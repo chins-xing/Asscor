@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package argus.v1;
+
+option go_package = "github.com/argus-security/argus/api/v1;apiv1";
+
+service KernelService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+service AgentService {
+  rpc GetSnapshot(SnapshotRequest) returns (SnapshotResponse);
+  rpc ExecuteCommand(CommandRequest) returns (CommandResponse);
+  rpc StreamLogs(stream LogEntry) returns (Ack);
+}
+
+message RegisterRequest {
+  string host_id = 1;
+  string hostname = 2;
+  string version = 3;
+}
+
+message RegisterResponse {
+  bool accepted = 1;
+  string session_id = 2;
+  bytes ca_certificate = 3;
+}
+
+message HeartbeatRequest {
+  string host_id = 1;
+  string session_id = 2;
+  AssessmentResult result = 3;
+}
+
+message HeartbeatResponse {
+  bool ok = 1;
+  double threat_coefficient = 2;
+  repeated Command pending_commands = 3;
+}
+
+message AssessmentResult {
+  double final_score = 1;
+  bool acceptable = 2;
+  map<string, double> domain_scores = 3;
+  repeated CheckResult checks = 4;
+}
+
+message CheckResult {
+  string check_id = 1;
+  string domain = 2;
+  bool passed = 3;
+  double delta = 4;
+  string detail = 5;
+}
+
+message Command {
+  string command_id = 1;
+  string command = 2;
+  map<string, string> params = 3;
+  bytes signature = 4;
+}
+
+message CommandResponse {
+  string command_id = 1;
+  bool success = 2;
+  string output = 3;
+}
+
+message SnapshotRequest {
+  string host_id = 1;
+}
+
+message SnapshotResponse {
+  string host_id = 1;
+  AssessmentResult result = 2;
+}
+
+message LogEntry {
+  string host_id = 1;
+  int64 timestamp = 2;
+  string level = 3;
+  string message = 4;
+}
+
+message Ack {
+  bool ok = 1;
+}
