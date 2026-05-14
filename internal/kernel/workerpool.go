@@ -1,0 +1,293 @@
+package kernel
+
+import (
+	"context"
+	"log"
+	"runtime"
+	"sync"
+	"time"
+)
+
+type WorkerPool struct {
+	semaphore chan struct{}
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	metrics   *WorkerPoolMetrics
+}
+
+type WorkerPoolMetrics struct {
+	mu                sync.Mutex
+	totalSubmitted    int64
+	totalCompleted    int64
+	totalFailed       int64
+	totalTimeout      int64
+	peakActiveWorkers int
+	lastReset         time.Time
+}
+
+func NewWorkerPool(maxConcurrency int) *WorkerPool {
+	if maxConcurrency <= 0 {
+		maxConcurrency = 10
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &WorkerPool{
+		semaphore: make(chan struct{}, maxConcurrency),
+		ctx:       ctx,
+		cancel:    cancel,
+		metrics: &WorkerPoolMetrics{
+			lastReset: time.Now(),
+		},
+	}
+}
+
+func (p *WorkerPool) Submit(task func() error) {
+	p.SubmitWithTimeout(task, 30*time.Minute)
+}
+
+func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration) {
+	p.metrics.mu.Lock()
+	p.metrics.totalSubmitted++
+	p.metrics.mu.Unlock()
+
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("workerpool: panic recovered: %v", r)
+				p.metrics.mu.Lock()
+				p.metrics.totalFailed++
+				p.metrics.mu.Unlock()
+			}
+		}()
+
+		select {
+		case p.semaphore <- struct{}{}:
+			defer func() { <-p.semaphore }()
+
+			done := make(chan error, 1)
+			go func() {
+				done <- task()
+			}()
+
+			select {
+			case err := <-done:
+				if err != nil {
+					p.metrics.mu.Lock()
+					p.metrics.totalFailed++
+					p.metrics.mu.Unlock()
+				} else {
+					p.metrics.mu.Lock()
+					p.metrics.totalCompleted++
+					p.metrics.mu.Unlock()
+				}
+			case <-time.After(timeout):
+				p.metrics.mu.Lock()
+				p.metrics.totalTimeout++
+				p.metrics.mu.Unlock()
+				log.Printf("workerpool: task timed out after %v", timeout)
+			}
+		case <-p.ctx.Done():
+			return
+		}
+	}()
+}
+
+func (p *WorkerPool) Wait() {
+	p.wg.Wait()
+}
+
+func (p *WorkerPool) Shutdown() {
+	p.cancel()
+	p.Wait()
+}
+
+func (p *WorkerPool) ActiveWorkers() int {
+	return len(p.semaphore)
+}
+
+func (p *WorkerPool) AvailableSlots() int {
+	return cap(p.semaphore) - len(p.semaphore)
+}
+
+func (p *WorkerPool) MaxConcurrency() int {
+	return cap(p.semaphore)
+}
+
+func (p *WorkerPool) Metrics() WorkerPoolMetrics {
+	p.metrics.mu.Lock()
+	defer p.metrics.mu.Unlock()
+	return WorkerPoolMetrics{
+		totalSubmitted:    p.metrics.totalSubmitted,
+		totalCompleted:    p.metrics.totalCompleted,
+		totalFailed:       p.metrics.totalFailed,
+		totalTimeout:      p.metrics.totalTimeout,
+		peakActiveWorkers: p.metrics.peakActiveWorkers,
+		lastReset:         p.metrics.lastReset,
+	}
+}
+
+func (p *WorkerPool) ResetMetrics() {
+	p.metrics.mu.Lock()
+	defer p.metrics.mu.Unlock()
+	p.metrics.totalSubmitted = 0
+	p.metrics.totalCompleted = 0
+	p.metrics.totalFailed = 0
+	p.metrics.totalTimeout = 0
+	p.metrics.peakActiveWorkers = 0
+	p.metrics.lastReset = time.Now()
+}
+
+type ConcurrencyStatus struct {
+	GoroutineCount    int       `json:"goroutine_count"`
+	HeapAllocMB       uint64    `json:"heap_alloc_mb"`
+	WorkerPoolActive  int       `json:"worker_pool_active"`
+	WorkerPoolQueued  int       `json:"worker_pool_queued"`
+	BusTopics         []string  `json:"bus_topics"`
+	AgentCount        int       `json:"agent_count"`
+	Timestamp         time.Time `json:"timestamp"`
+}
+
+type ConcurrencyModule struct {
+	kernel     *Kernel
+	workerPool *WorkerPool
+	state      PluginState
+}
+
+func NewConcurrencyModule(maxWorkers int) *ConcurrencyModule {
+	return &ConcurrencyModule{
+		workerPool: NewWorkerPool(maxWorkers),
+	}
+}
+
+func (m *ConcurrencyModule) Info() PluginInfo {
+	return PluginInfo{
+		Name:        "concurrency",
+		Version:     "1.2.0",
+		Description: "Concurrency controller — WorkerPool with semaphore-based throttling, health checks, metrics",
+		Author:      "ARGUS Core Team",
+	}
+}
+
+func (m *ConcurrencyModule) Dependencies() []PluginDependency {
+	return nil
+}
+
+func (m *ConcurrencyModule) Priority() int {
+	return 2
+}
+
+func (m *ConcurrencyModule) Init(ctx context.Context, k *Kernel) error {
+	m.kernel = k
+	m.state = PluginInitialized
+
+	if m.workerPool == nil {
+		m.workerPool = NewWorkerPool(10)
+	}
+
+	k.Container().Bind((*ConcurrencyInterface)(nil), m)
+	k.Container().Bind((*WorkerPoolInterface)(nil), m.workerPool)
+
+	return nil
+}
+
+func (m *ConcurrencyModule) Start(ctx context.Context) error {
+	m.state = PluginStarted
+	log.Printf("concurrency: started with max %d workers", m.workerPool.MaxConcurrency())
+	return nil
+}
+
+func (m *ConcurrencyModule) Stop(ctx context.Context) error {
+	m.state = PluginStopping
+	m.workerPool.Shutdown()
+	m.state = PluginStopped
+	log.Println("concurrency: stopped")
+	return nil
+}
+
+func (m *ConcurrencyModule) State() PluginState {
+	return m.state
+}
+
+func (m *ConcurrencyModule) Submit(task func() error) {
+	m.workerPool.Submit(task)
+}
+
+func (m *ConcurrencyModule) SubmitWithTimeout(task func() error, timeout time.Duration) {
+	m.workerPool.SubmitWithTimeout(task, timeout)
+}
+
+func (m *ConcurrencyModule) Wait() {
+	m.workerPool.Wait()
+}
+
+func (m *ConcurrencyModule) Pool() *WorkerPool {
+	return m.workerPool
+}
+
+func (m *ConcurrencyModule) HealthCheck(ctx context.Context) *ConcurrencyStatus {
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	agentCount := 0
+	hb, _ := m.kernel.GetPlugin("heartbeat")
+	if hb != nil {
+		if mi, ok := hb.(HeartbeatInterface); ok {
+			agentCount = len(mi.ListAgents())
+		}
+	}
+
+	busTopics := m.kernel.Bus().Topics()
+
+	return &ConcurrencyStatus{
+		GoroutineCount:   runtime.NumGoroutine(),
+		HeapAllocMB:      memStats.Alloc / 1024 / 1024,
+		WorkerPoolActive: m.workerPool.ActiveWorkers(),
+		WorkerPoolQueued: m.workerPool.AvailableSlots(),
+		BusTopics:        busTopics,
+		AgentCount:       agentCount,
+		Timestamp:        time.Now(),
+	}
+}
+
+func (m *ConcurrencyModule) CheckAlerts() []string {
+	status := m.HealthCheck(context.Background())
+	metrics := m.workerPool.Metrics()
+
+	var alerts []string
+
+	if status.GoroutineCount > 500 {
+		alerts = append(alerts, "high goroutine count")
+	}
+	if status.HeapAllocMB > 500 {
+		alerts = append(alerts, "high memory usage")
+	}
+	if metrics.totalTimeout > 5 {
+		alerts = append(alerts, "frequent task timeouts")
+	}
+	if metrics.totalFailed > metrics.totalCompleted && metrics.totalCompleted > 0 {
+		alerts = append(alerts, "high failure rate")
+	}
+
+	return alerts
+}
+
+type ConcurrencyInterface interface {
+	Submit(task func() error)
+	SubmitWithTimeout(task func() error, timeout time.Duration)
+	Wait()
+	Pool() *WorkerPool
+	HealthCheck(ctx context.Context) *ConcurrencyStatus
+	CheckAlerts() []string
+}
+
+type WorkerPoolInterface interface {
+	Submit(task func() error)
+	SubmitWithTimeout(task func() error, timeout time.Duration)
+	Wait()
+	ActiveWorkers() int
+	AvailableSlots() int
+	MaxConcurrency() int
+	Metrics() WorkerPoolMetrics
+}

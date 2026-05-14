@@ -1,0 +1,193 @@
+package kernel
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"sync"
+
+	"github.com/argus-security/argus/internal/config"
+)
+
+type HostStatus int
+
+const (
+	HostOK HostStatus = iota
+	HostWarning
+	HostCritical
+	HostIsolated
+)
+
+func (s HostStatus) String() string {
+	switch s {
+	case HostOK:
+		return "OK"
+	case HostWarning:
+		return "Warning"
+	case HostCritical:
+		return "Critical"
+	case HostIsolated:
+		return "Isolated"
+	default:
+		return "Unknown"
+	}
+}
+
+type PolicyAction struct {
+	Action  string
+	Params  map[string]string
+	Message string
+}
+
+type PolicyModule struct {
+	kernel *Kernel
+	cfg    *config.Config
+
+	mu          sync.RWMutex
+	hostStatus  map[string]HostStatus
+	actionQueue []PolicyAction
+
+	state PluginState
+}
+
+func (m *PolicyModule) Info() PluginInfo {
+	return PluginInfo{
+		Name:        "policy",
+		Version:     "1.2.0",
+		Description: "Policy manager — evaluates scores against thresholds and triggers automated actions",
+		Author:      "ARGUS Core Team",
+	}
+}
+
+func (m *PolicyModule) Dependencies() []PluginDependency {
+	return []PluginDependency{
+		{Name: "config", Interface: (*config.Config)(nil)},
+	}
+}
+
+func (m *PolicyModule) Priority() int {
+	return 50
+}
+
+func (m *PolicyModule) Init(ctx context.Context, k *Kernel) error {
+	m.kernel = k
+	m.hostStatus = make(map[string]HostStatus)
+	m.actionQueue = make([]PolicyAction, 0)
+	m.state = PluginInitialized
+
+	if impl, ok := k.Container().ResolveNamed("config"); ok {
+		if c, ok := impl.(*config.Config); ok {
+			m.cfg = c
+		}
+	}
+	if m.cfg == nil {
+		m.cfg = config.Default()
+	}
+
+	k.Container().Bind((*PolicyInterface)(nil), m)
+	return nil
+}
+
+func (m *PolicyModule) Start(ctx context.Context) error {
+	m.state = PluginStarted
+	m.kernel.Bus().Subscribe("assessor.result", "policy", m.onAssessmentResult)
+	log.Println("policy: started")
+	return nil
+}
+
+func (m *PolicyModule) Stop(ctx context.Context) error {
+	m.state = PluginStopping
+	m.kernel.Bus().UnsubscribeAll("policy")
+	m.state = PluginStopped
+	log.Println("policy: stopped")
+	return nil
+}
+
+func (m *PolicyModule) State() PluginState {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.state
+}
+
+func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, []PolicyAction) {
+	threshold := m.cfg.Threshold
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var status HostStatus
+	var actions []PolicyAction
+
+	switch {
+	case score >= threshold:
+		status = HostOK
+	case score >= threshold-10:
+		status = HostWarning
+		actions = append(actions, PolicyAction{
+			Action:  "notify_admin",
+			Message: fmt.Sprintf("host %s score %.2f below threshold %.2f", hostID, score, threshold),
+		})
+	case score >= threshold-30:
+		status = HostCritical
+		actions = append(actions, PolicyAction{
+			Action:  "notify_admin",
+			Message: fmt.Sprintf("CRITICAL: host %s score %.2f", hostID, score),
+		}, PolicyAction{
+			Action: "increase_assessment",
+			Params: map[string]string{"host_id": hostID},
+		})
+	default:
+		status = HostIsolated
+		actions = append(actions, PolicyAction{
+			Action:  "isolate_host",
+			Params:  map[string]string{"host_id": hostID},
+			Message: fmt.Sprintf("ISOLATING host %s: score %.2f", hostID, score),
+		}, PolicyAction{
+			Action:  "notify_admin",
+			Message: fmt.Sprintf("ISOLATED: host %s", hostID),
+		})
+	}
+
+	m.hostStatus[hostID] = status
+
+	for _, action := range actions {
+		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+			Topic:   "policy.action",
+			Payload: action,
+			Source:  "policy",
+		})
+	}
+
+	return status, actions
+}
+
+func (m *PolicyModule) GetHostStatus(hostID string) HostStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if s, ok := m.hostStatus[hostID]; ok {
+		return s
+	}
+	return HostOK
+}
+
+func (m *PolicyModule) onAssessmentResult(ctx context.Context, msg Message) error {
+	hostID := ""
+	if v, ok := msg.Payload.(map[string]interface{}); ok {
+		if id, ok2 := v["HostID"].(string); ok2 {
+			hostID = id
+		}
+	}
+	score := 0.0
+	if v, ok := msg.Payload.(map[string]interface{}); ok {
+		if s, ok2 := v["FinalScore"].(float64); ok2 {
+			score = s
+		}
+	}
+	m.EvaluateHost(hostID, score)
+	return nil
+}
+
+type PolicyInterface interface {
+	EvaluateHost(hostID string, score float64) (HostStatus, []PolicyAction)
+	GetHostStatus(hostID string) HostStatus
+}

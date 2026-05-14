@@ -65,6 +65,42 @@ func (a *Assessor) Assess() *model.AssessmentResult {
 	return result
 }
 
+func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
+	result := &model.AssessmentResult{
+		HostID:    hostID,
+		Hostname:  hostname,
+		Timestamp: time.Now(),
+		Threshold: a.cfg.Threshold,
+		Checks:    checkResults,
+	}
+
+	if len(checkResults) == 0 {
+		result.Acceptable = true
+		result.FinalScore = 100
+		result.DomainScores = model.DomainScores{
+			AttackSurface:      100,
+			BusinessContinuity: 100,
+			OperationTrust:     100,
+			Resilience:         100,
+		}
+		result.ThreatCoeff = a.cfg.ThreatCoeff
+		result.SPCScore = 1.0
+		return result
+	}
+
+	a.computeDomainScores(result)
+
+	a.evaluateEdgeFactors(result)
+
+	result.ThreatCoeff = a.cfg.ThreatCoeff
+	result.SPCScore = 1.0
+
+	result.FinalScore = a.computeFinalScore(result)
+	result.Acceptable = result.FinalScore >= result.Threshold
+
+	return result
+}
+
 func (a *Assessor) runChecksConcurrently(items []model.CheckItem, result *model.AssessmentResult) {
 	sem := make(chan struct{}, a.maxWorkers)
 	var wg sync.WaitGroup
@@ -115,11 +151,7 @@ func (a *Assessor) computeDomainScores(result *model.AssessmentResult) {
 
 func (a *Assessor) evaluateEdgeFactors(result *model.AssessmentResult) {
 	result.EdgeFactors = model.EdgeFactors{
-		TwoFactorFailure:     1.0,
-		SynCookieOff:         1.0,
-		ResourceCritical:     1.0,
-		SupplyChainUnchecked: 1.0,
-		AutoBlockNoWhitelist: 1.0,
+		TwoFactorFailure: 1.0,
 	}
 
 	for _, check := range result.Checks {
@@ -127,11 +159,10 @@ func (a *Assessor) evaluateEdgeFactors(result *model.AssessmentResult) {
 			continue
 		}
 		switch check.CheckID {
-		case "RS-005":
-			p, _ := a.checkPassed("RS-005", result)
-			if !p {
-				result.EdgeFactors.SynCookieOff = a.cfg.EdgeFactors.SynCookieOff
-			}
+		case "EF-001":
+			result.EdgeFactors.TwoFactorFailure = a.cfg.EdgeFactors.TwoFactorFailure
+		case "EF-002":
+			result.EdgeFactors.TwoFactorFailure = a.cfg.EdgeFactors.TwoFactorFailure * 0.82
 		}
 	}
 }
@@ -230,4 +261,25 @@ func (a *Assessor) PrintReport(result *model.AssessmentResult) string {
 	}
 
 	return report
+}
+
+func (a *Assessor) ValidateEdgeFactors(registeredChecks []model.CheckItem) []string {
+	var warnings []string
+
+	overlapLabels := map[string]string{
+		"RS-005": "SYN Cookie 已在边缘因子重复评估 (SSAM 1.3 已移除边缘因子重叠项，仅由韧性域独立评估)",
+		"OT-004": "供应链校验已在边缘因子重复评估 (SSAM 1.3 已移除边缘因子重叠项，仅由操作可信度域独立评估)",
+		"RS-003": "自动封禁已在边缘因子重复评估 (SSAM 1.3 已移除边缘因子重叠项，仅由韧性域独立评估)",
+		"BC-003": "资源紧张已在边缘因子重复评估 (SSAM 1.3 已移除边缘因子重叠项，仅由业务连续性域独立评估)",
+	}
+
+	for _, check := range registeredChecks {
+		if label, exists := overlapLabels[check.ID]; exists {
+			warnings = append(warnings, fmt.Sprintf(
+				"边缘因子冲突: %s", label,
+			))
+		}
+	}
+
+	return warnings
 }

@@ -40,11 +40,7 @@ func Default() *Config {
 		ThreatCoeff: 1.0,
 		SPCEnabled:  false,
 		EdgeFactors: model.EdgeFactors{
-			TwoFactorFailure:     1.0,
-			SynCookieOff:         1.0,
-			ResourceCritical:     1.0,
-			SupplyChainUnchecked: 1.0,
-			AutoBlockNoWhitelist: 1.0,
+			TwoFactorFailure: 1.0,
 		},
 		ACINetworkSegmentation: -15,
 		ACILAPSEnabled:        -10,
@@ -110,14 +106,19 @@ func Parse(content string) (*Config, error) {
 			switch k {
 			case "two_factor_failure":
 				cfg.EdgeFactors.TwoFactorFailure = f
-			case "syn_cookie_off":
-				cfg.EdgeFactors.SynCookieOff = f
-			case "resource_critical":
-				cfg.EdgeFactors.ResourceCritical = f
-			case "supply_chain_unchecked":
-				cfg.EdgeFactors.SupplyChainUnchecked = f
-			case "auto_block_no_whitelist":
-				cfg.EdgeFactors.AutoBlockNoWhitelist = f
+			}
+		}
+	}
+
+	if sec, ok := sections["edge_factors.level4_override"]; ok {
+		for k, v := range sec {
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				continue
+			}
+			switch k {
+			case "two_factor_failure":
+				cfg.EdgeFactors.TwoFactorFailure = f
 			}
 		}
 	}

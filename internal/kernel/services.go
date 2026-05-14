@@ -1,0 +1,154 @@
+package kernel
+
+import (
+	"context"
+	"log"
+
+	apiv1 "github.com/argus-security/argus/api/v1"
+	"github.com/argus-security/argus/internal/model"
+)
+
+type KernelServiceImpl struct {
+	heartbeat   HeartbeatInterface
+	commander   CommanderInterface
+	cti         CTIInterface
+	assessor    AssessorInterface
+	persistence PersistenceInterface
+}
+
+func NewKernelServiceImpl(
+	heartbeat HeartbeatInterface,
+	commander CommanderInterface,
+	cti CTIInterface,
+	assessor AssessorInterface,
+	persistence PersistenceInterface,
+) *KernelServiceImpl {
+	return &KernelServiceImpl{
+		heartbeat:   heartbeat,
+		commander:   commander,
+		cti:         cti,
+		assessor:    assessor,
+		persistence: persistence,
+	}
+}
+
+func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterRequest) (*apiv1.RegisterResponse, error) {
+	log.Printf("kernel: register request from %s (%s) v%s", req.HostId, req.Hostname, req.Version)
+
+	if s.heartbeat != nil {
+		s.heartbeat.RegisterAgent(req.HostId, req.Hostname, req.Version)
+	}
+
+	return &apiv1.RegisterResponse{
+		Accepted:  true,
+		SessionId: "sess-" + req.HostId,
+	}, nil
+}
+
+func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatRequest) (*apiv1.HeartbeatResponse, error) {
+	if s.heartbeat != nil {
+		s.heartbeat.RecordHeartbeat(req.HostId)
+	}
+
+	if req.Result != nil && s.assessor != nil {
+		checkResults := make([]model.CheckResult, 0, len(req.Result.Checks))
+		for _, c := range req.Result.Checks {
+			checkResults = append(checkResults, model.CheckResult{
+				CheckID: c.CheckId,
+				Domain:  c.Domain,
+				Passed:  c.Passed,
+				Delta:   c.Delta,
+				Detail:  c.Detail,
+			})
+		}
+
+		hostname := req.HostId
+		if s.heartbeat != nil {
+			if agent := s.heartbeat.GetAgent(req.HostId); agent != nil {
+				hostname = agent.Hostname
+			}
+		}
+
+		s.assessor.EvaluateFromResults(req.HostId, hostname, checkResults)
+	}
+
+	var pendingCmds []*apiv1.Command
+	if s.commander != nil {
+		pendingCmds = s.commander.DequeueCommands(req.HostId)
+	}
+
+	var threatCoeff float64 = 1.0
+	if s.cti != nil {
+		threatCoeff = s.cti.GetCoefficient()
+	}
+
+	return &apiv1.HeartbeatResponse{
+		Ok:                true,
+		ThreatCoefficient: threatCoeff,
+		PendingCommands:   pendingCmds,
+	}, nil
+}
+
+type AgentServiceImpl struct {
+	assessor   AssessorInterface
+	commander  CommanderInterface
+	logCollect LogCollectorInterface
+}
+
+func NewAgentServiceImpl(
+	assessor AssessorInterface,
+	commander CommanderInterface,
+	logCollect LogCollectorInterface,
+) *AgentServiceImpl {
+	return &AgentServiceImpl{
+		assessor:   assessor,
+		commander:  commander,
+		logCollect: logCollect,
+	}
+}
+
+func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotRequest) (*apiv1.SnapshotResponse, error) {
+	var result *apiv1.AssessmentResult
+	if s.assessor != nil {
+		ar := s.assessor.Evaluate(req.HostId)
+		if ar != nil {
+			checks := make([]*apiv1.CheckResult, len(ar.Checks))
+			for i, c := range ar.Checks {
+				checks[i] = &apiv1.CheckResult{
+					CheckId: c.CheckID,
+					Domain:  c.Domain,
+					Passed:  c.Passed,
+					Delta:   c.Delta,
+					Detail:  c.Detail,
+				}
+			}
+			result = &apiv1.AssessmentResult{
+				FinalScore: ar.FinalScore,
+				Acceptable: ar.Acceptable,
+				DomainScores: map[string]float64{
+					"attack_surface":      ar.DomainScores.AttackSurface,
+					"business_continuity": ar.DomainScores.BusinessContinuity,
+					"operation_trust":     ar.DomainScores.OperationTrust,
+					"resilience":          ar.DomainScores.Resilience,
+				},
+				Checks: checks,
+			}
+		}
+	}
+
+	return &apiv1.SnapshotResponse{
+		HostId: req.HostId,
+		Result: result,
+	}, nil
+}
+
+func (s *AgentServiceImpl) ExecuteCommand(ctx context.Context, req *apiv1.CommandRequest) (*apiv1.CommandResponse, error) {
+	if s.commander != nil {
+		s.commander.AckCommand(req.HostId, req.CommandId, true, "")
+	}
+
+	return &apiv1.CommandResponse{
+		CommandId: req.CommandId,
+		Success:   true,
+	}, nil
+}

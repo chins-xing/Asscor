@@ -101,29 +101,13 @@ func (d *DomainScores) Set(domain string, score float64) {
 }
 
 type EdgeFactors struct {
-	TwoFactorFailure     float64 `json:"two_factor_failure"`
-	SynCookieOff         float64 `json:"syn_cookie_off"`
-	ResourceCritical     float64 `json:"resource_critical"`
-	SupplyChainUnchecked float64 `json:"supply_chain_unchecked"`
-	AutoBlockNoWhitelist float64 `json:"auto_block_no_whitelist"`
+	TwoFactorFailure float64 `json:"two_factor_failure"`
 }
 
 func (e EdgeFactors) ActiveFactors() []float64 {
 	var factors []float64
 	if e.TwoFactorFailure < 1.0 {
 		factors = append(factors, e.TwoFactorFailure)
-	}
-	if e.SynCookieOff < 1.0 {
-		factors = append(factors, e.SynCookieOff)
-	}
-	if e.ResourceCritical < 1.0 {
-		factors = append(factors, e.ResourceCritical)
-	}
-	if e.SupplyChainUnchecked < 1.0 {
-		factors = append(factors, e.SupplyChainUnchecked)
-	}
-	if e.AutoBlockNoWhitelist < 1.0 {
-		factors = append(factors, e.AutoBlockNoWhitelist)
 	}
 	return factors
 }
