@@ -10,6 +10,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/argus-security/argus/internal/config"
 )
 
 type Kernel struct {
@@ -19,6 +21,7 @@ type Kernel struct {
 	extPoints *ExtensionRegistry
 
 	config map[string]string
+	cfg    *config.Config
 
 	mu     sync.RWMutex
 	ctx    context.Context
@@ -108,6 +111,12 @@ func (k *Kernel) SetConfig(key, value string) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.config[key] = value
+}
+
+func (k *Kernel) SetConfigObj(c *config.Config) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.cfg = c
 }
 
 func (k *Kernel) RegisterPlugin(p Plugin) error {

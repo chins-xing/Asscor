@@ -318,31 +318,31 @@ func (m *SPCModule) Init(ctx context.Context, k *Kernel) error {
 	m.kernel = k
 	m.state = PluginInitialized
 
-	if v, ok := k.config["spc_enabled"]; ok && (v == "true" || v == "1") {
-		m.enabled = true
-	}
-	if v, ok := k.config["spc_nvd_sync_interval_h"]; ok {
-		if h, err := time.ParseDuration(v + "h"); err == nil {
-			m.nvdConfig.SyncHours = int(h.Hours())
-		}
+	spcCfg := k.cfg.SPC
+	m.enabled = spcCfg.Enabled
+	m.minPScore = spcCfg.MinPScore
+	m.fetchInterval = time.Duration(spcCfg.FetchIntervalH) * time.Hour
+
+	m.nvdConfig.BaseURL = spcCfg.NVD.BaseURL
+	m.nvdConfig.APIKey = spcCfg.NVD.APIKey
+	m.nvdConfig.SyncHours = spcCfg.NVD.SyncIntervalH
+
+	if m.nvdConfig.APIKey == "" {
+		m.nvdConfig.APIKey = os.Getenv("NVD_API_KEY")
 	}
 
-	nvdAPIKey := k.config["spc_nvd_api_key"]
-	if nvdAPIKey == "" {
-		nvdAPIKey = os.Getenv("NVD_API_KEY")
-	}
-	if nvdAPIKey == "" && m.enabled {
-		log.Printf("spc: WARNING — NVD API key not configured, disabling SPC (set spc_nvd_api_key or NVD_API_KEY)")
-		m.enabled = false
-	} else {
-		m.nvdConfig.APIKey = nvdAPIKey
+	m.mispConfig.BaseURL = spcCfg.MISP.BaseURL
+	m.mispConfig.APIKey = spcCfg.MISP.APIKey
+	m.mispConfig.VerifyTLS = spcCfg.MISP.VerifyTLS
+	m.mispConfig.SyncHours = spcCfg.MISP.SyncIntervalH
+	m.mispConfig.TLPFilter = spcCfg.MISP.TLPFilter
+
+	if m.mispConfig.APIKey == "" {
+		m.mispConfig.APIKey = os.Getenv("MISP_API_KEY")
 	}
 
-	if v, ok := k.config["spc_misp_url"]; ok {
-		m.mispConfig.BaseURL = v
-	}
-	if v, ok := k.config["spc_misp_key"]; ok {
-		m.mispConfig.APIKey = v
+	if m.enabled && m.nvdConfig.APIKey == "" {
+		log.Printf("spc: WARNING — NVD API key not configured, SPC may be rate limited (set spc.nvd.api_key or NVD_API_KEY)")
 	}
 
 	k.Container().Bind((*SPCInterface)(nil), m)

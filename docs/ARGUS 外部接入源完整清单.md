@@ -1,0 +1,162 @@
+# ARGUS 外部接入源完整清单
+
+**版本**：v1.0  
+**日期**：2026-05-14  
+**配套文档**：ARGUS 扩展白皮书（内核安全域）、ARGUS 工程实现白皮书
+
+---
+
+## 一、探测器类（11 项）
+
+发现安全漏洞、配置缺陷、异常行为的外部工具。
+
+### P0（核心，必须首批接入）
+
+| ID | 工具 | 探测领域 | 输出格式 | 适配难度 | 接入价值 |
+|:---|:---|:---|:---|:---|:---|
+| **SC-001** | **Trivy** | 容器镜像漏洞、依赖库漏洞、IaC 配置缺陷 | JSON | 低 | 覆盖 CVE 漏洞扫描，替代 KS-001 内核漏洞检测、SC-002 依赖库漏洞 |
+| **SC-002** | **Nuclei** | Web 应用漏洞、配置缺陷、暴露面板 | JSON | 低 | 覆盖 Web 层攻击面，等保 L3-CE-23 端口检查可委派 |
+| **SC-003** | **Lynis** | 系统安全审计、合规检查 | 文本/JSON | 中 | 覆盖大量等保二级/三级系统配置检查，与 Argus 内置检查互补 |
+
+### P1（安全纵深，第二批接入）
+
+| ID | 工具 | 探测领域 | 输出格式 | 适配难度 | 接入价值 |
+|:---|:---|:---|:---|:---|:---|
+| **SC-004** | **OpenSCAP** | 合规扫描（等保/CIS/STIG） | XCCDF/OVAL | 中 | 提供官方等保合规扫描能力，与 Argus 自研检查交叉验证 |
+| **SC-005** | **Wazuh** | HIDS 告警、文件完整性、异常检测 | JSON API | 低 | 替代 RS-006 HIDS 部署检查，直接读取告警数据 |
+| **SC-006** | **Suricata** | NIDS 告警、协议解析、流量异常 | EVE JSON | 低 | 替代 RS-006 NIDS 部署检查，网络攻击检测数据源 |
+| **SC-007** | **Falco** | 容器运行时安全、系统调用异常 | JSON | 低 | 云原生安全域核心数据源，内核层行为检测 |
+| **SC-008** | **ClamAV** | 病毒扫描、恶意代码检测 | 文本 | 中 | 替代 RS-008 反病毒部署检查 |
+
+### P2（增强覆盖，第三批接入）
+
+| ID | 工具 | 探测领域 | 输出格式 | 适配难度 | 接入价值 |
+|:---|:---|:---|:---|:---|:---|
+| **SC-009** | **OSV-Scanner** | 开源依赖漏洞 | JSON | 低 | 补充 SC-002 依赖库漏洞，专注开源生态 |
+| **SC-010** | **AIDE** | 文件完整性检查 | 文本 | 中 | 替代 OT-013 文件完整性监控 |
+| **SC-011** | **Nikto** | Web 服务器配置缺陷 | 文本/HTML | 中 | 补充 Nuclei 未覆盖的 Web 服务器专项检查 |
+
+---
+
+## 二、管理类（10 项）
+
+提供资产上下文、配置预期状态、身份数据、任务编排、工单跟踪的外部平台。
+
+### P0（配置管理 + 资产管理，必须首批接入）
+
+| ID | 工具 | 管理领域 | 接口方式 | 适配难度 | 接入价值 |
+|:---|:---|:---|:---|:---|:---|
+| **MG-001** | **Ansible** | 配置管理、预期状态 | inventory 文件 / facts 缓存 | 低 | 提供“预期状态”参照系，检测配置漂移 |
+| **MG-002** | **NetBox** | 资产管理（DCIM/IPAM） | REST API | 低 | 提供资产角色、位置、业务关键度，用于 SPC 本地化因子 |
+| **MG-003** | **Snipe-IT** | IT 资产管理 | REST API | 低 | 补充 NetBox，适合非数据中心场景 |
+
+### P1（身份治理 + SIEM + 任务编排）
+
+| ID | 工具 | 管理领域 | 接口方式 | 适配难度 | 接入价值 |
+|:---|:---|:---|:---|:---|:---|
+| **MG-004** | **FreeIPA** | 身份治理、账户管理 | JSON-RPC / CLI | 中 | 替代 IAM-010/011/022 手工检查，提供权威账户数据 |
+| **MG-005** | **Keycloak** | 现代身份与访问管理 | REST API | 中 | 补充 FreeIPA，适合云原生环境 |
+| **MG-006** | **Wazuh SIEM** | 安全信息与事件管理 | REST API | 低 | 双向对接：读取告警→Argus 评估；Argus 分数→SIEM 仪表板 |
+| **MG-007** | **Rundeck** | 任务编排、作业调度 | REST API | 中 | 将 Argus 修复建议转化为可追踪的执行任务 |
+
+### P2（工单 + IaC 左移）
+
+| ID | 工具 | 管理领域 | 接口方式 | 适配难度 | 接入价值 |
+|:---|:---|:---|:---|:---|:---|
+| **MG-008** | **Jira** | 工单跟踪 | REST API | 中 | 评估发现严重问题时自动创建工单 |
+| **MG-009** | **Terraform** | 基础设施即代码 | .tf 文件 / state 解析 | 中 | 部署前安全评估，左移安全 |
+| **MG-010** | **OpenTofu** | 基础设施即代码（开源替代） | .tf 文件 / state 解析 | 中 | Terraform 的开源替代，同等能力 |
+
+---
+
+## 三、接入源总统计
+
+| 类别 | P0 | P1 | P2 | 小计 |
+|:---|:---:|:---:|:---:|:---:|
+| 探测器 | 3 | 5 | 3 | **11** |
+| 管理类 | 3 | 4 | 3 | **10** |
+| **合计** | **6** | **9** | **6** | **21** |
+
+---
+
+## 四、接入后检查项委派对照
+
+接入外部源后，Argus 现有检查项的委派情况：
+
+| 域 | 总检查项 | 委派给外部 | 保留自检 | 外部工具 |
+|:---|:---:|:---:|:---:|:---|
+| 攻击面管理 | 14 | 2 | 12 | Nuclei（端口扫描）、Trivy（漏洞） |
+| 业务连续性 | 3 | 0 | 3 | 全部自检 |
+| 操作可信度 | 19 | 4 | 15 | Lynis（审计）、AIDE（完整性）、FreeIPA（账户治理） |
+| 韧性 | 17 | 6 | 11 | Wazuh（HIDS）、Suricata（NIDS）、ClamAV（反病毒） |
+| 内核安全 | 12 | 1 | 11 | Trivy（内核 CVE）、其余 sysctl/module 检查自检 |
+| **合计** | **65** | **13** | **52** | |
+
+---
+
+## 五、实施路线
+
+| 阶段 | 接入源 | 时间 | 交付物 |
+|:---|:---|:---|:---|
+| **Phase 1** | P0 全部 6 项 | 3-4 周 | Trivy/Nuclei/Lynis 适配器 + Ansible/NetBox/Snipe-IT 适配器 |
+| **Phase 2** | P1 探测器 5 项 | 3-4 周 | OpenSCAP/Wazuh/Suricata/Falco/ClamAV 适配器 |
+| **Phase 3** | P1 管理类 4 项 | 3-4 周 | FreeIPA/Keycloak/Wazuh SIEM/Rundeck 适配器 |
+| **Phase 4** | P2 全部 6 项 | 4-5 周 | OSV-Scanner/AIDE/Nikto/Jira/Terraform/OpenTofu 适配器 |
+
+---
+
+## 六、配置文件模板
+
+```ini
+# ===== 探测器适配器 =====
+[adapters]
+trivy = on
+nuclei = on
+lynis = on
+openscap = off
+wazuh_agent = on
+suricata = on
+falco = off
+clamav = on
+osv_scanner = off
+aide = on
+nikto = off
+
+[adapter_paths]
+trivy = /usr/local/bin/trivy
+nuclei = /usr/local/bin/nuclei
+lynis = /usr/local/sbin/lynis
+openscap = /usr/bin/oscap
+clamav = /usr/bin/clamscan
+aide = /usr/bin/aide
+
+# ===== 管理类适配器 =====
+[management_adapters]
+ansible = on
+netbox = on
+snipe_it = off
+freeipa = off
+keycloak = off
+wazuh_siem = on
+rundeck = off
+jira = off
+terraform = off
+opentofu = off
+
+[ansible]
+inventory_path = /etc/ansible/hosts
+facts_path = /etc/ansible/facts.d
+
+[netbox]
+api_url = https://netbox.internal
+api_token = ${NETBOX_TOKEN}
+
+[wazuh_siem]
+api_url = https://wazuh.internal:55000
+username = argus
+password = ${WAZUH_PASSWORD}
+```
+
+---
+
+这份清单与《ARGUS 检查项完整清单 v2.0》（140 项）、《内核安全扩展白皮书》（12 项）配套，共同构成 Argus 从独立扫描器到安全治理中枢的完整路线图。

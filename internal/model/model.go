@@ -10,6 +10,8 @@ const (
 	DomainBusinessContinuity = "business_continuity"
 	DomainOperationTrust     = "operation_trust"
 	DomainResilience         = "resilience"
+
+	DomainKernelSecurity = "kernel_security"
 )
 
 type CheckFunc func() (passed bool, detail string)
@@ -49,6 +51,10 @@ var AllDomains = []string{
 	DomainResilience,
 }
 
+var ExtensionDomains = []string{
+	DomainKernelSecurity,
+}
+
 type CheckResult struct {
 	CheckID   string  `json:"check_id"`
 	Domain    string  `json:"domain"`
@@ -64,6 +70,7 @@ type DomainScores struct {
 	BusinessContinuity float64 `json:"business_continuity"`
 	OperationTrust     float64 `json:"operation_trust"`
 	Resilience         float64 `json:"resilience"`
+	KernelSecurity     float64 `json:"kernel_security,omitempty"`
 }
 
 func (d DomainScores) Get(domain string) float64 {
@@ -76,6 +83,8 @@ func (d DomainScores) Get(domain string) float64 {
 		return d.OperationTrust
 	case DomainResilience:
 		return d.Resilience
+	case DomainKernelSecurity:
+		return d.KernelSecurity
 	default:
 		return 0
 	}
@@ -97,6 +106,8 @@ func (d *DomainScores) Set(domain string, score float64) {
 		d.OperationTrust = score
 	case DomainResilience:
 		d.Resilience = score
+	case DomainKernelSecurity:
+		d.KernelSecurity = score
 	}
 }
 
@@ -157,4 +168,36 @@ func (w Weights) Get(domain string) float64 {
 	default:
 		return 0
 	}
+}
+
+type SPCConfig struct {
+	Enabled            bool
+	MinPScore          float64
+	CacheRetentionDays int
+	FetchIntervalH     int
+
+	NVD NVConfig
+	MISP MISPConfig
+	OSCAL OSCALConfig
+}
+
+type NVConfig struct {
+	BaseURL        string
+	APIKey         string
+	SyncIntervalH  int
+}
+
+type MISPConfig struct {
+	BaseURL        string
+	APIKey         string
+	VerifyTLS      bool
+	SyncIntervalH  int
+	TLPFilter      string
+}
+
+type OSCALConfig struct {
+	Enabled      bool
+	InputFormat  string
+	ResultsPath  string
+	PlanPath     string
 }

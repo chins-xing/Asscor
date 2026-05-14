@@ -28,6 +28,7 @@ func main() {
 	}
 
 	k := kernel.NewKernel()
+	k.SetConfigObj(cfg)
 
 	k.SetConfig("config_path", *configPath)
 	k.SetConfig("listen_addr", *listenAddr)

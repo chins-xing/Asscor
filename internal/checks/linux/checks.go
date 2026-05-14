@@ -13,7 +13,7 @@ import (
 )
 
 func All() []model.CheckItem {
-	return []model.CheckItem{
+	items := []model.CheckItem{
 		as001(),
 		as002(),
 		as003(),
@@ -71,6 +71,8 @@ func All() []model.CheckItem {
 		ef001(),
 		ef002(),
 	}
+	items = append(items, ksAll()...)
+	return items
 }
 
 func as001() model.CheckItem {

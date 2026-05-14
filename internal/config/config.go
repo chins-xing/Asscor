@@ -26,6 +26,13 @@ type Config struct {
 	ACIDLPMeasures        float64
 
 	CheckDeltas map[string]float64
+
+	SPC model.SPCConfig
+
+	Extensions       map[string]bool
+	ExtensionWeights map[string]float64
+
+	AdapterConfig map[string]string
 }
 
 func Default() *Config {
@@ -50,6 +57,33 @@ func Default() *Config {
 		ACIAppWhitelist:       -10,
 		ACIDLPMeasures:        -5,
 		CheckDeltas:           make(map[string]float64),
+		Extensions:            make(map[string]bool),
+		ExtensionWeights:      make(map[string]float64),
+		AdapterConfig:         make(map[string]string),
+		SPC: model.SPCConfig{
+			Enabled:            false,
+			MinPScore:          0.60,
+			CacheRetentionDays: 365,
+			FetchIntervalH:     1,
+			NVD: model.NVConfig{
+				BaseURL:        "https://services.nvd.nist.gov/rest/json/cves/2.0",
+				APIKey:         "",
+				SyncIntervalH:  6,
+			},
+			MISP: model.MISPConfig{
+				BaseURL:        "",
+				APIKey:         "",
+				VerifyTLS:      true,
+				SyncIntervalH:  1,
+				TLPFilter:      "white",
+			},
+			OSCAL: model.OSCALConfig{
+				Enabled:     false,
+				InputFormat: "json",
+				ResultsPath: "./oscal_results/",
+				PlanPath:    "./oscal_plan/",
+			},
+		},
 	}
 }
 
@@ -167,9 +201,166 @@ func Parse(content string) (*Config, error) {
 		}
 	}
 
+	if sec, ok := sections["check_deltas.ks"]; ok {
+		for k, v := range sec {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				cfg.CheckDeltas[k] = f
+			}
+		}
+	}
+
+	if sec, ok := sections["extensions"]; ok {
+		for k, v := range sec {
+			cfg.Extensions[k] = strings.EqualFold(v, "on") || strings.EqualFold(v, "true") || v == "1"
+		}
+	}
+
+	if sec, ok := sections["extension_weights"]; ok {
+		for k, v := range sec {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				cfg.ExtensionWeights[k] = f
+			}
+		}
+	}
+
+	if sec, ok := sections["spc"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "enabled":
+				cfg.SPC.Enabled = strings.EqualFold(v, "true") || v == "1"
+			case "min_pscore":
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					cfg.SPC.MinPScore = f
+				}
+			case "cache_retention_days":
+				if i, err := strconv.Atoi(v); err == nil {
+					cfg.SPC.CacheRetentionDays = i
+				}
+			case "fetch_interval_h":
+				if i, err := strconv.Atoi(v); err == nil {
+					cfg.SPC.FetchIntervalH = i
+				}
+			}
+		}
+	}
+
+	if sec, ok := sections["spc.nvd"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "base_url":
+				cfg.SPC.NVD.BaseURL = v
+			case "api_key":
+				cfg.SPC.NVD.APIKey = v
+			case "sync_interval_h":
+				if i, err := strconv.Atoi(v); err == nil {
+					cfg.SPC.NVD.SyncIntervalH = i
+				}
+			}
+		}
+		if envKey := os.Getenv("NVD_API_KEY"); envKey != "" {
+			cfg.SPC.NVD.APIKey = envKey
+		}
+	}
+
+	if sec, ok := sections["spc.misp"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "base_url":
+				cfg.SPC.MISP.BaseURL = v
+			case "api_key":
+				cfg.SPC.MISP.APIKey = v
+			case "verify_tls":
+				cfg.SPC.MISP.VerifyTLS = strings.EqualFold(v, "true") || v == "1"
+			case "sync_interval_h":
+				if i, err := strconv.Atoi(v); err == nil {
+					cfg.SPC.MISP.SyncIntervalH = i
+				}
+			case "tlp_filter":
+				cfg.SPC.MISP.TLPFilter = v
+			}
+		}
+		if envKey := os.Getenv("MISP_API_KEY"); envKey != "" {
+			cfg.SPC.MISP.APIKey = envKey
+		}
+	}
+
+	if sec, ok := sections["spc.oscal"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "enabled":
+				cfg.SPC.OSCAL.Enabled = strings.EqualFold(v, "true") || v == "1"
+			case "input_format":
+				cfg.SPC.OSCAL.InputFormat = v
+			case "results_path":
+				cfg.SPC.OSCAL.ResultsPath = v
+			case "plan_path":
+				cfg.SPC.OSCAL.PlanPath = v
+			}
+		}
+	}
+
 	cfg.Weights.Normalize()
 
+	if sec, ok := sections["edge_factors.custom"]; ok {
+		for k, v := range sec {
+			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 && f < 1.0 {
+				model.SetEdgeFactorValue(k, f)
+			}
+		}
+	}
+
+	if sec, ok := sections["domain_registry"]; ok {
+		for domain, status := range sec {
+			if strings.EqualFold(status, "on") || status == "1" {
+				if _, exists := model.GetDomainMeta(domain); !exists {
+					model.RegisterDomain(model.DomainMeta{
+						ID:            domain,
+						Label:         domain,
+						Category:      model.CategoryExtension,
+						DefaultWeight: 5,
+					})
+				}
+			}
+		}
+	}
+
+	cfg.buildAdapterConfig(sections)
+
 	return cfg, nil
+}
+
+func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
+	adapterSections := map[string]bool{
+		"adapters": true, "adapter_paths": true,
+		"trivy": true, "nuclei": true, "lynis": true,
+		"openscap": true, "wazuh_agent": true, "suricata": true,
+		"falco": true, "clamav": true, "osv_scanner": true,
+		"aide": true, "nikto": true,
+		"management_adapters": true,
+		"ansible": true, "netbox": true, "snipe_it": true,
+		"freeipa": true, "keycloak": true, "wazuh_siem": true,
+		"rundeck": true, "jira": true, "terraform": true, "opentofu": true,
+	}
+
+	for sectionName, kv := range sections {
+		if !adapterSections[sectionName] {
+			continue
+		}
+		switch sectionName {
+		case "adapters", "management_adapters":
+			for k, v := range kv {
+				cfg.AdapterConfig[k] = v
+			}
+		case "adapter_paths":
+			for k, v := range kv {
+				cfg.AdapterConfig["adapter_paths."+k] = v
+			}
+		default:
+			for k, v := range kv {
+				cfg.AdapterConfig[sectionName+"."+k] = v
+			}
+		}
+	}
 }
 
 func parseSections(content string) map[string]map[string]string {
