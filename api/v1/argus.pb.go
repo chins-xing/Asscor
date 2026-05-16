@@ -1,9 +1,11 @@
 package apiv1
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 )
@@ -27,24 +29,30 @@ type HeartbeatRequest struct {
 }
 
 type HeartbeatResponse struct {
-	Ok                bool       `json:"ok"`
-	ThreatCoefficient float64    `json:"threat_coefficient"`
-	PendingCommands   []*Command `json:"pending_commands"`
+	Ok                bool              `json:"ok"`
+	ThreatCoefficient float64           `json:"threat_coefficient"`
+	PendingCommands   []*Command        `json:"pending_commands"`
+	AssessmentResult  *AssessmentResult `json:"assessment_result,omitempty"`
 }
 
 type AssessmentResult struct {
 	FinalScore   float64            `json:"final_score"`
 	Acceptable   bool               `json:"acceptable"`
 	DomainScores map[string]float64 `json:"domain_scores"`
+	EdgeFactors  map[string]float64 `json:"edge_factors,omitempty"`
+	ThreatCoeff  float64            `json:"threat_coefficient,omitempty"`
+	SpcScore     float64            `json:"spc_score,omitempty"`
 	Checks       []*CheckResult     `json:"checks"`
 }
 
 type CheckResult struct {
-	CheckId string  `json:"check_id"`
-	Domain  string  `json:"domain"`
-	Passed  bool    `json:"passed"`
-	Delta   float64 `json:"delta"`
-	Detail  string  `json:"detail"`
+	CheckId       string  `json:"check_id"`
+	Domain        string  `json:"domain"`
+	Name          string  `json:"name"`
+	Passed        bool    `json:"passed"`
+	Delta         float64 `json:"delta"`
+	Detail        string  `json:"detail"`
+	ComplianceRef string  `json:"compliance_ref,omitempty"`
 }
 
 type Command struct {
@@ -127,18 +135,29 @@ func (r *ServiceRegistry) Dispatch(ctx context.Context, service, method string, 
 }
 
 type ServerCodec interface {
-	ReadRequest(conn net.Conn) (service, method string, payload []byte, err error)
+	ReadRequest(r io.Reader) (service, method string, payload []byte, err error)
 	WriteResponse(conn net.Conn, payload []byte) error
 	WriteError(conn net.Conn, err error) error
 }
 
 type JSONCodec struct{}
 
-func (c *JSONCodec) ReadRequest(conn net.Conn) (service, method string, payload []byte, err error) {
-	buf := make([]byte, 65536)
-	n, err := conn.Read(buf)
+func (c *JSONCodec) ReadRequest(r io.Reader) (service, method string, payload []byte, err error) {
+	br, ok := r.(*bufio.Reader)
+	if !ok {
+		br = bufio.NewReaderSize(r, 256*1024)
+	}
+
+	line, err := br.ReadBytes('\n')
 	if err != nil {
 		return "", "", nil, err
+	}
+
+	if len(line) > 0 && line[len(line)-1] == '\n' {
+		line = line[:len(line)-1]
+	}
+	if len(line) > 0 && line[len(line)-1] == '\r' {
+		line = line[:len(line)-1]
 	}
 
 	var req struct {
@@ -146,7 +165,7 @@ func (c *JSONCodec) ReadRequest(conn net.Conn) (service, method string, payload 
 		Method  string          `json:"method"`
 		Payload json.RawMessage `json:"payload"`
 	}
-	if err := json.Unmarshal(buf[:n], &req); err != nil {
+	if err := json.Unmarshal(line, &req); err != nil {
 		return "", "", nil, fmt.Errorf("decode request: %w", err)
 	}
 

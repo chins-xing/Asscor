@@ -33,6 +33,21 @@ type Config struct {
 	ExtensionWeights map[string]float64
 
 	AdapterConfig map[string]string
+
+	ExtMgrCfg ExtMgrConfig
+}
+
+type ExtMgrConfig struct {
+	Enabled          bool
+	ExtensionsDir    string
+	StateDir         string
+	AutoEnable       bool
+	AllowPreRelease  bool
+	ExecutionPolicy  string
+	ExecutionTimeout int
+	Repositories     []string
+	WhitelistCmds    []string
+	WorkingDir       string
 }
 
 func Default() *Config {
@@ -83,6 +98,16 @@ func Default() *Config {
 				ResultsPath: "./oscal_results/",
 				PlanPath:    "./oscal_plan/",
 			},
+		},
+		ExtMgrCfg: ExtMgrConfig{
+			Enabled:          true,
+			ExtensionsDir:    "./extensions",
+			StateDir:         "./extensions/state",
+			AutoEnable:       false,
+			AllowPreRelease:  false,
+			ExecutionPolicy:  "whitelist",
+			ExecutionTimeout: 30,
+			WorkingDir:       "./extensions/runtime",
 		},
 	}
 }
@@ -305,6 +330,7 @@ func Parse(content string) (*Config, error) {
 		for k, v := range sec {
 			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 && f < 1.0 {
 				model.SetEdgeFactorValue(k, f)
+				model.SetEdgeFactorActive(k, false)
 			}
 		}
 	}
@@ -320,6 +346,56 @@ func Parse(content string) (*Config, error) {
 						DefaultWeight: 5,
 					})
 				}
+			}
+		}
+	}
+
+	if sec, ok := sections["extension_manager"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "enabled":
+				cfg.ExtMgrCfg.Enabled = strings.EqualFold(v, "true") || v == "1"
+			case "extensions_dir":
+				cfg.ExtMgrCfg.ExtensionsDir = v
+			case "state_dir":
+				cfg.ExtMgrCfg.StateDir = v
+			case "auto_enable":
+				cfg.ExtMgrCfg.AutoEnable = strings.EqualFold(v, "true") || v == "1"
+			case "allow_prerelease":
+				cfg.ExtMgrCfg.AllowPreRelease = strings.EqualFold(v, "true") || v == "1"
+			case "execution_policy":
+				cfg.ExtMgrCfg.ExecutionPolicy = v
+			case "execution_timeout_s":
+				if i, err := strconv.Atoi(v); err == nil {
+					cfg.ExtMgrCfg.ExecutionTimeout = i
+				}
+			}
+		}
+	}
+
+	if sec, ok := sections["extension_manager.repositories"]; ok {
+		for _, v := range sec {
+			cfg.ExtMgrCfg.Repositories = append(cfg.ExtMgrCfg.Repositories, v)
+		}
+	}
+
+	if sec, ok := sections["extension_manager.whitelist"]; ok {
+		for _, v := range sec {
+			cfg.ExtMgrCfg.WhitelistCmds = append(cfg.ExtMgrCfg.WhitelistCmds, v)
+		}
+	}
+
+	if sec, ok := sections["extension_manager.execution"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "policy":
+				cfg.ExtMgrCfg.ExecutionPolicy = v
+			case "timeout_s":
+				if i, err := strconv.Atoi(v); err == nil {
+					cfg.ExtMgrCfg.ExecutionTimeout = i
+				}
+			case "working_dir":
+				cfg.ExtMgrCfg.WorkingDir = v
 			}
 		}
 	}

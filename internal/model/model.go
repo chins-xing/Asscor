@@ -142,10 +142,11 @@ type Weights struct {
 	BusinessContinuity float64
 	OperationTrust     float64
 	Resilience         float64
+	KernelSecurity     float64
 }
 
 func (w *Weights) Normalize() {
-	sum := w.AttackSurface + w.BusinessContinuity + w.OperationTrust + w.Resilience
+	sum := w.AttackSurface + w.BusinessContinuity + w.OperationTrust + w.Resilience + w.KernelSecurity
 	if sum == 0 || sum == 100 {
 		return
 	}
@@ -153,6 +154,7 @@ func (w *Weights) Normalize() {
 	w.BusinessContinuity = w.BusinessContinuity / sum * 100
 	w.OperationTrust = w.OperationTrust / sum * 100
 	w.Resilience = w.Resilience / sum * 100
+	w.KernelSecurity = w.KernelSecurity / sum * 100
 }
 
 func (w Weights) Get(domain string) float64 {

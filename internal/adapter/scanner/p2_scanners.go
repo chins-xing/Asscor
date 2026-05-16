@@ -46,16 +46,24 @@ func (o *OSVScannerAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, err
 	now := time.Now()
 	hasOutput := len(raw) > 0
 
+	vulnCount := 0
+	if hasOutput {
+		lower := strings.ToLower(string(raw))
+		vulnCount = strings.Count(lower, `"id":`)
+	}
+
+	passed := vulnCount == 0
+
 	return []*adapter.NormalizedFinding{{
 		ID:          "OSV-SCANNER-RESULT",
 		Source:      "osv_scanner",
 		ToolName:    "OSV-Scanner",
 		Timestamp:   now,
 		FindingType: adapter.FindingVulnerability,
-		Severity:    adapter.SeverityInfo,
+		Severity:    map[bool]adapter.Severity{true: adapter.SeverityInfo, false: adapter.SeverityHigh}[passed],
 		Title:       "OSV-Scanner dependency scan",
-		Passed:      !strings.Contains(string(raw), "vulnerability"),
-		Detail:      fmt.Sprintf("OSV-Scanner completed, findings: %v", hasOutput),
+		Passed:      passed,
+		Detail:      fmt.Sprintf("OSV-Scanner completed, %d vulnerabilities found", vulnCount),
 		Domain:      model.DomainAttackSurface,
 		DelegatedTo: "osv_scanner",
 	}}, nil
@@ -151,7 +159,10 @@ func (n *NiktoAdapter) Fetch(ctx context.Context, config map[string]string) ([]b
 	cmd := exec.CommandContext(ctx, niktoPath, "-h", target, "-Format", "txt")
 	out, err := cmd.Output()
 	if err != nil {
-		return out, nil
+		if len(out) > 0 {
+			return out, nil
+		}
+		return nil, fmt.Errorf("nikto execution failed: %w", err)
 	}
 	return out, nil
 }

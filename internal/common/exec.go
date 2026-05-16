@@ -47,5 +47,8 @@ func (e *CommandError) Error() string {
 
 func RunCmdQuiet(name string, args ...string) (string, bool) {
 	out, err := RunCmd(name, args...)
-	return out, err == nil
+	if err != nil {
+		return out, false
+	}
+	return out, true
 }

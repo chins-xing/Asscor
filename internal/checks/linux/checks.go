@@ -116,7 +116,7 @@ func as002() model.CheckItem {
 				return true, fmt.Sprintf("无法检查端口: %v", err)
 			}
 			lines := strings.Split(strings.TrimSpace(out), "\n")
-			var ports []string
+			portSet := make(map[int]bool)
 			for _, line := range lines[1:] {
 				fields := strings.Fields(line)
 				if len(fields) >= 4 {
@@ -124,13 +124,32 @@ func as002() model.CheckItem {
 					if idx := strings.LastIndex(addr, ":"); idx != -1 {
 						port := addr[idx+1:]
 						if p, err := strconv.Atoi(port); err == nil && p > 0 {
-							ports = append(ports, port)
+							portSet[p] = true
 						}
 					}
 				}
 			}
-			return true, fmt.Sprintf("当前监听 %d 个端口: [%s]", len(ports), strings.Join(ports, ", "))
+			uniquePorts := make([]int, 0, len(portSet))
+			for p := range portSet {
+				uniquePorts = append(uniquePorts, p)
+			}
+			sortSlice(uniquePorts)
+			portStrs := make([]string, len(uniquePorts))
+			for i, p := range uniquePorts {
+				portStrs[i] = strconv.Itoa(p)
+			}
+			return true, fmt.Sprintf("当前监听 %d 个端口: [%s]", len(uniquePorts), strings.Join(portStrs, ", "))
 		},
+	}
+}
+
+func sortSlice(s []int) {
+	for i := 0; i < len(s); i++ {
+		for j := i + 1; j < len(s); j++ {
+			if s[i] > s[j] {
+				s[i], s[j] = s[j], s[i]
+			}
+		}
 	}
 }
 
@@ -363,16 +382,54 @@ func as012() model.CheckItem {
 		ID:            "AS-012",
 		Domain:        model.DomainAttackSurface,
 		Name:          "幽灵账户检测",
-		Description:   "扫描无密码或长期未登录账户",
+		Description:   "检查UID=0非root账户及无属主进程账户",
 		Delta:         -6,
 		ComplianceRef: "L3-CE-09",
 		Platform:      "linux",
 		Check: func() (bool, string) {
+			systemWhitelist := map[string]bool{
+				"root": true, "bin": true, "daemon": true, "adm": true,
+				"lp": true, "sync": true, "shutdown": true, "halt": true,
+				"mail": true, "operator": true, "games": true, "ftp": true,
+				"nobody": true, "dbus": true, "polkitd": true, "avahi": true,
+				"colord": true, "cups": true, "gdm": true, "geoclue": true,
+				"lightdm": true, "nm-openconnect": true, "nm-openvpn": true,
+				"ntp": true, "openvpn": true, "pulse": true, "rpc": true,
+				"rpcuser": true, "rtkit": true, "saned": true, "speech-dispatcher": true,
+				"sshd": true, "syslog": true, "systemd-bus-proxy": true,
+				"systemd-network": true, "systemd-resolve": true, "systemd-timesync": true,
+				"tss": true, "usbmux": true, "uuidd": true,
+				"chrony": true, "dnsmasq": true, "gluster": true,
+				"libvirt-qemu": true, "libvirt-dnsmasq": true, "mysql": true,
+				"postgres": true, "redis": true, "nginx": true, "apache": true,
+				"www-data": true, "messagebus": true, "sys": true,
+				"proxy": true, "uucp": true, "news": true, "irc": true,
+				"list": true, "man": true, "backup": true, "smmsp": true,
+				"smmta": true, "postfix": true, "dovecot": true, "dovenull": true,
+				"vboxadd": true, "tcpdump": true, "snmp": true, "pcap": true,
+				"memcached": true, "tomcat": true, "jenkins": true, "git": true,
+				"svn": true, "docker": true, "lxd": true, "landscape": true,
+				"pollinate": true, "fwupd-refresh": true, "gnome-initial-setup": true,
+				"whoopsie": true, "kernoops": true, "hplip": true, "pki": true,
+				"elasticsearch": true, "logstash": true, "kibana": true,
+				"cassandra": true, "mongodb": true, "rabbitmq": true, "haproxy": true,
+				"consul": true, "nomad": true, "vault": true, "traefik": true,
+				"prometheus": true, "grafana": true, "alertmanager": true,
+				"node_exporter": true, "telegraf": true, "influxdb": true,
+				"ntopng": true, "ossec": true, "ossecm": true, "ossecr": true,
+				"wazuh": true, "suricata": true, "snort": true, "zeek": true,
+				"clamav": true, "freshclam": true,
+			}
+
 			data, err := os.ReadFile("/etc/shadow")
 			if err != nil {
 				return false, fmt.Sprintf("无法读取/etc/shadow: %v", err)
 			}
-			var ghost []string
+
+			var trueGhosts []string
+			var lockedSystemAccounts []string
+			shadowAccounts := make(map[string]bool)
+
 			for _, line := range strings.Split(string(data), "\n") {
 				line = strings.TrimSpace(line)
 				if line == "" {
@@ -382,16 +439,84 @@ func as012() model.CheckItem {
 				if len(parts) < 2 {
 					continue
 				}
+				user := parts[0]
+				shadowAccounts[user] = true
+
 				if parts[1] == "" || parts[1] == "!" || parts[1] == "!!" || parts[1] == "*" {
-					if parts[0] != "root" && !strings.HasPrefix(parts[0], "systemd-") {
-						ghost = append(ghost, parts[0])
+					if systemWhitelist[user] || strings.HasPrefix(user, "systemd-") {
+						lockedSystemAccounts = append(lockedSystemAccounts, user)
+						continue
+					}
+					trueGhosts = append(trueGhosts, user)
+				}
+			}
+
+			passwdData, err := os.ReadFile("/etc/passwd")
+			if err == nil {
+				for _, line := range strings.Split(string(passwdData), "\n") {
+					line = strings.TrimSpace(line)
+					if line == "" {
+						continue
+					}
+					parts := strings.Split(line, ":")
+					if len(parts) < 4 {
+						continue
+					}
+					if parts[2] == "0" && parts[0] != "root" {
+						if !systemWhitelist[parts[0]] {
+							trueGhosts = append(trueGhosts, fmt.Sprintf("%s(UID=0)", parts[0]))
+						}
 					}
 				}
 			}
-			if len(ghost) == 0 {
-				return true, "未发现幽灵账户"
+
+			uidMap := make(map[string]string)
+			processAccountsWithoutPasswd := make(map[string]bool)
+			if passwdData != nil {
+				for _, line := range strings.Split(string(passwdData), "\n") {
+					line = strings.TrimSpace(line)
+					if line == "" {
+						continue
+					}
+					parts := strings.Split(line, ":")
+					if len(parts) >= 4 {
+						uidMap[parts[2]] = parts[0]
+					}
+				}
 			}
-			return false, fmt.Sprintf("发现 %d 个幽灵账户: %s", len(ghost), strings.Join(ghost, ", "))
+
+			out, psErr := common.RunCmd("ps", "-eo", "uid=", "--no-headers")
+			if psErr == nil {
+				processUIDs := make(map[string]bool)
+				for _, line := range strings.Split(out, "\n") {
+					uid := strings.TrimSpace(line)
+					if uid != "" && uid != "0" {
+						processUIDs[uid] = true
+					}
+				}
+				for uid := range processUIDs {
+					if _, exists := uidMap[uid]; !exists {
+						if _, shadowExists := shadowAccounts[uid]; !shadowExists {
+							processAccountsWithoutPasswd[fmt.Sprintf("UID:%s", uid)] = true
+						}
+					}
+				}
+			}
+
+			for acct := range processAccountsWithoutPasswd {
+				trueGhosts = append(trueGhosts, acct)
+			}
+
+			if len(trueGhosts) > 0 {
+				return false, fmt.Sprintf("发现 %d 个可疑幽灵账户: %s; (系统默认账户 %d 个已正确锁定)",
+					len(trueGhosts), strings.Join(trueGhosts, ", "), len(lockedSystemAccounts))
+			}
+
+			if len(lockedSystemAccounts) > 0 {
+				return true, fmt.Sprintf("未发现幽灵账户 (系统默认账户 %d 个已正确锁定)", len(lockedSystemAccounts))
+			}
+
+			return true, "未发现幽灵账户"
 		},
 	}
 }
@@ -825,20 +950,25 @@ func ac005() model.CheckItem {
 		ComplianceRef: "ACI-06",
 		Platform:      "linux",
 		Check: func() (bool, string) {
-			if _, err := os.Stat("/etc/selinux/config"); err == nil {
-				data, _ := os.ReadFile("/etc/selinux/config")
-				if strings.Contains(string(data), "enforcing") {
-					return true, "SELinux enforcing模式提供执行限制"
-				}
-			}
-			_, err := common.RunCmd("which", "fapolicyd")
+			out, err := common.RunCmd("getenforce")
 			if err == nil {
-				out, ok := common.RunCmdQuiet("systemctl", "is-active", "fapolicyd")
-				if ok && strings.TrimSpace(out) == "active" {
-					return true, "fapolicyd 已运行"
+				status := strings.TrimSpace(out)
+				if status == "Enforcing" {
+					return true, "SELinux Enforcing 模式提供执行限制"
+				}
+				if status == "Permissive" {
+					out2, ok := common.RunCmdQuiet("systemctl", "is-active", "fapolicyd")
+					if ok && strings.TrimSpace(out2) == "active" {
+						return true, "fapolicyd 已运行 (SELinux Permissive)"
+					}
+					return false, fmt.Sprintf("SELinux 处于 %s 模式，应用白名单未生效", status)
 				}
 			}
-			return false, "未检测到应用程序白名单机制"
+			out2, ok := common.RunCmdQuiet("systemctl", "is-active", "fapolicyd")
+			if ok && strings.TrimSpace(out2) == "active" {
+				return true, "fapolicyd 已运行"
+			}
+			return false, "未检测到应用程序白名单机制 (SELinux Enforcing/fapolicyd)"
 		},
 	}
 }
@@ -1326,13 +1456,65 @@ func ot014() model.CheckItem {
 			if strings.Contains(out, "crypt") || strings.Contains(out, "LUKS") {
 				return true, "检测到LUKS加密分区"
 			}
+
 			out2, err2 := common.RunCmd("mount")
 			if err2 == nil && strings.Contains(out2, "gocryptfs") {
 				return true, "检测到gocryptfs加密挂载"
 			}
-			return false, "未检测到静态数据加密 (LUKS/gocryptfs)"
+
+			if _, err := os.Stat("/etc/crypttab"); err == nil {
+				data, err := os.ReadFile("/etc/crypttab")
+				if err == nil {
+					activeVolumes := parseCrypttab(string(data))
+					if len(activeVolumes) > 0 {
+						mappedDevices := getMappedDevices()
+						var mounted []string
+						for _, vol := range activeVolumes {
+							if mappedDevices[vol] {
+								mounted = append(mounted, "/dev/mapper/"+vol)
+							}
+						}
+						if len(mounted) > 0 {
+							return true, fmt.Sprintf("检测到加密存储配置: %s (活跃映射: %d 个)", strings.Join(activeVolumes, ", "), len(mounted))
+						}
+						return false, fmt.Sprintf("/etc/crypttab 中存在 %d 个加密卷配置但未检测到活跃映射 (%s, 请检查是否已挂载)", len(activeVolumes), strings.Join(activeVolumes, ", "))
+					}
+				}
+			}
+
+			return false, "未检测到静态数据加密 (LUKS/gocryptfs/crypttab)"
 		},
 	}
+}
+
+func parseCrypttab(content string) []string {
+	var volumes []string
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) >= 2 {
+			volumes = append(volumes, fields[0])
+		}
+	}
+	return volumes
+}
+
+func getMappedDevices() map[string]bool {
+	devices := make(map[string]bool)
+	entries, err := os.ReadDir("/dev/mapper")
+	if err != nil {
+		return devices
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if name != "control" {
+			devices[name] = true
+		}
+	}
+	return devices
 }
 
 // OT-015 国密算法检测
@@ -1594,7 +1776,23 @@ func ot022() model.CheckItem {
 				return true, "检测到LUKS加密存储"
 			}
 			if _, err := os.Stat("/etc/crypttab"); err == nil {
-				return true, "检测到加密存储配置 (/etc/crypttab)"
+				data, err := os.ReadFile("/etc/crypttab")
+				if err == nil {
+					activeVolumes := parseCrypttab(string(data))
+					if len(activeVolumes) > 0 {
+						mappedDevices := getMappedDevices()
+						var mounted []string
+						for _, vol := range activeVolumes {
+							if mappedDevices[vol] {
+								mounted = append(mounted, vol)
+							}
+						}
+						if len(mounted) > 0 {
+							return true, fmt.Sprintf("检测到加密存储: /etc/crypttab (活跃: %d/%d 卷)", len(mounted), len(activeVolumes))
+						}
+					}
+				}
+				return false, "检测到 /etc/crypttab 但无可验证的活跃加密卷映射"
 			}
 			return false, "未检测到强加密存储 (AES-256/国密)"
 		},
@@ -1608,23 +1806,54 @@ func rs006() model.CheckItem {
 		ID:            "RS-006",
 		Domain:        model.DomainResilience,
 		Name:          "HIDS/NIDS部署",
-		Description:   "检查Wazuh/AIDE/Tripwire等HIDS是否运行",
+		Description:   "检查Wazuh/AIDE/Suricata等HIDS/NIDS是否运行",
 		Delta:         -10,
 		ComplianceRef: "L3-CE-24",
 		Platform:      "linux",
 		Check: func() (bool, string) {
-			hidsTools := []string{"wazuh-agent", "ossec-hids", "aide", "tripwire", "samhain", "rkhunter"}
+			idsTools := []string{
+				"wazuh-agent", "ossec-hids", "ossec-agent",
+				"aide", "tripwire", "samhain", "rkhunter",
+				"suricata", "snort", "snort3", "zeek",
+			}
 			var found []string
-			for _, tool := range hidsTools {
+			for _, tool := range idsTools {
 				out, ok := common.RunCmdQuiet("systemctl", "is-active", tool)
 				if ok && strings.TrimSpace(out) == "active" {
 					found = append(found, tool)
 				}
 			}
-			if len(found) > 0 {
-				return true, fmt.Sprintf("检测到HIDS工具: %s", strings.Join(found, ", "))
+
+			processNames := []string{"suricata", "snort", "snort3", "zeek", "wazuh-agent",
+				"ossec-agent", "aide", "tripwire", "samhain"}
+			needProcessCheck := len(found) == 0
+			if needProcessCheck {
+				out, err := common.RunCmd("ps", "-eo", "comm", "--no-headers")
+				if err == nil {
+					for _, name := range processNames {
+						for _, line := range strings.Split(out, "\n") {
+							if strings.TrimSpace(line) == name {
+								found = append(found, name+"(进程)")
+								break
+							}
+						}
+					}
+				}
 			}
-			return false, "未检测到运行中的HIDS/NIDS工具"
+
+			if len(found) > 0 {
+				seen := make(map[string]bool)
+				var deduped []string
+				for _, t := range found {
+					base := strings.TrimSuffix(t, "(进程)")
+					if !seen[base] {
+						seen[base] = true
+						deduped = append(deduped, t)
+					}
+				}
+				return true, fmt.Sprintf("检测到IDS工具: %s", strings.Join(deduped, ", "))
+			}
+			return false, "未检测到运行中的HIDS/NIDS工具 (检查范围: wazuh/suricata/snort/zeek/aide/tripwire/samhain/rkhunter)"
 		},
 	}
 }

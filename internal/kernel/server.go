@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -109,6 +110,8 @@ func (s *Server) acceptLoop() {
 func (s *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
 
+	br := bufio.NewReaderSize(conn, 256*1024)
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -116,7 +119,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		default:
 		}
 
-		service, method, payload, err := s.codec.ReadRequest(conn)
+		service, method, payload, err := s.codec.ReadRequest(br)
 		if err != nil {
 			if err.Error() != "EOF" {
 				log.Printf("grpc: read error: %v", err)

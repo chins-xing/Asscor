@@ -5,7 +5,7 @@
 > Argus——希腊神话中的百眼巨人，全视、警惕、永不闭目。这个名字本身就是项目的隐喻：持续监控每一台主机的安全状态，不放过任何一个弱点。眼睛是项目的灵魂元素，也是 ARGUS 最核心的意象。
 
 **算法版本：** SSAM 1.3 | **项目版本：** ARGUS v0.1.1-MVP  
-**日期：** 2026-05-14  
+**日期：** 2026-05-16  
 **状态：** 发布
 
 ## 摘要
@@ -220,7 +220,8 @@ argus/
 ├── certs/             # TLS 证书目录
 ├── docs/              # 技术文档与白皮书
 ├── build/             # 编译产物（Linux/Windows）
-└── config.ini         # 默认配置文件
+├── config.ini         # 内核默认配置文件
+└── agent.ini          # Agent 默认配置文件
 ```
 
 ## 10. 快速开始
@@ -251,8 +252,14 @@ argus-kernel.exe -listen 0.0.0.0:50051 -no-mtls
 
 **启动 Agent（Linux）：**
 ```bash
-./argus-agent-linux-amd64-v0.1.1-MVP -kernel 192.168.1.100:50051 -host-id server01
+# 使用命令行参数
+./argus-agent-linux-amd64 -kernel 192.168.1.100:50051 -host-id server01
+
+# 或使用配置文件
+./argus-agent-linux-amd64 -config agent.ini
 ```
+
+Agent 配置文件 `agent.ini` 支持心跳间隔、重连策略、mTLS 等参数自定义，详见文件内注释。
 
 ## 11. 与 ARGUS μKernel 的联动
 
@@ -275,5 +282,9 @@ SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。�
 - **SSAM 1.1** — 四核心域 + 独立属性，消除维度重叠
 - **SSAM 1.2** — 引入 ACI、SPC、等保映射、AVD 扩展机制、μKernel 联动
 - **SSAM 1.3** — 移除4项重叠边缘因子（SYN Cookie/供应链/自动封禁/资源紧张），SPC 引入平方和衰减，增加边缘因子合规等级覆盖，内置冲突检测
+
+### ARGUS v0.1.1-MVP 修复记录
+
+- **Agent 反复重连修复** — Client 层改用 `bufio.Reader.ReadBytes('\n')` 按行读取 TCP 响应，解决半包导致的 JSON 解析失败；心跳循环改用 `time.Timer` 替代 `time.Ticker`，防止 `runChecks()` 耗时导致的心跳堆积触发连续错误重连。
 
 > **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 1.3。ARGUS 是实现 SSAM 的开源项目框架，当前版本 v0.1.1-MVP。两者版本号独立演进。

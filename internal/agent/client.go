@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bufio"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,7 @@ type Client struct {
 	addr      string
 	tlsConfig *tls.Config
 	conn      net.Conn
+	br        *bufio.Reader
 	mu        sync.Mutex
 	deadline  time.Duration
 	seq       int64
@@ -34,6 +36,7 @@ func (c *Client) Connect() error {
 
 	if c.conn != nil {
 		c.conn.Close()
+		c.br = nil
 	}
 
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
@@ -49,6 +52,7 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("connect to %s: %w", c.addr, err)
 	}
 
+	c.br = bufio.NewReaderSize(c.conn, 256*1024)
 	return nil
 }
 
@@ -58,6 +62,7 @@ func (c *Client) Close() error {
 	if c.conn != nil {
 		err := c.conn.Close()
 		c.conn = nil
+		c.br = nil
 		return err
 	}
 	return nil
@@ -122,10 +127,16 @@ func (c *Client) call(service, method string, req, resp interface{}) error {
 	}
 
 	c.conn.SetReadDeadline(time.Now().Add(c.deadline))
-	buf := make([]byte, 65536)
-	n, err := c.conn.Read(buf)
+	line, err := c.br.ReadBytes('\n')
 	if err != nil {
 		return fmt.Errorf("read: %w", err)
+	}
+
+	if len(line) > 0 && line[len(line)-1] == '\n' {
+		line = line[:len(line)-1]
+	}
+	if len(line) > 0 && line[len(line)-1] == '\r' {
+		line = line[:len(line)-1]
 	}
 
 	var respEnv struct {
@@ -133,7 +144,7 @@ func (c *Client) call(service, method string, req, resp interface{}) error {
 		Payload json.RawMessage `json:"payload"`
 		Error   string          `json:"error,omitempty"`
 	}
-	if err := json.Unmarshal(buf[:n], &respEnv); err != nil {
+	if err := json.Unmarshal(line, &respEnv); err != nil {
 		return fmt.Errorf("unmarshal response: %w", err)
 	}
 

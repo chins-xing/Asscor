@@ -116,15 +116,21 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 }
 
 func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
+	log.Printf("assessor: EvaluateFromResults called for %s with %d checks", hostID, len(checkResults))
+
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_evaluate", hostID)
 
 	result := m.engine.AssessFromResults(hostID, hostname, checkResults)
+	log.Printf("assessor: AssessFromResults returned score=%.2f for %s", result.FinalScore, hostID)
 
 	m.mu.Lock()
 	m.results[hostID] = result
 	m.mu.Unlock()
 
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
+
+	subCount := m.kernel.Bus().SubscriberCount("assessor.result")
+	log.Printf("assessor: publishing assessor.result (subscribers=%d)", subCount)
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
 		Topic:   "assessor.result",

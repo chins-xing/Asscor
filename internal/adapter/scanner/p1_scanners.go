@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -35,9 +36,14 @@ func (o *OpenSCAPAdapter) Fetch(ctx context.Context, config map[string]string) (
 		profile = "xccdf_org.ssgproject.content_profile_standard"
 	}
 
+	datastream := config["openscap.datastream"]
+	if datastream == "" {
+		datastream = "/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml"
+	}
+
 	cmd := exec.CommandContext(ctx, oscapPath, "xccdf", "eval", "--profile", profile,
 		"--results", "/tmp/oscap-results.xml", "--report", "/tmp/oscap-report.html",
-		"/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml")
+		datastream)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) > 0 {
@@ -222,7 +228,12 @@ func (s *SuricataAdapter) Fetch(ctx context.Context, config map[string]string) (
 	if err != nil {
 		return nil, fmt.Errorf("suricata fetch failed: %w", err)
 	}
-	_ = eveFile
+
+	if eveData, err := os.ReadFile(eveFile); err == nil && len(eveData) > 0 {
+		out = append(out, '\n')
+		out = append(out, eveData...)
+	}
+
 	return out, nil
 }
 

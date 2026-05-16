@@ -15,6 +15,8 @@ func main() {
 	configPath := flag.String("config", "agent.ini", "path to agent config file")
 	kernelAddr := flag.String("kernel", "localhost:8443", "kernel address host:port")
 	hostID := flag.String("host-id", "", "agent host identifier (default: hostname)")
+	tlsEnabled := flag.Bool("tls", false, "enable mTLS connection")
+	certDir := flag.String("cert-dir", "certs", "TLS certificate directory")
 	flag.Parse()
 
 	cfg := agent.DefaultConfig()
@@ -22,6 +24,14 @@ func main() {
 
 	if *hostID != "" {
 		cfg.HostID = *hostID
+	}
+
+	if *tlsEnabled {
+		cfg.TLSEnabled = true
+	}
+
+	if *certDir != "" {
+		cfg.CertDir = *certDir
 	}
 
 	if *configPath != "" {
@@ -100,6 +110,8 @@ func loadConfigFile(path string, cfg *agent.AgentConfig) error {
 				cfg.TLSEnabled = val == "true" || val == "yes" || val == "1"
 			case "tls_skip_verify":
 				cfg.TLSSkipVerify = val == "true" || val == "yes" || val == "1"
+			case "cert_dir":
+				cfg.CertDir = val
 			}
 		}
 	}

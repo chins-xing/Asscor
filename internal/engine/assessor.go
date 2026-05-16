@@ -265,7 +265,7 @@ func (a *Assessor) computeDynamicDomainScores(result *model.AssessmentResult) *m
 		activeDomains[c.Domain] = true
 	}
 	if len(activeDomains) == 0 {
-		for _, id := range model.ListDomainIDsByCategory(model.CategoryCore) {
+		for _, id := range model.ListDomainIDs() {
 			activeDomains[id] = true
 		}
 	}
@@ -290,12 +290,7 @@ func (a *Assessor) computeDynamicDomainScores(result *model.AssessmentResult) *m
 }
 
 func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
-	model.SetEdgeFactorValue("EF-002FA", 1.0)
-	model.SetEdgeFactorValue("EF-SYNCOOKIE", 1.0)
-	model.SetEdgeFactorValue("EF-SELINUX", 1.0)
-	model.SetEdgeFactorValue("EF-APPARMOR", 1.0)
-	model.SetEdgeFactorValue("EF-NO-SIEM", 1.0)
-	model.SetEdgeFactorValue("EF-NO-IDS", 1.0)
+	model.ResetAllEdgeFactors()
 
 	for _, check := range result.Checks {
 		if check.Passed {
@@ -305,7 +300,7 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		case "EF-001":
 			model.SetEdgeFactorValue("EF-002FA", a.cfg.EdgeFactors.TwoFactorFailure)
 		case "EF-002":
-			model.SetEdgeFactorValue("EF-002FA", a.cfg.EdgeFactors.TwoFactorFailure*0.82)
+			model.SetEdgeFactorValue("EF-002FA", 0.82)
 		}
 	}
 

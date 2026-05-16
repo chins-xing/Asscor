@@ -37,6 +37,7 @@ message HeartbeatResponse {
   bool ok = 1;
   double threat_coefficient = 2;
   repeated Command pending_commands = 3;
+  AssessmentResult assessment_result = 4;
 }
 
 message AssessmentResult {

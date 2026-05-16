@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/argus-security/argus/internal/config"
 	"github.com/argus-security/argus/internal/model"
 	"github.com/argus-security/argus/internal/version"
 )
@@ -17,12 +18,15 @@ import (
 type AssessmentRecord struct {
 	Timestamp      time.Time `json:"timestamp"`
 	HostID         string    `json:"host_id"`
+	Hostname       string    `json:"hostname,omitempty"`
 	FinalScore     float64   `json:"final_score"`
+	Threshold      float64   `json:"threshold,omitempty"`
 	Acceptable     bool      `json:"acceptable"`
 	AttackSurface  float64   `json:"attack_surface"`
 	BusinessCont   float64   `json:"business_continuity"`
 	OperationTrust float64   `json:"operation_trust"`
 	Resilience     float64   `json:"resilience"`
+	KernelSecurity float64   `json:"kernel_security,omitempty"`
 	TwoFactorFail  float64   `json:"two_factor_failure"`
 	ThreatCoeff    float64   `json:"threat_coefficient"`
 	SPCScore       float64   `json:"spc_score,omitempty"`
@@ -167,6 +171,7 @@ func (w *jsonlWriter) close() error {
 
 type PersistenceModule struct {
 	kernel *Kernel
+	cfg    *config.Config
 
 	mu          sync.Mutex
 	dataDir     string
@@ -211,6 +216,15 @@ func (m *PersistenceModule) Priority() int {
 func (m *PersistenceModule) Init(ctx context.Context, k *Kernel) error {
 	m.kernel = k
 	m.state = PluginInitialized
+
+	if impl, ok := k.Container().ResolveNamed("config"); ok {
+		if c, ok := impl.(*config.Config); ok {
+			m.cfg = c
+		}
+	}
+	if m.cfg == nil {
+		m.cfg = config.Default()
+	}
 
 	if err := os.MkdirAll(m.dataDir, 0755); err != nil {
 		return fmt.Errorf("persistence: create data dir: %w", err)
@@ -370,8 +384,12 @@ func (m *PersistenceModule) DataDir() string {
 
 func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message) error {
 	payload := msg.Payload
+	log.Printf("persistence: received assessor.result event (type=%T)", payload)
 
 	if ar, ok := payload.(*model.AssessmentResult); ok {
+		log.Printf("persistence: processing assessment for %s: score=%.2f acceptable=%v checks=%d",
+			ar.HostID, ar.FinalScore, ar.Acceptable, len(ar.Checks))
+
 		checkDetails := make([]CheckDetail, 0, len(ar.Checks))
 		for _, c := range ar.Checks {
 			checkDetails = append(checkDetails, CheckDetail{
@@ -388,12 +406,15 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		rec := AssessmentRecord{
 			Timestamp:      time.Now(),
 			HostID:         ar.HostID,
+			Hostname:       ar.Hostname,
 			FinalScore:     ar.FinalScore,
+			Threshold:      ar.Threshold,
 			Acceptable:     ar.Acceptable,
 			AttackSurface:  ar.DomainScores.AttackSurface,
 			BusinessCont:   ar.DomainScores.BusinessContinuity,
 			OperationTrust: ar.DomainScores.OperationTrust,
 			Resilience:     ar.DomainScores.Resilience,
+			KernelSecurity: ar.DomainScores.KernelSecurity,
 			TwoFactorFail:  ar.EdgeFactors.TwoFactorFailure,
 			ThreatCoeff:    ar.ThreatCoeff,
 			SPCScore:       ar.SPCScore,
@@ -407,7 +428,11 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			}
 		}
 
-		m.WriteAssessment(rec)
+		if err := m.WriteAssessment(rec); err != nil {
+			log.Printf("persistence: write assessment error: %v", err)
+		} else {
+			log.Printf("persistence: assessment written for %s (score=%.2f)", ar.HostID, ar.FinalScore)
+		}
 
 		passedCount := rec.CheckCount - rec.FailedCount
 		domainScores := map[string]float64{
@@ -415,12 +440,13 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			"business_continuity": ar.DomainScores.BusinessContinuity,
 			"operation_trust":     ar.DomainScores.OperationTrust,
 			"resilience":          ar.DomainScores.Resilience,
+			"kernel_security":     ar.DomainScores.KernelSecurity,
 		}
 		domainWeights := map[string]float64{
-			"attack_surface":      35,
-			"business_continuity": 25,
-			"operation_trust":     25,
-			"resilience":          15,
+			"attack_surface":      m.cfg.Weights.AttackSurface,
+			"business_continuity": m.cfg.Weights.BusinessContinuity,
+			"operation_trust":     m.cfg.Weights.OperationTrust,
+			"resilience":          m.cfg.Weights.Resilience,
 		}
 		edgeFactors := map[string]float64{
 			"two_factor_failure": ar.EdgeFactors.TwoFactorFailure,
@@ -442,13 +468,15 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			ThreatCoeff:   ar.ThreatCoeff,
 			SPCScore:      ar.SPCScore,
 			Checks:        checkDetails,
-			ComplianceFramework: "GB/T 22239-2019",
+			ComplianceFramework: m.cfg.ComplianceFramework,
 		}
 		report.Summary.TotalChecks = rec.CheckCount
 		report.Summary.PassedChecks = passedCount
 		report.Summary.FailedChecks = rec.FailedCount
 
-		m.WriteDashboardReport(report)
+		if err := m.WriteDashboardReport(report); err != nil {
+			log.Printf("persistence: write dashboard report error: %v", err)
+		}
 		return nil
 	}
 

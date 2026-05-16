@@ -125,5 +125,19 @@ func setupTLS(certDir string) *tls.Config {
 		os.WriteFile(serverKeyPath, serverPair.KeyPEM, 0600)
 	}
 
+	agentCertPath := certDir + "/agent.crt"
+	agentKeyPath := certDir + "/agent.key"
+	if _, err := os.Stat(agentCertPath); os.IsNotExist(err) {
+		log.Printf("generating new agent certificate...")
+		agentPair, err := kernel.IssueAgentCert(caPair, kernel.DefaultAgentConfig("agent"), "agent")
+		if err != nil {
+			log.Printf("warning: cannot issue agent cert: %v", err)
+		} else {
+			os.WriteFile(agentCertPath, agentPair.CertPEM, 0600)
+			os.WriteFile(agentKeyPath, agentPair.KeyPEM, 0600)
+			log.Printf("agent certificate generated: %s, %s", agentCertPath, agentKeyPath)
+		}
+	}
+
 	return kernel.NewServerTLSConfig(serverPair, caPair)
 }

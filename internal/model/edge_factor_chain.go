@@ -101,18 +101,13 @@ func (e *EdgeFactorChain) Apply(baseScore float64) float64 {
 	return math.Round(baseScore*100) / 100
 }
 
-func (e *EdgeFactorChain) ResetAll() {
+func ResetAllEdgeFactors() {
 	globalEdgeFactorChain.mu.Lock()
 	defer globalEdgeFactorChain.mu.Unlock()
 	for _, f := range globalEdgeFactorChain.factors {
 		f.Factor = 1.0
 		f.Active = false
 	}
-}
-
-func ResetAllEdgeFactors() {
-	var chain EdgeFactorChain
-	chain.ResetAll()
 }
 
 func init() {

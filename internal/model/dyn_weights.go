@@ -81,6 +81,9 @@ func (w *DynamicWeights) FromLegacy(legacy Weights) {
 	w.weights[DomainBusinessContinuity] = legacy.BusinessContinuity
 	w.weights[DomainOperationTrust] = legacy.OperationTrust
 	w.weights[DomainResilience] = legacy.Resilience
+	if legacy.KernelSecurity != 0 {
+		w.weights[DomainKernelSecurity] = legacy.KernelSecurity
+	}
 }
 
 func (w *DynamicWeights) ToLegacy() Weights {
@@ -91,5 +94,6 @@ func (w *DynamicWeights) ToLegacy() Weights {
 		BusinessContinuity: w.weights[DomainBusinessContinuity],
 		OperationTrust:     w.weights[DomainOperationTrust],
 		Resilience:         w.weights[DomainResilience],
+		KernelSecurity:     w.weights[DomainKernelSecurity],
 	}
 }

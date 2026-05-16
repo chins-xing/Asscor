@@ -46,19 +46,27 @@ func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterReq
 }
 
 func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatRequest) (*apiv1.HeartbeatResponse, error) {
+	log.Printf("kernel: heartbeat from %s (result=%v, assessor=%v)", req.HostId, req.Result != nil, s.assessor != nil)
+
 	if s.heartbeat != nil {
 		s.heartbeat.RecordHeartbeat(req.HostId)
 	}
 
+	var assessmentResult *apiv1.AssessmentResult
+
 	if req.Result != nil && s.assessor != nil {
+		log.Printf("kernel: processing %d check results from %s", len(req.Result.Checks), req.HostId)
+
 		checkResults := make([]model.CheckResult, 0, len(req.Result.Checks))
 		for _, c := range req.Result.Checks {
 			checkResults = append(checkResults, model.CheckResult{
-				CheckID: c.CheckId,
-				Domain:  c.Domain,
-				Passed:  c.Passed,
-				Delta:   c.Delta,
-				Detail:  c.Detail,
+				CheckID:       c.CheckId,
+				Domain:        c.Domain,
+				Name:          c.Name,
+				Passed:        c.Passed,
+				Delta:         c.Delta,
+				Detail:        c.Detail,
+				ComplianceRef: c.ComplianceRef,
 			})
 		}
 
@@ -69,7 +77,11 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 			}
 		}
 
-		s.assessor.EvaluateFromResults(req.HostId, hostname, checkResults)
+		result := s.assessor.EvaluateFromResults(req.HostId, hostname, checkResults)
+		log.Printf("kernel: assessment result for %s: score=%.2f acceptable=%v checks=%d",
+			req.HostId, result.FinalScore, result.Acceptable, len(result.Checks))
+
+		assessmentResult = convertAssessmentResult(result)
 	}
 
 	var pendingCmds []*apiv1.Command
@@ -86,7 +98,49 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		Ok:                true,
 		ThreatCoefficient: threatCoeff,
 		PendingCommands:   pendingCmds,
+		AssessmentResult:  assessmentResult,
 	}, nil
+}
+
+func convertAssessmentResult(r *model.AssessmentResult) *apiv1.AssessmentResult {
+	if r == nil {
+		return nil
+	}
+
+	domainScores := map[string]float64{
+		"attack_surface":      r.DomainScores.AttackSurface,
+		"business_continuity": r.DomainScores.BusinessContinuity,
+		"operation_trust":     r.DomainScores.OperationTrust,
+		"resilience":          r.DomainScores.Resilience,
+		"kernel_security":     r.DomainScores.KernelSecurity,
+	}
+
+	edgeFactors := map[string]float64{
+		"two_factor_failure": r.EdgeFactors.TwoFactorFailure,
+	}
+
+	checks := make([]*apiv1.CheckResult, 0, len(r.Checks))
+	for _, c := range r.Checks {
+		checks = append(checks, &apiv1.CheckResult{
+			CheckId:       c.CheckID,
+			Domain:        c.Domain,
+			Name:          c.Name,
+			Passed:        c.Passed,
+			Delta:         c.Delta,
+			Detail:        c.Detail,
+			ComplianceRef: c.ComplianceRef,
+		})
+	}
+
+	return &apiv1.AssessmentResult{
+		FinalScore:   r.FinalScore,
+		Acceptable:   r.Acceptable,
+		DomainScores: domainScores,
+		EdgeFactors:  edgeFactors,
+		ThreatCoeff:  r.ThreatCoeff,
+		SpcScore:     r.SPCScore,
+		Checks:       checks,
+	}
 }
 
 type AgentServiceImpl struct {
@@ -115,11 +169,13 @@ func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotR
 			checks := make([]*apiv1.CheckResult, len(ar.Checks))
 			for i, c := range ar.Checks {
 				checks[i] = &apiv1.CheckResult{
-					CheckId: c.CheckID,
-					Domain:  c.Domain,
-					Passed:  c.Passed,
-					Delta:   c.Delta,
-					Detail:  c.Detail,
+					CheckId:       c.CheckID,
+					Domain:        c.Domain,
+					Name:          c.Name,
+					Passed:        c.Passed,
+					Delta:         c.Delta,
+					Detail:        c.Detail,
+					ComplianceRef: c.ComplianceRef,
 				}
 			}
 			result = &apiv1.AssessmentResult{
@@ -130,6 +186,7 @@ func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotR
 					"business_continuity": ar.DomainScores.BusinessContinuity,
 					"operation_trust":     ar.DomainScores.OperationTrust,
 					"resilience":          ar.DomainScores.Resilience,
+					"kernel_security":     ar.DomainScores.KernelSecurity,
 				},
 				Checks: checks,
 			}

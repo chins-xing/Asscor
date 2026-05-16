@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log"
 	"os"
@@ -29,6 +31,7 @@ type AgentConfig struct {
 	ReconnectSec     int
 	TLSEnabled       bool
 	TLSSkipVerify    bool
+	CertDir          string
 }
 
 func DefaultConfig() AgentConfig {
@@ -122,16 +125,17 @@ func (a *Agent) runOnce(ctx context.Context) error {
 		}
 	}
 
-	ticker := time.NewTicker(time.Duration(a.cfg.HeartbeatSec) * time.Second)
-	defer ticker.Stop()
+	a.lastCheckTime = time.Time{}
 
 	consecutiveErrors := 0
+	timer := time.NewTimer(time.Duration(a.cfg.HeartbeatSec) * time.Second)
+	defer timer.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		case <-timer.C:
 			if err := a.heartbeatCycle(); err != nil {
 				consecutiveErrors++
 				log.Printf("agent: cycle error (%d/%d): %v",
@@ -139,20 +143,51 @@ func (a *Agent) runOnce(ctx context.Context) error {
 				if consecutiveErrors >= a.cfg.MaxRetries {
 					return fmt.Errorf("max retries exceeded: %w", err)
 				}
+				timer.Reset(time.Duration(a.cfg.HeartbeatSec) * time.Second)
 				continue
 			}
 			consecutiveErrors = 0
+			timer.Reset(time.Duration(a.cfg.HeartbeatSec) * time.Second)
 		}
 	}
 }
 
 func (a *Agent) connect() error {
-	a.client = NewClient(a.cfg.KernelAddr, nil)
+	var tlsConfig *tls.Config
+	if a.cfg.TLSEnabled {
+		certDir := a.cfg.CertDir
+		if certDir == "" {
+			certDir = "certs"
+		}
+
+		caCert, err := os.ReadFile(certDir + "/ca.crt")
+		if err != nil {
+			return fmt.Errorf("读取CA证书: %w", err)
+		}
+		caPool := x509.NewCertPool()
+		if !caPool.AppendCertsFromPEM(caCert) {
+			return fmt.Errorf("解析CA证书失败")
+		}
+
+		agentCert, err := tls.LoadX509KeyPair(certDir+"/agent.crt", certDir+"/agent.key")
+		if err != nil {
+			return fmt.Errorf("加载Agent证书: %w", err)
+		}
+
+		tlsConfig = &tls.Config{
+			Certificates: []tls.Certificate{agentCert},
+			RootCAs:      caPool,
+			ServerName:   "localhost",
+			MinVersion:   tls.VersionTLS12,
+		}
+	}
+
+	a.client = NewClient(a.cfg.KernelAddr, tlsConfig)
 	if err := a.client.Connect(); err != nil {
 		a.client = nil
 		return err
 	}
-	log.Printf("agent: connected to kernel at %s", a.cfg.KernelAddr)
+	log.Printf("agent: connected to kernel at %s (mTLS: %v)", a.cfg.KernelAddr, a.cfg.TLSEnabled)
 	return nil
 }
 
@@ -184,55 +219,36 @@ func (a *Agent) heartbeatCycle() error {
 	elapsed := time.Since(a.lastCheckTime)
 	shouldCheck := a.lastCheckTime.IsZero() || elapsed >= interval
 
-	var snapshot *apiv1.AssessmentResult
+	var checkResults []*apiv1.CheckResult
 
 	if shouldCheck {
 		results := a.runChecks()
 
-		passed := 0
-		failed := 0
-		checkResults := make([]*apiv1.CheckResult, 0, len(results))
+		checkResults = make([]*apiv1.CheckResult, 0, len(results))
 		for _, r := range results {
-			cr := &apiv1.CheckResult{
-				CheckId: r.CheckID,
-				Domain:  r.Domain,
-				Passed:  r.Passed,
-				Delta:   r.Delta,
-				Detail:  r.Detail,
-			}
-			checkResults = append(checkResults, cr)
-			if r.Passed {
-				passed++
-			} else {
-				failed++
-			}
-		}
-
-		score := 0.0
-		if a.checkCount > 0 {
-			score = float64(passed) / float64(a.checkCount) * 100.0
-		}
-
-		snapshot = &apiv1.AssessmentResult{
-			FinalScore: score,
-			Acceptable: score >= 80.0,
-			DomainScores: map[string]float64{
-				"total_passed": float64(passed),
-				"total_failed": float64(failed),
-			},
-			Checks: checkResults,
+			checkResults = append(checkResults, &apiv1.CheckResult{
+				CheckId:       r.CheckID,
+				Domain:        r.Domain,
+				Name:          r.Name,
+				Passed:        r.Passed,
+				Delta:         r.Delta,
+				Detail:        r.Detail,
+				ComplianceRef: r.ComplianceRef,
+			})
 		}
 
 		a.lastCheckTime = time.Now()
-
-		log.Printf("agent: assessment complete — %d/%d (%.1f%%) %s, next check in %s",
-			passed, a.checkCount, score,
-			map[bool]string{true: "ACCEPTABLE", false: "FAILED"}[score >= 80.0],
-			time.Duration(a.cfg.CheckIntervalSec)*time.Second)
 	} else {
 		remaining := interval - elapsed
 		if remaining.Seconds() <= 60 || int(remaining.Seconds())%60 == 0 {
 			log.Printf("agent: next assessment in %s", remaining.Round(time.Second))
+		}
+	}
+
+	var snapshot *apiv1.AssessmentResult
+	if len(checkResults) > 0 {
+		snapshot = &apiv1.AssessmentResult{
+			Checks: checkResults,
 		}
 	}
 
@@ -255,7 +271,173 @@ func (a *Agent) heartbeatCycle() error {
 
 	a.pendingCmd = heartbeatResp.PendingCommands
 
+	if heartbeatResp.AssessmentResult != nil && len(checkResults) > 0 {
+		a.printAssessmentReport(heartbeatResp.AssessmentResult)
+	}
+
 	return nil
+}
+
+func (a *Agent) printAssessmentReport(result *apiv1.AssessmentResult) {
+	bar := func(score float64, width int) string {
+		filled := int(score / 100 * float64(width))
+		if filled > width {
+			filled = width
+		}
+		b := make([]byte, width)
+		for i := 0; i < width; i++ {
+			if i < filled {
+				b[i] = '='
+			} else {
+				b[i] = ' '
+			}
+		}
+		return string(b)
+	}
+
+	domainLabels := map[string]string{
+		"attack_surface":      "Attack Surface",
+		"business_continuity": "Business Continuity",
+		"operation_trust":     "Operation Trust",
+		"resilience":          "Resilience",
+		"kernel_security":     "Kernel Security",
+	}
+
+	coreOrder := []string{"resilience", "attack_surface", "business_continuity", "operation_trust"}
+	extOrder := []string{"kernel_security"}
+	detailOrder := []string{"operation_trust", "attack_surface", "kernel_security", "resilience", "business_continuity"}
+
+	checksByDomain := make(map[string][]*apiv1.CheckResult)
+	for _, c := range result.Checks {
+		checksByDomain[c.Domain] = append(checksByDomain[c.Domain], c)
+	}
+
+	fmt.Println()
+	fmt.Println("[ Core Domain Scores ]")
+	fmt.Println("---------------------------------------------------------------")
+	for _, domain := range coreOrder {
+		label := domainLabels[domain]
+		if label == "" {
+			label = domain
+		}
+		score := 0.0
+		if result.DomainScores != nil {
+			score = result.DomainScores[domain]
+		}
+		fmt.Printf("  %-20s : [%-20s] %.0f/100\n", label, bar(score, 20), score)
+	}
+
+	fmt.Println()
+	fmt.Println("[ Extension Domain Scores ]")
+	fmt.Println("---------------------------------------------------------------")
+	extFound := false
+	for _, domain := range extOrder {
+		checks, ok := checksByDomain[domain]
+		if !ok {
+			continue
+		}
+		extFound = true
+		passed := 0
+		for _, c := range checks {
+			if c.Passed {
+				passed++
+			}
+		}
+		label := domainLabels[domain]
+		if label == "" {
+			label = domain
+		}
+		score := 0.0
+		if result.DomainScores != nil {
+			score = result.DomainScores[domain]
+		}
+		fmt.Printf("  %-20s : [%-20s] %.0f/100  (%d of %d checks passed)\n",
+			label, bar(score, 20), score, passed, len(checks))
+	}
+	if !extFound {
+		fmt.Println("  (none)")
+	}
+
+	fmt.Println()
+	fmt.Println("[ Edge Factor Report ]")
+	fmt.Println("---------------------------------------------------------------")
+	edgeFound := false
+	for id, factor := range result.EdgeFactors {
+		if factor < 1.0 {
+			name := ""
+			switch id {
+			case "two_factor_failure":
+				name = "2FA Missing"
+			default:
+				name = id
+			}
+			fmt.Printf("  %-12s : %-30s factor=%.2f (ACTIVE)\n", id, name, factor)
+			edgeFound = true
+		}
+	}
+	if !edgeFound {
+		fmt.Println("  (none)")
+	}
+
+	for _, domain := range detailOrder {
+		checks, ok := checksByDomain[domain]
+		if !ok {
+			continue
+		}
+		label := domainLabels[domain]
+		if label == "" {
+			label = domain
+		}
+		fmt.Println()
+		fmt.Printf("[ %s Details ]\n", label)
+		fmt.Println("---------------------------------------------------------------")
+		for _, c := range checks {
+			status := "PASS"
+			if !c.Passed {
+				status = "FAIL"
+			}
+			if c.Detail != "" {
+				fmt.Printf("  [%s] %s : %s (%s)\n", status, c.CheckId, c.Name, c.Detail)
+			} else {
+				fmt.Printf("  [%s] %s : %s\n", status, c.CheckId, c.Name)
+			}
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("---------------------------------------------------------------")
+	status := "ACCEPTABLE"
+	if !result.Acceptable {
+		status = "NOT ACCEPTABLE"
+	}
+	threatCoeff := result.ThreatCoeff
+	if threatCoeff == 0 {
+		threatCoeff = 1.0
+	}
+	spcScore := result.SpcScore
+	if spcScore == 0 {
+		spcScore = 1.0
+	}
+	fmt.Printf("  Final Score: %.2f/100    Threshold: 80.00    Status: %s\n", result.FinalScore, status)
+	fmt.Printf("  Threat Coeff: %.2f    SPC Score: %.2f\n", threatCoeff, spcScore)
+	fmt.Println("---------------------------------------------------------------")
+	fmt.Println()
+
+	passed := 0
+	total := len(result.Checks)
+	for _, c := range result.Checks {
+		if c.Passed {
+			passed++
+		}
+	}
+	passRate := 0.0
+	if total > 0 {
+		passRate = float64(passed) / float64(total) * 100.0
+	}
+	log.Printf("agent: assessment complete — %d/%d (%.1f%%) %s, next check in %s",
+		passed, total, passRate,
+		map[bool]string{true: "ACCEPTABLE", false: "FAILED"}[result.Acceptable],
+		time.Duration(a.cfg.CheckIntervalSec)*time.Second)
 }
 
 func (a *Agent) executePendingCommands() {
