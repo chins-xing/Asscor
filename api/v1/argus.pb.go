@@ -89,6 +89,10 @@ type LogEntry struct {
 	Message   string `json:"message"`
 }
 
+type StreamLogsRequest struct {
+	Entries []*LogEntry `json:"entries"`
+}
+
 type Ack struct {
 	Ok bool `json:"ok"`
 }

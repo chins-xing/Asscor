@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"runtime"
 	"sync"
@@ -68,6 +69,12 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 
 			done := make(chan error, 1)
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("workerpool: task panic recovered: %v", r)
+						done <- fmt.Errorf("panic: %v", r)
+					}
+				}()
 				done <- task()
 			}()
 
@@ -87,6 +94,7 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 				p.metrics.totalTimeout++
 				p.metrics.mu.Unlock()
 				log.Printf("workerpool: task timed out after %v", timeout)
+				go func() { <-done }()
 			}
 		case <-p.ctx.Done():
 			return

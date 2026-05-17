@@ -91,12 +91,22 @@ func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
 }
 
 func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
-	for _, entry := range entries {
-		if err := m.Append(entry); err != nil {
-			return err
-		}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.writer == nil || len(entries) == 0 {
+		return nil
 	}
-	return nil
+
+	var buf []byte
+	for _, entry := range entries {
+		ts := time.Unix(entry.Timestamp, 0).Format(time.RFC3339)
+		line := ts + " [" + entry.Level + "] " + entry.HostId + ": " + entry.Message + "\n"
+		buf = append(buf, []byte(line)...)
+	}
+
+	_, err := m.writer.Write(buf)
+	return err
 }
 
 type LogCollectorInterface interface {

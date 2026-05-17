@@ -37,7 +37,7 @@ type AgentConfig struct {
 func DefaultConfig() AgentConfig {
 	hostname, _ := os.Hostname()
 	return AgentConfig{
-		KernelAddr:       "localhost:8443",
+		KernelAddr:       "localhost:50051",
 		HostID:           hostname,
 		Hostname:         hostname,
 		Version:          "1.2.0",

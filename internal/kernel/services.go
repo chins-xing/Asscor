@@ -2,6 +2,9 @@ package kernel
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"log"
 
 	apiv1 "github.com/argus-security/argus/api/v1"
@@ -35,13 +38,15 @@ func NewKernelServiceImpl(
 func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterRequest) (*apiv1.RegisterResponse, error) {
 	log.Printf("kernel: register request from %s (%s) v%s", req.HostId, req.Hostname, req.Version)
 
-	if s.heartbeat != nil {
-		s.heartbeat.RegisterAgent(req.HostId, req.Hostname, req.Version)
+	if s.heartbeat == nil {
+		return nil, fmt.Errorf("heartbeat service not available")
 	}
+
+	s.heartbeat.RegisterAgent(req.HostId, req.Hostname, req.Version)
 
 	return &apiv1.RegisterResponse{
 		Accepted:  true,
-		SessionId: "sess-" + req.HostId,
+		SessionId: "sess-" + req.HostId + "-" + randomSessionSuffix(),
 	}, nil
 }
 
@@ -208,4 +213,26 @@ func (s *AgentServiceImpl) ExecuteCommand(ctx context.Context, req *apiv1.Comman
 		CommandId: req.CommandId,
 		Success:   true,
 	}, nil
+}
+
+func (s *AgentServiceImpl) StreamLogs(ctx context.Context, req *apiv1.StreamLogsRequest) (*apiv1.Ack, error) {
+	if s.logCollect == nil {
+		return &apiv1.Ack{Ok: false}, fmt.Errorf("log collector not available")
+	}
+
+	if len(req.Entries) == 0 {
+		return &apiv1.Ack{Ok: true}, nil
+	}
+
+	if err := s.logCollect.AppendBatch(req.Entries); err != nil {
+		return &apiv1.Ack{Ok: false}, err
+	}
+
+	return &apiv1.Ack{Ok: true}, nil
+}
+
+func randomSessionSuffix() string {
+	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }

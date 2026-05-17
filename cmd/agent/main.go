@@ -13,7 +13,7 @@ import (
 
 func main() {
 	configPath := flag.String("config", "agent.ini", "path to agent config file")
-	kernelAddr := flag.String("kernel", "localhost:8443", "kernel address host:port")
+	kernelAddr := flag.String("kernel", "localhost:50051", "kernel address host:port")
 	hostID := flag.String("host-id", "", "agent host identifier (default: hostname)")
 	tlsEnabled := flag.Bool("tls", false, "enable mTLS connection")
 	certDir := flag.String("cert-dir", "certs", "TLS certificate directory")

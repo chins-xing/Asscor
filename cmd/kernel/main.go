@@ -34,6 +34,19 @@ func main() {
 	k.SetConfig("listen_addr", *listenAddr)
 	k.SetConfig("cert_dir", *certDir)
 
+	// inject interceptor config from INI into kernel config map
+	interceptorKeys := []string{
+		"rate_limit_enabled", "rate_limit_per_sec", "rate_limit_burst",
+		"circuit_breaker_enabled", "circuit_breaker_ratio",
+		"circuit_breaker_min_req", "circuit_breaker_timeout_s",
+		"audit_log_enabled",
+	}
+	for _, key := range interceptorKeys {
+		if val := cfg.AdapterConfig["interceptor."+key]; val != "" {
+			k.SetConfig("interceptor."+key, val)
+		}
+	}
+
 	k.Container().BindNamed("config", (*config.Config)(nil), cfg)
 
 	assessor := &kernel.AssessorModule{}
@@ -66,6 +79,17 @@ func main() {
 	server := kernel.NewServer(serverCfg, k)
 	for _, desc := range kernel.BuildServiceDesc(kernelSvc, agentSvc) {
 		server.RegisterService(desc)
+	}
+
+	interceptorCfg := kernel.ResolveInterceptorConfig(k.Config())
+	interceptors := kernel.NewInterceptors(interceptorCfg)
+	server.SetInterceptors(interceptors)
+
+	if interceptorCfg.RateLimitEnabled || interceptorCfg.CircuitBreakerEnabled {
+		log.Printf("interceptors: rate_limit=%v circuit_breaker=%v audit_log=%v",
+			interceptorCfg.RateLimitEnabled,
+			interceptorCfg.CircuitBreakerEnabled,
+			interceptorCfg.AuditLogEnabled)
 	}
 
 	if err := server.Start(); err != nil {

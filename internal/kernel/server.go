@@ -15,21 +15,23 @@ import (
 )
 
 type ServerConfig struct {
-	ListenAddr      string
-	TLSConfig       *tls.Config
-	MaxRecvMsgSize  int
-	MaxSendMsgSize  int
-	KeepaliveTime   time.Duration
+	ListenAddr       string
+	TLSConfig        *tls.Config
+	MaxRecvMsgSize   int
+	MaxSendMsgSize   int
+	KeepaliveTime    time.Duration
 	KeepaliveTimeout time.Duration
+	MaxConns         int
 }
 
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{
-		ListenAddr:      "0.0.0.0:50051",
-		MaxRecvMsgSize:  16 * 1024 * 1024,
-		MaxSendMsgSize:  16 * 1024 * 1024,
-		KeepaliveTime:   30 * time.Second,
+		ListenAddr:       "0.0.0.0:50051",
+		MaxRecvMsgSize:   16 * 1024 * 1024,
+		MaxSendMsgSize:   16 * 1024 * 1024,
+		KeepaliveTime:    30 * time.Second,
 		KeepaliveTimeout: 10 * time.Second,
+		MaxConns:         100,
 	}
 }
 
@@ -40,19 +42,27 @@ type Server struct {
 	registry *apiv1.ServiceRegistry
 	codec    apiv1.ServerCodec
 
+	interceptors *Interceptors
+
 	mu       sync.Mutex
 	listener net.Listener
+	connSem  chan struct{}
 	ctx      context.Context
 	cancel   context.CancelFunc
 }
 
 func NewServer(cfg ServerConfig, k *Kernel) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
+	maxConns := cfg.MaxConns
+	if maxConns <= 0 {
+		maxConns = 100
+	}
 	return &Server{
 		cfg:      cfg,
 		kernel:   k,
 		registry: apiv1.NewServiceRegistry(),
 		codec:    &apiv1.JSONCodec{},
+		connSem:  make(chan struct{}, maxConns),
 		ctx:      ctx,
 		cancel:   cancel,
 	}
@@ -60,6 +70,10 @@ func NewServer(cfg ServerConfig, k *Kernel) *Server {
 
 func (s *Server) RegisterService(desc *apiv1.ServiceDesc) {
 	s.registry.Register(desc)
+}
+
+func (s *Server) SetInterceptors(interceptors *Interceptors) {
+	s.interceptors = interceptors
 }
 
 func (s *Server) Start() error {
@@ -103,7 +117,17 @@ func (s *Server) acceptLoop() {
 			}
 		}
 
-		go s.handleConn(conn)
+		select {
+		case s.connSem <- struct{}{}:
+		case <-s.ctx.Done():
+			conn.Close()
+			return
+		}
+
+		go func() {
+			defer func() { <-s.connSem }()
+			s.handleConn(conn)
+		}()
 	}
 }
 
@@ -112,12 +136,24 @@ func (s *Server) handleConn(conn net.Conn) {
 
 	br := bufio.NewReaderSize(conn, 256*1024)
 
+	clientAddr := conn.RemoteAddr().String()
+	ctx := context.WithValue(s.ctx, "client_addr", clientAddr)
+
+	var dispatch HandlerFunc
+	if s.interceptors != nil && len(s.interceptors.Chain.Interceptors()) > 0 {
+		dispatch = s.interceptors.Chain.Then(func(ctx context.Context, service, method string, payload []byte) ([]byte, error) {
+			return s.registry.Dispatch(ctx, service, method, payload)
+		})
+	}
+
 	for {
 		select {
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 			return
 		default:
 		}
+
+		conn.SetReadDeadline(time.Now().Add(s.cfg.KeepaliveTimeout))
 
 		service, method, payload, err := s.codec.ReadRequest(br)
 		if err != nil {
@@ -127,7 +163,15 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 
-		respPayload, err := s.registry.Dispatch(s.ctx, service, method, payload)
+		var respPayload []byte
+		if dispatch != nil {
+			respPayload, err = dispatch(ctx, service, method, payload)
+		} else {
+			respPayload, err = s.registry.Dispatch(ctx, service, method, payload)
+		}
+
+		conn.SetWriteDeadline(time.Now().Add(s.cfg.KeepaliveTimeout))
+
 		if err != nil {
 			if werr := s.codec.WriteError(conn, err); werr != nil {
 				log.Printf("grpc: write error response: %v (original: %v)", werr, err)
@@ -198,6 +242,17 @@ func BuildServiceDesc(kernelSvc *KernelServiceImpl, agentSvc *AgentServiceImpl) 
 						return nil, fmt.Errorf("decode: %w", err)
 					}
 					resp, err := agentSvc.ExecuteCommand(ctx, &req)
+					if err != nil {
+						return nil, err
+					}
+					return json.Marshal(resp)
+				},
+				"StreamLogs": func(ctx context.Context, payload []byte) ([]byte, error) {
+					var req apiv1.StreamLogsRequest
+					if err := json.Unmarshal(payload, &req); err != nil {
+						return nil, fmt.Errorf("decode: %w", err)
+					}
+					resp, err := agentSvc.StreamLogs(ctx, &req)
 					if err != nil {
 						return nil, err
 					}

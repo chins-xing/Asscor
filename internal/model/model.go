@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"runtime"
 	"time"
 )
@@ -28,7 +29,19 @@ type CheckItem struct {
 }
 
 func (c CheckItem) Run() CheckResult {
-	passed, detail := c.Check()
+	var passed bool
+	var detail string
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				passed = false
+				detail = fmt.Sprintf("panic: %v", r)
+			}
+		}()
+		passed, detail = c.Check()
+	}()
+
 	return CheckResult{
 		CheckID:       c.ID,
 		Domain:        c.Domain,

@@ -99,7 +99,12 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 					fmt.Printf("bus: panic in subscriber %s for topic %s: %v\n", s.id, msg.Topic, r)
 				}
 			}()
-			_ = s.handler(ctx, msg)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				_ = s.handler(ctx, msg)
+			}
 		}(sub)
 	}
 }

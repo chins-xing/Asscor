@@ -17,7 +17,7 @@ type CommanderModule struct {
 	kernel  *Kernel
 	hmacKey []byte
 
-	mu          sync.Mutex
+	mu          sync.RWMutex
 	pendingCmds map[string]map[string]*apiv1.Command
 	state       PluginState
 }
@@ -49,7 +49,7 @@ func (m *CommanderModule) Init(ctx context.Context, k *Kernel) error {
 	}
 	if key == "" {
 		key = randomHex(32)
-		log.Printf("commander: warning — no HMAC key configured, generated random key: %s", key)
+		log.Printf("commander: warning — no HMAC key configured, generated random key length=%d", len(key))
 	}
 	m.hmacKey = []byte(key)
 
@@ -76,8 +76,8 @@ func (m *CommanderModule) Stop(ctx context.Context) error {
 }
 
 func (m *CommanderModule) State() PluginState {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.state
 }
 
@@ -129,7 +129,7 @@ func (m *CommanderModule) AckCommand(hostID string, cmdID string, success bool, 
 func (m *CommanderModule) sign(cmdID, action string) []byte {
 	mac := hmac.New(sha256.New, m.hmacKey)
 	mac.Write([]byte(cmdID + ":" + action))
-	return []byte(hex.EncodeToString(mac.Sum(nil)))
+	return mac.Sum(nil)
 }
 
 func (m *CommanderModule) onPolicyAction(ctx context.Context, msg Message) error {
