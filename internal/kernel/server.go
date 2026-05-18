@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"runtime"
 	"sync"
 	"time"
 
@@ -132,7 +133,13 @@ func (s *Server) acceptLoop() {
 }
 
 func (s *Server) handleConn(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		conn.Close()
+		if r := recover(); r != nil {
+			log.Printf("grpc: panic recovered from %s: %v\n%s",
+				conn.RemoteAddr(), r, stackTrace(4096))
+		}
+	}()
 
 	br := bufio.NewReaderSize(conn, 256*1024)
 
@@ -261,4 +268,10 @@ func BuildServiceDesc(kernelSvc *KernelServiceImpl, agentSvc *AgentServiceImpl) 
 			},
 		},
 	}
+}
+
+func stackTrace(n int) string {
+	buf := make([]byte, n)
+	m := runtime.Stack(buf, false)
+	return string(buf[:m])
 }

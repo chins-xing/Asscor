@@ -315,30 +315,47 @@ func (m *SPCModule) Priority() int {
 }
 
 func (m *SPCModule) Init(ctx context.Context, k *Kernel) error {
+	if k == nil {
+		return fmt.Errorf("kernel instance must not be nil")
+	}
 	m.kernel = k
 	m.state = PluginInitialized
 
-	spcCfg := k.cfg.SPC
-	m.enabled = spcCfg.Enabled
-	m.minPScore = spcCfg.MinPScore
-	m.fetchInterval = time.Duration(spcCfg.FetchIntervalH) * time.Hour
-
-	m.nvdConfig.BaseURL = spcCfg.NVD.BaseURL
-	m.nvdConfig.APIKey = spcCfg.NVD.APIKey
-	m.nvdConfig.SyncHours = spcCfg.NVD.SyncIntervalH
-
-	if m.nvdConfig.APIKey == "" {
+	if k.cfg == nil {
+		m.enabled = false
+		m.minPScore = 0.60
+		m.fetchInterval = 24 * time.Hour
+		m.nvdConfig.BaseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 		m.nvdConfig.APIKey = os.Getenv("NVD_API_KEY")
-	}
-
-	m.mispConfig.BaseURL = spcCfg.MISP.BaseURL
-	m.mispConfig.APIKey = spcCfg.MISP.APIKey
-	m.mispConfig.VerifyTLS = spcCfg.MISP.VerifyTLS
-	m.mispConfig.SyncHours = spcCfg.MISP.SyncIntervalH
-	m.mispConfig.TLPFilter = spcCfg.MISP.TLPFilter
-
-	if m.mispConfig.APIKey == "" {
+		m.nvdConfig.SyncHours = 24
+		m.mispConfig.BaseURL = ""
 		m.mispConfig.APIKey = os.Getenv("MISP_API_KEY")
+		m.mispConfig.VerifyTLS = true
+		m.mispConfig.SyncHours = 24
+		m.mispConfig.TLPFilter = "white,green"
+	} else {
+		spcCfg := k.cfg.SPC
+		m.enabled = spcCfg.Enabled
+		m.minPScore = spcCfg.MinPScore
+		m.fetchInterval = time.Duration(spcCfg.FetchIntervalH) * time.Hour
+
+		m.nvdConfig.BaseURL = spcCfg.NVD.BaseURL
+		m.nvdConfig.APIKey = spcCfg.NVD.APIKey
+		m.nvdConfig.SyncHours = spcCfg.NVD.SyncIntervalH
+
+		if m.nvdConfig.APIKey == "" {
+			m.nvdConfig.APIKey = os.Getenv("NVD_API_KEY")
+		}
+
+		m.mispConfig.BaseURL = spcCfg.MISP.BaseURL
+		m.mispConfig.APIKey = spcCfg.MISP.APIKey
+		m.mispConfig.VerifyTLS = spcCfg.MISP.VerifyTLS
+		m.mispConfig.SyncHours = spcCfg.MISP.SyncIntervalH
+		m.mispConfig.TLPFilter = spcCfg.MISP.TLPFilter
+
+		if m.mispConfig.APIKey == "" {
+			m.mispConfig.APIKey = os.Getenv("MISP_API_KEY")
+		}
 	}
 
 	if m.enabled && m.nvdConfig.APIKey == "" {

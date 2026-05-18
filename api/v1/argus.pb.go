@@ -184,10 +184,19 @@ func (c *JSONCodec) WriteResponse(conn net.Conn, payload []byte) error {
 		"status":  "ok",
 		"payload": json.RawMessage(payload),
 	}
-	data, _ := json.Marshal(resp)
+	data, err := json.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("marshal response: %w", err)
+	}
 	data = append(data, '\n')
-	_, err := conn.Write(data)
-	return err
+	for written := 0; written < len(data); {
+		n, err := conn.Write(data[written:])
+		if err != nil {
+			return err
+		}
+		written += n
+	}
+	return nil
 }
 
 func (c *JSONCodec) WriteError(conn net.Conn, err error) error {
@@ -195,8 +204,17 @@ func (c *JSONCodec) WriteError(conn net.Conn, err error) error {
 		"status": "error",
 		"error":  err.Error(),
 	}
-	data, _ := json.Marshal(resp)
+	data, merr := json.Marshal(resp)
+	if merr != nil {
+		return fmt.Errorf("marshal error response: %w", merr)
+	}
 	data = append(data, '\n')
-	_, errWrite := conn.Write(data)
-	return errWrite
+	for written := 0; written < len(data); {
+		n, werr := conn.Write(data[written:])
+		if werr != nil {
+			return werr
+		}
+		written += n
+	}
+	return nil
 }

@@ -100,6 +100,10 @@ func (m *HeartbeatModule) RegisterAgent(hostID, hostname, version string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if m.agents == nil {
+		m.agents = make(map[string]*AgentRecord)
+	}
+
 	m.agents[hostID] = &AgentRecord{
 		HostID:     hostID,
 		Hostname:   hostname,
@@ -108,11 +112,13 @@ func (m *HeartbeatModule) RegisterAgent(hostID, hostname, version string) {
 		Registered: time.Now(),
 	}
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
-		Topic:   "agent.registered",
-		Payload: hostID,
-		Source:  "heartbeat",
-	})
+	if m.kernel != nil {
+		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+			Topic:   "agent.registered",
+			Payload: hostID,
+			Source:  "heartbeat",
+		})
+	}
 
 	log.Printf("heartbeat: agent %s (%s) registered", hostID, hostname)
 }

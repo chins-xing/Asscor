@@ -122,8 +122,13 @@ func (c *Client) call(service, method string, req, resp interface{}) error {
 	}
 
 	c.conn.SetWriteDeadline(time.Now().Add(c.deadline))
-	if _, err := c.conn.Write(append(data, '\n')); err != nil {
-		return fmt.Errorf("write: %w", err)
+	data = append(data, '\n')
+	for written := 0; written < len(data); {
+		n, err := c.conn.Write(data[written:])
+		if err != nil {
+			return fmt.Errorf("write: %w", err)
+		}
+		written += n
 	}
 
 	c.conn.SetReadDeadline(time.Now().Add(c.deadline))

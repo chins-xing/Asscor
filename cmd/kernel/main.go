@@ -92,6 +92,10 @@ func main() {
 			interceptorCfg.AuditLogEnabled)
 	}
 
+	if err := k.Run(); err != nil {
+		log.Fatalf("kernel error: %v", err)
+	}
+
 	if err := server.Start(); err != nil {
 		log.Fatalf("start microkernel server: %v", err)
 	}
@@ -106,10 +110,6 @@ func main() {
 		fmt.Printf("    {%s} v%s — %s\n", info.Name, info.Version, info.Description)
 	}
 	fmt.Println()
-
-	if err := k.Run(); err != nil {
-		log.Fatalf("kernel error: %v", err)
-	}
 
 	server.Stop()
 }
