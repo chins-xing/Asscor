@@ -102,9 +102,9 @@ func (c *Container) Inject(target interface{}) error {
 		var ok bool
 
 		if tag != "" && tag != "true" {
-			impl, ok = c.aliases[tag]
-			if ok {
-				impl, ok = c.bindings[reflect.TypeOf(impl)]
+			resolvedType, aliasOk := c.aliases[tag]
+			if aliasOk {
+				impl, ok = c.bindings[resolvedType]
 			}
 		}
 

@@ -80,7 +80,7 @@ func GenerateCA(config CertConfig) (*CertPair, error) {
 		return nil, fmt.Errorf("create CA cert: %w", err)
 	}
 
-	return encodePair(der, key), nil
+	return encodePair(der, key)
 }
 
 func IssueServerCert(caPair *CertPair, config CertConfig) (*CertPair, error) {
@@ -120,7 +120,7 @@ func IssueServerCert(caPair *CertPair, config CertConfig) (*CertPair, error) {
 		return nil, fmt.Errorf("create server cert: %w", err)
 	}
 
-	return encodePair(der, key), nil
+	return encodePair(der, key)
 }
 
 func IssueAgentCert(caPair *CertPair, config CertConfig, hostID string) (*CertPair, error) {
@@ -158,23 +158,26 @@ func IssueAgentCert(caPair *CertPair, config CertConfig, hostID string) (*CertPa
 		return nil, fmt.Errorf("create agent cert: %w", err)
 	}
 
-	return encodePair(der, key), nil
+	return encodePair(der, key)
 }
 
-func encodePair(der []byte, key *rsa.PrivateKey) *CertPair {
+func encodePair(der []byte, key *rsa.PrivateKey) (*CertPair, error) {
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 	keyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(key),
 	})
 
-	tlsCert, _ := tls.X509KeyPair(certPEM, keyPEM)
+	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("encode cert pair: %w", err)
+	}
 
 	return &CertPair{
 		CertPEM: certPEM,
 		KeyPEM:  keyPEM,
 		Cert:    &tlsCert,
-	}
+	}, nil
 }
 
 func LoadCertPair(certPath, keyPath string) (*CertPair, error) {

@@ -22,7 +22,7 @@ func (a *AuditLogInterceptor) Interceptor() Interceptor {
 		elapsed := time.Since(start)
 
 		if a.onAudit != nil {
-			clientAddr, _ := ctx.Value("client_addr").(string)
+			clientAddr, _ := ctx.Value(ctxKey("client_addr")).(string)
 
 			errStr := ""
 			if err != nil {

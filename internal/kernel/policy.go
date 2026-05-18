@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/argus-security/argus/internal/config"
+	"github.com/argus-security/argus/internal/model"
 )
 
 type HostStatus int
@@ -60,9 +61,7 @@ func (m *PolicyModule) Info() PluginInfo {
 }
 
 func (m *PolicyModule) Dependencies() []PluginDependency {
-	return []PluginDependency{
-		{Name: "config", Interface: (*config.Config)(nil)},
-	}
+	return nil
 }
 
 func (m *PolicyModule) Priority() int {
@@ -113,7 +112,6 @@ func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, [
 	threshold := m.cfg.Threshold
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	var status HostStatus
 	var actions []PolicyAction
@@ -121,34 +119,42 @@ func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, [
 	switch {
 	case score >= threshold:
 		status = HostOK
-	case score >= threshold-10:
-		status = HostWarning
-		actions = append(actions, PolicyAction{
-			Action:  "notify_admin",
-			Message: fmt.Sprintf("host %s score %.2f below threshold %.2f", hostID, score, threshold),
-		})
-	case score >= threshold-30:
-		status = HostCritical
-		actions = append(actions, PolicyAction{
-			Action:  "notify_admin",
-			Message: fmt.Sprintf("CRITICAL: host %s score %.2f", hostID, score),
-		}, PolicyAction{
-			Action: "increase_assessment",
-			Params: map[string]string{"host_id": hostID},
-		})
 	default:
 		status = HostIsolated
-		actions = append(actions, PolicyAction{
-			Action:  "isolate_host",
-			Params:  map[string]string{"host_id": hostID},
-			Message: fmt.Sprintf("ISOLATING host %s: score %.2f", hostID, score),
-		}, PolicyAction{
-			Action:  "notify_admin",
-			Message: fmt.Sprintf("ISOLATED: host %s", hostID),
-		})
+	}
+
+	if status != HostOK {
+		switch {
+		case score >= threshold-10:
+			status = HostWarning
+			actions = append(actions, PolicyAction{
+				Action:  "notify_admin",
+				Message: fmt.Sprintf("host %s score %.2f below threshold %.2f", hostID, score, threshold),
+			})
+		case score >= threshold-30:
+			status = HostCritical
+			actions = append(actions, PolicyAction{
+				Action:  "notify_admin",
+				Message: fmt.Sprintf("CRITICAL: host %s score %.2f", hostID, score),
+			}, PolicyAction{
+				Action: "increase_assessment",
+				Params: map[string]string{"host_id": hostID},
+			})
+		default:
+			status = HostIsolated
+			actions = append(actions, PolicyAction{
+				Action:  "isolate_host",
+				Params:  map[string]string{"host_id": hostID},
+				Message: fmt.Sprintf("ISOLATING host %s: score %.2f", hostID, score),
+			}, PolicyAction{
+				Action:  "notify_admin",
+				Message: fmt.Sprintf("ISOLATED: host %s", hostID),
+			})
+		}
 	}
 
 	m.hostStatus[hostID] = status
+	m.mu.Unlock()
 
 	for _, action := range actions {
 		m.kernel.Bus().Publish(m.kernel.Context(), Message{
@@ -171,19 +177,11 @@ func (m *PolicyModule) GetHostStatus(hostID string) HostStatus {
 }
 
 func (m *PolicyModule) onAssessmentResult(ctx context.Context, msg Message) error {
-	hostID := ""
-	if v, ok := msg.Payload.(map[string]interface{}); ok {
-		if id, ok2 := v["HostID"].(string); ok2 {
-			hostID = id
-		}
+	result, ok := msg.Payload.(*model.AssessmentResult)
+	if !ok {
+		return nil
 	}
-	score := 0.0
-	if v, ok := msg.Payload.(map[string]interface{}); ok {
-		if s, ok2 := v["FinalScore"].(float64); ok2 {
-			score = s
-		}
-	}
-	m.EvaluateHost(hostID, score)
+	m.EvaluateHost(result.HostID, result.FinalScore)
 	return nil
 }
 

@@ -85,6 +85,10 @@ func (m *CTIModule) updateCoefficient() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if m.activeThreats > 0 {
+		m.activeThreats = m.activeThreats / 2
+	}
+
 	base := 1.0
 	threatPenalty := float64(m.activeThreats) * 0.02
 	m.coefficient = math.Max(0.60, base-threatPenalty)

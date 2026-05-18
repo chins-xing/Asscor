@@ -13,13 +13,20 @@ import (
 
 func main() {
 	configPath := flag.String("config", "agent.ini", "path to agent config file")
-	kernelAddr := flag.String("kernel", "localhost:50051", "kernel address host:port")
+	kernelAddr := flag.String("kernel", "127.0.0.1:50051", "kernel address host:port")
 	hostID := flag.String("host-id", "", "agent host identifier (default: hostname)")
 	tlsEnabled := flag.Bool("tls", false, "enable mTLS connection")
 	certDir := flag.String("cert-dir", "certs", "TLS certificate directory")
 	flag.Parse()
 
 	cfg := agent.DefaultConfig()
+
+	if err := loadConfigFile(*configPath, &cfg); err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("agent: warning: cannot load config %s: %v", *configPath, err)
+		}
+	}
+
 	cfg.KernelAddr = *kernelAddr
 
 	if *hostID != "" {
@@ -32,12 +39,6 @@ func main() {
 
 	if *certDir != "" {
 		cfg.CertDir = *certDir
-	}
-
-	if *configPath != "" {
-		if err := loadConfigFile(*configPath, &cfg); err != nil {
-			log.Printf("agent: warning: cannot load config %s: %v, using defaults", *configPath, err)
-		}
 	}
 
 	if cfg.HostID == "" {

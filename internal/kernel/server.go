@@ -5,7 +5,9 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"runtime"
@@ -14,6 +16,8 @@ import (
 
 	apiv1 "github.com/argus-security/argus/api/v1"
 )
+
+type ctxKey string
 
 type ServerConfig struct {
 	ListenAddr       string
@@ -27,7 +31,7 @@ type ServerConfig struct {
 
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{
-		ListenAddr:       "0.0.0.0:50051",
+		ListenAddr:       ":50051",
 		MaxRecvMsgSize:   16 * 1024 * 1024,
 		MaxSendMsgSize:   16 * 1024 * 1024,
 		KeepaliveTime:    30 * time.Second,
@@ -144,13 +148,18 @@ func (s *Server) handleConn(conn net.Conn) {
 	br := bufio.NewReaderSize(conn, 256*1024)
 
 	clientAddr := conn.RemoteAddr().String()
-	ctx := context.WithValue(s.ctx, "client_addr", clientAddr)
+	ctx := context.WithValue(s.ctx, ctxKey("client_addr"), clientAddr)
 
 	var dispatch HandlerFunc
 	if s.interceptors != nil && len(s.interceptors.Chain.Interceptors()) > 0 {
 		dispatch = s.interceptors.Chain.Then(func(ctx context.Context, service, method string, payload []byte) ([]byte, error) {
 			return s.registry.Dispatch(ctx, service, method, payload)
 		})
+	}
+
+	maxPayload := int64(s.cfg.MaxRecvMsgSize)
+	if maxPayload <= 0 {
+		maxPayload = 16 * 1024 * 1024
 	}
 
 	for {
@@ -162,9 +171,9 @@ func (s *Server) handleConn(conn net.Conn) {
 
 		conn.SetReadDeadline(time.Now().Add(s.cfg.KeepaliveTimeout))
 
-		service, method, payload, err := s.codec.ReadRequest(br)
+		service, method, payload, err := s.codec.ReadRequest(io.LimitReader(br, maxPayload))
 		if err != nil {
-			if err.Error() != "EOF" {
+			if !errors.Is(err, io.EOF) {
 				log.Printf("grpc: read error: %v", err)
 			}
 			return

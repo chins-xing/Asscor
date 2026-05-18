@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/argus-security/argus/internal/config"
 	"github.com/argus-security/argus/internal/kernel"
@@ -16,7 +18,7 @@ import (
 
 func main() {
 	configPath := flag.String("config", "config.ini", "configuration file path")
-	listenAddr := flag.String("listen", "0.0.0.0:50051", "microkernel listen address")
+	listenAddr := flag.String("listen", ":50051", "microkernel listen address")
 	noMTLS := flag.Bool("no-mtls", false, "disable mTLS (development only)")
 	certDir := flag.String("cert-dir", "certs", "TLS certificate directory")
 	flag.Parse()
@@ -92,8 +94,8 @@ func main() {
 			interceptorCfg.AuditLogEnabled)
 	}
 
-	if err := k.Run(); err != nil {
-		log.Fatalf("kernel error: %v", err)
+	if err := k.Bootstrap(); err != nil {
+		log.Fatalf("kernel bootstrap: %v", err)
 	}
 
 	if err := server.Start(); err != nil {
@@ -111,7 +113,14 @@ func main() {
 	}
 	fmt.Println()
 
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-sigCh
+	log.Printf("kernel: received signal %v, shutting down", sig)
+	signal.Stop(sigCh)
+
 	server.Stop()
+	k.Shutdown()
 }
 
 func setupTLS(certDir string) *tls.Config {
@@ -133,8 +142,14 @@ func setupTLS(certDir string) *tls.Config {
 			log.Printf("warning: cannot generate CA: %v, starting without mTLS", err)
 			return nil
 		}
-		os.WriteFile(caPath, caPair.CertPEM, 0600)
-		os.WriteFile(caKeyPath, caPair.KeyPEM, 0600)
+		if err := os.WriteFile(caPath, caPair.CertPEM, 0600); err != nil {
+			log.Printf("warning: cannot write CA cert %s: %v, starting without mTLS", caPath, err)
+			return nil
+		}
+		if err := os.WriteFile(caKeyPath, caPair.KeyPEM, 0600); err != nil {
+			log.Printf("warning: cannot write CA key %s: %v, starting without mTLS", caKeyPath, err)
+			return nil
+		}
 	}
 
 	serverPair, err := kernel.LoadCertPair(serverCertPath, serverKeyPath)
@@ -145,8 +160,14 @@ func setupTLS(certDir string) *tls.Config {
 			log.Printf("warning: cannot issue server cert: %v, starting without mTLS", err)
 			return nil
 		}
-		os.WriteFile(serverCertPath, serverPair.CertPEM, 0600)
-		os.WriteFile(serverKeyPath, serverPair.KeyPEM, 0600)
+		if err := os.WriteFile(serverCertPath, serverPair.CertPEM, 0600); err != nil {
+			log.Printf("warning: cannot write server cert %s: %v, starting without mTLS", serverCertPath, err)
+			return nil
+		}
+		if err := os.WriteFile(serverKeyPath, serverPair.KeyPEM, 0600); err != nil {
+			log.Printf("warning: cannot write server key %s: %v, starting without mTLS", serverKeyPath, err)
+			return nil
+		}
 	}
 
 	agentCertPath := certDir + "/agent.crt"
@@ -157,8 +178,12 @@ func setupTLS(certDir string) *tls.Config {
 		if err != nil {
 			log.Printf("warning: cannot issue agent cert: %v", err)
 		} else {
-			os.WriteFile(agentCertPath, agentPair.CertPEM, 0600)
-			os.WriteFile(agentKeyPath, agentPair.KeyPEM, 0600)
+			if err := os.WriteFile(agentCertPath, agentPair.CertPEM, 0600); err != nil {
+				log.Printf("warning: cannot write agent cert %s: %v", agentCertPath, err)
+			}
+			if err := os.WriteFile(agentKeyPath, agentPair.KeyPEM, 0600); err != nil {
+				log.Printf("warning: cannot write agent key %s: %v", agentKeyPath, err)
+			}
 			log.Printf("agent certificate generated: %s, %s", agentCertPath, agentKeyPath)
 		}
 	}

@@ -3,17 +3,54 @@ package common
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os/exec"
 	"time"
 )
 
 var DefaultTimeout = 10 * time.Second
 
+var allowedCommands = map[string]bool{
+	"systemctl":   true,
+	"ss":          true,
+	"sysctl":      true,
+	"iptables":    true,
+	"firewall-cmd": true,
+	"uname":       true,
+	"dmesg":       true,
+	"lsmod":       true,
+	"mount":       true,
+	"mokutil":     true,
+	"bpftool":     true,
+	"sestatus":    true,
+	"aa-status":   true,
+	"cat":         true,
+	"lsattr":      true,
+	"getenforce":  true,
+	"getfacl":     true,
+	"lsblk":       true,
+	"openssl":     true,
+	"which":       true,
+	"passwd":      true,
+	"ps":          true,
+	"apt":         true,
+	"yum":         true,
+	"dnf":         true,
+	"chronyc":     true,
+	"dmsetup":     true,
+	"sh":          true,
+	"cmd":         true,
+}
+
 func RunCmd(name string, args ...string) (string, error) {
 	return RunCmdTimeout(DefaultTimeout, name, args...)
 }
 
 func RunCmdTimeout(timeout time.Duration, name string, args ...string) (string, error) {
+	if !allowedCommands[name] {
+		return "", fmt.Errorf("command %q is not in allowlist", name)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
