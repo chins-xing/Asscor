@@ -1,6 +1,6 @@
 # ARGUS 外部接入源完整清单
 
-**版本**：v1.1  
+**版本**：v1.2  
 **日期**：2026-05-20  
 **配套文档**：ARGUS 扩展白皮书（内核安全域）、ARGUS 工程实现白皮书
 
@@ -85,12 +85,13 @@
 
 | 域 | 总检查项 | 委派给外部 | 保留自检 | 外部工具 |
 |:---|:---:|:---:|:---:|:---|
-| 攻击面管理 | 16 | 2 | 14 | Nuclei（端口扫描）、Trivy（漏洞） |
+| 攻击面管理 | 17 | 2 | 15 | Nuclei（端口扫描）、Trivy（漏洞） |
 | 业务连续性 | 3 | 0 | 3 | 全部自检 |
-| 操作可信度 | 19 | 4 | 15 | Lynis（审计）、AIDE（完整性）、FreeIPA（账户治理） |
+| 操作可信度 | 22 | 4 | 18 | Lynis（审计）、AIDE（完整性）、FreeIPA（账户治理） |
 | 韧性 | 12 | 6 | 6 | Wazuh（HIDS）、Suricata（NIDS）、ClamAV（反病毒） |
+| 韧性(ACI) | 8 | 0 | 8 | 全部自检（沦陷后指标，外部工具无法替代） |
 | 内核安全 | 12 | 1 | 11 | Trivy（内核 CVE）、其余 sysctl/module 检查自检 |
-| **合计** | **62** | **13** | **49** | |
+| **合计** | **74** | **13** | **61** | |
 
 ---
 
@@ -109,17 +110,18 @@
 
 ```ini
 # ===== 探测器适配器 =====
+# 注意：所有适配器默认关闭，需根据实际部署环境手动开启
 [adapters]
-trivy = on
-nuclei = on
-lynis = on
+trivy = off
+nuclei = off
+lynis = off
 openscap = off
-wazuh_agent = on
-suricata = on
+wazuh_agent = off
+suricata = off
 falco = off
-clamav = on
+clamav = off
 osv_scanner = off
-aide = on
+aide = off
 nikto = off
 
 [adapter_paths]
@@ -127,17 +129,27 @@ trivy = /usr/local/bin/trivy
 nuclei = /usr/local/bin/nuclei
 lynis = /usr/local/sbin/lynis
 openscap = /usr/bin/oscap
+falco = /usr/bin/falco
 clamav = /usr/bin/clamscan
+osv_scanner = /usr/bin/osv-scanner
 aide = /usr/bin/aide
+nikto = /usr/bin/nikto
+
+[trivy]
+target_images = 
+
+[nuclei]
+templates = 
+target = 
 
 # ===== 管理类适配器 =====
 [management_adapters]
-ansible = on
-netbox = on
+ansible = off
+netbox = off
 snipe_it = off
 freeipa = off
 keycloak = off
-wazuh_siem = on
+wazuh_siem = off
 rundeck = off
 jira = off
 terraform = off
@@ -151,11 +163,39 @@ facts_path = /etc/ansible/facts.d
 api_url = https://netbox.internal
 api_token = ${NETBOX_TOKEN}
 
+[snipe_it]
+api_url = https://snipeit.internal
+api_token = ${SNIPEIT_TOKEN}
+
 [wazuh_siem]
 api_url = https://wazuh.internal:55000
 username = argus
 password = ${WAZUH_PASSWORD}
+
+[terraform]
+plan_dir = .
+
+[opentofu]
+plan_dir = .
 ```
+
+---
+
+## 七、安全注意事项
+
+### 7.1 API Key 来源审计
+
+Argus 对外部接入源的 API Key 实施来源审计，确保密钥来源可追溯：
+
+- **环境变量优先**：NVD API Key（`NVD_API_KEY`）、MISP API Key（`MISP_API_KEY`）、NetBox Token（`NETBOX_TOKEN`）、Wazuh Password（`WAZUH_PASSWORD`）等均优先从环境变量读取
+- **配置文件次之**：若环境变量未设置，则从 config.ini 对应段读取
+- **审计日志**：无论 Key 从哪个来源加载，系统均记录日志（如 `config: NVD API key loaded from environment variable` 或 `config: NVD API key loaded from configuration file`），便于安全审计追溯
+
+### 7.2 适配器执行安全
+
+- **默认关闭**：所有适配器默认 `off`，需管理员按需开启，避免意外执行外部工具
+- **命令白名单**：ExtensionExecutor 通过白名单限制可执行路径，并解析符号链接防止绕过
+- **超时控制**：所有适配器执行均有超时限制（默认 30 秒），防止挂起
 
 ---
 
@@ -167,3 +207,4 @@ password = ${WAZUH_PASSWORD}
 
 - **v1.0** — 2026-05-14，初始版本，覆盖全部外部接入源与适配器清单。
 - **v1.1** — 2026-05-20，更新检查项统计（攻击面管理 14→16，韧性域统计修正为 12）；补充 API Key 来源审计说明（环境变量优先于配置文件）。
+- **v1.2** — 2026-05-20，修正配置模板与 config.ini 一致（所有适配器默认 off）；修正委派对照表计数（AS 16→17，OT 19→22，新增 ACI 行 8 项，合计 62→74）；补充 adapter_paths（falco/osv_scanner/nikto）和配置段（[snipe_it]/[terraform]/[opentofu]）；新增第七章安全注意事项（API Key 来源审计、适配器执行安全）。
