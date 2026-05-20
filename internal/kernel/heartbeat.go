@@ -183,6 +183,10 @@ func (m *HeartbeatModule) checkTimeouts() {
 			Source:  "heartbeat",
 		})
 		log.Printf("heartbeat: agent %s timed out", id)
+
+		m.mu.Lock()
+		delete(m.agents, id)
+		m.mu.Unlock()
 	}
 }
 

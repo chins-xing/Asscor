@@ -19,9 +19,13 @@ import (
 func main() {
 	configPath := flag.String("config", "config.ini", "configuration file path")
 	listenAddr := flag.String("listen", ":50051", "microkernel listen address")
-	noMTLS := flag.Bool("no-mtls", false, "disable mTLS (development only)")
+	noMTLS := flag.Bool("no-mtls", false, "disable mTLS (DEVELOPMENT ONLY — not for production)")
 	certDir := flag.String("cert-dir", "certs", "TLS certificate directory")
 	flag.Parse()
+
+	if *noMTLS {
+		log.Println("WARNING: mTLS is DISABLED — this mode is intended for development only, do not use in production")
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {

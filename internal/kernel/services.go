@@ -38,6 +38,19 @@ func NewKernelServiceImpl(
 func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterRequest) (*apiv1.RegisterResponse, error) {
 	log.Printf("kernel: register request from %s (%s) v%s", req.HostId, req.Hostname, req.Version)
 
+	if req.HostId == "" {
+		return &apiv1.RegisterResponse{
+			Accepted:  false,
+			SessionId: "",
+		}, fmt.Errorf("host_id is required")
+	}
+	if req.Version == "" {
+		return &apiv1.RegisterResponse{
+			Accepted:  false,
+			SessionId: "",
+		}, fmt.Errorf("version is required")
+	}
+
 	if s.heartbeat == nil {
 		return nil, fmt.Errorf("heartbeat service not available")
 	}

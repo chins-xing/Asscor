@@ -260,6 +260,7 @@ type SPCModule struct {
 
 	mu          sync.RWMutex
 	cveCache    []SPCCVEScore
+	cveIndex    map[string]int
 	assetCache  map[string]*LocalAsset
 	lastFetch   time.Time
 	lastUpdate  time.Time
@@ -273,14 +274,17 @@ type SPCModule struct {
 	mispClient     *SPCMISPClient
 	enabled        bool
 	minPScore      float64
+	maxCacheSize   int
 }
 
 func NewSPCModule() *SPCModule {
 	return &SPCModule{
 		cveCache:      make([]SPCCVEScore, 0),
+		cveIndex:      make(map[string]int),
 		assetCache:    make(map[string]*LocalAsset),
 		fetchInterval: 1 * time.Hour,
 		minPScore:     0.60,
+		maxCacheSize:  100000,
 		enabled:       false,
 		mispConfig: SPCMISPConfig{
 			SyncHours: 1,
@@ -452,6 +456,10 @@ func (m *SPCModule) cleanupOldCVEs() {
 		}
 	}
 	m.cveCache = kept
+	m.cveIndex = make(map[string]int, len(kept))
+	for i, cve := range kept {
+		m.cveIndex[cve.CVEID] = i
+	}
 	removed := before - len(m.cveCache)
 	if removed > 0 {
 		log.Printf("spc: cleaned %d old CVE records (kept %d)", removed, len(m.cveCache))
@@ -532,14 +540,12 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 	sampleCVEs := m.generateSampleCVEs()
 	m.mu.Lock()
 	for _, cve := range sampleCVEs {
-		exists := false
-		for _, existing := range m.cveCache {
-			if existing.CVEID == cve.CVEID {
-				exists = true
+		if _, exists := m.cveIndex[cve.CVEID]; !exists {
+			if len(m.cveCache) >= m.maxCacheSize {
+				log.Printf("spc: CVE cache reached max size %d, skipping new entries", m.maxCacheSize)
 				break
 			}
-		}
-		if !exists {
+			m.cveIndex[cve.CVEID] = len(m.cveCache)
 			m.cveCache = append(m.cveCache, cve)
 			result.CVEAdded++
 		}
@@ -657,14 +663,8 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 			APTGroupAssoc:   rec.APTGroupAssoc,
 		}
 
-		exists := false
-		for _, existing := range m.cveCache {
-			if existing.CVEID == cve.CVEID {
-				exists = true
-				break
-			}
-		}
-		if !exists {
+		if _, exists := m.cveIndex[cve.CVEID]; !exists {
+			m.cveIndex[cve.CVEID] = len(m.cveCache)
 			m.cveCache = append(m.cveCache, cve)
 			added++
 		}
@@ -936,13 +936,15 @@ func (m *SPCModule) generateWeightShift(affectedCVE []string, cves []SPCCVEScore
 		model.DomainResilience:         0,
 	}
 
+	cveMap := make(map[string]*SPCCVEScore, len(cves))
+	for i := range cves {
+		cveMap[cves[i].CVEID] = &cves[i]
+	}
+
 	publicExposedCount := 0
 	for _, id := range affectedCVE {
-		for _, cve := range cves {
-			if cve.CVEID == id && cve.Exposure >= ExposureDMZ {
-				publicExposedCount++
-				break
-			}
+		if cve, ok := cveMap[id]; ok && cve.Exposure >= ExposureDMZ {
+			publicExposedCount++
 		}
 	}
 
@@ -960,20 +962,53 @@ func (m *SPCModule) calculateKillChainScore(cves []SPCCVEScore, asset *LocalAsse
 		return 100.0
 	}
 
-	stageTactics := map[string][]string{
-		"initial_access":    {"TA0001"},
-		"execution":         {"TA0002"},
-		"persistence":       {"TA0003"},
-		"privilege_escalation": {"TA0004"},
-		"defense_evasion":   {"TA0005"},
-		"credential_access": {"TA0006"},
-		"lateral_movement":  {"TA0008"},
-		"exfiltration":      {"TA0010"},
-		"impact":            {"TA0040"},
+	techToTactics := map[string][]string{
+		"T1190": {"initial_access"},
+		"T1133": {"initial_access"},
+		"T1078": {"initial_access", "persistence", "privilege_escalation"},
+		"T1071": {"command_and_control"},
+		"T1095": {"command_and_control"},
+		"T1571": {"command_and_control"},
+		"T1573": {"command_and_control"},
+		"T1059": {"execution"},
+		"T1203": {"execution"},
+		"T1053": {"execution", "persistence"},
+		"T1543": {"persistence", "privilege_escalation"},
+		"T1547": {"persistence", "privilege_escalation"},
+		"T1136": {"persistence"},
+		"T1548": {"privilege_escalation", "defense_evasion"},
+		"T1068": {"privilege_escalation"},
+		"T1055": {"defense_evasion", "privilege_escalation"},
+		"T1562": {"defense_evasion"},
+		"T1070": {"defense_evasion"},
+		"T1550": {"credential_access", "lateral_movement"},
+		"T1003": {"credential_access"},
+		"T1110": {"credential_access"},
+		"T1558": {"credential_access"},
+		"T1210": {"lateral_movement"},
+		"T1021": {"lateral_movement"},
+		"T1080": {"lateral_movement"},
+		"T1048": {"exfiltration"},
+		"T1041": {"exfiltration"},
+		"T1567": {"exfiltration"},
+		"T1486": {"impact"},
+		"T1489": {"impact"},
+		"T1490": {"impact"},
+		"T1498": {"impact"},
+		"T1499": {"impact"},
+		"T1592": {"initial_access"},
+		"T1595": {"initial_access"},
+		"T1199": {"initial_access"},
+		"T1566": {"initial_access"},
 	}
 
 	stageScores := make(map[string]float64)
-	for stage := range stageTactics {
+	allStages := []string{
+		"initial_access", "execution", "persistence",
+		"privilege_escalation", "defense_evasion", "credential_access",
+		"lateral_movement", "exfiltration", "impact", "command_and_control",
+	}
+	for _, stage := range allStages {
 		stageScores[stage] = 100.0
 	}
 
@@ -985,12 +1020,12 @@ func (m *SPCModule) calculateKillChainScore(cves []SPCCVEScore, asset *LocalAsse
 		matchedCVECount++
 
 		for _, tech := range cve.AttckTechniques {
-			for stage, tactics := range stageTactics {
-				for _, tac := range tactics {
-					if strings.HasPrefix(tech, strings.TrimPrefix(tac, "TA")) {
-						stageScores[stage] = math.Max(0, stageScores[stage]-10)
-					}
-				}
+			stages, ok := techToTactics[tech]
+			if !ok {
+				continue
+			}
+			for _, stage := range stages {
+				stageScores[stage] = math.Max(0, stageScores[stage]-10)
 			}
 		}
 	}
@@ -1009,11 +1044,10 @@ func (m *SPCModule) calculateKillChainScore(cves []SPCCVEScore, asset *LocalAsse
 func (m *SPCModule) AddCVE(score SPCCVEScore) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, existing := range m.cveCache {
-		if existing.CVEID == score.CVEID {
-			return
-		}
+	if _, exists := m.cveIndex[score.CVEID]; exists {
+		return
 	}
+	m.cveIndex[score.CVEID] = len(m.cveCache)
 	m.cveCache = append(m.cveCache, score)
 }
 
@@ -1021,14 +1055,8 @@ func (m *SPCModule) AddCVEs(scores []SPCCVEScore) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, score := range scores {
-		exists := false
-		for _, existing := range m.cveCache {
-			if existing.CVEID == score.CVEID {
-				exists = true
-				break
-			}
-		}
-		if !exists {
+		if _, exists := m.cveIndex[score.CVEID]; !exists {
+			m.cveIndex[score.CVEID] = len(m.cveCache)
 			m.cveCache = append(m.cveCache, score)
 		}
 	}
@@ -1064,6 +1092,7 @@ func (m *SPCModule) ClearCache() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cveCache = m.cveCache[:0]
+	m.cveIndex = make(map[string]int)
 }
 
 func (m *SPCModule) LastUpdate() time.Time {

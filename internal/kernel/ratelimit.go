@@ -7,13 +7,19 @@ import (
 	"time"
 )
 
-type RateLimiter struct {
-	rate       float64
-	burst      int
+type clientBucket struct {
 	tokens     float64
 	lastRefill time.Time
-	mu         sync.Mutex
-	onRejected func(service, method, reason string)
+}
+
+type RateLimiter struct {
+	rate        float64
+	burst       int
+	mu          sync.Mutex
+	buckets     map[string]*clientBucket
+	onRejected  func(service, method, reason string)
+	cleanupTick *time.Ticker
+	stopCleanup chan struct{}
 }
 
 func NewRateLimiter(ratePerSec float64, burst int, onRejected func(service, method, reason string)) *RateLimiter {
@@ -23,44 +29,90 @@ func NewRateLimiter(ratePerSec float64, burst int, onRejected func(service, meth
 	if burst <= 0 {
 		burst = int(ratePerSec)
 	}
-	return &RateLimiter{
+	rl := &RateLimiter{
 		rate:       ratePerSec,
 		burst:      burst,
-		tokens:     float64(burst),
-		lastRefill: time.Now(),
+		buckets:    make(map[string]*clientBucket),
 		onRejected: onRejected,
+		stopCleanup: make(chan struct{}),
 	}
+	rl.startAutoCleanup()
+	return rl
 }
 
-func (r *RateLimiter) allow() bool {
+func (r *RateLimiter) startAutoCleanup() {
+	r.cleanupTick = time.NewTicker(5 * time.Minute)
+	go func() {
+		for {
+			select {
+			case <-r.cleanupTick.C:
+				r.CleanupStale(30 * time.Minute)
+			case <-r.stopCleanup:
+				return
+			}
+		}
+	}()
+}
+
+func (r *RateLimiter) Stop() {
+	if r.cleanupTick != nil {
+		r.cleanupTick.Stop()
+	}
+	close(r.stopCleanup)
+}
+
+func (r *RateLimiter) allow(clientAddr string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	b, ok := r.buckets[clientAddr]
+	if !ok {
+		b = &clientBucket{
+			tokens:     float64(r.burst),
+			lastRefill: time.Now(),
+		}
+		r.buckets[clientAddr] = b
+	}
+
 	now := time.Now()
-	elapsed := now.Sub(r.lastRefill).Seconds()
+	elapsed := now.Sub(b.lastRefill).Seconds()
 	if elapsed > 0 {
-		refill := elapsed * r.rate
-		r.tokens += refill
-		if r.tokens > float64(r.burst) {
-			r.tokens = float64(r.burst)
+		b.tokens += elapsed * r.rate
+		if b.tokens > float64(r.burst) {
+			b.tokens = float64(r.burst)
 		}
 	}
-	r.lastRefill = now
+	b.lastRefill = now
 
-	if r.tokens >= 1.0 {
-		r.tokens -= 1.0
+	if b.tokens >= 1.0 {
+		b.tokens -= 1.0
 		return true
 	}
 	return false
 }
 
+func (r *RateLimiter) CleanupStale(maxAge time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cutoff := time.Now().Add(-maxAge)
+	for addr, b := range r.buckets {
+		if b.lastRefill.Before(cutoff) {
+			delete(r.buckets, addr)
+		}
+	}
+}
+
 func (r *RateLimiter) Interceptor() Interceptor {
 	return func(ctx context.Context, service, method string, payload []byte, handler HandlerFunc) ([]byte, error) {
-		if !r.allow() {
+		clientAddr, _ := ctx.Value(ctxKey("client_addr")).(string)
+		if clientAddr == "" {
+			clientAddr = "unknown"
+		}
+		if !r.allow(clientAddr) {
 			if r.onRejected != nil {
 				r.onRejected(service, method, "rate_limit_exceeded")
 			}
-			return nil, fmt.Errorf("rate limit exceeded: %s/%s", service, method)
+			return nil, fmt.Errorf("rate limit exceeded: %s/%s (client: %s)", service, method, clientAddr)
 		}
 		return handler(ctx, service, method, payload)
 	}

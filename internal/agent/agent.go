@@ -2,12 +2,15 @@ package agent
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"sync/atomic"
 	"syscall"
@@ -32,6 +35,7 @@ type AgentConfig struct {
 	TLSEnabled       bool
 	TLSSkipVerify    bool
 	CertDir          string
+	HMACKey          string
 }
 
 func DefaultConfig() AgentConfig {
@@ -46,20 +50,22 @@ func DefaultConfig() AgentConfig {
 		CheckTimeoutSec:  10,
 		MaxRetries:       3,
 		ReconnectSec:     5,
-		TLSEnabled:       false,
+		TLSEnabled:       true,
 		TLSSkipVerify:    false,
 	}
 }
 
 type Agent struct {
-	cfg           AgentConfig
-	client        *Client
-	sessionID     string
-	running       atomic.Bool
-	checkers      []model.CheckItem
-	checkCount    int
-	pendingCmd    []*apiv1.Command
-	lastCheckTime time.Time
+	cfg              AgentConfig
+	client           *Client
+	sessionID        string
+	running          atomic.Bool
+	checkers         []model.CheckItem
+	checkCount       int
+	pendingCmd       []*apiv1.Command
+	lastCheckTime    time.Time
+	hmacKeyConfigured bool
+	hmacKeyWarned    atomic.Bool
 }
 
 func NewAgent(cfg AgentConfig) *Agent {
@@ -68,10 +74,16 @@ func NewAgent(cfg AgentConfig) *Agent {
 	allChecks := checks.GetAll()
 	log.Printf("agent: loaded %d platform checks for %s/%s", len(allChecks), runtime.GOOS, runtime.GOARCH)
 
+	hmacKeyConfigured := cfg.HMACKey != "" || os.Getenv("ARGUS_HMAC_KEY") != ""
+	if !hmacKeyConfigured {
+		log.Printf("agent: WARNING — HMAC key not configured. Remote commands will be REJECTED. Set ARGUS_HMAC_KEY environment variable or configure hmac_key in agent config.")
+	}
+
 	return &Agent{
-		cfg:        cfg,
-		checkers:   allChecks,
-		checkCount: len(allChecks),
+		cfg:              cfg,
+		checkers:         allChecks,
+		checkCount:       len(allChecks),
+		hmacKeyConfigured: hmacKeyConfigured,
 	}
 }
 
@@ -160,7 +172,7 @@ func (a *Agent) connect() error {
 			certDir = "certs"
 		}
 
-		caCert, err := os.ReadFile(certDir + "/ca.crt")
+		caCert, err := os.ReadFile(filepath.Join(certDir, "ca.crt"))
 		if err != nil {
 			return fmt.Errorf("读取CA证书: %w", err)
 		}
@@ -169,7 +181,7 @@ func (a *Agent) connect() error {
 			return fmt.Errorf("解析CA证书失败")
 		}
 
-		agentCert, err := tls.LoadX509KeyPair(certDir+"/agent.crt", certDir+"/agent.key")
+		agentCert, err := tls.LoadX509KeyPair(filepath.Join(certDir, "agent.crt"), filepath.Join(certDir, "agent.key"))
 		if err != nil {
 			return fmt.Errorf("加载Agent证书: %w", err)
 		}
@@ -266,7 +278,7 @@ func (a *Agent) heartbeatCycle() error {
 	if !heartbeatResp.Ok {
 		log.Printf("agent: heartbeat not ok, re-registering")
 		a.sessionID = ""
-		return nil
+		return fmt.Errorf("heartbeat rejected by kernel")
 	}
 
 	a.pendingCmd = heartbeatResp.PendingCommands
@@ -418,7 +430,7 @@ func (a *Agent) printAssessmentReport(result *apiv1.AssessmentResult) {
 	if spcScore == 0 {
 		spcScore = 1.0
 	}
-	fmt.Printf("  Final Score: %.2f/100    Threshold: 80.00    Status: %s\n", result.FinalScore, status)
+	fmt.Printf("  Final Score: %.2f/100    Status: %s\n", result.FinalScore, status)
 	fmt.Printf("  Threat Coeff: %.2f    SPC Score: %.2f\n", threatCoeff, spcScore)
 	fmt.Println("---------------------------------------------------------------")
 	fmt.Println()
@@ -447,10 +459,39 @@ func (a *Agent) executePendingCommands() {
 
 	log.Printf("agent: executing %d pending commands", len(a.pendingCmd))
 	for _, cmd := range a.pendingCmd {
+		if !a.verifyCommandSignature(cmd) {
+			log.Printf("agent: REJECTED command [%s]: HMAC signature verification failed", cmd.CommandId)
+			continue
+		}
 		log.Printf("agent: exec [%s]: %s", cmd.CommandId, cmd.Command)
 		a.runCommand(cmd)
 	}
 	a.pendingCmd = nil
+}
+
+func (a *Agent) verifyCommandSignature(cmd *apiv1.Command) bool {
+	if len(cmd.Signature) == 0 {
+		log.Printf("agent: command [%s] has no signature, rejecting", cmd.CommandId)
+		return false
+	}
+
+	hmacKey := a.cfg.HMACKey
+	if hmacKey == "" {
+		hmacKey = os.Getenv("ARGUS_HMAC_KEY")
+	}
+	if hmacKey == "" {
+		if !a.hmacKeyWarned.Load() {
+			a.hmacKeyWarned.Store(true)
+			log.Printf("agent: SECURITY ALERT — HMAC key not configured. All remote commands will be rejected until ARGUS_HMAC_KEY is set.")
+		}
+		return false
+	}
+
+	mac := hmac.New(sha256.New, []byte(hmacKey))
+	mac.Write([]byte(cmd.CommandId + ":" + cmd.Command))
+	expected := mac.Sum(nil)
+
+	return hmac.Equal(cmd.Signature, expected)
 }
 
 func (a *Agent) runChecks() []model.CheckResult {
@@ -465,14 +506,27 @@ func (a *Agent) runChecks() []model.CheckResult {
 func (a *Agent) runCommand(cmd *apiv1.Command) {
 	timeout := 30 * time.Second
 
-	shell := "sh"
-	shellFlag := "-c"
-	if runtime.GOOS == "windows" {
-		shell = "cmd"
-		shellFlag = "/c"
+	if !common.IsShellCommandAllowed(cmd.Command) {
+		name, args, ok := common.ParseCommand(cmd.Command)
+		if !ok {
+			log.Printf("agent: REJECTED command [%s]: %q not in allowlist", cmd.CommandId, cmd.Command)
+			return
+		}
+		output, err := common.RunCmdTimeout(timeout, name, args...)
+		if err != nil && output == "" {
+			log.Printf("agent: command [%s] failed: %v", cmd.CommandId, err)
+		} else if output != "" {
+			log.Printf("agent: command [%s] output: %s", cmd.CommandId, output)
+		}
+		return
 	}
 
-	output, err := common.RunCmdTimeout(timeout, shell, shellFlag, cmd.Command)
+	name, args, ok := common.ParseCommand(cmd.Command)
+	if !ok {
+		log.Printf("agent: REJECTED command [%s]: failed to parse %q", cmd.CommandId, cmd.Command)
+		return
+	}
+	output, err := common.RunCmdTimeout(timeout, name, args...)
 	if err != nil && output == "" {
 		log.Printf("agent: command [%s] failed: %v", cmd.CommandId, err)
 	} else if output != "" {

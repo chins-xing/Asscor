@@ -1,0 +1,720 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-05-20T21:17:39.845971835+08:00",
+  "host_id": "iZn4afsy99fu7dy1xcgb8pZ",
+  "hostname": "iZn4afsy99fu7dy1xcgb8pZ",
+  "framework": "ARGUS",
+  "ssam_version": "1.3",
+  "final_score": 30.12,
+  "threshold": 80,
+  "acceptable": false,
+  "domain_scores": {
+    "attack_surface": 55,
+    "business_continuity": 60,
+    "kernel_security": 39,
+    "operation_trust": 9,
+    "resilience": 0
+  },
+  "domain_weights": {
+    "attack_surface": 35,
+    "business_continuity": 25,
+    "operation_trust": 25,
+    "resilience": 15
+  },
+  "edge_factors": {
+    "two_factor_failure": 0.82
+  },
+  "threat_coefficient": 1,
+  "spc_score": 1,
+  "summary": {
+    "total_checks": 76,
+    "passed_checks": 30,
+    "failed_checks": 46
+  },
+  "checks": [
+    {
+      "check_id": "AS-001",
+      "domain": "attack_surface",
+      "name": "无用服务关闭",
+      "passed": true,
+      "delta": -8,
+      "detail": "所有高风险服务均已禁用",
+      "compliance_ref": "L3-CE-21"
+    },
+    {
+      "check_id": "AS-002",
+      "domain": "attack_surface",
+      "name": "开放端口检查",
+      "passed": true,
+      "delta": -8,
+      "detail": "当前监听 4 个端口: [22, 111, 31337, 50051]",
+      "compliance_ref": "L3-CE-23"
+    },
+    {
+      "check_id": "AS-003",
+      "domain": "attack_surface",
+      "name": "强认证策略",
+      "passed": true,
+      "delta": -10,
+      "detail": "SSH强认证策略已正确配置",
+      "compliance_ref": "L3-CE-01"
+    },
+    {
+      "check_id": "AS-004",
+      "domain": "attack_surface",
+      "name": "最小防火墙规则",
+      "passed": false,
+      "delta": -8,
+      "detail": "INPUT链默认策略非DROP，建议设置为DROP",
+      "compliance_ref": "L3-CE-12"
+    },
+    {
+      "check_id": "AS-005",
+      "domain": "attack_surface",
+      "name": "网络服务暴露面检查",
+      "passed": false,
+      "delta": -8,
+      "detail": "对外暴露端口过多 (4个): 111, 22, 31337, 50051，建议最小化暴露面",
+      "compliance_ref": "L3-CE-23"
+    },
+    {
+      "check_id": "AS-006",
+      "domain": "attack_surface",
+      "name": "危险协议检测",
+      "passed": true,
+      "delta": -10,
+      "detail": "未检测到危险协议服务",
+      "compliance_ref": "L3-CE-05"
+    },
+    {
+      "check_id": "AS-007",
+      "domain": "attack_surface",
+      "name": "账户锁定策略",
+      "passed": true,
+      "delta": -6,
+      "detail": "fail2ban 已运行",
+      "compliance_ref": "L3-CE-02"
+    },
+    {
+      "check_id": "AS-008",
+      "domain": "attack_surface",
+      "name": "会话超时配置",
+      "passed": false,
+      "delta": -3,
+      "detail": "未检测到TMOUT配置",
+      "compliance_ref": "L3-CE-03"
+    },
+    {
+      "check_id": "AS-009",
+      "domain": "attack_surface",
+      "name": "加密协议强制",
+      "passed": true,
+      "delta": -8,
+      "detail": "明文协议已禁用，SSH已启用",
+      "compliance_ref": "L3-CE-05"
+    },
+    {
+      "check_id": "AS-010",
+      "domain": "attack_surface",
+      "name": "共享账户检测",
+      "passed": true,
+      "delta": -5,
+      "detail": "未发现UID共享或重复",
+      "compliance_ref": "L3-CE-06"
+    },
+    {
+      "check_id": "AS-011",
+      "domain": "attack_surface",
+      "name": "默认账户检测",
+      "passed": true,
+      "delta": -6,
+      "detail": "未发现活跃的默认账户",
+      "compliance_ref": "L3-CE-08"
+    },
+    {
+      "check_id": "AS-012",
+      "domain": "attack_surface",
+      "name": "幽灵账户检测",
+      "passed": false,
+      "delta": -6,
+      "detail": "发现 4 个可疑幽灵账户: unbound, nscd, admin, jack; (系统默认账户 25 个已正确锁定)",
+      "compliance_ref": "L3-CE-09"
+    },
+    {
+      "check_id": "AS-013",
+      "domain": "attack_surface",
+      "name": "文件ACL检查",
+      "passed": false,
+      "delta": -5,
+      "detail": "/etc 存在过度开放ACL; /var/log 存在过度开放ACL",
+      "compliance_ref": "L3-CE-10"
+    },
+    {
+      "check_id": "AS-014",
+      "domain": "attack_surface",
+      "name": "系统服务审计",
+      "passed": true,
+      "delta": -5,
+      "detail": "运行 25 个服务 (合理范围)",
+      "compliance_ref": "L3-CE-22"
+    },
+    {
+      "check_id": "AS-015",
+      "domain": "attack_surface",
+      "name": "传输层加密",
+      "passed": true,
+      "delta": -8,
+      "detail": "传输层加密配置基本合理",
+      "compliance_ref": "L3-CE-31"
+    },
+    {
+      "check_id": "AS-016",
+      "domain": "attack_surface",
+      "name": "登录源限制",
+      "passed": false,
+      "delta": -10,
+      "detail": "未检测到SSH登录源IP限制",
+      "compliance_ref": "L4-CE-02"
+    },
+    {
+      "check_id": "AS-017",
+      "domain": "attack_surface",
+      "name": "访问时间控制",
+      "passed": false,
+      "delta": -5,
+      "detail": "未检测到访问时间控制配置",
+      "compliance_ref": "L4-CE-04"
+    },
+    {
+      "check_id": "OT-001",
+      "domain": "operation_trust",
+      "name": "关键文件权限",
+      "passed": true,
+      "delta": -10,
+      "detail": "关键文件权限配置正确",
+      "compliance_ref": "L3-CE-07"
+    },
+    {
+      "check_id": "OT-002",
+      "domain": "operation_trust",
+      "name": "审计日志服务",
+      "passed": true,
+      "delta": -10,
+      "detail": "审计日志服务已运行: rsyslog, auditd",
+      "compliance_ref": "L3-CE-14"
+    },
+    {
+      "check_id": "OT-003",
+      "domain": "operation_trust",
+      "name": "命令历史防篡改",
+      "passed": true,
+      "delta": -8,
+      "detail": "/var/log 已设置append-only属性",
+      "compliance_ref": "L3-CE-16"
+    },
+    {
+      "check_id": "OT-004",
+      "domain": "operation_trust",
+      "name": "供应链完整性",
+      "passed": false,
+      "delta": -5,
+      "detail": "未检测到pip/npm hash校验配置",
+      "compliance_ref": "L3-CE-32"
+    },
+    {
+      "check_id": "OT-005",
+      "domain": "operation_trust",
+      "name": "SELinux/AppArmor",
+      "passed": false,
+      "delta": -15,
+      "detail": "SELinux处于Disabled模式",
+      "compliance_ref": "L4-CE-03"
+    },
+    {
+      "check_id": "OT-006",
+      "domain": "operation_trust",
+      "name": "敏感文件标记",
+      "passed": true,
+      "delta": -5,
+      "detail": "未发现可被其他用户读取的敏感文件",
+      "compliance_ref": "L3-CE-11"
+    },
+    {
+      "check_id": "OT-007",
+      "domain": "operation_trust",
+      "name": "用户目录权限",
+      "passed": false,
+      "delta": -4,
+      "detail": "/home/.maegis 权限=0755 (存在'其他'或'组'写权限); /home/.zaegis 权限=0755 (存在'其他'或'组'写权限); /home/.~aegis 权限=0755 (存在'其他'或'组'写权限); /home/myuser 权限=0755 (存在'其他'或'组'写权限)",
+      "compliance_ref": "L3-CE-13"
+    },
+    {
+      "check_id": "OT-008",
+      "domain": "operation_trust",
+      "name": "审计内容完整性",
+      "passed": true,
+      "delta": -5,
+      "detail": "auditd规则覆盖 7 个关键系统调用",
+      "compliance_ref": "L3-CE-15"
+    },
+    {
+      "check_id": "OT-009",
+      "domain": "operation_trust",
+      "name": "日志远程备份",
+      "passed": false,
+      "delta": -8,
+      "detail": "rsyslog未配置远程转发",
+      "compliance_ref": "L3-CE-17"
+    },
+    {
+      "check_id": "OT-010",
+      "domain": "operation_trust",
+      "name": "审计进程守护",
+      "passed": true,
+      "delta": -5,
+      "detail": "auditd已配置自动重启守护",
+      "compliance_ref": "L3-CE-18"
+    },
+    {
+      "check_id": "OT-011",
+      "domain": "operation_trust",
+      "name": "日志分类存储",
+      "passed": true,
+      "delta": -3,
+      "detail": "日志分类存储: audit.log, secure, messages",
+      "compliance_ref": "L3-CE-19"
+    },
+    {
+      "check_id": "OT-012",
+      "domain": "operation_trust",
+      "name": "审计报表生成",
+      "passed": false,
+      "delta": -3,
+      "detail": "未发现aureport定时报表任务",
+      "compliance_ref": "L3-CE-20"
+    },
+    {
+      "check_id": "OT-013",
+      "domain": "operation_trust",
+      "name": "文件完整性监控",
+      "passed": false,
+      "delta": -10,
+      "detail": "未检测到文件完整性监控工具 (AIDE/Tripwire)",
+      "compliance_ref": "L3-CE-30"
+    },
+    {
+      "check_id": "OT-014",
+      "domain": "operation_trust",
+      "name": "静态数据加密",
+      "passed": false,
+      "delta": -10,
+      "detail": "未检测到静态数据加密 (LUKS/gocryptfs/crypttab)",
+      "compliance_ref": "L3-CE-33"
+    },
+    {
+      "check_id": "OT-015",
+      "domain": "operation_trust",
+      "name": "国密算法检测",
+      "passed": true,
+      "delta": 3,
+      "detail": "支持国密算法: SM4",
+      "compliance_ref": "L3-CE-35"
+    },
+    {
+      "check_id": "OT-016",
+      "domain": "operation_trust",
+      "name": "残留信息检查",
+      "passed": false,
+      "delta": -5,
+      "detail": "/tmp未使用tmpfs",
+      "compliance_ref": "L3-CE-39"
+    },
+    {
+      "check_id": "OT-017",
+      "domain": "operation_trust",
+      "name": "内存转储限制",
+      "passed": true,
+      "delta": -5,
+      "detail": "core dump已禁用",
+      "compliance_ref": "L3-CE-40"
+    },
+    {
+      "check_id": "OT-018",
+      "domain": "operation_trust",
+      "name": "敏感数据最小化",
+      "passed": true,
+      "delta": -6,
+      "detail": "未在日志中发现明文敏感信息",
+      "compliance_ref": "L3-CE-41"
+    },
+    {
+      "check_id": "OT-019",
+      "domain": "operation_trust",
+      "name": "个人数据脱敏",
+      "passed": false,
+      "delta": -6,
+      "detail": "未检测到日志脱敏配置",
+      "compliance_ref": "L3-CE-42"
+    },
+    {
+      "check_id": "OT-020",
+      "domain": "operation_trust",
+      "name": "详细审计",
+      "passed": false,
+      "delta": -10,
+      "detail": "auditd仅覆盖 0 个特权操作 (建议\u003e=4)",
+      "compliance_ref": "L4-CE-05"
+    },
+    {
+      "check_id": "OT-021",
+      "domain": "operation_trust",
+      "name": "时间源可信",
+      "passed": true,
+      "delta": -5,
+      "detail": "chronyd已同步可信时间源",
+      "compliance_ref": "L4-CE-06"
+    },
+    {
+      "check_id": "OT-022",
+      "domain": "operation_trust",
+      "name": "强加密存储",
+      "passed": false,
+      "delta": -15,
+      "detail": "检测到 /etc/crypttab 但无可验证的活跃加密卷映射",
+      "compliance_ref": "L4-CE-09"
+    },
+    {
+      "check_id": "RS-001",
+      "domain": "resilience",
+      "name": "系统更新检查",
+      "passed": true,
+      "delta": -10,
+      "detail": "更新检查完成 (可能无更新或检查出错)",
+      "compliance_ref": "L3-CE-26"
+    },
+    {
+      "check_id": "RS-002",
+      "domain": "resilience",
+      "name": "连接数限制",
+      "passed": false,
+      "delta": -8,
+      "detail": "tcp_max_syn_backlog=128 (建议\u003e=1024)",
+      "compliance_ref": "L3-CE-12"
+    },
+    {
+      "check_id": "RS-003",
+      "domain": "resilience",
+      "name": "自动封禁精度",
+      "passed": false,
+      "delta": -6,
+      "detail": "fail2ban已运行但未检测到有效jail配置",
+      "compliance_ref": "L3-CE-02"
+    },
+    {
+      "check_id": "RS-004",
+      "domain": "resilience",
+      "name": "DDoS防护配置",
+      "passed": false,
+      "delta": -10,
+      "detail": "DDoS防护配置不足 (SYN Cookie, SYNACK重试=2)，建议增强: ",
+      "compliance_ref": "L3-CE-12"
+    },
+    {
+      "check_id": "RS-005",
+      "domain": "resilience",
+      "name": "SYN Cookie防护",
+      "passed": true,
+      "delta": -5,
+      "detail": "SYN Cookie已开启",
+      "compliance_ref": "L1-CE-04"
+    },
+    {
+      "check_id": "RS-006",
+      "domain": "resilience",
+      "name": "HIDS/NIDS部署",
+      "passed": true,
+      "delta": -10,
+      "detail": "检测到IDS工具: suricata",
+      "compliance_ref": "L3-CE-24"
+    },
+    {
+      "check_id": "RS-007",
+      "domain": "resilience",
+      "name": "入侵告警配置",
+      "passed": false,
+      "delta": -6,
+      "detail": "未检测到HIDS告警配置",
+      "compliance_ref": "L3-CE-25"
+    },
+    {
+      "check_id": "RS-008",
+      "domain": "resilience",
+      "name": "反病毒部署",
+      "passed": false,
+      "delta": -8,
+      "detail": "未检测到反病毒工具 (ClamAV等)",
+      "compliance_ref": "L3-CE-27"
+    },
+    {
+      "check_id": "RS-009",
+      "domain": "resilience",
+      "name": "病毒库更新",
+      "passed": false,
+      "delta": -6,
+      "detail": "未检测到病毒库自动更新配置",
+      "compliance_ref": "L3-CE-28"
+    },
+    {
+      "check_id": "RS-010",
+      "domain": "resilience",
+      "name": "集中管控集成",
+      "passed": false,
+      "delta": -4,
+      "detail": "未检测到集中管控代理",
+      "compliance_ref": "L3-CE-29"
+    },
+    {
+      "check_id": "RS-011",
+      "domain": "resilience",
+      "name": "APT检测能力",
+      "passed": false,
+      "delta": -15,
+      "detail": "未检测到APT检测/威胁狩猎工具",
+      "compliance_ref": "L4-CE-07"
+    },
+    {
+      "check_id": "RS-012",
+      "domain": "resilience",
+      "name": "分布式IDS",
+      "passed": false,
+      "delta": -10,
+      "detail": "仅检测到单一IDS组件: suricata，建议部署分布式IDS",
+      "compliance_ref": "L4-CE-08"
+    },
+    {
+      "check_id": "BC-005",
+      "domain": "business_continuity",
+      "name": "备份机制",
+      "passed": false,
+      "delta": -10,
+      "detail": "未发现备份定时任务",
+      "compliance_ref": "L3-CE-36"
+    },
+    {
+      "check_id": "BC-006",
+      "domain": "business_continuity",
+      "name": "异地备份",
+      "passed": false,
+      "delta": -10,
+      "detail": "未发现异地备份配置 (rsync/rclone)",
+      "compliance_ref": "L3-CE-37"
+    },
+    {
+      "check_id": "BC-007",
+      "domain": "business_continuity",
+      "name": "灾难恢复演练",
+      "passed": false,
+      "delta": -20,
+      "detail": "未发现灾备演练记录，建议建立定期灾备演练机制",
+      "compliance_ref": "L4-CE-09"
+    },
+    {
+      "check_id": "AC-001",
+      "domain": "resilience",
+      "name": "ACI:网络分段验证",
+      "passed": false,
+      "delta": -15,
+      "detail": "仅检测到少量防火墙规则，建议增强网络分段",
+      "compliance_ref": "ACI-01"
+    },
+    {
+      "check_id": "AC-002",
+      "domain": "resilience",
+      "name": "ACI:离线备份完整性",
+      "passed": false,
+      "delta": -20,
+      "detail": "未发现远程备份配置 (rsync/rclone)",
+      "compliance_ref": "ACI-03"
+    },
+    {
+      "check_id": "AC-003",
+      "domain": "resilience",
+      "name": "ACI:审计日志远程备份",
+      "passed": false,
+      "delta": -10,
+      "detail": "rsyslog未配置远程转发",
+      "compliance_ref": "ACI-05"
+    },
+    {
+      "check_id": "AC-004",
+      "domain": "resilience",
+      "name": "ACI:EDR部署检测",
+      "passed": false,
+      "delta": -10,
+      "detail": "未检测到EDR/端点安全工具",
+      "compliance_ref": "ACI-04"
+    },
+    {
+      "check_id": "AC-005",
+      "domain": "resilience",
+      "name": "ACI:应用程序白名单",
+      "passed": false,
+      "delta": -10,
+      "detail": "未检测到应用程序白名单机制 (SELinux Enforcing/fapolicyd)",
+      "compliance_ref": "ACI-06"
+    },
+    {
+      "check_id": "AC-006",
+      "domain": "resilience",
+      "name": "ACI:本地管理员密码唯一性",
+      "passed": false,
+      "delta": -10,
+      "detail": "未检测到LAPS，且sudoers存在NOPASSWD配置，本地管理员密码风险较高",
+      "compliance_ref": "ACI-02"
+    },
+    {
+      "check_id": "AC-007",
+      "domain": "resilience",
+      "name": "ACI:数据防泄露措施",
+      "passed": false,
+      "delta": -5,
+      "detail": "未检测到DLP措施 (商业DLP或敏感文件审计监控)",
+      "compliance_ref": "ACI-07"
+    },
+    {
+      "check_id": "AC-008",
+      "domain": "resilience",
+      "name": "ACI:恢复能力验证",
+      "passed": false,
+      "delta": -10,
+      "detail": "未检测到恢复能力配置 (rear/clonezilla/timeshift/borg/restic或恢复脚本)",
+      "compliance_ref": "ACI-08"
+    },
+    {
+      "check_id": "EF-001",
+      "domain": "attack_surface",
+      "name": "双因素认证",
+      "passed": false,
+      "delta": 0,
+      "detail": "未检测到双因素认证配置 (TOTP/证书/U2F)",
+      "compliance_ref": "L3-CE-04"
+    },
+    {
+      "check_id": "EF-002",
+      "domain": "attack_surface",
+      "name": "三因素认证",
+      "passed": false,
+      "delta": 0,
+      "detail": "仅检测到 0 个认证因素 (需要\u003e=3)",
+      "compliance_ref": "L4-CE-01"
+    },
+    {
+      "check_id": "KS-001",
+      "domain": "kernel_security",
+      "name": "Kernel Version CVE Check",
+      "passed": true,
+      "delta": -15,
+      "detail": "内核 5.10.134-19.3.1.al8.x86_64 未发现已知高危CVE",
+      "compliance_ref": "KS-01"
+    },
+    {
+      "check_id": "KS-002",
+      "domain": "kernel_security",
+      "name": "KASLR Status",
+      "passed": true,
+      "delta": -10,
+      "detail": "KASLR 默认启用（未显式禁用）",
+      "compliance_ref": "KS-02"
+    },
+    {
+      "check_id": "KS-003",
+      "domain": "kernel_security",
+      "name": "Kernel Module Signature Enforcement",
+      "passed": false,
+      "delta": -15,
+      "detail": "模块签名已启用但未强制(CONFIG_MODULE_SIG_FORCE 未设置)",
+      "compliance_ref": "KS-03"
+    },
+    {
+      "check_id": "KS-004",
+      "domain": "kernel_security",
+      "name": "Kernel Information Leak Protection",
+      "passed": false,
+      "delta": -8,
+      "detail": "kernel.kptr_restrict=1（仅root可见，建议设为2）; kernel.dmesg_restrict=0（应为1）",
+      "compliance_ref": "KS-04"
+    },
+    {
+      "check_id": "KS-005",
+      "domain": "kernel_security",
+      "name": "KPTI Status",
+      "passed": true,
+      "delta": -10,
+      "detail": "KPTI 已启用（检测到 2 个CPU标记）",
+      "compliance_ref": "KS-05"
+    },
+    {
+      "check_id": "KS-006",
+      "domain": "kernel_security",
+      "name": "Kernel Module Minimization",
+      "passed": true,
+      "delta": -5,
+      "detail": "已加载 43 个内核模块，在合理范围内",
+      "compliance_ref": "KS-06"
+    },
+    {
+      "check_id": "KS-007",
+      "domain": "kernel_security",
+      "name": "Sysctl Security Baseline",
+      "passed": false,
+      "delta": -10,
+      "detail": "7项不合规: 内核指针隐藏=1（应为2）; ptrace限制: 无法读取; 反向路径过滤=0（应为1）; ICMP重定向=1（应为0）; 安全ICMP重定向=1（应为0）; 发送ICMP重定向=1（应为0）; IPv6重定向=1（应为0）",
+      "compliance_ref": "KS-07"
+    },
+    {
+      "check_id": "KS-008",
+      "domain": "kernel_security",
+      "name": "eBPF Program Audit",
+      "passed": true,
+      "delta": -12,
+      "detail": "检测到 32 个eBPF程序（无基线文件，跳过比对）",
+      "compliance_ref": "KS-08"
+    },
+    {
+      "check_id": "KS-009",
+      "domain": "kernel_security",
+      "name": "Kernel Debug Interfaces Disabled",
+      "passed": false,
+      "delta": -8,
+      "detail": "kernel.sysrq=1（应为0）; debugfs 已挂载; /dev/mem 可读",
+      "compliance_ref": "KS-09"
+    },
+    {
+      "check_id": "KS-010",
+      "domain": "kernel_security",
+      "name": "Secure Boot Status",
+      "passed": true,
+      "delta": -10,
+      "detail": "Secure Boot 已启用（dmesg确认）",
+      "compliance_ref": "KS-10"
+    },
+    {
+      "check_id": "KS-011",
+      "domain": "kernel_security",
+      "name": "dmesg Access Restriction",
+      "passed": false,
+      "delta": -5,
+      "detail": "kernel.dmesg_restrict=0（应为1），非特权用户可读取内核日志",
+      "compliance_ref": "KS-11"
+    },
+    {
+      "check_id": "KS-012",
+      "domain": "kernel_security",
+      "name": "LSMs Status",
+      "passed": false,
+      "delta": -15,
+      "detail": "LSM已加载(capability,selinux)但无enforcing模块",
+      "compliance_ref": "KS-12"
+    }
+  ]
+}

@@ -290,7 +290,10 @@ func (a *Assessor) computeDynamicDomainScores(result *model.AssessmentResult) *m
 }
 
 func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
-	model.ResetAllEdgeFactors()
+	localFactors := make(map[string]float64)
+	for id := range model.ListEdgeFactors() {
+		localFactors[model.ListEdgeFactors()[id].ID] = 1.0
+	}
 
 	for _, check := range result.Checks {
 		if check.Passed {
@@ -298,20 +301,15 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		}
 		switch check.CheckID {
 		case "EF-001":
-			model.SetEdgeFactorValue("EF-002FA", a.cfg.EdgeFactors.TwoFactorFailure)
+			localFactors["EF-002FA"] = a.cfg.EdgeFactors.TwoFactorFailure
 		case "EF-002":
-			model.SetEdgeFactorValue("EF-002FA", 0.82)
+			localFactors["EF-002FA"] = 0.82
 		}
 	}
 
-	factors := model.ActiveEdgeFactors()
 	mapped := model.EdgeFactors{TwoFactorFailure: 1.0}
-	if len(factors) > 0 {
-		for _, f := range model.ListEdgeFactors() {
-			if f.ID == "EF-002FA" && f.Active {
-				mapped.TwoFactorFailure = f.Factor
-			}
-		}
+	if v, ok := localFactors["EF-002FA"]; ok && v < 1.0 {
+		mapped.TwoFactorFailure = v
 	}
 	result.EdgeFactors = mapped
 }
@@ -338,8 +336,10 @@ func (a *Assessor) computeDynamicFinalScore(scores *model.DynamicDomainScores, r
 	baseScore *= result.ThreatCoeff
 	baseScore *= result.SPCScore
 
-	var chain model.EdgeFactorChain
-	baseScore = chain.Apply(baseScore)
+	activeFactors := result.EdgeFactors.ActiveFactors()
+	for _, f := range activeFactors {
+		baseScore *= f
+	}
 
 	return math.Round(baseScore*100) / 100
 }

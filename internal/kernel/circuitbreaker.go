@@ -16,6 +16,8 @@ const (
 	StateHalfOpen CircuitState = 2
 )
 
+const maxWindowSize = 1000
+
 func (s CircuitState) String() string {
 	switch s {
 	case StateClosed:
@@ -33,14 +35,58 @@ type CircuitBreakerConfig struct {
 	FailureRatio  float64
 	MinRequests   int
 	Timeout       time.Duration
+	WindowSize    time.Duration
 	OnStateChange func(service, method string)
 }
 
+type windowEntry struct {
+	timestamp time.Time
+	success   bool
+}
+
 type circuitRecord struct {
-	state         int32
-	failures      int32
-	successes     int32
+	state           int32
 	lastStateChange time.Time
+	mu              sync.Mutex
+	window          []windowEntry
+}
+
+func (r *circuitRecord) addEntry(success bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.window = append(r.window, windowEntry{
+		timestamp: time.Now(),
+		success:   success,
+	})
+	if len(r.window) > maxWindowSize {
+		r.window = r.window[len(r.window)-maxWindowSize:]
+	}
+}
+
+func (r *circuitRecord) pruneWindow(windowSize time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cutoff := time.Now().Add(-windowSize)
+	idx := 0
+	for idx < len(r.window) && r.window[idx].timestamp.Before(cutoff) {
+		idx++
+	}
+	if idx > 0 {
+		r.window = r.window[idx:]
+	}
+}
+
+func (r *circuitRecord) stats() (failures, successes int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, e := range r.window {
+		if e.success {
+			successes++
+		} else {
+			failures++
+		}
+	}
+	return
 }
 
 type CircuitBreaker struct {
@@ -58,6 +104,9 @@ func NewCircuitBreaker(cfg CircuitBreakerConfig) *CircuitBreaker {
 	}
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 30 * time.Second
+	}
+	if cfg.WindowSize <= 0 {
+		cfg.WindowSize = 60 * time.Second
 	}
 	return &CircuitBreaker{
 		records: make(map[string]*circuitRecord),
@@ -106,16 +155,16 @@ func (cb *CircuitBreaker) state(k string) CircuitState {
 
 func (cb *CircuitBreaker) recordFailure(k string) {
 	rec := cb.getRecord(k)
-	atomic.AddInt32(&rec.failures, 1)
+	rec.addEntry(false)
+	rec.pruneWindow(cb.cfg.WindowSize)
 
 	state := CircuitState(atomic.LoadInt32(&rec.state))
 
 	switch state {
 	case StateClosed:
-		failures := atomic.LoadInt32(&rec.failures)
-		successes := atomic.LoadInt32(&rec.successes)
+		failures, successes := rec.stats()
 		total := failures + successes
-		if total >= int32(cb.cfg.MinRequests) && float64(total) > 0 {
+		if total >= cb.cfg.MinRequests && total > 0 {
 			ratio := float64(failures) / float64(total)
 			if ratio >= cb.cfg.FailureRatio {
 				if atomic.CompareAndSwapInt32(&rec.state, int32(StateClosed), int32(StateOpen)) {
@@ -138,15 +187,17 @@ func (cb *CircuitBreaker) recordFailure(k string) {
 
 func (cb *CircuitBreaker) recordSuccess(k string) {
 	rec := cb.getRecord(k)
-	atomic.AddInt32(&rec.successes, 1)
+	rec.addEntry(true)
+	rec.pruneWindow(cb.cfg.WindowSize)
 
 	state := CircuitState(atomic.LoadInt32(&rec.state))
 
 	switch state {
 	case StateHalfOpen:
 		if atomic.CompareAndSwapInt32(&rec.state, int32(StateHalfOpen), int32(StateClosed)) {
-			atomic.StoreInt32(&rec.failures, 0)
-			atomic.StoreInt32(&rec.successes, 0)
+			rec.mu.Lock()
+			rec.window = rec.window[:0]
+			rec.mu.Unlock()
 			rec.lastStateChange = time.Now()
 			if cb.cfg.OnStateChange != nil {
 				cb.cfg.OnStateChange(k, "closed")
@@ -186,17 +237,17 @@ func (cb *CircuitBreaker) Reset(service, method string) {
 	rec, ok := cb.records[k]
 	if ok {
 		atomic.StoreInt32(&rec.state, int32(StateClosed))
-		atomic.StoreInt32(&rec.failures, 0)
-		atomic.StoreInt32(&rec.successes, 0)
+		rec.mu.Lock()
+		rec.window = rec.window[:0]
+		rec.mu.Unlock()
 	}
 	cb.mu.Unlock()
 }
 
-func (cb *CircuitBreaker) Stats(service, method string) (CircuitState, int32, int32) {
+func (cb *CircuitBreaker) Stats(service, method string) (CircuitState, int, int) {
 	k := key(service, method)
 	rec := cb.getRecord(k)
 	state := CircuitState(atomic.LoadInt32(&rec.state))
-	failures := atomic.LoadInt32(&rec.failures)
-	successes := atomic.LoadInt32(&rec.successes)
+	failures, successes := rec.stats()
 	return state, failures, successes
 }

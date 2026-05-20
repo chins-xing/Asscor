@@ -54,6 +54,7 @@ type Server struct {
 	connSem  chan struct{}
 	ctx      context.Context
 	cancel   context.CancelFunc
+	wg       sync.WaitGroup
 }
 
 func NewServer(cfg ServerConfig, k *Kernel) *Server {
@@ -129,8 +130,12 @@ func (s *Server) acceptLoop() {
 			return
 		}
 
+		s.wg.Add(1)
 		go func() {
-			defer func() { <-s.connSem }()
+			defer func() {
+				<-s.connSem
+				s.wg.Done()
+			}()
 			s.handleConn(conn)
 		}()
 	}
@@ -207,6 +212,7 @@ func (s *Server) Stop() {
 	if s.listener != nil {
 		s.listener.Close()
 	}
+	s.wg.Wait()
 }
 
 func BuildServiceDesc(kernelSvc *KernelServiceImpl, agentSvc *AgentServiceImpl) []*apiv1.ServiceDesc {

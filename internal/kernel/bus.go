@@ -3,7 +3,9 @@ package kernel
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -22,10 +24,17 @@ type subscriber struct {
 	handler MessageHandler
 }
 
+type BusMetrics struct {
+	PanicCount   int64
+	ErrorCount   int64
+	MessageCount int64
+}
+
 type Bus struct {
 	mu          sync.RWMutex
 	subscribers map[string][]subscriber
 	queueSize   int
+	metrics     BusMetrics
 }
 
 func NewBus(queueSize int) *Bus {
@@ -92,18 +101,24 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 	copy(subs, b.subscribers[msg.Topic])
 	b.mu.RUnlock()
 
+	atomic.AddInt64(&b.metrics.MessageCount, 1)
+
 	for _, sub := range subs {
 		go func(s subscriber) {
 			defer func() {
 				if r := recover(); r != nil {
-					fmt.Printf("bus: panic in subscriber %s for topic %s: %v\n", s.id, msg.Topic, r)
+					atomic.AddInt64(&b.metrics.PanicCount, 1)
+					log.Printf("bus: PANIC in subscriber %s for topic %s: %v (total panics: %d)", s.id, msg.Topic, r, atomic.LoadInt64(&b.metrics.PanicCount))
 				}
 			}()
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				_ = s.handler(ctx, msg)
+				if err := s.handler(ctx, msg); err != nil {
+					atomic.AddInt64(&b.metrics.ErrorCount, 1)
+					log.Printf("bus: error in subscriber %s for topic %s: %v", s.id, msg.Topic, err)
+				}
 			}
 		}(sub)
 	}
@@ -128,6 +143,14 @@ func (b *Bus) SubscriberCount(topic string) int {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return len(b.subscribers[topic])
+}
+
+func (b *Bus) GetMetrics() BusMetrics {
+	return BusMetrics{
+		PanicCount:   atomic.LoadInt64(&b.metrics.PanicCount),
+		ErrorCount:   atomic.LoadInt64(&b.metrics.ErrorCount),
+		MessageCount: atomic.LoadInt64(&b.metrics.MessageCount),
+	}
 }
 
 func (b *Bus) Topics() []string {

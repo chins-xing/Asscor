@@ -137,7 +137,7 @@ func (w *jsonlWriter) write(data []byte) error {
 		base := fname[:len(fname)-len(ext)]
 		dated := filepath.Join(dir, fmt.Sprintf("%s-%s%s", base, time.Now().Format("20060102"), ext))
 
-		f, err := os.OpenFile(dated, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		f, err := os.OpenFile(dated, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			return fmt.Errorf("open jsonl: %w", err)
 		}
@@ -317,7 +317,7 @@ func (m *PersistenceModule) WriteDashboardReport(report *DashboardReport) error 
 
 	path := filepath.Join(m.dataDir, "latest-assessment.json")
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return fmt.Errorf("dashboard write tmp: %w", err)
 	}
 	if err := os.Rename(tmpPath, path); err != nil {

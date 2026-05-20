@@ -78,10 +78,26 @@ func (e *ExtensionExecutor) isCommandAllowed(cmdPath string) bool {
 		return false
 	}
 
-	base := filepath.Base(cmdPath)
+	resolvedPath, err := filepath.EvalSymlinks(cmdPath)
+	if err != nil {
+		log.Printf("extmgr: failed to resolve symlink for %s: %v", cmdPath, err)
+		return false
+	}
+
+	base := filepath.Base(resolvedPath)
 	if allowed, exists := e.whitelist[base]; exists && allowed {
 		return true
 	}
+
+	absPath, err := filepath.Abs(resolvedPath)
+	if err == nil {
+		for allowedPath := range e.whitelist {
+			if absPath == allowedPath {
+				return true
+			}
+		}
+	}
+
 	return false
 }
 

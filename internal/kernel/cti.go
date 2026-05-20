@@ -86,7 +86,14 @@ func (m *CTIModule) updateCoefficient() {
 	defer m.mu.Unlock()
 
 	if m.activeThreats > 0 {
-		m.activeThreats = m.activeThreats / 2
+		decay := m.activeThreats / 4
+		if decay < 1 {
+			decay = 1
+		}
+		m.activeThreats -= decay
+		if m.activeThreats < 0 {
+			m.activeThreats = 0
+		}
 	}
 
 	base := 1.0

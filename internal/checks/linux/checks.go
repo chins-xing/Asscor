@@ -18,6 +18,8 @@ func All() []model.CheckItem {
 		as002(),
 		as003(),
 		as004(),
+		as005(),
+		as006(),
 		as007(),
 		as008(),
 		as009(),
@@ -52,6 +54,9 @@ func All() []model.CheckItem {
 		ot021(),
 		ot022(),
 		rs001(),
+		rs002(),
+		rs003(),
+		rs004(),
 		rs005(),
 		rs006(),
 		rs007(),
@@ -68,6 +73,9 @@ func All() []model.CheckItem {
 		ac003(),
 		ac004(),
 		ac005(),
+		ac006(),
+		ac007(),
+		ac008(),
 		ef001(),
 		ef002(),
 	}
@@ -2129,4 +2137,396 @@ func ef002() model.CheckItem {
 			return false, fmt.Sprintf("仅检测到 %d 个认证因素 (需要>=3)", factorCount)
 		},
 	}
+}
+
+// AS-005 网络服务暴露面检查
+// 等保条款: L3-CE-23 | ATT&CK: T1595.001
+func as005() model.CheckItem {
+	return model.CheckItem{
+		ID:            "AS-005",
+		Domain:        model.DomainAttackSurface,
+		Name:          "网络服务暴露面检查",
+		Description:   "检查对外暴露的网络服务是否最小化",
+		Delta:         -8,
+		ComplianceRef: "L3-CE-23",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			out, err := common.RunCmd("ss", "-tlnp")
+			if err != nil {
+				return false, fmt.Sprintf("无法获取监听端口: %v", err)
+			}
+			lines := strings.Split(out, "\n")
+			var externalPorts []string
+			for _, line := range lines {
+				if strings.Contains(line, "LISTEN") {
+					fields := strings.Fields(line)
+					if len(fields) >= 4 {
+						addr := fields[3]
+						if strings.HasPrefix(addr, "0.0.0.0:") || strings.HasPrefix(addr, ":::") || strings.HasPrefix(addr, "*:") {
+							port := addr
+							if idx := strings.LastIndex(addr, ":"); idx != -1 {
+								port = addr[idx+1:]
+							}
+							externalPorts = append(externalPorts, port)
+						}
+					}
+				}
+			}
+			if len(externalPorts) == 0 {
+				return true, "无对外暴露端口"
+			}
+			if len(externalPorts) <= 3 {
+				return true, fmt.Sprintf("对外暴露端口数量合理: %s", strings.Join(externalPorts, ", "))
+			}
+			return false, fmt.Sprintf("对外暴露端口过多 (%d个): %s，建议最小化暴露面", len(externalPorts), strings.Join(externalPorts, ", "))
+		},
+	}
+}
+
+// AS-006 危险协议检测
+// 等保条款: L3-CE-05 | ATT&CK: T1071
+func as006() model.CheckItem {
+	return model.CheckItem{
+		ID:            "AS-006",
+		Domain:        model.DomainAttackSurface,
+		Name:          "危险协议检测",
+		Description:   "检查是否存在明文传输的危险协议服务",
+		Delta:         -10,
+		ComplianceRef: "L3-CE-05",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			dangerousProtocols := []string{"telnet", "ftp", "rsh", "rlogin", "rexec", "tftp", "http"}
+			var active []string
+			for _, proto := range dangerousProtocols {
+				out, ok := common.RunCmdQuiet("systemctl", "is-active", proto)
+				if ok && strings.TrimSpace(out) == "active" {
+					active = append(active, proto)
+				}
+				out2, ok2 := common.RunCmdQuiet("ss", "-tlnp")
+				if ok2 && strings.Contains(out2, proto) {
+					if !contains(active, proto) {
+						active = append(active, proto+"(端口)")
+					}
+				}
+			}
+			if len(active) == 0 {
+				return true, "未检测到危险协议服务"
+			}
+			return false, fmt.Sprintf("检测到 %d 个危险协议服务: %s", len(active), strings.Join(active, ", "))
+		},
+	}
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+// RS-002 连接数限制
+// 等保条款: L3-CE-12 | ATT&CK: T1499
+func rs002() model.CheckItem {
+	return model.CheckItem{
+		ID:            "RS-002",
+		Domain:        model.DomainResilience,
+		Name:          "连接数限制",
+		Description:   "检查系统是否配置了连接数限制以防止资源耗尽",
+		Delta:         -8,
+		ComplianceRef: "L3-CE-12",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			var issues []string
+			data, err := os.ReadFile("/proc/sys/net/core/somaxconn")
+			if err == nil {
+				val := strings.TrimSpace(string(data))
+				if v, err := strconv.Atoi(val); err == nil && v < 128 {
+					issues = append(issues, fmt.Sprintf("somaxconn=%d (建议>=128)", v))
+				}
+			}
+			data2, err := os.ReadFile("/proc/sys/net/ipv4/tcp_max_syn_backlog")
+			if err == nil {
+				val := strings.TrimSpace(string(data2))
+				if v, err := strconv.Atoi(val); err == nil && v < 1024 {
+					issues = append(issues, fmt.Sprintf("tcp_max_syn_backlog=%d (建议>=1024)", v))
+				}
+			}
+			out, err := common.RunCmd("sysctl", "-n", "net.ipv4.tcp_max_connections")
+			if err == nil {
+				val := strings.TrimSpace(out)
+				if v, err := strconv.Atoi(val); err == nil && v > 0 && v < 1000 {
+					issues = append(issues, fmt.Sprintf("tcp_max_connections=%d (建议>=1000)", v))
+				}
+			}
+			if len(issues) == 0 {
+				return true, "连接数限制配置合理"
+			}
+			return false, strings.Join(issues, "; ")
+		},
+	}
+}
+
+// RS-003 自动封禁精度
+// 等保条款: L3-CE-02 | ATT&CK: T1110
+func rs003() model.CheckItem {
+	return model.CheckItem{
+		ID:            "RS-003",
+		Domain:        model.DomainResilience,
+		Name:          "自动封禁精度",
+		Description:   "检查fail2ban或类似工具的封禁规则是否有效配置",
+		Delta:         -6,
+		ComplianceRef: "L3-CE-02",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			out, ok := common.RunCmdQuiet("systemctl", "is-active", "fail2ban")
+			if ok && strings.TrimSpace(out) == "active" {
+				jailsOut, err := common.RunCmd("fail2ban-client", "status")
+				if err == nil && strings.Contains(jailsOut, "Jail list") {
+					jails := parseFail2banJails(jailsOut)
+					if len(jails) >= 2 {
+						return true, fmt.Sprintf("fail2ban已运行，监控 %d 个jail: %s", len(jails), strings.Join(jails, ", "))
+					}
+					if len(jails) == 1 {
+						return false, fmt.Sprintf("fail2ban仅监控 1 个jail (%s)，建议增加更多监控规则", jails[0])
+					}
+				}
+				return false, "fail2ban已运行但未检测到有效jail配置"
+			}
+			out2, ok2 := common.RunCmdQuiet("systemctl", "is-active", "crowdsec")
+			if ok2 && strings.TrimSpace(out2) == "active" {
+				return true, "crowdsec已运行，提供自动封禁能力"
+			}
+			out3, ok3 := common.RunCmdQuiet("which", "denyhosts")
+			if ok3 && strings.TrimSpace(out3) != "" {
+				return true, "denyhosts已安装，提供SSH自动封禁"
+			}
+			return false, "未检测到自动封禁工具 (fail2ban/crowdsec/denyhosts)"
+		},
+	}
+}
+
+func parseFail2banJails(output string) []string {
+	var jails []string
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "Jail list:") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				jailList := strings.TrimSpace(parts[1])
+				for _, j := range strings.Split(jailList, ",") {
+					jail := strings.TrimSpace(j)
+					if jail != "" {
+						jails = append(jails, jail)
+					}
+				}
+			}
+		}
+	}
+	return jails
+}
+
+// RS-004 DDoS防护配置
+// 等保条款: L3-CE-12 | ATT&CK: T1498
+func rs004() model.CheckItem {
+	return model.CheckItem{
+		ID:            "RS-004",
+		Domain:        model.DomainResilience,
+		Name:          "DDoS防护配置",
+		Description:   "检查系统是否配置了DDoS防护参数",
+		Delta:         -10,
+		ComplianceRef: "L3-CE-12",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			var configured []string
+			var issues []string
+			data, err := os.ReadFile("/proc/sys/net/ipv4/tcp_syncookies")
+			if err == nil && strings.TrimSpace(string(data)) == "1" {
+				configured = append(configured, "SYN Cookie")
+			} else {
+				issues = append(issues, "SYN Cookie未启用")
+			}
+			data2, err := os.ReadFile("/proc/sys/net/ipv4/tcp_synack_retries")
+			if err == nil {
+				val := strings.TrimSpace(string(data2))
+				if v, err := strconv.Atoi(val); err == nil && v <= 5 {
+					configured = append(configured, fmt.Sprintf("SYNACK重试=%d", v))
+				}
+			}
+			data3, err := os.ReadFile("/proc/sys/net/ipv4/tcp_fin_timeout")
+			if err == nil {
+				val := strings.TrimSpace(string(data3))
+				if v, err := strconv.Atoi(val); err == nil && v <= 30 {
+					configured = append(configured, fmt.Sprintf("FIN超时=%d", v))
+				}
+			}
+			out, err := common.RunCmd("sysctl", "-n", "net.ipv4.conf.all.rp_filter")
+			if err == nil && strings.TrimSpace(out) == "1" {
+				configured = append(configured, "反向路径过滤")
+			}
+			if len(configured) >= 3 {
+				return true, fmt.Sprintf("DDoS防护配置完善: %s", strings.Join(configured, ", "))
+			}
+			if len(configured) > 0 {
+				return false, fmt.Sprintf("DDoS防护配置不足 (%s)，建议增强: %s", strings.Join(configured, ", "), strings.Join(issues, "; "))
+			}
+			return false, "未检测到DDoS防护配置"
+		},
+	}
+}
+
+// AC-006 本地管理员密码唯一性(LAPS)
+// 等保条款: ACI-02 | ATT&CK: T1078.002
+func ac006() model.CheckItem {
+	return model.CheckItem{
+		ID:            "AC-006",
+		Domain:        model.DomainResilience,
+		Name:          "ACI:本地管理员密码唯一性",
+		Description:   "检查是否部署LAPS或类似机制确保本地管理员密码唯一",
+		Delta:         -10,
+		ComplianceRef: "ACI-02",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			lapsIndicators := []string{
+				"/opt/laps/laps",
+				"/usr/local/bin/laps",
+				"/etc/laps/config",
+				"/var/lib/laps",
+			}
+			for _, indicator := range lapsIndicators {
+				if _, err := os.Stat(indicator); err == nil {
+					return true, fmt.Sprintf("检测到LAPS部署: %s", indicator)
+				}
+			}
+			out, err := common.RunCmd("which", "laps")
+			if err == nil && strings.TrimSpace(out) != "" {
+				return true, "LAPS工具已安装"
+			}
+			out2, err := common.RunCmd("systemctl", "list-units", "--type=service", "--all")
+			if err == nil && strings.Contains(strings.ToLower(out2), "laps") {
+				return true, "检测到LAPS服务"
+			}
+			sudoersData, err := os.ReadFile("/etc/sudoers")
+			if err == nil {
+				if strings.Contains(string(sudoersData), "NOPASSWD") {
+					return false, "未检测到LAPS，且sudoers存在NOPASSWD配置，本地管理员密码风险较高"
+				}
+			}
+			return false, "未检测到LAPS或类似机制，本地管理员密码可能存在复用风险"
+		},
+	}
+}
+
+// AC-007 数据防泄露(DLP)措施
+// 等保条款: ACI-07 | ATT&CK: T1048
+func ac007() model.CheckItem {
+	return model.CheckItem{
+		ID:            "AC-007",
+		Domain:        model.DomainResilience,
+		Name:          "ACI:数据防泄露措施",
+		Description:   "检查敏感数据出口是否受控",
+		Delta:         -5,
+		ComplianceRef: "ACI-07",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			dlpTools := []string{
+				"forcepoint",
+				"symantec-dlp",
+				"digitalguardian",
+				"cofense",
+				"trellix",
+			}
+			for _, tool := range dlpTools {
+				out, ok := common.RunCmdQuiet("systemctl", "is-active", tool)
+				if ok && strings.TrimSpace(out) == "active" {
+					return true, fmt.Sprintf("检测到DLP工具: %s", tool)
+				}
+			}
+			out, err := common.RunCmd("ps", "-eo", "comm", "--no-headers")
+			if err == nil {
+				processes := strings.ToLower(out)
+				for _, tool := range dlpTools {
+					if strings.Contains(processes, tool) {
+						return true, fmt.Sprintf("检测到DLP进程: %s", tool)
+					}
+				}
+			}
+			auditRules, err := os.ReadFile("/etc/audit/rules.d/audit.rules")
+			if err == nil {
+				content := string(auditRules)
+				if strings.Contains(content, "watch") && (strings.Contains(content, "/etc/passwd") || strings.Contains(content, "/etc/shadow")) {
+					return true, "审计规则监控敏感文件访问，提供基础DLP能力"
+				}
+			}
+			return false, "未检测到DLP措施 (商业DLP或敏感文件审计监控)"
+		},
+	}
+}
+
+// AC-008 恢复能力验证(MTTR)
+// 等保条款: ACI-08 | ATT&CK: T1485
+func ac008() model.CheckItem {
+	return model.CheckItem{
+		ID:            "AC-008",
+		Domain:        model.DomainResilience,
+		Name:          "ACI:恢复能力验证",
+		Description:   "检查系统恢复能力和MTTR相关配置",
+		Delta:         -10,
+		ComplianceRef: "ACI-08",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			var recoveryIndicators []string
+			recoveryTools := []string{
+				"rear",
+				"relax-and-recover",
+				"clonezilla",
+				"timeshift",
+				"borgbackup",
+				"restic",
+			}
+			for _, tool := range recoveryTools {
+				out, err := common.RunCmd("which", tool)
+				if err == nil && strings.TrimSpace(out) != "" {
+					recoveryIndicators = append(recoveryIndicators, tool)
+				}
+			}
+			cronDirs := []string{"/etc/cron.d", "/etc/cron.daily", "/etc/cron.weekly"}
+			for _, dir := range cronDirs {
+				entries, err := os.ReadDir(dir)
+				if err != nil {
+					continue
+				}
+				for _, entry := range entries {
+					data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+					if err != nil {
+						continue
+					}
+					content := strings.ToLower(string(data))
+					if strings.Contains(content, "restore") || strings.Contains(content, "recover") || strings.Contains(content, "backup") {
+						recoveryIndicators = append(recoveryIndicators, entry.Name())
+					}
+				}
+			}
+			if len(recoveryIndicators) >= 2 {
+				return true, fmt.Sprintf("恢复能力配置完善: %s", strings.Join(unique(recoveryIndicators), ", "))
+			}
+			if len(recoveryIndicators) == 1 {
+				return false, fmt.Sprintf("恢复能力配置不足，仅检测到: %s", recoveryIndicators[0])
+			}
+			return false, "未检测到恢复能力配置 (rear/clonezilla/timeshift/borg/restic或恢复脚本)"
+		},
+	}
+}
+
+func unique(slice []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+	for _, s := range slice {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
 }

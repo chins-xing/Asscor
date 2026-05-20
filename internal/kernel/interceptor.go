@@ -154,11 +154,15 @@ func ResolveInterceptorConfig(cfg map[string]string) InterceptorConfig {
 	if v, ok := cfg["interceptor.rate_limit_per_sec"]; ok {
 		if f, err := parseFloat64(v); err == nil && f > 0 {
 			ic.RateLimitPerSec = f
+		} else if err != nil {
+			log.Printf("interceptor: invalid rate_limit_per_sec value %q: %v", v, err)
 		}
 	}
 	if v, ok := cfg["interceptor.rate_limit_burst"]; ok {
 		if i, err := parseInt(v); err == nil && i > 0 {
 			ic.RateLimitBurst = i
+		} else if err != nil {
+			log.Printf("interceptor: invalid rate_limit_burst value %q: %v", v, err)
 		}
 	}
 	if v, ok := cfg["interceptor.circuit_breaker_enabled"]; ok {
@@ -167,16 +171,22 @@ func ResolveInterceptorConfig(cfg map[string]string) InterceptorConfig {
 	if v, ok := cfg["interceptor.circuit_breaker_ratio"]; ok {
 		if f, err := parseFloat64(v); err == nil && f > 0 && f <= 1.0 {
 			ic.CircuitBreakerRatio = f
+		} else if err != nil {
+			log.Printf("interceptor: invalid circuit_breaker_ratio value %q: %v", v, err)
 		}
 	}
 	if v, ok := cfg["interceptor.circuit_breaker_min_req"]; ok {
 		if i, err := parseInt(v); err == nil && i > 0 {
 			ic.CircuitBreakerMinReq = i
+		} else if err != nil {
+			log.Printf("interceptor: invalid circuit_breaker_min_req value %q: %v", v, err)
 		}
 	}
 	if v, ok := cfg["interceptor.circuit_breaker_timeout_s"]; ok {
 		if i, err := parseInt(v); err == nil && i > 0 {
 			ic.CircuitBreakerTimeout = time.Duration(i) * time.Second
+		} else if err != nil {
+			log.Printf("interceptor: invalid circuit_breaker_timeout_s value %q: %v", v, err)
 		}
 	}
 	if v, ok := cfg["interceptor.audit_log_enabled"]; ok {

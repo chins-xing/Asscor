@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -284,6 +285,9 @@ func Parse(content string) (*Config, error) {
 		}
 		if envKey := os.Getenv("NVD_API_KEY"); envKey != "" {
 			cfg.SPC.NVD.APIKey = envKey
+			log.Printf("config: NVD API key loaded from environment variable (NVD_API_KEY)")
+		} else if cfg.SPC.NVD.APIKey != "" {
+			log.Printf("config: NVD API key loaded from configuration file")
 		}
 	}
 
@@ -306,6 +310,9 @@ func Parse(content string) (*Config, error) {
 		}
 		if envKey := os.Getenv("MISP_API_KEY"); envKey != "" {
 			cfg.SPC.MISP.APIKey = envKey
+			log.Printf("config: MISP API key loaded from environment variable (MISP_API_KEY)")
+		} else if cfg.SPC.MISP.APIKey != "" {
+			log.Printf("config: MISP API key loaded from configuration file")
 		}
 	}
 
