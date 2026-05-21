@@ -176,12 +176,23 @@ func (s *Server) handleConn(conn net.Conn) {
 
 		conn.SetReadDeadline(time.Now().Add(s.cfg.KeepaliveTimeout))
 
-		service, method, payload, err := s.codec.ReadRequest(io.LimitReader(br, maxPayload))
+		service, method, payload, err := s.codec.ReadRequest(io.LimitReader(br, maxPayload+1))
 		if err != nil {
+			if errors.Is(err, io.EOF) && len(payload) == 0 {
+				return
+			}
 			if !errors.Is(err, io.EOF) {
 				logger.With("component", "grpc").Warn("read error", "error", err)
+				return
 			}
-			return
+		}
+
+		if int64(len(payload)) > maxPayload {
+			logger.With("component", "grpc").Warn("payload exceeds limit", "size", len(payload), "limit", maxPayload, "remote", clientAddr)
+			if werr := s.codec.WriteError(conn, fmt.Errorf("payload too large: %d bytes (max %d)", len(payload), maxPayload)); werr != nil {
+				logger.With("component", "grpc").Error("write error response", "write_error", werr)
+			}
+			continue
 		}
 
 		var respPayload []byte
@@ -211,6 +222,9 @@ func (s *Server) Stop() {
 	s.cancel()
 	if s.listener != nil {
 		s.listener.Close()
+	}
+	if s.interceptors != nil {
+		s.interceptors.Stop()
 	}
 	s.wg.Wait()
 }

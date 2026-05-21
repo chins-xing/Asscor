@@ -49,17 +49,19 @@ func (m *CommanderModule) Init(ctx context.Context, k *Kernel) error {
 		key = os.Getenv("ARGUS_HMAC_KEY")
 	}
 	if key == "" {
-		keyPath := filepath.Join(os.TempDir(), "argus-hmac-key")
+		keyPath := filepath.Join("certs", "argus-hmac-key")
 		savedKey, err := os.ReadFile(keyPath)
 		if err == nil && len(savedKey) > 0 {
 			key = string(savedKey)
 			logger.With("component", "commander").Info("loaded persisted HMAC key", "path", keyPath)
 		} else {
 			key = randomHex(32)
-			if err := os.WriteFile(keyPath, []byte(key), 0600); err != nil {
+			if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
+				logger.With("component", "commander").Warn("failed to create key directory", "error", err)
+			} else if err := os.WriteFile(keyPath, []byte(key), 0600); err != nil {
 				logger.With("component", "commander").Warn("failed to persist HMAC key", "path", keyPath, "error", err)
 			} else {
-				logger.With("component", "commander").Warn("no HMAC key configured, generated and persisted random key", "path", keyPath, "key_length", len(key))
+				logger.With("component", "commander").Info("generated and persisted HMAC key", "path", keyPath)
 			}
 		}
 	}
@@ -134,6 +136,20 @@ func (m *CommanderModule) DequeueCommands(hostID string) []*apiv1.Command {
 func (m *CommanderModule) AckCommand(hostID string, cmdID string, success bool, output string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if cmds, ok := m.pendingCmds[hostID]; ok {
+		if _, exists := cmds[cmdID]; !exists {
+			logger.With("component", "commander").Warn("ack for unknown command", "command_id", cmdID, "host_id", hostID)
+			return
+		}
+		delete(cmds, cmdID)
+		if len(cmds) == 0 {
+			delete(m.pendingCmds, hostID)
+		}
+	} else {
+		logger.With("component", "commander").Warn("ack for unknown host", "command_id", cmdID, "host_id", hostID)
+		return
+	}
 
 	logger.With("component", "commander").Info("command executed", "command_id", cmdID, "host_id", hostID, "success", success)
 }

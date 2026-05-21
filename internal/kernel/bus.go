@@ -36,6 +36,7 @@ type Bus struct {
 	subscribers map[string][]subscriber
 	queueSize   int
 	dispatchSem chan struct{}
+	maxGoroutines chan struct{}
 	metrics     BusMetrics
 }
 
@@ -43,10 +44,12 @@ func NewBus(queueSize int) *Bus {
 	if queueSize <= 0 {
 		queueSize = 256
 	}
+	maxG := 1024
 	return &Bus{
-		subscribers: make(map[string][]subscriber),
-		queueSize:   queueSize,
-		dispatchSem: make(chan struct{}, queueSize),
+		subscribers:   make(map[string][]subscriber),
+		queueSize:     queueSize,
+		dispatchSem:   make(chan struct{}, queueSize),
+		maxGoroutines: make(chan struct{}, maxG),
 	}
 }
 
@@ -107,8 +110,17 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 	atomic.AddInt64(&b.metrics.MessageCount, 1)
 
 	for _, sub := range subs {
+		select {
+		case b.maxGoroutines <- struct{}{}:
+		default:
+			atomic.AddInt64(&b.metrics.ErrorCount, 1)
+			logger.With("component", "bus").Warn("max goroutines reached, dropping message",
+				"subscriber", sub.id, "topic", msg.Topic)
+			continue
+		}
 		go func(s subscriber) {
 			defer func() {
+				<-b.maxGoroutines
 				<-b.dispatchSem
 				if r := recover(); r != nil {
 					atomic.AddInt64(&b.metrics.PanicCount, 1)

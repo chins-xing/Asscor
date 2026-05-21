@@ -110,28 +110,24 @@ func (c *Container) Inject(target interface{}) error {
 
 		if !ok {
 			fieldType := field.Type
-		loop:
-			for iface, binding := range c.bindings {
-				ifaceType := iface
-				if fieldType.Kind() == reflect.Interface && reflect.TypeOf(binding).Implements(fieldType) {
-					impl = binding
-					ok = true
-					_ = ifaceType
-					break loop
+			if fieldType.Kind() == reflect.Interface {
+				for _, binding := range c.bindings {
+					if reflect.TypeOf(binding).Implements(fieldType) {
+						impl = binding
+						ok = true
+						break
+					}
 				}
 			}
 		}
 
 		if !ok {
 			fieldType := field.Type
-		loop2:
-			for iface, binding := range c.bindings {
-				bindingType := reflect.TypeOf(binding)
-				if bindingType.AssignableTo(fieldType) {
+			for _, binding := range c.bindings {
+				if reflect.TypeOf(binding).AssignableTo(fieldType) {
 					impl = binding
 					ok = true
-					_ = iface
-					break loop2
+					break
 				}
 			}
 		}

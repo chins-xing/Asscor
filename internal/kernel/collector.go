@@ -15,7 +15,7 @@ type LogCollectorModule struct {
 	kernel  *Kernel
 	logPath string
 
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	writer *os.File
 	state  PluginState
 }
@@ -72,8 +72,8 @@ func (m *LogCollectorModule) Stop(ctx context.Context) error {
 }
 
 func (m *LogCollectorModule) State() PluginState {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.state
 }
 

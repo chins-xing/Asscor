@@ -2,8 +2,7 @@ package kernel
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/argus-security/argus/internal/logger"
@@ -70,7 +69,7 @@ func DefaultInterceptorHooks() *InterceptorHooks {
 			if !event.Success {
 				status = "ERR"
 			}
-			slog.Info("audit",
+			logger.With("component", "audit").Info("audit log",
 				"timestamp", event.Timestamp.Format(time.RFC3339),
 				"service", event.Service,
 				"method", event.Method,
@@ -201,14 +200,24 @@ func ResolveInterceptorConfig(cfg map[string]string) InterceptorConfig {
 	return ic
 }
 
+func (ic *Interceptors) Stop() {
+	if ic.RateLimiter != nil {
+		ic.RateLimiter.Stop()
+	}
+}
+
 func parseFloat64(s string) (float64, error) {
-	var f float64
-	_, err := fmt.Sscanf(s, "%f", &f)
-	return f, err
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, err
+	}
+	return f, nil
 }
 
 func parseInt(s string) (int, error) {
-	var i int
-	_, err := fmt.Sscanf(s, "%d", &i)
-	return i, err
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, err
+	}
+	return i, nil
 }

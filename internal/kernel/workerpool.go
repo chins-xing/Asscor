@@ -68,6 +68,9 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 		case p.semaphore <- struct{}{}:
 			defer func() { <-p.semaphore }()
 
+			taskCtx, taskCancel := context.WithTimeout(context.Background(), timeout)
+			defer taskCancel()
+
 			done := make(chan error, 1)
 			go func() {
 				defer func() {
@@ -90,11 +93,12 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 					p.metrics.totalCompleted++
 					p.metrics.mu.Unlock()
 				}
-			case <-time.After(timeout):
+			case <-taskCtx.Done():
 				p.metrics.mu.Lock()
 				p.metrics.totalTimeout++
 				p.metrics.mu.Unlock()
-				logger.With("component", "workerpool").Warn("task timed out", "timeout", timeout)
+				logger.With("component", "workerpool").Warn("task timed out, cancelling", "timeout", timeout)
+				taskCancel()
 				go func() { <-done }()
 			}
 		case <-p.ctx.Done():
@@ -216,6 +220,8 @@ func (m *ConcurrencyModule) Stop(ctx context.Context) error {
 }
 
 func (m *ConcurrencyModule) State() PluginState {
+	m.workerPool.metrics.mu.Lock()
+	defer m.workerPool.metrics.mu.Unlock()
 	return m.state
 }
 

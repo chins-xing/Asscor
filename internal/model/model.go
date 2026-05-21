@@ -126,12 +126,32 @@ func (d *DomainScores) Set(domain string, score float64) {
 
 type EdgeFactors struct {
 	TwoFactorFailure float64 `json:"two_factor_failure"`
+	SYNCookieDisabled float64 `json:"syn_cookie_disabled"`
+	SELinuxDisabled  float64 `json:"selinux_disabled"`
+	AppArmorDisabled float64 `json:"apparmor_disabled"`
+	NoSIEM           float64 `json:"no_siem"`
+	NoIDS            float64 `json:"no_ids"`
 }
 
 func (e EdgeFactors) ActiveFactors() []float64 {
 	var factors []float64
 	if e.TwoFactorFailure < 1.0 {
 		factors = append(factors, e.TwoFactorFailure)
+	}
+	if e.SYNCookieDisabled < 1.0 {
+		factors = append(factors, e.SYNCookieDisabled)
+	}
+	if e.SELinuxDisabled < 1.0 {
+		factors = append(factors, e.SELinuxDisabled)
+	}
+	if e.AppArmorDisabled < 1.0 {
+		factors = append(factors, e.AppArmorDisabled)
+	}
+	if e.NoSIEM < 1.0 {
+		factors = append(factors, e.NoSIEM)
+	}
+	if e.NoIDS < 1.0 {
+		factors = append(factors, e.NoIDS)
 	}
 	return factors
 }

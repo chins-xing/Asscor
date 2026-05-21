@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -155,13 +156,7 @@ func as002() model.CheckItem {
 }
 
 func sortSlice(s []int) {
-	for i := 0; i < len(s); i++ {
-		for j := i + 1; j < len(s); j++ {
-			if s[i] > s[j] {
-				s[i], s[j] = s[j], s[i]
-			}
-		}
-	}
+	sort.Ints(s)
 }
 
 func as003() model.CheckItem {

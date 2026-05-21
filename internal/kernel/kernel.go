@@ -219,14 +219,12 @@ func (k *Kernel) Bootstrap() error {
 
 		for _, dep := range rec.plugin.Dependencies() {
 			if dep.Interface != nil {
-				impl, ok := k.di.Resolve(dep.Interface)
-				if ok {
-					k.di.Bind(dep.Interface, impl)
+				if _, ok := k.di.Resolve(dep.Interface); !ok {
+					logger.With("component", "kernel").Warn("dependency not resolved", "plugin", rec.plugin.Info().Name, "interface", dep.Interface)
 				}
 			} else if dep.Name != "" {
-				impl, ok := k.di.ResolveNamed(dep.Name)
-				if ok {
-					k.di.BindNamed(dep.Name, dep.Interface, impl)
+				if _, ok := k.di.ResolveNamed(dep.Name); !ok {
+					logger.With("component", "kernel").Warn("named dependency not resolved", "plugin", rec.plugin.Info().Name, "name", dep.Name)
 				}
 			}
 		}

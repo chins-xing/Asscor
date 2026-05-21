@@ -98,15 +98,23 @@ func (s *GRPCServer) Start() error {
 	s.running = true
 	s.mu.Unlock()
 
+	serveErr := make(chan error, 1)
 	go func() {
 		logger.With("component", "grpc_server").Info("gRPC server started", "addr", s.cfg.ListenAddr)
 		if err := s.server.Serve(lis); err != nil {
 			s.mu.Lock()
 			s.running = false
 			s.mu.Unlock()
+			serveErr <- err
 			logger.With("component", "grpc_server").Error("gRPC server stopped", "error", err)
 		}
 	}()
+
+	select {
+	case err := <-serveErr:
+		return fmt.Errorf("gRPC server failed to start: %w", err)
+	case <-time.After(2 * time.Second):
+	}
 
 	return nil
 }

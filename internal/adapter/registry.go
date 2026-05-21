@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/argus-security/argus/internal/logger"
 )
@@ -100,7 +101,14 @@ func (p *Pipeline) RunAll(ctx context.Context) []PipelineResult {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			findings, err := ExecuteAdapter(ctx, adapter, p.config)
+			adapterTimeout := 60 * time.Second
+			if t, ok := adapter.(interface{ Timeout() time.Duration }); ok {
+				adapterTimeout = t.Timeout()
+			}
+			actx, cancel := context.WithTimeout(ctx, adapterTimeout)
+			defer cancel()
+
+			findings, err := ExecuteAdapter(actx, adapter, p.config)
 			if err != nil {
 				logger.With("component", "adapter").Error("adapter execution failed", "adapter_id", adapter.ID(), "error", err)
 			}

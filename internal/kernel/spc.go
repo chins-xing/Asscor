@@ -611,13 +611,13 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 	m.lastFetch = time.Now()
 	baseURL := m.nvdConfig.BaseURL
 	apiKey := m.nvdConfig.APIKey
+	since := m.lastUpdate
 	m.mu.Unlock()
 
 	if baseURL == "" {
 		baseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 	}
 
-	since := m.lastUpdate
 	if since.IsZero() {
 		since = time.Now().AddDate(0, 0, -7)
 	}
@@ -778,21 +778,17 @@ func (m *SPCModule) fetchNVDAPI(baseURL, apiKey string, since time.Time) ([]SPCC
 			resp.Body.Close()
 			retryCount++
 			if retryCount > maxRetries {
-				logger.With("component", "spc").Error("NVD rate limit exceeded max retries",
-					"max_retries", maxRetries,
-					"cves_fetched", len(allCVEs))
-				return allCVEs, fmt.Errorf("NVD rate limit: exceeded %d retries", maxRetries)
+				return allCVEs, fmt.Errorf("NVD API rate limited after %d retries", maxRetries)
 			}
-			waitTime := 30 * time.Second
-			if apiKey != "" {
-				waitTime = 6 * time.Second
+			backoff := time.Duration(1<<uint(retryCount-1)) * 2 * time.Second
+			logger.With("component", "spc").Warn("NVD API rate limited, retrying with backoff",
+				"retry", retryCount, "backoff", backoff)
+			select {
+			case <-time.After(backoff):
+				continue
+			case <-m.kernel.Context().Done():
+				return allCVEs, m.kernel.Context().Err()
 			}
-			logger.With("component", "spc").Warn("NVD rate limited, waiting before retry",
-				"retry", retryCount,
-				"max_retries", maxRetries,
-				"wait", waitTime)
-			time.Sleep(waitTime)
-			continue
 		}
 
 		retryCount = 0
@@ -1478,6 +1474,10 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 	added := 0
 	m.mu.Lock()
 	for _, rec := range records {
+		if len(m.cveCache) >= m.maxCacheSize {
+			logger.With("component", "spc").Warn("CVE cache reached max size during OSCAL import", "max", m.maxCacheSize, "imported", added)
+			break
+		}
 		pubDate, _ := time.Parse("2006-01-02", rec.DatePublished)
 		modDate, _ := time.Parse("2006-01-02", rec.DateModified)
 
@@ -1666,9 +1666,7 @@ func parseOSCALYAML(data []byte) ([]SPCVulnerabilityRecord, error) {
 
 func parseFloat(s string) (float64, error) {
 	s = strings.TrimSpace(s)
-	var f float64
-	_, err := fmt.Sscanf(s, "%f", &f)
-	return f, err
+	return strconv.ParseFloat(s, 64)
 }
 
 type oscalXMLRoot struct {
@@ -2116,6 +2114,10 @@ func (m *SPCModule) AddCVE(score SPCCVEScore) {
 	if _, exists := m.cveIndex[score.CVEID]; exists {
 		return
 	}
+	if len(m.cveCache) >= m.maxCacheSize {
+		logger.With("component", "spc").Warn("CVE cache reached max size in AddCVE", "max", m.maxCacheSize)
+		return
+	}
 	m.cveIndex[score.CVEID] = len(m.cveCache)
 	m.cveCache = append(m.cveCache, score)
 }
@@ -2124,10 +2126,15 @@ func (m *SPCModule) AddCVEs(scores []SPCCVEScore) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, score := range scores {
-		if _, exists := m.cveIndex[score.CVEID]; !exists {
-			m.cveIndex[score.CVEID] = len(m.cveCache)
-			m.cveCache = append(m.cveCache, score)
+		if _, exists := m.cveIndex[score.CVEID]; exists {
+			continue
 		}
+		if len(m.cveCache) >= m.maxCacheSize {
+			logger.With("component", "spc").Warn("CVE cache reached max size in AddCVEs", "max", m.maxCacheSize, "added_so_far", len(m.cveCache))
+			break
+		}
+		m.cveIndex[score.CVEID] = len(m.cveCache)
+		m.cveCache = append(m.cveCache, score)
 	}
 }
 
@@ -2209,7 +2216,7 @@ func (m *SPCModule) saveCacheToDisk() {
 	}
 
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		logger.With("component", "spc").Error("failed to write cache file", "error", err)
 		return
 	}
@@ -2259,6 +2266,7 @@ func (m *SPCModule) LastUpdate() time.Time {
 }
 
 func (m *SPCModule) generateSampleCVEs() []SPCCVEScore {
+	logger.With("component", "spc").Warn("USING SAMPLE CVE DATA — not suitable for production; configure NVD API key for real data")
 	now := time.Now()
 	return []SPCCVEScore{
 		{

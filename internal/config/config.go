@@ -66,6 +66,11 @@ func Default() *Config {
 		SPCEnabled:  false,
 		EdgeFactors: model.EdgeFactors{
 			TwoFactorFailure: 1.0,
+			SYNCookieDisabled: 0.75,
+			SELinuxDisabled:  0.80,
+			AppArmorDisabled: 0.82,
+			NoSIEM:           0.90,
+			NoIDS:            0.88,
 		},
 		ACINetworkSegmentation: -15,
 		ACILAPSEnabled:        -10,
@@ -301,7 +306,7 @@ func Parse(content string) (*Config, error) {
 			cfg.SPC.NVD.APIKey = envKey
 			logger.With("component", "config").Info("NVD API key loaded from environment variable", "source", "NVD_API_KEY")
 		} else if cfg.SPC.NVD.APIKey != "" {
-			logger.With("component", "config").Info("NVD API key loaded from configuration file")
+			logger.With("component", "config").Info("NVD API key loaded from configuration file", "key_length", len(cfg.SPC.NVD.APIKey))
 		}
 	}
 
@@ -356,7 +361,7 @@ func Parse(content string) (*Config, error) {
 			cfg.SPC.MISP.APIKey = envKey
 			logger.With("component", "config").Info("MISP API key loaded from environment variable", "source", "MISP_API_KEY")
 		} else if cfg.SPC.MISP.APIKey != "" {
-			logger.With("component", "config").Info("MISP API key loaded from configuration file")
+			logger.With("component", "config").Info("MISP API key loaded from configuration file", "key_length", len(cfg.SPC.MISP.APIKey))
 		}
 	}
 

@@ -155,6 +155,15 @@ func (a *Assessor) ensureDefaults(result *model.AssessmentResult) {
 }
 
 func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
+	cacheKey := fmt.Sprintf("%s_%d", hostID, len(checkResults))
+	if cached, ok := a.resultsCache.Load(cacheKey); ok {
+		cachedResult := cached.(*model.AssessmentResult)
+		if time.Since(cachedResult.Timestamp) < 5*time.Minute {
+			return cachedResult
+		}
+		a.resultsCache.Delete(cacheKey)
+	}
+
 	ctx := context.Background()
 	result := &model.AssessmentResult{
 		HostID:    hostID,
@@ -199,6 +208,8 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 	result.Acceptable = result.FinalScore >= result.Threshold
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreReport, result)
+
+	a.resultsCache.Store(cacheKey, result)
 
 	return result
 }
@@ -350,9 +361,31 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		}
 	}
 
-	mapped := model.EdgeFactors{TwoFactorFailure: 1.0}
+	mapped := model.EdgeFactors{
+		TwoFactorFailure: 1.0,
+		SYNCookieDisabled: 1.0,
+		SELinuxDisabled:  1.0,
+		AppArmorDisabled: 1.0,
+		NoSIEM:           1.0,
+		NoIDS:            1.0,
+	}
 	if v, ok := localFactors["EF-002FA"]; ok && v < 1.0 {
 		mapped.TwoFactorFailure = v
+	}
+	if v, ok := localFactors["EF-SYNCOOKIE"]; ok && v < 1.0 {
+		mapped.SYNCookieDisabled = v
+	}
+	if v, ok := localFactors["EF-SELINUX"]; ok && v < 1.0 {
+		mapped.SELinuxDisabled = v
+	}
+	if v, ok := localFactors["EF-APPARMOR"]; ok && v < 1.0 {
+		mapped.AppArmorDisabled = v
+	}
+	if v, ok := localFactors["EF-NO-SIEM"]; ok && v < 1.0 {
+		mapped.NoSIEM = v
+	}
+	if v, ok := localFactors["EF-NO-IDS"]; ok && v < 1.0 {
+		mapped.NoIDS = v
 	}
 	result.EdgeFactors = mapped
 }

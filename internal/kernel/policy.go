@@ -111,8 +111,6 @@ func (m *PolicyModule) State() PluginState {
 func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, []PolicyAction) {
 	threshold := m.cfg.Threshold
 
-	m.mu.Lock()
-
 	var status HostStatus
 	var actions []PolicyAction
 
@@ -153,6 +151,7 @@ func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, [
 		}
 	}
 
+	m.mu.Lock()
 	m.hostStatus[hostID] = status
 	m.mu.Unlock()
 
