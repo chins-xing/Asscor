@@ -20,6 +20,7 @@ type RateLimiter struct {
 	onRejected  func(service, method, reason string)
 	cleanupTick *time.Ticker
 	stopCleanup chan struct{}
+	stopped     bool
 }
 
 func NewRateLimiter(ratePerSec float64, burst int, onRejected func(service, method, reason string)) *RateLimiter {
@@ -58,7 +59,10 @@ func (r *RateLimiter) Stop() {
 	if r.cleanupTick != nil {
 		r.cleanupTick.Stop()
 	}
-	close(r.stopCleanup)
+	if !r.stopped {
+		r.stopped = true
+		close(r.stopCleanup)
+	}
 }
 
 func (r *RateLimiter) allow(clientAddr string) bool {

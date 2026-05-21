@@ -12,7 +12,7 @@ func TestAssess_AllPassed(t *testing.T) {
 	cfg := config.Default()
 	a := NewAssessor(cfg)
 
-	result := a.Assess()
+	result := a.Assess("", "")
 
 	if result.FinalScore != 100.0 {
 		t.Errorf("expected FinalScore=100, got %.2f", result.FinalScore)

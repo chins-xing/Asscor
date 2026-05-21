@@ -217,6 +217,13 @@ func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotR
 }
 
 func (s *AgentServiceImpl) ExecuteCommand(ctx context.Context, req *apiv1.CommandRequest) (*apiv1.CommandResponse, error) {
+	if req.CommandId == "" || req.HostId == "" {
+		return &apiv1.CommandResponse{
+			CommandId: req.CommandId,
+			Success:   false,
+		}, fmt.Errorf("command_id and host_id are required")
+	}
+
 	if s.commander != nil {
 		s.commander.AckCommand(req.HostId, req.CommandId, true, "")
 	}
@@ -244,7 +251,12 @@ func (s *AgentServiceImpl) StreamLogs(ctx context.Context, req *apiv1.StreamLogs
 }
 
 func randomSessionSuffix() string {
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		logger.With("component", "kernel").Error("crypto/rand read failed for session suffix", "error", err)
+		for i := range b {
+			b[i] = byte(i)
+		}
+	}
 	return hex.EncodeToString(b)
 }

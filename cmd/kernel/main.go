@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/argus-security/argus/internal/cli"
 	"github.com/argus-security/argus/internal/config"
 	"github.com/argus-security/argus/internal/kernel"
 	"github.com/argus-security/argus/internal/logger"
@@ -101,8 +102,9 @@ func main() {
 	attck := kernel.NewATTACKModule()
 	configWatcher := kernel.NewConfigWatcherModule(*configPath)
 	adapterIntegration := kernel.NewAdapterIntegrationModule()
+	cliModule := cli.NewCLIModule()
 
-	for _, p := range []kernel.Plugin{heartbeat, spc, cti, assessor, policy, commander, logCollector, persistence, concurrency, attck, configWatcher, adapterIntegration} {
+	for _, p := range []kernel.Plugin{heartbeat, spc, cti, assessor, policy, commander, logCollector, persistence, concurrency, attck, configWatcher, adapterIntegration, cliModule} {
 		if err := k.RegisterPlugin(p); err != nil {
 			log.Error("register plugin failed", "error", err)
 			os.Exit(1)

@@ -24,7 +24,7 @@ func main() {
 	}
 
 	assessor := engine.NewAssessor(cfg)
-	result := assessor.Assess()
+	result := assessor.Assess("", "")
 
 	if *jsonOutput {
 		output, _ := json.MarshalIndent(result, "", "  ")

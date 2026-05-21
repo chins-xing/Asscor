@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -53,6 +54,10 @@ var allowedShellCommands = map[string]bool{
 
 func IsCommandAllowed(name string) bool {
 	return allowedCommands[name]
+}
+
+func containsShellMetachar(s string) bool {
+	return strings.ContainsAny(s, "|;&`$()<>{}\n\r")
 }
 
 func IsShellCommandAllowed(cmd string) bool {
@@ -122,6 +127,12 @@ func RunCmd(name string, args ...string) (string, error) {
 func RunCmdTimeout(timeout time.Duration, name string, args ...string) (string, error) {
 	if !allowedCommands[name] {
 		return "", fmt.Errorf("command %q is not in allowlist", name)
+	}
+
+	for i, arg := range args {
+		if containsShellMetachar(arg) {
+			return "", fmt.Errorf("argument %d contains shell metacharacters: %q", i, arg)
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

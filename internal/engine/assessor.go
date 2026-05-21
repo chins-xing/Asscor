@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"math"
 	"os"
@@ -52,11 +53,16 @@ func (a *Assessor) ScoringEngine() *DynamicScoringEngine {
 	return a.scoringEngine
 }
 
-func (a *Assessor) Assess() *model.AssessmentResult {
+func (a *Assessor) Assess(hostID string, hostname string) *model.AssessmentResult {
 	ctx := context.Background()
-	hostname, _ := os.Hostname()
+	if hostID == "" {
+		hostID, _ = os.Hostname()
+	}
+	if hostname == "" {
+		hostname, _ = os.Hostname()
+	}
 	result := &model.AssessmentResult{
-		HostID:    hostname,
+		HostID:    hostID,
 		Hostname:  hostname,
 		Timestamp: time.Now(),
 		Threshold: a.cfg.Threshold,
@@ -155,7 +161,7 @@ func (a *Assessor) ensureDefaults(result *model.AssessmentResult) {
 }
 
 func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
-	cacheKey := fmt.Sprintf("%s_%d", hostID, len(checkResults))
+	cacheKey := fmt.Sprintf("%s_%d_%s", hostID, len(checkResults), hashCheckResults(checkResults))
 	if cached, ok := a.resultsCache.Load(cacheKey); ok {
 		cachedResult := cached.(*model.AssessmentResult)
 		if time.Since(cachedResult.Timestamp) < 5*time.Minute {
@@ -557,4 +563,23 @@ func (a *Assessor) RegisterHook(id string, phase AssessmentPhase, hook Assessmen
 
 func (a *Assessor) UnregisterHook(id string) {
 	a.scoringEngine.Hooks().Unregister(id)
+}
+
+func hashCheckResults(results []model.CheckResult) string {
+	h := sha256.New()
+	for _, r := range results {
+		h.Write([]byte(r.CheckID))
+		if r.Passed {
+			h.Write([]byte("1"))
+		} else {
+			h.Write([]byte("0"))
+		}
+		var buf [8]byte
+		bits := math.Float64bits(r.Delta)
+		for i := 0; i < 8; i++ {
+			buf[i] = byte(bits >> uint(i*8))
+		}
+		h.Write(buf[:])
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))[:16]
 }

@@ -135,22 +135,22 @@ type EdgeFactors struct {
 
 func (e EdgeFactors) ActiveFactors() []float64 {
 	var factors []float64
-	if e.TwoFactorFailure < 1.0 {
+	if e.TwoFactorFailure > 0 && e.TwoFactorFailure < 1.0 {
 		factors = append(factors, e.TwoFactorFailure)
 	}
-	if e.SYNCookieDisabled < 1.0 {
+	if e.SYNCookieDisabled > 0 && e.SYNCookieDisabled < 1.0 {
 		factors = append(factors, e.SYNCookieDisabled)
 	}
-	if e.SELinuxDisabled < 1.0 {
+	if e.SELinuxDisabled > 0 && e.SELinuxDisabled < 1.0 {
 		factors = append(factors, e.SELinuxDisabled)
 	}
-	if e.AppArmorDisabled < 1.0 {
+	if e.AppArmorDisabled > 0 && e.AppArmorDisabled < 1.0 {
 		factors = append(factors, e.AppArmorDisabled)
 	}
-	if e.NoSIEM < 1.0 {
+	if e.NoSIEM > 0 && e.NoSIEM < 1.0 {
 		factors = append(factors, e.NoSIEM)
 	}
-	if e.NoIDS < 1.0 {
+	if e.NoIDS > 0 && e.NoIDS < 1.0 {
 		factors = append(factors, e.NoIDS)
 	}
 	return factors

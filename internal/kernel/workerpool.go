@@ -99,7 +99,14 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 				p.metrics.mu.Unlock()
 				logger.With("component", "workerpool").Warn("task timed out, cancelling", "timeout", timeout)
 				taskCancel()
-				go func() { <-done }()
+				p.wg.Add(1)
+				go func() {
+					defer p.wg.Done()
+					select {
+					case <-done:
+					case <-p.ctx.Done():
+					}
+				}()
 			}
 		case <-p.ctx.Done():
 			return

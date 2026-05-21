@@ -14,6 +14,34 @@ import (
 	"github.com/argus-security/argus/internal/model"
 )
 
+func sanitizeEnvKey(key string) error {
+	if key == "" {
+		return fmt.Errorf("empty environment variable key")
+	}
+	if strings.Contains(key, "=") {
+		return fmt.Errorf("environment variable key %q contains '='", key)
+	}
+	if strings.ContainsAny(key, "\n\r") {
+		return fmt.Errorf("environment variable key %q contains newline", key)
+	}
+	return nil
+}
+
+func buildEnv(base []string, custom map[string]string) ([]string, error) {
+	env := make([]string, len(base))
+	copy(env, base)
+	for k, v := range custom {
+		if err := sanitizeEnvKey(k); err != nil {
+			return nil, err
+		}
+		if strings.ContainsAny(v, "\n\r") {
+			return nil, fmt.Errorf("environment variable value for %q contains newline", k)
+		}
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+	return env, nil
+}
+
 type ExecutionPolicy string
 
 const (
@@ -141,13 +169,15 @@ func (e *ExtensionExecutor) Execute(ctx context.Context, spec ExtensionSpec, arg
 		cmd.Dir = spec.InstallPath
 	}
 
-	cmd.Env = os.Environ()
-	for k, v := range spec.CustomConfig {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	env, err := buildEnv(os.Environ(), spec.CustomConfig)
+	if err != nil {
+		return nil, fmt.Errorf("invalid custom config env: %w", err)
 	}
-	for k, v := range config.Environment {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	envExtra, err := buildEnv(nil, config.Environment)
+	if err != nil {
+		return nil, fmt.Errorf("invalid execution config env: %w", err)
 	}
+	cmd.Env = append(env, envExtra...)
 
 	output, err := cmd.CombinedOutput()
 	result.Output = string(output)
@@ -212,10 +242,11 @@ func (e *ExtensionExecutor) ExecuteCustom(ctx context.Context, spec ExtensionSpe
 	cmd := exec.CommandContext(execCtx, scriptPath, args...)
 	cmd.Dir = cleanInstallPath
 
-	cmd.Env = os.Environ()
-	for k, v := range spec.CustomConfig {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	cmdEnv, err := buildEnv(os.Environ(), spec.CustomConfig)
+	if err != nil {
+		return result, fmt.Errorf("invalid custom config env: %w", err)
 	}
+	cmd.Env = cmdEnv
 
 	output, err := cmd.CombinedOutput()
 	result.Output = string(output)

@@ -1,0 +1,474 @@
+package cli
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/argus-security/argus/internal/kernel"
+	"github.com/argus-security/argus/internal/logger"
+)
+
+type kernelBridge struct {
+	kernel *kernel.Kernel
+	engine *Engine
+}
+
+func newKernelBridge(k *kernel.Kernel, e *Engine) *kernelBridge {
+	return &kernelBridge{kernel: k, engine: e}
+}
+
+func (b *kernelBridge) GetPlugin(name string) (interface{}, bool) {
+	p, ok := b.kernel.GetPlugin(name)
+	if !ok {
+		return nil, false
+	}
+	info := p.Info()
+	state := p.State().String()
+	pi := &PluginInfo{
+		Name:        info.Name,
+		Version:     info.Version,
+		Description: info.Description,
+		State:       state,
+	}
+	return pi, true
+}
+
+func (b *kernelBridge) ListPlugins() []PluginInfo {
+	infos := b.kernel.ListPlugins()
+	result := make([]PluginInfo, len(infos))
+	for i, info := range infos {
+		p, _ := b.kernel.GetPlugin(info.Name)
+		state := "unknown"
+		if p != nil {
+			state = p.State().String()
+		}
+		result[i] = PluginInfo{
+			Name:        info.Name,
+			Version:     info.Version,
+			Description: info.Description,
+			State:       state,
+		}
+	}
+	return result
+}
+
+func (b *kernelBridge) Config() map[string]string {
+	return b.kernel.Config()
+}
+
+func (b *kernelBridge) SetConfig(key, value string) {
+	b.kernel.SetConfig(key, value)
+}
+
+func (b *kernelBridge) Evaluate(hostID string) (interface{}, error) {
+	p, ok := b.kernel.GetPlugin("assessor")
+	if !ok {
+		return nil, fmt.Errorf("assessor plugin not available")
+	}
+	assessor, ok := p.(*kernel.AssessorModule)
+	if !ok {
+		return nil, fmt.Errorf("assessor plugin type mismatch")
+	}
+	return assessor.Evaluate(hostID), nil
+}
+
+func (b *kernelBridge) HealthCheck(ctx context.Context) []HealthStatus {
+	kernelResults := b.kernel.HealthCheck(ctx)
+	results := make([]HealthStatus, len(kernelResults))
+	for i, kr := range kernelResults {
+		results[i] = HealthStatus{
+			Name:    kr.Name,
+			Healthy: kr.Healthy,
+			Error:   kr.Error,
+		}
+	}
+	return results
+}
+
+func (b *kernelBridge) Bus() BusAccess {
+	return &busBridge{bus: b.kernel.Bus(), ctx: b.kernel.Context()}
+}
+
+func (b *kernelBridge) Agents() AgentAccess {
+	return &agentBridge{kernel: b.kernel}
+}
+
+func (b *kernelBridge) Logs() LogAccess {
+	return &logBridge{kernel: b.kernel}
+}
+
+func (b *kernelBridge) CheckPermission(level PermissionLevel) bool {
+	return true
+}
+
+func (b *kernelBridge) Registry() *Registry {
+	return b.engine.Registry()
+}
+
+func (b *kernelBridge) History() *History {
+	return b.engine.History()
+}
+
+type agentBridge struct {
+	kernel *kernel.Kernel
+}
+
+func (a *agentBridge) ListAgents() []AgentInfo {
+	p, ok := a.kernel.GetPlugin("heartbeat")
+	if !ok {
+		return nil
+	}
+	hb, ok := p.(kernel.HeartbeatInterface)
+	if !ok {
+		return nil
+	}
+	agents := hb.ListAgents()
+	result := make([]AgentInfo, len(agents))
+	for i, ag := range agents {
+		result[i] = AgentInfo{
+			HostID:      ag.HostID,
+			Hostname:    ag.Hostname,
+			Version:     ag.Version,
+			LastSeen:    ag.LastSeen,
+			Registered:  ag.Registered,
+			Connections: ag.Connections,
+			Active:      ag.Active,
+		}
+	}
+	return result
+}
+
+func (a *agentBridge) GetAgent(hostID string) (*AgentInfo, bool) {
+	p, ok := a.kernel.GetPlugin("heartbeat")
+	if !ok {
+		return nil, false
+	}
+	hb, ok := p.(kernel.HeartbeatInterface)
+	if !ok {
+		return nil, false
+	}
+	ag := hb.GetAgent(hostID)
+	if ag == nil {
+		return nil, false
+	}
+	info := &AgentInfo{
+		HostID:      ag.HostID,
+		Hostname:    ag.Hostname,
+		Version:     ag.Version,
+		LastSeen:    ag.LastSeen,
+		Registered:  ag.Registered,
+		Connections: ag.Connections,
+		Active:      ag.Active,
+	}
+	return info, true
+}
+
+func (a *agentBridge) IsAgentAlive(hostID string) bool {
+	p, ok := a.kernel.GetPlugin("heartbeat")
+	if !ok {
+		return false
+	}
+	hb, ok := p.(kernel.HeartbeatInterface)
+	if !ok {
+		return false
+	}
+	return hb.IsAlive(hostID)
+}
+
+func (a *agentBridge) SendCommand(hostID, action string, params map[string]string) (string, error) {
+	p, ok := a.kernel.GetPlugin("commander")
+	if !ok {
+		return "", fmt.Errorf("commander plugin not available")
+	}
+	cmd, ok := p.(kernel.CommanderInterface)
+	if !ok {
+		return "", fmt.Errorf("commander plugin type mismatch")
+	}
+	cmdID := cmd.EnqueueCommand(hostID, action, params)
+	return cmdID, nil
+}
+
+type logBridge struct {
+	kernel *kernel.Kernel
+}
+
+func (l *logBridge) ReadLogs(hostID string, limit int, level string) ([]LogEntry, error) {
+	logPath := "argus-kernel.log"
+	f, err := os.Open(logPath)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open log file: %w", err)
+	}
+	defer f.Close()
+
+	var entries []LogEntry
+	scanner := bufio.NewScanner(f)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var record map[string]interface{}
+		if err := json.Unmarshal(line, &record); err != nil {
+			continue
+		}
+
+		hostIDVal, _ := record["host_id"].(string)
+		if hostID != "" && hostIDVal != hostID {
+			continue
+		}
+
+		levelVal, _ := record["level"].(string)
+		if level != "" && !strings.EqualFold(levelVal, level) {
+			continue
+		}
+
+		ts, _ := record["timestamp"].(string)
+		tsTime, _ := time.Parse(time.RFC3339Nano, ts)
+		msg, _ := record["message"].(string)
+		src, _ := record["source"].(string)
+
+		entries = append(entries, LogEntry{
+			Timestamp: tsTime,
+			Level:     levelVal,
+			HostID:    hostIDVal,
+			Message:   msg,
+			Source:    src,
+		})
+
+		if limit > 0 && len(entries) >= limit {
+			break
+		}
+	}
+
+	return entries, nil
+}
+
+func (l *logBridge) ExportLogs(hostID string, format string) (string, error) {
+	entries, err := l.ReadLogs(hostID, 0, "")
+	if err != nil {
+		return "", err
+	}
+
+	if len(entries) == 0 {
+		return "", fmt.Errorf("no log entries found")
+	}
+
+	switch format {
+	case "json":
+		data, err := json.MarshalIndent(entries, "", "  ")
+		if err != nil {
+			return "", fmt.Errorf("marshal logs: %w", err)
+		}
+		return string(data), nil
+
+	case "csv":
+		var b strings.Builder
+		b.WriteString("timestamp,level,host_id,source,message\n")
+		for _, e := range entries {
+			msg := strings.ReplaceAll(e.Message, "\"", "\"\"")
+			b.WriteString(fmt.Sprintf("%s,%s,%s,%s,\"%s\"\n",
+				e.Timestamp.Format(time.RFC3339),
+				e.Level,
+				e.HostID,
+				e.Source,
+				msg,
+			))
+		}
+		return b.String(), nil
+
+	default:
+		return "", fmt.Errorf("unsupported export format: %s (use json or csv)", format)
+	}
+}
+
+type busBridge struct {
+	bus *kernel.Bus
+	ctx context.Context
+}
+
+func (bb *busBridge) Publish(ctx context.Context, topic string, payload interface{}) {
+	bb.bus.Publish(ctx, kernel.Message{
+		Topic:   topic,
+		Payload: payload,
+		Source:  "cli",
+	})
+}
+
+func (bb *busBridge) Subscribe(topic, subscriberID string) <-chan interface{} {
+	ch := make(chan interface{}, 64)
+	bb.bus.Subscribe(topic, subscriberID, func(ctx context.Context, msg kernel.Message) error {
+		select {
+		case ch <- msg.Payload:
+		default:
+		}
+		return nil
+	})
+	return ch
+}
+
+type CLIModule struct {
+	kernel  *kernel.Kernel
+	engine  *Engine
+	bridge  *kernelBridge
+	enabled bool
+
+	mu    sync.RWMutex
+	state kernel.PluginState
+}
+
+func NewCLIModule() *CLIModule {
+	return &CLIModule{}
+}
+
+func (m *CLIModule) Info() kernel.PluginInfo {
+	return kernel.PluginInfo{
+		Name:        "cli",
+		Version:     "1.0.0",
+		Description: "Command-line interface — interactive CLI with command registration, completion, history, and plugin extensibility",
+		Author:      "ARGUS Core Team",
+	}
+}
+
+func (m *CLIModule) Dependencies() []kernel.PluginDependency {
+	return nil
+}
+
+func (m *CLIModule) Priority() int {
+	return 90
+}
+
+func (m *CLIModule) Init(ctx context.Context, k *kernel.Kernel) error {
+	m.kernel = k
+	m.state = kernel.PluginInitialized
+
+	cfgMap := k.Config()
+	if v := cfgMap["cli.enabled"]; v == "off" || v == "false" || v == "0" {
+		m.enabled = false
+		logger.With("component", "cli").Info("CLI disabled by configuration")
+		return nil
+	}
+	m.enabled = true
+
+	m.engine = NewEngine(nil)
+	m.bridge = newKernelBridge(k, m.engine)
+	m.engine.kernel = m.bridge
+
+	m.engine.RegisterBuiltinCommands()
+
+	k.Container().Bind((*CLIInterface)(nil), m)
+
+	k.Extensions().RegisterPoint(kernel.ExtensionPoint{
+		Name:        "cli.command.register",
+		Description: "Register custom CLI commands from plugins",
+		Version:     "1.0",
+	})
+
+	logger.With("component", "cli").Info("CLI module initialized")
+	return nil
+}
+
+func (m *CLIModule) Start(ctx context.Context) error {
+	m.state = kernel.PluginStarted
+
+	if !m.enabled {
+		logger.With("component", "cli").Info("CLI module disabled, not starting interactive terminal")
+		return nil
+	}
+
+	go func() {
+		term := NewTerminal(m.engine)
+		if err := term.Run(); err != nil {
+			logger.With("component", "cli").Error("terminal error", "error", err)
+		}
+	}()
+
+	logger.With("component", "cli").Info("CLI module started")
+	return nil
+}
+
+func (m *CLIModule) Stop(ctx context.Context) error {
+	m.state = kernel.PluginStopping
+	if m.engine != nil {
+		m.engine.Stop()
+	}
+	m.state = kernel.PluginStopped
+	logger.With("component", "cli").Info("CLI module stopped")
+	return nil
+}
+
+func (m *CLIModule) State() kernel.PluginState {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.state
+}
+
+func (m *CLIModule) HealthCheck(ctx context.Context) error {
+	if m.state != kernel.PluginStarted {
+		return fmt.Errorf("CLI module not started (state=%s)", m.state)
+	}
+	return nil
+}
+
+func (m *CLIModule) Engine() *Engine {
+	return m.engine
+}
+
+func (m *CLIModule) RegisterCommand(cmd Command) error {
+	if m.engine == nil {
+		return fmt.Errorf("CLI engine not initialized")
+	}
+	return m.engine.Registry().Register(cmd)
+}
+
+func (m *CLIModule) Execute(input string) *CommandResult {
+	if m.engine == nil {
+		return &CommandResult{ExitCode: ExitError, Err: fmt.Errorf("CLI engine not initialized")}
+	}
+	return m.engine.Execute(input)
+}
+
+type CLIInterface interface {
+	RegisterCommand(cmd Command) error
+	Execute(input string) *CommandResult
+	Engine() *Engine
+}
+
+type BaseCommand struct {
+	info        CommandInfo
+	handler     CommandHandler
+	completions func(ctx *CommandContext, partial string) []string
+}
+
+func NewBaseCommand(info CommandInfo, handler CommandHandler) *BaseCommand {
+	return &BaseCommand{info: info, handler: handler}
+}
+
+func (c *BaseCommand) Info() CommandInfo {
+	return c.info
+}
+
+func (c *BaseCommand) Execute(ctx *CommandContext) *CommandResult {
+	return c.handler(ctx)
+}
+
+func (c *BaseCommand) Completions(ctx *CommandContext, partial string) []string {
+	if c.completions != nil {
+		return c.completions(ctx, partial)
+	}
+	return nil
+}
+
+func (c *BaseCommand) WithCompletions(fn func(ctx *CommandContext, partial string) []string) *BaseCommand {
+	c.completions = fn
+	return c
+}

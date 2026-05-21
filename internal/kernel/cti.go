@@ -111,14 +111,31 @@ func (m *CTIModule) GetCoefficient() float64 {
 	return m.coefficient
 }
 
+func severityWeight(severity string) int {
+	switch severity {
+	case "critical":
+		return 4
+	case "high":
+		return 3
+	case "medium":
+		return 2
+	case "low":
+		return 1
+	default:
+		return 2
+	}
+}
+
 func (m *CTIModule) ReportThreat(severity string) {
+	weight := severityWeight(severity)
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.activeThreats++
+	m.activeThreats += weight
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
 		Topic:   "cti.threat_detected",
-		Payload: map[string]interface{}{"severity": severity, "active_count": m.activeThreats},
+		Payload: map[string]interface{}{"severity": severity, "weight": weight, "active_count": m.activeThreats},
 		Source:  "cti",
 	})
 }

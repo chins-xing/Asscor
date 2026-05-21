@@ -333,6 +333,8 @@ SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。�
 
 ### ARGUS v0.1.1-MVP 修复记录
 
+#### 第一批修复（基础设施与协议层）
+
 - **Agent 反复重连修复** — Client 层改用 `bufio.Reader.ReadBytes('\n')` 按行读取 TCP 响应，解决半包导致的 JSON 解析失败；心跳循环改用 `time.Timer` 替代 `time.Ticker`，防止 `runChecks()` 耗时导致的心跳堆积触发连续错误重连。
 - **SPC 后台定时同步修复** — `fetchLoop()` 在启动时立即执行首次同步（而非等待首个 Ticker 间隔），确保内核启动后即可获得最新漏洞情报。
 - **SPC CVE 缓存磁盘持久化** — 新增 `loadCacheFromDisk()` / `saveCacheToDisk()` 方法，CVE 缓存在启动时从磁盘 JSON 加载、退出时保存，避免服务重启后缓存丢失。
@@ -341,5 +343,50 @@ SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。�
 - **权重热加载** — `Assessor.ReloadWeights()` 支持运行时动态更新四域权重，配合 `ConfigWatcher` 模块监控配置文件变化自动触发重载，无需重启服务。
 - **AdapterIntegrationModule 注册修复** — 将 `AdapterIntegrationModule` 加入 Kernel 插件注册列表，使后台定时同步（每6小时）、事件总线发布 `adapter.findings`、按需拉取 `CollectFindings()` 功能生效。
 - **行业配置文件体系** — 新增 `config/` 目录，提供政府(config.gov.ini)、金融(config.fin.ini)、医疗(config.med.ini)、教育(config.edu.ini)、企业通用(config.ent.ini) 五套行业专用配置模板。
+
+#### 第二批修复（全项目代码审计 — 2026-05-22）
+
+**高风险（H）— 可被直接利用的安全漏洞或导致服务崩溃的缺陷：**
+
+| 编号 | 模块 | 问题 | 修复 |
+|------|------|------|------|
+| H-01 | `api/v1/grpc.go` | Protobuf 结构体 `String()` 方法使用 `fmt.Sprintf("%+v", m)` 导致无限递归，`go vet` 报错 | 改为 `fmt.Sprintf("%+v", *m)` 解引用指针，共修改 13 处 |
+| H-02 | `internal/engine/assessor.go` | `computeDynamicFinalScore` 因 `FillFromLegacy` 未填充所有域和 `ActiveFactors()` 将 0.0 视为活跃，导致加权和恒为 0 | 修复 `FillFromLegacy` 填充所有域；`ActiveFactors()` 增加 `>0` 判断 |
+| H-03 | `internal/kernel/commander.go` | HMAC 签名仅包含 `cmdID` 和 `action`，未包含 `params`，存在参数篡改风险 | 修改 `sign` 方法按 key 排序后加入所有参数，Agent 端同步更新验证逻辑 |
+| H-04 | `internal/kernel/assessor.go` | `Assess()` 使用本地主机名作为 `HostID`，`Evaluate` 事后覆盖导致内部计算不一致 | 修改 `Assess` 接受 `hostID` 参数，`Evaluate` 直接传递而非覆盖 |
+| H-05 | `internal/kernel/bus.go` | `assessor.result`、`policy.action` 等关键消息使用异步 `Publish`，可能导致消息丢失或处理顺序问题 | 改为 `PublishSync` 同步发布，并记录发布错误 |
+| H-06 | `internal/kernel/config_watcher.go` | 裸类型断言 `p.(*AssessorModule)` 在类型不匹配时直接 panic | 改为安全形式 `am, ok2 := p.(*AssessorModule)`，不匹配时记录警告 |
+
+**中风险（M）— 逻辑错误或安全加固不足：**
+
+| 编号 | 模块 | 问题 | 修复 |
+|------|------|------|------|
+| M-01 | `internal/kernel/cti.go` | `ReportThreat` 未区分威胁严重级别，仅递增计数 | 新增 `severityWeight` 函数，按级别（critical=4, high=3, medium=2, low=1）加权计算 |
+| M-02 | `internal/kernel/policy.go` | 阈值逻辑重叠：外层 switch 设为 `HostIsolated` 后，内层 switch 又覆盖为 `HostWarning` | 合并为单一互斥 switch，按分数区间依次判断 |
+| M-03 | `internal/kernel/ratelimit.go` | `Stop()` 多次调用重复关闭 `stopCleanup` channel 导致 panic | 添加 `stopped` 标志，确保 `close` 只调用一次 |
+| M-04 | `internal/kernel/workerpool.go` | 任务超时后启动的排空 goroutine 未加入 WaitGroup，导致 `Shutdown()` 无法等待 | 排空 goroutine 调用 `p.wg.Add(1)` 和 `defer p.wg.Done()`，绑定 `p.ctx.Done()` |
+| M-05 | `internal/extmgr/extension_executor.go` | 环境变量键名含 `=` 或值含换行可导致注入攻击 | 新增 `sanitizeEnvKey` 和 `buildEnv` 函数验证键名和值 |
+| M-06 | `internal/common/exec.go` | 未检查命令参数中的 shell 元字符，存在注入风险 | 新增 `containsShellMetachar` 函数，执行前检查所有参数 |
+| M-07 | `internal/kernel/spc.go` | 使用 CVE ID 匹配包名（如 CVE-2023-1234 匹配"2023"包），且短包名易误匹配 | 移除 CVE ID 匹配，仅用 Description；过滤长度 <2 的包名 |
+| M-08 | `internal/kernel/services.go` | SessionID 随机后缀仅 4 字节（32 位熵），易被猜测 | 增至 16 字节（128 位熵） |
+
+**低风险（L）— 防御性编程与健壮性增强：**
+
+| 编号 | 模块 | 问题 | 修复 |
+|------|------|------|------|
+| L-01 | `internal/kernel/collector.go` | `entry.Message` 含换行可注入日志结构 | 新增 `sanitizeLogField` 过滤 `\n` 和 `\r` |
+| L-02 | `internal/kernel/collector.go` | 写入日志后未调用 `Sync()`，崩溃可能丢失数据 | 写入成功后调用 `m.writer.Sync()` |
+| L-03 | `internal/kernel/services.go` | 未验证 `CommandId` 和 `HostId` 为空，可伪造命令确认 | 添加空值校验，返回错误 |
+| L-04 | `internal/kernel/services.go` | `rand.Read` 错误被忽略 `_, _ = rand.Read(b)` | 检查错误并记录，降级为确定性填充 |
+| L-05 | `internal/kernel/spc.go` | EPSS 因子线性缩放（`EPSS*10`）无法准确反映利用概率影响 | 改为对数缩放 `-log(1-EPSS)/5` |
+
+**新增功能（CLI Agent 管理模块）：**
+
+- **Agent 生命周期管理** — 实现 `agent start/stop/restart/status` 命令，通过 `CommanderModule` 下发控制指令
+- **多实例管理** — 支持 `--host <hostID>` 单实例操作、`--all` 批量操作、`--filter <expr>` 过滤
+- **日志查看与导出** — `agent logs` 命令支持按主机 ID、级别过滤，JSON/CSV 格式导出
+- **权限验证机制** — 引入 `PermissionLevel`（PermRead/PermWrite/PermAdmin/PermSuper），命令执行前验证权限
+- **格式化输出** — 统一支持文本表格和 JSON 两种输出格式，通过 `--json` 参数切换
+- **HMAC 密钥管理** — 密钥元数据（创建时间/过期时间/哈希）、自动轮换（90 天）、文件权限 `0600`
 
 > **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 1.3。ARGUS 是实现 SSAM 的开源项目框架，当前版本 v0.1.1-MVP。两者版本号独立演进。

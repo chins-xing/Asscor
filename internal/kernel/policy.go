@@ -117,38 +117,31 @@ func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, [
 	switch {
 	case score >= threshold:
 		status = HostOK
+	case score >= threshold-10:
+		status = HostWarning
+		actions = append(actions, PolicyAction{
+			Action:  "notify_admin",
+			Message: fmt.Sprintf("host %s score %.2f below threshold %.2f", hostID, score, threshold),
+		})
+	case score >= threshold-30:
+		status = HostCritical
+		actions = append(actions, PolicyAction{
+			Action:  "notify_admin",
+			Message: fmt.Sprintf("CRITICAL: host %s score %.2f", hostID, score),
+		}, PolicyAction{
+			Action: "increase_assessment",
+			Params: map[string]string{"host_id": hostID},
+		})
 	default:
 		status = HostIsolated
-	}
-
-	if status != HostOK {
-		switch {
-		case score >= threshold-10:
-			status = HostWarning
-			actions = append(actions, PolicyAction{
-				Action:  "notify_admin",
-				Message: fmt.Sprintf("host %s score %.2f below threshold %.2f", hostID, score, threshold),
-			})
-		case score >= threshold-30:
-			status = HostCritical
-			actions = append(actions, PolicyAction{
-				Action:  "notify_admin",
-				Message: fmt.Sprintf("CRITICAL: host %s score %.2f", hostID, score),
-			}, PolicyAction{
-				Action: "increase_assessment",
-				Params: map[string]string{"host_id": hostID},
-			})
-		default:
-			status = HostIsolated
-			actions = append(actions, PolicyAction{
-				Action:  "isolate_host",
-				Params:  map[string]string{"host_id": hostID},
-				Message: fmt.Sprintf("ISOLATING host %s: score %.2f", hostID, score),
-			}, PolicyAction{
-				Action:  "notify_admin",
-				Message: fmt.Sprintf("ISOLATED: host %s", hostID),
-			})
-		}
+		actions = append(actions, PolicyAction{
+			Action:  "isolate_host",
+			Params:  map[string]string{"host_id": hostID},
+			Message: fmt.Sprintf("ISOLATING host %s: score %.2f", hostID, score),
+		}, PolicyAction{
+			Action:  "notify_admin",
+			Message: fmt.Sprintf("ISOLATED: host %s", hostID),
+		})
 	}
 
 	m.mu.Lock()
@@ -156,11 +149,13 @@ func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, [
 	m.mu.Unlock()
 
 	for _, action := range actions {
-		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+		if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
 			Topic:   "policy.action",
 			Payload: action,
 			Source:  "policy",
-		})
+		}); len(errs) > 0 {
+			logger.With("component", "policy").Warn("sync publish errors", "count", len(errs))
+		}
 	}
 
 	return status, actions

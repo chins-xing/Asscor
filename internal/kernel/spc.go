@@ -1756,6 +1756,10 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 	cves := make([]SPCCVEScore, len(m.cveCache))
 	copy(cves, m.cveCache)
 	asset := m.assetCache[hostID]
+	kevCatalog := make(map[string]bool, len(m.kevCatalog))
+	for k, v := range m.kevCatalog {
+		kevCatalog[k] = v
+	}
 	m.mu.RUnlock()
 
 	var sumOfSquares float64
@@ -1781,13 +1785,15 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		cve.ControlLevel = controlLevel
 
 		cvssFactor := math.Min(1.0, cve.CVSS/10.0)
-		epssFactor := math.Min(1.0, cve.EPSS*10)
+		epssFactor := 0.0
+		if cve.EPSS > 0 {
+			epssFactor = math.Min(1.0, -math.Log1p(-cve.EPSS)/5.0)
+		}
 		kevFactor := 0.0
 		if cve.InKEV {
 			kevFactor = 1.0
-		} else if m.isInKEVCatalog(cve.CVEID) {
+		} else if kevCatalog[cve.CVEID] {
 			kevFactor = 1.0
-			cve.InKEV = true
 		}
 		if kevFactor == 0 && cve.HasPublicPoC {
 			kevFactor = 0.3
@@ -1856,11 +1862,13 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 
 	m.kernel.Extensions().Execute(m.kernel.Context(), "spc.post_calculate", correction)
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
+	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
 		Topic:   "spc.vector.updated",
 		Payload: correction,
 		Source:  "spc",
-	})
+	}); len(errs) > 0 {
+		logger.With("component", "spc").Warn("sync publish errors", "count", len(errs))
+	}
 
 	return correction
 }
@@ -1868,8 +1876,12 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 func (m *SPCModule) matchCPE(cve *SPCCVEScore, asset *LocalAsset, packages []string) (MatchType, bool) {
 	if len(cve.AffectedCPEs) == 0 {
 		for _, pkg := range packages {
-			if strings.Contains(strings.ToLower(cve.CVEID), strings.ToLower(pkg)) ||
-				strings.Contains(strings.ToLower(cve.Description), strings.ToLower(pkg)) {
+			if len(pkg) < 2 {
+				continue
+			}
+			lowerDesc := strings.ToLower(cve.Description)
+			lowerPkg := strings.ToLower(pkg)
+			if strings.Contains(lowerDesc, lowerPkg) {
 				return MatchCPEProduct, true
 			}
 		}
@@ -1878,6 +1890,9 @@ func (m *SPCModule) matchCPE(cve *SPCCVEScore, asset *LocalAsset, packages []str
 
 	if asset == nil {
 		for _, pkg := range packages {
+			if len(pkg) < 2 {
+				continue
+			}
 			for _, cpe := range cve.AffectedCPEs {
 				if strings.Contains(strings.ToLower(cpe), strings.ToLower(pkg)) {
 					return MatchCPEProduct, true
@@ -1903,6 +1918,9 @@ func (m *SPCModule) matchCPE(cve *SPCCVEScore, asset *LocalAsset, packages []str
 	}
 
 	for _, pkg := range packages {
+		if len(pkg) < 2 {
+			continue
+		}
 		for _, cpe := range cve.AffectedCPEs {
 			parts := strings.Split(cpe, ":")
 			for _, part := range parts {

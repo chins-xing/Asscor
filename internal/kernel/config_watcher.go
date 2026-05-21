@@ -50,7 +50,11 @@ func (m *ConfigWatcherModule) Init(ctx context.Context, k *Kernel) error {
 	m.state = PluginInitialized
 
 	if p, ok := k.GetPlugin("assessor"); ok {
-		m.assessor = p.(*AssessorModule)
+		if am, ok2 := p.(*AssessorModule); ok2 {
+			m.assessor = am
+		} else {
+			logger.With("component", "config_watcher").Warn("assessor plugin has unexpected type")
+		}
 	}
 
 	info, err := os.Stat(m.configPath)

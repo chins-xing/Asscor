@@ -109,8 +109,7 @@ func (m *AssessorModule) HealthCheck(ctx context.Context) error {
 func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_evaluate", hostID)
 
-	result := m.engine.Assess()
-	result.HostID = hostID
+	result := m.engine.Assess(hostID, hostID)
 
 	m.applySPCAndCTI(hostID, result)
 
@@ -120,11 +119,13 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
+	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
 		Topic:   "assessor.result",
 		Payload: result,
 		Source:  "assessor",
-	})
+	}); len(errs) > 0 {
+		logger.With("component", "assessor").Warn("sync publish errors", "count", len(errs))
+	}
 
 	return result
 }
@@ -151,11 +152,13 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	subCount := m.kernel.Bus().SubscriberCount("assessor.result")
 	logger.With("component", "assessor").Debug("publishing assessor.result", "subscribers", subCount)
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
+	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
 		Topic:   "assessor.result",
 		Payload: result,
 		Source:  "assessor",
-	})
+	}); len(errs) > 0 {
+		logger.With("component", "assessor").Warn("sync publish errors", "count", len(errs))
+	}
 
 	return result
 }

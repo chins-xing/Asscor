@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,7 +43,7 @@ func (m *LogCollectorModule) Init(ctx context.Context, k *Kernel) error {
 	m.logPath = "argus-kernel.log"
 	m.state = PluginInitialized
 
-	f, err := os.OpenFile(m.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(m.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -77,6 +78,15 @@ func (m *LogCollectorModule) State() PluginState {
 	return m.state
 }
 
+func sanitizeLogField(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' {
+			return ' '
+		}
+		return r
+	}, s)
+}
+
 func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -87,9 +97,9 @@ func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
 
 	record := map[string]interface{}{
 		"timestamp": time.Unix(entry.Timestamp, 0).Format(time.RFC3339Nano),
-		"level":     entry.Level,
-		"host_id":   entry.HostId,
-		"message":   entry.Message,
+		"level":     sanitizeLogField(entry.Level),
+		"host_id":   sanitizeLogField(entry.HostId),
+		"message":   sanitizeLogField(entry.Message),
 		"source":    "agent",
 	}
 
@@ -99,6 +109,9 @@ func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
 	}
 	data = append(data, '\n')
 	_, err = m.writer.Write(data)
+	if err == nil {
+		m.writer.Sync()
+	}
 	return err
 }
 
@@ -114,9 +127,9 @@ func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
 	for _, entry := range entries {
 		record := map[string]interface{}{
 			"timestamp": time.Unix(entry.Timestamp, 0).Format(time.RFC3339Nano),
-			"level":     entry.Level,
-			"host_id":   entry.HostId,
-			"message":   entry.Message,
+			"level":     sanitizeLogField(entry.Level),
+			"host_id":   sanitizeLogField(entry.HostId),
+			"message":   sanitizeLogField(entry.Message),
 			"source":    "agent",
 		}
 
@@ -129,6 +142,9 @@ func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
 	}
 
 	_, err := m.writer.Write(buf)
+	if err == nil {
+		m.writer.Sync()
+	}
 	return err
 }
 

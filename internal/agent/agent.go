@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"sync"
 	"sync/atomic"
 
@@ -491,9 +492,22 @@ func (a *Agent) verifyCommandSignature(cmd *apiv1.Command) bool {
 
 	mac := hmac.New(sha256.New, []byte(hmacKey))
 	mac.Write([]byte(cmd.CommandId + ":" + cmd.Command))
+	keys := sortedParamKeys(cmd.Params)
+	for _, k := range keys {
+		mac.Write([]byte(":" + k + "=" + cmd.Params[k]))
+	}
 	expected := mac.Sum(nil)
 
 	return hmac.Equal(cmd.Signature, expected)
+}
+
+func sortedParamKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func (a *Agent) runChecks() []model.CheckResult {
