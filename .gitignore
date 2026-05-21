@@ -30,6 +30,9 @@ go.work.sum
 # Build output
 build/
 
+# TLS certificates and private keys
+certs/
+
 # Editor/IDE
 # .idea/
 # .vscode/
