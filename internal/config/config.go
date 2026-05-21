@@ -18,6 +18,7 @@ type Config struct {
 	ThreatCoeff  float64
 	SPCEnabled   bool
 	ComplianceFramework string
+	DataDir      string
 
 	ACINetworkSegmentation float64
 	ACILAPSEnabled        float64
@@ -164,6 +165,8 @@ func Parse(content string) (*Config, error) {
 				}
 			case "compliance_framework":
 				cfg.ComplianceFramework = v
+			case "data_dir":
+				cfg.DataDir = v
 			}
 		}
 	}

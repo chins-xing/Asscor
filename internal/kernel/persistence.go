@@ -279,6 +279,20 @@ func (m *PersistenceModule) State() PluginState {
 	return m.state
 }
 
+func (m *PersistenceModule) HealthCheck(ctx context.Context) error {
+	if m.state != PluginStarted {
+		return fmt.Errorf("persistence not started (state=%s)", m.state)
+	}
+	info, err := os.Stat(m.dataDir)
+	if err != nil {
+		return fmt.Errorf("persistence data dir inaccessible: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("persistence data path is not a directory: %s", m.dataDir)
+	}
+	return nil
+}
+
 func (m *PersistenceModule) Append(dataset string, record interface{}) error {
 	if !m.enabled {
 		return nil

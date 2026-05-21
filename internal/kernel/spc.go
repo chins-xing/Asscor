@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -446,6 +447,7 @@ func (m *SPCModule) Start(ctx context.Context) error {
 				logger.With("component", "spc").Warn("MISP configuration invalid, continuing without MISP", "error", err)
 			}
 		}
+		m.loadCacheFromDisk()
 		go m.fetchLoop()
 	}
 	logger.With("component", "spc").Info("started", "enabled", m.enabled)
@@ -454,6 +456,7 @@ func (m *SPCModule) Start(ctx context.Context) error {
 
 func (m *SPCModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+	m.saveCacheToDisk()
 	m.state = PluginStopped
 	logger.With("component", "spc").Info("stopped")
 	return nil
@@ -463,6 +466,13 @@ func (m *SPCModule) State() PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
+}
+
+func (m *SPCModule) HealthCheck(ctx context.Context) error {
+	if m.state != PluginStarted {
+		return fmt.Errorf("spc not started (state=%s)", m.state)
+	}
+	return nil
 }
 
 func (m *SPCModule) Enabled() bool {
@@ -476,15 +486,18 @@ func (m *SPCModule) SetEnabled(v bool) {
 }
 
 func (m *SPCModule) fetchLoop() {
+	m.FetchFromAllSources()
+
 	ticker := time.NewTicker(m.fetchInterval)
 	defer ticker.Stop()
 
 	cleanupTicker := time.NewTicker(24 * time.Hour)
-	defer cleanupTicker.Stop()
+	defer cleanupTicker()
 
 	for {
 		select {
 		case <-m.kernel.Context().Done():
+			m.saveCacheToDisk()
 			return
 		case <-ticker.C:
 			m.FetchFromAllSources()
@@ -2149,6 +2162,94 @@ func (m *SPCModule) ClearCache() {
 	defer m.mu.Unlock()
 	m.cveCache = m.cveCache[:0]
 	m.cveIndex = make(map[string]int)
+}
+
+func (m *SPCModule) cacheFilePath() string {
+	dataDir := "./data"
+	if m.kernel != nil && m.kernel.cfg != nil && m.kernel.cfg.DataDir != "" {
+		dataDir = m.kernel.cfg.DataDir
+	}
+	return filepath.Join(dataDir, "spc_cache.json")
+}
+
+func (m *SPCModule) saveCacheToDisk() {
+	m.mu.RLock()
+	cacheCopy := make([]SPCCVEScore, len(m.cveCache))
+	copy(cacheCopy, m.cveCache)
+	lastUpd := m.lastUpdate
+	m.mu.RUnlock()
+
+	if len(cacheCopy) == 0 {
+		return
+	}
+
+	path := m.cacheFilePath()
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		logger.With("component", "spc").Error("failed to create cache directory", "error", err)
+		return
+	}
+
+	payload := struct {
+		SavedAt    time.Time     `json:"saved_at"`
+		LastUpdate time.Time     `json:"last_update"`
+		CVECount   int           `json:"cve_count"`
+		CVEs       []SPCCVEScore `json:"cves"`
+	}{
+		SavedAt:    time.Now(),
+		LastUpdate: lastUpd,
+		CVECount:   len(cacheCopy),
+		CVEs:       cacheCopy,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		logger.With("component", "spc").Error("failed to marshal cache", "error", err)
+		return
+	}
+
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		logger.With("component", "spc").Error("failed to write cache file", "error", err)
+		return
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		logger.With("component", "spc").Error("failed to rename cache file", "error", err)
+		return
+	}
+
+	logger.With("component", "spc").Info("SPC cache saved to disk", "path", path, "cve_count", len(cacheCopy))
+}
+
+func (m *SPCModule) loadCacheFromDisk() {
+	path := m.cacheFilePath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		logger.With("component", "spc").Debug("no SPC cache file found, starting fresh", "error", err)
+		return
+	}
+
+	var payload struct {
+		SavedAt    time.Time     `json:"saved_at"`
+		LastUpdate time.Time     `json:"last_update"`
+		CVECount   int           `json:"cve_count"`
+		CVEs       []SPCCVEScore `json:"cves"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		logger.With("component", "spc").Warn("failed to parse SPC cache file", "error", err)
+		return
+	}
+
+	m.mu.Lock()
+	m.cveCache = payload.CVEs
+	m.cveIndex = make(map[string]int, len(m.cveCache))
+	for i, cve := range m.cveCache {
+		m.cveIndex[cve.CVEID] = i
+	}
+	m.lastUpdate = payload.LastUpdate
+	m.mu.Unlock()
+
+	logger.With("component", "spc").Info("SPC cache loaded from disk", "cve_count", len(m.cveCache), "last_update", payload.LastUpdate.Format(time.RFC3339))
 }
 
 func (m *SPCModule) LastUpdate() time.Time {

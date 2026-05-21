@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sync"
 
@@ -93,6 +94,16 @@ func (m *AssessorModule) State() PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
+}
+
+func (m *AssessorModule) HealthCheck(ctx context.Context) error {
+	if m.state != PluginStarted {
+		return fmt.Errorf("assessor not started (state=%s)", m.state)
+	}
+	if m.engine == nil {
+		return fmt.Errorf("assessor engine is nil")
+	}
+	return nil
 }
 
 func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
@@ -272,8 +283,24 @@ func (m *AssessorModule) GetResult(hostID string) *model.AssessmentResult {
 	return m.results[hostID]
 }
 
+func (m *AssessorModule) ReloadConfig(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	m.mu.Lock()
+	m.cfg = cfg
+	m.mu.Unlock()
+
+	m.engine.ReloadWeights(cfg)
+
+	logger.With("component", "assessor").Info("config reloaded",
+		"threshold", cfg.Threshold,
+		"threat_coeff", cfg.ThreatCoeff)
+}
+
 type AssessorInterface interface {
 	Evaluate(hostID string) *model.AssessmentResult
 	EvaluateFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
 	GetResult(hostID string) *model.AssessmentResult
+	ReloadConfig(cfg *config.Config)
 }

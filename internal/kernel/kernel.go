@@ -331,3 +331,37 @@ func (k *Kernel) IsRunning() bool {
 		return true
 	}
 }
+
+type PluginHealthStatus struct {
+	Name   string `json:"name"`
+	Healthy bool  `json:"healthy"`
+	Error  string `json:"error,omitempty"`
+}
+
+func (k *Kernel) HealthCheck(ctx context.Context) []PluginHealthStatus {
+	k.mu.RLock()
+	plugins := make([]pluginRecord, 0, len(k.plugins))
+	for _, rec := range k.plugins {
+		plugins = append(plugins, rec)
+	}
+	k.mu.RUnlock()
+
+	var results []PluginHealthStatus
+	for _, rec := range plugins {
+		status := PluginHealthStatus{
+			Name: rec.plugin.Info().Name,
+		}
+		if hc, ok := rec.plugin.(HealthCheckable); ok {
+			if err := hc.HealthCheck(ctx); err != nil {
+				status.Healthy = false
+				status.Error = err.Error()
+			} else {
+				status.Healthy = true
+			}
+		} else {
+			status.Healthy = true
+		}
+		results = append(results, status)
+	}
+	return results
+}

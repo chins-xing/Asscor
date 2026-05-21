@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -73,6 +74,19 @@ func (m *HeartbeatModule) State() PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
+}
+
+func (m *HeartbeatModule) HealthCheck(ctx context.Context) error {
+	if m.state != PluginStarted {
+		return fmt.Errorf("heartbeat not started (state=%s)", m.state)
+	}
+	m.mu.RLock()
+	agentCount := len(m.agents)
+	m.mu.RUnlock()
+	if agentCount > 1000 {
+		return fmt.Errorf("heartbeat agent count abnormally high: %d", agentCount)
+	}
+	return nil
 }
 
 func (m *HeartbeatModule) RecordHeartbeat(hostID string) {

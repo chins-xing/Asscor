@@ -164,7 +164,18 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 		Checks:    checkResults,
 	}
 
-	if len(checkResults) == 0 {
+	a.scoringEngine.Hooks().Execute(ctx, PhasePreCheck, result)
+
+	adapterResults := a.runAdapterPipeline()
+	for _, r := range adapterResults {
+		for _, f := range r.Findings {
+			result.Checks = append(result.Checks, f.ToCheckResult())
+		}
+	}
+
+	a.scoringEngine.Hooks().Execute(ctx, PhasePostCheck, result)
+
+	if len(result.Checks) == 0 {
 		return a.buildEmptyResult(result)
 	}
 
@@ -172,6 +183,9 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 	for domain, score := range dynScores.GetAll() {
 		result.DomainScores.Set(domain, score)
 	}
+
+	a.scoringEngine.Hooks().Execute(ctx, PhasePreScore, result)
+	a.scoringEngine.Hooks().Execute(ctx, PhasePostScore, result)
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreEdge, result)
 
@@ -183,6 +197,8 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 
 	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
 	result.Acceptable = result.FinalScore >= result.Threshold
+
+	a.scoringEngine.Hooks().Execute(ctx, PhasePreReport, result)
 
 	return result
 }

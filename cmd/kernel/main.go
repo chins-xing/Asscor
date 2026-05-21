@@ -99,8 +99,9 @@ func main() {
 	persistence := kernel.NewPersistenceModule("data")
 	concurrency := kernel.NewConcurrencyModule(10)
 	attck := kernel.NewATTACKModule()
+	configWatcher := kernel.NewConfigWatcherModule(*configPath)
 
-	for _, p := range []kernel.Plugin{heartbeat, spc, cti, assessor, policy, commander, logCollector, persistence, concurrency, attck} {
+	for _, p := range []kernel.Plugin{heartbeat, spc, cti, assessor, policy, commander, logCollector, persistence, concurrency, attck, configWatcher} {
 		if err := k.RegisterPlugin(p); err != nil {
 			log.Error("register plugin failed", "error", err)
 			os.Exit(1)
@@ -143,6 +144,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	grpcCfg := kernel.DefaultGRPCServerConfig()
+	if v := cfg.AdapterConfig["grpc.enabled"]; v == "on" || v == "true" || v == "1" {
+		grpcCfg.Enabled = true
+	}
+	if v := cfg.AdapterConfig["grpc.listen_addr"]; v != "" {
+		grpcCfg.ListenAddr = v
+	}
+	if v := cfg.AdapterConfig["grpc.tls_enabled"]; v == "on" || v == "true" || v == "1" {
+		grpcCfg.TLSEnabled = true
+		grpcCfg.CertFile = filepath.Join(*certDir, "server.crt")
+		grpcCfg.KeyFile = filepath.Join(*certDir, "server.key")
+		grpcCfg.CAFile = filepath.Join(*certDir, "ca.crt")
+	}
+	grpcServer := kernel.NewGRPCServer(grpcCfg, kernelSvc, agentSvc)
+	if err := grpcServer.Start(); err != nil {
+		log.Error("start gRPC server failed", "error", err)
+		os.Exit(1)
+	}
+
 	log.Info("ARGUS μKernel started",
 		"version", version.ARGUSVersion,
 		"ssam_version", version.SSAMVersion,
@@ -169,6 +189,7 @@ func main() {
 	signal.Stop(sigCh)
 
 	server.Stop()
+	grpcServer.Stop()
 	k.Shutdown()
 	log.Info("kernel stopped")
 }
