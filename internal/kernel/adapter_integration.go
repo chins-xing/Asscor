@@ -137,11 +137,16 @@ func (m *AdapterIntegrationModule) publishAdapterFindings(results []adapter.Pipe
 			continue
 		}
 
-		m.kernel.Bus().Publish("adapter.findings", map[string]interface{}{
-			"adapter_id": r.AdapterID,
-			"adapter":    r.AdapterName,
-			"findings":   checkResults,
-			"timestamp":  time.Now(),
+		m.kernel.Bus().Publish(context.Background(), Message{
+			Topic:     "adapter.findings",
+			Payload: map[string]interface{}{
+				"adapter_id": r.AdapterID,
+				"adapter":    r.AdapterName,
+				"findings":   checkResults,
+				"timestamp":  time.Now(),
+			},
+			Source:    "adapter_integration",
+			Timestamp: time.Now(),
 		})
 	}
 }

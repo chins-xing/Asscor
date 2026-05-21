@@ -67,10 +67,6 @@ func (s *GRPCServer) Start() error {
 
 	opts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(s.cfg.MaxRecvSize),
-		grpc.KeepaliveParams(keepalive.ServerParameters{
-			MinTime:             s.cfg.KeepaliveMin,
-			PermitWithoutStream: true,
-		}),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             s.cfg.KeepaliveMin,
 			PermitWithoutStream: true,

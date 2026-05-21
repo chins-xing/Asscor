@@ -492,7 +492,7 @@ func (m *SPCModule) fetchLoop() {
 	defer ticker.Stop()
 
 	cleanupTicker := time.NewTicker(24 * time.Hour)
-	defer cleanupTicker()
+	defer cleanupTicker.Stop()
 
 	for {
 		select {

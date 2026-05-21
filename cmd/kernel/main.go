@@ -100,8 +100,9 @@ func main() {
 	concurrency := kernel.NewConcurrencyModule(10)
 	attck := kernel.NewATTACKModule()
 	configWatcher := kernel.NewConfigWatcherModule(*configPath)
+	adapterIntegration := kernel.NewAdapterIntegrationModule()
 
-	for _, p := range []kernel.Plugin{heartbeat, spc, cti, assessor, policy, commander, logCollector, persistence, concurrency, attck, configWatcher} {
+	for _, p := range []kernel.Plugin{heartbeat, spc, cti, assessor, policy, commander, logCollector, persistence, concurrency, attck, configWatcher, adapterIntegration} {
 		if err := k.RegisterPlugin(p); err != nil {
 			log.Error("register plugin failed", "error", err)
 			os.Exit(1)

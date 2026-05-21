@@ -1,13 +1,13 @@
-package apiv1
+﻿package apiv1
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 type PBRegisterRequest struct {
@@ -17,7 +17,7 @@ type PBRegisterRequest struct {
 }
 
 func (m *PBRegisterRequest) Reset()         { *m = PBRegisterRequest{} }
-func (m *PBRegisterRequest) String() string { return proto.CompactTextString(m) }
+func (m *PBRegisterRequest) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBRegisterRequest) ProtoMessage()  {}
 
 type PBRegisterResponse struct {
@@ -27,7 +27,7 @@ type PBRegisterResponse struct {
 }
 
 func (m *PBRegisterResponse) Reset()         { *m = PBRegisterResponse{} }
-func (m *PBRegisterResponse) String() string { return proto.CompactTextString(m) }
+func (m *PBRegisterResponse) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBRegisterResponse) ProtoMessage()  {}
 
 type PBHeartbeatRequest struct {
@@ -37,7 +37,7 @@ type PBHeartbeatRequest struct {
 }
 
 func (m *PBHeartbeatRequest) Reset()         { *m = PBHeartbeatRequest{} }
-func (m *PBHeartbeatRequest) String() string { return proto.CompactTextString(m) }
+func (m *PBHeartbeatRequest) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBHeartbeatRequest) ProtoMessage()  {}
 
 type PBHeartbeatResponse struct {
@@ -48,7 +48,7 @@ type PBHeartbeatResponse struct {
 }
 
 func (m *PBHeartbeatResponse) Reset()         { *m = PBHeartbeatResponse{} }
-func (m *PBHeartbeatResponse) String() string { return proto.CompactTextString(m) }
+func (m *PBHeartbeatResponse) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBHeartbeatResponse) ProtoMessage()  {}
 
 type PBAssessmentResult struct {
@@ -59,7 +59,7 @@ type PBAssessmentResult struct {
 }
 
 func (m *PBAssessmentResult) Reset()         { *m = PBAssessmentResult{} }
-func (m *PBAssessmentResult) String() string { return proto.CompactTextString(m) }
+func (m *PBAssessmentResult) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBAssessmentResult) ProtoMessage()  {}
 
 type PBCheckResult struct {
@@ -71,7 +71,7 @@ type PBCheckResult struct {
 }
 
 func (m *PBCheckResult) Reset()         { *m = PBCheckResult{} }
-func (m *PBCheckResult) String() string { return proto.CompactTextString(m) }
+func (m *PBCheckResult) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBCheckResult) ProtoMessage()  {}
 
 type PBCommand struct {
@@ -82,7 +82,7 @@ type PBCommand struct {
 }
 
 func (m *PBCommand) Reset()         { *m = PBCommand{} }
-func (m *PBCommand) String() string { return proto.CompactTextString(m) }
+func (m *PBCommand) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBCommand) ProtoMessage()  {}
 
 type PBCommandRequest struct {
@@ -94,7 +94,7 @@ type PBCommandRequest struct {
 }
 
 func (m *PBCommandRequest) Reset()         { *m = PBCommandRequest{} }
-func (m *PBCommandRequest) String() string { return proto.CompactTextString(m) }
+func (m *PBCommandRequest) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBCommandRequest) ProtoMessage()  {}
 
 type PBCommandResponse struct {
@@ -104,7 +104,7 @@ type PBCommandResponse struct {
 }
 
 func (m *PBCommandResponse) Reset()         { *m = PBCommandResponse{} }
-func (m *PBCommandResponse) String() string { return proto.CompactTextString(m) }
+func (m *PBCommandResponse) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBCommandResponse) ProtoMessage()  {}
 
 type PBSnapshotRequest struct {
@@ -112,7 +112,7 @@ type PBSnapshotRequest struct {
 }
 
 func (m *PBSnapshotRequest) Reset()         { *m = PBSnapshotRequest{} }
-func (m *PBSnapshotRequest) String() string { return proto.CompactTextString(m) }
+func (m *PBSnapshotRequest) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBSnapshotRequest) ProtoMessage()  {}
 
 type PBSnapshotResponse struct {
@@ -121,7 +121,7 @@ type PBSnapshotResponse struct {
 }
 
 func (m *PBSnapshotResponse) Reset()         { *m = PBSnapshotResponse{} }
-func (m *PBSnapshotResponse) String() string { return proto.CompactTextString(m) }
+func (m *PBSnapshotResponse) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBSnapshotResponse) ProtoMessage()  {}
 
 type PBLogEntry struct {
@@ -132,7 +132,7 @@ type PBLogEntry struct {
 }
 
 func (m *PBLogEntry) Reset()         { *m = PBLogEntry{} }
-func (m *PBLogEntry) String() string { return proto.CompactTextString(m) }
+func (m *PBLogEntry) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBLogEntry) ProtoMessage()  {}
 
 type PBAck struct {
@@ -140,7 +140,7 @@ type PBAck struct {
 }
 
 func (m *PBAck) Reset()         { *m = PBAck{} }
-func (m *PBAck) String() string { return proto.CompactTextString(m) }
+func (m *PBAck) String() string { return fmt.Sprintf("%+v", m) }
 func (m *PBAck) ProtoMessage()  {}
 
 func ConvertAssessmentResultToPB(r *AssessmentResult) *PBAssessmentResult {
@@ -193,7 +193,7 @@ type KernelServiceServer interface {
 type AgentServiceServer interface {
 	GetSnapshot(ctx context.Context, req *PBSnapshotRequest) (*PBSnapshotResponse, error)
 	ExecuteCommand(ctx context.Context, req *PBCommandRequest) (*PBCommandResponse, error)
-	StreamLogs(stream grpc.ServerStream) error
+	StreamLogs(stream AgentService_StreamLogsServer) error
 }
 
 func RegisterKernelServiceServer(s grpc.ServiceRegistrar, srv KernelServiceServer) {

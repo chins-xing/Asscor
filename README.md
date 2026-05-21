@@ -205,21 +205,26 @@ compliance_framework = GB/T 22239-2019 Level 3
 ```
 argus/
 ├── cmd/
-│   ├── kernel/        # 微内核服务端入口
-│   ├── agent/         # Agent 客户端入口
+│   ├── kernel/        # 微内核服务端入口（gRPC + JSONRPC 双协议栈）
+│   ├── agent/         # Agent 客户端入口（gRPC + JSONRPC）
 │   └── argus/         # 独立评估工具入口
 ├── internal/
-│   ├── kernel/        # 内核核心模块
-│   ├── agent/         # Agent 核心模块
-│   ├── engine/        # SSAM 评估引擎
-│   ├── checks/        # 检查项库（Linux/Windows）
+│   ├── kernel/        # 内核核心模块（assessor, policy, spc, cti,
+│   │                   #  adapter_integration, config_watcher 等）
+│   ├── agent/         # Agent 核心模块（collector, executor）
+│   ├── engine/        # SSAM 评估引擎（含适配器流水线集成）
+│   ├── adapter/       # 外部工具适配器框架（21 个适配器：11 探测器 + 10 管理类）
+│   │   ├── scanner/   #   探测器适配器（Trivy, Nuclei, Lynis, OpenSCAP 等）
+│   │   └── management/#   管理类适配器（Ansible, NetBox, FreeIPA, Jira 等）
+│   ├── checks/        # 检查项库（Linux/Windows，等保映射 53+9 项）
 │   ├── model/         # 数据模型定义
-│   ├── config/        # 配置解析器
+│   ├── config/        # 配置解析器（INI 格式，支持行业模板覆盖）
 │   └── version/       # 版本信息
-├── api/v1/            # gRPC/JSONRPC 接口定义
-├── certs/             # TLS 证书目录
+├── api/v1/            # gRPC 服务接口定义与消息类型
+├── config/            # 行业专用配置文件（政府、金融、医疗、教育等）
+├── certs/             # TLS/mTLS 证书目录（已排除于版本控制）
 ├── docs/              # 技术文档与白皮书
-├── build/             # 编译产物（Linux/Windows）
+├── build/             # 编译产物（Linux/Windows，已排除于版本控制）
 ├── config.ini         # 内核默认配置文件
 └── agent.ini          # Agent 默认配置文件
 ```
@@ -235,19 +240,25 @@ argus/
 # 输出 JSON 格式报告
 ./argus-linux-amd64-v0.1.1-MVP -json
 
-# 指定配置文件
+# 指定默认配置文件
 ./argus-linux-amd64-v0.1.1-MVP -config config.ini
+
+# 使用行业专用配置（政府/金融/医疗等）
+./argus-linux-amd64-v0.1.1-MVP -config config/config.gov.ini
 ```
 
 ### 10.2 分布式模式
 
 **启动 Kernel（Windows/Linux）：**
 ```bash
-# Windows
+# Windows（JSONRPC 默认端口 50051，gRPC 默认端口 50052）
 argus-kernel.exe -listen 0.0.0.0:50051 -no-mtls
 
-# Linux
-./argus-kernel-linux-amd64-v0.1.1-MVP -listen 0.0.0.0:50051 -no-mtls
+# Linux（使用行业配置）
+./argus-kernel-linux-amd64-v0.1.1-MVP -listen 0.0.0.0:50051 -no-mtls -config config/config.fin.ini
+
+# 启用 mTLS（自动生成自签名证书）
+./argus-kernel-linux-amd64-v0.1.1-MVP -listen 0.0.0.0:50051
 ```
 
 **启动 Agent（Linux）：**
@@ -263,7 +274,44 @@ Agent 配置文件 `agent.ini` 支持心跳间隔、重连策略、mTLS 等参�
 
 ## 11. 与 ARGUS μKernel 的联动
 
-ARGUS μKernel 是风险评估与指令分发中心，采用微内核 + Agent 架构，通过 mTLS 加密的 JSONRPC 通信。Agent 负责本地检查执行与状态上报，内核汇聚计算并自动下发修复指令，实现"评估→诊断→修复"闭环。
+ARGUS μKernel 是风险评估与指令分发中心，采用微内核 + Agent 架构，通过 **gRPC 原生协议 + JSONRPC 兼容层** 双协议栈通信，均支持 mTLS 加密。Agent 负责本地检查执行与状态上报，内核汇聚计算并自动下发修复指令，实现"评估→诊断→修复"闭环。
+
+### 核心能力
+
+| 模块 | 功能 |
+|------|------|
+| **评估引擎 (Assessor)** | 加载检查项并发评估，计算 SSAM 四域得分 + 边缘因子 + SPC 修正 |
+| **适配器集成 (AdapterIntegration)** | 周期性执行 21 个外部工具适配器（Fetch→Parse→Map→Validate 四阶段流水线），结果注入评分流程 |
+| **安全态势计算器 (SPC)** | 从 NVD/EPSS/CISA KEV 拉取漏洞情报，CVE 缓存磁盘持久化（启动加载/退出保存），输出个体化 P_score |
+| **配置监听器 (ConfigWatcher)** | 监控配置文件变化，支持权重热加载（`Assessor.ReloadWeights()`）和 SIGHUP 信号 |
+| **策略管理器 (Policy Manager)** | 根据分数区间生成自动化动作（notify_admin / isolate_host 等） |
+| **指令下发器 (Commander)** | HMAC-SHA256 签名命令下发，Agent 白名单执行 |
+
+### 行业配置模板
+
+`config/` 目录提供按行业定制的配置文件，覆盖权重、阈值、适配器开关：
+
+| 文件 | 适用场景 | 特点 |
+|------|----------|------|
+| `config.gov.ini` | 政府机构 | 高操作可信度权重(30)，等保三级+ |
+| `config.fin.ini` | 金融行业 | 高韧性权重(20)，等保四级阈值(90) |
+| `config.med.ini` | 医疗健康 | 业务连续性优先，HIPAA 对齐 |
+| `config.edu.ini` | 教育科研 | 开放端口容忍度高，侧重基础防护 |
+| `config.ent.ini` | 企业通用 | 均衡权重，等保三级默认 |
+
+### 双协议栈架构
+
+```
+Agent ──gRPC/mTLS──▶ Kernel gRPC Server (:50052)
+   │                    │
+   │                    ├─ KernelService (Register, Heartbeat, GetSnapshot)
+   │                    └─ AgentService (ExecuteCommand, StreamLogs)
+   │
+   └──JSONRPC/mTLS──▶ Kernel JSONRPC Server (:50051)
+                        │
+                        ├─ Register / Heartbeat / GetSnapshot
+                        └─ ExecuteCommand / StreamLogs
+```
 
 ## 12. 总结
 
@@ -286,5 +334,12 @@ SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。�
 ### ARGUS v0.1.1-MVP 修复记录
 
 - **Agent 反复重连修复** — Client 层改用 `bufio.Reader.ReadBytes('\n')` 按行读取 TCP 响应，解决半包导致的 JSON 解析失败；心跳循环改用 `time.Timer` 替代 `time.Ticker`，防止 `runChecks()` 耗时导致的心跳堆积触发连续错误重连。
+- **SPC 后台定时同步修复** — `fetchLoop()` 在启动时立即执行首次同步（而非等待首个 Ticker 间隔），确保内核启动后即可获得最新漏洞情报。
+- **SPC CVE 缓存磁盘持久化** — 新增 `loadCacheFromDisk()` / `saveCacheToDisk()` 方法，CVE 缓存在启动时从磁盘 JSON 加载、退出时保存，避免服务重启后缓存丢失。
+- **适配器结果纳入评分** — `Assessor.AssessFromResults()` 和 `Assess()` 中新增 `runAdapterPipeline()` 调用，21 个外部适配器的 Finding 通过 `NormalizedFinding.ToCheckResult()` 转换后注入评分流程，与内置检查项合并计算。
+- **gRPC 原生协议实现** — 基于 `google.golang.org/grpc` 实现原生 gRPC 服务端/客户端，支持 TLS/mTLS 配置，定义 `KernelService`/`AgentService` 接口及 Protobuf 消息类型，与 JSONRPC 兼容层形成双协议栈。
+- **权重热加载** — `Assessor.ReloadWeights()` 支持运行时动态更新四域权重，配合 `ConfigWatcher` 模块监控配置文件变化自动触发重载，无需重启服务。
+- **AdapterIntegrationModule 注册修复** — 将 `AdapterIntegrationModule` 加入 Kernel 插件注册列表，使后台定时同步（每6小时）、事件总线发布 `adapter.findings`、按需拉取 `CollectFindings()` 功能生效。
+- **行业配置文件体系** — 新增 `config/` 目录，提供政府(config.gov.ini)、金融(config.fin.ini)、医疗(config.med.ini)、教育(config.edu.ini)、企业通用(config.ent.ini) 五套行业专用配置模板。
 
 > **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 1.3。ARGUS 是实现 SSAM 的开源项目框架，当前版本 v0.1.1-MVP。两者版本号独立演进。
