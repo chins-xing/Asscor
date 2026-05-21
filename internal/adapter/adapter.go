@@ -183,7 +183,7 @@ func ExecuteAdapter(ctx context.Context, a Adapter, config map[string]string) ([
 	valid, errs := a.Validate(findings)
 	if len(errs) > 0 {
 		for _, e := range errs {
-			LogWarn("adapter %s validation: %v", a.ID(), e)
+			LogWarn("adapter validation error", "adapter_id", a.ID(), "error", e)
 		}
 	}
 

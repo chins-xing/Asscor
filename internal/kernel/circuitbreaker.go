@@ -76,7 +76,8 @@ func (r *circuitRecord) pruneWindow(windowSize time.Duration) {
 	}
 }
 
-func (r *circuitRecord) stats() (failures, successes int) {
+func (r *circuitRecord) stats(windowSize time.Duration) (failures, successes int) {
+	r.pruneWindow(windowSize)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, e := range r.window {
@@ -156,13 +157,12 @@ func (cb *CircuitBreaker) state(k string) CircuitState {
 func (cb *CircuitBreaker) recordFailure(k string) {
 	rec := cb.getRecord(k)
 	rec.addEntry(false)
-	rec.pruneWindow(cb.cfg.WindowSize)
 
 	state := CircuitState(atomic.LoadInt32(&rec.state))
 
 	switch state {
 	case StateClosed:
-		failures, successes := rec.stats()
+		failures, successes := rec.stats(cb.cfg.WindowSize)
 		total := failures + successes
 		if total >= cb.cfg.MinRequests && total > 0 {
 			ratio := float64(failures) / float64(total)
@@ -248,6 +248,6 @@ func (cb *CircuitBreaker) Stats(service, method string) (CircuitState, int, int)
 	k := key(service, method)
 	rec := cb.getRecord(k)
 	state := CircuitState(atomic.LoadInt32(&rec.state))
-	failures, successes := rec.stats()
+	failures, successes := rec.stats(cb.cfg.WindowSize)
 	return state, failures, successes
 }

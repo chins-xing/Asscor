@@ -3,10 +3,10 @@ package kernel
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/argus-security/argus/internal/config"
+	"github.com/argus-security/argus/internal/logger"
 	"github.com/argus-security/argus/internal/model"
 )
 
@@ -90,7 +90,7 @@ func (m *PolicyModule) Init(ctx context.Context, k *Kernel) error {
 func (m *PolicyModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
 	m.kernel.Bus().Subscribe("assessor.result", "policy", m.onAssessmentResult)
-	log.Println("policy: started")
+	logger.With("component", "policy").Info("started")
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (m *PolicyModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.kernel.Bus().UnsubscribeAll("policy")
 	m.state = PluginStopped
-	log.Println("policy: stopped")
+	logger.With("component", "policy").Info("stopped")
 	return nil
 }
 

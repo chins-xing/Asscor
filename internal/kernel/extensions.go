@@ -112,7 +112,7 @@ func (r *ExtensionRegistry) ExecuteUntilFirst(ctx context.Context, pointName str
 
 	for _, ext := range exts {
 		if err := ext.handler(ctx, data); err != nil {
-			return ext.pluginID, nil, err
+			continue
 		}
 		return ext.pluginID, nil, nil
 	}

@@ -3,7 +3,7 @@ package kernel
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"sort"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/argus-security/argus/internal/config"
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type Kernel struct {
@@ -23,10 +24,11 @@ type Kernel struct {
 	config map[string]string
 	cfg    *config.Config
 
-	mu     sync.RWMutex
-	ctx    context.Context
-	cancel context.CancelFunc
-	done   chan struct{}
+	mu        sync.RWMutex
+	ctx       context.Context
+	cancel    context.CancelFunc
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 type pluginRecord struct {
@@ -136,7 +138,7 @@ func (k *Kernel) RegisterPlugin(p Plugin) error {
 		registered: time.Now(),
 	}
 
-	log.Printf("kernel: plugin %s v%s registered", info.Name, info.Version)
+	logger.With("component", "kernel").Info("plugin registered", "name", info.Name, "version", info.Version)
 	return nil
 }
 
@@ -159,7 +161,7 @@ func (k *Kernel) UnregisterPlugin(name string) error {
 	k.bus.UnsubscribeAll(name)
 	delete(k.plugins, name)
 
-	log.Printf("kernel: plugin %s unregistered", name)
+	logger.With("component", "kernel").Info("plugin unregistered", "name", name)
 	return nil
 }
 
@@ -211,7 +213,7 @@ func (k *Kernel) Bootstrap() error {
 	for _, rec := range plugins {
 		if cfg, ok := rec.plugin.(ConfigurablePlugin); ok {
 			if err := cfg.Configure(k.config); err != nil {
-				log.Printf("kernel: configure plugin %s: %v", rec.plugin.Info().Name, err)
+				logger.With("component", "kernel").Warn("configure plugin failed", "plugin", rec.plugin.Info().Name, "error", err)
 			}
 		}
 
@@ -232,7 +234,7 @@ func (k *Kernel) Bootstrap() error {
 		if err := rec.plugin.Init(k.ctx, k); err != nil {
 			return fmt.Errorf("init plugin %s: %w", rec.plugin.Info().Name, err)
 		}
-		log.Printf("kernel: plugin %s initialized", rec.plugin.Info().Name)
+		logger.With("component", "kernel").Info("plugin initialized", "plugin", rec.plugin.Info().Name)
 	}
 
 	k.extPoints.Execute(k.ctx, "kernel.post_init", nil)
@@ -243,17 +245,17 @@ func (k *Kernel) Bootstrap() error {
 		if err := rec.plugin.Start(k.ctx); err != nil {
 			return fmt.Errorf("start plugin %s: %w", rec.plugin.Info().Name, err)
 		}
-		log.Printf("kernel: plugin %s started", rec.plugin.Info().Name)
+		logger.With("component", "kernel").Info("plugin started", "plugin", rec.plugin.Info().Name)
 	}
 
 	k.extPoints.Execute(k.ctx, "kernel.post_start", nil)
 
-	log.Println("kernel: all plugins started successfully")
+	slog.Info("kernel: all plugins started successfully")
 	return nil
 }
 
 func (k *Kernel) Shutdown() error {
-	log.Println("kernel: shutting down...")
+	slog.Info("kernel: shutting down")
 
 	k.extPoints.Execute(k.ctx, "kernel.pre_stop", nil)
 
@@ -283,17 +285,19 @@ func (k *Kernel) Shutdown() error {
 			continue
 		}
 		if err := rec.plugin.Stop(k.ctx); err != nil {
-			log.Printf("kernel: error stopping plugin %s: %v", rec.plugin.Info().Name, err)
+			logger.With("component", "kernel").Error("error stopping plugin", "plugin", rec.plugin.Info().Name, "error", err)
 		}
-		log.Printf("kernel: plugin %s stopped", rec.plugin.Info().Name)
+		logger.With("component", "kernel").Info("plugin stopped", "plugin", rec.plugin.Info().Name)
 	}
 
 	k.cancel()
 
 	k.extPoints.Execute(k.ctx, "kernel.post_stop", nil)
 
-	close(k.done)
-	log.Println("kernel: shutdown complete")
+	k.closeOnce.Do(func() {
+		close(k.done)
+	})
+	slog.Info("kernel: shutdown complete")
 	return nil
 }
 
@@ -308,7 +312,7 @@ func (k *Kernel) Run() error {
 
 	select {
 	case sig := <-sigCh:
-		log.Printf("kernel: received signal %v", sig)
+		slog.Info("kernel: received signal", "signal", sig.String())
 	case <-k.done:
 	}
 

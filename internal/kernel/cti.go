@@ -2,10 +2,11 @@ package kernel
 
 import (
 	"context"
-	"log"
 	"math"
 	"sync"
 	"time"
+
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type CTIModule struct {
@@ -50,14 +51,14 @@ func (m *CTIModule) Init(ctx context.Context, k *Kernel) error {
 func (m *CTIModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
 	go m.updateLoop()
-	log.Printf("cti: started (μ=%.2f)", m.coefficient)
+	logger.With("component", "cti").Info("started", "coefficient", m.coefficient)
 	return nil
 }
 
 func (m *CTIModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.state = PluginStopped
-	log.Println("cti: stopped")
+	logger.With("component", "cti").Info("stopped")
 	return nil
 }
 
@@ -101,7 +102,7 @@ func (m *CTIModule) updateCoefficient() {
 	m.coefficient = math.Max(0.60, base-threatPenalty)
 
 	m.lastUpdate = time.Now()
-	log.Printf("cti: coefficient updated to μ=%.4f (active threats: %d)", m.coefficient, m.activeThreats)
+	logger.With("component", "cti").Info("coefficient updated", "coefficient", m.coefficient, "active_threats", m.activeThreats)
 }
 
 func (m *CTIModule) GetCoefficient() float64 {

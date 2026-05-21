@@ -2,9 +2,10 @@ package kernel
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
+
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type AgentRecord struct {
@@ -14,6 +15,7 @@ type AgentRecord struct {
 	LastSeen    time.Time
 	Registered  time.Time
 	Connections int64
+	Active      bool
 }
 
 type HeartbeatModule struct {
@@ -56,14 +58,14 @@ func (m *HeartbeatModule) Init(ctx context.Context, k *Kernel) error {
 func (m *HeartbeatModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
 	go m.monitorLoop()
-	log.Println("heartbeat: started (timeout:", m.timeout, ")")
+	logger.With("component", "heartbeat").Info("started", "timeout", m.timeout)
 	return nil
 }
 
 func (m *HeartbeatModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.state = PluginStopped
-	log.Println("heartbeat: stopped")
+	logger.With("component", "heartbeat").Info("stopped")
 	return nil
 }
 
@@ -82,12 +84,14 @@ func (m *HeartbeatModule) RecordHeartbeat(hostID string) {
 		agent = &AgentRecord{
 			HostID:     hostID,
 			Registered: time.Now(),
+			Active:     true,
 		}
 		m.agents[hostID] = agent
 	}
 
 	agent.LastSeen = time.Now()
 	agent.Connections++
+	agent.Active = true
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
 		Topic:   "agent.heartbeat",
@@ -110,6 +114,7 @@ func (m *HeartbeatModule) RegisterAgent(hostID, hostname, version string) {
 		Version:    version,
 		LastSeen:   time.Now(),
 		Registered: time.Now(),
+		Active:     true,
 	}
 
 	if m.kernel != nil {
@@ -120,7 +125,7 @@ func (m *HeartbeatModule) RegisterAgent(hostID, hostname, version string) {
 		})
 	}
 
-	log.Printf("heartbeat: agent %s (%s) registered", hostID, hostname)
+	logger.With("component", "heartbeat").Info("agent registered", "host_id", hostID, "hostname", hostname)
 }
 
 func (m *HeartbeatModule) GetAgent(hostID string) *AgentRecord {
@@ -148,7 +153,7 @@ func (m *HeartbeatModule) IsAlive(hostID string) bool {
 	if !ok {
 		return false
 	}
-	return time.Since(agent.LastSeen) < m.timeout
+	return agent.Active && time.Since(agent.LastSeen) < m.timeout
 }
 
 func (m *HeartbeatModule) monitorLoop() {
@@ -182,10 +187,12 @@ func (m *HeartbeatModule) checkTimeouts() {
 			Payload: id,
 			Source:  "heartbeat",
 		})
-		log.Printf("heartbeat: agent %s timed out", id)
+		logger.With("component", "heartbeat").Warn("agent timed out", "host_id", id)
 
 		m.mu.Lock()
-		delete(m.agents, id)
+		if agent, ok := m.agents[id]; ok {
+			agent.Active = false
+		}
 		m.mu.Unlock()
 	}
 }

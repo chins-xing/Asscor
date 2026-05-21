@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -11,7 +12,42 @@ import (
 	"github.com/argus-security/argus/internal/model"
 )
 
-// ===== OSV-Scanner Adapter (SC-009, P2) =====
+type osvResult struct {
+	Results []osvPackageResult `json:"results"`
+}
+
+type osvPackageResult struct {
+	Package      osvPackage      `json:"package"`
+	Source       osvSource       `json:"source"`
+	Vulnerabilities []osvVuln    `json:"vulnerabilities"`
+}
+
+type osvPackage struct {
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Ecosystem string `json:"ecosystem"`
+}
+
+type osvSource struct {
+	Path string `json:"path"`
+	Type string `json:"type"`
+}
+
+type osvVuln struct {
+	ID      string   `json:"id"`
+	Summary string   `json:"summary"`
+	Details string   `json:"details"`
+	Aliases []string `json:"aliases"`
+	Severity []osvSeverity `json:"severity"`
+	DatabaseSpecific struct {
+		URL string `json:"url"`
+	} `json:"database_specific"`
+}
+
+type osvSeverity struct {
+	Type  string `json:"type"`
+	Score string `json:"score"`
+}
 
 type OSVScannerAdapter struct {
 	adapter.BaseAdapter
@@ -37,6 +73,9 @@ func (o *OSVScannerAdapter) Fetch(ctx context.Context, config map[string]string)
 	cmd := exec.CommandContext(ctx, osvPath, "--json", scanPath)
 	out, err := cmd.Output()
 	if err != nil {
+		if len(out) > 0 {
+			return out, nil
+		}
 		return nil, fmt.Errorf("osv-scanner execution failed: %w", err)
 	}
 	return out, nil
@@ -44,29 +83,92 @@ func (o *OSVScannerAdapter) Fetch(ctx context.Context, config map[string]string)
 
 func (o *OSVScannerAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) {
 	now := time.Now()
-	hasOutput := len(raw) > 0
 
-	vulnCount := 0
-	if hasOutput {
-		lower := strings.ToLower(string(raw))
-		vulnCount = strings.Count(lower, `"id":`)
+	var result osvResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		hasOutput := len(raw) > 0
+		vulnCount := 0
+		if hasOutput {
+			vulnCount = strings.Count(strings.ToLower(string(raw)), `"id":`)
+		}
+		return []*adapter.NormalizedFinding{{
+			ID:          "OSV-SCANNER-RESULT",
+			Source:      "osv_scanner",
+			ToolName:    "OSV-Scanner",
+			Timestamp:   now,
+			FindingType: adapter.FindingVulnerability,
+			Severity:    map[bool]adapter.Severity{true: adapter.SeverityInfo, false: adapter.SeverityHigh}[vulnCount == 0],
+			Title:       "OSV-Scanner dependency scan",
+			Passed:      vulnCount == 0,
+			Detail:      fmt.Sprintf("OSV-Scanner completed, %d vulnerabilities found", vulnCount),
+			Domain:      model.DomainAttackSurface,
+			DelegatedTo: "osv_scanner",
+		}}, nil
 	}
 
-	passed := vulnCount == 0
+	totalVulns := 0
+	var findings []*adapter.NormalizedFinding
 
-	return []*adapter.NormalizedFinding{{
-		ID:          "OSV-SCANNER-RESULT",
-		Source:      "osv_scanner",
-		ToolName:    "OSV-Scanner",
-		Timestamp:   now,
-		FindingType: adapter.FindingVulnerability,
-		Severity:    map[bool]adapter.Severity{true: adapter.SeverityInfo, false: adapter.SeverityHigh}[passed],
-		Title:       "OSV-Scanner dependency scan",
-		Passed:      passed,
-		Detail:      fmt.Sprintf("OSV-Scanner completed, %d vulnerabilities found", vulnCount),
-		Domain:      model.DomainAttackSurface,
-		DelegatedTo: "osv_scanner",
-	}}, nil
+	for _, pkg := range result.Results {
+		for _, vuln := range pkg.Vulnerabilities {
+			totalVulns++
+
+			cveID := vuln.ID
+			for _, alias := range vuln.Aliases {
+				if strings.HasPrefix(alias, "CVE-") {
+					cveID = alias
+					break
+				}
+			}
+
+			sev := adapter.SeverityMedium
+			for _, s := range vuln.Severity {
+				if strings.HasPrefix(s.Type, "CVSS") {
+					if strings.Contains(s.Score, "CRITICAL") {
+						sev = adapter.SeverityCritical
+					} else if strings.Contains(s.Score, "HIGH") {
+						sev = adapter.SeverityHigh
+					}
+				}
+			}
+
+			findings = append(findings, &adapter.NormalizedFinding{
+				ID:          vuln.ID,
+				Source:      "osv_scanner",
+				ToolName:    "OSV-Scanner",
+				Timestamp:   now,
+				FindingType: adapter.FindingVulnerability,
+				Severity:    sev,
+				Title:       vuln.Summary,
+				Description: vuln.Details,
+				Resource:    fmt.Sprintf("%s@%s (%s)", pkg.Package.Name, pkg.Package.Version, pkg.Package.Ecosystem),
+				CVE:         cveID,
+				Reference:   vuln.DatabaseSpecific.URL,
+				Passed:      false,
+				Detail:      fmt.Sprintf("Vulnerability %s in %s@%s", vuln.ID, pkg.Package.Name, pkg.Package.Version),
+				Domain:      model.DomainAttackSurface,
+				DelegatedTo: "osv_scanner",
+			})
+		}
+	}
+
+	if totalVulns == 0 {
+		findings = append(findings, &adapter.NormalizedFinding{
+			ID:          "OSV-SCANNER-RESULT",
+			Source:      "osv_scanner",
+			ToolName:    "OSV-Scanner",
+			Timestamp:   now,
+			FindingType: adapter.FindingVulnerability,
+			Severity:    adapter.SeverityInfo,
+			Title:       "OSV-Scanner dependency scan",
+			Passed:      true,
+			Detail:      "OSV-Scanner completed, no vulnerabilities found",
+			Domain:      model.DomainAttackSurface,
+			DelegatedTo: "osv_scanner",
+		})
+	}
+
+	return findings, nil
 }
 
 func (o *OSVScannerAdapter) Map(findings []*adapter.NormalizedFinding) []*adapter.NormalizedFinding {

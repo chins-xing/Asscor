@@ -2,12 +2,13 @@ package kernel
 
 import (
 	"context"
-	"log"
 	"math"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type ATTACKTactic struct {
@@ -167,14 +168,14 @@ func (m *ATTACKModule) Init(ctx context.Context, k *Kernel) error {
 
 func (m *ATTACKModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
-	log.Println("attck: started, ATT&CK", m.attckVersion)
+	logger.With("component", "attck").Info("started", "version", m.attckVersion)
 	return nil
 }
 
 func (m *ATTACKModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.state = PluginStopped
-	log.Println("attck: stopped")
+	logger.With("component", "attck").Info("stopped")
 	return nil
 }
 

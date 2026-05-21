@@ -8,13 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"runtime"
 	"sync"
 	"time"
 
 	apiv1 "github.com/argus-security/argus/api/v1"
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type ctxKey string
@@ -97,7 +98,7 @@ func (s *Server) Start() error {
 	}
 
 	s.listener = lis
-	log.Printf("grpc: server listening on %s (mTLS: %v)", s.cfg.ListenAddr, s.cfg.TLSConfig != nil)
+	logger.With("component", "grpc").Info("server listening", "addr", s.cfg.ListenAddr, "mtls", s.cfg.TLSConfig != nil)
 
 	go s.acceptLoop()
 
@@ -118,7 +119,7 @@ func (s *Server) acceptLoop() {
 			case <-s.ctx.Done():
 				return
 			default:
-				log.Printf("grpc: accept error: %v", err)
+				logger.With("component", "grpc").Error("accept error", "error", err)
 				continue
 			}
 		}
@@ -145,8 +146,7 @@ func (s *Server) handleConn(conn net.Conn) {
 	defer func() {
 		conn.Close()
 		if r := recover(); r != nil {
-			log.Printf("grpc: panic recovered from %s: %v\n%s",
-				conn.RemoteAddr(), r, stackTrace(4096))
+			slog.Error("grpc: panic recovered", "remote", conn.RemoteAddr(), "panic", r, "stack", stackTrace(4096))
 		}
 	}()
 
@@ -179,7 +179,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		service, method, payload, err := s.codec.ReadRequest(io.LimitReader(br, maxPayload))
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
-				log.Printf("grpc: read error: %v", err)
+				logger.With("component", "grpc").Warn("read error", "error", err)
 			}
 			return
 		}
@@ -195,13 +195,13 @@ func (s *Server) handleConn(conn net.Conn) {
 
 		if err != nil {
 			if werr := s.codec.WriteError(conn, err); werr != nil {
-				log.Printf("grpc: write error response: %v (original: %v)", werr, err)
+				logger.With("component", "grpc").Error("write error response", "write_error", werr, "original_error", err)
 			}
 			continue
 		}
 
 		if err := s.codec.WriteResponse(conn, respPayload); err != nil {
-			log.Printf("grpc: write error: %v", err)
+			logger.With("component", "grpc").Error("write error", "error", err)
 			return
 		}
 	}

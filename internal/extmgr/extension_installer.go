@@ -7,13 +7,14 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type DownloadStrategy interface {
@@ -95,7 +96,7 @@ func (d *gitDownloader) Fetch(spec ExtensionSpec, dest string) (string, error) {
 		return "", fmt.Errorf("git clone %s: %w\nstderr: %s", spec.Source.URL, err, stderr.String())
 	}
 
-	log.Printf("[extmgr] cloned %s from %s", spec.ID, spec.Source.URL)
+	logger.With("component", "extmgr").Info("cloned extension", "extension_id", spec.ID, "source", spec.Source.URL)
 	return cloneTarget, nil
 }
 
@@ -226,7 +227,7 @@ func (i *ExtensionInstaller) Install(spec ExtensionSpec) (string, error) {
 	spec.InstallTime = time.Now()
 	spec.State = ExtStateInstalled
 
-	log.Printf("[extmgr] installed extension %s v%s to %s", spec.ID, spec.Version, installDir)
+	logger.With("component", "extmgr").Info("installed extension", "extension_id", spec.ID, "version", spec.Version, "dir", installDir)
 	return installDir, nil
 }
 

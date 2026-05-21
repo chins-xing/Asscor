@@ -3,10 +3,11 @@ package kernel
 import (
 	"context"
 	"fmt"
-	"log"
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type WorkerPool struct {
@@ -56,7 +57,7 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 		defer p.wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("workerpool: panic recovered: %v", r)
+				logger.With("component", "workerpool").Error("panic recovered", "panic", r)
 				p.metrics.mu.Lock()
 				p.metrics.totalFailed++
 				p.metrics.mu.Unlock()
@@ -71,7 +72,7 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 			go func() {
 				defer func() {
 					if r := recover(); r != nil {
-						log.Printf("workerpool: task panic recovered: %v", r)
+						logger.With("component", "workerpool").Error("task panic recovered", "panic", r)
 						done <- fmt.Errorf("panic: %v", r)
 					}
 				}()
@@ -93,7 +94,7 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 				p.metrics.mu.Lock()
 				p.metrics.totalTimeout++
 				p.metrics.mu.Unlock()
-				log.Printf("workerpool: task timed out after %v", timeout)
+				logger.With("component", "workerpool").Warn("task timed out", "timeout", timeout)
 				go func() { <-done }()
 			}
 		case <-p.ctx.Done():
@@ -202,7 +203,7 @@ func (m *ConcurrencyModule) Init(ctx context.Context, k *Kernel) error {
 
 func (m *ConcurrencyModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
-	log.Printf("concurrency: started with max %d workers", m.workerPool.MaxConcurrency())
+	logger.With("component", "concurrency").Info("started", "max_workers", m.workerPool.MaxConcurrency())
 	return nil
 }
 
@@ -210,7 +211,7 @@ func (m *ConcurrencyModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.workerPool.Shutdown()
 	m.state = PluginStopped
-	log.Println("concurrency: stopped")
+	logger.With("component", "concurrency").Info("stopped")
 	return nil
 }
 

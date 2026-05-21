@@ -107,7 +107,7 @@ func (n *NucleiAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) 
 
 		var item nucleiResultItem
 		if err := json.Unmarshal([]byte(line), &item); err != nil {
-			adapter.LogWarn("nuclei jsonl parse skipped: %v", err)
+			adapter.LogWarn("nuclei jsonl parse skipped", "error", err)
 			continue
 		}
 

@@ -3,11 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 
 	"github.com/argus-security/argus/internal/agent"
+	"github.com/argus-security/argus/internal/logger"
 	"github.com/argus-security/argus/internal/version"
 )
 
@@ -17,13 +17,23 @@ func main() {
 	hostID := flag.String("host-id", "", "agent host identifier (default: hostname)")
 	tlsEnabled := flag.Bool("tls", false, "enable mTLS connection")
 	certDir := flag.String("cert-dir", "certs", "TLS certificate directory")
+	logFormat := flag.String("log-format", "json", "log format: json, text")
+	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
+	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
 	flag.Parse()
+
+	logger.Init(logger.Config{
+		Format: *logFormat,
+		Level:  *logLevel,
+		Output: *logOutput,
+	})
+	log := logger.With("component", "agent")
 
 	cfg := agent.DefaultConfig()
 
 	if err := loadConfigFile(*configPath, &cfg); err != nil {
 		if !os.IsNotExist(err) {
-			log.Printf("agent: warning: cannot load config %s: %v", *configPath, err)
+			log.Warn("cannot load config", "path", *configPath, "error", err)
 		}
 	}
 
@@ -47,7 +57,7 @@ func main() {
 		cfg.Hostname = hostname
 	}
 
-	log.Printf("agent: starting (ARGUS %s, SSAM %s) — %s @ %s", version.ARGUSVersion, version.SSAMVersion, cfg.HostID, cfg.KernelAddr)
+	log.Info("starting agent", "version", version.ARGUSVersion, "ssam_version", version.SSAMVersion, "host_id", cfg.HostID, "kernel_addr", cfg.KernelAddr)
 
 	agt := agent.NewAgent(cfg)
 	if err := agt.Run(); err != nil {
@@ -55,7 +65,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Println("agent: stopped")
+	log.Info("agent stopped")
 }
 
 func loadConfigFile(path string, cfg *agent.AgentConfig) error {

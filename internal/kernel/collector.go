@@ -2,12 +2,13 @@ package kernel
 
 import (
 	"context"
-	"log"
+	"encoding/json"
 	"os"
 	"sync"
 	"time"
 
 	apiv1 "github.com/argus-security/argus/api/v1"
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type LogCollectorModule struct {
@@ -54,7 +55,7 @@ func (m *LogCollectorModule) Init(ctx context.Context, k *Kernel) error {
 
 func (m *LogCollectorModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
-	log.Println("log_collector: started, writing to", m.logPath)
+	logger.With("component", "log_collector").Info("started", "path", m.logPath)
 	return nil
 }
 
@@ -66,7 +67,7 @@ func (m *LogCollectorModule) Stop(ctx context.Context) error {
 	}
 	m.mu.Unlock()
 	m.state = PluginStopped
-	log.Println("log_collector: stopped")
+	logger.With("component", "log_collector").Info("stopped")
 	return nil
 }
 
@@ -84,9 +85,20 @@ func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
 		return nil
 	}
 
-	ts := time.Unix(entry.Timestamp, 0).Format(time.RFC3339)
-	line := ts + " [" + entry.Level + "] " + entry.HostId + ": " + entry.Message + "\n"
-	_, err := m.writer.WriteString(line)
+	record := map[string]interface{}{
+		"timestamp": time.Unix(entry.Timestamp, 0).Format(time.RFC3339Nano),
+		"level":     entry.Level,
+		"host_id":   entry.HostId,
+		"message":   entry.Message,
+		"source":    "agent",
+	}
+
+	data, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	_, err = m.writer.Write(data)
 	return err
 }
 
@@ -100,9 +112,20 @@ func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
 
 	var buf []byte
 	for _, entry := range entries {
-		ts := time.Unix(entry.Timestamp, 0).Format(time.RFC3339)
-		line := ts + " [" + entry.Level + "] " + entry.HostId + ": " + entry.Message + "\n"
-		buf = append(buf, []byte(line)...)
+		record := map[string]interface{}{
+			"timestamp": time.Unix(entry.Timestamp, 0).Format(time.RFC3339Nano),
+			"level":     entry.Level,
+			"host_id":   entry.HostId,
+			"message":   entry.Message,
+			"source":    "agent",
+		}
+
+		data, err := json.Marshal(record)
+		if err != nil {
+			continue
+		}
+		data = append(data, '\n')
+		buf = append(buf, data...)
 	}
 
 	_, err := m.writer.Write(buf)

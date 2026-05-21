@@ -5,9 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"log"
 
 	apiv1 "github.com/argus-security/argus/api/v1"
+	"github.com/argus-security/argus/internal/logger"
 	"github.com/argus-security/argus/internal/model"
 )
 
@@ -36,7 +36,7 @@ func NewKernelServiceImpl(
 }
 
 func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterRequest) (*apiv1.RegisterResponse, error) {
-	log.Printf("kernel: register request from %s (%s) v%s", req.HostId, req.Hostname, req.Version)
+	logger.With("component", "kernel").Info("register request", "host_id", req.HostId, "hostname", req.Hostname, "version", req.Version)
 
 	if req.HostId == "" {
 		return &apiv1.RegisterResponse{
@@ -64,7 +64,7 @@ func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterReq
 }
 
 func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatRequest) (*apiv1.HeartbeatResponse, error) {
-	log.Printf("kernel: heartbeat from %s (result=%v, assessor=%v)", req.HostId, req.Result != nil, s.assessor != nil)
+	logger.With("component", "kernel").Info("heartbeat received", "host_id", req.HostId, "has_result", req.Result != nil, "has_assessor", s.assessor != nil)
 
 	if s.heartbeat != nil {
 		s.heartbeat.RecordHeartbeat(req.HostId)
@@ -73,7 +73,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 	var assessmentResult *apiv1.AssessmentResult
 
 	if req.Result != nil && s.assessor != nil {
-		log.Printf("kernel: processing %d check results from %s", len(req.Result.Checks), req.HostId)
+		logger.With("component", "kernel").Info("processing check results", "count", len(req.Result.Checks), "host_id", req.HostId)
 
 		checkResults := make([]model.CheckResult, 0, len(req.Result.Checks))
 		for _, c := range req.Result.Checks {
@@ -96,8 +96,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		}
 
 		result := s.assessor.EvaluateFromResults(req.HostId, hostname, checkResults)
-		log.Printf("kernel: assessment result for %s: score=%.2f acceptable=%v checks=%d",
-			req.HostId, result.FinalScore, result.Acceptable, len(result.Checks))
+		logger.With("component", "kernel").Info("assessment result", "host_id", req.HostId, "score", result.FinalScore, "acceptable", result.Acceptable, "checks", len(result.Checks))
 
 		assessmentResult = convertAssessmentResult(result)
 	}

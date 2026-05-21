@@ -3,11 +3,12 @@ package engine
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/argus-security/argus/internal/logger"
 
 	"github.com/argus-security/argus/internal/adapter"
 	"github.com/argus-security/argus/internal/checks"
@@ -69,7 +70,7 @@ func (a *Assessor) Assess() *model.AssessmentResult {
 			result.Checks = append(result.Checks, f.ToCheckResult())
 		}
 		if r.Error != nil {
-			log.Printf("[assessor] adapter %s failed: %v", r.AdapterID, r.Error)
+			logger.With("component", "assessor").Error("adapter failed", "adapter_id", r.AdapterID, "error", r.Error)
 			result.Checks = append(result.Checks, model.CheckResult{
 				CheckID: "ADAPTER-" + r.AdapterID,
 				Domain:  "attack_surface",
@@ -120,12 +121,7 @@ func (a *Assessor) Assess() *model.AssessmentResult {
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostEdge, result)
 
-	if result.ThreatCoeff == 0 {
-		result.ThreatCoeff = a.cfg.ThreatCoeff
-	}
-	if result.SPCScore == 0 {
-		result.SPCScore = 1.0
-	}
+	a.ensureDefaults(result)
 
 	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
 	result.Acceptable = result.FinalScore >= result.Threshold
@@ -147,6 +143,15 @@ func (a *Assessor) buildEmptyResult(result *model.AssessmentResult) *model.Asses
 	result.ThreatCoeff = a.cfg.ThreatCoeff
 	result.SPCScore = 1.0
 	return result
+}
+
+func (a *Assessor) ensureDefaults(result *model.AssessmentResult) {
+	if result.ThreatCoeff == 0 {
+		result.ThreatCoeff = a.cfg.ThreatCoeff
+	}
+	if result.SPCScore == 0 {
+		result.SPCScore = 1.0
+	}
 }
 
 func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
@@ -174,12 +179,7 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostEdge, result)
 
-	if result.ThreatCoeff == 0 {
-		result.ThreatCoeff = a.cfg.ThreatCoeff
-	}
-	if result.SPCScore == 0 {
-		result.SPCScore = 1.0
-	}
+	a.ensureDefaults(result)
 
 	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
 	result.Acceptable = result.FinalScore >= result.Threshold
@@ -291,8 +291,20 @@ func (a *Assessor) computeDynamicDomainScores(result *model.AssessmentResult) *m
 
 func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 	localFactors := make(map[string]float64)
-	for id := range model.ListEdgeFactors() {
-		localFactors[model.ListEdgeFactors()[id].ID] = 1.0
+	for _, ef := range model.ListEdgeFactors() {
+		localFactors[ef.ID] = 1.0
+	}
+
+	customFactors := a.cfg.EdgeFactorsCustom
+	if len(customFactors) == 0 {
+		customFactors = map[string]float64{
+			"EF-002FA":     a.cfg.EdgeFactors.TwoFactorFailure,
+			"EF-SYNCOOKIE": 0.75,
+			"EF-SELINUX":   0.80,
+			"EF-APPARMOR":  0.82,
+			"EF-NO-SIEM":   0.90,
+			"EF-NO-IDS":    0.88,
+		}
 	}
 
 	for _, check := range result.Checks {
@@ -301,9 +313,24 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		}
 		switch check.CheckID {
 		case "EF-001":
-			localFactors["EF-002FA"] = a.cfg.EdgeFactors.TwoFactorFailure
+			if v, ok := customFactors["EF-002FA"]; ok {
+				localFactors["EF-002FA"] = v
+			} else {
+				localFactors["EF-002FA"] = a.cfg.EdgeFactors.TwoFactorFailure
+			}
 		case "EF-002":
-			localFactors["EF-002FA"] = 0.82
+			if v, ok := customFactors["EF-3FA"]; ok {
+				localFactors["EF-3FA"] = v
+			} else {
+				localFactors["EF-3FA"] = 0.82
+			}
+			if v, ok := localFactors["EF-002FA"]; !ok || v > 0.82 {
+				localFactors["EF-002FA"] = 0.82
+			}
+		default:
+			if penalty, ok := customFactors[check.CheckID]; ok && penalty < 1.0 {
+				localFactors[check.CheckID] = penalty
+			}
 		}
 	}
 
@@ -325,13 +352,6 @@ func (a *Assessor) checkPassed(id string, result *model.AssessmentResult) (bool,
 
 func (a *Assessor) computeDynamicFinalScore(scores *model.DynamicDomainScores, result *model.AssessmentResult) float64 {
 	baseScore := a.scoringEngine.ComputeWeightedSum(scores)
-
-	if result.ThreatCoeff == 0 {
-		result.ThreatCoeff = a.cfg.ThreatCoeff
-	}
-	if result.SPCScore == 0 {
-		result.SPCScore = 1.0
-	}
 
 	baseScore *= result.ThreatCoeff
 	baseScore *= result.SPCScore
@@ -479,7 +499,7 @@ func (a *Assessor) ReloadWeights(cfg *config.Config) {
 	for domain, val := range cfg.ExtensionWeights {
 		a.scoringEngine.SetWeight(domain, val)
 	}
-	log.Println("[assessor] weights reloaded from config")
+	logger.With("component", "assessor").Info("weights reloaded from config")
 }
 
 func (a *Assessor) RegisterHook(id string, phase AssessmentPhase, hook AssessmentHook, priority int) {

@@ -3,7 +3,6 @@ package extmgr
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/argus-security/argus/internal/logger"
 	"github.com/argus-security/argus/internal/model"
 )
 
@@ -78,14 +78,22 @@ func (e *ExtensionExecutor) isCommandAllowed(cmdPath string) bool {
 		return false
 	}
 
+	base := filepath.Base(cmdPath)
+	if allowed, exists := e.whitelist[base]; exists && allowed {
+		return true
+	}
+
+	if allowed, exists := e.whitelist[cmdPath]; exists && allowed {
+		return true
+	}
+
 	resolvedPath, err := filepath.EvalSymlinks(cmdPath)
 	if err != nil {
-		log.Printf("extmgr: failed to resolve symlink for %s: %v", cmdPath, err)
 		return false
 	}
 
-	base := filepath.Base(resolvedPath)
-	if allowed, exists := e.whitelist[base]; exists && allowed {
+	resolvedBase := filepath.Base(resolvedPath)
+	if allowed, exists := e.whitelist[resolvedBase]; exists && allowed {
 		return true
 	}
 
@@ -154,7 +162,7 @@ func (e *ExtensionExecutor) Execute(ctx context.Context, spec ExtensionSpec, arg
 	}
 
 	result.Success = true
-	log.Printf("[extmgr] executed extension %s in %v", spec.ID, result.Duration)
+	logger.With("component", "extmgr").Info("executed extension", "extension_id", spec.ID, "duration", result.Duration)
 	return result, nil
 }
 

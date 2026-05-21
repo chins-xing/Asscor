@@ -2,18 +2,19 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/argus-security/argus/internal/logger"
 	"github.com/argus-security/argus/internal/model"
 )
 
 type Config struct {
 	Weights      model.Weights
 	Threshold    float64
-	EdgeFactors  model.EdgeFactors
+	EdgeFactors       model.EdgeFactors
+	EdgeFactorsCustom map[string]float64
 	ThreatCoeff  float64
 	SPCEnabled   bool
 	ComplianceFramework string
@@ -85,6 +86,16 @@ func Default() *Config {
 				BaseURL:        "https://services.nvd.nist.gov/rest/json/cves/2.0",
 				APIKey:         "",
 				SyncIntervalH:  6,
+			},
+			EPSS: model.EPSSConfig{
+				Enabled:       true,
+				DataURL:       "https://epss.cyentia.com/epss_scores-current.csv.gz",
+				SyncIntervalH: 24,
+			},
+			CISAKEV: model.CISAKEVConfig{
+				Enabled:       true,
+				CatalogURL:    "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+				SyncIntervalH: 24,
 			},
 			MISP: model.MISPConfig{
 				BaseURL:        "",
@@ -285,9 +296,39 @@ func Parse(content string) (*Config, error) {
 		}
 		if envKey := os.Getenv("NVD_API_KEY"); envKey != "" {
 			cfg.SPC.NVD.APIKey = envKey
-			log.Printf("config: NVD API key loaded from environment variable (NVD_API_KEY)")
+			logger.With("component", "config").Info("NVD API key loaded from environment variable", "source", "NVD_API_KEY")
 		} else if cfg.SPC.NVD.APIKey != "" {
-			log.Printf("config: NVD API key loaded from configuration file")
+			logger.With("component", "config").Info("NVD API key loaded from configuration file")
+		}
+	}
+
+	if sec, ok := sections["spc.epss"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "enabled":
+				cfg.SPC.EPSS.Enabled = strings.EqualFold(v, "true") || v == "1"
+			case "data_url":
+				cfg.SPC.EPSS.DataURL = v
+			case "sync_interval_h":
+				if i, err := strconv.Atoi(v); err == nil {
+					cfg.SPC.EPSS.SyncIntervalH = i
+				}
+			}
+		}
+	}
+
+	if sec, ok := sections["spc.cisa_kev"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "enabled":
+				cfg.SPC.CISAKEV.Enabled = strings.EqualFold(v, "true") || v == "1"
+			case "catalog_url":
+				cfg.SPC.CISAKEV.CatalogURL = v
+			case "sync_interval_h":
+				if i, err := strconv.Atoi(v); err == nil {
+					cfg.SPC.CISAKEV.SyncIntervalH = i
+				}
+			}
 		}
 	}
 
@@ -310,9 +351,9 @@ func Parse(content string) (*Config, error) {
 		}
 		if envKey := os.Getenv("MISP_API_KEY"); envKey != "" {
 			cfg.SPC.MISP.APIKey = envKey
-			log.Printf("config: MISP API key loaded from environment variable (MISP_API_KEY)")
+			logger.With("component", "config").Info("MISP API key loaded from environment variable", "source", "MISP_API_KEY")
 		} else if cfg.SPC.MISP.APIKey != "" {
-			log.Printf("config: MISP API key loaded from configuration file")
+			logger.With("component", "config").Info("MISP API key loaded from configuration file")
 		}
 	}
 
@@ -334,10 +375,14 @@ func Parse(content string) (*Config, error) {
 	cfg.Weights.Normalize()
 
 	if sec, ok := sections["edge_factors.custom"]; ok {
+		if cfg.EdgeFactorsCustom == nil {
+			cfg.EdgeFactorsCustom = make(map[string]float64)
+		}
 		for k, v := range sec {
 			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 && f < 1.0 {
 				model.SetEdgeFactorValue(k, f)
 				model.SetEdgeFactorActive(k, false)
+				cfg.EdgeFactorsCustom[k] = f
 			}
 		}
 	}

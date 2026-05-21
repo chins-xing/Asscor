@@ -146,6 +146,9 @@ func as002() model.CheckItem {
 			for i, p := range uniquePorts {
 				portStrs[i] = strconv.Itoa(p)
 			}
+			if len(uniquePorts) > 20 {
+				return false, fmt.Sprintf("监听端口过多(%d个，阈值20): [%s]", len(uniquePorts), strings.Join(portStrs, ", "))
+			}
 			return true, fmt.Sprintf("当前监听 %d 个端口: [%s]", len(uniquePorts), strings.Join(portStrs, ", "))
 		},
 	}

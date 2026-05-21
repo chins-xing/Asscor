@@ -3,9 +3,10 @@ package adapter
 import (
 	"context"
 	"fmt"
-	"log"
 	"sort"
 	"sync"
+
+	"github.com/argus-security/argus/internal/logger"
 )
 
 var registry = struct {
@@ -17,7 +18,7 @@ func Register(a Adapter) {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
 	if _, exists := registry.adapters[a.ID()]; exists {
-		log.Printf("[adapter] overwriting adapter %s", a.ID())
+		logger.With("component", "adapter").Warn("overwriting adapter", "adapter_id", a.ID())
 	}
 	registry.adapters[a.ID()] = a
 }
@@ -101,7 +102,7 @@ func (p *Pipeline) RunAll(ctx context.Context) []PipelineResult {
 
 			findings, err := ExecuteAdapter(ctx, adapter, p.config)
 			if err != nil {
-				log.Printf("[adapter] %s failed: %v", adapter.ID(), err)
+				logger.With("component", "adapter").Error("adapter execution failed", "adapter_id", adapter.ID(), "error", err)
 			}
 			resultsCh <- PipelineResult{
 				AdapterID:   adapter.ID(),

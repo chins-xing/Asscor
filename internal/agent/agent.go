@@ -7,12 +7,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"sync/atomic"
+
+	"github.com/argus-security/argus/internal/logger"
+	"github.com/argus-security/argus/internal/version"
 	"syscall"
 	"time"
 
@@ -44,7 +47,7 @@ func DefaultConfig() AgentConfig {
 		KernelAddr:       "localhost:50051",
 		HostID:           hostname,
 		Hostname:         hostname,
-		Version:          "1.2.0",
+		Version:          version.ARGUSVersion,
 		HeartbeatSec:     2,
 		CheckIntervalSec: 3600,
 		CheckTimeoutSec:  10,
@@ -72,11 +75,11 @@ func NewAgent(cfg AgentConfig) *Agent {
 	common.DefaultTimeout = time.Duration(cfg.CheckTimeoutSec) * time.Second
 
 	allChecks := checks.GetAll()
-	log.Printf("agent: loaded %d platform checks for %s/%s", len(allChecks), runtime.GOOS, runtime.GOARCH)
+	logger.With("component", "agent").Info("loaded platform checks", "count", len(allChecks), "os", runtime.GOOS, "arch", runtime.GOARCH)
 
 	hmacKeyConfigured := cfg.HMACKey != "" || os.Getenv("ARGUS_HMAC_KEY") != ""
 	if !hmacKeyConfigured {
-		log.Printf("agent: WARNING — HMAC key not configured. Remote commands will be REJECTED. Set ARGUS_HMAC_KEY environment variable or configure hmac_key in agent config.")
+		logger.With("component", "agent").Warn("HMAC key not configured, remote commands will be rejected")
 	}
 
 	return &Agent{
@@ -99,13 +102,13 @@ func (a *Agent) Run() error {
 
 	go func() {
 		<-sigCh
-		log.Println("agent: received shutdown signal")
+		logger.With("component", "agent").Info("received shutdown signal")
 		cancel()
 	}()
 
 	for a.running.Load() {
 		if err := a.runOnce(ctx); err != nil {
-			log.Printf("agent: session error: %v", err)
+			logger.With("component", "agent").Error("session error", "error", err)
 			a.sessionID = ""
 			if a.client != nil {
 				a.client.Close()
@@ -150,8 +153,7 @@ func (a *Agent) runOnce(ctx context.Context) error {
 		case <-timer.C:
 			if err := a.heartbeatCycle(); err != nil {
 				consecutiveErrors++
-				log.Printf("agent: cycle error (%d/%d): %v",
-					consecutiveErrors, a.cfg.MaxRetries, err)
+				logger.With("component", "agent").Error("cycle error", "consecutive", consecutiveErrors, "max_retries", a.cfg.MaxRetries, "error", err)
 				if consecutiveErrors >= a.cfg.MaxRetries {
 					return fmt.Errorf("max retries exceeded: %w", err)
 				}
@@ -174,16 +176,16 @@ func (a *Agent) connect() error {
 
 		caCert, err := os.ReadFile(filepath.Join(certDir, "ca.crt"))
 		if err != nil {
-			return fmt.Errorf("读取CA证书: %w", err)
+			return fmt.Errorf("read CA certificate: %w", err)
 		}
 		caPool := x509.NewCertPool()
 		if !caPool.AppendCertsFromPEM(caCert) {
-			return fmt.Errorf("解析CA证书失败")
+			return fmt.Errorf("failed to parse CA certificate")
 		}
 
 		agentCert, err := tls.LoadX509KeyPair(filepath.Join(certDir, "agent.crt"), filepath.Join(certDir, "agent.key"))
 		if err != nil {
-			return fmt.Errorf("加载Agent证书: %w", err)
+			return fmt.Errorf("load agent certificate: %w", err)
 		}
 
 		tlsConfig = &tls.Config{
@@ -199,7 +201,7 @@ func (a *Agent) connect() error {
 		a.client = nil
 		return err
 	}
-	log.Printf("agent: connected to kernel at %s (mTLS: %v)", a.cfg.KernelAddr, a.cfg.TLSEnabled)
+	logger.With("component", "agent").Info("connected to kernel", "addr", a.cfg.KernelAddr, "mtls", a.cfg.TLSEnabled)
 	return nil
 }
 
@@ -220,7 +222,7 @@ func (a *Agent) register() error {
 	}
 
 	a.sessionID = resp.SessionId
-	log.Printf("agent: registered — session=%s", a.sessionID)
+	logger.With("component", "agent").Info("registered", "session_id", a.sessionID)
 	return nil
 }
 
@@ -253,7 +255,7 @@ func (a *Agent) heartbeatCycle() error {
 	} else {
 		remaining := interval - elapsed
 		if remaining.Seconds() <= 60 || int(remaining.Seconds())%60 == 0 {
-			log.Printf("agent: next assessment in %s", remaining.Round(time.Second))
+			logger.With("component", "agent").Info("next assessment", "in", remaining.Round(time.Second))
 		}
 	}
 
@@ -276,7 +278,7 @@ func (a *Agent) heartbeatCycle() error {
 	}
 
 	if !heartbeatResp.Ok {
-		log.Printf("agent: heartbeat not ok, re-registering")
+		logger.With("component", "agent").Warn("heartbeat not ok, re-registering")
 		a.sessionID = ""
 		return fmt.Errorf("heartbeat rejected by kernel")
 	}
@@ -446,10 +448,10 @@ func (a *Agent) printAssessmentReport(result *apiv1.AssessmentResult) {
 	if total > 0 {
 		passRate = float64(passed) / float64(total) * 100.0
 	}
-	log.Printf("agent: assessment complete — %d/%d (%.1f%%) %s, next check in %s",
-		passed, total, passRate,
-		map[bool]string{true: "ACCEPTABLE", false: "FAILED"}[result.Acceptable],
-		time.Duration(a.cfg.CheckIntervalSec)*time.Second)
+	logger.With("component", "agent").Info("assessment complete",
+		"passed", passed, "total", total, "pass_rate", passRate,
+		"status", map[bool]string{true: "ACCEPTABLE", false: "FAILED"}[result.Acceptable],
+		"next_check", time.Duration(a.cfg.CheckIntervalSec)*time.Second)
 }
 
 func (a *Agent) executePendingCommands() {
@@ -457,13 +459,13 @@ func (a *Agent) executePendingCommands() {
 		return
 	}
 
-	log.Printf("agent: executing %d pending commands", len(a.pendingCmd))
+	logger.With("component", "agent").Info("executing pending commands", "count", len(a.pendingCmd))
 	for _, cmd := range a.pendingCmd {
 		if !a.verifyCommandSignature(cmd) {
-			log.Printf("agent: REJECTED command [%s]: HMAC signature verification failed", cmd.CommandId)
+			logger.With("component", "agent").Warn("command rejected: HMAC verification failed", "command_id", cmd.CommandId)
 			continue
 		}
-		log.Printf("agent: exec [%s]: %s", cmd.CommandId, cmd.Command)
+		logger.With("component", "agent").Info("executing command", "command_id", cmd.CommandId, "command", cmd.Command)
 		a.runCommand(cmd)
 	}
 	a.pendingCmd = nil
@@ -471,7 +473,7 @@ func (a *Agent) executePendingCommands() {
 
 func (a *Agent) verifyCommandSignature(cmd *apiv1.Command) bool {
 	if len(cmd.Signature) == 0 {
-		log.Printf("agent: command [%s] has no signature, rejecting", cmd.CommandId)
+		logger.With("component", "agent").Warn("command has no signature, rejecting", "command_id", cmd.CommandId)
 		return false
 	}
 
@@ -482,7 +484,7 @@ func (a *Agent) verifyCommandSignature(cmd *apiv1.Command) bool {
 	if hmacKey == "" {
 		if !a.hmacKeyWarned.Load() {
 			a.hmacKeyWarned.Store(true)
-			log.Printf("agent: SECURITY ALERT — HMAC key not configured. All remote commands will be rejected until ARGUS_HMAC_KEY is set.")
+			logger.With("component", "agent").Error("SECURITY ALERT: HMAC key not configured, all remote commands rejected")
 		}
 		return false
 	}
@@ -495,11 +497,35 @@ func (a *Agent) verifyCommandSignature(cmd *apiv1.Command) bool {
 }
 
 func (a *Agent) runChecks() []model.CheckResult {
-	results := make([]model.CheckResult, 0, len(a.checkers))
-	for _, check := range a.checkers {
-		result := check.Run()
-		results = append(results, result)
+	results := make([]model.CheckResult, len(a.checkers))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 10)
+
+	for i, check := range a.checkers {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int, c model.CheckItem) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			done := make(chan model.CheckResult, 1)
+			go func() {
+				done <- c.Run()
+			}()
+
+			select {
+			case r := <-done:
+				results[idx] = r
+			case <-time.After(60 * time.Second):
+				results[idx] = model.CheckResult{
+					CheckID: c.ID,
+					Passed:  false,
+					Detail:  "check timed out after 60s",
+				}
+			}
+		}(i, check)
 	}
+	wg.Wait()
 	return results
 }
 
@@ -509,28 +535,28 @@ func (a *Agent) runCommand(cmd *apiv1.Command) {
 	if !common.IsShellCommandAllowed(cmd.Command) {
 		name, args, ok := common.ParseCommand(cmd.Command)
 		if !ok {
-			log.Printf("agent: REJECTED command [%s]: %q not in allowlist", cmd.CommandId, cmd.Command)
+			logger.With("component", "agent").Warn("command rejected: not in allowlist", "command_id", cmd.CommandId, "command", cmd.Command)
 			return
 		}
 		output, err := common.RunCmdTimeout(timeout, name, args...)
 		if err != nil && output == "" {
-			log.Printf("agent: command [%s] failed: %v", cmd.CommandId, err)
+			logger.With("component", "agent").Error("command failed", "command_id", cmd.CommandId, "error", err)
 		} else if output != "" {
-			log.Printf("agent: command [%s] output: %s", cmd.CommandId, output)
+			logger.With("component", "agent").Info("command output", "command_id", cmd.CommandId, "output", output)
 		}
 		return
 	}
 
 	name, args, ok := common.ParseCommand(cmd.Command)
 	if !ok {
-		log.Printf("agent: REJECTED command [%s]: failed to parse %q", cmd.CommandId, cmd.Command)
+		logger.With("component", "agent").Warn("command rejected: failed to parse", "command_id", cmd.CommandId, "command", cmd.Command)
 		return
 	}
 	output, err := common.RunCmdTimeout(timeout, name, args...)
 	if err != nil && output == "" {
-		log.Printf("agent: command [%s] failed: %v", cmd.CommandId, err)
+		logger.With("component", "agent").Error("command failed", "command_id", cmd.CommandId, "error", err)
 	} else if output != "" {
-		log.Printf("agent: command [%s] output: %s", cmd.CommandId, output)
+		logger.With("component", "agent").Info("command output", "command_id", cmd.CommandId, "output", output)
 	}
 }
 

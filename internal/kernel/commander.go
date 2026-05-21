@@ -6,11 +6,12 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"log"
 	"os"
+	"path/filepath"
 	"sync"
 
 	apiv1 "github.com/argus-security/argus/api/v1"
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type CommanderModule struct {
@@ -48,8 +49,19 @@ func (m *CommanderModule) Init(ctx context.Context, k *Kernel) error {
 		key = os.Getenv("ARGUS_HMAC_KEY")
 	}
 	if key == "" {
-		key = randomHex(32)
-		log.Printf("commander: warning — no HMAC key configured, generated random key length=%d", len(key))
+		keyPath := filepath.Join(os.TempDir(), "argus-hmac-key")
+		savedKey, err := os.ReadFile(keyPath)
+		if err == nil && len(savedKey) > 0 {
+			key = string(savedKey)
+			logger.With("component", "commander").Info("loaded persisted HMAC key", "path", keyPath)
+		} else {
+			key = randomHex(32)
+			if err := os.WriteFile(keyPath, []byte(key), 0600); err != nil {
+				logger.With("component", "commander").Warn("failed to persist HMAC key", "path", keyPath, "error", err)
+			} else {
+				logger.With("component", "commander").Warn("no HMAC key configured, generated and persisted random key", "path", keyPath, "key_length", len(key))
+			}
+		}
 	}
 	m.hmacKey = []byte(key)
 
@@ -63,7 +75,7 @@ func (m *CommanderModule) Init(ctx context.Context, k *Kernel) error {
 func (m *CommanderModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
 	m.kernel.Bus().Subscribe("policy.action", "commander", m.onPolicyAction)
-	log.Println("commander: started")
+	logger.With("component", "commander").Info("started")
 	return nil
 }
 
@@ -71,7 +83,7 @@ func (m *CommanderModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.kernel.Bus().UnsubscribeAll("commander")
 	m.state = PluginStopped
-	log.Println("commander: stopped")
+	logger.With("component", "commander").Info("stopped")
 	return nil
 }
 
@@ -123,7 +135,7 @@ func (m *CommanderModule) AckCommand(hostID string, cmdID string, success bool, 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	log.Printf("commander: command %s for %s: success=%v output=%s", cmdID, hostID, success, output)
+	logger.With("component", "commander").Info("command executed", "command_id", cmdID, "host_id", hostID, "success", success)
 }
 
 func (m *CommanderModule) sign(cmdID, action string) []byte {

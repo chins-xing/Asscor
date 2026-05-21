@@ -137,17 +137,18 @@ func (e EdgeFactors) ActiveFactors() []float64 {
 }
 
 type AssessmentResult struct {
-	HostID       string            `json:"host_id"`
-	Hostname     string            `json:"hostname"`
-	Timestamp    time.Time         `json:"timestamp"`
-	FinalScore   float64           `json:"final_score"`
-	Acceptable   bool              `json:"acceptable"`
-	Threshold    float64           `json:"threshold"`
-	DomainScores DomainScores      `json:"domain_scores"`
-	EdgeFactors  EdgeFactors       `json:"edge_factors"`
-	ThreatCoeff  float64           `json:"threat_coefficient"`
-	SPCScore     float64           `json:"spc_score,omitempty"`
-	Checks       []CheckResult     `json:"checks"`
+	HostID             string            `json:"host_id"`
+	Hostname           string            `json:"hostname"`
+	Timestamp          time.Time         `json:"timestamp"`
+	FinalScore         float64           `json:"final_score"`
+	Acceptable         bool              `json:"acceptable"`
+	Threshold          float64           `json:"threshold"`
+	DomainScores       DomainScores      `json:"domain_scores"`
+	DomainWeightShift  map[string]float64 `json:"domain_weight_shift,omitempty"`
+	EdgeFactors        EdgeFactors       `json:"edge_factors"`
+	ThreatCoeff        float64           `json:"threat_coefficient"`
+	SPCScore           float64           `json:"spc_score,omitempty"`
+	Checks             []CheckResult     `json:"checks"`
 }
 
 type Weights struct {
@@ -191,8 +192,10 @@ type SPCConfig struct {
 	CacheRetentionDays int
 	FetchIntervalH     int
 
-	NVD NVConfig
-	MISP MISPConfig
+	NVD   NVConfig
+	EPSS  EPSSConfig
+	CISAKEV CISAKEVConfig
+	MISP  MISPConfig
 	OSCAL OSCALConfig
 }
 
@@ -200,6 +203,18 @@ type NVConfig struct {
 	BaseURL        string
 	APIKey         string
 	SyncIntervalH  int
+}
+
+type EPSSConfig struct {
+	Enabled       bool
+	DataURL       string
+	SyncIntervalH int
+}
+
+type CISAKEVConfig struct {
+	Enabled       bool
+	CatalogURL    string
+	SyncIntervalH int
 }
 
 type MISPConfig struct {

@@ -4,13 +4,14 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/argus-security/argus/internal/config"
 	"github.com/argus-security/argus/internal/kernel"
+	"github.com/argus-security/argus/internal/logger"
 	"github.com/argus-security/argus/internal/version"
 
 	_ "github.com/argus-security/argus/internal/checks"
@@ -21,16 +22,50 @@ func main() {
 	listenAddr := flag.String("listen", ":50051", "microkernel listen address")
 	noMTLS := flag.Bool("no-mtls", false, "disable mTLS (DEVELOPMENT ONLY — not for production)")
 	certDir := flag.String("cert-dir", "certs", "TLS certificate directory")
+	daemon := flag.Bool("daemon", false, "run as background daemon")
+	pidFile := flag.String("pid-file", "", "PID file path (default: argus-kernel.pid in current directory)")
+	logFormat := flag.String("log-format", "json", "log format: json, text")
+	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
+	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
 	flag.Parse()
 
+	logCfg := logger.Config{
+		Format: *logFormat,
+		Level:  *logLevel,
+		Output: *logOutput,
+	}
+	logger.Init(logCfg)
+	log := logger.With("component", "kernel")
+
+	if *daemon {
+		if err := daemonize(*pidFile); err != nil {
+			log.Error("failed to daemonize", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if *noMTLS {
-		log.Println("WARNING: mTLS is DISABLED — this mode is intended for development only, do not use in production")
+		log.Warn("mTLS is DISABLED — this mode is intended for development only, do not use in production")
 	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Printf("warning: cannot load config %s: %v, using defaults", *configPath, err)
+		log.Warn("cannot load config, using defaults", "path", *configPath, "error", err)
 		cfg = config.Default()
+	}
+
+	if cfgLogLevel := cfg.AdapterConfig["log.level"]; cfgLogLevel != "" && *logLevel == "info" {
+		logCfg.Level = cfgLogLevel
+		logger.Init(logCfg)
+	}
+	if cfgLogFormat := cfg.AdapterConfig["log.format"]; cfgLogFormat != "" && *logFormat == "json" {
+		logCfg.Format = cfgLogFormat
+		logger.Init(logCfg)
+	}
+	if cfgLogOutput := cfg.AdapterConfig["log.output"]; cfgLogOutput != "" && *logOutput == "stderr" {
+		logCfg.Output = cfgLogOutput
+		logger.Init(logCfg)
 	}
 
 	k := kernel.NewKernel()
@@ -40,7 +75,6 @@ func main() {
 	k.SetConfig("listen_addr", *listenAddr)
 	k.SetConfig("cert_dir", *certDir)
 
-	// inject interceptor config from INI into kernel config map
 	interceptorKeys := []string{
 		"rate_limit_enabled", "rate_limit_per_sec", "rate_limit_burst",
 		"circuit_breaker_enabled", "circuit_breaker_ratio",
@@ -68,7 +102,8 @@ func main() {
 
 	for _, p := range []kernel.Plugin{heartbeat, spc, cti, assessor, policy, commander, logCollector, persistence, concurrency, attck} {
 		if err := k.RegisterPlugin(p); err != nil {
-			log.Fatalf("register plugin: %v", err)
+			log.Error("register plugin failed", "error", err)
+			os.Exit(1)
 		}
 	}
 
@@ -92,25 +127,35 @@ func main() {
 	server.SetInterceptors(interceptors)
 
 	if interceptorCfg.RateLimitEnabled || interceptorCfg.CircuitBreakerEnabled {
-		log.Printf("interceptors: rate_limit=%v circuit_breaker=%v audit_log=%v",
-			interceptorCfg.RateLimitEnabled,
-			interceptorCfg.CircuitBreakerEnabled,
-			interceptorCfg.AuditLogEnabled)
+		log.Info("interceptors configured",
+			"rate_limit", interceptorCfg.RateLimitEnabled,
+			"circuit_breaker", interceptorCfg.CircuitBreakerEnabled,
+			"audit_log", interceptorCfg.AuditLogEnabled)
 	}
 
 	if err := k.Bootstrap(); err != nil {
-		log.Fatalf("kernel bootstrap: %v", err)
+		log.Error("kernel bootstrap failed", "error", err)
+		os.Exit(1)
 	}
 
 	if err := server.Start(); err != nil {
-		log.Fatalf("start microkernel server: %v", err)
+		log.Error("start microkernel server failed", "error", err)
+		os.Exit(1)
 	}
+
+	log.Info("ARGUS μKernel started",
+		"version", version.ARGUSVersion,
+		"ssam_version", version.SSAMVersion,
+		"listen", *listenAddr,
+		"mtls", !*noMTLS,
+		"plugins", len(k.ListPlugins()))
 
 	fmt.Println()
 	fmt.Println("ARGUS \u00b5Kernel")
 	fmt.Printf("  Framework: %s   SSAM: %s\n", version.ARGUSVersion, version.SSAMVersion)
 	fmt.Println()
 	fmt.Printf("  Listen:   %s (mTLS: %v)\n", *listenAddr, !*noMTLS)
+	fmt.Printf("  Log:      %s (%s) -> %s\n", *logFormat, *logLevel, *logOutput)
 	fmt.Printf("  Plugins:  %d loaded\n", len(k.ListPlugins()))
 	for _, info := range k.ListPlugins() {
 		fmt.Printf("    {%s} v%s — %s\n", info.Name, info.Version, info.Description)
@@ -120,75 +165,91 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh
-	log.Printf("kernel: received signal %v, shutting down", sig)
+	log.Info("shutting down", "signal", sig.String())
 	signal.Stop(sigCh)
 
 	server.Stop()
 	k.Shutdown()
+	log.Info("kernel stopped")
+}
+
+func daemonize(pidFilePath string) error {
+	if pidFilePath == "" {
+		pidFilePath = "argus-kernel.pid"
+	}
+
+	absPidFile, err := filepath.Abs(pidFilePath)
+	if err != nil {
+		return fmt.Errorf("resolve pid file path: %w", err)
+	}
+
+	return daemonizePlatform(absPidFile)
 }
 
 func setupTLS(certDir string) *tls.Config {
+	log := logger.With("component", "tls")
+
 	if err := os.MkdirAll(certDir, 0700); err != nil {
-		log.Printf("warning: cannot create cert dir %s: %v, starting without mTLS", certDir, err)
+		log.Warn("cannot create cert dir, starting without mTLS", "dir", certDir, "error", err)
 		return nil
 	}
 
-	caPath := certDir + "/ca.crt"
-	caKeyPath := certDir + "/ca.key"
-	serverCertPath := certDir + "/server.crt"
-	serverKeyPath := certDir + "/server.key"
+	caPath := filepath.Join(certDir, "ca.crt")
+	caKeyPath := filepath.Join(certDir, "ca.key")
+	serverCertPath := filepath.Join(certDir, "server.crt")
+	serverKeyPath := filepath.Join(certDir, "server.key")
 
 	caPair, err := kernel.LoadCertPair(caPath, caKeyPath)
 	if err != nil {
-		log.Printf("generating new CA certificate...")
+		log.Info("generating new CA certificate")
 		caPair, err = kernel.GenerateCA(kernel.DefaultCAConfig())
 		if err != nil {
-			log.Printf("warning: cannot generate CA: %v, starting without mTLS", err)
+			log.Warn("cannot generate CA, starting without mTLS", "error", err)
 			return nil
 		}
 		if err := os.WriteFile(caPath, caPair.CertPEM, 0600); err != nil {
-			log.Printf("warning: cannot write CA cert %s: %v, starting without mTLS", caPath, err)
+			log.Warn("cannot write CA cert, starting without mTLS", "path", caPath, "error", err)
 			return nil
 		}
 		if err := os.WriteFile(caKeyPath, caPair.KeyPEM, 0600); err != nil {
-			log.Printf("warning: cannot write CA key %s: %v, starting without mTLS", caKeyPath, err)
+			log.Warn("cannot write CA key, starting without mTLS", "path", caKeyPath, "error", err)
 			return nil
 		}
 	}
 
 	serverPair, err := kernel.LoadCertPair(serverCertPath, serverKeyPath)
 	if err != nil {
-		log.Printf("generating new server certificate...")
+		log.Info("generating new server certificate")
 		serverPair, err = kernel.IssueServerCert(caPair, kernel.DefaultServerCertConfig())
 		if err != nil {
-			log.Printf("warning: cannot issue server cert: %v, starting without mTLS", err)
+			log.Warn("cannot issue server cert, starting without mTLS", "error", err)
 			return nil
 		}
 		if err := os.WriteFile(serverCertPath, serverPair.CertPEM, 0600); err != nil {
-			log.Printf("warning: cannot write server cert %s: %v, starting without mTLS", serverCertPath, err)
+			log.Warn("cannot write server cert, starting without mTLS", "path", serverCertPath, "error", err)
 			return nil
 		}
 		if err := os.WriteFile(serverKeyPath, serverPair.KeyPEM, 0600); err != nil {
-			log.Printf("warning: cannot write server key %s: %v, starting without mTLS", serverKeyPath, err)
+			log.Warn("cannot write server key, starting without mTLS", "path", serverKeyPath, "error", err)
 			return nil
 		}
 	}
 
-	agentCertPath := certDir + "/agent.crt"
-	agentKeyPath := certDir + "/agent.key"
+	agentCertPath := filepath.Join(certDir, "agent.crt")
+	agentKeyPath := filepath.Join(certDir, "agent.key")
 	if _, err := os.Stat(agentCertPath); os.IsNotExist(err) {
-		log.Printf("generating new agent certificate...")
+		log.Info("generating new agent certificate")
 		agentPair, err := kernel.IssueAgentCert(caPair, kernel.DefaultAgentConfig("agent"), "agent")
 		if err != nil {
-			log.Printf("warning: cannot issue agent cert: %v", err)
+			log.Warn("cannot issue agent cert", "error", err)
 		} else {
 			if err := os.WriteFile(agentCertPath, agentPair.CertPEM, 0600); err != nil {
-				log.Printf("warning: cannot write agent cert %s: %v", agentCertPath, err)
+				log.Warn("cannot write agent cert", "path", agentCertPath, "error", err)
 			}
 			if err := os.WriteFile(agentKeyPath, agentPair.KeyPEM, 0600); err != nil {
-				log.Printf("warning: cannot write agent key %s: %v", agentKeyPath, err)
+				log.Warn("cannot write agent key", "path", agentKeyPath, "error", err)
 			}
-			log.Printf("agent certificate generated: %s, %s", agentCertPath, agentKeyPath)
+			log.Info("agent certificate generated", "cert", agentCertPath, "key", agentKeyPath)
 		}
 	}
 

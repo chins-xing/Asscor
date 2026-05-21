@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/argus-security/argus/internal/config"
+	"github.com/argus-security/argus/internal/logger"
 	"github.com/argus-security/argus/internal/model"
 	"github.com/argus-security/argus/internal/version"
 )
@@ -146,6 +146,11 @@ func (w *jsonlWriter) write(data []byte) error {
 	}
 
 	_, err := w.file.Write(append(data, '\n'))
+	if err != nil && w.file != nil {
+		w.file.Close()
+		w.file = nil
+		w.day = 0
+	}
 	return err
 }
 
@@ -246,7 +251,7 @@ func (m *PersistenceModule) Start(ctx context.Context) error {
 	m.kernel.Bus().Subscribe("agent.timeout", "persistence", m.onAgentTimeout)
 
 	go m.flushLoop()
-	log.Println("persistence: started, data dir:", m.dataDir)
+	logger.With("component", "persistence").Info("started", "data_dir", m.dataDir)
 	return nil
 }
 
@@ -266,7 +271,7 @@ func (m *PersistenceModule) Stop(ctx context.Context) error {
 	m.mu.Unlock()
 
 	m.state = PluginStopped
-	log.Println("persistence: stopped")
+	logger.With("component", "persistence").Info("stopped")
 	return nil
 }
 
@@ -384,11 +389,11 @@ func (m *PersistenceModule) DataDir() string {
 
 func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message) error {
 	payload := msg.Payload
-	log.Printf("persistence: received assessor.result event (type=%T)", payload)
+	logger.With("component", "persistence").Debug("received assessor.result event", "type", fmt.Sprintf("%T", payload))
 
 	if ar, ok := payload.(*model.AssessmentResult); ok {
-		log.Printf("persistence: processing assessment for %s: score=%.2f acceptable=%v checks=%d",
-			ar.HostID, ar.FinalScore, ar.Acceptable, len(ar.Checks))
+		logger.With("component", "persistence").Info("processing assessment",
+			"host_id", ar.HostID, "score", ar.FinalScore, "acceptable", ar.Acceptable, "checks", len(ar.Checks))
 
 		checkDetails := make([]CheckDetail, 0, len(ar.Checks))
 		for _, c := range ar.Checks {
@@ -429,9 +434,9 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		}
 
 		if err := m.WriteAssessment(rec); err != nil {
-			log.Printf("persistence: write assessment error: %v", err)
+			logger.With("component", "persistence").Error("write assessment error", "error", err)
 		} else {
-			log.Printf("persistence: assessment written for %s (score=%.2f)", ar.HostID, ar.FinalScore)
+			logger.With("component", "persistence").Info("assessment written", "host_id", ar.HostID, "score", ar.FinalScore)
 		}
 
 		passedCount := rec.CheckCount - rec.FailedCount
@@ -475,7 +480,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		report.Summary.FailedChecks = rec.FailedCount
 
 		if err := m.WriteDashboardReport(report); err != nil {
-			log.Printf("persistence: write dashboard report error: %v", err)
+			logger.With("component", "persistence").Error("write dashboard report error", "error", err)
 		}
 		return nil
 	}

@@ -3,12 +3,13 @@ package extmgr
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type extensionRecord struct {
@@ -59,7 +60,7 @@ func (el *ExtensionLifecycle) Register(spec ExtensionSpec, installPath string) e
 		return fmt.Errorf("save state: %w", err)
 	}
 
-	log.Printf("[extmgr] registered extension %s v%s", spec.ID, spec.Version)
+	logger.With("component", "extmgr").Info("registered extension", "extension_id", spec.ID, "version", spec.Version)
 	return nil
 }
 
@@ -102,7 +103,7 @@ func (el *ExtensionLifecycle) Enable(id string) error {
 		return fmt.Errorf("save state: %w", err)
 	}
 
-	log.Printf("[extmgr] enabled extension %s", id)
+	logger.With("component", "extmgr").Info("enabled extension", "extension_id", id)
 	return nil
 }
 
@@ -140,7 +141,7 @@ func (el *ExtensionLifecycle) Disable(id string) error {
 		return fmt.Errorf("save state: %w", err)
 	}
 
-	log.Printf("[extmgr] disabled extension %s", id)
+	logger.With("component", "extmgr").Info("disabled extension", "extension_id", id)
 	return nil
 }
 
@@ -167,7 +168,7 @@ func (el *ExtensionLifecycle) Delete(id string) error {
 	installPath := rec.Spec.InstallPath
 	if installPath != "" {
 		if err := os.RemoveAll(installPath); err != nil {
-			log.Printf("[extmgr] warning: failed to remove %s: %v", installPath, err)
+			logger.With("component", "extmgr").Warn("failed to remove path", "path", installPath, "error", err)
 		}
 	}
 
@@ -184,7 +185,7 @@ func (el *ExtensionLifecycle) Delete(id string) error {
 		return fmt.Errorf("save state: %w", err)
 	}
 
-	log.Printf("[extmgr] deleted extension %s", id)
+	logger.With("component", "extmgr").Info("deleted extension", "extension_id", id)
 	return nil
 }
 
@@ -340,7 +341,7 @@ func (el *ExtensionLifecycle) loadState() {
 
 	var records map[string]extensionRecord
 	if err := json.Unmarshal(data, &records); err != nil {
-		log.Printf("[extmgr] failed to load state: %v", err)
+		logger.With("component", "extmgr").Error("failed to load state", "error", err)
 		return
 	}
 
@@ -350,5 +351,5 @@ func (el *ExtensionLifecycle) loadState() {
 		el.order = append(el.order, id)
 	}
 
-	log.Printf("[extmgr] loaded %d extension records from state", len(records))
+	logger.With("component", "extmgr").Info("loaded extension records from state", "count", len(records))
 }

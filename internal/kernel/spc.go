@@ -1,18 +1,23 @@
 package kernel
 
 import (
+	"bufio"
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
-	"log"
+	"io"
 	"math"
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/argus-security/argus/internal/logger"
 	"github.com/argus-security/argus/internal/model"
 )
 
@@ -255,6 +260,18 @@ type SPCOscalConfig struct {
 	PlanPath     string `json:"plan_path"`
 }
 
+type SPCEPSSConfig struct {
+	Enabled       bool   `json:"enabled"`
+	DataURL       string `json:"data_url"`
+	SyncIntervalH int    `json:"sync_interval_h"`
+}
+
+type SPCKEVConfig struct {
+	Enabled       bool   `json:"enabled"`
+	CatalogURL    string `json:"catalog_url"`
+	SyncIntervalH int    `json:"sync_interval_h"`
+}
+
 type SPCModule struct {
 	kernel *Kernel
 
@@ -270,11 +287,14 @@ type SPCModule struct {
 	fetchInterval  time.Duration
 	mispConfig     SPCMISPConfig
 	nvdConfig      SPCNVDConfig
+	epssConfig     SPCEPSSConfig
+	kevConfig      SPCKEVConfig
 	oscalConfig    SPCOscalConfig
 	mispClient     *SPCMISPClient
 	enabled        bool
 	minPScore      float64
 	maxCacheSize   int
+	kevCatalog     map[string]bool
 }
 
 func NewSPCModule() *SPCModule {
@@ -282,6 +302,7 @@ func NewSPCModule() *SPCModule {
 		cveCache:      make([]SPCCVEScore, 0),
 		cveIndex:      make(map[string]int),
 		assetCache:    make(map[string]*LocalAsset),
+		kevCatalog:    make(map[string]bool),
 		fetchInterval: 1 * time.Hour,
 		minPScore:     0.60,
 		maxCacheSize:  100000,
@@ -294,6 +315,16 @@ func NewSPCModule() *SPCModule {
 		nvdConfig: SPCNVDConfig{
 			BaseURL:   "https://services.nvd.nist.gov/rest/json/cves/2.0",
 			SyncHours: 6,
+		},
+		epssConfig: SPCEPSSConfig{
+			Enabled:       true,
+			DataURL:       "https://epss.cyentia.com/epss_scores-current.csv.gz",
+			SyncIntervalH: 24,
+		},
+		kevConfig: SPCKEVConfig{
+			Enabled:       true,
+			CatalogURL:    "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+			SyncIntervalH: 24,
 		},
 		oscalConfig: SPCOscalConfig{
 			InputFormat: "json",
@@ -332,6 +363,12 @@ func (m *SPCModule) Init(ctx context.Context, k *Kernel) error {
 		m.nvdConfig.BaseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 		m.nvdConfig.APIKey = os.Getenv("NVD_API_KEY")
 		m.nvdConfig.SyncHours = 24
+		m.epssConfig.Enabled = true
+		m.epssConfig.DataURL = "https://epss.cyentia.com/epss_scores-current.csv.gz"
+		m.epssConfig.SyncIntervalH = 24
+		m.kevConfig.Enabled = true
+		m.kevConfig.CatalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+		m.kevConfig.SyncIntervalH = 24
 		m.mispConfig.BaseURL = ""
 		m.mispConfig.APIKey = os.Getenv("MISP_API_KEY")
 		m.mispConfig.VerifyTLS = true
@@ -351,6 +388,20 @@ func (m *SPCModule) Init(ctx context.Context, k *Kernel) error {
 			m.nvdConfig.APIKey = os.Getenv("NVD_API_KEY")
 		}
 
+		m.epssConfig.Enabled = spcCfg.EPSS.Enabled
+		m.epssConfig.DataURL = spcCfg.EPSS.DataURL
+		m.epssConfig.SyncIntervalH = spcCfg.EPSS.SyncIntervalH
+		if m.epssConfig.DataURL == "" {
+			m.epssConfig.DataURL = "https://epss.cyentia.com/epss_scores-current.csv.gz"
+		}
+
+		m.kevConfig.Enabled = spcCfg.CISAKEV.Enabled
+		m.kevConfig.CatalogURL = spcCfg.CISAKEV.CatalogURL
+		m.kevConfig.SyncIntervalH = spcCfg.CISAKEV.SyncIntervalH
+		if m.kevConfig.CatalogURL == "" {
+			m.kevConfig.CatalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+		}
+
 		m.mispConfig.BaseURL = spcCfg.MISP.BaseURL
 		m.mispConfig.APIKey = spcCfg.MISP.APIKey
 		m.mispConfig.VerifyTLS = spcCfg.MISP.VerifyTLS
@@ -363,7 +414,7 @@ func (m *SPCModule) Init(ctx context.Context, k *Kernel) error {
 	}
 
 	if m.enabled && m.nvdConfig.APIKey == "" {
-		log.Printf("spc: WARNING — NVD API key not configured, SPC may be rate limited (set spc.nvd.api_key or NVD_API_KEY)")
+		logger.With("component", "spc").Warn("NVD API key not configured, SPC may be rate limited")
 	}
 
 	k.Container().Bind((*SPCInterface)(nil), m)
@@ -392,19 +443,19 @@ func (m *SPCModule) Start(ctx context.Context) error {
 	if m.enabled {
 		if m.mispConfig.BaseURL != "" && m.mispConfig.APIKey != "" {
 			if err := m.ConfigureMISP(m.mispConfig.BaseURL, m.mispConfig.APIKey); err != nil {
-				log.Printf("spc: WARNING — MISP configuration invalid: %v, continuing without MISP", err)
+				logger.With("component", "spc").Warn("MISP configuration invalid, continuing without MISP", "error", err)
 			}
 		}
 		go m.fetchLoop()
 	}
-	log.Println("spc: started (enabled:", m.enabled, ")")
+	logger.With("component", "spc").Info("started", "enabled", m.enabled)
 	return nil
 }
 
 func (m *SPCModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.state = PluginStopped
-	log.Println("spc: stopped")
+	logger.With("component", "spc").Info("stopped")
 	return nil
 }
 
@@ -462,7 +513,7 @@ func (m *SPCModule) cleanupOldCVEs() {
 	}
 	removed := before - len(m.cveCache)
 	if removed > 0 {
-		log.Printf("spc: cleaned %d old CVE records (kept %d)", removed, len(m.cveCache))
+		logger.With("component", "spc").Info("cleaned old CVE records", "removed", removed, "kept", len(m.cveCache))
 	}
 }
 
@@ -471,6 +522,16 @@ func (m *SPCModule) FetchFromAllSources() []SPCFetchResult {
 
 	result := m.FetchFromNVD()
 	results = append(results, result)
+
+	if m.epssConfig.Enabled {
+		resultEPSS := m.FetchFromEPSS()
+		results = append(results, resultEPSS)
+	}
+
+	if m.kevConfig.Enabled {
+		resultKEV := m.FetchFromCISAKEV()
+		results = append(results, resultKEV)
+	}
 
 	result2 := m.FetchFromMISP()
 	results = append(results, result2)
@@ -489,11 +550,13 @@ func (m *SPCModule) FetchFromAllSources() []SPCFetchResult {
 		if pi, ok2 := persister.(PersistenceInterface); ok2 {
 			topCVEs := make([]string, 0, 10)
 			m.mu.RLock()
-			sort.Slice(m.cveCache, func(i, j int) bool {
-				return m.cveCache[i].CVSS > m.cveCache[j].CVSS
+			sorted := make([]SPCCVEScore, len(m.cveCache))
+			copy(sorted, m.cveCache)
+			sort.Slice(sorted, func(i, j int) bool {
+				return sorted[i].CVSS > sorted[j].CVSS
 			})
-			for i := 0; i < len(m.cveCache) && i < 10; i++ {
-				topCVEs = append(topCVEs, m.cveCache[i].CVEID)
+			for i := 0; i < len(sorted) && i < 10; i++ {
+				topCVEs = append(topCVEs, sorted[i].CVEID)
 			}
 			kevCount := 0
 			highCount := 0
@@ -533,16 +596,31 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 
 	m.mu.Lock()
 	m.lastFetch = time.Now()
+	baseURL := m.nvdConfig.BaseURL
+	apiKey := m.nvdConfig.APIKey
 	m.mu.Unlock()
 
-	log.Println("spc: NVD fetch triggered (stub — add NVD API key for live data)")
+	if baseURL == "" {
+		baseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+	}
 
-	sampleCVEs := m.generateSampleCVEs()
+	since := m.lastUpdate
+	if since.IsZero() {
+		since = time.Now().AddDate(0, 0, -7)
+	}
+
+	cves, err := m.fetchNVDAPI(baseURL, apiKey, since)
+	if err != nil {
+		result.Error = err.Error()
+		logger.With("component", "spc").Warn("NVD API fetch failed, falling back to sample data", "error", err)
+		cves = m.generateSampleCVEs()
+	}
+
 	m.mu.Lock()
-	for _, cve := range sampleCVEs {
+	for _, cve := range cves {
 		if _, exists := m.cveIndex[cve.CVEID]; !exists {
 			if len(m.cveCache) >= m.maxCacheSize {
-				log.Printf("spc: CVE cache reached max size %d, skipping new entries", m.maxCacheSize)
+				logger.With("component", "spc").Warn("CVE cache reached max size", "max", m.maxCacheSize)
 				break
 			}
 			m.cveIndex[cve.CVEID] = len(m.cveCache)
@@ -553,7 +631,495 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 	m.mu.Unlock()
 
 	result.Duration = time.Since(start)
+	logger.With("component", "spc").Info("NVD fetch completed", "duration", result.Duration, "added", result.CVEAdded)
 	return result
+}
+
+type nvdAPIResponse struct {
+	TotalResults int              `json:"totalResults"`
+	ResultsPerPage int            `json:"resultsPerPage"`
+	StartIndex int                `json:"startIndex"`
+	Vulnerabilities []nvdVulnItem `json:"vulnerabilities"`
+}
+
+type nvdVulnItem struct {
+	CVE nvdCVE `json:"cve"`
+}
+
+type nvdCVE struct {
+	ID             string          `json:"id"`
+	SourceIdentifier string        `json:"sourceIdentifier"`
+	Published      string          `json:"published"`
+	LastModified   string          `json:"lastModified"`
+	Descriptions   []nvdLangStr   `json:"descriptions"`
+	Metrics        nvdMetrics      `json:"metrics"`
+	Weaknesses     []nvdWeakness   `json:"weaknesses"`
+	Configurations []nvdConfig     `json:"configurations"`
+	References     []nvdReference  `json:"references"`
+}
+
+type nvdLangStr struct {
+	Lang  string `json:"lang"`
+	Value string `json:"value"`
+}
+
+type nvdMetrics struct {
+	CVSSMetricV31 []nvdCVSSMetric `json:"cvssMetricV31"`
+	CVSSMetricV30 []nvdCVSSMetric `json:"cvssMetricV30"`
+	CVSSMetricV2  []nvdCVSSMetricV2 `json:"cvssMetricV2"`
+}
+
+type nvdCVSSMetric struct {
+	Source   string     `json:"source"`
+	Type     string     `json:"type"`
+	CVSSData nvdCVSSData `json:"cvssData"`
+	ExploitabilityScore float64 `json:"exploitabilityScore"`
+	ImpactScore         float64 `json:"impactScore"`
+}
+
+type nvdCVSSData struct {
+	Version                       string  `json:"version"`
+	VectorString                  string  `json:"vectorString"`
+	BaseScore                     float64 `json:"baseScore"`
+	BaseSeverity                  string  `json:"baseSeverity"`
+}
+
+type nvdCVSSMetricV2 struct {
+	Source       string       `json:"source"`
+	Type         string       `json:"type"`
+	CVSSData     nvdCVSSDataV2 `json:"cvssData"`
+	BaseSeverity string       `json:"baseSeverity"`
+	ExploitabilityScore float64 `json:"exploitabilityScore"`
+	ImpactScore         float64 `json:"impactScore"`
+}
+
+type nvdCVSSDataV2 struct {
+	Version      string  `json:"version"`
+	VectorString string  `json:"vectorString"`
+	BaseScore    float64 `json:"baseScore"`
+}
+
+type nvdWeakness struct {
+	Source          string        `json:"source"`
+	Type            string        `json:"type"`
+	Description     []nvdLangStr  `json:"description"`
+}
+
+type nvdConfig struct {
+	Operator string      `json:"operator"`
+	Nodes    []nvdNode   `json:"nodes"`
+}
+
+type nvdNode struct {
+	Operator string     `json:"operator"`
+	Negate   bool       `json:"negate"`
+	CPEMatch []nvdCPEMatch `json:"cpeMatch"`
+}
+
+type nvdCPEMatch struct {
+	Vulnerable            bool   `json:"vulnerable"`
+	Criteria              string `json:"criteria"`
+	MatchCriteriaID       string `json:"matchCriteriaId"`
+	VersionStartIncluding string `json:"versionStartIncluding"`
+	VersionStartExcluding string `json:"versionStartExcluding"`
+	VersionEndIncluding   string `json:"versionEndIncluding"`
+	VersionEndExcluding   string `json:"versionEndExcluding"`
+}
+
+type nvdReference struct {
+	Source string `json:"source"`
+	URL    string `json:"url"`
+	Tags   []string `json:"tags"`
+}
+
+func (m *SPCModule) fetchNVDAPI(baseURL, apiKey string, since time.Time) ([]SPCCVEScore, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	var allCVEs []SPCCVEScore
+	startIdx := 0
+	pageSize := 100
+	maxRetries := 5
+	retryCount := 0
+
+	for {
+		dateStr := since.UTC().Format("2006-01-02T15:04:05") + ".000Z"
+		reqURL := fmt.Sprintf("%s?resultsPerPage=%d&startIndex=%d&pubStartDate=%s",
+			baseURL, pageSize, startIdx, dateStr)
+
+		req, err := http.NewRequest("GET", reqURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("NVD request creation: %w", err)
+		}
+
+		req.Header.Set("Accept", "application/json")
+		if apiKey != "" {
+			req.Header.Set("apiKey", apiKey)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return allCVEs, fmt.Errorf("NVD API call: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			resp.Body.Close()
+			retryCount++
+			if retryCount > maxRetries {
+				logger.With("component", "spc").Error("NVD rate limit exceeded max retries",
+					"max_retries", maxRetries,
+					"cves_fetched", len(allCVEs))
+				return allCVEs, fmt.Errorf("NVD rate limit: exceeded %d retries", maxRetries)
+			}
+			waitTime := 30 * time.Second
+			if apiKey != "" {
+				waitTime = 6 * time.Second
+			}
+			logger.With("component", "spc").Warn("NVD rate limited, waiting before retry",
+				"retry", retryCount,
+				"max_retries", maxRetries,
+				"wait", waitTime)
+			time.Sleep(waitTime)
+			continue
+		}
+
+		retryCount = 0
+
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return allCVEs, fmt.Errorf("NVD API returned HTTP %d", resp.StatusCode)
+		}
+
+		var apiResp nvdAPIResponse
+		if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+			resp.Body.Close()
+			return allCVEs, fmt.Errorf("NVD response decode: %w", err)
+		}
+		resp.Body.Close()
+
+		for _, vuln := range apiResp.Vulnerabilities {
+			cve := m.parseNVDCVE(vuln.CVE)
+			allCVEs = append(allCVEs, cve)
+		}
+
+		if apiResp.StartIndex+apiResp.ResultsPerPage >= apiResp.TotalResults {
+			break
+		}
+		startIdx += apiResp.ResultsPerPage
+
+		if apiKey == "" {
+			time.Sleep(6 * time.Second)
+		} else {
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+
+	logger.With("component", "spc").Info("NVD API fetched CVEs", "count", len(allCVEs), "since", since.Format("2006-01-02"))
+	return allCVEs, nil
+}
+
+func (m *SPCModule) parseNVDCVE(cve nvdCVE) SPCCVEScore {
+	desc := ""
+	for _, d := range cve.Descriptions {
+		if d.Lang == "en" {
+			desc = d.Value
+			break
+		}
+	}
+	if desc == "" && len(cve.Descriptions) > 0 {
+		desc = cve.Descriptions[0].Value
+	}
+
+	var cvssScore float64
+	var cvssVector string
+	if len(cve.Metrics.CVSSMetricV31) > 0 {
+		cvssScore = cve.Metrics.CVSSMetricV31[0].CVSSData.BaseScore
+		cvssVector = cve.Metrics.CVSSMetricV31[0].CVSSData.VectorString
+	} else if len(cve.Metrics.CVSSMetricV30) > 0 {
+		cvssScore = cve.Metrics.CVSSMetricV30[0].CVSSData.BaseScore
+		cvssVector = cve.Metrics.CVSSMetricV30[0].CVSSData.VectorString
+	} else if len(cve.Metrics.CVSSMetricV2) > 0 {
+		cvssScore = cve.Metrics.CVSSMetricV2[0].CVSSData.BaseScore
+		cvssVector = cve.Metrics.CVSSMetricV2[0].CVSSData.VectorString
+	}
+
+	var affectedCPEs []string
+	for _, cfg := range cve.Configurations {
+		for _, node := range cfg.Nodes {
+			for _, match := range node.CPEMatch {
+				if match.Vulnerable && match.Criteria != "" {
+					affectedCPEs = append(affectedCPEs, match.Criteria)
+				}
+			}
+		}
+	}
+
+	pubDate, _ := time.Parse("2006-01-02T15:04:05.000", cve.Published)
+	modDate, _ := time.Parse("2006-01-02T15:04:05.000", cve.LastModified)
+	if pubDate.IsZero() {
+		pubDate, _ = time.Parse(time.RFC3339, cve.Published)
+	}
+	if modDate.IsZero() {
+		modDate, _ = time.Parse(time.RFC3339, cve.LastModified)
+	}
+
+	var attckTechs []string
+	for _, ref := range cve.References {
+		for _, tag := range ref.Tags {
+			if strings.HasPrefix(tag, "ATT&CK:") {
+				tech := strings.TrimPrefix(tag, "ATT&CK:")
+				attckTechs = append(attckTechs, tech)
+			} else if strings.HasPrefix(tag, "MITRE ATT&CK:") {
+				tech := strings.TrimPrefix(tag, "MITRE ATT&CK:")
+				attckTechs = append(attckTechs, tech)
+			}
+		}
+	}
+
+	return SPCCVEScore{
+		CVEID:          cve.ID,
+		Description:    desc,
+		CVSS:           cvssScore,
+		CVSSVector:     cvssVector,
+		AffectedCPEs:   affectedCPEs,
+		AttckTechniques: attckTechs,
+		DatePublished:  pubDate,
+		DateModified:   modDate,
+	}
+}
+
+func (m *SPCModule) FetchFromEPSS() SPCFetchResult {
+	start := time.Now()
+	result := SPCFetchResult{
+		Source:    "epss",
+		Timestamp: start,
+	}
+
+	if !m.epssConfig.Enabled {
+		result.Error = "EPSS data source disabled"
+		return result
+	}
+
+	dataURL := m.epssConfig.DataURL
+	if dataURL == "" {
+		dataURL = "https://epss.cyentia.com/epss_scores-current.csv.gz"
+	}
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Get(dataURL)
+	if err != nil {
+		result.Error = fmt.Sprintf("EPSS fetch failed: %v", err)
+		result.Duration = time.Since(start)
+		logger.With("component", "spc").Error("EPSS fetch failed", "error", err)
+		return result
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		result.Error = fmt.Sprintf("EPSS returned HTTP %d", resp.StatusCode)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	var reader io.Reader = resp.Body
+	if strings.HasSuffix(dataURL, ".gz") {
+		gzReader, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			result.Error = fmt.Sprintf("EPSS gzip decompress failed: %v", err)
+			result.Duration = time.Since(start)
+			return result
+		}
+		defer gzReader.Close()
+		reader = gzReader
+	}
+
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	lineNum := 0
+	parsed := 0
+	updated := 0
+	created := 0
+
+	for scanner.Scan() {
+		lineNum++
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "model") || strings.HasPrefix(line, "cve") {
+			continue
+		}
+
+		fields := strings.Split(line, ",")
+		if len(fields) < 3 {
+			continue
+		}
+
+		cveID := strings.TrimSpace(fields[0])
+		epssStr := strings.TrimSpace(fields[1])
+		percentileStr := strings.TrimSpace(fields[2])
+
+		if !strings.HasPrefix(strings.ToUpper(cveID), "CVE-") {
+			continue
+		}
+
+		epssVal, _ := strconv.ParseFloat(epssStr, 64)
+		percentileVal, _ := strconv.ParseFloat(percentileStr, 64)
+		parsed++
+
+		m.mu.Lock()
+		if idx, exists := m.cveIndex[cveID]; exists && idx < len(m.cveCache) {
+			m.cveCache[idx].EPSS = epssVal
+			m.cveCache[idx].EPSSPercent = percentileVal
+			updated++
+		} else if len(m.cveCache) < m.maxCacheSize {
+			m.cveIndex[cveID] = len(m.cveCache)
+			m.cveCache = append(m.cveCache, SPCCVEScore{
+				CVEID:       cveID,
+				EPSS:        epssVal,
+				EPSSPercent: percentileVal,
+			})
+			created++
+		}
+		m.mu.Unlock()
+	}
+
+	if err := scanner.Err(); err != nil {
+		result.Error = fmt.Sprintf("EPSS parse error: %v", err)
+	}
+
+	result.CVEAdded = created
+	result.CVEUpdated = updated
+	result.Duration = time.Since(start)
+
+	logger.With("component", "spc").Info("EPSS data fetched",
+		"parsed", parsed,
+		"created", created,
+		"updated", updated,
+		"duration_ms", result.Duration.Milliseconds())
+
+	return result
+}
+
+func (m *SPCModule) FetchFromCISAKEV() SPCFetchResult {
+	start := time.Now()
+	result := SPCFetchResult{
+		Source:    "cisa_kev",
+		Timestamp: start,
+	}
+
+	if !m.kevConfig.Enabled {
+		result.Error = "CISA KEV data source disabled"
+		return result
+	}
+
+	catalogURL := m.kevConfig.CatalogURL
+	if catalogURL == "" {
+		catalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+	}
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Get(catalogURL)
+	if err != nil {
+		result.Error = fmt.Sprintf("CISA KEV fetch failed: %v", err)
+		result.Duration = time.Since(start)
+		logger.With("component", "spc").Error("CISA KEV fetch failed", "error", err)
+		return result
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		result.Error = fmt.Sprintf("CISA KEV returned HTTP %d", resp.StatusCode)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	var kevCatalog struct {
+		Title           string `json:"title"`
+		CatalogVersion  string `json:"catalogVersion"`
+		DateReleased    string `json:"dateReleased"`
+		Count           int    `json:"count"`
+		Vulnerabilities []struct {
+			CVEID                       string `json:"cveID"`
+			VendorProject               string `json:"vendorProject"`
+			Product                     string `json:"product"`
+			VulnerabilityName           string `json:"vulnerabilityName"`
+			DateAdded                   string `json:"dateAdded"`
+			ShortDescription            string `json:"shortDescription"`
+			RequiredAction              string `json:"requiredAction"`
+			DueDate                     string `json:"dueDate"`
+			KnownRansomwareCampaignUse  string `json:"knownRansomwareCampaignUse"`
+			Notes                       string `json:"notes"`
+		} `json:"vulnerabilities"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&kevCatalog); err != nil {
+		result.Error = fmt.Sprintf("CISA KEV decode failed: %v", err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	newKEV := make(map[string]bool)
+	kevUpdated := 0
+	kevCreated := 0
+	for _, vuln := range kevCatalog.Vulnerabilities {
+		cveID := strings.TrimSpace(vuln.CVEID)
+		if cveID == "" {
+			continue
+		}
+		newKEV[cveID] = true
+
+		m.mu.Lock()
+		if idx, exists := m.cveIndex[cveID]; exists && idx < len(m.cveCache) {
+			m.cveCache[idx].InKEV = true
+			if strings.EqualFold(vuln.KnownRansomwareCampaignUse, "known") {
+				m.cveCache[idx].APTGroupAssoc = appendUnique(m.cveCache[idx].APTGroupAssoc, "ransomware")
+			}
+			kevUpdated++
+		} else if len(m.cveCache) < m.maxCacheSize {
+			m.cveIndex[cveID] = len(m.cveCache)
+			aptAssoc := []string{}
+			if strings.EqualFold(vuln.KnownRansomwareCampaignUse, "known") {
+				aptAssoc = []string{"ransomware"}
+			}
+			m.cveCache = append(m.cveCache, SPCCVEScore{
+				CVEID:        cveID,
+				InKEV:        true,
+				APTGroupAssoc: aptAssoc,
+			})
+			kevCreated++
+		}
+		m.mu.Unlock()
+	}
+
+	m.mu.Lock()
+	m.kevCatalog = newKEV
+	m.mu.Unlock()
+
+	result.CVEAdded = kevCreated
+	result.CVEUpdated = kevUpdated
+	result.Duration = time.Since(start)
+
+	logger.With("component", "spc").Info("CISA KEV catalog fetched",
+		"total_kev", len(newKEV),
+		"created", kevCreated,
+		"updated", kevUpdated,
+		"catalog_version", kevCatalog.CatalogVersion,
+		"duration_ms", result.Duration.Milliseconds())
+
+	return result
+}
+
+func appendUnique(slice []string, val string) []string {
+	for _, s := range slice {
+		if s == val {
+			return slice
+		}
+	}
+	return append(slice, val)
+}
+
+func (m *SPCModule) isInKEVCatalog(cveID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.kevCatalog[cveID]
 }
 
 func (m *SPCModule) FetchFromMISP() SPCFetchResult {
@@ -563,19 +1129,267 @@ func (m *SPCModule) FetchFromMISP() SPCFetchResult {
 		Timestamp: time.Now(),
 	}
 
-	log.Println("spc: MISP fetch triggered (stub — configure MISP base URL and API key)")
+	m.mu.RLock()
+	client := m.mispClient
+	m.mu.RUnlock()
 
-	if m.mispClient != nil && m.mispClient.config.BaseURL != "" {
-		m.fetchMISPEvents(result)
+	if client == nil || client.config.BaseURL == "" {
+		result.Duration = time.Since(start)
+		return result
 	}
 
+	cves := m.fetchMISPEvents(client)
+
+	m.mu.Lock()
+	for _, cve := range cves {
+		if _, exists := m.cveIndex[cve.CVEID]; !exists {
+			if len(m.cveCache) >= m.maxCacheSize {
+				break
+			}
+			m.cveIndex[cve.CVEID] = len(m.cveCache)
+			m.cveCache = append(m.cveCache, cve)
+			result.CVEAdded++
+		}
+	}
+	m.mu.Unlock()
+
+	m.mu.Lock()
+	if client != nil {
+		client.lastSync = time.Now()
+	}
+	m.mu.Unlock()
+
 	result.Duration = time.Since(start)
+	logger.With("component", "spc").Info("MISP fetch completed", "duration", result.Duration, "added", result.CVEAdded)
 	return result
 }
 
-func (m *SPCModule) fetchMISPEvents(result SPCFetchResult) {
-	result.CVEAdded = 0
-	log.Println("spc: MISP live fetch not configured, using stub data")
+type mispEventSearchRequest struct {
+	ReturnFormat  string   `json:"returnFormat"`
+	Type         []string `json:"type"`
+	Category     []string `json:"category"`
+	Tags         []string `json:"tags,omitempty"`
+	DateFrom     string   `json:"date,omitempty"`
+	Published    bool     `json:"published"`
+	EnforceWarninglist bool `json:"enforceWarninglist"`
+	Limit        int      `json:"limit"`
+	Page         int      `json:"page"`
+}
+
+type mispEventResponse struct {
+	Response []mispEventItem `json:"response"`
+}
+
+type mispEventItem struct {
+	Event mispEvent `json:"Event"`
+}
+
+type mispEvent struct {
+	ID          string          `json:"id"`
+	Info        string          `json:"info"`
+	ThreatLevel string          `json:"threat_level_id"`
+	Published   bool            `json:"published"`
+	Date        string          `json:"date"`
+	Tags        []mispTag       `json:"Tag"`
+	Galaxy      []mispGalaxy    `json:"Galaxy"`
+	Attribute   []mispAttribute `json:"Attribute"`
+}
+
+type mispTag struct {
+	Name  string `json:"name"`
+	Color string `json:"colour"`
+}
+
+type mispGalaxy struct {
+	Name     string           `json:"name"`
+	Type     string           `json:"type"`
+	Cluster  []mispGalaxyCluster `json:"GalaxyCluster"`
+}
+
+type mispGalaxyCluster struct {
+	Value   string   `json:"value"`
+	TagName string   `json:"tag_name"`
+	Meta    struct {
+		Synonyms []string `json:"synonyms"`
+	} `json:"meta"`
+}
+
+type mispAttribute struct {
+	Type       string `json:"type"`
+	Category   string `json:"category"`
+	Value      string `json:"value"`
+	ToIDS      bool   `json:"to_ids"`
+	Comment    string `json:"comment"`
+}
+
+func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
+	searchReq := mispEventSearchRequest{
+		ReturnFormat: "json",
+		Type:        []string{"vulnerability"},
+		Category:    []string{"External analysis"},
+		Published:   true,
+		EnforceWarninglist: true,
+		Limit:       100,
+		Page:        1,
+	}
+
+	if client.config.TLPFilter != "" {
+		tlps := strings.Split(client.config.TLPFilter, ",")
+		for _, tlp := range tlps {
+			searchReq.Tags = append(searchReq.Tags, "tlp:"+strings.TrimSpace(tlp))
+		}
+	}
+
+	since := m.lastUpdate
+	if since.IsZero() {
+		since = time.Now().AddDate(0, 0, -7)
+	}
+	searchReq.DateFrom = since.Format("2006-01-02")
+
+	body, err := json.Marshal(searchReq)
+	if err != nil {
+		logger.With("component", "spc").Error("MISP request marshal failed", "error", err)
+		return nil
+	}
+
+	req, err := http.NewRequest("POST", client.config.BaseURL+"/events/restSearch",
+		strings.NewReader(string(body)))
+	if err != nil {
+		logger.With("component", "spc").Error("MISP request creation failed", "error", err)
+		return nil
+	}
+
+	req.Header.Set("Authorization", client.config.APIKey)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+
+	if !client.config.VerifyTLS {
+		client.client.Transport = &http.Transport{
+			TLSClientConfig: nil,
+		}
+	}
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		logger.With("component", "spc").Error("MISP API call failed", "error", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.With("component", "spc").Error("MISP API returned error status", "status", resp.StatusCode)
+		return nil
+	}
+
+	var eventResp mispEventResponse
+	if err := json.NewDecoder(resp.Body).Decode(&eventResp); err != nil {
+		logger.With("component", "spc").Error("MISP response decode failed", "error", err)
+		return nil
+	}
+
+	var cves []SPCCVEScore
+	for _, item := range eventResp.Response {
+		parsed := m.parseMISPEvent(item.Event)
+		cves = append(cves, parsed...)
+	}
+
+	logger.With("component", "spc").Info("MISP fetched events", "events", len(eventResp.Response), "cves", len(cves))
+	return cves
+}
+
+func (m *SPCModule) parseMISPEvent(event mispEvent) []SPCCVEScore {
+	var cveIDs []string
+	var descriptions []string
+
+	for _, attr := range event.Attribute {
+		if attr.Type == "vulnerability" {
+			if strings.HasPrefix(strings.ToUpper(attr.Value), "CVE-") {
+				cveIDs = append(cveIDs, attr.Value)
+			}
+		}
+		if attr.Category == "External analysis" && attr.Comment != "" {
+			descriptions = append(descriptions, attr.Comment)
+		}
+	}
+
+	var galaxyTags []string
+	var attckTechs []string
+	var aptGroups []string
+
+	for _, g := range event.Galaxy {
+		for _, cluster := range g.Cluster {
+			galaxyTags = append(galaxyTags, cluster.TagName)
+			if strings.HasPrefix(g.Type, "mitre-attack-pattern") {
+				tech := extractATTCKTechnique(cluster.TagName)
+				if tech != "" {
+					attckTechs = append(attckTechs, tech)
+				}
+			}
+			if strings.HasPrefix(g.Type, "threat-actor") || strings.HasPrefix(g.Type, "microsoft-activity-group") {
+				aptGroups = append(aptGroups, cluster.Value)
+			}
+		}
+	}
+
+	for _, tag := range event.Tags {
+		if strings.HasPrefix(tag.Name, "misp-galaxy:mitre-attack-pattern") {
+			tech := extractATTCKTechnique(tag.Name)
+			if tech != "" {
+				attckTechs = append(attckTechs, tech)
+			}
+		}
+		if strings.HasPrefix(tag.Name, "misp-galaxy:threat-actor") {
+			parts := strings.Split(tag.Name, "=\"")
+			if len(parts) >= 2 {
+				name := strings.TrimSuffix(parts[1], "\"")
+				aptGroups = append(aptGroups, name)
+			}
+		}
+	}
+
+	desc := event.Info
+	if len(descriptions) > 0 {
+		desc = descriptions[0]
+	}
+
+	pubDate, _ := time.Parse("2006-01-02", event.Date)
+
+	var results []SPCCVEScore
+	for _, cveID := range cveIDs {
+		results = append(results, SPCCVEScore{
+			CVEID:          cveID,
+			Description:    desc,
+			DatePublished:  pubDate,
+			DateModified:   time.Now(),
+			AttckTechniques: attckTechs,
+			MISPGalaxyTags:  galaxyTags,
+			APTGroupAssoc:   aptGroups,
+		})
+	}
+
+	return results
+}
+
+func extractATTCKTechnique(tagName string) string {
+	upper := strings.ToUpper(tagName)
+	idx := strings.Index(upper, "T1")
+	if idx < 0 {
+		return ""
+	}
+	tech := tagName[idx:]
+	var result strings.Builder
+	for _, ch := range tech {
+		if (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') {
+			result.WriteRune(ch)
+		} else {
+			break
+		}
+	}
+	s := result.String()
+	if len(s) < 4 {
+		return ""
+	}
+	return s
 }
 
 func (m *SPCModule) ConfigureMISP(baseURL, apiKey string) error {
@@ -614,7 +1428,7 @@ func (m *SPCModule) ConfigureMISP(baseURL, apiKey string) error {
 		lastSync: time.Now(),
 	}
 
-	log.Printf("spc: MISP connection verified at %s", baseURL)
+	logger.With("component", "spc").Info("MISP connection verified", "url", baseURL)
 	return nil
 }
 
@@ -632,12 +1446,20 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 			}
 			records = wrapper.Findings
 		}
-	case "yaml", "xml":
-		log.Println("spc: OSCAL YAML/XML parsing not implemented, use JSON format")
-		return 0, nil
+	case "yaml", "yml":
+		parsed, err := parseOSCALYAML(data)
+		if err != nil {
+			return 0, fmt.Errorf("OSCAL YAML parse: %w", err)
+		}
+		records = parsed
+	case "xml":
+		parsed, err := parseOSCALXML(data)
+		if err != nil {
+			return 0, fmt.Errorf("OSCAL XML parse: %w", err)
+		}
+		records = parsed
 	default:
-		log.Println("spc: unknown OSCAL format:", format)
-		return 0, nil
+		return 0, fmt.Errorf("unknown OSCAL format: %s (supported: json, yaml, xml)", format)
 	}
 
 	added := 0
@@ -671,7 +1493,237 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 	}
 	m.mu.Unlock()
 
+	logger.With("component", "spc").Info("OSCAL import completed", "format", format, "added", added)
 	return added, nil
+}
+
+func parseOSCALYAML(data []byte) ([]SPCVulnerabilityRecord, error) {
+	var records []SPCVulnerabilityRecord
+	text := strings.TrimSpace(string(data))
+
+	if strings.HasPrefix(text, "---") {
+		text = strings.TrimPrefix(text, "---")
+		text = strings.TrimSpace(text)
+	}
+
+	lines := strings.Split(text, "\n")
+	var currentRecord *SPCVulnerabilityRecord
+	var inFindings bool
+	var inFinding bool
+	var listKey string
+	var listItems []string
+
+	flushRecord := func() {
+		if currentRecord != nil && currentRecord.CVEID != "" {
+			switch listKey {
+			case "affected_cpes":
+				currentRecord.AffectedCPEs = listItems
+			case "attck_techniques":
+				currentRecord.AttckTechniques = listItems
+			case "misp_galaxy_tags":
+				currentRecord.MISPGalaxyTags = listItems
+			case "apt_group_assoc":
+				currentRecord.APTGroupAssoc = listItems
+			}
+			records = append(records, *currentRecord)
+		}
+		currentRecord = nil
+		listKey = ""
+		listItems = nil
+	}
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		indent := 0
+		for _, ch := range line {
+			if ch == ' ' {
+				indent++
+			} else {
+				break
+			}
+		}
+
+		if indent == 0 && strings.HasPrefix(trimmed, "findings:") {
+			inFindings = true
+			inFinding = false
+			continue
+		}
+
+		if indent == 0 && !strings.HasPrefix(trimmed, "findings:") {
+			inFindings = false
+			inFinding = false
+			flushRecord()
+			continue
+		}
+
+		if inFindings && indent == 2 && strings.HasSuffix(trimmed, ":") {
+			flushRecord()
+			currentRecord = &SPCVulnerabilityRecord{}
+			inFinding = true
+			listKey = ""
+			listItems = nil
+			continue
+		}
+
+		if inFinding && currentRecord != nil {
+			if strings.HasPrefix(trimmed, "- ") {
+				item := strings.TrimPrefix(trimmed, "- ")
+				item = strings.Trim(item, "\"")
+				if listKey != "" {
+					listItems = append(listItems, item)
+				}
+				continue
+			}
+
+			parts := strings.SplitN(trimmed, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				val := strings.TrimSpace(parts[1])
+				val = strings.Trim(val, "\"")
+
+				if listKey != "" && key != listKey {
+					switch listKey {
+					case "affected_cpes":
+						currentRecord.AffectedCPEs = listItems
+					case "attck_techniques":
+						currentRecord.AttckTechniques = listItems
+					case "misp_galaxy_tags":
+						currentRecord.MISPGalaxyTags = listItems
+					case "apt_group_assoc":
+						currentRecord.APTGroupAssoc = listItems
+					}
+					listKey = ""
+					listItems = nil
+				}
+
+				if val == "" {
+					switch key {
+					case "affected_cpes", "attck_techniques", "misp_galaxy_tags", "apt_group_assoc":
+						listKey = key
+						listItems = nil
+					}
+					continue
+				}
+
+				switch key {
+				case "cve_id":
+					currentRecord.CVEID = val
+				case "description":
+					currentRecord.Description = val
+				case "cvss_score":
+					if f, err := parseFloat(val); err == nil {
+						currentRecord.CVSSScore = f
+					}
+				case "cvss_vector":
+					currentRecord.CVSSVector = val
+				case "epss_score":
+					if f, err := parseFloat(val); err == nil {
+						currentRecord.EPSSScore = f
+					}
+				case "epss_percentile":
+					if f, err := parseFloat(val); err == nil {
+						currentRecord.EPSSPercent = f
+					}
+				case "in_kev":
+					currentRecord.InKEV = strings.EqualFold(val, "true") || val == "1"
+				case "date_published":
+					currentRecord.DatePublished = val
+				case "date_modified":
+					currentRecord.DateModified = val
+				case "oscal_finding_uuid":
+					currentRecord.OSCALFindingUUID = val
+				}
+			}
+		}
+	}
+
+	flushRecord()
+
+	if len(records) == 0 {
+		return nil, fmt.Errorf("no valid vulnerability records found in YAML")
+	}
+
+	return records, nil
+}
+
+func parseFloat(s string) (float64, error) {
+	s = strings.TrimSpace(s)
+	var f float64
+	_, err := fmt.Sscanf(s, "%f", &f)
+	return f, err
+}
+
+type oscalXMLRoot struct {
+	XMLName  struct{}          `xml:"oscal"`
+	Findings oscalXMLFindings  `xml:"findings"`
+}
+
+type oscalXMLFindings struct {
+	Finding []oscalXMLFinding `xml:"finding"`
+}
+
+type oscalXMLFinding struct {
+	CVEID          string   `xml:"cve_id"`
+	Description    string   `xml:"description"`
+	CVSSScore      float64  `xml:"cvss_score"`
+	CVSSVector     string   `xml:"cvss_vector"`
+	EPSSScore      float64  `xml:"epss_score"`
+	EPSSPercent    float64  `xml:"epss_percentile"`
+	InKEV          bool     `xml:"in_kev"`
+	DatePublished  string   `xml:"date_published"`
+	DateModified   string   `xml:"date_modified"`
+	AffectedCPEs   struct {
+		CPE []string `xml:"cpe"`
+	} `xml:"affected_cpes"`
+	AttckTechniques struct {
+		Technique []string `xml:"technique"`
+	} `xml:"attck_techniques"`
+	MISPGalaxyTags struct {
+		Tag []string `xml:"tag"`
+	} `xml:"misp_galaxy_tags"`
+	OSCALFindingUUID string `xml:"oscal_finding_uuid"`
+	APTGroupAssoc    struct {
+		Group []string `xml:"group"`
+	} `xml:"apt_group_assoc"`
+}
+
+func parseOSCALXML(data []byte) ([]SPCVulnerabilityRecord, error) {
+	var root oscalXMLRoot
+	if err := xml.Unmarshal(data, &root); err != nil {
+		return nil, err
+	}
+
+	var records []SPCVulnerabilityRecord
+	for _, f := range root.Findings.Finding {
+		rec := SPCVulnerabilityRecord{
+			CVEID:           f.CVEID,
+			Description:     f.Description,
+			CVSSScore:       f.CVSSScore,
+			CVSSVector:      f.CVSSVector,
+			EPSSScore:       f.EPSSScore,
+			EPSSPercent:     f.EPSSPercent,
+			InKEV:           f.InKEV,
+			DatePublished:   f.DatePublished,
+			DateModified:    f.DateModified,
+			AffectedCPEs:    f.AffectedCPEs.CPE,
+			AttckTechniques: f.AttckTechniques.Technique,
+			MISPGalaxyTags:  f.MISPGalaxyTags.Tag,
+			OSCALFindingUUID: f.OSCALFindingUUID,
+			APTGroupAssoc:   f.APTGroupAssoc.Group,
+		}
+		records = append(records, rec)
+	}
+
+	if len(records) == 0 {
+		return nil, fmt.Errorf("no valid vulnerability records found in XML")
+	}
+
+	return records, nil
 }
 
 func (m *SPCModule) UpsertAsset(asset LocalAsset) {
@@ -722,7 +1774,11 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		kevFactor := 0.0
 		if cve.InKEV {
 			kevFactor = 1.0
-		} else if cve.HasPublicPoC {
+		} else if m.isInKEVCatalog(cve.CVEID) {
+			kevFactor = 1.0
+			cve.InKEV = true
+		}
+		if kevFactor == 0 && cve.HasPublicPoC {
 			kevFactor = 0.3
 		}
 
@@ -1161,6 +2217,8 @@ type SPCInterface interface {
 	UpsertAsset(asset LocalAsset)
 	GetAsset(hostID string) *LocalAsset
 	FetchFromAllSources() []SPCFetchResult
+	FetchFromEPSS() SPCFetchResult
+	FetchFromCISAKEV() SPCFetchResult
 	ImportOSCAL(data []byte, format string) (int, error)
 	ConfigureMISP(baseURL, apiKey string) error
 	Enabled() bool

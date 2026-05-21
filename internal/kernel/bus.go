@@ -3,10 +3,11 @@ package kernel
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/argus-security/argus/internal/logger"
 )
 
 type Message struct {
@@ -34,6 +35,7 @@ type Bus struct {
 	mu          sync.RWMutex
 	subscribers map[string][]subscriber
 	queueSize   int
+	dispatchSem chan struct{}
 	metrics     BusMetrics
 }
 
@@ -44,6 +46,7 @@ func NewBus(queueSize int) *Bus {
 	return &Bus{
 		subscribers: make(map[string][]subscriber),
 		queueSize:   queueSize,
+		dispatchSem: make(chan struct{}, queueSize),
 	}
 }
 
@@ -106,18 +109,28 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 	for _, sub := range subs {
 		go func(s subscriber) {
 			defer func() {
+				<-b.dispatchSem
 				if r := recover(); r != nil {
 					atomic.AddInt64(&b.metrics.PanicCount, 1)
-					log.Printf("bus: PANIC in subscriber %s for topic %s: %v (total panics: %d)", s.id, msg.Topic, r, atomic.LoadInt64(&b.metrics.PanicCount))
+					logger.With("component", "bus").Error("subscriber panic", "subscriber", s.id, "topic", msg.Topic, "panic", r, "total_panics", atomic.LoadInt64(&b.metrics.PanicCount))
 				}
 			}()
+			select {
+			case b.dispatchSem <- struct{}{}:
+			default:
+				atomic.AddInt64(&b.metrics.ErrorCount, 1)
+				logger.With("component", "bus").Warn("dispatch semaphore full, dropping message",
+					"subscriber", s.id, "topic", msg.Topic,
+					"queue_size", b.queueSize)
+				return
+			}
 			select {
 			case <-ctx.Done():
 				return
 			default:
 				if err := s.handler(ctx, msg); err != nil {
 					atomic.AddInt64(&b.metrics.ErrorCount, 1)
-					log.Printf("bus: error in subscriber %s for topic %s: %v", s.id, msg.Topic, err)
+					logger.With("component", "bus").Error("subscriber error", "subscriber", s.id, "topic", msg.Topic, "error", err)
 				}
 			}
 		}(sub)
