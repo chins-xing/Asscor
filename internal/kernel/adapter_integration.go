@@ -11,7 +11,7 @@ import (
 )
 
 type AdapterIntegrationModule struct {
-	kernel *Kernel
+	kernel KernelContext
 
 	mu           sync.RWMutex
 	adapterCfg   map[string]string
@@ -45,15 +45,15 @@ func (m *AdapterIntegrationModule) Priority() int {
 	return 50
 }
 
-func (m *AdapterIntegrationModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *AdapterIntegrationModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.state = PluginInitialized
 
-	if k.cfg != nil {
-		m.adapterCfg = k.cfg.AdapterConfig
+	if cfg := kc.GetConfigObj(); cfg != nil {
+		m.adapterCfg = cfg.AdapterConfig
 	}
 
-	k.Container().Bind((*AdapterIntegrationInterface)(nil), m)
+	kc.Container().Bind((*AdapterIntegrationInterface)(nil), m)
 
 	return nil
 }
@@ -61,14 +61,14 @@ func (m *AdapterIntegrationModule) Init(ctx context.Context, k *Kernel) error {
 func (m *AdapterIntegrationModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
 	go m.syncLoop()
-	logger.With("component", "adapter_integration").Info("started")
+	logger.WithComponent("adapter_integration").Info("started")
 	return nil
 }
 
 func (m *AdapterIntegrationModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.state = PluginStopped
-	logger.With("component", "adapter_integration").Info("stopped")
+	logger.WithComponent("adapter_integration").Info("stopped")
 	return nil
 }
 
@@ -113,7 +113,7 @@ func (m *AdapterIntegrationModule) RunAdapters(ctx context.Context) []adapter.Pi
 		m.publishAdapterFindings(results)
 	}
 
-	logger.With("component", "adapter_integration").Info("adapter sync completed",
+	logger.WithComponent("adapter_integration").Info("adapter sync completed",
 		"adapters", len(results), "findings", totalFindings)
 	return results
 }
@@ -163,7 +163,7 @@ func (m *AdapterIntegrationModule) CollectFindings() []model.CheckResult {
 
 		findings, err := adapter.ExecuteAdapter(context.Background(), a, cfg)
 		if err != nil {
-			logger.With("component", "adapter_integration").Warn("adapter execution failed",
+			logger.WithComponent("adapter_integration").Warn("adapter execution failed",
 				"adapter_id", a.ID(), "error", err)
 			continue
 		}

@@ -9,17 +9,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
-
 	"github.com/argus-security/argus/internal/adapter"
 	"github.com/argus-security/argus/internal/checks"
 	"github.com/argus-security/argus/internal/config"
+	"github.com/argus-security/argus/internal/logger"
 	"github.com/argus-security/argus/internal/model"
+	"github.com/argus-security/argus/internal/ssam"
 )
 
 type Assessor struct {
 	cfg           *config.Config
 	scoringEngine *DynamicScoringEngine
+	ssamEngine    *ssam.Engine
 	maxWorkers    int
 	resultsCache  sync.Map
 	mu            sync.RWMutex
@@ -28,7 +29,10 @@ type Assessor struct {
 func NewAssessor(cfg *config.Config) *Assessor {
 	engine := NewDynamicScoringEngine()
 
+	ssamEngine := ssam.NewEngine()
 	if cfg != nil {
+		ssamEngine.SetWeights(ssam.ConfigToWeights(cfg))
+		ssamEngine.SetEdgeFactors(ssam.ConfigToEdgeFactors(cfg))
 		w := cfg.Weights
 		engine.SetWeight(model.DomainAttackSurface, w.AttackSurface)
 		engine.SetWeight(model.DomainBusinessContinuity, w.BusinessContinuity)
@@ -41,12 +45,18 @@ func NewAssessor(cfg *config.Config) *Assessor {
 	}
 
 	engine.InitializeDefaults()
+	ssamEngine.InitializeDefaults(nil, nil)
 
 	return &Assessor{
 		cfg:           cfg,
 		scoringEngine: engine,
+		ssamEngine:    ssamEngine,
 		maxWorkers:    10,
 	}
+}
+
+func (a *Assessor) SSAMEngine() *ssam.Engine {
+	return a.ssamEngine
 }
 
 func (a *Assessor) ScoringEngine() *DynamicScoringEngine {
@@ -76,7 +86,7 @@ func (a *Assessor) Assess(hostID string, hostname string) *model.AssessmentResul
 			result.Checks = append(result.Checks, f.ToCheckResult())
 		}
 		if r.Error != nil {
-			logger.With("component", "assessor").Error("adapter failed", "adapter_id", r.AdapterID, "error", r.Error)
+			logger.WithComponent("assessor").Error("adapter failed", "adapter_id", r.AdapterID, "error", r.Error)
 			result.Checks = append(result.Checks, model.CheckResult{
 				CheckID: "ADAPTER-" + r.AdapterID,
 				Domain:  "attack_surface",
@@ -112,25 +122,34 @@ func (a *Assessor) Assess(hostID string, hostname string) *model.AssessmentResul
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostCheck, result)
 
-	dynScores := a.computeDynamicDomainScores(result)
-	for domain, score := range dynScores.GetAll() {
-		result.DomainScores.Set(domain, score)
+	ssamInput := &ssam.AssessmentInput{
+		HostID:      result.HostID,
+		Hostname:    result.Hostname,
+		Timestamp:   result.Timestamp,
+		Threshold:   result.Threshold,
+		Checks:      ssam.CheckResultsToInputs(result.Checks),
+		ThreatCoeff: a.cfg.ThreatCoeff,
+		SPCScore:    1.0,
 	}
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreScore, result)
 
+	ssamOutput, err := a.ssamEngine.ComputeScore(ctx, ssamInput)
+	if err != nil {
+		logger.WithComponent("assessor").Error("ssam compute failed, fallback to legacy", "error", err)
+		dynScores := a.computeDynamicDomainScores(result)
+		for domain, score := range dynScores.GetAll() {
+			result.DomainScores.Set(domain, score)
+		}
+		a.evaluateEdgeFactorChain(result)
+		a.ensureDefaults(result)
+		result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
+		result.Acceptable = result.FinalScore >= result.Threshold
+	} else {
+		ssam.OutputToModel(ssamOutput, result)
+	}
+
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostScore, result)
-
-	a.scoringEngine.Hooks().Execute(ctx, PhasePreEdge, result)
-
-	a.evaluateEdgeFactorChain(result)
-
-	a.scoringEngine.Hooks().Execute(ctx, PhasePostEdge, result)
-
-	a.ensureDefaults(result)
-
-	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
-	result.Acceptable = result.FinalScore >= result.Threshold
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreReport, result)
 
@@ -194,24 +213,34 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 		return a.buildEmptyResult(result)
 	}
 
-	dynScores := a.computeDynamicDomainScores(result)
-	for domain, score := range dynScores.GetAll() {
-		result.DomainScores.Set(domain, score)
+	ssamInput := &ssam.AssessmentInput{
+		HostID:      result.HostID,
+		Hostname:    result.Hostname,
+		Timestamp:   result.Timestamp,
+		Threshold:   result.Threshold,
+		Checks:      ssam.CheckResultsToInputs(result.Checks),
+		ThreatCoeff: a.cfg.ThreatCoeff,
+		SPCScore:    1.0,
 	}
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreScore, result)
+
+	ssamOutput, err := a.ssamEngine.ComputeScore(ctx, ssamInput)
+	if err != nil {
+		logger.WithComponent("assessor").Error("ssam compute failed, fallback to legacy", "error", err)
+		dynScores := a.computeDynamicDomainScores(result)
+		for domain, score := range dynScores.GetAll() {
+			result.DomainScores.Set(domain, score)
+		}
+		a.evaluateEdgeFactorChain(result)
+		a.ensureDefaults(result)
+		result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
+		result.Acceptable = result.FinalScore >= result.Threshold
+	} else {
+		ssam.OutputToModel(ssamOutput, result)
+	}
+
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostScore, result)
-
-	a.scoringEngine.Hooks().Execute(ctx, PhasePreEdge, result)
-
-	a.evaluateEdgeFactorChain(result)
-
-	a.scoringEngine.Hooks().Execute(ctx, PhasePostEdge, result)
-
-	a.ensureDefaults(result)
-
-	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
-	result.Acceptable = result.FinalScore >= result.Threshold
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreReport, result)
 
@@ -396,15 +425,6 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 	result.EdgeFactors = mapped
 }
 
-func (a *Assessor) checkPassed(id string, result *model.AssessmentResult) (bool, string) {
-	for _, c := range result.Checks {
-		if c.CheckID == id {
-			return c.Passed, c.Detail
-		}
-	}
-	return true, ""
-}
-
 func (a *Assessor) computeDynamicFinalScore(scores *model.DynamicDomainScores, result *model.AssessmentResult) float64 {
 	baseScore := a.scoringEngine.ComputeWeightedSum(scores)
 
@@ -554,7 +574,11 @@ func (a *Assessor) ReloadWeights(cfg *config.Config) {
 	for domain, val := range cfg.ExtensionWeights {
 		a.scoringEngine.SetWeight(domain, val)
 	}
-	logger.With("component", "assessor").Info("weights reloaded from config")
+
+	a.ssamEngine.SetWeights(ssam.ConfigToWeights(cfg))
+	a.ssamEngine.SetEdgeFactors(ssam.ConfigToEdgeFactors(cfg))
+
+	logger.WithComponent("assessor").Info("weights reloaded from config (engine + ssam)")
 }
 
 func (a *Assessor) RegisterHook(id string, phase AssessmentPhase, hook AssessmentHook, priority int) {

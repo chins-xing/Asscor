@@ -18,7 +18,7 @@ import (
 )
 
 type CommanderModule struct {
-	kernel  *Kernel
+	kernel  KernelContext
 	hmacKey []byte
 
 	mu          sync.RWMutex
@@ -55,14 +55,14 @@ func (m *CommanderModule) Priority() int {
 	return 60
 }
 
-func (m *CommanderModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *CommanderModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.pendingCmds = make(map[string]map[string]*apiv1.Command)
 
 	keyPath := filepath.Join("certs", "argus-hmac-key")
 	metaPath := filepath.Join("certs", "argus-hmac-key-meta.json")
 
-	key := k.Config()["hmac_key"]
+	key := kc.Config()["hmac_key"]
 	if key == "" {
 		key = os.Getenv("ARGUS_HMAC_KEY")
 	}
@@ -70,7 +70,7 @@ func (m *CommanderModule) Init(ctx context.Context, k *Kernel) error {
 		savedKey, err := os.ReadFile(keyPath)
 		if err == nil && len(savedKey) > 0 {
 			key = string(savedKey)
-			logger.With("component", "commander").Info("loaded persisted HMAC key", "path", keyPath)
+			logger.WithComponent("commander").Info("loaded persisted HMAC key", "path", keyPath)
 
 			metaData, err := os.ReadFile(metaPath)
 			if err == nil {
@@ -78,7 +78,7 @@ func (m *CommanderModule) Init(ctx context.Context, k *Kernel) error {
 				if json.Unmarshal(metaData, &meta) == nil {
 					m.keyMeta = meta
 					if time.Now().After(meta.ExpiresAt) {
-						logger.With("component", "commander").Warn("HMAC key expired, rotating", "expired_at", meta.ExpiresAt)
+						logger.WithComponent("commander").Warn("HMAC key expired, rotating", "expired_at", meta.ExpiresAt)
 						m.rotateKey(keyPath, metaPath)
 						key = string(m.hmacKey)
 					}
@@ -102,7 +102,7 @@ func (m *CommanderModule) Init(ctx context.Context, k *Kernel) error {
 
 	m.state = PluginInitialized
 
-	k.Container().Bind((*CommanderInterface)(nil), m)
+	kc.Container().Bind((*CommanderInterface)(nil), m)
 
 	return nil
 }
@@ -117,17 +117,17 @@ func (m *CommanderModule) generateAndPersistKey(keyPath, metaPath string) {
 	}
 
 	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
-		logger.With("component", "commander").Warn("failed to create key directory", "error", err)
+		logger.WithComponent("commander").Warn("failed to create key directory", "error", err)
 		return
 	}
 	if err := os.WriteFile(keyPath, []byte(key), 0600); err != nil {
-		logger.With("component", "commander").Warn("failed to persist HMAC key", "path", keyPath, "error", err)
+		logger.WithComponent("commander").Warn("failed to persist HMAC key", "path", keyPath, "error", err)
 	} else {
-		logger.With("component", "commander").Info("generated and persisted HMAC key", "path", keyPath)
+		logger.WithComponent("commander").Info("generated and persisted HMAC key", "path", keyPath)
 	}
 	metaData, _ := json.Marshal(m.keyMeta)
 	if err := os.WriteFile(metaPath, metaData, 0600); err != nil {
-		logger.With("component", "commander").Warn("failed to persist key metadata", "path", metaPath, "error", err)
+		logger.WithComponent("commander").Warn("failed to persist key metadata", "path", metaPath, "error", err)
 	}
 }
 
@@ -145,13 +145,13 @@ func (m *CommanderModule) rotateKey(keyPath, metaPath string) {
 	}
 
 	if err := os.WriteFile(keyPath, []byte(newKey), 0600); err != nil {
-		logger.With("component", "commander").Warn("failed to persist rotated HMAC key", "error", err)
+		logger.WithComponent("commander").Warn("failed to persist rotated HMAC key", "error", err)
 	}
 	metaData, _ := json.Marshal(m.keyMeta)
 	if err := os.WriteFile(metaPath, metaData, 0600); err != nil {
-		logger.With("component", "commander").Warn("failed to persist rotated key metadata", "error", err)
+		logger.WithComponent("commander").Warn("failed to persist rotated key metadata", "error", err)
 	}
-	logger.With("component", "commander").Info("HMAC key rotated", "expires_at", m.keyMeta.ExpiresAt)
+	logger.WithComponent("commander").Info("HMAC key rotated", "expires_at", m.keyMeta.ExpiresAt)
 }
 
 func (m *CommanderModule) KeyExpiry() time.Time {
@@ -167,8 +167,8 @@ func sha256Hex(data []byte) string {
 
 func (m *CommanderModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
-	m.kernel.Bus().Subscribe("policy.action", "commander", m.onPolicyAction)
-	logger.With("component", "commander").Info("started")
+	m.kernel.Bus().Subscribe(TopicPolicyAction, "commander", m.onPolicyAction)
+	logger.WithComponent("commander").Info("started")
 	return nil
 }
 
@@ -176,7 +176,7 @@ func (m *CommanderModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.kernel.Bus().UnsubscribeAll("commander")
 	m.state = PluginStopped
-	logger.With("component", "commander").Info("stopped")
+	logger.WithComponent("commander").Info("stopped")
 	return nil
 }
 
@@ -230,7 +230,7 @@ func (m *CommanderModule) AckCommand(hostID string, cmdID string, success bool, 
 
 	if cmds, ok := m.pendingCmds[hostID]; ok {
 		if _, exists := cmds[cmdID]; !exists {
-			logger.With("component", "commander").Warn("ack for unknown command", "command_id", cmdID, "host_id", hostID)
+			logger.WithComponent("commander").Warn("ack for unknown command", "command_id", cmdID, "host_id", hostID)
 			return
 		}
 		delete(cmds, cmdID)
@@ -238,11 +238,11 @@ func (m *CommanderModule) AckCommand(hostID string, cmdID string, success bool, 
 			delete(m.pendingCmds, hostID)
 		}
 	} else {
-		logger.With("component", "commander").Warn("ack for unknown host", "command_id", cmdID, "host_id", hostID)
+		logger.WithComponent("commander").Warn("ack for unknown host", "command_id", cmdID, "host_id", hostID)
 		return
 	}
 
-	logger.With("component", "commander").Info("command executed", "command_id", cmdID, "host_id", hostID, "success", success)
+	logger.WithComponent("commander").Info("command executed", "command_id", cmdID, "host_id", hostID, "success", success)
 }
 
 func (m *CommanderModule) sign(cmdID, action string, params map[string]string) []byte {
@@ -288,7 +288,7 @@ func (m *CommanderModule) onPolicyAction(ctx context.Context, msg Message) error
 func randomHex(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		logger.With("component", "commander").Error("crypto/rand read failed", "error", err)
+		logger.WithComponent("commander").Error("crypto/rand read failed", "error", err)
 		for i := range b {
 			b[i] = byte(i)
 		}

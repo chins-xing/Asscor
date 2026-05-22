@@ -59,17 +59,17 @@ type InterceptorHooks struct {
 func DefaultInterceptorHooks() *InterceptorHooks {
 	return &InterceptorHooks{
 		OnRejected: func(service, method, reason string) {
-			logger.With("component", "interceptor").Warn("request rejected", "service", service, "method", method, "reason", reason)
+			logger.WithComponent("interceptor").Warn("request rejected", "service", service, "method", method, "reason", reason)
 		},
 		OnBroken: func(service, method string) {
-			logger.With("component", "interceptor").Warn("circuit open", "service", service, "method", method)
+			logger.WithComponent("interceptor").Warn("circuit open", "service", service, "method", method)
 		},
 		OnAudit: func(event InterceptorEvent) {
 			status := "OK"
 			if !event.Success {
 				status = "ERR"
 			}
-			logger.With("component", "audit").Info("audit log",
+			logger.WithComponent("audit").Info("audit log",
 				"timestamp", event.Timestamp.Format(time.RFC3339),
 				"service", event.Service,
 				"method", event.Method,
@@ -159,14 +159,14 @@ func ResolveInterceptorConfig(cfg map[string]string) InterceptorConfig {
 		if f, err := parseFloat64(v); err == nil && f > 0 {
 			ic.RateLimitPerSec = f
 		} else if err != nil {
-			logger.With("component", "interceptor").Warn("invalid config value", "key", "rate_limit_per_sec", "value", v, "error", err)
+			logger.WithComponent("interceptor").Warn("invalid config value", "key", "rate_limit_per_sec", "value", v, "error", err)
 		}
 	}
 	if v, ok := cfg["interceptor.rate_limit_burst"]; ok {
 		if i, err := parseInt(v); err == nil && i > 0 {
 			ic.RateLimitBurst = i
 		} else if err != nil {
-			logger.With("component", "interceptor").Warn("invalid config value", "key", "rate_limit_burst", "value", v, "error", err)
+			logger.WithComponent("interceptor").Warn("invalid config value", "key", "rate_limit_burst", "value", v, "error", err)
 		}
 	}
 	if v, ok := cfg["interceptor.circuit_breaker_enabled"]; ok {
@@ -176,21 +176,21 @@ func ResolveInterceptorConfig(cfg map[string]string) InterceptorConfig {
 		if f, err := parseFloat64(v); err == nil && f > 0 && f <= 1.0 {
 			ic.CircuitBreakerRatio = f
 		} else if err != nil {
-			logger.With("component", "interceptor").Warn("invalid config value", "key", "circuit_breaker_ratio", "value", v, "error", err)
+			logger.WithComponent("interceptor").Warn("invalid config value", "key", "circuit_breaker_ratio", "value", v, "error", err)
 		}
 	}
 	if v, ok := cfg["interceptor.circuit_breaker_min_req"]; ok {
 		if i, err := parseInt(v); err == nil && i > 0 {
 			ic.CircuitBreakerMinReq = i
 		} else if err != nil {
-			logger.With("component", "interceptor").Warn("invalid config value", "key", "circuit_breaker_min_req", "value", v, "error", err)
+			logger.WithComponent("interceptor").Warn("invalid config value", "key", "circuit_breaker_min_req", "value", v, "error", err)
 		}
 	}
 	if v, ok := cfg["interceptor.circuit_breaker_timeout_s"]; ok {
 		if i, err := parseInt(v); err == nil && i > 0 {
 			ic.CircuitBreakerTimeout = time.Duration(i) * time.Second
 		} else if err != nil {
-			logger.With("component", "interceptor").Warn("invalid config value", "key", "circuit_breaker_timeout_s", "value", v, "error", err)
+			logger.WithComponent("interceptor").Warn("invalid config value", "key", "circuit_breaker_timeout_s", "value", v, "error", err)
 		}
 	}
 	if v, ok := cfg["interceptor.audit_log_enabled"]; ok {

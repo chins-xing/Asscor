@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -13,14 +14,14 @@ import (
 )
 
 type ConfigWatcherModule struct {
-	kernel     *Kernel
+	kernel     KernelContext
 	configPath string
 	interval   time.Duration
 
 	mu       sync.RWMutex
 	lastMod  time.Time
 	state    PluginState
-	assessor *AssessorModule
+	assessor AssessorInterface
 }
 
 func NewConfigWatcherModule(configPath string) *ConfigWatcherModule {
@@ -45,21 +46,30 @@ func (m *ConfigWatcherModule) Dependencies() []PluginDependency {
 	}
 }
 
-func (m *ConfigWatcherModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *ConfigWatcherModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.state = PluginInitialized
 
-	if p, ok := k.GetPlugin("assessor"); ok {
-		if am, ok2 := p.(*AssessorModule); ok2 {
-			m.assessor = am
+	if impl, ok := kc.Container().Resolve((*AssessorInterface)(nil)); ok {
+		if a, ok2 := impl.(AssessorInterface); ok2 {
+			m.assessor = a
 		} else {
-			logger.With("component", "config_watcher").Warn("assessor plugin has unexpected type")
+			logger.WithComponent("config_watcher").Warn("assessor has unexpected type in DI container")
 		}
 	}
+
+	cfg := kc.GetConfigObj()
+	if cfg != nil && cfg.HotloadIntervalS > 0 {
+		m.interval = time.Duration(cfg.HotloadIntervalS) * time.Second
+	}
+
+	m.resolveConfigPath()
 
 	info, err := os.Stat(m.configPath)
 	if err == nil {
 		m.lastMod = info.ModTime()
+	} else {
+		logger.WithComponent("config_watcher").Warn("config file not found at resolved path", "path", m.configPath, "error", err)
 	}
 
 	return nil
@@ -68,11 +78,20 @@ func (m *ConfigWatcherModule) Init(ctx context.Context, k *Kernel) error {
 func (m *ConfigWatcherModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
 
-	go m.watchLoop()
+	hotloadEnabled := true
+	if cfg := m.kernel.GetConfigObj(); cfg != nil {
+		hotloadEnabled = cfg.HotloadEnabled
+	}
+
+	if hotloadEnabled {
+		go m.watchLoop()
+	}
+
 	go m.sighupLoop()
 
-	logger.With("component", "config_watcher").Info("started",
+	logger.WithComponent("config_watcher").Info("started",
 		"config_path", m.configPath,
+		"hotload_enabled", hotloadEnabled,
 		"poll_interval", m.interval.String())
 
 	return nil
@@ -80,7 +99,7 @@ func (m *ConfigWatcherModule) Start(ctx context.Context) error {
 
 func (m *ConfigWatcherModule) Stop(ctx context.Context) error {
 	m.state = PluginStopped
-	logger.With("component", "config_watcher").Info("stopped")
+	logger.WithComponent("config_watcher").Info("stopped")
 	return nil
 }
 
@@ -114,7 +133,7 @@ func (m *ConfigWatcherModule) sighupLoop() {
 		case <-m.kernel.Context().Done():
 			return
 		case <-sigCh:
-			logger.With("component", "config_watcher").Info("SIGHUP received, forcing config reload")
+			logger.WithComponent("config_watcher").Info("SIGHUP received, forcing config reload")
 			m.forceReload()
 		}
 	}
@@ -123,7 +142,7 @@ func (m *ConfigWatcherModule) sighupLoop() {
 func (m *ConfigWatcherModule) checkAndReload() {
 	info, err := os.Stat(m.configPath)
 	if err != nil {
-		logger.With("component", "config_watcher").Warn("cannot stat config file", "path", m.configPath, "error", err)
+		logger.WithComponent("config_watcher").Warn("cannot stat config file", "path", m.configPath, "error", err)
 		return
 	}
 
@@ -138,10 +157,38 @@ func (m *ConfigWatcherModule) checkAndReload() {
 	m.forceReload()
 }
 
+func (m *ConfigWatcherModule) resolveConfigPath() {
+	if filepath.IsAbs(m.configPath) {
+		return
+	}
+
+	if _, err := os.Stat(m.configPath); err == nil {
+		return
+	}
+
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exeDir := filepath.Dir(exePath)
+	candidate := filepath.Join(exeDir, m.configPath)
+	if _, err := os.Stat(candidate); err == nil {
+		m.configPath = candidate
+		logger.WithComponent("config_watcher").Info("resolved config path from executable directory", "path", m.configPath)
+		return
+	}
+
+	wd, _ := os.Getwd()
+	candidate = filepath.Join(wd, m.configPath)
+	if abs, err := filepath.Abs(candidate); err == nil {
+		m.configPath = abs
+	}
+}
+
 func (m *ConfigWatcherModule) forceReload() {
 	cfg, err := config.Load(m.configPath)
 	if err != nil {
-		logger.With("component", "config_watcher").Error("failed to reload config", "path", m.configPath, "error", err)
+		logger.WithComponent("config_watcher").Error("failed to reload config", "path", m.configPath, "error", err)
 		return
 	}
 
@@ -161,7 +208,7 @@ func (m *ConfigWatcherModule) forceReload() {
 		Source:  "config_watcher",
 	})
 
-	logger.With("component", "config_watcher").Info("config reloaded",
+	logger.WithComponent("config_watcher").Info("config reloaded",
 		"path", m.configPath,
 		"weights", cfg.Weights,
 		"threshold", cfg.Threshold)

@@ -61,7 +61,7 @@ func NewGRPCServer(cfg GRPCServerConfig, kernelSvc *KernelServiceImpl, agentSvc 
 
 func (s *GRPCServer) Start() error {
 	if !s.cfg.Enabled {
-		logger.With("component", "grpc_server").Info("gRPC server disabled")
+		logger.WithComponent("grpc_server").Info("gRPC server disabled")
 		return nil
 	}
 
@@ -79,7 +79,7 @@ func (s *GRPCServer) Start() error {
 			return fmt.Errorf("load TLS credentials: %w", err)
 		}
 		opts = append(opts, grpc.Creds(creds))
-		logger.With("component", "grpc_server").Info("mTLS enabled")
+		logger.WithComponent("grpc_server").Info("mTLS enabled")
 	}
 
 	s.server = grpc.NewServer(opts...)
@@ -100,20 +100,21 @@ func (s *GRPCServer) Start() error {
 
 	serveErr := make(chan error, 1)
 	go func() {
-		logger.With("component", "grpc_server").Info("gRPC server started", "addr", s.cfg.ListenAddr)
+		logger.WithComponent("grpc_server").Info("gRPC server starting", "addr", s.cfg.ListenAddr)
 		if err := s.server.Serve(lis); err != nil {
 			s.mu.Lock()
 			s.running = false
 			s.mu.Unlock()
 			serveErr <- err
-			logger.With("component", "grpc_server").Error("gRPC server stopped", "error", err)
+			logger.WithComponent("grpc_server").Error("gRPC server stopped", "error", err)
 		}
 	}()
 
 	select {
 	case err := <-serveErr:
 		return fmt.Errorf("gRPC server failed to start: %w", err)
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
+		logger.WithComponent("grpc_server").Info("gRPC server running", "addr", s.cfg.ListenAddr)
 	}
 
 	return nil
@@ -125,7 +126,7 @@ func (s *GRPCServer) Stop() {
 	if s.server != nil && s.running {
 		s.server.GracefulStop()
 		s.running = false
-		logger.With("component", "grpc_server").Info("gRPC server stopped gracefully")
+		logger.WithComponent("grpc_server").Info("gRPC server stopped gracefully")
 	}
 }
 
@@ -250,7 +251,7 @@ func (h *grpcAgentHandler) StreamLogs(stream apiv1.AgentService_StreamLogsServer
 			break
 		}
 
-		logger.With("component", "grpc_stream_logs").Debug("received log entry",
+		logger.WithComponent("grpc_stream_logs").Debug("received log entry",
 			"host_id", entry.HostId, "level", entry.Level, "message", entry.Message)
 	}
 
@@ -316,7 +317,7 @@ func (c *GRPCClient) Connect() error {
 	c.kernel = apiv1.NewKernelServiceClient(conn)
 	c.mu.Unlock()
 
-	logger.With("component", "grpc_client").Info("connected to gRPC server", "addr", c.cfg.ServerAddr)
+	logger.WithComponent("grpc_client").Info("connected to gRPC server", "addr", c.cfg.ServerAddr)
 	return nil
 }
 

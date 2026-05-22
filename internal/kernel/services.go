@@ -36,7 +36,7 @@ func NewKernelServiceImpl(
 }
 
 func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterRequest) (*apiv1.RegisterResponse, error) {
-	logger.With("component", "kernel").Info("register request", "host_id", req.HostId, "hostname", req.Hostname, "version", req.Version)
+	logger.WithComponent("kernel").Info("register request", "host_id", req.HostId, "hostname", req.Hostname, "version", req.Version)
 
 	if req.HostId == "" {
 		return &apiv1.RegisterResponse{
@@ -64,7 +64,7 @@ func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterReq
 }
 
 func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatRequest) (*apiv1.HeartbeatResponse, error) {
-	logger.With("component", "kernel").Info("heartbeat received", "host_id", req.HostId, "has_result", req.Result != nil, "has_assessor", s.assessor != nil)
+	logger.WithComponent("kernel").Info("heartbeat received", "host_id", req.HostId, "has_result", req.Result != nil, "has_assessor", s.assessor != nil)
 
 	if s.heartbeat != nil {
 		s.heartbeat.RecordHeartbeat(req.HostId)
@@ -73,7 +73,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 	var assessmentResult *apiv1.AssessmentResult
 
 	if req.Result != nil && s.assessor != nil {
-		logger.With("component", "kernel").Info("processing check results", "count", len(req.Result.Checks), "host_id", req.HostId)
+		logger.WithComponent("kernel").Info("processing check results", "count", len(req.Result.Checks), "host_id", req.HostId)
 
 		checkResults := make([]model.CheckResult, 0, len(req.Result.Checks))
 		for _, c := range req.Result.Checks {
@@ -96,7 +96,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		}
 
 		result := s.assessor.EvaluateFromResults(req.HostId, hostname, checkResults)
-		logger.With("component", "kernel").Info("assessment result", "host_id", req.HostId, "score", result.FinalScore, "acceptable", result.Acceptable, "checks", len(result.Checks))
+		logger.WithComponent("kernel").Info("assessment result", "host_id", req.HostId, "score", result.FinalScore, "acceptable", result.Acceptable, "checks", len(result.Checks))
 
 		assessmentResult = convertAssessmentResult(result)
 	}
@@ -133,7 +133,12 @@ func convertAssessmentResult(r *model.AssessmentResult) *apiv1.AssessmentResult 
 	}
 
 	edgeFactors := map[string]float64{
-		"two_factor_failure": r.EdgeFactors.TwoFactorFailure,
+		"two_factor_failure":  r.EdgeFactors.TwoFactorFailure,
+		"syn_cookie_disabled": r.EdgeFactors.SYNCookieDisabled,
+		"selinux_disabled":    r.EdgeFactors.SELinuxDisabled,
+		"apparmor_disabled":   r.EdgeFactors.AppArmorDisabled,
+		"no_siem":             r.EdgeFactors.NoSIEM,
+		"no_ids":              r.EdgeFactors.NoIDS,
 	}
 
 	checks := make([]*apiv1.CheckResult, 0, len(r.Checks))
@@ -205,6 +210,14 @@ func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotR
 					"resilience":          ar.DomainScores.Resilience,
 					"kernel_security":     ar.DomainScores.KernelSecurity,
 				},
+				EdgeFactors: map[string]float64{
+					"two_factor_failure":  ar.EdgeFactors.TwoFactorFailure,
+					"syn_cookie_disabled": ar.EdgeFactors.SYNCookieDisabled,
+					"selinux_disabled":    ar.EdgeFactors.SELinuxDisabled,
+					"apparmor_disabled":   ar.EdgeFactors.AppArmorDisabled,
+					"no_siem":             ar.EdgeFactors.NoSIEM,
+					"no_ids":              ar.EdgeFactors.NoIDS,
+				},
 				Checks: checks,
 			}
 		}
@@ -253,7 +266,7 @@ func (s *AgentServiceImpl) StreamLogs(ctx context.Context, req *apiv1.StreamLogs
 func randomSessionSuffix() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		logger.With("component", "kernel").Error("crypto/rand read failed for session suffix", "error", err)
+		logger.WithComponent("kernel").Error("crypto/rand read failed for session suffix", "error", err)
 		for i := range b {
 			b[i] = byte(i)
 		}

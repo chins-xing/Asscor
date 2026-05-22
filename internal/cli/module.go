@@ -15,11 +15,11 @@ import (
 )
 
 type kernelBridge struct {
-	kernel *kernel.Kernel
+	kernel kernel.KernelContext
 	engine *Engine
 }
 
-func newKernelBridge(k *kernel.Kernel, e *Engine) *kernelBridge {
+func newKernelBridge(k kernel.KernelContext, e *Engine) *kernelBridge {
 	return &kernelBridge{kernel: k, engine: e}
 }
 
@@ -67,13 +67,13 @@ func (b *kernelBridge) SetConfig(key, value string) {
 }
 
 func (b *kernelBridge) Evaluate(hostID string) (interface{}, error) {
-	p, ok := b.kernel.GetPlugin("assessor")
+	impl, ok := b.kernel.Container().Resolve((*kernel.AssessorInterface)(nil))
 	if !ok {
-		return nil, fmt.Errorf("assessor plugin not available")
+		return nil, fmt.Errorf("assessor not available")
 	}
-	assessor, ok := p.(*kernel.AssessorModule)
+	assessor, ok := impl.(kernel.AssessorInterface)
 	if !ok {
-		return nil, fmt.Errorf("assessor plugin type mismatch")
+		return nil, fmt.Errorf("assessor type mismatch")
 	}
 	return assessor.Evaluate(hostID), nil
 }
@@ -92,7 +92,7 @@ func (b *kernelBridge) HealthCheck(ctx context.Context) []HealthStatus {
 }
 
 func (b *kernelBridge) Bus() BusAccess {
-	return &busBridge{bus: b.kernel.Bus(), ctx: b.kernel.Context()}
+	return newBusBridge(b.kernel.Bus(), b.kernel.Context())
 }
 
 func (b *kernelBridge) Agents() AgentAccess {
@@ -116,7 +116,7 @@ func (b *kernelBridge) History() *History {
 }
 
 type agentBridge struct {
-	kernel *kernel.Kernel
+	kernel kernel.KernelContext
 }
 
 func (a *agentBridge) ListAgents() []AgentInfo {
@@ -195,7 +195,7 @@ func (a *agentBridge) SendCommand(hostID, action string, params map[string]strin
 }
 
 type logBridge struct {
-	kernel *kernel.Kernel
+	kernel kernel.KernelContext
 }
 
 func (l *logBridge) ReadLogs(hostID string, limit int, level string) ([]LogEntry, error) {
@@ -291,9 +291,15 @@ func (l *logBridge) ExportLogs(hostID string, format string) (string, error) {
 	}
 }
 
+var _ kernel.BusAccess = (*busBridge)(nil)
+
 type busBridge struct {
 	bus *kernel.Bus
 	ctx context.Context
+}
+
+func newBusBridge(bus *kernel.Bus, ctx context.Context) *busBridge {
+	return &busBridge{bus: bus, ctx: ctx}
 }
 
 func (bb *busBridge) Publish(ctx context.Context, topic string, payload interface{}) {
@@ -317,7 +323,7 @@ func (bb *busBridge) Subscribe(topic, subscriberID string) <-chan interface{} {
 }
 
 type CLIModule struct {
-	kernel  *kernel.Kernel
+	kernel  kernel.KernelContext
 	engine  *Engine
 	bridge  *kernelBridge
 	enabled bool
@@ -347,33 +353,33 @@ func (m *CLIModule) Priority() int {
 	return 90
 }
 
-func (m *CLIModule) Init(ctx context.Context, k *kernel.Kernel) error {
-	m.kernel = k
+func (m *CLIModule) Init(ctx context.Context, kc kernel.KernelContext) error {
+	m.kernel = kc
 	m.state = kernel.PluginInitialized
 
-	cfgMap := k.Config()
+	cfgMap := kc.Config()
 	if v := cfgMap["cli.enabled"]; v == "off" || v == "false" || v == "0" {
 		m.enabled = false
-		logger.With("component", "cli").Info("CLI disabled by configuration")
+		logger.WithComponent("cli").Info("CLI disabled by configuration")
 		return nil
 	}
 	m.enabled = true
 
 	m.engine = NewEngine(nil)
-	m.bridge = newKernelBridge(k, m.engine)
+	m.bridge = newKernelBridge(kc, m.engine)
 	m.engine.kernel = m.bridge
 
 	m.engine.RegisterBuiltinCommands()
 
-	k.Container().Bind((*CLIInterface)(nil), m)
+	kc.Container().Bind((*CLIInterface)(nil), m)
 
-	k.Extensions().RegisterPoint(kernel.ExtensionPoint{
+	kc.Extensions().RegisterPoint(kernel.ExtensionPoint{
 		Name:        "cli.command.register",
 		Description: "Register custom CLI commands from plugins",
 		Version:     "1.0",
 	})
 
-	logger.With("component", "cli").Info("CLI module initialized")
+	logger.WithComponent("cli").Info("CLI module initialized")
 	return nil
 }
 
@@ -381,18 +387,27 @@ func (m *CLIModule) Start(ctx context.Context) error {
 	m.state = kernel.PluginStarted
 
 	if !m.enabled {
-		logger.With("component", "cli").Info("CLI module disabled, not starting interactive terminal")
+		logger.WithComponent("cli").Info("CLI module disabled, not starting interactive terminal")
 		return nil
+	}
+
+	if logger.CurrentOutput() == "stderr" || logger.CurrentOutput() == "stdout" {
+		logPath := "argus-kernel.log"
+		if err := logger.RedirectToFile(logPath); err != nil {
+			logger.WithComponent("cli").Warn("failed to redirect logs to file, CLI output may be interleaved", "path", logPath, "error", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "CLI active: logs redirected to %s\n", logPath)
+		}
 	}
 
 	go func() {
 		term := NewTerminal(m.engine)
 		if err := term.Run(); err != nil {
-			logger.With("component", "cli").Error("terminal error", "error", err)
+			logger.WithComponent("cli").Error("terminal error", "error", err)
 		}
 	}()
 
-	logger.With("component", "cli").Info("CLI module started")
+	logger.WithComponent("cli").Info("CLI module started", "log_output", logger.CurrentOutput())
 	return nil
 }
 
@@ -401,8 +416,9 @@ func (m *CLIModule) Stop(ctx context.Context) error {
 	if m.engine != nil {
 		m.engine.Stop()
 	}
+	logger.RedirectToStderr()
 	m.state = kernel.PluginStopped
-	logger.With("component", "cli").Info("CLI module stopped")
+	logger.WithComponent("cli").Info("CLI module stopped")
 	return nil
 }
 

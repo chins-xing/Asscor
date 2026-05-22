@@ -98,7 +98,7 @@ func (s *Server) Start() error {
 	}
 
 	s.listener = lis
-	logger.With("component", "grpc").Info("server listening", "addr", s.cfg.ListenAddr, "mtls", s.cfg.TLSConfig != nil)
+	logger.WithComponent("grpc").Info("server listening", "addr", s.cfg.ListenAddr, "mtls", s.cfg.TLSConfig != nil)
 
 	go s.acceptLoop()
 
@@ -119,7 +119,7 @@ func (s *Server) acceptLoop() {
 			case <-s.ctx.Done():
 				return
 			default:
-				logger.With("component", "grpc").Error("accept error", "error", err)
+				logger.WithComponent("grpc").Error("accept error", "error", err)
 				continue
 			}
 		}
@@ -182,15 +182,15 @@ func (s *Server) handleConn(conn net.Conn) {
 				return
 			}
 			if !errors.Is(err, io.EOF) {
-				logger.With("component", "grpc").Warn("read error", "error", err)
+				logger.WithComponent("grpc").Warn("read error", "error", err)
 				return
 			}
 		}
 
 		if int64(len(payload)) > maxPayload {
-			logger.With("component", "grpc").Warn("payload exceeds limit", "size", len(payload), "limit", maxPayload, "remote", clientAddr)
+			logger.WithComponent("grpc").Warn("payload exceeds limit", "size", len(payload), "limit", maxPayload, "remote", clientAddr)
 			if werr := s.codec.WriteError(conn, fmt.Errorf("payload too large: %d bytes (max %d)", len(payload), maxPayload)); werr != nil {
-				logger.With("component", "grpc").Error("write error response", "write_error", werr)
+				logger.WithComponent("grpc").Error("write error response", "write_error", werr)
 			}
 			continue
 		}
@@ -206,13 +206,13 @@ func (s *Server) handleConn(conn net.Conn) {
 
 		if err != nil {
 			if werr := s.codec.WriteError(conn, err); werr != nil {
-				logger.With("component", "grpc").Error("write error response", "write_error", werr, "original_error", err)
+				logger.WithComponent("grpc").Error("write error response", "write_error", werr, "original_error", err)
 			}
 			continue
 		}
 
 		if err := s.codec.WriteResponse(conn, respPayload); err != nil {
-			logger.With("component", "grpc").Error("write error", "error", err)
+			logger.WithComponent("grpc").Error("write error", "error", err)
 			return
 		}
 	}

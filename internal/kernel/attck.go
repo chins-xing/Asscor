@@ -103,7 +103,7 @@ type KillChainAssessment struct {
 }
 
 type ATTACKModule struct {
-	kernel       *Kernel
+	kernel       KernelContext
 	mu           sync.RWMutex
 	tactics      []ATTACKTactic
 	aptGroups    map[string]*APTGroupProfile
@@ -137,27 +137,27 @@ func (m *ATTACKModule) Priority() int {
 	return 21
 }
 
-func (m *ATTACKModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *ATTACKModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.state = PluginInitialized
 
 	m.loadDefaultMatrix()
 	m.loadDefaultAPTProfiles()
 	m.buildTransitionMatrix()
 
-	k.Container().Bind((*ATTACKInterface)(nil), m)
+	kc.Container().Bind((*ATTACKInterface)(nil), m)
 
-	k.Extensions().RegisterPoint(ExtensionPoint{
+	kc.Extensions().RegisterPoint(ExtensionPoint{
 		Name:        "attck.coverage.complete",
 		Description: "Called after coverage analysis completes",
 		Version:     "1.0",
 	})
-	k.Extensions().RegisterPoint(ExtensionPoint{
+	kc.Extensions().RegisterPoint(ExtensionPoint{
 		Name:        "attck.apt.matched",
 		Description: "Called when APT group match is detected",
 		Version:     "1.0",
 	})
-	k.Extensions().RegisterPoint(ExtensionPoint{
+	kc.Extensions().RegisterPoint(ExtensionPoint{
 		Name:        "attck.risk.predicted",
 		Description: "Called after predictive risk assessment",
 		Version:     "1.0",
@@ -168,14 +168,14 @@ func (m *ATTACKModule) Init(ctx context.Context, k *Kernel) error {
 
 func (m *ATTACKModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
-	logger.With("component", "attck").Info("started", "version", m.attckVersion)
+	logger.WithComponent("attck").Info("started", "version", m.attckVersion)
 	return nil
 }
 
 func (m *ATTACKModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.state = PluginStopped
-	logger.With("component", "attck").Info("stopped")
+	logger.WithComponent("attck").Info("stopped")
 	return nil
 }
 

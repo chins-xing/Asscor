@@ -96,7 +96,7 @@ func (d *gitDownloader) Fetch(spec ExtensionSpec, dest string) (string, error) {
 		return "", fmt.Errorf("git clone %s: %w\nstderr: %s", spec.Source.URL, err, stderr.String())
 	}
 
-	logger.With("component", "extmgr").Info("cloned extension", "extension_id", spec.ID, "source", spec.Source.URL)
+	logger.WithComponent("extmgr").Info("cloned extension", "extension_id", spec.ID, "source", spec.Source.URL)
 	return cloneTarget, nil
 }
 
@@ -227,7 +227,7 @@ func (i *ExtensionInstaller) Install(spec ExtensionSpec) (string, error) {
 	spec.InstallTime = time.Now()
 	spec.State = ExtStateInstalled
 
-	logger.With("component", "extmgr").Info("installed extension", "extension_id", spec.ID, "version", spec.Version, "dir", installDir)
+	logger.WithComponent("extmgr").Info("installed extension", "extension_id", spec.ID, "version", spec.Version, "dir", installDir)
 	return installDir, nil
 }
 

@@ -119,6 +119,13 @@ func (k *Kernel) SetConfigObj(c *config.Config) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.cfg = c
+	k.di.BindNamed("config", (*config.Config)(nil), c)
+}
+
+func (k *Kernel) GetConfigObj() *config.Config {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	return k.cfg
 }
 
 func (k *Kernel) RegisterPlugin(p Plugin) error {
@@ -138,7 +145,7 @@ func (k *Kernel) RegisterPlugin(p Plugin) error {
 		registered: time.Now(),
 	}
 
-	logger.With("component", "kernel").Info("plugin registered", "name", info.Name, "version", info.Version)
+	logger.WithComponent("kernel").Info("plugin registered", "name", info.Name, "version", info.Version)
 	return nil
 }
 
@@ -161,7 +168,7 @@ func (k *Kernel) UnregisterPlugin(name string) error {
 	k.bus.UnsubscribeAll(name)
 	delete(k.plugins, name)
 
-	logger.With("component", "kernel").Info("plugin unregistered", "name", name)
+	logger.WithComponent("kernel").Info("plugin unregistered", "name", name)
 	return nil
 }
 
@@ -213,18 +220,18 @@ func (k *Kernel) Bootstrap() error {
 	for _, rec := range plugins {
 		if cfg, ok := rec.plugin.(ConfigurablePlugin); ok {
 			if err := cfg.Configure(k.config); err != nil {
-				logger.With("component", "kernel").Warn("configure plugin failed", "plugin", rec.plugin.Info().Name, "error", err)
+				logger.WithComponent("kernel").Warn("configure plugin failed", "plugin", rec.plugin.Info().Name, "error", err)
 			}
 		}
 
 		for _, dep := range rec.plugin.Dependencies() {
 			if dep.Interface != nil {
 				if _, ok := k.di.Resolve(dep.Interface); !ok {
-					logger.With("component", "kernel").Warn("dependency not resolved", "plugin", rec.plugin.Info().Name, "interface", dep.Interface)
+					logger.WithComponent("kernel").Warn("dependency not resolved", "plugin", rec.plugin.Info().Name, "interface", dep.Interface)
 				}
 			} else if dep.Name != "" {
 				if _, ok := k.di.ResolveNamed(dep.Name); !ok {
-					logger.With("component", "kernel").Warn("named dependency not resolved", "plugin", rec.plugin.Info().Name, "name", dep.Name)
+					logger.WithComponent("kernel").Warn("named dependency not resolved", "plugin", rec.plugin.Info().Name, "name", dep.Name)
 				}
 			}
 		}
@@ -232,7 +239,7 @@ func (k *Kernel) Bootstrap() error {
 		if err := rec.plugin.Init(k.ctx, k); err != nil {
 			return fmt.Errorf("init plugin %s: %w", rec.plugin.Info().Name, err)
 		}
-		logger.With("component", "kernel").Info("plugin initialized", "plugin", rec.plugin.Info().Name)
+		logger.WithComponent("kernel").Info("plugin initialized", "plugin", rec.plugin.Info().Name)
 	}
 
 	k.extPoints.Execute(k.ctx, "kernel.post_init", nil)
@@ -243,7 +250,7 @@ func (k *Kernel) Bootstrap() error {
 		if err := rec.plugin.Start(k.ctx); err != nil {
 			return fmt.Errorf("start plugin %s: %w", rec.plugin.Info().Name, err)
 		}
-		logger.With("component", "kernel").Info("plugin started", "plugin", rec.plugin.Info().Name)
+		logger.WithComponent("kernel").Info("plugin started", "plugin", rec.plugin.Info().Name)
 	}
 
 	k.extPoints.Execute(k.ctx, "kernel.post_start", nil)
@@ -283,9 +290,9 @@ func (k *Kernel) Shutdown() error {
 			continue
 		}
 		if err := rec.plugin.Stop(k.ctx); err != nil {
-			logger.With("component", "kernel").Error("error stopping plugin", "plugin", rec.plugin.Info().Name, "error", err)
+			logger.WithComponent("kernel").Error("error stopping plugin", "plugin", rec.plugin.Info().Name, "error", err)
 		}
-		logger.With("component", "kernel").Info("plugin stopped", "plugin", rec.plugin.Info().Name)
+		logger.WithComponent("kernel").Info("plugin stopped", "plugin", rec.plugin.Info().Name)
 	}
 
 	k.cancel()

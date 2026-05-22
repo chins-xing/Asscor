@@ -19,7 +19,7 @@ func Register(a Adapter) {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
 	if _, exists := registry.adapters[a.ID()]; exists {
-		logger.With("component", "adapter").Warn("overwriting adapter", "adapter_id", a.ID())
+		logger.WithComponent("adapter").Warn("overwriting adapter", "adapter_id", a.ID())
 	}
 	registry.adapters[a.ID()] = a
 }
@@ -57,6 +57,12 @@ func ListByCategory(category string) []Adapter {
 		return list[i].ID() < list[j].ID()
 	})
 	return list
+}
+
+func ResetRegistryForTesting() {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	registry.adapters = make(map[string]Adapter)
 }
 
 type PipelineResult struct {
@@ -110,7 +116,7 @@ func (p *Pipeline) RunAll(ctx context.Context) []PipelineResult {
 
 			findings, err := ExecuteAdapter(actx, adapter, p.config)
 			if err != nil {
-				logger.With("component", "adapter").Error("adapter execution failed", "adapter_id", adapter.ID(), "error", err)
+				logger.WithComponent("adapter").Error("adapter execution failed", "adapter_id", adapter.ID(), "error", err)
 			}
 			resultsCh <- PipelineResult{
 				AdapterID:   adapter.ID(),

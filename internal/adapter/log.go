@@ -12,24 +12,28 @@ func SetDebug(enabled bool) {
 	debugEnabled = enabled
 }
 
+func ResetDebugForTesting() {
+	debugEnabled = false
+}
+
 func LogInfo(msg string, args ...interface{}) {
-	logger.With("component", "adapter").Info(msg, args...)
+	logger.WithComponent("adapter").Info(msg, args...)
 }
 
 func LogWarn(msg string, args ...interface{}) {
-	logger.With("component", "adapter").Warn(msg, args...)
+	logger.WithComponent("adapter").Warn(msg, args...)
 }
 
 func LogDebug(msg string, args ...interface{}) {
 	if debugEnabled {
-		logger.With("component", "adapter").Debug(msg, args...)
+		logger.WithComponent("adapter").Debug(msg, args...)
 	}
 }
 
 func LogError(msg string, args ...interface{}) {
-	logger.With("component", "adapter").Error(msg, args...)
+	logger.WithComponent("adapter").Error(msg, args...)
 }
 
 func AdapterLogger(name string) *slog.Logger {
-	return logger.With("component", "adapter", "adapter_name", name)
+	return logger.With("adapter", "adapter_name", name)
 }

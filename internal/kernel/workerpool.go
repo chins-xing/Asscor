@@ -57,7 +57,7 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 		defer p.wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				logger.With("component", "workerpool").Error("panic recovered", "panic", r)
+				logger.WithComponent("workerpool").Error("panic recovered", "panic", r)
 				p.metrics.mu.Lock()
 				p.metrics.totalFailed++
 				p.metrics.mu.Unlock()
@@ -75,7 +75,7 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 			go func() {
 				defer func() {
 					if r := recover(); r != nil {
-						logger.With("component", "workerpool").Error("task panic recovered", "panic", r)
+						logger.WithComponent("workerpool").Error("task panic recovered", "panic", r)
 						done <- fmt.Errorf("panic: %v", r)
 					}
 				}()
@@ -97,7 +97,7 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 				p.metrics.mu.Lock()
 				p.metrics.totalTimeout++
 				p.metrics.mu.Unlock()
-				logger.With("component", "workerpool").Warn("task timed out, cancelling", "timeout", timeout)
+				logger.WithComponent("workerpool").Warn("task timed out, cancelling", "timeout", timeout)
 				taskCancel()
 				p.wg.Add(1)
 				go func() {
@@ -170,7 +170,7 @@ type ConcurrencyStatus struct {
 }
 
 type ConcurrencyModule struct {
-	kernel     *Kernel
+	kernel     KernelContext
 	workerPool *WorkerPool
 	state      PluginState
 }
@@ -198,23 +198,23 @@ func (m *ConcurrencyModule) Priority() int {
 	return 2
 }
 
-func (m *ConcurrencyModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *ConcurrencyModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.state = PluginInitialized
 
 	if m.workerPool == nil {
 		m.workerPool = NewWorkerPool(10)
 	}
 
-	k.Container().Bind((*ConcurrencyInterface)(nil), m)
-	k.Container().Bind((*WorkerPoolInterface)(nil), m.workerPool)
+	kc.Container().Bind((*ConcurrencyInterface)(nil), m)
+	kc.Container().Bind((*WorkerPoolInterface)(nil), m.workerPool)
 
 	return nil
 }
 
 func (m *ConcurrencyModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
-	logger.With("component", "concurrency").Info("started", "max_workers", m.workerPool.MaxConcurrency())
+	logger.WithComponent("concurrency").Info("started", "max_workers", m.workerPool.MaxConcurrency())
 	return nil
 }
 
@@ -222,7 +222,7 @@ func (m *ConcurrencyModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.workerPool.Shutdown()
 	m.state = PluginStopped
-	logger.With("component", "concurrency").Info("stopped")
+	logger.WithComponent("concurrency").Info("stopped")
 	return nil
 }
 

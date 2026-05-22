@@ -106,7 +106,7 @@ func NewExtensionManager(cfg ManagerConfig) *ExtensionManager {
 		})
 	}
 
-	logger.With("component", "extmgr").Info("manager initialized", "repos", len(mgr.repos), "dir", cfg.ExtensionsDir)
+	logger.WithComponent("extmgr").Info("manager initialized", "repos", len(mgr.repos), "dir", cfg.ExtensionsDir)
 	return mgr
 }
 
@@ -145,7 +145,7 @@ func (m *ExtensionManager) InstallFromSpec(spec ExtensionSpec) error {
 
 	if m.config.AutoEnable {
 		if err := m.lifecycle.Enable(spec.ID); err != nil {
-			logger.With("component", "extmgr").Warn("auto-enable failed", "extension_id", spec.ID, "error", err)
+			logger.WithComponent("extmgr").Warn("auto-enable failed", "extension_id", spec.ID, "error", err)
 		}
 	}
 
@@ -242,7 +242,7 @@ func (m *ExtensionManager) AddRepository(name, url string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.repos = append(m.repos, ExtensionRepository{Name: name, URL: url})
-	logger.With("component", "extmgr").Info("added repository", "name", name, "url", url)
+	logger.WithComponent("extmgr").Info("added repository", "name", name, "url", url)
 }
 
 func (m *ExtensionManager) RemoveRepository(name string) {
@@ -251,7 +251,7 @@ func (m *ExtensionManager) RemoveRepository(name string) {
 	for i, r := range m.repos {
 		if r.Name == name {
 			m.repos = append(m.repos[:i], m.repos[i+1:]...)
-			logger.With("component", "extmgr").Info("removed repository", "name", name)
+			logger.WithComponent("extmgr").Info("removed repository", "name", name)
 			return
 		}
 	}
@@ -272,7 +272,7 @@ func (m *ExtensionManager) RefreshRepositories(ctx context.Context) error {
 	m.mu.RUnlock()
 
 	for _, repo := range repos {
-		logger.With("component", "extmgr").Info("refreshing repository", "name", repo.Name, "url", repo.URL)
+		logger.WithComponent("extmgr").Info("refreshing repository", "name", repo.Name, "url", repo.URL)
 	}
 	return nil
 }
@@ -308,7 +308,7 @@ func (m *ExtensionManager) onExtensionInstalled(spec ExtensionSpec) {
 			Category:      model.CategoryExtension,
 			DefaultWeight: 5,
 		})
-		logger.With("component", "extmgr").Info("registered domain from extension", "extension_id", spec.ID)
+		logger.WithComponent("extmgr").Info("registered domain from extension", "extension_id", spec.ID)
 	case ExtTypeEdgeFactor:
 		factorValue := 1.0
 		if v, ok := spec.CustomConfig["factor"]; ok {
@@ -322,13 +322,13 @@ func (m *ExtensionManager) onExtensionInstalled(spec ExtensionSpec) {
 			Active:      spec.State == ExtStateEnabled,
 			Priority:    50,
 		})
-		logger.With("component", "extmgr").Info("registered edge factor from extension", "extension_id", spec.ID)
+		logger.WithComponent("extmgr").Info("registered edge factor from extension", "extension_id", spec.ID)
 	case ExtTypeHook:
 		if a != nil {
 			a.RegisterHook(spec.ID, engine.PhasePostScore, func(ctx context.Context, result *model.AssessmentResult) error {
 				return m.executeHook(ctx, spec, result)
 			}, 50)
-			logger.With("component", "extmgr").Info("registered hook from extension", "extension_id", spec.ID)
+			logger.WithComponent("extmgr").Info("registered hook from extension", "extension_id", spec.ID)
 		}
 	}
 }
@@ -343,7 +343,7 @@ func (m *ExtensionManager) onExtensionDisabled(spec ExtensionSpec) {
 	switch spec.ExtType {
 	case ExtTypeCheckModule:
 		count := checks.Unregister(spec.ID)
-		logger.With("component", "extmgr").Info("unregistered checks from extension", "count", count, "extension_id", spec.ID)
+		logger.WithComponent("extmgr").Info("unregistered checks from extension", "count", count, "extension_id", spec.ID)
 	case ExtTypeDomain:
 		model.UnregisterDomain(spec.ID)
 	case ExtTypeEdgeFactor:
@@ -358,13 +358,13 @@ func (m *ExtensionManager) onExtensionDeleted(spec ExtensionSpec) {
 func (m *ExtensionManager) registerCheckModule(spec ExtensionSpec) {
 	checkDir := filepath.Join(spec.InstallPath, "checks")
 	if _, err := os.Stat(checkDir); os.IsNotExist(err) {
-		logger.With("component", "extmgr").Debug("no checks directory in extension", "extension_id", spec.ID)
+		logger.WithComponent("extmgr").Debug("no checks directory in extension", "extension_id", spec.ID)
 		return
 	}
 
 	entries, err := os.ReadDir(checkDir)
 	if err != nil {
-		logger.With("component", "extmgr").Error("failed to read checks dir", "extension_id", spec.ID, "error", err)
+		logger.WithComponent("extmgr").Error("failed to read checks dir", "extension_id", spec.ID, "error", err)
 		return
 	}
 
@@ -381,7 +381,7 @@ func (m *ExtensionManager) registerCheckModule(spec ExtensionSpec) {
 			if f.IsDir() || filepath.Ext(f.Name()) != ".go" {
 				continue
 			}
-			logger.With("component", "extmgr").Debug("found check source in extension", "extension_id", spec.ID, "dir", entry.Name(), "file", f.Name())
+			logger.WithComponent("extmgr").Debug("found check source in extension", "extension_id", spec.ID, "dir", entry.Name(), "file", f.Name())
 		}
 	}
 }

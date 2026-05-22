@@ -210,9 +210,12 @@ argus/
 │   └── argus/         # 独立评估工具入口
 ├── internal/
 │   ├── kernel/        # 内核核心模块（assessor, policy, spc, cti,
-│   │                   #  adapter_integration, config_watcher 等）
+│   │                   #  adapter_integration, config_watcher,
+│   │                   #  di, bus, circuitbreaker, interceptor 等）
+│   ├── ssam/          # SSAM 独立算法模块（engine, interfaces, adapter,
+│   │                   #  defaults, errors — 可脱离 Argus 独立使用）
 │   ├── agent/         # Agent 核心模块（collector, executor）
-│   ├── engine/        # SSAM 评估引擎（含适配器流水线集成）
+│   ├── engine/        # Argus 评估引擎（含适配器流水线集成，内部调用 ssam 包）
 │   ├── adapter/       # 外部工具适配器框架（21 个适配器：11 探测器 + 10 管理类）
 │   │   ├── scanner/   #   探测器适配器（Trivy, Nuclei, Lynis, OpenSCAP 等）
 │   │   └── management/#   管理类适配器（Ansible, NetBox, FreeIPA, Jira 等）
@@ -280,7 +283,12 @@ ARGUS μKernel 是风险评估与指令分发中心，采用微内核 + Agent �
 
 | 模块 | 功能 |
 |------|------|
-| **评估引擎 (Assessor)** | 加载检查项并发评估，计算 SSAM 四域得分 + 边缘因子 + SPC 修正 |
+| **SSAM 算法引擎 (internal/ssam)** | 独立算法模块，实现 SSAM 1.3 评分公式、域评分、边缘因子计算、钩子机制；可脱离 Argus 框架独立使用 |
+| **评估引擎 (Assessor)** | 加载检查项并发评估，通过 SSAM 模块计算四域得分 + 边缘因子 + SPC 修正 |
+| **依赖注入容器 (DI Container)** | 基于反射的 IoC 容器，支持接口绑定、命名绑定、结构体字段注入（`inject` tag）、确定性匹配 |
+| **消息总线 (Bus)** | 发布-订阅模式事件总线，支持同步/异步发布、goroutine 并发控制、信号量防泄漏 |
+| **熔断器 (Circuit Breaker)** | 基于滑动窗口的熔断器（Closed→Open→Half-Open），防止服务雪崩 |
+| **拦截器链 (Interceptor)** | 可组合的请求拦截器，内置速率限制、熔断器、审计日志拦截器 |
 | **适配器集成 (AdapterIntegration)** | 周期性执行 21 个外部工具适配器（Fetch→Parse→Map→Validate 四阶段流水线），结果注入评分流程 |
 | **安全态势计算器 (SPC)** | 从 NVD/EPSS/CISA KEV 拉取漏洞情报，CVE 缓存磁盘持久化（启动加载/退出保存），输出个体化 P_score |
 | **配置监听器 (ConfigWatcher)** | 监控配置文件变化，支持权重热加载（`Assessor.ReloadWeights()`）和 SIGHUP 信号 |
@@ -316,6 +324,35 @@ Agent ──gRPC/mTLS──▶ Kernel gRPC Server (:50052)
 ## 12. 总结
 
 SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。四个核心域与边缘因子、威胁系数、SPC 态势修正共同形成完整的风险评估体系。引入等保映射后，ARGUS 项目既是对抗高级威胁的战术工具，也是衡量合规持续有效性的战略仪表盘。它不仅回答"系统安全吗"，更回答"在当下威胁中，我们的安全程度是否可以被接受"。
+
+## 12.1 SSAM 与 Argus 框架解耦架构
+
+自 v0.1.1-MVP 起，SSAM 算法已从 Argus 框架中完全解耦为独立模块 `internal/ssam`，两者通过标准化接口松耦合协作：
+
+```
+┌─────────────────────────────────────────────────┐
+│                  Argus Kernel                    │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
+│  │ Assessor │─▶│ DI       │─▶│ SSAM Engine   │  │
+│  │ Module   │  │ Container│  │ (internal/ssam)│  │
+│  └──────────┘  └──────────┘  └───────────────┘  │
+│       │              ▲              │            │
+│       ▼              │              ▼            │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
+│  │ Adapter  │  │ Config   │  │ Adapter       │  │
+│  │ Pipeline │  │ Adapter  │  │ (model↔ssam)  │  │
+│  └──────────┘  └──────────┘  └───────────────┘  │
+└─────────────────────────────────────────────────┘
+```
+
+**关键设计原则：**
+
+- **接口隔离**：SSAM 通过 `Provider` 聚合接口暴露能力（`ScoringProvider` + `DomainProvider` + `EdgeFactorProvider` + `HookProvider`）
+- **依赖注入**：Argus 通过 DI 容器绑定 `ssam.ScoringProvider` → `Engine` 实例，框架不直接依赖 Engine 具体类型
+- **数据格式标准化**：`AssessmentInput` / `AssessmentOutput` 作为 DTO，`adapter.go` 负责 Argus model ↔ SSAM 格式转换
+- **独立可用**：`internal/ssam` 无外部依赖（仅 `config`、`model`、`logger`），可直接 `go get` 引入第三方项目
+
+详细接口规范与接入指南请参阅 [docs/SSAM接口规范与接入指南.md](docs/SSAM接口规范与接入指南.md)。
 
 ## 13. 已知局限与后续工作
 
@@ -390,3 +427,36 @@ SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。�
 - **HMAC 密钥管理** — 密钥元数据（创建时间/过期时间/哈希）、自动轮换（90 天）、文件权限 `0600`
 
 > **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 1.3。ARGUS 是实现 SSAM 的开源项目框架，当前版本 v0.1.1-MVP。两者版本号独立演进。
+
+#### 第三批修复（SSAM 解耦与二次审计 — 2026-05-22）
+
+**架构重构 — SSAM 算法与 Argus 框架解耦：**
+
+- **SSAM 独立模块** — 将 SSAM 核心算法抽取为独立包 `internal/ssam`，包含接口定义（`Provider` 四子接口）、数据结构（`AssessmentInput`/`AssessmentOutput` DTO）、算法实现（`Engine`）、配置适配（`adapter.go`）、默认值（`defaults.go`）、输入验证（`errors.go`）
+- **依赖注入集成** — 在 `AssessorModule.Init` 中将 SSAM Engine 实例注册到 DI 容器（`Bind((*ssam.ScoringProvider)(nil), engine)`），框架通过接口消费 SSAM 能力
+- **边缘因子级联机制** — 支持 `CascadeTo`/`CascadeValue`/`CascadeOnly` 配置，实现因子间级联关系（如 3FA 未满足时级联修改 2FA 因子值）
+- **钩子机制** — 提供 `HookPhase`（pre_score/post_score/pre_edge/post_edge）和 `AssessmentHook` 接口，支持在评分过程各阶段插入自定义逻辑
+- **编译时接口检查** — 添加 `var _ Provider = (*Engine)(nil)` 确保 Engine 始终满足 Provider 接口
+
+**基础设施增强：**
+
+- **熔断器 (Circuit Breaker)** — 实现基于滑动窗口的熔断器，支持 Closed/Open/Half-Open 三态切换，可配置失败率阈值、超时时间、窗口大小
+- **消息总线 (Bus)** — 基于发布-订阅模式的事件总线，支持同步/异步发布、goroutine 并发控制（信号量 + maxGoroutines）、防泄漏机制
+- **拦截器链 (Interceptor Chain)** — 可组合的请求拦截器，内置速率限制、熔断器、审计日志拦截器
+- **确定性依赖注入** — 对 DI 容器绑定类型排序，消除 map 迭代顺序随机导致的匹配不确定性
+- **gRPC 启动检测** — 改进 gRPC 服务器启动检测机制，超时增至 5 秒并优化日志
+
+**二次审计修复（#11-#13）：**
+
+| 编号 | 模块 | 问题 | 修复 |
+|------|------|------|------|
+| #11 | `services.go` GetSnapshot | 未映射边缘因子到 gRPC 响应 | 补全 6 项边缘因子映射 |
+| #12 | `persistence.go` AssessmentRecord | 仅持久化 TwoFactorFail，其他 5 项丢失 | 新增 SYNCookieDis/SELinuxDis/AppArmorDis/NoSIEM/NoIDS 字段 |
+| #13 | `persistence.go` DashboardReport | 边缘因子映射不完整 | 补全 6 项边缘因子映射 |
+
+**废弃代码清理：**
+
+- 移除 `engine/assessor.go` 中未实现的 `ScoringBackend` 接口
+- 移除 `engine/assessor.go` 中无调用点的 `checkPassed()` 方法
+- 移除 `model/edge_factor_chain.go` 中无调用点的 `EdgeFactorChain.Apply()` 方法和 `ResetEdgeFactorsForTesting()` 函数
+- 清理 `model/edge_factor_chain.go` 中不再使用的 `math` 导入

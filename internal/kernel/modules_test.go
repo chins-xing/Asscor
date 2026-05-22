@@ -55,7 +55,7 @@ func TestSPCModule(t *testing.T) {
 	spc := NewSPCModule()
 	spc.enabled = true
 
-	if err := spc.Init(k.Context(), k); err != nil {
+	if err := spc.Init(k.Context(), KernelContext(k)); err != nil {
 		t.Fatalf("init spc: %v", err)
 	}
 
@@ -135,7 +135,7 @@ func TestATTACKCoverage(t *testing.T) {
 	k := NewKernel()
 	attck := NewATTACKModule()
 
-	if err := attck.Init(k.Context(), k); err != nil {
+	if err := attck.Init(k.Context(), KernelContext(k)); err != nil {
 		t.Fatalf("init attck: %v", err)
 	}
 
@@ -167,7 +167,7 @@ func TestATTACKCoverage(t *testing.T) {
 func TestAPTGroupMatch(t *testing.T) {
 	k := NewKernel()
 	attck := NewATTACKModule()
-	if err := attck.Init(k.Context(), k); err != nil {
+	if err := attck.Init(k.Context(), KernelContext(k)); err != nil {
 		t.Fatalf("init attck: %v", err)
 	}
 
@@ -188,7 +188,7 @@ func TestAPTGroupMatch(t *testing.T) {
 func TestPredictiveRisk(t *testing.T) {
 	k := NewKernel()
 	attck := NewATTACKModule()
-	if err := attck.Init(k.Context(), k); err != nil {
+	if err := attck.Init(k.Context(), KernelContext(k)); err != nil {
 		t.Fatalf("init attck: %v", err)
 	}
 

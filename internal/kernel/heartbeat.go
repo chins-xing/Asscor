@@ -20,7 +20,7 @@ type AgentRecord struct {
 }
 
 type HeartbeatModule struct {
-	kernel *Kernel
+	kernel KernelContext
 
 	mu      sync.RWMutex
 	agents  map[string]*AgentRecord
@@ -46,27 +46,27 @@ func (m *HeartbeatModule) Priority() int {
 	return 5
 }
 
-func (m *HeartbeatModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *HeartbeatModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.agents = make(map[string]*AgentRecord)
 	m.timeout = 60 * time.Second
 	m.state = PluginInitialized
 
-	k.Container().Bind((*HeartbeatInterface)(nil), m)
+	kc.Container().Bind((*HeartbeatInterface)(nil), m)
 	return nil
 }
 
 func (m *HeartbeatModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
 	go m.monitorLoop()
-	logger.With("component", "heartbeat").Info("started", "timeout", m.timeout)
+	logger.WithComponent("heartbeat").Info("started", "timeout", m.timeout)
 	return nil
 }
 
 func (m *HeartbeatModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.state = PluginStopped
-	logger.With("component", "heartbeat").Info("stopped")
+	logger.WithComponent("heartbeat").Info("stopped")
 	return nil
 }
 
@@ -133,13 +133,13 @@ func (m *HeartbeatModule) RegisterAgent(hostID, hostname, version string) {
 
 	if m.kernel != nil {
 		m.kernel.Bus().Publish(m.kernel.Context(), Message{
-			Topic:   "agent.registered",
+			Topic:   TopicAgentRegistered,
 			Payload: hostID,
 			Source:  "heartbeat",
 		})
 	}
 
-	logger.With("component", "heartbeat").Info("agent registered", "host_id", hostID, "hostname", hostname)
+	logger.WithComponent("heartbeat").Info("agent registered", "host_id", hostID, "hostname", hostname)
 }
 
 func (m *HeartbeatModule) GetAgent(hostID string) *AgentRecord {
@@ -197,11 +197,11 @@ func (m *HeartbeatModule) checkTimeouts() {
 
 	for _, id := range timedOut {
 		m.kernel.Bus().Publish(m.kernel.Context(), Message{
-			Topic:   "agent.timeout",
+			Topic:   TopicAgentTimeout,
 			Payload: id,
 			Source:  "heartbeat",
 		})
-		logger.With("component", "heartbeat").Warn("agent timed out", "host_id", id)
+		logger.WithComponent("heartbeat").Warn("agent timed out", "host_id", id)
 
 		m.mu.Lock()
 		if agent, ok := m.agents[id]; ok {

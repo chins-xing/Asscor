@@ -84,7 +84,7 @@ func (h *HookRegistry) Execute(ctx context.Context, phase AssessmentPhase, resul
 	var errs []error
 	for _, hk := range hooks {
 		if err := hk.hook(ctx, result); err != nil {
-			logger.With("component", "engine").Warn("hook error", "hook_id", hk.id, "phase", phase, "error", err)
+			logger.WithComponent("engine").Warn("hook error", "hook_id", hk.id, "phase", phase, "error", err)
 			errs = append(errs, fmt.Errorf("%s: %w", hk.id, err))
 		}
 	}

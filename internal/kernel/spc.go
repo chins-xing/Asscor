@@ -274,7 +274,7 @@ type SPCKEVConfig struct {
 }
 
 type SPCModule struct {
-	kernel *Kernel
+	kernel KernelContext
 
 	mu          sync.RWMutex
 	cveCache    []SPCCVEScore
@@ -350,14 +350,15 @@ func (m *SPCModule) Priority() int {
 	return 20
 }
 
-func (m *SPCModule) Init(ctx context.Context, k *Kernel) error {
-	if k == nil {
-		return fmt.Errorf("kernel instance must not be nil")
+func (m *SPCModule) Init(ctx context.Context, kc KernelContext) error {
+	if kc == nil {
+		return fmt.Errorf("kernel context must not be nil")
 	}
-	m.kernel = k
+	m.kernel = kc
 	m.state = PluginInitialized
 
-	if k.cfg == nil {
+	cfg := kc.GetConfigObj()
+	if cfg == nil {
 		m.enabled = false
 		m.minPScore = 0.60
 		m.fetchInterval = 24 * time.Hour
@@ -376,7 +377,7 @@ func (m *SPCModule) Init(ctx context.Context, k *Kernel) error {
 		m.mispConfig.SyncHours = 24
 		m.mispConfig.TLPFilter = "white,green"
 	} else {
-		spcCfg := k.cfg.SPC
+		spcCfg := cfg.SPC
 		m.enabled = spcCfg.Enabled
 		m.minPScore = spcCfg.MinPScore
 		m.fetchInterval = time.Duration(spcCfg.FetchIntervalH) * time.Hour
@@ -415,22 +416,22 @@ func (m *SPCModule) Init(ctx context.Context, k *Kernel) error {
 	}
 
 	if m.enabled && m.nvdConfig.APIKey == "" {
-		logger.With("component", "spc").Warn("NVD API key not configured, SPC may be rate limited")
+		logger.WithComponent("spc").Warn("NVD API key not configured, SPC may be rate limited")
 	}
 
-	k.Container().Bind((*SPCInterface)(nil), m)
+	kc.Container().Bind((*SPCInterface)(nil), m)
 
-	k.Extensions().RegisterPoint(ExtensionPoint{
+	kc.Extensions().RegisterPoint(ExtensionPoint{
 		Name:        "spc.pre_calculate",
 		Description: "Called before SPC calculation",
 		Version:     "1.0",
 	})
-	k.Extensions().RegisterPoint(ExtensionPoint{
+	kc.Extensions().RegisterPoint(ExtensionPoint{
 		Name:        "spc.post_calculate",
 		Description: "Called after SPC calculation completes",
 		Version:     "1.0",
 	})
-	k.Extensions().RegisterPoint(ExtensionPoint{
+	kc.Extensions().RegisterPoint(ExtensionPoint{
 		Name:        "spc.cve_updated",
 		Description: "Called when CVE cache is refreshed",
 		Version:     "1.0",
@@ -444,13 +445,13 @@ func (m *SPCModule) Start(ctx context.Context) error {
 	if m.enabled {
 		if m.mispConfig.BaseURL != "" && m.mispConfig.APIKey != "" {
 			if err := m.ConfigureMISP(m.mispConfig.BaseURL, m.mispConfig.APIKey); err != nil {
-				logger.With("component", "spc").Warn("MISP configuration invalid, continuing without MISP", "error", err)
+				logger.WithComponent("spc").Warn("MISP configuration invalid, continuing without MISP", "error", err)
 			}
 		}
 		m.loadCacheFromDisk()
 		go m.fetchLoop()
 	}
-	logger.With("component", "spc").Info("started", "enabled", m.enabled)
+	logger.WithComponent("spc").Info("started", "enabled", m.enabled)
 	return nil
 }
 
@@ -458,7 +459,7 @@ func (m *SPCModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.saveCacheToDisk()
 	m.state = PluginStopped
-	logger.With("component", "spc").Info("stopped")
+	logger.WithComponent("spc").Info("stopped")
 	return nil
 }
 
@@ -526,7 +527,7 @@ func (m *SPCModule) cleanupOldCVEs() {
 	}
 	removed := before - len(m.cveCache)
 	if removed > 0 {
-		logger.With("component", "spc").Info("cleaned old CVE records", "removed", removed, "kept", len(m.cveCache))
+		logger.WithComponent("spc").Info("cleaned old CVE records", "removed", removed, "kept", len(m.cveCache))
 	}
 }
 
@@ -625,7 +626,7 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 	cves, err := m.fetchNVDAPI(baseURL, apiKey, since)
 	if err != nil {
 		result.Error = err.Error()
-		logger.With("component", "spc").Warn("NVD API fetch failed, falling back to sample data", "error", err)
+		logger.WithComponent("spc").Warn("NVD API fetch failed, falling back to sample data", "error", err)
 		cves = m.generateSampleCVEs()
 	}
 
@@ -633,7 +634,7 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 	for _, cve := range cves {
 		if _, exists := m.cveIndex[cve.CVEID]; !exists {
 			if len(m.cveCache) >= m.maxCacheSize {
-				logger.With("component", "spc").Warn("CVE cache reached max size", "max", m.maxCacheSize)
+				logger.WithComponent("spc").Warn("CVE cache reached max size", "max", m.maxCacheSize)
 				break
 			}
 			m.cveIndex[cve.CVEID] = len(m.cveCache)
@@ -644,7 +645,7 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 	m.mu.Unlock()
 
 	result.Duration = time.Since(start)
-	logger.With("component", "spc").Info("NVD fetch completed", "duration", result.Duration, "added", result.CVEAdded)
+	logger.WithComponent("spc").Info("NVD fetch completed", "duration", result.Duration, "added", result.CVEAdded)
 	return result
 }
 
@@ -781,7 +782,7 @@ func (m *SPCModule) fetchNVDAPI(baseURL, apiKey string, since time.Time) ([]SPCC
 				return allCVEs, fmt.Errorf("NVD API rate limited after %d retries", maxRetries)
 			}
 			backoff := time.Duration(1<<uint(retryCount-1)) * 2 * time.Second
-			logger.With("component", "spc").Warn("NVD API rate limited, retrying with backoff",
+			logger.WithComponent("spc").Warn("NVD API rate limited, retrying with backoff",
 				"retry", retryCount, "backoff", backoff)
 			select {
 			case <-time.After(backoff):
@@ -822,7 +823,7 @@ func (m *SPCModule) fetchNVDAPI(baseURL, apiKey string, since time.Time) ([]SPCC
 		}
 	}
 
-	logger.With("component", "spc").Info("NVD API fetched CVEs", "count", len(allCVEs), "since", since.Format("2006-01-02"))
+	logger.WithComponent("spc").Info("NVD API fetched CVEs", "count", len(allCVEs), "since", since.Format("2006-01-02"))
 	return allCVEs, nil
 }
 
@@ -918,7 +919,7 @@ func (m *SPCModule) FetchFromEPSS() SPCFetchResult {
 	if err != nil {
 		result.Error = fmt.Sprintf("EPSS fetch failed: %v", err)
 		result.Duration = time.Since(start)
-		logger.With("component", "spc").Error("EPSS fetch failed", "error", err)
+		logger.WithComponent("spc").Error("EPSS fetch failed", "error", err)
 		return result
 	}
 	defer resp.Body.Close()
@@ -998,7 +999,7 @@ func (m *SPCModule) FetchFromEPSS() SPCFetchResult {
 	result.CVEUpdated = updated
 	result.Duration = time.Since(start)
 
-	logger.With("component", "spc").Info("EPSS data fetched",
+	logger.WithComponent("spc").Info("EPSS data fetched",
 		"parsed", parsed,
 		"created", created,
 		"updated", updated,
@@ -1029,7 +1030,7 @@ func (m *SPCModule) FetchFromCISAKEV() SPCFetchResult {
 	if err != nil {
 		result.Error = fmt.Sprintf("CISA KEV fetch failed: %v", err)
 		result.Duration = time.Since(start)
-		logger.With("component", "spc").Error("CISA KEV fetch failed", "error", err)
+		logger.WithComponent("spc").Error("CISA KEV fetch failed", "error", err)
 		return result
 	}
 	defer resp.Body.Close()
@@ -1106,7 +1107,7 @@ func (m *SPCModule) FetchFromCISAKEV() SPCFetchResult {
 	result.CVEUpdated = kevUpdated
 	result.Duration = time.Since(start)
 
-	logger.With("component", "spc").Info("CISA KEV catalog fetched",
+	logger.WithComponent("spc").Info("CISA KEV catalog fetched",
 		"total_kev", len(newKEV),
 		"created", kevCreated,
 		"updated", kevUpdated,
@@ -1169,7 +1170,7 @@ func (m *SPCModule) FetchFromMISP() SPCFetchResult {
 	m.mu.Unlock()
 
 	result.Duration = time.Since(start)
-	logger.With("component", "spc").Info("MISP fetch completed", "duration", result.Duration, "added", result.CVEAdded)
+	logger.WithComponent("spc").Info("MISP fetch completed", "duration", result.Duration, "added", result.CVEAdded)
 	return result
 }
 
@@ -1257,14 +1258,14 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 
 	body, err := json.Marshal(searchReq)
 	if err != nil {
-		logger.With("component", "spc").Error("MISP request marshal failed", "error", err)
+		logger.WithComponent("spc").Error("MISP request marshal failed", "error", err)
 		return nil
 	}
 
 	req, err := http.NewRequest("POST", client.config.BaseURL+"/events/restSearch",
 		strings.NewReader(string(body)))
 	if err != nil {
-		logger.With("component", "spc").Error("MISP request creation failed", "error", err)
+		logger.WithComponent("spc").Error("MISP request creation failed", "error", err)
 		return nil
 	}
 
@@ -1280,19 +1281,19 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 
 	resp, err := client.client.Do(req)
 	if err != nil {
-		logger.With("component", "spc").Error("MISP API call failed", "error", err)
+		logger.WithComponent("spc").Error("MISP API call failed", "error", err)
 		return nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logger.With("component", "spc").Error("MISP API returned error status", "status", resp.StatusCode)
+		logger.WithComponent("spc").Error("MISP API returned error status", "status", resp.StatusCode)
 		return nil
 	}
 
 	var eventResp mispEventResponse
 	if err := json.NewDecoder(resp.Body).Decode(&eventResp); err != nil {
-		logger.With("component", "spc").Error("MISP response decode failed", "error", err)
+		logger.WithComponent("spc").Error("MISP response decode failed", "error", err)
 		return nil
 	}
 
@@ -1302,7 +1303,7 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 		cves = append(cves, parsed...)
 	}
 
-	logger.With("component", "spc").Info("MISP fetched events", "events", len(eventResp.Response), "cves", len(cves))
+	logger.WithComponent("spc").Info("MISP fetched events", "events", len(eventResp.Response), "cves", len(cves))
 	return cves
 }
 
@@ -1437,7 +1438,7 @@ func (m *SPCModule) ConfigureMISP(baseURL, apiKey string) error {
 		lastSync: time.Now(),
 	}
 
-	logger.With("component", "spc").Info("MISP connection verified", "url", baseURL)
+	logger.WithComponent("spc").Info("MISP connection verified", "url", baseURL)
 	return nil
 }
 
@@ -1475,7 +1476,7 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 	m.mu.Lock()
 	for _, rec := range records {
 		if len(m.cveCache) >= m.maxCacheSize {
-			logger.With("component", "spc").Warn("CVE cache reached max size during OSCAL import", "max", m.maxCacheSize, "imported", added)
+			logger.WithComponent("spc").Warn("CVE cache reached max size during OSCAL import", "max", m.maxCacheSize, "imported", added)
 			break
 		}
 		pubDate, _ := time.Parse("2006-01-02", rec.DatePublished)
@@ -1506,7 +1507,7 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 	}
 	m.mu.Unlock()
 
-	logger.With("component", "spc").Info("OSCAL import completed", "format", format, "added", added)
+	logger.WithComponent("spc").Info("OSCAL import completed", "format", format, "added", added)
 	return added, nil
 }
 
@@ -1867,7 +1868,7 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		Payload: correction,
 		Source:  "spc",
 	}); len(errs) > 0 {
-		logger.With("component", "spc").Warn("sync publish errors", "count", len(errs))
+		logger.WithComponent("spc").Warn("sync publish errors", "count", len(errs))
 	}
 
 	return correction
@@ -2133,7 +2134,7 @@ func (m *SPCModule) AddCVE(score SPCCVEScore) {
 		return
 	}
 	if len(m.cveCache) >= m.maxCacheSize {
-		logger.With("component", "spc").Warn("CVE cache reached max size in AddCVE", "max", m.maxCacheSize)
+		logger.WithComponent("spc").Warn("CVE cache reached max size in AddCVE", "max", m.maxCacheSize)
 		return
 	}
 	m.cveIndex[score.CVEID] = len(m.cveCache)
@@ -2148,7 +2149,7 @@ func (m *SPCModule) AddCVEs(scores []SPCCVEScore) {
 			continue
 		}
 		if len(m.cveCache) >= m.maxCacheSize {
-			logger.With("component", "spc").Warn("CVE cache reached max size in AddCVEs", "max", m.maxCacheSize, "added_so_far", len(m.cveCache))
+			logger.WithComponent("spc").Warn("CVE cache reached max size in AddCVEs", "max", m.maxCacheSize, "added_so_far", len(m.cveCache))
 			break
 		}
 		m.cveIndex[score.CVEID] = len(m.cveCache)
@@ -2191,8 +2192,10 @@ func (m *SPCModule) ClearCache() {
 
 func (m *SPCModule) cacheFilePath() string {
 	dataDir := "./data"
-	if m.kernel != nil && m.kernel.cfg != nil && m.kernel.cfg.DataDir != "" {
-		dataDir = m.kernel.cfg.DataDir
+	if m.kernel != nil {
+		if cfg := m.kernel.GetConfigObj(); cfg != nil && cfg.DataDir != "" {
+			dataDir = cfg.DataDir
+		}
 	}
 	return filepath.Join(dataDir, "spc_cache.json")
 }
@@ -2211,7 +2214,7 @@ func (m *SPCModule) saveCacheToDisk() {
 	path := m.cacheFilePath()
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		logger.With("component", "spc").Error("failed to create cache directory", "error", err)
+		logger.WithComponent("spc").Error("failed to create cache directory", "error", err)
 		return
 	}
 
@@ -2229,28 +2232,28 @@ func (m *SPCModule) saveCacheToDisk() {
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		logger.With("component", "spc").Error("failed to marshal cache", "error", err)
+		logger.WithComponent("spc").Error("failed to marshal cache", "error", err)
 		return
 	}
 
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
-		logger.With("component", "spc").Error("failed to write cache file", "error", err)
+		logger.WithComponent("spc").Error("failed to write cache file", "error", err)
 		return
 	}
 	if err := os.Rename(tmpPath, path); err != nil {
-		logger.With("component", "spc").Error("failed to rename cache file", "error", err)
+		logger.WithComponent("spc").Error("failed to rename cache file", "error", err)
 		return
 	}
 
-	logger.With("component", "spc").Info("SPC cache saved to disk", "path", path, "cve_count", len(cacheCopy))
+	logger.WithComponent("spc").Info("SPC cache saved to disk", "path", path, "cve_count", len(cacheCopy))
 }
 
 func (m *SPCModule) loadCacheFromDisk() {
 	path := m.cacheFilePath()
 	data, err := os.ReadFile(path)
 	if err != nil {
-		logger.With("component", "spc").Debug("no SPC cache file found, starting fresh", "error", err)
+		logger.WithComponent("spc").Debug("no SPC cache file found, starting fresh", "error", err)
 		return
 	}
 
@@ -2261,7 +2264,7 @@ func (m *SPCModule) loadCacheFromDisk() {
 		CVEs       []SPCCVEScore `json:"cves"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
-		logger.With("component", "spc").Warn("failed to parse SPC cache file", "error", err)
+		logger.WithComponent("spc").Warn("failed to parse SPC cache file", "error", err)
 		return
 	}
 
@@ -2274,7 +2277,7 @@ func (m *SPCModule) loadCacheFromDisk() {
 	m.lastUpdate = payload.LastUpdate
 	m.mu.Unlock()
 
-	logger.With("component", "spc").Info("SPC cache loaded from disk", "cve_count", len(m.cveCache), "last_update", payload.LastUpdate.Format(time.RFC3339))
+	logger.WithComponent("spc").Info("SPC cache loaded from disk", "cve_count", len(m.cveCache), "last_update", payload.LastUpdate.Format(time.RFC3339))
 }
 
 func (m *SPCModule) LastUpdate() time.Time {
@@ -2284,7 +2287,7 @@ func (m *SPCModule) LastUpdate() time.Time {
 }
 
 func (m *SPCModule) generateSampleCVEs() []SPCCVEScore {
-	logger.With("component", "spc").Warn("USING SAMPLE CVE DATA — not suitable for production; configure NVD API key for real data")
+	logger.WithComponent("spc").Warn("USING SAMPLE CVE DATA — not suitable for production; configure NVD API key for real data")
 	now := time.Now()
 	return []SPCCVEScore{
 		{

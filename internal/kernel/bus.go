@@ -114,24 +114,28 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 		case b.maxGoroutines <- struct{}{}:
 		default:
 			atomic.AddInt64(&b.metrics.ErrorCount, 1)
-			logger.With("component", "bus").Warn("max goroutines reached, dropping message",
+			logger.WithComponent("bus").Warn("max goroutines reached, dropping message",
 				"subscriber", sub.id, "topic", msg.Topic)
 			continue
 		}
 		go func(s subscriber) {
+			acquired := false
 			defer func() {
 				<-b.maxGoroutines
-				<-b.dispatchSem
+				if acquired {
+					<-b.dispatchSem
+				}
 				if r := recover(); r != nil {
 					atomic.AddInt64(&b.metrics.PanicCount, 1)
-					logger.With("component", "bus").Error("subscriber panic", "subscriber", s.id, "topic", msg.Topic, "panic", r, "total_panics", atomic.LoadInt64(&b.metrics.PanicCount))
+					logger.WithComponent("bus").Error("subscriber panic", "subscriber", s.id, "topic", msg.Topic, "panic", r, "total_panics", atomic.LoadInt64(&b.metrics.PanicCount))
 				}
 			}()
 			select {
 			case b.dispatchSem <- struct{}{}:
+				acquired = true
 			default:
 				atomic.AddInt64(&b.metrics.ErrorCount, 1)
-				logger.With("component", "bus").Warn("dispatch semaphore full, dropping message",
+				logger.WithComponent("bus").Warn("dispatch semaphore full, dropping message",
 					"subscriber", s.id, "topic", msg.Topic,
 					"queue_size", b.queueSize)
 				return
@@ -142,7 +146,7 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 			default:
 				if err := s.handler(ctx, msg); err != nil {
 					atomic.AddInt64(&b.metrics.ErrorCount, 1)
-					logger.With("component", "bus").Error("subscriber error", "subscriber", s.id, "topic", msg.Topic, "error", err)
+					logger.WithComponent("bus").Error("subscriber error", "subscriber", s.id, "topic", msg.Topic, "error", err)
 				}
 			}
 		}(sub)

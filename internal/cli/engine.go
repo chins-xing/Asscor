@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/argus-security/argus/internal/kernel"
 	"github.com/argus-security/argus/internal/logger"
 )
 
@@ -168,10 +169,7 @@ type KernelAccess interface {
 	History() *History
 }
 
-type BusAccess interface {
-	Publish(ctx context.Context, topic string, payload interface{})
-	Subscribe(topic, subscriberID string) <-chan interface{}
-}
+type BusAccess = kernel.BusAccess
 
 type commandEntry struct {
 	info    CommandInfo
@@ -222,7 +220,7 @@ func (r *Registry) RegisterFrom(info CommandInfo, handler CommandHandler, comple
 	}
 	r.categories[name] = info.Category
 
-	logger.With("component", "cli").Debug("command registered", "name", name, "category", string(info.Category), "source", source)
+	logger.WithComponent("cli").Debug("command registered", "name", name, "category", string(info.Category), "source", source)
 	return nil
 }
 
@@ -472,7 +470,7 @@ func (e *Engine) RegisterBuiltinCommands() {
 
 	for _, b := range builtins {
 		if err := e.registry.RegisterFrom(b.info, b.handler, b.completions, "builtin"); err != nil {
-			logger.With("component", "cli").Error("failed to register builtin command", "name", b.info.Name, "error", err)
+			logger.WithComponent("cli").Error("failed to register builtin command", "name", b.info.Name, "error", err)
 		}
 	}
 
@@ -486,7 +484,7 @@ func (e *Engine) RegisterBuiltinCommands() {
 	}
 	for alias, target := range aliases {
 		if err := e.registry.RegisterAlias(alias, target); err != nil {
-			logger.With("component", "cli").Debug("alias registration skipped", "alias", alias, "target", target, "error", err)
+			logger.WithComponent("cli").Debug("alias registration skipped", "alias", alias, "target", target, "error", err)
 		}
 	}
 }
@@ -594,7 +592,7 @@ func (e *Engine) Start() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.running = true
-	logger.With("component", "cli").Info("CLI engine started", "commands", len(e.registry.List()))
+	logger.WithComponent("cli").Info("CLI engine started", "commands", len(e.registry.List()))
 	return nil
 }
 
@@ -603,7 +601,7 @@ func (e *Engine) Stop() error {
 	defer e.mu.Unlock()
 	e.running = false
 	e.cancel()
-	logger.With("component", "cli").Info("CLI engine stopped")
+	logger.WithComponent("cli").Info("CLI engine stopped")
 	return nil
 }
 

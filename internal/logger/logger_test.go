@@ -259,3 +259,88 @@ func TestWithComponentAndTrace(t *testing.T) {
 		t.Errorf("expected trace_id='trace-789', got %v", tid)
 	}
 }
+
+func TestRedirectToFile(t *testing.T) {
+	defer ResetForTesting()
+	ResetForTesting()
+	tmpDir := t.TempDir()
+	initialLog := filepath.Join(tmpDir, "initial.log")
+
+	Init(Config{Format: "json", Level: "info", Output: initialLog})
+	L().Info("before redirect")
+
+	redirectLog := filepath.Join(tmpDir, "redirected.log")
+	if err := RedirectToFile(redirectLog); err != nil {
+		t.Fatalf("RedirectToFile failed: %v", err)
+	}
+
+	L().Info("after redirect")
+
+	data, err := os.ReadFile(redirectLog)
+	if err != nil {
+		t.Fatalf("cannot read redirected log: %v", err)
+	}
+	if !strings.Contains(string(data), "after redirect") {
+		t.Errorf("redirected log should contain 'after redirect', got: %s", string(data))
+	}
+
+	initialData, _ := os.ReadFile(initialLog)
+	if !strings.Contains(string(initialData), "before redirect") {
+		t.Error("initial log should contain 'before redirect'")
+	}
+	if strings.Contains(string(initialData), "after redirect") {
+		t.Error("initial log should NOT contain 'after redirect'")
+	}
+}
+
+func TestRedirectToStderr(t *testing.T) {
+	defer ResetForTesting()
+	ResetForTesting()
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "stderr_test.log")
+
+	Init(Config{Format: "json", Level: "info", Output: logFile})
+
+	if CurrentOutput() != logFile {
+		t.Errorf("CurrentOutput = %q, want %q", CurrentOutput(), logFile)
+	}
+
+	RedirectToStderr()
+
+	if CurrentOutput() != "stderr" {
+		t.Errorf("CurrentOutput = %q, want 'stderr'", CurrentOutput())
+	}
+}
+
+func TestSwitchWriter(t *testing.T) {
+	var buf1, buf2 strings.Builder
+
+	sw := newSwitchWriter(&buf1)
+	sw.Write([]byte("first"))
+	if buf1.String() != "first" {
+		t.Errorf("expected 'first', got %q", buf1.String())
+	}
+
+	sw.Switch(&buf2)
+	sw.Write([]byte("second"))
+	if buf2.String() != "second" {
+		t.Errorf("expected 'second', got %q", buf2.String())
+	}
+	if buf1.String() != "first" {
+		t.Errorf("buf1 should be unchanged, got %q", buf1.String())
+	}
+}
+
+func TestRedirectInvalidPath(t *testing.T) {
+	defer ResetForTesting()
+	ResetForTesting()
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "valid.log")
+
+	Init(Config{Format: "json", Level: "info", Output: logFile})
+
+	err := RedirectToFile("/nonexistent/dir/impossible.log")
+	if err == nil {
+		t.Error("expected error for invalid path")
+	}
+}

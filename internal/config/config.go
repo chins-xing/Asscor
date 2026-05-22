@@ -38,6 +38,9 @@ type Config struct {
 	AdapterConfig map[string]string
 
 	ExtMgrCfg ExtMgrConfig
+
+	HotloadEnabled bool
+	HotloadIntervalS int
 }
 
 type ExtMgrConfig struct {
@@ -127,6 +130,8 @@ func Default() *Config {
 			ExecutionTimeout: 30,
 			WorkingDir:       "./extensions/runtime",
 		},
+		HotloadEnabled:   false,
+		HotloadIntervalS: 30,
 	}
 }
 
@@ -185,6 +190,16 @@ func Parse(content string) (*Config, error) {
 			switch k {
 			case "two_factor_failure":
 				cfg.EdgeFactors.TwoFactorFailure = f
+			case "syn_cookie_disabled":
+				cfg.EdgeFactors.SYNCookieDisabled = f
+			case "selinux_disabled":
+				cfg.EdgeFactors.SELinuxDisabled = f
+			case "apparmor_disabled":
+				cfg.EdgeFactors.AppArmorDisabled = f
+			case "no_siem":
+				cfg.EdgeFactors.NoSIEM = f
+			case "no_ids":
+				cfg.EdgeFactors.NoIDS = f
 			}
 		}
 	}
@@ -304,9 +319,9 @@ func Parse(content string) (*Config, error) {
 		}
 		if envKey := os.Getenv("NVD_API_KEY"); envKey != "" {
 			cfg.SPC.NVD.APIKey = envKey
-			logger.With("component", "config").Info("NVD API key loaded from environment variable", "source", "NVD_API_KEY")
+			logger.WithComponent("config").Info("NVD API key loaded from environment variable", "source", "NVD_API_KEY")
 		} else if cfg.SPC.NVD.APIKey != "" {
-			logger.With("component", "config").Info("NVD API key loaded from configuration file", "key_length", len(cfg.SPC.NVD.APIKey))
+			logger.WithComponent("config").Info("NVD API key loaded from configuration file", "key_length", len(cfg.SPC.NVD.APIKey))
 		}
 	}
 
@@ -359,9 +374,9 @@ func Parse(content string) (*Config, error) {
 		}
 		if envKey := os.Getenv("MISP_API_KEY"); envKey != "" {
 			cfg.SPC.MISP.APIKey = envKey
-			logger.With("component", "config").Info("MISP API key loaded from environment variable", "source", "MISP_API_KEY")
+			logger.WithComponent("config").Info("MISP API key loaded from environment variable", "source", "MISP_API_KEY")
 		} else if cfg.SPC.MISP.APIKey != "" {
-			logger.With("component", "config").Info("MISP API key loaded from configuration file", "key_length", len(cfg.SPC.MISP.APIKey))
+			logger.WithComponent("config").Info("MISP API key loaded from configuration file", "key_length", len(cfg.SPC.MISP.APIKey))
 		}
 	}
 
@@ -460,6 +475,19 @@ func Parse(content string) (*Config, error) {
 		}
 	}
 
+	if sec, ok := sections["weights_hotload"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "enabled":
+				cfg.HotloadEnabled = strings.EqualFold(v, "true") || v == "1"
+			case "interval_s":
+				if i, err := strconv.Atoi(v); err == nil && i > 0 {
+					cfg.HotloadIntervalS = i
+				}
+			}
+		}
+	}
+
 	cfg.buildAdapterConfig(sections)
 
 	return cfg, nil
@@ -477,6 +505,7 @@ func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 		"freeipa": true, "keycloak": true, "wazuh_siem": true,
 		"rundeck": true, "jira": true, "terraform": true, "opentofu": true,
 		"interceptor": true,
+		"grpc": true, "log": true,
 	}
 
 	for sectionName, kv := range sections {

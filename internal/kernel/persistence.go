@@ -28,6 +28,11 @@ type AssessmentRecord struct {
 	Resilience     float64   `json:"resilience"`
 	KernelSecurity float64   `json:"kernel_security,omitempty"`
 	TwoFactorFail  float64   `json:"two_factor_failure"`
+	SYNCookieDis   float64   `json:"syn_cookie_disabled,omitempty"`
+	SELinuxDis     float64   `json:"selinux_disabled,omitempty"`
+	AppArmorDis    float64   `json:"apparmor_disabled,omitempty"`
+	NoSIEM         float64   `json:"no_siem,omitempty"`
+	NoIDS          float64   `json:"no_ids,omitempty"`
 	ThreatCoeff    float64   `json:"threat_coefficient"`
 	SPCScore       float64   `json:"spc_score,omitempty"`
 	CheckCount     int       `json:"check_count"`
@@ -175,7 +180,7 @@ func (w *jsonlWriter) close() error {
 }
 
 type PersistenceModule struct {
-	kernel *Kernel
+	kernel KernelContext
 	cfg    *config.Config
 
 	mu          sync.Mutex
@@ -218,11 +223,11 @@ func (m *PersistenceModule) Priority() int {
 	return 3
 }
 
-func (m *PersistenceModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *PersistenceModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.state = PluginInitialized
 
-	if impl, ok := k.Container().ResolveNamed("config"); ok {
+	if impl, ok := kc.Container().ResolveNamed("config"); ok {
 		if c, ok := impl.(*config.Config); ok {
 			m.cfg = c
 		}
@@ -238,7 +243,7 @@ func (m *PersistenceModule) Init(ctx context.Context, k *Kernel) error {
 	m.flushTicker = time.NewTicker(30 * time.Second)
 	m.flushDone = make(chan struct{})
 
-	k.Container().Bind((*PersistenceInterface)(nil), m)
+	kc.Container().Bind((*PersistenceInterface)(nil), m)
 
 	return nil
 }
@@ -246,12 +251,12 @@ func (m *PersistenceModule) Init(ctx context.Context, k *Kernel) error {
 func (m *PersistenceModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
 
-	m.kernel.Bus().Subscribe("assessor.result", "persistence", m.onAssessmentResult)
-	m.kernel.Bus().Subscribe("agent.registered", "persistence", m.onAgentRegistered)
-	m.kernel.Bus().Subscribe("agent.timeout", "persistence", m.onAgentTimeout)
+	m.kernel.Bus().Subscribe(TopicAssessorResult, "persistence", m.onAssessmentResult)
+	m.kernel.Bus().Subscribe(TopicAgentRegistered, "persistence", m.onAgentRegistered)
+	m.kernel.Bus().Subscribe(TopicAgentTimeout, "persistence", m.onAgentTimeout)
 
 	go m.flushLoop()
-	logger.With("component", "persistence").Info("started", "data_dir", m.dataDir)
+	logger.WithComponent("persistence").Info("started", "data_dir", m.dataDir)
 	return nil
 }
 
@@ -271,7 +276,7 @@ func (m *PersistenceModule) Stop(ctx context.Context) error {
 	m.mu.Unlock()
 
 	m.state = PluginStopped
-	logger.With("component", "persistence").Info("stopped")
+	logger.WithComponent("persistence").Info("stopped")
 	return nil
 }
 
@@ -403,10 +408,10 @@ func (m *PersistenceModule) DataDir() string {
 
 func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message) error {
 	payload := msg.Payload
-	logger.With("component", "persistence").Debug("received assessor.result event", "type", fmt.Sprintf("%T", payload))
+	logger.WithComponent("persistence").Debug("received assessor.result event", "type", fmt.Sprintf("%T", payload))
 
 	if ar, ok := payload.(*model.AssessmentResult); ok {
-		logger.With("component", "persistence").Info("processing assessment",
+		logger.WithComponent("persistence").Info("processing assessment",
 			"host_id", ar.HostID, "score", ar.FinalScore, "acceptable", ar.Acceptable, "checks", len(ar.Checks))
 
 		checkDetails := make([]CheckDetail, 0, len(ar.Checks))
@@ -435,6 +440,11 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			Resilience:     ar.DomainScores.Resilience,
 			KernelSecurity: ar.DomainScores.KernelSecurity,
 			TwoFactorFail:  ar.EdgeFactors.TwoFactorFailure,
+			SYNCookieDis:   ar.EdgeFactors.SYNCookieDisabled,
+			SELinuxDis:     ar.EdgeFactors.SELinuxDisabled,
+			AppArmorDis:    ar.EdgeFactors.AppArmorDisabled,
+			NoSIEM:         ar.EdgeFactors.NoSIEM,
+			NoIDS:          ar.EdgeFactors.NoIDS,
 			ThreatCoeff:    ar.ThreatCoeff,
 			SPCScore:       ar.SPCScore,
 			CheckCount:     len(ar.Checks),
@@ -448,9 +458,9 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		}
 
 		if err := m.WriteAssessment(rec); err != nil {
-			logger.With("component", "persistence").Error("write assessment error", "error", err)
+			logger.WithComponent("persistence").Error("write assessment error", "error", err)
 		} else {
-			logger.With("component", "persistence").Info("assessment written", "host_id", ar.HostID, "score", ar.FinalScore)
+			logger.WithComponent("persistence").Info("assessment written", "host_id", ar.HostID, "score", ar.FinalScore)
 		}
 
 		passedCount := rec.CheckCount - rec.FailedCount
@@ -468,7 +478,12 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			"resilience":          m.cfg.Weights.Resilience,
 		}
 		edgeFactors := map[string]float64{
-			"two_factor_failure": ar.EdgeFactors.TwoFactorFailure,
+			"two_factor_failure":  ar.EdgeFactors.TwoFactorFailure,
+			"syn_cookie_disabled": ar.EdgeFactors.SYNCookieDisabled,
+			"selinux_disabled":    ar.EdgeFactors.SELinuxDisabled,
+			"apparmor_disabled":   ar.EdgeFactors.AppArmorDisabled,
+			"no_siem":             ar.EdgeFactors.NoSIEM,
+			"no_ids":              ar.EdgeFactors.NoIDS,
 		}
 
 		report := &DashboardReport{
@@ -494,7 +509,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		report.Summary.FailedChecks = rec.FailedCount
 
 		if err := m.WriteDashboardReport(report); err != nil {
-			logger.With("component", "persistence").Error("write dashboard report error", "error", err)
+			logger.WithComponent("persistence").Error("write dashboard report error", "error", err)
 		}
 		return nil
 	}

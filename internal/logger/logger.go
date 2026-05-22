@@ -12,11 +12,41 @@ type contextKey struct{}
 
 var traceKey = contextKey{}
 
+type switchWriter struct {
+	mu sync.RWMutex
+	w  io.Writer
+}
+
+func newSwitchWriter(w io.Writer) *switchWriter {
+	return &switchWriter{w: w}
+}
+
+func (sw *switchWriter) Write(p []byte) (n int, err error) {
+	sw.mu.RLock()
+	defer sw.mu.RUnlock()
+	return sw.w.Write(p)
+}
+
+func (sw *switchWriter) Switch(w io.Writer) {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+	sw.w = w
+}
+
+func (sw *switchWriter) Current() io.Writer {
+	sw.mu.RLock()
+	defer sw.mu.RUnlock()
+	return sw.w
+}
+
 var (
-	globalHandler slog.Handler
-	globalLogger  *slog.Logger
-	globalFile    *os.File
-	once          sync.Once
+	globalHandler  slog.Handler
+	globalLogger   *slog.Logger
+	globalFile     *os.File
+	globalSwitcher *switchWriter
+	handlerOpts    *slog.HandlerOptions
+	handlerFormat  string
+	once           sync.Once
 )
 
 type Config struct {
@@ -37,6 +67,12 @@ func DefaultConfig() Config {
 
 func Init(cfg Config) {
 	once.Do(func() {
+		handlerOpts = &slog.HandlerOptions{
+			Level:     parseLevel(cfg.Level),
+			AddSource: cfg.AddSource,
+		}
+		handlerFormat = cfg.Format
+
 		var w io.Writer
 		switch cfg.Output {
 		case "stdout":
@@ -46,10 +82,7 @@ func Init(cfg Config) {
 		default:
 			f, err := os.OpenFile(cfg.Output, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 			if err != nil {
-				fallback := os.Stderr
-				globalHandler = slog.NewJSONHandler(fallback, &slog.HandlerOptions{
-					Level: parseLevel(cfg.Level),
-				})
+				globalHandler = slog.NewJSONHandler(os.Stderr, handlerOpts)
 				globalLogger = slog.New(globalHandler)
 				globalLogger.Error("logger: cannot open log file, falling back to stderr", "path", cfg.Output, "error", err)
 				return
@@ -58,23 +91,21 @@ func Init(cfg Config) {
 			w = f
 		}
 
-		opts := &slog.HandlerOptions{
-			Level:     parseLevel(cfg.Level),
-			AddSource: cfg.AddSource,
-		}
-
-		switch cfg.Format {
-		case "text":
-			globalHandler = slog.NewTextHandler(w, opts)
-		case "json", "":
-			globalHandler = slog.NewJSONHandler(w, opts)
-		default:
-			globalHandler = slog.NewJSONHandler(w, opts)
-		}
+		globalSwitcher = newSwitchWriter(w)
+		globalHandler = newHandler(globalSwitcher, handlerFormat, handlerOpts)
 
 		globalLogger = slog.New(globalHandler)
 		slog.SetDefault(globalLogger)
 	})
+}
+
+func newHandler(w io.Writer, format string, opts *slog.HandlerOptions) slog.Handler {
+	switch format {
+	case "text":
+		return slog.NewTextHandler(w, opts)
+	default:
+		return slog.NewJSONHandler(w, opts)
+	}
 }
 
 func parseLevel(s string) slog.Level {
@@ -105,6 +136,10 @@ func With(component string, extra ...any) *slog.Logger {
 		l = l.With(extra...)
 	}
 	return l
+}
+
+func WithComponent(component string) *slog.Logger {
+	return L().With("component", component)
 }
 
 func WithTrace(ctx context.Context) *slog.Logger {
@@ -143,6 +178,59 @@ func InfoCtx(ctx context.Context, msg string, args ...any)   { L().InfoContext(c
 func WarnCtx(ctx context.Context, msg string, args ...any)   { L().WarnContext(ctx, msg, args...) }
 func ErrorCtx(ctx context.Context, msg string, args ...any)  { L().ErrorContext(ctx, msg, args...) }
 
+func RedirectToFile(path string) error {
+	if globalSwitcher == nil {
+		return nil
+	}
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+
+	prevFile := globalFile
+	globalFile = f
+	globalSwitcher.Switch(f)
+
+	if prevFile != nil {
+		prevFile.Close()
+	}
+
+	return nil
+}
+
+func RedirectToStderr() {
+	if globalSwitcher == nil {
+		return
+	}
+
+	prevFile := globalFile
+	globalFile = nil
+	globalSwitcher.Switch(os.Stderr)
+
+	if prevFile != nil {
+		prevFile.Close()
+	}
+}
+
+func CurrentOutput() string {
+	if globalSwitcher == nil {
+		return "stderr"
+	}
+	w := globalSwitcher.Current()
+	switch w {
+	case os.Stdout:
+		return "stdout"
+	case os.Stderr:
+		return "stderr"
+	default:
+		if globalFile != nil {
+			return globalFile.Name()
+		}
+		return "file"
+	}
+}
+
 func ResetForTesting() {
 	if globalFile != nil {
 		globalFile.Close()
@@ -150,5 +238,8 @@ func ResetForTesting() {
 	}
 	globalHandler = nil
 	globalLogger = nil
+	globalSwitcher = nil
+	handlerOpts = nil
+	handlerFormat = ""
 	once = sync.Once{}
 }

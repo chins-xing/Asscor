@@ -10,7 +10,7 @@ import (
 )
 
 type CTIModule struct {
-	kernel *Kernel
+	kernel KernelContext
 
 	mu            sync.RWMutex
 	coefficient   float64
@@ -38,27 +38,27 @@ func (m *CTIModule) Priority() int {
 	return 10
 }
 
-func (m *CTIModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *CTIModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.coefficient = 1.0
 	m.updateInterval = 15 * time.Minute
 	m.state = PluginInitialized
 
-	k.Container().Bind((*CTIInterface)(nil), m)
+	kc.Container().Bind((*CTIInterface)(nil), m)
 	return nil
 }
 
 func (m *CTIModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
 	go m.updateLoop()
-	logger.With("component", "cti").Info("started", "coefficient", m.coefficient)
+	logger.WithComponent("cti").Info("started", "coefficient", m.coefficient)
 	return nil
 }
 
 func (m *CTIModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.state = PluginStopped
-	logger.With("component", "cti").Info("stopped")
+	logger.WithComponent("cti").Info("stopped")
 	return nil
 }
 
@@ -102,7 +102,7 @@ func (m *CTIModule) updateCoefficient() {
 	m.coefficient = math.Max(0.60, base-threatPenalty)
 
 	m.lastUpdate = time.Now()
-	logger.With("component", "cti").Info("coefficient updated", "coefficient", m.coefficient, "active_threats", m.activeThreats)
+	logger.WithComponent("cti").Info("coefficient updated", "coefficient", m.coefficient, "active_threats", m.activeThreats)
 }
 
 func (m *CTIModule) GetCoefficient() float64 {

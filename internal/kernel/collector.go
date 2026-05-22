@@ -13,7 +13,7 @@ import (
 )
 
 type LogCollectorModule struct {
-	kernel  *Kernel
+	kernel  KernelContext
 	logPath string
 
 	mu     sync.RWMutex
@@ -38,8 +38,8 @@ func (m *LogCollectorModule) Priority() int {
 	return 70
 }
 
-func (m *LogCollectorModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *LogCollectorModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.logPath = "argus-kernel.log"
 	m.state = PluginInitialized
 
@@ -49,14 +49,14 @@ func (m *LogCollectorModule) Init(ctx context.Context, k *Kernel) error {
 	}
 	m.writer = f
 
-	k.Container().Bind((*LogCollectorInterface)(nil), m)
+	kc.Container().Bind((*LogCollectorInterface)(nil), m)
 
 	return nil
 }
 
 func (m *LogCollectorModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
-	logger.With("component", "log_collector").Info("started", "path", m.logPath)
+	logger.WithComponent("log_collector").Info("started", "path", m.logPath)
 	return nil
 }
 
@@ -68,7 +68,7 @@ func (m *LogCollectorModule) Stop(ctx context.Context) error {
 	}
 	m.mu.Unlock()
 	m.state = PluginStopped
-	logger.With("component", "log_collector").Info("stopped")
+	logger.WithComponent("log_collector").Info("stopped")
 	return nil
 }
 

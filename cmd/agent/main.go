@@ -27,7 +27,7 @@ func main() {
 		Level:  *logLevel,
 		Output: *logOutput,
 	})
-	log := logger.With("component", "agent")
+	log := logger.WithComponent("agent")
 
 	cfg := agent.DefaultConfig()
 
@@ -123,6 +123,8 @@ func loadConfigFile(path string, cfg *agent.AgentConfig) error {
 				cfg.TLSSkipVerify = val == "true" || val == "yes" || val == "1"
 			case "cert_dir":
 				cfg.CertDir = val
+			case "hmac_key":
+				cfg.HMACKey = val
 			}
 		}
 	}

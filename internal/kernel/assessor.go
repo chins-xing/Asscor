@@ -3,18 +3,19 @@ package kernel
 import (
 	"context"
 	"fmt"
-	"math"
 	"sync"
+	"time"
 
 	"github.com/argus-security/argus/internal/checks"
 	"github.com/argus-security/argus/internal/config"
 	"github.com/argus-security/argus/internal/engine"
 	"github.com/argus-security/argus/internal/logger"
 	"github.com/argus-security/argus/internal/model"
+	"github.com/argus-security/argus/internal/ssam"
 )
 
 type AssessorModule struct {
-	kernel *Kernel
+	kernel KernelContext
 	cfg    *config.Config
 	engine *engine.Assessor
 
@@ -39,12 +40,12 @@ func (m *AssessorModule) Dependencies() []PluginDependency {
 	}
 }
 
-func (m *AssessorModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.state = PluginInitialized
 	m.results = make(map[string]*model.AssessmentResult)
 
-	if impl, ok := k.Container().ResolveNamed("config"); ok {
+	if impl, ok := kc.Container().ResolveNamed("config"); ok {
 		if c, ok := impl.(*config.Config); ok {
 			m.cfg = c
 		}
@@ -55,19 +56,21 @@ func (m *AssessorModule) Init(ctx context.Context, k *Kernel) error {
 
 	m.engine = engine.NewAssessor(m.cfg)
 
+	kc.Container().Bind((*ssam.ScoringProvider)(nil), m.engine.SSAMEngine())
+
 	warnings := m.engine.ValidateEdgeFactors(checks.GetAll())
 	for _, w := range warnings {
-		logger.With("component", "assessor").Warn("edge factor warning", "warning", w)
+		logger.WithComponent("assessor").Warn("edge factor warning", "warning", w)
 	}
 
-	k.Container().Bind((*AssessorInterface)(nil), m)
+	kc.Container().Bind((*AssessorInterface)(nil), m)
 
-	k.Extensions().RegisterPoint(ExtensionPoint{
+	kc.Extensions().RegisterPoint(ExtensionPoint{
 		Name:        "assessor.pre_evaluate",
 		Description: "Called before each host assessment",
 		Version:     "1.0",
 	})
-	k.Extensions().RegisterPoint(ExtensionPoint{
+	kc.Extensions().RegisterPoint(ExtensionPoint{
 		Name:        "assessor.post_evaluate",
 		Description: "Called after each host assessment completes",
 		Version:     "1.0",
@@ -78,7 +81,7 @@ func (m *AssessorModule) Init(ctx context.Context, k *Kernel) error {
 
 func (m *AssessorModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
-	logger.With("component", "assessor").Info("started")
+	logger.WithComponent("assessor").Info("started")
 	return nil
 }
 
@@ -86,7 +89,7 @@ func (m *AssessorModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.kernel.Bus().UnsubscribeAll("assessor")
 	m.state = PluginStopped
-	logger.With("component", "assessor").Info("stopped")
+	logger.WithComponent("assessor").Info("stopped")
 	return nil
 }
 
@@ -120,28 +123,46 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
 
 	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
-		Topic:   "assessor.result",
+		Topic:   TopicAssessorResult,
 		Payload: result,
 		Source:  "assessor",
 	}); len(errs) > 0 {
-		logger.With("component", "assessor").Warn("sync publish errors", "count", len(errs))
+		logger.WithComponent("assessor").Warn("sync publish errors", "count", len(errs))
 	}
 
 	return result
 }
 
 func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
-	logger.With("component", "assessor").Info("EvaluateFromResults called", "host_id", hostID, "checks", len(checkResults))
+	logger.WithComponent("assessor").Info("EvaluateFromResults called", "host_id", hostID, "checks", len(checkResults))
 
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_evaluate", hostID)
 
-	result := m.engine.AssessFromResults(hostID, hostname, checkResults)
+	result := &model.AssessmentResult{
+		HostID:    hostID,
+		Hostname:  hostname,
+		Timestamp: time.Now(),
+		Threshold: m.cfg.Threshold,
+		Checks:    checkResults,
+	}
 
-	m.applySPCAndCTI(hostID, result)
+	if len(result.Checks) == 0 {
+		result.Acceptable = true
+		result.FinalScore = 100
+		result.DomainScores = model.DomainScores{
+			AttackSurface:      100,
+			BusinessContinuity: 100,
+			OperationTrust:     100,
+			Resilience:         100,
+		}
+		result.ThreatCoeff = m.cfg.ThreatCoeff
+		result.SPCScore = 1.0
+	} else {
+		m.applySPCAndCTI(hostID, result)
+		result.FinalScore = m.recomputeFinalScore(result)
+	}
 
-	result.FinalScore = m.recomputeFinalScore(result)
-
-	logger.With("component", "assessor").Info("assessment score computed", "host_id", hostID, "score", result.FinalScore, "spc_score", result.SPCScore, "threat_coeff", result.ThreatCoeff)
+	logger.WithComponent("assessor").Info("assessment score computed", "host_id", hostID, "score", result.FinalScore, "spc_score", result.SPCScore, "threat_coeff", result.ThreatCoeff)
 
 	m.mu.Lock()
 	m.results[hostID] = result
@@ -149,21 +170,24 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
 
-	subCount := m.kernel.Bus().SubscriberCount("assessor.result")
-	logger.With("component", "assessor").Debug("publishing assessor.result", "subscribers", subCount)
+	subCount := m.kernel.Bus().SubscriberCount(TopicAssessorResult)
+	logger.WithComponent("assessor").Debug("publishing assessor.result", "subscribers", subCount)
 
 	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
-		Topic:   "assessor.result",
+		Topic:   TopicAssessorResult,
 		Payload: result,
 		Source:  "assessor",
 	}); len(errs) > 0 {
-		logger.With("component", "assessor").Warn("sync publish errors", "count", len(errs))
+		logger.WithComponent("assessor").Warn("sync publish errors", "count", len(errs))
 	}
 
 	return result
 }
 
 func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentResult) {
+	spcScore := 1.0
+	threatCoeff := m.cfg.ThreatCoeff
+
 	if impl, ok := m.kernel.Container().Resolve((*SPCInterface)(nil)); ok {
 		if spc, ok2 := impl.(SPCInterface); ok2 && spc.Enabled() {
 			m.syncACIToAsset(spc, hostID, result)
@@ -173,7 +197,7 @@ func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentR
 				packages = asset.Packages
 			}
 			correction := spc.Calculate(hostID, packages)
-			result.SPCScore = correction.Score
+			spcScore = correction.Score
 
 			if len(correction.Weights) > 0 {
 				if result.DomainWeightShift == nil {
@@ -184,7 +208,7 @@ func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentR
 				}
 			}
 
-			logger.With("component", "assessor").Info("SPC correction applied",
+			logger.WithComponent("assessor").Info("SPC correction applied",
 				"host_id", hostID,
 				"p_score", correction.Score,
 				"action", correction.Action,
@@ -194,9 +218,12 @@ func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentR
 
 	if impl, ok := m.kernel.Container().Resolve((*CTIInterface)(nil)); ok {
 		if cti, ok2 := impl.(CTIInterface); ok2 {
-			result.ThreatCoeff = cti.GetCoefficient()
+			threatCoeff = cti.GetCoefficient()
 		}
 	}
+
+	result.SPCScore = spcScore
+	result.ThreatCoeff = threatCoeff
 }
 
 func (m *AssessorModule) syncACIToAsset(spc SPCInterface, hostID string, result *model.AssessmentResult) {
@@ -260,24 +287,25 @@ func (m *AssessorModule) recomputeFinalScore(result *model.AssessmentResult) flo
 		result.ThreatCoeff = 1.0
 	}
 
-	dynScores := model.NewDynamicDomainScores()
-	dynScores.Set(model.DomainAttackSurface, result.DomainScores.AttackSurface)
-	dynScores.Set(model.DomainBusinessContinuity, result.DomainScores.BusinessContinuity)
-	dynScores.Set(model.DomainOperationTrust, result.DomainScores.OperationTrust)
-	dynScores.Set(model.DomainResilience, result.DomainScores.Resilience)
-	dynScores.Set(model.DomainKernelSecurity, result.DomainScores.KernelSecurity)
-
-	baseScore := m.engine.ScoringEngine().ComputeWeightedSum(dynScores)
-
-	baseScore *= result.ThreatCoeff
-	baseScore *= result.SPCScore
-
-	activeFactors := result.EdgeFactors.ActiveFactors()
-	for _, f := range activeFactors {
-		baseScore *= f
+	ssamEngine := m.engine.SSAMEngine()
+	ssamInput := &ssam.AssessmentInput{
+		HostID:      result.HostID,
+		Hostname:    result.Hostname,
+		Timestamp:   result.Timestamp,
+		Threshold:   result.Threshold,
+		Checks:      ssam.CheckResultsToInputs(result.Checks),
+		ThreatCoeff: result.ThreatCoeff,
+		SPCScore:    result.SPCScore,
 	}
 
-	return math.Round(baseScore*100) / 100
+	ssamOutput, err := ssamEngine.ComputeScore(context.Background(), ssamInput)
+	if err != nil {
+		logger.WithComponent("assessor").Error("ssam recompute failed", "error", err)
+		return 0
+	}
+
+	ssam.OutputToModel(ssamOutput, result)
+	return ssamOutput.FinalScore
 }
 
 func (m *AssessorModule) GetResult(hostID string) *model.AssessmentResult {
@@ -296,7 +324,7 @@ func (m *AssessorModule) ReloadConfig(cfg *config.Config) {
 
 	m.engine.ReloadWeights(cfg)
 
-	logger.With("component", "assessor").Info("config reloaded",
+	logger.WithComponent("assessor").Info("config reloaded",
 		"threshold", cfg.Threshold,
 		"threat_coeff", cfg.ThreatCoeff)
 }

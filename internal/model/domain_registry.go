@@ -131,3 +131,45 @@ func GetDomainLabel(id string) string {
 	}
 	return id
 }
+
+func ResetDomainsForTesting() {
+	globalDomainRegistry.mu.Lock()
+	defer globalDomainRegistry.mu.Unlock()
+	globalDomainRegistry.domains = map[string]DomainMeta{
+		DomainAttackSurface: {
+			ID:            DomainAttackSurface,
+			Label:         "Attack Surface",
+			Description:   "Attacksurface management: unused services, open ports, strong auth, SSH config",
+			Category:      CategoryCore,
+			DefaultWeight: 35,
+		},
+		DomainBusinessContinuity: {
+			ID:            DomainBusinessContinuity,
+			Label:         "Business Continuity",
+			Description:   "Business continuity: critical services, backup, resource adequacy",
+			Category:      CategoryCore,
+			DefaultWeight: 25,
+		},
+		DomainOperationTrust: {
+			ID:            DomainOperationTrust,
+			Label:         "Operation Trust",
+			Description:   "Operation trust: file permissions, audit logs, command history, supply chain, MAC",
+			Category:      CategoryCore,
+			DefaultWeight: 25,
+		},
+		DomainResilience: {
+			ID:            DomainResilience,
+			Label:         "Resilience",
+			Description:   "Resilience: auto-block precision, SYN cookie, connection limits, ACI",
+			Category:      CategoryCore,
+			DefaultWeight: 15,
+		},
+		DomainKernelSecurity: {
+			ID:            DomainKernelSecurity,
+			Label:         "Kernel Security",
+			Description:   "Kernel security: CVE check, module signing, KASLR, hardening sysctls",
+			Category:      CategoryExtension,
+			DefaultWeight: 10,
+		},
+	}
+}

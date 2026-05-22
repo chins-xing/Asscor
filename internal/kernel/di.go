@@ -3,6 +3,7 @@ package kernel
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"sync"
 )
 
@@ -111,7 +112,8 @@ func (c *Container) Inject(target interface{}) error {
 		if !ok {
 			fieldType := field.Type
 			if fieldType.Kind() == reflect.Interface {
-				for _, binding := range c.bindings {
+				candidates := c.sortedBindings()
+				for _, binding := range candidates {
 					if reflect.TypeOf(binding).Implements(fieldType) {
 						impl = binding
 						ok = true
@@ -123,7 +125,8 @@ func (c *Container) Inject(target interface{}) error {
 
 		if !ok {
 			fieldType := field.Type
-			for _, binding := range c.bindings {
+			candidates := c.sortedBindings()
+			for _, binding := range candidates {
 				if reflect.TypeOf(binding).AssignableTo(fieldType) {
 					impl = binding
 					ok = true
@@ -155,4 +158,19 @@ func (c *Container) Count() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.bindings)
+}
+
+func (c *Container) sortedBindings() []interface{} {
+	types := make([]reflect.Type, 0, len(c.bindings))
+	for t := range c.bindings {
+		types = append(types, t)
+	}
+	sort.Slice(types, func(i, j int) bool {
+		return types[i].String() < types[j].String()
+	})
+	result := make([]interface{}, len(types))
+	for i, t := range types {
+		result[i] = c.bindings[t]
+	}
+	return result
 }

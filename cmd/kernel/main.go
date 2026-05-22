@@ -30,13 +30,18 @@ func main() {
 	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
 	flag.Parse()
 
+	resolvedConfigPath := *configPath
+	if abs, err := filepath.Abs(*configPath); err == nil {
+		resolvedConfigPath = abs
+	}
+
 	logCfg := logger.Config{
 		Format: *logFormat,
 		Level:  *logLevel,
 		Output: *logOutput,
 	}
 	logger.Init(logCfg)
-	log := logger.With("component", "kernel")
+	log := logger.WithComponent("kernel")
 
 	if *daemon {
 		if err := daemonize(*pidFile); err != nil {
@@ -50,9 +55,9 @@ func main() {
 		log.Warn("mTLS is DISABLED — this mode is intended for development only, do not use in production")
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.Load(resolvedConfigPath)
 	if err != nil {
-		log.Warn("cannot load config, using defaults", "path", *configPath, "error", err)
+		log.Warn("cannot load config, using defaults", "path", resolvedConfigPath, "error", err)
 		cfg = config.Default()
 	}
 
@@ -72,7 +77,7 @@ func main() {
 	k := kernel.NewKernel()
 	k.SetConfigObj(cfg)
 
-	k.SetConfig("config_path", *configPath)
+	k.SetConfig("config_path", resolvedConfigPath)
 	k.SetConfig("listen_addr", *listenAddr)
 	k.SetConfig("cert_dir", *certDir)
 
@@ -100,7 +105,7 @@ func main() {
 	persistence := kernel.NewPersistenceModule("data")
 	concurrency := kernel.NewConcurrencyModule(10)
 	attck := kernel.NewATTACKModule()
-	configWatcher := kernel.NewConfigWatcherModule(*configPath)
+	configWatcher := kernel.NewConfigWatcherModule(resolvedConfigPath)
 	adapterIntegration := kernel.NewAdapterIntegrationModule()
 	cliModule := cli.NewCLIModule()
 
@@ -211,7 +216,7 @@ func daemonize(pidFilePath string) error {
 }
 
 func setupTLS(certDir string) *tls.Config {
-	log := logger.With("component", "tls")
+	log := logger.WithComponent("tls")
 
 	if err := os.MkdirAll(certDir, 0700); err != nil {
 		log.Warn("cannot create cert dir, starting without mTLS", "dir", certDir, "error", err)

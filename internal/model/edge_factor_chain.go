@@ -1,7 +1,6 @@
 package model
 
 import (
-	"math"
 	"sort"
 	"sync"
 )
@@ -91,14 +90,6 @@ func ActiveEdgeFactors() []float64 {
 		}
 	}
 	return result
-}
-
-func (e *EdgeFactorChain) Apply(baseScore float64) float64 {
-	factors := ActiveEdgeFactors()
-	for _, f := range factors {
-		baseScore *= f
-	}
-	return math.Round(baseScore*100) / 100
 }
 
 func ResetAllEdgeFactors() {

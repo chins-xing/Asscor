@@ -192,7 +192,7 @@ func (e *ExtensionExecutor) Execute(ctx context.Context, spec ExtensionSpec, arg
 	}
 
 	result.Success = true
-	logger.With("component", "extmgr").Info("executed extension", "extension_id", spec.ID, "duration", result.Duration)
+	logger.WithComponent("extmgr").Info("executed extension", "extension_id", spec.ID, "duration", result.Duration)
 	return result, nil
 }
 

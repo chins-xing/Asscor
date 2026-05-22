@@ -41,7 +41,7 @@ type PolicyAction struct {
 }
 
 type PolicyModule struct {
-	kernel *Kernel
+	kernel KernelContext
 	cfg    *config.Config
 
 	mu          sync.RWMutex
@@ -68,13 +68,13 @@ func (m *PolicyModule) Priority() int {
 	return 50
 }
 
-func (m *PolicyModule) Init(ctx context.Context, k *Kernel) error {
-	m.kernel = k
+func (m *PolicyModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
 	m.hostStatus = make(map[string]HostStatus)
 	m.actionQueue = make([]PolicyAction, 0)
 	m.state = PluginInitialized
 
-	if impl, ok := k.Container().ResolveNamed("config"); ok {
+	if impl, ok := kc.Container().ResolveNamed("config"); ok {
 		if c, ok := impl.(*config.Config); ok {
 			m.cfg = c
 		}
@@ -83,14 +83,14 @@ func (m *PolicyModule) Init(ctx context.Context, k *Kernel) error {
 		m.cfg = config.Default()
 	}
 
-	k.Container().Bind((*PolicyInterface)(nil), m)
+	kc.Container().Bind((*PolicyInterface)(nil), m)
 	return nil
 }
 
 func (m *PolicyModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
-	m.kernel.Bus().Subscribe("assessor.result", "policy", m.onAssessmentResult)
-	logger.With("component", "policy").Info("started")
+	m.kernel.Bus().Subscribe(TopicAssessorResult, "policy", m.onAssessmentResult)
+	logger.WithComponent("policy").Info("started")
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (m *PolicyModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.kernel.Bus().UnsubscribeAll("policy")
 	m.state = PluginStopped
-	logger.With("component", "policy").Info("stopped")
+	logger.WithComponent("policy").Info("stopped")
 	return nil
 }
 
@@ -150,11 +150,11 @@ func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, [
 
 	for _, action := range actions {
 		if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
-			Topic:   "policy.action",
+			Topic:   TopicPolicyAction,
 			Payload: action,
 			Source:  "policy",
 		}); len(errs) > 0 {
-			logger.With("component", "policy").Warn("sync publish errors", "count", len(errs))
+			logger.WithComponent("policy").Warn("sync publish errors", "count", len(errs))
 		}
 	}
 
