@@ -34,6 +34,7 @@ type PBHeartbeatRequest struct {
 	HostId    string              `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
 	SessionId string              `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	Result    *PBAssessmentResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
+	Packages  []string            `protobuf:"bytes,5,rep,name=packages,proto3" json:"packages,omitempty"`
 }
 
 func (m *PBHeartbeatRequest) Reset()         { *m = PBHeartbeatRequest{} }

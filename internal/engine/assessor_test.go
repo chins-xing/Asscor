@@ -470,3 +470,123 @@ func TestAssessFromResults_RealWorldScenario(t *testing.T) {
 		t.Errorf("FinalScore = %.4f, want %.4f (weightedSum=%.4f)", result.FinalScore, expectedFinal, weightedSum)
 	}
 }
+
+type mockSPCProvider struct {
+	enabled   bool
+	asset     *SPCLocalAsset
+	correction SPCCorrection
+}
+
+func (m *mockSPCProvider) Enabled() bool {
+	return m.enabled
+}
+
+func (m *mockSPCProvider) GetAsset(hostID string) *SPCLocalAsset {
+	return m.asset
+}
+
+func (m *mockSPCProvider) UpsertAsset(asset SPCLocalAsset) {
+	m.asset = &asset
+}
+
+func (m *mockSPCProvider) Calculate(hostID string, assetPackages []string) SPCCorrection {
+	return m.correction
+}
+
+func TestSPCProvider_Integration(t *testing.T) {
+	cfg := config.Default()
+	cfg.Threshold = 80.0
+	cfg.Weights = model.Weights{
+		AttackSurface:      35,
+		BusinessContinuity: 25,
+		OperationTrust:     25,
+		Resilience:         15,
+	}
+	cfg.CheckDeltas = map[string]float64{
+		"AS-004": -8, "OT-005": -15,
+	}
+
+	a := NewAssessor(cfg)
+
+	checks := []model.CheckResult{
+		{CheckID: "AS-004", Domain: model.DomainAttackSurface, Name: "SSH Config", Passed: false, Delta: -8},
+		{CheckID: "OT-005", Domain: model.DomainOperationTrust, Name: "SELinux", Passed: false, Delta: -15},
+	}
+
+	resultNoSPC := a.AssessFromResults("host-01", "host-01", checks)
+	scoreNoSPC := resultNoSPC.FinalScore
+	spcNoSPC := resultNoSPC.SPCScore
+
+	t.Logf("Without SPC: FinalScore=%.2f, SPCScore=%.2f", scoreNoSPC, spcNoSPC)
+
+	if spcNoSPC != 1.0 {
+		t.Errorf("SPCScore without provider should be 1.0, got %.2f", spcNoSPC)
+	}
+
+	a.SetSPCProvider(&mockSPCProvider{
+		enabled: true,
+		asset: &SPCLocalAsset{
+			HostID:   "host-02",
+			Packages: []string{"openssl"},
+		},
+		correction: SPCCorrection{
+			Score:       0.85,
+			Weights:     map[string]float64{"attack_surface": -5},
+			Action:      "harden",
+			AffectedCVE: []string{"CVE-2024-1234"},
+		},
+	})
+
+	resultWithSPC := a.AssessFromResults("host-02", "host-02", checks)
+	scoreWithSPC := resultWithSPC.FinalScore
+	spcWithSPC := resultWithSPC.SPCScore
+
+	t.Logf("With SPC: FinalScore=%.2f, SPCScore=%.2f", scoreWithSPC, spcWithSPC)
+
+	if spcWithSPC != 0.85 {
+		t.Errorf("SPCScore with provider should be 0.85, got %.2f", spcWithSPC)
+	}
+
+	if scoreWithSPC >= scoreNoSPC {
+		t.Errorf("FinalScore with SPC penalty (%.2f) should be less than without (%.2f)", scoreWithSPC, scoreNoSPC)
+	}
+
+	if resultWithSPC.DomainWeightShift == nil {
+		t.Error("DomainWeightShift should be set when SPC provides weight shifts")
+	} else if shift, ok := resultWithSPC.DomainWeightShift["attack_surface"]; !ok || shift != -5 {
+		t.Errorf("DomainWeightShift[attack_surface] should be -5, got %v", shift)
+	}
+}
+
+func TestSPCProvider_Disabled(t *testing.T) {
+	cfg := config.Default()
+	a := NewAssessor(cfg)
+
+	a.SetSPCProvider(&mockSPCProvider{
+		enabled: false,
+		correction: SPCCorrection{
+			Score: 0.5,
+		},
+	})
+
+	result := a.AssessFromResults("host-01", "host-01", []model.CheckResult{
+		{CheckID: "AS-001", Domain: model.DomainAttackSurface, Passed: true, Delta: -8},
+	})
+
+	if result.SPCScore != 1.0 {
+		t.Errorf("SPCScore with disabled provider should be 1.0, got %.2f", result.SPCScore)
+	}
+}
+
+func TestSPCProvider_NilProvider(t *testing.T) {
+	cfg := config.Default()
+	a := NewAssessor(cfg)
+
+	result := a.AssessFromResults("host-01", "host-01", []model.CheckResult{
+		{CheckID: "AS-001", Domain: model.DomainAttackSurface, Passed: true, Delta: -8},
+	})
+
+	if result.SPCScore != 1.0 {
+		t.Errorf("SPCScore with nil provider should be 1.0, got %.2f", result.SPCScore)
+	}
+}

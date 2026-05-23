@@ -3,6 +3,7 @@ package kernel
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +39,10 @@ func (m *AssessorModule) Dependencies() []PluginDependency {
 	return []PluginDependency{
 		{Name: "config", Interface: (*config.Config)(nil)},
 	}
+}
+
+func (m *AssessorModule) Priority() int {
+	return 40
 }
 
 func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
@@ -115,6 +120,11 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	result := m.engine.Assess(hostID, hostID)
 
 	m.applySPCAndCTI(hostID, result)
+
+	if result.SPCScore != 1.0 || result.ThreatCoeff != m.cfg.ThreatCoeff {
+		result.FinalScore = m.recomputeFinalScore(result)
+		result.Acceptable = result.FinalScore >= result.Threshold
+	}
 
 	m.mu.Lock()
 	m.results[hostID] = result
@@ -196,8 +206,27 @@ func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentR
 			if asset := spc.GetAsset(hostID); asset != nil {
 				packages = asset.Packages
 			}
+			if len(packages) == 0 {
+				packages = m.extractPackagesFromChecks(result.Checks)
+			}
 			correction := spc.Calculate(hostID, packages)
 			spcScore = correction.Score
+
+			if len(correction.AffectedCVE) > 0 {
+				cveInfos := make([]model.SPCCVEInfo, 0, len(correction.PenaltyBreakdown))
+				for _, p := range correction.PenaltyBreakdown {
+					cveInfos = append(cveInfos, model.SPCCVEInfo{
+						CVEID:   p.CVEID,
+						CVSS:    p.CVSS,
+						EPSS:    p.EPSS,
+						InKEV:   p.InKEV,
+						HasPoC:  p.HasPoC,
+						Penalty: p.Penalty,
+						Product: p.Products,
+					})
+				}
+				result.SPCCVEs = cveInfos
+			}
 
 			if len(correction.Weights) > 0 {
 				if result.DomainWeightShift == nil {
@@ -334,4 +363,53 @@ type AssessorInterface interface {
 	EvaluateFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
 	GetResult(hostID string) *model.AssessmentResult
 	ReloadConfig(cfg *config.Config)
+}
+
+func (m *AssessorModule) extractPackagesFromChecks(checks []model.CheckResult) []string {
+	keywordMap := map[string][]string{
+		"ssh":        {"openssh", "ssh"},
+		"openssl":    {"openssl"},
+		"nginx":      {"nginx"},
+		"apache":     {"apache", "httpd"},
+		"php":        {"php"},
+		"mysql":      {"mysql", "mariadb"},
+		"postgres":   {"postgresql", "postgres"},
+		"redis":      {"redis"},
+		"docker":     {"docker"},
+		"kernel":     {"linux-kernel"},
+		"selinux":    {"selinux", "libselinux"},
+		"firewall":   {"iptables", "firewalld", "nftables"},
+		"fail2ban":   {"fail2ban"},
+		"audit":      {"auditd", "audit"},
+		"cron":       {"cronie", "crontabs"},
+		"rsyslog":    {"rsyslog"},
+		"suricata":   {"suricata"},
+		"chrony":     {"chrony"},
+		"clamav":     {"clamav"},
+		"cryptsetup": {"cryptsetup"},
+	}
+
+	pkgSet := make(map[string]bool)
+	for _, check := range checks {
+		detail := strings.ToLower(check.Detail)
+		name := strings.ToLower(check.Name)
+		id := strings.ToLower(check.CheckID)
+		combined := detail + " " + name + " " + id
+		for keyword, pkgs := range keywordMap {
+			if strings.Contains(combined, keyword) {
+				for _, pkg := range pkgs {
+					pkgSet[pkg] = true
+				}
+			}
+		}
+	}
+
+	pkgs := make([]string, 0, len(pkgSet))
+	for p := range pkgSet {
+		pkgs = append(pkgs, p)
+	}
+	if len(pkgs) > 0 {
+		logger.WithComponent("assessor").Info("extracted packages from check results as fallback", "count", len(pkgs), "packages", strings.Join(pkgs, ","))
+	}
+	return pkgs
 }

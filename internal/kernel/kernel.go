@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"reflect"
 	"sort"
 	"sync"
 	"syscall"
@@ -227,7 +228,11 @@ func (k *Kernel) Bootstrap() error {
 		for _, dep := range rec.plugin.Dependencies() {
 			if dep.Interface != nil {
 				if _, ok := k.di.Resolve(dep.Interface); !ok {
-					logger.WithComponent("kernel").Warn("dependency not resolved", "plugin", rec.plugin.Info().Name, "interface", dep.Interface)
+					ifaceType := reflect.TypeOf(dep.Interface)
+					if ifaceType.Kind() == reflect.Ptr {
+						ifaceType = ifaceType.Elem()
+					}
+					logger.WithComponent("kernel").Warn("dependency not resolved", "plugin", rec.plugin.Info().Name, "interface", ifaceType.String())
 				}
 			} else if dep.Name != "" {
 				if _, ok := k.di.ResolveNamed(dep.Name); !ok {

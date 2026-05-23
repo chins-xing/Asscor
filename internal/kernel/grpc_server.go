@@ -184,6 +184,7 @@ func (h *grpcKernelHandler) Heartbeat(ctx context.Context, req *apiv1.PBHeartbea
 		HostId:    req.HostId,
 		SessionId: req.SessionId,
 		Result:    apiv1.ConvertPBToAssessmentResult(req.Result),
+		Packages:  req.Packages,
 	}
 
 	resp, err := h.svc.Heartbeat(ctx, jsonReq)
@@ -346,7 +347,7 @@ func (c *GRPCClient) Register(ctx context.Context, hostId, hostname, version str
 	})
 }
 
-func (c *GRPCClient) Heartbeat(ctx context.Context, hostId, sessionId string, result *apiv1.AssessmentResult) (*apiv1.PBHeartbeatResponse, error) {
+func (c *GRPCClient) Heartbeat(ctx context.Context, hostId, sessionId string, result *apiv1.AssessmentResult, packages []string) (*apiv1.PBHeartbeatResponse, error) {
 	c.mu.RLock()
 	kernel := c.kernel
 	c.mu.RUnlock()
@@ -359,6 +360,7 @@ func (c *GRPCClient) Heartbeat(ctx context.Context, hostId, sessionId string, re
 		HostId:    hostId,
 		SessionId: sessionId,
 		Result:    apiv1.ConvertAssessmentResultToPB(result),
+		Packages:  packages,
 	})
 }
 

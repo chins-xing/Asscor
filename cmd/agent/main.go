@@ -16,6 +16,7 @@ func main() {
 	kernelAddr := flag.String("kernel", "127.0.0.1:50051", "kernel address host:port")
 	hostID := flag.String("host-id", "", "agent host identifier (default: hostname)")
 	tlsEnabled := flag.Bool("tls", false, "enable mTLS connection")
+	tlsSkipVerify := flag.Bool("tls-skip-verify", false, "skip TLS certificate verification (DEVELOPMENT ONLY)")
 	certDir := flag.String("cert-dir", "certs", "TLS certificate directory")
 	logFormat := flag.String("log-format", "json", "log format: json, text")
 	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
@@ -45,6 +46,10 @@ func main() {
 
 	if *tlsEnabled {
 		cfg.TLSEnabled = true
+	}
+
+	if *tlsSkipVerify {
+		cfg.TLSSkipVerify = true
 	}
 
 	if *certDir != "" {

@@ -42,7 +42,7 @@ func (m *AdapterIntegrationModule) Dependencies() []PluginDependency {
 }
 
 func (m *AdapterIntegrationModule) Priority() int {
-	return 50
+	return 45
 }
 
 func (m *AdapterIntegrationModule) Init(ctx context.Context, kc KernelContext) error {

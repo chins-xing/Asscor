@@ -6,12 +6,17 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"fmt"
+	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -70,6 +75,7 @@ type Agent struct {
 	lastCheckTime    time.Time
 	hmacKeyConfigured bool
 	hmacKeyWarned    atomic.Bool
+	cachedPackages   []string
 }
 
 func NewAgent(cfg AgentConfig) *Agent {
@@ -175,19 +181,37 @@ func (a *Agent) connect() error {
 			certDir = "certs"
 		}
 
-		caCert, err := os.ReadFile(filepath.Join(certDir, "ca.crt"))
+		caCertPath := filepath.Join(certDir, "ca.crt")
+		agentCertPath := filepath.Join(certDir, "agent.crt")
+		agentKeyPath := filepath.Join(certDir, "agent.key")
+
+		caCert, err := os.ReadFile(caCertPath)
 		if err != nil {
-			return fmt.Errorf("read CA certificate: %w", err)
+			return fmt.Errorf("read CA certificate from %s: %w", caCertPath, err)
 		}
 		caPool := x509.NewCertPool()
 		if !caPool.AppendCertsFromPEM(caCert) {
-			return fmt.Errorf("failed to parse CA certificate")
+			return fmt.Errorf("failed to parse CA certificate from %s", caCertPath)
 		}
 
-		agentCert, err := tls.LoadX509KeyPair(filepath.Join(certDir, "agent.crt"), filepath.Join(certDir, "agent.key"))
+		caFingerprint := sha256.Sum256(caCert)
+		caFPShort := hex.EncodeToString(caFingerprint[:])[:16]
+
+		agentCert, err := tls.LoadX509KeyPair(agentCertPath, agentKeyPath)
 		if err != nil {
-			return fmt.Errorf("load agent certificate: %w", err)
+			return fmt.Errorf("load agent certificate from %s: %w", agentCertPath, err)
 		}
+
+		var agentFPShort string
+		if len(agentCert.Certificate) > 0 {
+			agentFP := sha256.Sum256(agentCert.Certificate[0])
+			agentFPShort = hex.EncodeToString(agentFP[:])[:16]
+		}
+
+		logger.WithComponent("agent").Info("TLS configured",
+			"cert_dir", certDir,
+			"ca_sha256", caFPShort,
+			"agent_sha256", agentFPShort)
 
 		tlsConfig = &tls.Config{
 			Certificates: []tls.Certificate{agentCert},
@@ -195,15 +219,138 @@ func (a *Agent) connect() error {
 			ServerName:   "localhost",
 			MinVersion:   tls.VersionTLS12,
 		}
+
+		if a.cfg.TLSSkipVerify {
+			tlsConfig.InsecureSkipVerify = true
+			logger.WithComponent("agent").Warn("TLS certificate verification is DISABLED — not for production use")
+		}
 	}
 
 	a.client = NewClient(a.cfg.KernelAddr, tlsConfig)
 	if err := a.client.Connect(); err != nil {
 		a.client = nil
+		a.diagnoseTLS()
+
+		if a.cfg.TLSEnabled {
+			logger.WithComponent("agent").Info("re-reading certificates from disk and retrying connection")
+			time.Sleep(1 * time.Second)
+
+			certDir := a.cfg.CertDir
+			if certDir == "" {
+				certDir = "certs"
+			}
+			caCertPath := filepath.Join(certDir, "ca.crt")
+			agentCertPath := filepath.Join(certDir, "agent.crt")
+			agentKeyPath := filepath.Join(certDir, "agent.key")
+
+			caCert, caErr := os.ReadFile(caCertPath)
+			if caErr != nil {
+				return fmt.Errorf("TLS connect failed, re-read CA cert error: %w (original: %v)", caErr, err)
+			}
+			caPool := x509.NewCertPool()
+			if !caPool.AppendCertsFromPEM(caCert) {
+				return fmt.Errorf("TLS connect failed, re-read CA cert parse error (original: %v)", err)
+			}
+
+			caFP := sha256.Sum256(caCert)
+			logger.WithComponent("agent").Info("re-read CA cert", "sha256", hex.EncodeToString(caFP[:])[:16])
+
+			agentCert, agentErr := tls.LoadX509KeyPair(agentCertPath, agentKeyPath)
+			if agentErr != nil {
+				return fmt.Errorf("TLS connect failed, re-read agent cert error: %w (original: %v)", agentErr, err)
+			}
+
+			retryTLSConfig := &tls.Config{
+				Certificates: []tls.Certificate{agentCert},
+				RootCAs:      caPool,
+				ServerName:   "localhost",
+				MinVersion:   tls.VersionTLS12,
+			}
+			if a.cfg.TLSSkipVerify {
+				retryTLSConfig.InsecureSkipVerify = true
+			}
+
+			a.client = NewClient(a.cfg.KernelAddr, retryTLSConfig)
+			if retryErr := a.client.Connect(); retryErr != nil {
+				a.client = nil
+				return fmt.Errorf("TLS connect failed after cert re-read (original: %v, retry: %v). HINT: delete certs/ directory on BOTH kernel and agent, then restart kernel to regenerate", err, retryErr)
+			}
+			logger.WithComponent("agent").Info("connected to kernel on retry with fresh certs", "addr", a.cfg.KernelAddr)
+			return nil
+		}
+
 		return err
 	}
 	logger.WithComponent("agent").Info("connected to kernel", "addr", a.cfg.KernelAddr, "mtls", a.cfg.TLSEnabled)
 	return nil
+}
+
+func (a *Agent) diagnoseTLS() {
+	if !a.cfg.TLSEnabled {
+		return
+	}
+
+	certDir := a.cfg.CertDir
+	if certDir == "" {
+		certDir = "certs"
+	}
+
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	diagConn, err := tls.DialWithDialer(dialer, "tcp", a.cfg.KernelAddr, &tls.Config{
+		InsecureSkipVerify: true,
+		MinVersion:         tls.VersionTLS12,
+	})
+	if err != nil {
+		logger.WithComponent("agent").Error("TLS diagnose: cannot connect even with skip-verify", "error", err)
+		return
+	}
+	defer diagConn.Close()
+
+	certs := diagConn.ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		logger.WithComponent("agent").Error("TLS diagnose: server sent no certificates")
+		return
+	}
+
+	serverCert := certs[0]
+	serverFP := sha256.Sum256(serverCert.Raw)
+	logger.WithComponent("agent").Error("TLS diagnose: server certificate info",
+		"subject", serverCert.Subject.CommonName,
+		"issuer", serverCert.Issuer.CommonName,
+		"sha256", hex.EncodeToString(serverFP[:])[:16],
+		"not_before", serverCert.NotBefore.Format(time.RFC3339),
+		"not_after", serverCert.NotAfter.Format(time.RFC3339),
+		"dns_names", fmt.Sprintf("%v", serverCert.DNSNames),
+	)
+
+	caCertPEM, err := os.ReadFile(filepath.Join(certDir, "ca.crt"))
+	if err != nil {
+		logger.WithComponent("agent").Error("TLS diagnose: cannot read local CA", "error", err)
+		return
+	}
+
+	caBlock, _ := pem.Decode(caCertPEM)
+	if caBlock == nil {
+		logger.WithComponent("agent").Error("TLS diagnose: cannot decode local CA PEM")
+		return
+	}
+	caCert, err := x509.ParseCertificate(caBlock.Bytes)
+	if err != nil {
+		logger.WithComponent("agent").Error("TLS diagnose: cannot parse local CA", "error", err)
+		return
+	}
+
+	sigErr := serverCert.CheckSignatureFrom(caCert)
+	if sigErr != nil {
+		logger.WithComponent("agent").Error("TLS diagnose: server cert NOT signed by local CA",
+			"error", sigErr,
+			"ca_issuer", caCert.Issuer.CommonName,
+			"ca_subject", caCert.Subject.CommonName,
+		)
+		logger.WithComponent("agent").Error("HINT: delete certs/ directory on BOTH kernel and agent, then restart kernel to regenerate")
+	} else {
+		logger.WithComponent("agent").Info("TLS diagnose: server cert IS signed by local CA — issue may be SAN/name mismatch")
+	}
 }
 
 func (a *Agent) register() error {
@@ -271,6 +418,7 @@ func (a *Agent) heartbeatCycle() error {
 		HostId:    a.cfg.HostID,
 		SessionId: a.sessionID,
 		Result:    snapshot,
+		Packages:  a.collectPackages(),
 	}
 
 	heartbeatResp, err := a.client.Heartbeat(heartbeatReq)
@@ -434,7 +582,43 @@ func (a *Agent) printAssessmentReport(result *apiv1.AssessmentResult) {
 		spcScore = 1.0
 	}
 	fmt.Printf("  Final Score: %.2f/100    Status: %s\n", result.FinalScore, status)
-	fmt.Printf("  Threat Coeff: %.2f    SPC Score: %.2f\n", threatCoeff, spcScore)
+	if spcScore >= 1.0 {
+		fmt.Printf("  Threat Coeff: %.2f    SPC Score: %.2f (pending data sync)\n", threatCoeff, spcScore)
+	} else {
+		fmt.Printf("  Threat Coeff: %.2f    SPC Score: %.2f\n", threatCoeff, spcScore)
+	}
+
+	if len(result.SpcCVEs) > 0 {
+		fmt.Println("---------------------------------------------------------------")
+		fmt.Printf("[ SPC: Matched CVEs (%d) ]\n", len(result.SpcCVEs))
+		fmt.Println("---------------------------------------------------------------")
+		sort.Slice(result.SpcCVEs, func(i, j int) bool {
+			return result.SpcCVEs[i].CVSS > result.SpcCVEs[j].CVSS
+		})
+		maxShow := len(result.SpcCVEs)
+		if maxShow > 15 {
+			maxShow = 15
+		}
+		for i := 0; i < maxShow; i++ {
+			cve := result.SpcCVEs[i]
+			tags := ""
+			if cve.InKEV {
+				tags += " [KEV]"
+			}
+			if cve.HasPoC {
+				tags += " [PoC]"
+			}
+			product := ""
+			if cve.Product != "" {
+				product = fmt.Sprintf("  (%s)", cve.Product)
+			}
+			fmt.Printf("  %s  CVSS:%.1f  EPSS:%.2f  Penalty:%.4f%s%s\n",
+				cve.CVEID, cve.CVSS, cve.EPSS, cve.Penalty, tags, product)
+		}
+		if len(result.SpcCVEs) > maxShow {
+			fmt.Printf("  ... and %d more\n", len(result.SpcCVEs)-maxShow)
+		}
+	}
 	fmt.Println("---------------------------------------------------------------")
 	fmt.Println()
 
@@ -508,6 +692,146 @@ func sortedParamKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func (a *Agent) collectPackages() []string {
+	if a.cachedPackages != nil {
+		return a.cachedPackages
+	}
+
+	var packages []string
+
+	if runtime.GOOS == "linux" {
+		if _, err := os.Stat("/usr/bin/rpm"); err == nil {
+			packages = a.parseRPMPackages()
+			if len(packages) == 0 {
+				logger.WithComponent("agent").Warn("rpm command found but no packages returned, trying alternative rpm query")
+				packages = a.parseRPMPackagesAlt()
+			}
+		} else if _, err := os.Stat("/usr/bin/dpkg-query"); err == nil {
+			packages = a.parseDPKGPackages()
+		} else if _, err := os.Stat("/usr/bin/pacman"); err == nil {
+			packages = a.parsePacmanPackages()
+		} else {
+			logger.WithComponent("agent").Warn("no supported package manager found (rpm/dpkg/pacman)")
+		}
+	}
+
+	if len(packages) == 0 {
+		packages = a.extractPackagesFromChecks()
+	}
+
+	a.cachedPackages = packages
+	logger.WithComponent("agent").Info("collected packages", "count", len(packages))
+	return packages
+}
+
+func (a *Agent) parseRPMPackages() []string {
+	out, err := a.safeExec("rpm", []string{"-qa", "--queryformat", "%{NAME} %{VERSION}-%{RELEASE}\n"})
+	if err != nil {
+		logger.WithComponent("agent").Warn("rpm -qa failed", "error", err.Error())
+		return nil
+	}
+	return a.parsePackageList(out)
+}
+
+func (a *Agent) parseRPMPackagesAlt() []string {
+	out, err := a.safeExec("rpm", []string{"-qa"})
+	if err != nil {
+		logger.WithComponent("agent").Warn("rpm -qa (alt) failed", "error", err.Error())
+		return nil
+	}
+	return a.parsePackageList(out)
+}
+
+func (a *Agent) parseDPKGPackages() []string {
+	out, err := a.safeExec("dpkg-query", []string{"-W", "-f", "${Package} ${Version}\n"})
+	if err != nil {
+		logger.WithComponent("agent").Warn("dpkg-query failed", "error", err.Error())
+		return nil
+	}
+	return a.parsePackageList(out)
+}
+
+func (a *Agent) parsePacmanPackages() []string {
+	out, err := a.safeExec("pacman", []string{"-Q"})
+	if err != nil {
+		logger.WithComponent("agent").Warn("pacman -Q failed", "error", err.Error())
+		return nil
+	}
+	return a.parsePackageList(out)
+}
+
+func (a *Agent) parsePackageList(output string) []string {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	pkgs := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			pkgs = append(pkgs, line)
+		}
+	}
+	return pkgs
+}
+
+func (a *Agent) extractPackagesFromChecks() []string {
+	keywordMap := map[string][]string{
+		"ssh":       {"openssh", "ssh"},
+		"openssl":   {"openssl"},
+		"nginx":     {"nginx"},
+		"apache":    {"apache", "httpd"},
+		"php":       {"php"},
+		"mysql":     {"mysql", "mariadb"},
+		"postgres":  {"postgresql", "postgres"},
+		"redis":     {"redis"},
+		"docker":    {"docker"},
+		"kernel":    {"linux-kernel"},
+		"selinux":   {"selinux", "libselinux"},
+		"firewall":  {"iptables", "firewalld", "nftables"},
+		"fail2ban":  {"fail2ban"},
+		"audit":     {"auditd", "audit"},
+		"cron":      {"cronie", "crontabs"},
+		"rsyslog":   {"rsyslog"},
+		"suricata":  {"suricata"},
+		"chrony":    {"chrony"},
+		"clamav":    {"clamav"},
+		"cryptsetup": {"cryptsetup"},
+	}
+
+	pkgSet := make(map[string]bool)
+	for _, check := range a.checkers {
+		desc := strings.ToLower(check.Description)
+		name := strings.ToLower(check.Name)
+		id := strings.ToLower(check.ID)
+		combined := desc + " " + name + " " + id
+		for keyword, pkgs := range keywordMap {
+			if strings.Contains(combined, keyword) {
+				for _, pkg := range pkgs {
+					pkgSet[pkg] = true
+				}
+			}
+		}
+	}
+
+	pkgs := make([]string, 0, len(pkgSet))
+	for p := range pkgSet {
+		pkgs = append(pkgs, p)
+	}
+	if len(pkgs) > 0 {
+		logger.WithComponent("agent").Info("extracted packages from check results", "count", len(pkgs), "packages", strings.Join(pkgs, ","))
+	}
+	return pkgs
+}
+
+func (a *Agent) safeExec(name string, args []string) (string, error) {
+	if !common.IsCommandAllowed(name) {
+		return "", fmt.Errorf("command %s not in allowlist", name)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	out, err := cmd.Output()
+	return string(out), err
 }
 
 func (a *Agent) runChecks() []model.CheckResult {

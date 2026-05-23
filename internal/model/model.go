@@ -168,7 +168,18 @@ type AssessmentResult struct {
 	EdgeFactors        EdgeFactors       `json:"edge_factors"`
 	ThreatCoeff        float64           `json:"threat_coefficient"`
 	SPCScore           float64           `json:"spc_score,omitempty"`
+	SPCCVEs            []SPCCVEInfo      `json:"spc_cves,omitempty"`
 	Checks             []CheckResult     `json:"checks"`
+}
+
+type SPCCVEInfo struct {
+	CVEID   string  `json:"cve_id"`
+	CVSS    float64 `json:"cvss"`
+	EPSS    float64 `json:"epss"`
+	InKEV   bool    `json:"in_kev"`
+	HasPoC  bool    `json:"has_poc"`
+	Penalty float64 `json:"penalty"`
+	Product string  `json:"product,omitempty"`
 }
 
 type Weights struct {
@@ -223,6 +234,8 @@ type NVConfig struct {
 	BaseURL        string
 	APIKey         string
 	SyncIntervalH  int
+	UseLastMod     bool
+	NoRejected     bool
 }
 
 type EPSSConfig struct {

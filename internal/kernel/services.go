@@ -17,6 +17,7 @@ type KernelServiceImpl struct {
 	cti         CTIInterface
 	assessor    AssessorInterface
 	persistence PersistenceInterface
+	spc         SPCInterface
 }
 
 func NewKernelServiceImpl(
@@ -25,6 +26,7 @@ func NewKernelServiceImpl(
 	cti CTIInterface,
 	assessor AssessorInterface,
 	persistence PersistenceInterface,
+	spc SPCInterface,
 ) *KernelServiceImpl {
 	return &KernelServiceImpl{
 		heartbeat:   heartbeat,
@@ -32,6 +34,7 @@ func NewKernelServiceImpl(
 		cti:         cti,
 		assessor:    assessor,
 		persistence: persistence,
+		spc:         spc,
 	}
 }
 
@@ -68,6 +71,20 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 
 	if s.heartbeat != nil {
 		s.heartbeat.RecordHeartbeat(req.HostId)
+	}
+
+	if s.spc != nil && s.spc.Enabled() && len(req.Packages) > 0 {
+		asset := s.spc.GetAsset(req.HostId)
+		if asset == nil {
+			asset = &LocalAsset{
+				HostID:   req.HostId,
+				Packages: req.Packages,
+			}
+		} else {
+			asset.Packages = req.Packages
+		}
+		s.spc.UpsertAsset(*asset)
+		logger.WithComponent("kernel").Debug("SPC asset updated from heartbeat", "host_id", req.HostId, "packages", len(req.Packages))
 	}
 
 	var assessmentResult *apiv1.AssessmentResult
@@ -154,6 +171,19 @@ func convertAssessmentResult(r *model.AssessmentResult) *apiv1.AssessmentResult 
 		})
 	}
 
+	spcCVEs := make([]apiv1.SPCCVEInfo, 0, len(r.SPCCVEs))
+	for _, c := range r.SPCCVEs {
+		spcCVEs = append(spcCVEs, apiv1.SPCCVEInfo{
+			CVEID:   c.CVEID,
+			CVSS:    c.CVSS,
+			EPSS:    c.EPSS,
+			InKEV:   c.InKEV,
+			HasPoC:  c.HasPoC,
+			Penalty: c.Penalty,
+			Product: c.Product,
+		})
+	}
+
 	return &apiv1.AssessmentResult{
 		FinalScore:   r.FinalScore,
 		Acceptable:   r.Acceptable,
@@ -161,6 +191,7 @@ func convertAssessmentResult(r *model.AssessmentResult) *apiv1.AssessmentResult 
 		EdgeFactors:  edgeFactors,
 		ThreatCoeff:  r.ThreatCoeff,
 		SpcScore:     r.SPCScore,
+		SpcCVEs:      spcCVEs,
 		Checks:       checks,
 	}
 }

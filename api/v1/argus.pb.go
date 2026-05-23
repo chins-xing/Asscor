@@ -26,6 +26,7 @@ type HeartbeatRequest struct {
 	HostId    string            `json:"host_id"`
 	SessionId string            `json:"session_id"`
 	Result    *AssessmentResult `json:"result,omitempty"`
+	Packages  []string          `json:"packages,omitempty"`
 }
 
 type HeartbeatResponse struct {
@@ -42,7 +43,18 @@ type AssessmentResult struct {
 	EdgeFactors  map[string]float64 `json:"edge_factors,omitempty"`
 	ThreatCoeff  float64            `json:"threat_coefficient,omitempty"`
 	SpcScore     float64            `json:"spc_score,omitempty"`
+	SpcCVEs      []SPCCVEInfo       `json:"spc_cves,omitempty"`
 	Checks       []*CheckResult     `json:"checks"`
+}
+
+type SPCCVEInfo struct {
+	CVEID      string  `json:"cve_id"`
+	CVSS       float64 `json:"cvss"`
+	EPSS       float64 `json:"epss"`
+	InKEV      bool    `json:"in_kev"`
+	HasPoC     bool    `json:"has_poc"`
+	Penalty    float64 `json:"penalty"`
+	Product    string  `json:"product,omitempty"`
 }
 
 type CheckResult struct {
@@ -95,6 +107,147 @@ type StreamLogsRequest struct {
 
 type Ack struct {
 	Ok bool `json:"ok"`
+}
+
+type ListSourcesRequest struct {
+	Category string `json:"category,omitempty"`
+}
+
+type ListSourcesResponse struct {
+	Sources []*SourceStatus `json:"sources"`
+}
+
+type GetSourceRequest struct {
+	Id string `json:"id"`
+}
+
+type GetSourceResponse struct {
+	Status *SourceStatus `json:"status"`
+	Spec   *SourceSpec   `json:"spec,omitempty"`
+	Config *SourceConfig `json:"config,omitempty"`
+}
+
+type DeploySourceRequest struct {
+	Spec   *SourceSpec   `json:"spec"`
+	Config map[string]string `json:"config,omitempty"`
+}
+
+type DeploySourceResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+type EnableSourceRequest struct {
+	Id string `json:"id"`
+}
+
+type EnableSourceResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+type DisableSourceRequest struct {
+	Id string `json:"id"`
+}
+
+type DisableSourceResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+type UninstallSourceRequest struct {
+	Id    string `json:"id"`
+	Force bool   `json:"force,omitempty"`
+}
+
+type UninstallSourceResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+type UpdateSourceRequest struct {
+	Id      string `json:"id"`
+	Version string `json:"version"`
+}
+
+type UpdateSourceResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+type ConfigureSourceRequest struct {
+	Id       string            `json:"id"`
+	Settings map[string]string `json:"settings"`
+}
+
+type ConfigureSourceResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+type RunSourceRequest struct {
+	Id string `json:"id"`
+}
+
+type RunSourceResponse struct {
+	Success      bool   `json:"success"`
+	FindingsCount int32 `json:"findings_count"`
+	Error        string `json:"error,omitempty"`
+}
+
+type SourceAuditLogRequest struct {
+	SourceId string `json:"source_id,omitempty"`
+	Limit    int32  `json:"limit,omitempty"`
+}
+
+type SourceAuditLogResponse struct {
+	Entries []*AuditLogEntry `json:"entries"`
+}
+
+type SourceStatus struct {
+	Id          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Priority    string `json:"priority,omitempty"`
+	Description string `json:"description,omitempty"`
+	State       string `json:"state"`
+	Version     string `json:"version"`
+	Enabled     bool   `json:"enabled"`
+	LastSync    int64  `json:"last_sync"`
+	LastError   string `json:"last_error,omitempty"`
+	Findings    int32  `json:"findings_count"`
+	SyncCount   int64  `json:"sync_count"`
+	ErrorCount  int64  `json:"error_count"`
+	InstalledAt int64  `json:"installed_at"`
+}
+
+type SourceSpec struct {
+	Id              string   `json:"id"`
+	Name            string   `json:"name"`
+	Category        string   `json:"category"`
+	Priority        string   `json:"priority"`
+	Version         string   `json:"version"`
+	Description     string   `json:"description,omitempty"`
+	Interface       string   `json:"interface,omitempty"`
+	AdapterId       string   `json:"adapter_id,omitempty"`
+	OutputFormat    string   `json:"output_format,omitempty"`
+	AdaptDifficulty string   `json:"adapt_difficulty,omitempty"`
+	AccessValue     string   `json:"access_value,omitempty"`
+	DependsOn       []string `json:"depends_on,omitempty"`
+}
+
+type SourceConfig struct {
+	Id       string            `json:"id"`
+	Settings map[string]string `json:"settings"`
+}
+
+type AuditLogEntry struct {
+	Timestamp int64  `json:"timestamp"`
+	Action    string `json:"action"`
+	SourceId  string `json:"source_id"`
+	Operator  string `json:"operator"`
+	Detail    string `json:"detail"`
+	Success   bool   `json:"success"`
 }
 
 type MethodHandler func(ctx context.Context, payload []byte) ([]byte, error)

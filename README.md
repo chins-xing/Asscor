@@ -4,8 +4,8 @@
 >
 > Argus——希腊神话中的百眼巨人，全视、警惕、永不闭目。这个名字本身就是项目的隐喻：持续监控每一台主机的安全状态，不放过任何一个弱点。眼睛是项目的灵魂元素，也是 ARGUS 最核心的意象。
 
-**算法版本：** SSAM 1.3 | **项目版本：** ARGUS v0.1.1-MVP  
-**日期：** 2026-05-16  
+**算法版本：** SSAM 1.3 | **项目版本：** ARGUS v0.1.2-MVP  
+**日期：** 2026-05-24  
 **状态：** 发布
 
 ## 摘要
@@ -238,16 +238,16 @@ argus/
 
 ```bash
 # 使用独立评估工具
-./argus-linux-amd64-v0.1.1-MVP
+./argus-linux-amd64-v0.1.2-MVP
 
 # 输出 JSON 格式报告
-./argus-linux-amd64-v0.1.1-MVP -json
+./argus-linux-amd64-v0.1.2-MVP -json
 
 # 指定默认配置文件
-./argus-linux-amd64-v0.1.1-MVP -config config.ini
+./argus-linux-amd64-v0.1.2-MVP -config config.ini
 
 # 使用行业专用配置（政府/金融/医疗等）
-./argus-linux-amd64-v0.1.1-MVP -config config/config.gov.ini
+./argus-linux-amd64-v0.1.2-MVP -config config/config.gov.ini
 ```
 
 ### 10.2 分布式模式
@@ -258,10 +258,10 @@ argus/
 argus-kernel.exe -listen 0.0.0.0:50051 -no-mtls
 
 # Linux（使用行业配置）
-./argus-kernel-linux-amd64-v0.1.1-MVP -listen 0.0.0.0:50051 -no-mtls -config config/config.fin.ini
+./argus-kernel-linux-amd64-v0.1.2-MVP -listen 0.0.0.0:50051 -no-mtls -config config/config.fin.ini
 
 # 启用 mTLS（自动生成自签名证书）
-./argus-kernel-linux-amd64-v0.1.1-MVP -listen 0.0.0.0:50051
+./argus-kernel-linux-amd64-v0.1.2-MVP -listen 0.0.0.0:50051
 ```
 
 **启动 Agent（Linux）：**
@@ -368,7 +368,7 @@ SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。�
 - **SSAM 1.2** — 引入 ACI、SPC、等保映射、AVD 扩展机制、μKernel 联动
 - **SSAM 1.3** — 移除4项重叠边缘因子（SYN Cookie/供应链/自动封禁/资源紧张），SPC 引入平方和衰减，增加边缘因子合规等级覆盖，内置冲突检测
 
-### ARGUS v0.1.1-MVP 修复记录
+### ARGUS v0.1.2-MVP 修复记录
 
 #### 第一批修复（基础设施与协议层）
 
@@ -426,7 +426,7 @@ SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。�
 - **格式化输出** — 统一支持文本表格和 JSON 两种输出格式，通过 `--json` 参数切换
 - **HMAC 密钥管理** — 密钥元数据（创建时间/过期时间/哈希）、自动轮换（90 天）、文件权限 `0600`
 
-> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 1.3。ARGUS 是实现 SSAM 的开源项目框架，当前版本 v0.1.1-MVP。两者版本号独立演进。
+> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 1.3。ARGUS 是实现 SSAM 的开源项目框架，当前版本 v0.1.2-MVP。两者版本号独立演进。
 
 #### 第三批修复（SSAM 解耦与二次审计 — 2026-05-22）
 

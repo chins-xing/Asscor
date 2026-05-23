@@ -47,13 +47,14 @@ func helpCmdHandler(ctx *CommandContext) *CommandResult {
 	b.WriteString("\n  ARGUS \u00b5Kernel CLI\n")
 	b.WriteString(fmt.Sprintf("  Framework: %s   SSAM: %s\n\n", version.ARGUSVersion, version.SSAMVersion))
 
-	categories := []CommandCategory{CategoryCore, CategoryAgent, CategoryAssess, CategorySPC, CategoryPlugin, CategorySystem, CategoryDebug}
+	categories := []CommandCategory{CategoryCore, CategoryAgent, CategoryAssess, CategorySPC, CategoryPlugin, CategorySource, CategorySystem, CategoryDebug}
 	categoryLabels := map[CommandCategory]string{
 		CategoryCore:   "Core Commands",
 		CategoryAgent:  "Agent Management",
 		CategoryAssess: "Assessment",
 		CategorySPC:    "Security Posture",
 		CategoryPlugin: "Plugin Management",
+		CategorySource: "Source Management",
 		CategorySystem: "System",
 		CategoryDebug:  "Debug",
 	}

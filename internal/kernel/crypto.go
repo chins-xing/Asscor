@@ -208,11 +208,108 @@ func (cp *CertPair) CertPool() *x509.CertPool {
 	return pool
 }
 
+func ValidateCertPair(pair *CertPair) error {
+	if pair == nil || pair.Cert == nil {
+		return fmt.Errorf("nil cert pair")
+	}
+	if len(pair.Cert.Certificate) == 0 {
+		return fmt.Errorf("empty certificate chain")
+	}
+
+	x509Cert, err := x509.ParseCertificate(pair.Cert.Certificate[0])
+	if err != nil {
+		return fmt.Errorf("parse certificate: %w", err)
+	}
+
+	now := time.Now()
+	if now.Before(x509Cert.NotBefore) {
+		return fmt.Errorf("certificate not valid yet (notBefore=%s)", x509Cert.NotBefore.Format(time.RFC3339))
+	}
+	if now.After(x509Cert.NotAfter) {
+		return fmt.Errorf("certificate expired (notAfter=%s)", x509Cert.NotAfter.Format(time.RFC3339))
+	}
+
+	pubKey, ok := x509Cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("certificate public key is not RSA")
+	}
+
+	privKey, ok := pair.Cert.PrivateKey.(*rsa.PrivateKey)
+	if !ok {
+		return fmt.Errorf("private key is not RSA")
+	}
+
+	if pubKey.N.Cmp(privKey.N) != 0 || pubKey.E != privKey.E {
+		return fmt.Errorf("certificate public key does not match private key")
+	}
+
+	return nil
+}
+
+func VerifyCertChain(certPair *CertPair, caPair *CertPair) bool {
+	cert, err := x509.ParseCertificate(certPair.Cert.Certificate[0])
+	if err != nil {
+		return false
+	}
+
+	caCert, err := x509.ParseCertificate(caPair.Cert.Certificate[0])
+	if err != nil {
+		return false
+	}
+
+	if err := ValidateCertPair(caPair); err != nil {
+		return false
+	}
+
+	roots := x509.NewCertPool()
+	roots.AddCert(caCert)
+
+	opts := x509.VerifyOptions{
+		Roots:     roots,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	}
+
+	if _, err := cert.Verify(opts); err != nil {
+		return false
+	}
+	return true
+}
+
+func VerifySignature(certPair *CertPair, caPair *CertPair) error {
+	if len(certPair.Cert.Certificate) == 0 {
+		return fmt.Errorf("empty certificate chain")
+	}
+	if len(caPair.Cert.Certificate) == 0 {
+		return fmt.Errorf("empty CA certificate chain")
+	}
+
+	cert, err := x509.ParseCertificate(certPair.Cert.Certificate[0])
+	if err != nil {
+		return fmt.Errorf("parse certificate: %w", err)
+	}
+
+	caCert, err := x509.ParseCertificate(caPair.Cert.Certificate[0])
+	if err != nil {
+		return fmt.Errorf("parse CA certificate: %w", err)
+	}
+
+	if err := cert.CheckSignatureFrom(caCert); err != nil {
+		return fmt.Errorf("signature verification failed: %w", err)
+	}
+
+	return nil
+}
+
 func NewServerTLSConfig(serverCert, caCert *CertPair) *tls.Config {
 	clientPool := caCert.CertPool()
 
+	serverTLSCert := *serverCert.Cert
+	if len(serverTLSCert.Certificate) > 0 {
+		serverTLSCert.Certificate = append(serverTLSCert.Certificate, caCert.Cert.Certificate[0])
+	}
+
 	return &tls.Config{
-		Certificates: []tls.Certificate{*serverCert.Cert},
+		Certificates: []tls.Certificate{serverTLSCert},
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		ClientCAs:    clientPool,
 		MinVersion:   tls.VersionTLS12,
@@ -220,7 +317,6 @@ func NewServerTLSConfig(serverCert, caCert *CertPair) *tls.Config {
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 		},
-		PreferServerCipherSuites: true,
 	}
 }
 

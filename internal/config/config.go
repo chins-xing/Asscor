@@ -95,6 +95,8 @@ func Default() *Config {
 				BaseURL:        "https://services.nvd.nist.gov/rest/json/cves/2.0",
 				APIKey:         "",
 				SyncIntervalH:  6,
+				UseLastMod:     false,
+				NoRejected:     true,
 			},
 			EPSS: model.EPSSConfig{
 				Enabled:       true,
@@ -315,6 +317,10 @@ func Parse(content string) (*Config, error) {
 				if i, err := strconv.Atoi(v); err == nil {
 					cfg.SPC.NVD.SyncIntervalH = i
 				}
+			case "use_last_mod":
+				cfg.SPC.NVD.UseLastMod = strings.EqualFold(v, "true") || v == "1"
+			case "no_rejected":
+				cfg.SPC.NVD.NoRejected = strings.EqualFold(v, "true") || v == "1"
 			}
 		}
 		if envKey := os.Getenv("NVD_API_KEY"); envKey != "" {

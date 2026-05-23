@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,10 +18,45 @@ import (
 	"github.com/argus-security/argus/internal/ssam"
 )
 
+type SPCProvider interface {
+	Enabled() bool
+	GetAsset(hostID string) *SPCLocalAsset
+	UpsertAsset(asset SPCLocalAsset)
+	Calculate(hostID string, assetPackages []string) SPCCorrection
+}
+
+type SPCLocalAsset struct {
+	HostID        string
+	NetworkZone   string
+	Role          string
+	Packages      []string
+	InstalledCPEs []string
+	Compensations SPCCompensations
+}
+
+type SPCCompensations struct {
+	VirtualPatch  bool
+	WAFRules      bool
+	IPSRules      bool
+	AppWhitelist  bool
+}
+
+type SPCCorrection struct {
+	Score            float64
+	Weights          map[string]float64
+	Action           string
+	AffectedCVE      []string
+	TopCVEImpact     string
+	TotalPenalty     float64
+	PenaltyBreakdown []interface{}
+	KillChainScore   float64
+}
+
 type Assessor struct {
 	cfg           *config.Config
 	scoringEngine *DynamicScoringEngine
 	ssamEngine    *ssam.Engine
+	spcProvider   SPCProvider
 	maxWorkers    int
 	resultsCache  sync.Map
 	mu            sync.RWMutex
@@ -53,6 +89,10 @@ func NewAssessor(cfg *config.Config) *Assessor {
 		ssamEngine:    ssamEngine,
 		maxWorkers:    10,
 	}
+}
+
+func (a *Assessor) SetSPCProvider(provider SPCProvider) {
+	a.spcProvider = provider
 }
 
 func (a *Assessor) SSAMEngine() *ssam.Engine {
@@ -122,6 +162,8 @@ func (a *Assessor) Assess(hostID string, hostname string) *model.AssessmentResul
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostCheck, result)
 
+	spcScore := a.computeSPCScore(ctx, hostID, result)
+
 	ssamInput := &ssam.AssessmentInput{
 		HostID:      result.HostID,
 		Hostname:    result.Hostname,
@@ -129,7 +171,7 @@ func (a *Assessor) Assess(hostID string, hostname string) *model.AssessmentResul
 		Threshold:   result.Threshold,
 		Checks:      ssam.CheckResultsToInputs(result.Checks),
 		ThreatCoeff: a.cfg.ThreatCoeff,
-		SPCScore:    1.0,
+		SPCScore:    spcScore,
 	}
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreScore, result)
@@ -179,6 +221,115 @@ func (a *Assessor) ensureDefaults(result *model.AssessmentResult) {
 	}
 }
 
+func (a *Assessor) computeSPCScore(ctx context.Context, hostID string, result *model.AssessmentResult) float64 {
+	if a.spcProvider == nil || !a.spcProvider.Enabled() {
+		return 1.0
+	}
+
+	a.syncACIToSPCAsset(hostID, result)
+
+	var packages []string
+	if asset := a.spcProvider.GetAsset(hostID); asset != nil {
+		packages = asset.Packages
+	}
+	if len(packages) == 0 {
+		packages = a.collectPackageHints(result)
+	}
+
+	correction := a.spcProvider.Calculate(hostID, packages)
+
+	if len(correction.Weights) > 0 {
+		if result.DomainWeightShift == nil {
+			result.DomainWeightShift = make(map[string]float64)
+		}
+		for k, v := range correction.Weights {
+			result.DomainWeightShift[k] = v
+		}
+	}
+
+	logger.WithComponent("assessor").Info("SPC correction applied",
+		"host_id", hostID,
+		"p_score", correction.Score,
+		"action", correction.Action,
+		"affected_cve", len(correction.AffectedCVE),
+		"total_penalty", correction.TotalPenalty)
+
+	return correction.Score
+}
+
+func (a *Assessor) syncACIToSPCAsset(hostID string, result *model.AssessmentResult) {
+	asset := a.spcProvider.GetAsset(hostID)
+	if asset == nil {
+		asset = &SPCLocalAsset{HostID: hostID}
+	}
+
+	aciChecks := map[string]*bool{}
+	for i := range result.Checks {
+		c := &result.Checks[i]
+		if strings.HasPrefix(c.CheckID, "AC-") {
+			passed := c.Passed
+			aciChecks[c.CheckID] = &passed
+		}
+	}
+
+	changed := false
+
+	if p := aciChecks["AC-001"]; p != nil && *p {
+		if asset.NetworkZone != "internal" && asset.NetworkZone != "lan" {
+			asset.NetworkZone = "internal"
+			changed = true
+		}
+	}
+
+	if p := aciChecks["AC-004"]; p != nil && *p {
+		if !asset.Compensations.IPSRules {
+			asset.Compensations.IPSRules = true
+			changed = true
+		}
+	}
+
+	if p := aciChecks["AC-005"]; p != nil && *p {
+		if !asset.Compensations.AppWhitelist {
+			asset.Compensations.AppWhitelist = true
+			changed = true
+		}
+	}
+
+	if changed {
+		a.spcProvider.UpsertAsset(*asset)
+	}
+}
+
+func (a *Assessor) collectPackageHints(result *model.AssessmentResult) []string {
+	seen := make(map[string]bool)
+	var packages []string
+
+	for _, c := range result.Checks {
+		detail := strings.ToLower(c.Detail)
+		extractPkgHints(detail, seen, &packages)
+	}
+
+	return packages
+}
+
+func extractPkgHints(detail string, seen map[string]bool, packages *[]string) {
+	keywords := []string{
+		"openssl", "nginx", "php", "apache", "httpd",
+		"openssh", "ssh", "bind", "postfix", "dovecot",
+		"mysql", "mariadb", "postgresql", "redis", "mongodb",
+		"java", "tomcat", "node", "python", "perl", "ruby",
+		"kernel", "linux", "systemd", "docker", "containerd",
+		"clamav", "suricata", "fail2ban", "aide", "ossec",
+		"rsync", "rclone", "chrony", "ntpd", "auditd",
+	}
+	for _, kw := range keywords {
+		if strings.Contains(detail, kw) && !seen[kw] {
+			seen[kw] = true
+			*packages = append(*packages, kw)
+		}
+	}
+}
+
 func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
 	cacheKey := fmt.Sprintf("%s_%d_%s", hostID, len(checkResults), hashCheckResults(checkResults))
 	if cached, ok := a.resultsCache.Load(cacheKey); ok {
@@ -213,6 +364,8 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 		return a.buildEmptyResult(result)
 	}
 
+	spcScore := a.computeSPCScore(ctx, hostID, result)
+
 	ssamInput := &ssam.AssessmentInput{
 		HostID:      result.HostID,
 		Hostname:    result.Hostname,
@@ -220,7 +373,7 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 		Threshold:   result.Threshold,
 		Checks:      ssam.CheckResultsToInputs(result.Checks),
 		ThreatCoeff: a.cfg.ThreatCoeff,
-		SPCScore:    1.0,
+		SPCScore:    spcScore,
 	}
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreScore, result)

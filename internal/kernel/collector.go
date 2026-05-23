@@ -3,7 +3,9 @@ package kernel
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,7 +19,7 @@ type LogCollectorModule struct {
 	logPath string
 
 	mu     sync.RWMutex
-	writer *os.File
+	writer io.Writer
 	state  PluginState
 }
 
@@ -40,14 +42,34 @@ func (m *LogCollectorModule) Priority() int {
 
 func (m *LogCollectorModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
-	m.logPath = "argus-kernel.log"
 	m.state = PluginInitialized
 
-	f, err := os.OpenFile(m.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
+	m.logPath = "argus-kernel.log"
+	if cfg := kc.GetConfigObj(); cfg != nil {
+		if cfg.DataDir != "" {
+			m.logPath = filepath.Join(cfg.DataDir, "argus-kernel.log")
+		}
 	}
-	m.writer = f
+
+	logDir := filepath.Dir(m.logPath)
+	if logDir != "." && logDir != "" {
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			logger.WithComponent("log_collector").Warn("cannot create log directory, falling back to stdout",
+				"dir", logDir, "error", err)
+			m.writer = os.Stdout
+		}
+	}
+
+	if m.writer == nil {
+		f, err := os.OpenFile(m.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			logger.WithComponent("log_collector").Warn("cannot open log file, falling back to stdout",
+				"path", m.logPath, "error", err)
+			m.writer = os.Stdout
+		} else {
+			m.writer = f
+		}
+	}
 
 	kc.Container().Bind((*LogCollectorInterface)(nil), m)
 
@@ -63,8 +85,8 @@ func (m *LogCollectorModule) Start(ctx context.Context) error {
 func (m *LogCollectorModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
 	m.mu.Lock()
-	if m.writer != nil {
-		m.writer.Close()
+	if f, ok := m.writer.(*os.File); ok && f != os.Stdout && f != os.Stderr {
+		f.Close()
 	}
 	m.mu.Unlock()
 	m.state = PluginStopped
@@ -110,7 +132,9 @@ func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
 	data = append(data, '\n')
 	_, err = m.writer.Write(data)
 	if err == nil {
-		m.writer.Sync()
+		if f, ok := m.writer.(*os.File); ok {
+			f.Sync()
+		}
 	}
 	return err
 }
@@ -143,7 +167,9 @@ func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
 
 	_, err := m.writer.Write(buf)
 	if err == nil {
-		m.writer.Sync()
+		if f, ok := m.writer.(*os.File); ok {
+			f.Sync()
+		}
 	}
 	return err
 }

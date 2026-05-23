@@ -32,6 +32,7 @@ const (
 	CategorySystem  CommandCategory = "system"
 	CategoryDebug   CommandCategory = "debug"
 	CategoryAgent   CommandCategory = "agent"
+	CategorySource  CommandCategory = "source"
 )
 
 type CommandParam struct {
@@ -164,9 +165,26 @@ type KernelAccess interface {
 	Bus() BusAccess
 	Agents() AgentAccess
 	Logs() LogAccess
+	Sources() SourceAccess
 	CheckPermission(level PermissionLevel) bool
 	Registry() *Registry
 	History() *History
+}
+
+type SourceAccess interface {
+	DeploySource(ctx context.Context, spec kernel.SourceSpec, cfg kernel.SourceConfig) error
+	UninstallSource(ctx context.Context, id string, force bool) error
+	EnableSource(ctx context.Context, id string) error
+	DisableSource(ctx context.Context, id string) error
+	UpdateSource(ctx context.Context, id string, version string) error
+	GetSourceStatus(id string) (*kernel.SourceStatus, bool)
+	ListSources(category kernel.SourceCategory) []kernel.SourceStatus
+	ListAllSources() []kernel.SourceStatus
+	ConfigureSource(ctx context.Context, id string, cfg kernel.SourceConfig) error
+	GetSourceConfig(id string) (*kernel.SourceConfig, bool)
+	GetSourceSpec(id string) (*kernel.SourceSpec, bool)
+	RunSourceNow(ctx context.Context, id string) error
+	GetAuditLog(sourceID string, limit int) []kernel.AuditLogEntry
 }
 
 type BusAccess = kernel.BusAccess
@@ -466,6 +484,7 @@ func (e *Engine) RegisterBuiltinCommands() {
 		{historyCmdInfo, historyCmdHandler, historyCompletions},
 		{agentCmdInfo, agentCmdHandler, agentCompletions},
 		{logCmdInfo, logCmdHandler, logCompletions},
+		{sourceCmdInfo, sourceCmdHandler, sourceCompletions},
 	}
 
 	for _, b := range builtins {

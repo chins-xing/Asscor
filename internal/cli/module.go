@@ -103,6 +103,10 @@ func (b *kernelBridge) Logs() LogAccess {
 	return &logBridge{kernel: b.kernel}
 }
 
+func (b *kernelBridge) Sources() SourceAccess {
+	return &sourceBridge{kernel: b.kernel}
+}
+
 func (b *kernelBridge) CheckPermission(level PermissionLevel) bool {
 	return true
 }
@@ -293,6 +297,126 @@ func (l *logBridge) ExportLogs(hostID string, format string) (string, error) {
 
 var _ kernel.BusAccess = (*busBridge)(nil)
 
+type sourceBridge struct {
+	kernel kernel.KernelContext
+}
+
+func (s *sourceBridge) resolveManager() (kernel.SourceManagerInterface, error) {
+	impl, ok := s.kernel.Container().Resolve((*kernel.SourceManagerInterface)(nil))
+	if !ok {
+		return nil, fmt.Errorf("source manager not available")
+	}
+	sm, ok := impl.(kernel.SourceManagerInterface)
+	if !ok {
+		return nil, fmt.Errorf("source manager type mismatch")
+	}
+	return sm, nil
+}
+
+func (s *sourceBridge) DeploySource(ctx context.Context, spec kernel.SourceSpec, cfg kernel.SourceConfig) error {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return err
+	}
+	return sm.DeploySource(ctx, spec, cfg)
+}
+
+func (s *sourceBridge) UninstallSource(ctx context.Context, id string, force bool) error {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return err
+	}
+	return sm.UninstallSource(ctx, id, force)
+}
+
+func (s *sourceBridge) EnableSource(ctx context.Context, id string) error {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return err
+	}
+	return sm.EnableSource(ctx, id)
+}
+
+func (s *sourceBridge) DisableSource(ctx context.Context, id string) error {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return err
+	}
+	return sm.DisableSource(ctx, id)
+}
+
+func (s *sourceBridge) UpdateSource(ctx context.Context, id string, version string) error {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return err
+	}
+	return sm.UpdateSource(ctx, id, version)
+}
+
+func (s *sourceBridge) GetSourceStatus(id string) (*kernel.SourceStatus, bool) {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return nil, false
+	}
+	return sm.GetSourceStatus(id)
+}
+
+func (s *sourceBridge) ListSources(category kernel.SourceCategory) []kernel.SourceStatus {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return nil
+	}
+	return sm.ListSources(category)
+}
+
+func (s *sourceBridge) ListAllSources() []kernel.SourceStatus {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return nil
+	}
+	return sm.ListAllSources()
+}
+
+func (s *sourceBridge) ConfigureSource(ctx context.Context, id string, cfg kernel.SourceConfig) error {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return err
+	}
+	return sm.ConfigureSource(ctx, id, cfg)
+}
+
+func (s *sourceBridge) GetSourceConfig(id string) (*kernel.SourceConfig, bool) {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return nil, false
+	}
+	return sm.GetSourceConfig(id)
+}
+
+func (s *sourceBridge) GetSourceSpec(id string) (*kernel.SourceSpec, bool) {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return nil, false
+	}
+	return sm.GetSourceSpec(id)
+}
+
+func (s *sourceBridge) RunSourceNow(ctx context.Context, id string) error {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return err
+	}
+	return sm.RunSourceNow(ctx, id)
+}
+
+func (s *sourceBridge) GetAuditLog(sourceID string, limit int) []kernel.AuditLogEntry {
+	sm, err := s.resolveManager()
+	if err != nil {
+		return nil
+	}
+	return sm.GetAuditLog(sourceID, limit)
+}
+
 type busBridge struct {
 	bus *kernel.Bus
 	ctx context.Context
@@ -327,13 +451,16 @@ type CLIModule struct {
 	engine  *Engine
 	bridge  *kernelBridge
 	enabled bool
+	done    chan struct{}
 
 	mu    sync.RWMutex
 	state kernel.PluginState
 }
 
 func NewCLIModule() *CLIModule {
-	return &CLIModule{}
+	return &CLIModule{
+		done: make(chan struct{}),
+	}
 }
 
 func (m *CLIModule) Info() kernel.PluginInfo {
@@ -405,6 +532,7 @@ func (m *CLIModule) Start(ctx context.Context) error {
 		if err := term.Run(); err != nil {
 			logger.WithComponent("cli").Error("terminal error", "error", err)
 		}
+		close(m.done)
 	}()
 
 	logger.WithComponent("cli").Info("CLI module started", "log_output", logger.CurrentOutput())
@@ -453,10 +581,15 @@ func (m *CLIModule) Execute(input string) *CommandResult {
 	return m.engine.Execute(input)
 }
 
+func (m *CLIModule) Done() <-chan struct{} {
+	return m.done
+}
+
 type CLIInterface interface {
 	RegisterCommand(cmd Command) error
 	Execute(input string) *CommandResult
 	Engine() *Engine
+	Done() <-chan struct{}
 }
 
 type BaseCommand struct {

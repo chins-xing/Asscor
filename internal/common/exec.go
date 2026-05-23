@@ -33,6 +33,9 @@ var allowedCommands = map[string]bool{
 	"ps":          true,
 	"chronyc":     true,
 	"dmsetup":     true,
+	"rpm":         true,
+	"dpkg-query":  true,
+	"pacman":      true,
 }
 
 var allowedShellCommands = map[string]bool{
