@@ -30,6 +30,9 @@ go.work.sum
 # Build output
 build/
 
+# data
+data/
+
 # TLS certificates and private keys
 certs/
 
