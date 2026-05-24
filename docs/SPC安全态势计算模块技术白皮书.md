@@ -1,6 +1,6 @@
 # ARGUS 安全态势计算模块（SPC）技术白皮书
 
-> **版本：** v1.2 | **适用：** ARGUS v0.1.2-MVP / SSAM 1.3 | **日期：** 2026-05-24
+> **版本：** v1.3 | **适用：** ARGUS v0.1.2-MVP / SSAM 1.3 | **日期：** 2026-05-25
 
 ## 1. 概述
 
@@ -34,9 +34,9 @@ SPC 采用三级数据源架构，从全球到本地逐层聚焦：
 
 | 数据源 | 用途 | 同步策略 |
 |--------|------|----------|
-| **NVD** (National Vulnerability Database) | CVE 元数据、CVSS 评分、CPE 配置、引用链接 | API 2.0，120 天窗口分片请求，6.5s/请求速率控制（无 API Key） |
-| **CNNVD** (中国国家信息安全漏洞库) | 中文 CVE 补充、国产软件漏洞 | 计划中 |
-| **CNVD** (国家信息安全漏洞共享平台) | 中国特色漏洞通告 | 计划中 |
+| **NVD** (National Vulnerability Database) | CVE 元数据、CVSS 评分、CPE 配置、引用链接 | API 2.0，120 天窗口分片请求，并发分片（无 Key: 4×30d，有 Key: 2×60d），指数退避重试 |
+| **CNNVD** (中国国家信息安全漏洞库) | 中文 CVE 补充、国产软件漏洞 | REST API，中文严重等级映射（严重/高危/中危/低危） |
+| **CNVD** (国家信息安全漏洞共享平台) | 中国特色漏洞通告 | REST API，中文严重等级映射 |
 
 ### 2.2 二级数据源：利用情报
 
@@ -50,7 +50,7 @@ SPC 采用三级数据源架构，从全球到本地逐层聚焦：
 | 数据 | 采集方式 | 用途 |
 |------|----------|------|
 | **软件包列表** | Agent 通过 `rpm -qa` / `dpkg-query -W` 采集 | CVE→资产匹配 |
-| **安装的 CPE** | 从软件包元数据生成（计划中） | 精确版本匹配 |
+| **安装的 CPE** | 从软件包元数据自动生成（已实现） | 精确版本匹配 |
 | **服务与端口** | Agent 检查项采集 | 暴露面判定 |
 | **安全控制措施** | Agent 检查项结果 | 控制级别判定 |
 
@@ -92,12 +92,14 @@ CPE（Common Platform Enumeration）格式为 `cpe:2.3:part:vendor:product:versi
 
 | 优先级 | 匹配方式 | MatchType | Factor | 说明 |
 |--------|----------|-----------|--------|------|
-| 1 | CPE Product 精确匹配 | `MatchCPEProduct` | 0.3 | `pkgNameSet[cpe.product]` 命中 |
-| 2 | CPE Vendor 匹配 | `MatchCPEVendor` | 0.3 | `pkgNameSet[cpe.vendor]` 命中（vendor ≥ 2 字符） |
-| 3 | Description 子串匹配 | `MatchCPEProduct` | 0.3 | 包名出现在 CVE 描述中 |
-| 4 | CPE 子串匹配 | `MatchCPEProduct` | 0.3 | 包名是 CPE 字符串的子串 |
+| 1 | CPE 精确版本匹配 | `MatchExactVersion` | 1.0 | InstalledCPE 与 AffectedCPE 版本完全一致 |
+| 2 | CPE 版本范围匹配 | `MatchVersionRange` | 0.7 | InstalledCPE 版本在 AffectedCPE 的 versionStart/versionEnd 范围内 |
+| 3 | CPE Product 匹配 | `MatchCPEProduct` | 0.3 | `pkgNameSet[cpe.product]` 命中 |
+| 4 | CPE Vendor 匹配 | `MatchCPEVendor` | 0.3 | `pkgNameSet[cpe.vendor]` 命中（vendor ≥ 2 字符） |
+| 5 | Description 子串匹配 | `MatchCPEProduct` | 0.3 | 包名出现在 CVE 描述中 |
+| 6 | CPE 子串匹配 | `MatchCPEProduct` | 0.3 | 包名是 CPE 字符串的子串 |
 
-> **注意：** 当前版本 MatchType.Factor 统一为 0.3（Product/Vendor/Description 级别）。精确版本匹配（Factor=1.0）和版本范围匹配（Factor=0.7）将在 `InstalledCPEs` 功能完善后启用。
+> **v1.3 更新：** 精确版本匹配（Factor=1.0）和版本范围匹配（Factor=0.7）已启用。Agent 端通过包名-版本解析和 vendor-product 映射表自动生成 InstalledCPEs（CPE 2.3 格式字符串），Kernel 端在匹配时优先使用精确版本匹配。
 
 ### 3.4 暴露面判定（ExposureLevel）
 
@@ -213,11 +215,12 @@ SPC 严格遵循 NVD API 2.0 规范：
 |----------|----------|
 | 日期参数必须配对 | `pubStartDate` + `pubEndDate` 或 `lastModStartDate` + `lastModEndDate` |
 | 日期范围 ≤ 120 天 | 120 天窗口分片请求，自动分页 |
-| 无 API Key 速率限制 | 5 次/30 秒，每次请求后等待 6.5 秒 |
-| 有 API Key 速率限制 | 50 次/30 秒，每次请求后等待 0.6 秒 |
+| 无 API Key 速率限制 | 5 次/30 秒，并发分片 4×30 天窗口，每次请求后等待 6.5 秒 |
+| 有 API Key 速率限制 | 50 次/30 秒，并发分片 2×60 天窗口，每次请求后等待 0.6 秒 |
 | 分页每页 ≤ 2000 条 | 使用 `startIndex` 参数分页 |
-| 429 响应渐进退避 | retry 1: 20s, retry 2: 30s, retry 3: 40s |
+| 429 响应指数退避 | 退避间隔 = `min(60s, (1 << retryCount) * time.Second)`，最大重试 5 次 |
 | 请求超时控制 | 45 秒 context 超时 |
+| 并发窗口控制 | WorkerPool 信号量限制最大并发度 |
 
 ### 5.2 同步策略
 
@@ -430,15 +433,17 @@ SPC 模块运行在 Kernel 端，Agent 通过 mTLS 加密的 gRPC 通道上报�
 
 ## 12. 后续规划
 
-| 功能 | 优先级 | 说明 |
-|------|--------|------|
-| InstalledCPEs 生成 | 高 | 从软件包元数据自动生成 CPE 条目，启用精确版本匹配 |
-| CNNVD/CNVD 接入 | 中 | 补充中国特色漏洞数据 |
-| MISP 威胁情报集成 | 中 | 从 MISP 实例拉取事件和星系标签 |
-| OSCAL 导入 | 低 | 支持 OSCAL 格式的安全评估结果导入 |
-| 版本范围匹配 | 高 | 利用 CPE 的 versionStart/versionEnd 实现精确版本范围匹配 |
-| 缓存增量更新优化 | 中 | 仅更新变更的 CVE，减少全量替换开销 |
+| 功能 | 优先级 | 说明 | 状态 |
+|------|--------|------|------|
+| InstalledCPEs 生成 | 高 | 从软件包元数据自动生成 CPE 条目，启用精确版本匹配 | ✅ 已实现 |
+| CNNVD/CNVD 接入 | 中 | 补充中国特色漏洞数据 | ✅ 已实现 |
+| MISP 威胁情报集成 | 中 | 从 MISP 实例拉取事件和星系标签 | 计划中 |
+| OSCAL 导入 | 低 | 支持 OSCAL 格式的安全评估结果导入 | 计划中 |
+| 版本范围匹配 | 高 | 利用 CPE 的 versionStart/versionEnd 实现精确版本范围匹配 | ✅ 已实现 |
+| 缓存增量更新优化 | 中 | 仅更新变更的 CVE，减少全量替换开销 | 计划中 |
+| NVD 并发分片请求 | 高 | 无 Key 时 4×30d 并发，有 Key 时 2×60d 并发 | ✅ 已实现 |
+| 指数退避重试 | 高 | 替代固定间隔重试，避免 429 速率限制 | ✅ 已实现 |
 
 ---
 
-> **说明：** SPC 是 SSAM 1.3 的核心组件，当前版本 v1.2。ARGUS 是实现 SSAM 的开源项目框架，当前版本 v0.1.2-MVP。两者版本号独立演进。
+> **说明：** SPC 是 SSAM 1.3 的核心组件，当前版本 v1.3。ARGUS 是实现 SSAM 的开源项目框架，当前版本 v0.1.2-MVP。两者版本号独立演进。

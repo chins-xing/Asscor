@@ -1,6 +1,6 @@
 # ARGUS CLI 命令使用指南
 
-> 版本：v0.1.2-MVP | SSAM 1.3 | 最后更新：2026-05-24
+> 版本：v0.1.2-MVP | SSAM 1.3 | 最后更新：2026-05-25
 
 ---
 
@@ -12,12 +12,13 @@
 4. [评估命令](#4-评估命令)
 5. [SPC 命令](#5-spc-命令)
 6. [Agent 管理命令](#6-agent-管理命令)
-7. [插件管理命令](#7-插件管理命令)
-8. [外部源管理命令](#8-外部源管理命令)
-9. [系统命令](#9-系统命令)
-10. [调试命令](#10-调试命令)
-11. [命令注册与扩展](#11-命令注册与扩展)
-12. [交互式终端功能](#12-交互式终端功能)
+7. [ATT&CK 命令](#7-attck-命令)
+8. [插件管理命令](#8-插件管理命令)
+9. [外部源管理命令](#9-外部源管理命令)
+10. [系统命令](#10-系统命令)
+11. [调试命令](#11-调试命令)
+12. [命令注册与扩展](#12-命令注册与扩展)
+13. [交互式终端功能](#13-交互式终端功能)
 
 ---
 
@@ -348,9 +349,235 @@ argus> log export --format=json --output=logs.json
 
 ---
 
-## 7. 插件管理命令
+## 7. ATT&CK 命令
 
-### 7.1 plugin — 插件管理
+### 7.1 attck — MITRE ATT&CK V19 威胁分析
+
+操作 ATT&CK V19 模块，包括检测规则管理、IOC 管理、差距分析、攻击链重构、APT 归因和威胁狩猎。
+
+**用法**：
+
+```
+attck <action> [options]
+```
+
+**子命令**：
+
+| 动作 | 说明 |
+|------|------|
+| `summary` | ATT&CK 模块概览（规则数、告警数、IOC 数、覆盖率） |
+| `rule` | 检测规则管理 |
+| `alert` | 告警查询与确认 |
+| `anomaly` | 异常事件查询 |
+| `ioc` | IOC 指标管理 |
+| `actor` | 威胁行为体画像 |
+| `gap` | 防御差距分析 |
+| `control` | 安全控制映射 |
+| `chain` | 攻击链重构 |
+| `attribute` | APT 归因分析 |
+| `hunt` | 威胁狩猎框架 |
+| `emulate` | 对手仿真执行 |
+| `improve` | 持续改进追踪 |
+
+**选项**：
+
+| 选项 | 短选项 | 默认值 | 说明 |
+|------|--------|--------|------|
+| `--host` | `-H` | — | 目标主机 ID |
+| `--severity` | `-s` | — | 按严重等级过滤：`critical`、`high`、`medium`、`low` |
+| `--technique` | `-t` | — | 按 ATT&CK 技术 ID 过滤 |
+| `--limit` | `-n` | `20` | 结果数量限制 |
+| `--format` | `-f` | `text` | 输出格式：`text`、`json` |
+
+### 7.2 attck summary — 模块概览
+
+**示例**：
+
+```
+argus> attck summary
+
+  ATT&CK V19 Module Summary
+  ─────────────────────────────────────────
+  detection_rules    15
+  active_alerts      3
+  ioc_entries        128
+  threat_actors      12
+  coverage_pct       67.3%
+  chains_detected    1
+  hunt_hypotheses    4
+```
+
+### 7.3 attck rule — 检测规则管理
+
+| 子动作 | 说明 |
+|--------|------|
+| `add` | 注册检测规则 |
+| `list` | 列出所有规则 |
+| `delete` | 删除规则 |
+| `evaluate` | 对指定主机评估规则 |
+
+**示例**：
+
+```
+argus> attck rule add --name "suspicious_powershell" --technique T1059 --severity high
+argus> attck rule list
+argus> attck rule evaluate --rule=<ruleID> --host=web-server-01
+argus> attck rule delete --rule=<ruleID>
+```
+
+### 7.4 attck alert — 告警管理
+
+| 子动作 | 说明 |
+|--------|------|
+| `list` | 列出告警 |
+| `ack` | 确认告警 |
+
+**示例**：
+
+```
+argus> attck alert list --severity=high
+argus> attck alert list --host=web-server-01
+argus> attck alert ack --alert=<alertID>
+```
+
+### 7.5 attck ioc — IOC 管理
+
+| 子动作 | 说明 |
+|--------|------|
+| `add` | 添加 IOC |
+| `list` | 列出 IOC |
+| `search` | 搜索 IOC |
+| `delete` | 删除 IOC |
+| `expire` | 清理过期 IOC |
+
+**示例**：
+
+```
+argus> attck ioc add --type=ip --value=10.0.0.1 --confidence=0.8 --technique=T1071
+argus> attck ioc list --type=domain
+argus> attck ioc search --value=10.0.0
+argus> attck ioc delete --id=<iocID>
+argus> attck ioc expire
+```
+
+### 7.6 attck gap — 防御差距分析
+
+对指定主机执行 ATT&CK 覆盖率差距分析，输出防御缺口和缓解建议。
+
+**示例**：
+
+```
+argus> attck gap --host=web-server-01
+
+  Gap Analysis: web-server-01
+  ─────────────────────────────────────────
+  coverage_pct       67.3%
+  gaps_found         8
+  critical_gaps      2
+
+  Critical Gaps:
+    TA0001/T1566  Initial Access / Phishing
+    TA0006/T1003  Credential Access / OS Credential Dumping
+```
+
+### 7.7 attck chain — 攻击链重构
+
+基于告警、异常、IOC 多源证据，按 ATT&CK 战术顺序自动重构多阶段攻击链。
+
+**示例**：
+
+```
+argus> attck chain --host=web-server-01
+
+  Attack Chain: CHAIN-20260525-001
+  ─────────────────────────────────────────
+  stages: 5
+  severity: critical
+  status: active
+
+  Stage 1: TA0001/T1566  Phishing          confidence: 0.85
+  Stage 2: TA0002/T1059  PowerShell         confidence: 0.90
+  Stage 3: TA0006/T1003  Credential Dump    confidence: 0.75
+  Stage 4: TA0008/T1021  Lateral Movement   confidence: 0.60
+  Stage 5: TA0011/T1071  C2 Communication   confidence: 0.80
+```
+
+### 7.8 attck attribute — APT 归因
+
+对已检测的攻击链执行 APT 归因分析，基于 TTP 重叠和 IOC 匹配计算置信度。
+
+**示例**：
+
+```
+argus> attck attribute --chain=CHAIN-20260525-001
+
+  Attribution Result
+  ─────────────────────────────────────────
+  primary_actor      APT28
+  confidence         0.82
+  ttp_overlap        0.78 (7/9 techniques match)
+  ioc_match          0.88 (3 IOC matches)
+  industry_align     +0.05 (Government sector)
+```
+
+### 7.9 attck hunt — 威胁狩猎
+
+| 子动作 | 说明 |
+|--------|------|
+| `generate` | 自动生成狩猎假设 |
+| `list` | 列出狩猎假设 |
+| `execute` | 执行狩猎假设 |
+| `confirm` | 确认狩猎结果 |
+
+**示例**：
+
+```
+argus> attck hunt generate --host=web-server-01
+argus> attck hunt list
+argus> attck hunt execute --id=<hypothesisID> --host=web-server-01
+argus> attck hunt confirm --id=<hypothesisID> --status=confirmed
+```
+
+### 7.10 attck emulate — 对手仿真
+
+| 子动作 | 说明 |
+|--------|------|
+| `create` | 创建仿真场景 |
+| `generate` | 从 APT 组织自动生成场景 |
+| `run` | 执行仿真 |
+| `results` | 查看仿真结果 |
+
+**示例**：
+
+```
+argus> attck emulate generate --actor=APT29
+argus> attck emulate run --scenario=<scenarioID> --host=web-server-01 --safe
+argus> attck emulate results --scenario=<scenarioID>
+```
+
+### 7.11 attck improve — 持续改进追踪
+
+| 子动作 | 说明 |
+|--------|------|
+| `create` | 创建改进追踪 |
+| `list` | 列出改进追踪 |
+| `update` | 更新改进动作状态 |
+| `progress` | 查看改进进度 |
+
+**示例**：
+
+```
+argus> attck improve create --name=" Harden credential policy"
+argus> attck improve list
+argus> attck improve update --track=<trackID> --action=<actionID> --status=completed
+argus> attck improve progress --track=<trackID>
+```
+
+---
+
+## 8. 插件管理命令
+
+### 8.1 plugin — 插件管理
 
 列出、查看和管理 Kernel 插件。
 
@@ -390,7 +617,7 @@ argus> plugin list
   log_collector     v1.0.0  Agent log collection
   persistence       v1.0.0  Data persistence layer
   concurrency       v1.0.0  Concurrency control
-  attck             v1.0.0  MITRE ATT&CK mapping
+  attck             v2.0.0  MITRE ATT&CK V19 threat analysis
   config_watcher    v1.0.0  Configuration hot-reload
   adapter_integration v1.0.0 External adapter integration
   source_manager    v1.0.0  External source management
@@ -402,9 +629,9 @@ argus> plugin health
 
 ---
 
-## 8. 外部源管理命令
+## 9. 外部源管理命令
 
-### 8.1 source — 外部源管理
+### 9.1 source — 外部源管理
 
 部署、配置、启停和审计外部集成源。
 
@@ -455,9 +682,9 @@ argus> source audit trivy --limit 20
 
 ---
 
-## 9. 系统命令
+## 10. 系统命令
 
-### 9.1 config — 配置查看
+### 10.1 config — 配置查看
 
 查看当前 Kernel 配置。
 
@@ -487,7 +714,7 @@ argus> config threshold
 argus> config --json
 ```
 
-### 9.2 health — 健康检查
+### 10.2 health — 健康检查
 
 对所有 Kernel 插件执行健康检查。
 
@@ -516,9 +743,9 @@ argus> health --json
 
 ---
 
-## 10. 调试命令
+## 11. 调试命令
 
-### 10.1 history — 命令历史
+### 11.1 history — 命令历史
 
 查看命令执行历史记录。
 
@@ -561,22 +788,23 @@ argus> history --clear
 
 ---
 
-## 11. 命令注册与扩展
+## 12. 命令注册与扩展
 
-### 11.1 命令分类
+### 12.1 命令分类
 
 | 分类 | 标识 | 包含命令 |
 |------|------|----------|
 | Core | `core` | help, version, status |
 | Assessment | `assess` | assess |
 | SPC | `spc` | spc |
+| ATT&CK | `attck` | attck |
 | Plugin | `plugin` | plugin |
 | Agent | `agent` | agent, log |
 | Source | `source` | source |
 | System | `system` | config, health |
 | Debug | `debug` | history |
 
-### 11.2 权限级别
+### 12.2 权限级别
 
 | 级别 | 标识 | 说明 |
 |------|------|------|
@@ -584,7 +812,7 @@ argus> history --clear
 | Write | `PermWrite` | 修改操作，如更新配置、启停 Agent |
 | Admin | `PermAdmin` | 管理操作，如部署外部源、强制操作 |
 
-### 11.3 插件注册自定义命令
+### 12.3 插件注册自定义命令
 
 插件可通过 `cli.command.register` 扩展点注册自定义命令：
 
@@ -610,7 +838,7 @@ if ok {
 }
 ```
 
-### 11.4 命令接口规范
+### 12.4 命令接口规范
 
 ```go
 type Command interface {
@@ -628,9 +856,9 @@ type Command interface {
 
 ---
 
-## 12. 交互式终端功能
+## 13. 交互式终端功能
 
-### 12.1 自动补全
+### 13.1 自动补全
 
 输入命令时按 `Tab` 键触发自动补全：
 
@@ -638,12 +866,12 @@ type Command interface {
 - 子命令补全：输入命令后按 `Tab`
 - 选项补全：输入 `--` 后按 `Tab`
 
-### 12.2 命令历史
+### 13.2 命令历史
 
 - 使用 `↑` / `↓` 箭头键浏览历史命令
 - 使用 `history` 命令查看完整历史记录
 
-### 12.3 输出格式
+### 13.3 输出格式
 
 所有命令支持 `--json` 选项输出结构化 JSON 数据，便于脚本集成：
 
@@ -652,7 +880,7 @@ type Command interface {
 echo "spc summary --json" | ./argus-kernel-linux-x86_64
 ```
 
-### 12.4 退出码
+### 13.4 退出码
 
 | 退出码 | 含义 |
 |--------|------|

@@ -5,7 +5,7 @@
 > Argus——希腊神话中的百眼巨人，全视、警惕、永不闭目。这个名字本身就是项目的隐喻：持续监控每一台主机的安全状态，不放过任何一个弱点。眼睛是项目的灵魂元素，也是 ARGUS 最核心的意象。
 
 **算法版本：** SSAM 1.3 | **项目版本：** ARGUS v0.1.2-MVP  
-**日期：** 2026-05-24  
+**日期：** 2026-05-25  
 **状态：** 发布
 
 ## 摘要
@@ -211,7 +211,11 @@ argus/
 ├── internal/
 │   ├── kernel/        # 内核核心模块（assessor, policy, spc, cti,
 │   │                   #  adapter_integration, config_watcher,
-│   │                   #  di, bus, circuitbreaker, interceptor 等）
+│   │                   #  di, bus, circuitbreaker, interceptor,
+│   │                   #  attck, attck_detection, attck_ti,
+│   │                   #  attck_emulation, attck_assessment,
+│   │                   #  attck_apt_chain, attck_apt_detect,
+│   │                   #  attck_apt_attribution, attck_apt_hunt 等）
 │   ├── ssam/          # SSAM 独立算法模块（engine, interfaces, adapter,
 │   │                   #  defaults, errors — 可脱离 Argus 独立使用）
 │   ├── agent/         # Agent 核心模块（collector, executor）
@@ -290,10 +294,11 @@ ARGUS μKernel 是风险评估与指令分发中心，采用微内核 + Agent �
 | **熔断器 (Circuit Breaker)** | 基于滑动窗口的熔断器（Closed→Open→Half-Open），防止服务雪崩 |
 | **拦截器链 (Interceptor)** | 可组合的请求拦截器，内置速率限制、熔断器、审计日志拦截器 |
 | **适配器集成 (AdapterIntegration)** | 周期性执行 21 个外部工具适配器（Fetch→Parse→Map→Validate 四阶段流水线），结果注入评分流程 |
-| **安全态势计算器 (SPC)** | 从 NVD/EPSS/CISA KEV 拉取漏洞情报，CVE 缓存磁盘持久化（启动加载/退出保存），输出个体化 P_score |
+| **安全态势计算器 (SPC)** | 从 NVD/EPSS/CISA KEV/CNNVD/CNVD 拉取漏洞情报，CVE 缓存磁盘持久化（启动加载/退出保存），CPE 精确版本匹配，输出个体化 P_score |
 | **配置监听器 (ConfigWatcher)** | 监控配置文件变化，支持权重热加载（`Assessor.ReloadWeights()`）和 SIGHUP 信号 |
 | **策略管理器 (Policy Manager)** | 根据分数区间生成自动化动作（notify_admin / isolate_host 等） |
 | **指令下发器 (Commander)** | HMAC-SHA256 签名命令下发，Agent 白名单执行 |
+| **ATT&CK V19 模块 (ATTACK)** | MITRE ATT&CK V19 框架集成，四大子模块（检测分析/威胁情报/对手仿真/评估工程）+ APT 增强层（攻击链重构/行为检测/归因引擎/威胁狩猎） |
 
 ### 行业配置模板
 
@@ -354,7 +359,87 @@ SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。�
 
 详细接口规范与接入指南请参阅 [docs/SSAM接口规范与接入指南.md](docs/SSAM接口规范与接入指南.md)。
 
-## 13. 已知局限与后续工作
+## 13. ATT&CK V19 威胁分析模块
+
+ARGUS v0.1.2-MVP 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。该模块作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
+
+### 13.1 四大核心子模块
+
+| 子模块 | 实现文件 | 核心能力 |
+|--------|----------|----------|
+| **检测与分析** | `attck_detection.go` | 检测规则引擎、异常事件记录、告警关联分析、检测摘要统计 |
+| **威胁情报** | `attck_ti.go` | IOC 管理、威胁行为体画像、TTP 追踪、告警情报富化 |
+| **对手仿真与红队** | `attck_emulation.go` | 仿真场景管理、从 APT 组织自动生成场景、安全模式仿真执行 |
+| **评估与工程** | `attck_assessment.go` | 差距分析、控制映射、缓解建议、持续改进追踪 |
+
+### 13.2 APT 攻击分析与检测增强
+
+在四大子模块基础上，APT 增强层提供高级威胁分析能力：
+
+| 功能 | 实现文件 | 描述 |
+|------|----------|------|
+| **攻击链重构** | `attck_apt_chain.go` | 基于告警、异常、IOC 多源证据，按 ATT&CK 战术顺序自动重构多阶段攻击链 |
+| **行为检测** | `attck_apt_detect.go` | 行为指标注册与评估、主机行为基线管理、C2 信标检测（间隔抖动分析） |
+| **APT 归因引擎** | `attck_apt_attribution.go` | 多源证据融合（TTP 重叠 60% + IOC 匹配 40%），APT 组织匹配置信度评分 |
+| **威胁狩猎框架** | `attck_apt_hunt.go` | 狩猎假设 CRUD、基于攻击转移矩阵自动生成假设、假设执行与确认 |
+
+### 13.3 与 SSAM 模型的协同
+
+ATT&CK 模块与 SSAM 评估体系形成双向增强闭环：
+
+- **韧性域增强**：APT 攻击链检测结果通过事件总线（`attck.apt.chain_detected`）注入策略管理器，影响主机安全状态判定
+- **SPC 联动**：APT 归因引擎输出的威胁行为体信息可与 SPC 漏洞情报交叉验证，动态调整 $P_{score}$
+- **CTI 协同**：CTI 模块的威胁系数 $\mu$ 与 ATT&CK 威胁情报子模块共享数据源，确保威胁评估一致性
+- **策略联动**：APT 检测告警（`attck.detection.alert`、`attck.behavioral.alert`）触发策略管理器自动响应动作
+
+### 13.4 扩展点与事件
+
+| 扩展点/事件主题 | 触发时机 |
+|-----------------|----------|
+| `attck.coverage.complete` | 覆盖率分析完成 |
+| `attck.apt.matched` | APT 组织匹配检测 |
+| `attck.detection.alert` | 检测告警触发 |
+| `attck.detection.anomaly` | 高分异常检测 |
+| `attck.apt.chain_detected` | APT 攻击链重构 |
+| `attck.apt.attribution` | APT 归因执行 |
+| `attck.apt.hunt_confirmed` | 威胁狩猎假设确认 |
+| `attck.behavioral.alert` | 行为告警触发 |
+| `attck.behavioral.beacon` | C2 信标检测 |
+| `attck.emulation.complete` | 对手仿真完成 |
+| `attck.assessment.complete` | 差距分析评估完成 |
+
+### 13.5 模块架构
+
+```
+ATTACKModule (Plugin v2.0.0)
+├── 检测与分析 (Detection & Analytics)
+│   ├── DetectionRule 引擎 — 规则注册/评估/删除
+│   ├── AnomalyEvent 记录 — 异常事件存储与查询
+│   ├── AlertCorrelation — 告警关联分析
+│   └── DetectionSummary — 检测统计摘要
+├── 威胁情报 (Threat Intelligence)
+│   ├── IOCEntry 管理 — 增删查搜、过期清理
+│   ├── ThreatActorProfile — 威胁行为体画像
+│   ├── TTPTrack — 战术/技术/程序追踪
+│   └── AlertEnrichment — 告警情报富化
+├── 对手仿真 (Adversary Emulation)
+│   ├── EmulationScenario — 仿真场景 CRUD
+│   ├── AutoGeneration — 从 APT 组织自动生成场景
+│   ├── SafeModeExecution — 安全模式仿真执行
+│   └── EmulationResult — 仿真结果记录
+├── 评估与工程 (Assessment & Engineering)
+│   ├── GapAnalysis — 防御差距分析
+│   ├── ControlMapping — 安全控制映射
+│   ├── MitigationRecommendation — 缓解建议
+│   └── ImprovementTracking — 持续改进追踪
+└── APT 增强层 (APT Analysis Enhancement)
+    ├── AttackChainReconstruction — 多源证据攻击链重构
+    ├── BehavioralDetection — 行为指标/基线/信标检测
+    ├── AttributionEngine — 多源融合 APT 归因
+    └── ThreatHunting — 假设驱动的威胁狩猎框架
+```
+
+## 14. 已知局限与后续工作
 
 - ACI 基于假设攻击者已获基础权限，未覆盖所有攻陷场景
 - SPC 精度依赖本地资产清单完整性和情报源质量
@@ -367,6 +452,30 @@ SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。�
 - **SSAM 1.1** — 四核心域 + 独立属性，消除维度重叠
 - **SSAM 1.2** — 引入 ACI、SPC、等保映射、AVD 扩展机制、μKernel 联动
 - **SSAM 1.3** — 移除4项重叠边缘因子（SYN Cookie/供应链/自动封禁/资源紧张），SPC 引入平方和衰减，增加边缘因子合规等级覆盖，内置冲突检测
+
+### ARGUS v0.1.2-MVP ATT&CK V19 模块扩展记录
+
+#### ATT&CK V19 四大核心子模块
+
+- **检测与分析子模块** — 实现检测规则引擎（注册/评估/删除/列表）、异常事件记录与查询、告警关联分析（同主机告警按战术-技术关联）、检测摘要统计
+- **威胁情报子模块** — 实现 IOC 管理（增删查搜/过期清理）、威胁行为体画像（CRUD/技术匹配）、TTP 追踪（按行为体/技术查询）、告警情报富化
+- **对手仿真与红队子模块** — 实现仿真场景管理（CRUD/按组织筛选）、从 APT 组织自动生成仿真场景、安全模式仿真执行、仿真结果记录
+- **评估与工程子模块** — 实现差距分析（按主机评估防御覆盖率）、安全控制映射（技术→缓解措施）、缓解建议生成、持续改进追踪（进度计算/动作状态更新）
+
+#### APT 攻击分析与检测增强
+
+- **攻击链重构引擎** — 基于告警、异常、IOC 多源证据，按 ATT&CK 战术顺序（初始访问→执行→持久化→…→命令控制）自动重构多阶段攻击链，支持多主机关联
+- **行为检测引擎** — 行为指标注册与评估（阈值比较/窗口检测）、主机行为基线管理（指标更新/偏差检测）、C2 信标检测（网络连接时间序列间隔抖动分析，jitter<0.3 评分≥0.7）
+- **APT 归因引擎** — 多源证据融合算法（TTP 重叠权重 60% + IOC 匹配权重 40%），APT 组织匹配置信度评分，行业对齐加成，替代行为体排序
+- **威胁狩猎框架** — 狩猎假设 CRUD、基于攻击技术转移矩阵自动生成假设（告警驱动+异常驱动+信标驱动）、假设执行与确认、狩猎结果存储
+
+#### SPC 模块增强
+
+- **InstalledCPEs 自动生成** — Agent 端通过包名-版本解析和 vendor-product 映射表，将软件包信息转换为标准 CPE 2.3 格式字符串
+- **CPE 精确版本匹配** — 实现 MatchExactVersion（精确版本比对）和 MatchVersionRange（版本范围比对），优先精确匹配
+- **NVD API 并发分片请求** — 无 API Key 时 4 并发×30 天窗口，有 API Key 时 2 并发×60 天窗口，指数退避重试
+- **CNNVD/CNVD 数据源接入** — 新增 CNNVDConfig/CNVDConfig 配置结构体，实现 FetchFromCNNVD/FetchFromCNVD 方法，支持中文严重等级映射
+- **SPC 文件拆分** — 按功能边界将 spc.go 拆分为 spc.go（核心）、spc_fetch.go（数据拉取）、spc_match.go（CPE 匹配）、spc_persist.go（持久化）四个模块
 
 ### ARGUS v0.1.2-MVP 修复记录
 

@@ -103,28 +103,50 @@ type KillChainAssessment struct {
 }
 
 type ATTACKModule struct {
-	kernel       KernelContext
-	mu           sync.RWMutex
-	tactics      []ATTACKTactic
-	aptGroups    map[string]*APTGroupProfile
-	transMatrix  TransitionMatrix
-	state        PluginState
-	attckVersion string
+	kernel             KernelContext
+	mu                 sync.RWMutex
+	tactics            []ATTACKTactic
+	aptGroups          map[string]*APTGroupProfile
+	transMatrix        TransitionMatrix
+	state              PluginState
+	attckVersion       string
+	detectionRules     []DetectionRule
+	alerts             []DetectionAlert
+	anomalies          []AnomalyEvent
+	iocs               []IOCEntry
+	threatActors       map[string]ThreatActorProfile
+	ttpTracks          []TTPTrack
+	scenarios          []EmulationScenario
+	emulationResults   []EmulationResult
+	assessmentReports  []AssessmentReport
+	improvementTracks  map[string]ImprovementTrack
+	defaultMitigations map[string][]Mitigation
+	attackChains       []AttackChain
+	behavioralIndicators []BehavioralIndicator
+	baselines          map[string]BehavioralBaseline
+	behavioralAlerts   []BehavioralAlert
+	beaconDetections   []BeaconDetection
+	huntHypotheses     []HuntHypothesis
+	huntResults        []HuntResult
 }
 
 func NewATTACKModule() *ATTACKModule {
 	return &ATTACKModule{
-		aptGroups:    make(map[string]*APTGroupProfile),
-		transMatrix:  make(TransitionMatrix),
-		attckVersion: "v19",
+		aptGroups:          make(map[string]*APTGroupProfile),
+		transMatrix:        make(TransitionMatrix),
+		attckVersion:       "v19",
+		threatActors:       make(map[string]ThreatActorProfile),
+		improvementTracks:  make(map[string]ImprovementTrack),
+		defaultMitigations: make(map[string][]Mitigation),
+		baselines:          make(map[string]BehavioralBaseline),
 	}
 }
 
 func (m *ATTACKModule) Info() PluginInfo {
 	return PluginInfo{
 		Name:        "attck",
-		Version:     "1.2.0",
-		Description: "MITRE ATT&CK analysis — tactic/technique mapping, coverage heatmap, APT group profiling, predictive risk assessment",
+		Version:     "2.0.0",
+		Description: "MITRE ATT&CK V19 — detection analytics, threat intelligence, adversary emulation, assessment & engineering",
 		Author:      "ARGUS Core Team",
 	}
 }
@@ -144,6 +166,11 @@ func (m *ATTACKModule) Init(ctx context.Context, kc KernelContext) error {
 	m.loadDefaultMatrix()
 	m.loadDefaultAPTProfiles()
 	m.buildTransitionMatrix()
+	m.loadDefaultDetectionRules()
+	m.loadDefaultThreatActors()
+	m.loadDefaultScenarios()
+	m.loadDefaultMitigations()
+	m.loadDefaultBehavioralIndicators()
 
 	kc.Container().Bind((*ATTACKInterface)(nil), m)
 
@@ -160,6 +187,56 @@ func (m *ATTACKModule) Init(ctx context.Context, kc KernelContext) error {
 	kc.Extensions().RegisterPoint(ExtensionPoint{
 		Name:        "attck.risk.predicted",
 		Description: "Called after predictive risk assessment",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "attck.detection.alert",
+		Description: "Called when a detection alert is triggered",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "attck.detection.anomaly",
+		Description: "Called when a high-score anomaly is detected",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "attck.emulation.complete",
+		Description: "Called after adversary emulation completes",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "attck.assessment.complete",
+		Description: "Called after gap analysis assessment completes",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "attck.apt.chain_detected",
+		Description: "Called when an APT attack chain is reconstructed",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "attck.apt.attribution",
+		Description: "Called when APT attribution is performed",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "attck.apt.hunt_confirmed",
+		Description: "Called when a threat hunt hypothesis is confirmed",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "attck.apt.report_generated",
+		Description: "Called when an APT analysis report is generated",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "attck.behavioral.alert",
+		Description: "Called when a behavioral alert is triggered",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "attck.behavioral.beacon",
+		Description: "Called when C2 beaconing is detected",
 		Version:     "1.0",
 	})
 
@@ -1019,4 +1096,64 @@ type ATTACKInterface interface {
 	UpdateCheckMapping(techID string, argusChecks []string)
 	UpsertAPTGroup(profile APTGroupProfile)
 	Version() string
+	RegisterDetectionRule(rule DetectionRule) error
+	GetDetectionRule(ruleID string) *DetectionRule
+	ListDetectionRules(techniqueID string, enabledOnly bool) []DetectionRule
+	DeleteDetectionRule(ruleID string) bool
+	EvaluateDetectionRule(ruleID, hostID, rawLog string, fields map[string]string) (*DetectionAlert, error)
+	GetAlerts(hostID, severity string, limit int) []DetectionAlert
+	AcknowledgeAlert(alertID string) bool
+	RecordAnomaly(event AnomalyEvent)
+	GetAnomalies(hostID string, minScore float64, limit int) []AnomalyEvent
+	CorrelateAlerts(hostID string) []CorrelationResult
+	GetDetectionSummary() DetectionSummary
+	AddIOC(entry IOCEntry) error
+	GetIOCs(iocType string, techniqueID string, limit int) []IOCEntry
+	SearchIOC(value string) []IOCEntry
+	DeleteIOC(iocID string) bool
+	ExpireIOCs() int
+	UpsertThreatActor(profile ThreatActorProfile) error
+	GetThreatActor(actorID string) *ThreatActorProfile
+	ListThreatActors() []ThreatActorProfile
+	MatchThreatActor(detectedTechniques []string) []APTMatchResult
+	AddTTPTrack(track TTPTrack) error
+	GetTTPTracks(actorID, techniqueID string) []TTPTrack
+	EnrichAlertWithTI(alertID string) (*DetectionAlert, map[string]interface{})
+	GetTISummary() map[string]interface{}
+	CreateScenario(scenario EmulationScenario) error
+	GetScenario(scenarioID string) *EmulationScenario
+	ListScenarios(actorProfile string) []EmulationScenario
+	DeleteScenario(scenarioID string) bool
+	GenerateScenarioFromActor(actorID string) (*EmulationScenario, error)
+	RunEmulation(scenarioID, hostID string, safeMode bool) (*EmulationResult, error)
+	GetEmulationResults(scenarioID string, limit int) []EmulationResult
+	PerformGapAnalysis(hostID string) (*AssessmentReport, error)
+	GetControlMapping(techniqueID string) *ControlMapping
+	GetAssessmentReports(hostID string, limit int) []AssessmentReport
+	CreateImprovementTrack(track ImprovementTrack) error
+	GetImprovementTrack(trackID string) *ImprovementTrack
+	ListImprovementTracks() []ImprovementTrack
+	UpdateImprovementAction(trackID, actionID string, status string) error
+	CalculateImprovementProgress(trackID string) (float64, error)
+	ReconstructAttackChain(hostIDs []string) (*AttackChain, error)
+	GetAttackChains(hostID string, limit int) []AttackChain
+	CorrelateMultiIndicator(hostIDs []string) []MultiIndicatorCorrelation
+	RegisterBehavioralIndicator(indicator BehavioralIndicator) error
+	ListBehavioralIndicators(techniqueID string) []BehavioralIndicator
+	DeleteBehavioralIndicator(indicatorID string) bool
+	UpdateBaseline(hostID string, metrics map[string]float64)
+	GetBaseline(hostID string) *BehavioralBaseline
+	EvaluateBehavioralIndicators(hostID string, metrics map[string]float64) []BehavioralAlert
+	GetBehavioralAlerts(hostID string, limit int) []BehavioralAlert
+	DetectBeaconing(hostID string, events []TimeSeriesPoint) []BeaconDetection
+	GetBeaconDetections(hostID string, limit int) []BeaconDetection
+	PerformAttribution(chainID string) (*AttributionResult, error)
+	GenerateAPTAnalysisReport(hostIDs []string) (*APTAnalysisReport, error)
+	CreateHuntHypothesis(hypothesis HuntHypothesis) error
+	GetHuntHypothesis(hypothesisID string) *HuntHypothesis
+	ListHuntHypotheses(techniqueID string, status string) []HuntHypothesis
+	DeleteHuntHypothesis(hypothesisID string) bool
+	ExecuteHunt(hypothesisID string, hostID string) (*HuntResult, error)
+	GetHuntResults(hostID string, limit int) []HuntResult
+	AutoGenerateHypotheses(hostID string) ([]HuntHypothesis, error)
 }

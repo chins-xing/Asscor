@@ -1,6 +1,6 @@
 # ARGUS 使用手册
 
-> 版本：v0.1.2-MVP | SSAM 1.3 | 最后更新：2026-05-24
+> 版本：v0.1.2-MVP | SSAM 1.3 | 最后更新：2026-05-25
 
 ---
 
@@ -15,17 +15,18 @@
 7. [配置文件详解](#7-配置文件详解)
 8. [SPC 安全态势模块](#8-spc-安全态势模块)
 9. [等保映射与评分阈值](#9-等保映射与评分阈值)
-10. [日志管理](#10-日志管理)
-11. [守护进程模式](#11-守护进程模式)
-12. [离线评估模式](#12-离线评估模式)
-13. [环境变量参考](#13-环境变量参考)
-14. [故障排查](#14-故障排查)
+10. [ATT&CK V19 威胁分析模块](#10-attck-v19-威胁分析模块)
+11. [日志管理](#11-日志管理)
+12. [守护进程模式](#12-守护进程模式)
+13. [离线评估模式](#13-离线评估模式)
+14. [环境变量参考](#14-环境变量参考)
+15. [故障排查](#15-故障排查)
 
 ---
 
 ## 1. 概述
 
-ARGUS 是一个开源的分布式安全可接受性评估系统，实现了系统安全可接受性模型（SSAM）1.2。系统通过四个互斥核心域评估主机安全状态：
+ARGUS 是一个开源的分布式安全可接受性评估系统，实现了系统安全可接受性模型（SSAM）1.3。系统通过四个互斥核心域评估主机安全状态，并集成 MITRE ATT&CK V19 威胁分析框架，提供从安全评估、威胁检测到 APT 攻击分析的完整能力链。
 
 | 核心域 | 权重 | 评估内容 |
 |--------|------|----------|
@@ -33,6 +34,14 @@ ARGUS 是一个开源的分布式安全可接受性评估系统，实现了系�
 | 业务连续性 | 25% | 关键服务运行、备份机制、资源充裕度 |
 | 操作可信度 | 25% | 文件权限、审计日志、命令历史防篡改、供应链完整性、SELinux/AppArmor |
 | 韧性 | 15% | 自动封禁精度、SYN Cookie、连接限制、可接受沦陷指标（ACI） |
+
+**附加模块**：
+
+| 模块 | 功能 |
+|------|------|
+| ATT&CK V19 | MITRE ATT&CK 框架集成，检测分析、威胁情报、对手仿真、评估工程、APT 攻击分析与检测增强 |
+| SPC | 安全态势计算，NVD/EPSS/CISA KEV/CNNVD/CNVD 多源漏洞情报与本地资产比对 |
+| CTI | 网络威胁情报管理，动态威胁系数 μ 计算 |
 
 **评分公式**：
 
@@ -87,6 +96,9 @@ SSAM_final = (Σ(S_i × W_i) / ΣW_i) × ΠM_j × μ × P_score
 │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ │
 │  │Assess│ │Policy│ │ SPC  │ │ CTI  │ │Cmdr  │ │
 │  └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘ │
+│  ┌──────┐                                      │
+│  │ATT&CK│  MITRE ATT&CK V19 威胁分析           │
+│  └──┬───┘  检测/情报/仿真/评估/APT增强          │
 │     │        │        │        │        │      │
 │  ┌──┴────────┴────────┴────────┴────────┴──┐   │
 │  │         μKernel Plugin Bus              │   │
@@ -173,7 +185,7 @@ ARGUS μKernel
     {log_collector} v1.0.0 — Agent log collection
     {persistence} v1.0.0 — Data persistence layer
     {concurrency} v1.0.0 — Concurrency control
-    {attck} v1.0.0 — MITRE ATT&CK mapping
+    {attck} v2.0.0 — MITRE ATT&CK V19 threat analysis
     {config_watcher} v1.0.0 — Configuration hot-reload
     {adapter_integration} v1.0.0 — External adapter integration
     {source_manager} v1.0.0 — External source management
@@ -496,9 +508,86 @@ threshold = 90.0
 
 ---
 
-## 10. 日志管理
+## 10. ATT&CK V19 威胁分析模块
 
-### 10.1 日志配置
+ARGUS v0.1.2-MVP 集成 MITRE ATT&CK V19 框架，作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行。模块提供从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。
+
+### 10.1 四大核心子模块
+
+| 子模块 | 核心能力 |
+|--------|----------|
+| **检测与分析** | 检测规则引擎（注册/评估/删除）、异常事件记录与查询、告警关联分析、检测摘要统计 |
+| **威胁情报** | IOC 管理（增删查搜/过期清理）、威胁行为体画像、TTP 追踪、告警情报富化 |
+| **对手仿真与红队** | 仿真场景管理、从 APT 组织自动生成场景、安全模式仿真执行、仿真结果记录 |
+| **评估与工程** | 差距分析（防御覆盖率）、安全控制映射、缓解建议生成、持续改进追踪 |
+
+### 10.2 APT 攻击分析与检测增强
+
+在四大子模块基础上，APT 增强层提供高级威胁分析能力：
+
+| 功能 | 描述 |
+|------|------|
+| **攻击链重构** | 基于告警、异常、IOC 多源证据，按 ATT&CK 战术顺序自动重构多阶段攻击链 |
+| **行为检测** | 行为指标注册与评估、主机行为基线管理、C2 信标检测（间隔抖动分析） |
+| **APT 归因引擎** | 多源证据融合（TTP 重叠 60% + IOC 匹配 40%），APT 组织匹配置信度评分 |
+| **威胁狩猎框架** | 狩猎假设 CRUD、基于攻击转移矩阵自动生成假设、假设执行与确认 |
+
+### 10.3 与 SSAM 评估体系的协同
+
+ATT&CK 模块与 SSAM 评估体系形成双向增强闭环：
+
+- **韧性域增强**：APT 攻击链检测结果通过事件总线注入策略管理器，影响主机安全状态判定
+- **SPC 联动**：APT 归因引擎输出的威胁行为体信息可与 SPC 漏洞情报交叉验证，动态调整 P_score
+- **CTI 协同**：CTI 模块的威胁系数 μ 与 ATT&CK 威胁情报子模块共享数据源
+- **策略联动**：APT 检测告警触发策略管理器自动响应动作
+
+### 10.4 ATT&CK 配置
+
+```ini
+[attck]
+enabled = true                  # 是否启用 ATT&CK 模块
+version = v19                   # ATT&CK 框架版本
+auto_hunt = false               # 是否自动生成狩猎假设
+beacon_threshold = 0.7          # 信标检测评分阈值
+attribution_threshold = 0.6     # APT 归因置信度阈值
+safe_emulation = true           # 仿真是否默认安全模式
+```
+
+### 10.5 CLI 操作
+
+通过 Kernel 交互式 CLI 可操作 ATT&CK 模块：
+
+```
+# 查看检测摘要
+argus> attck summary
+
+# 注册检测规则
+argus> attck rule add --name "suspicious_powershell" --technique T1059 --severity high
+
+# 查看 IOC 列表
+argus> attck ioc list --type ip
+
+# 执行差距分析
+argus> attck gap --host=web-server-01
+
+# 重构攻击链
+argus> attck chain --host=web-server-01
+
+# 执行 APT 归因
+argus> attck attribute --chain=<chainID>
+
+# 生成狩猎假设
+argus> attck hunt generate --host=web-server-01
+
+# 执行对手仿真
+argus> attck emulate --scenario=<scenarioID> --host=web-server-01 --safe
+```
+
+---
+
+## 11. 日志管理
+
+### 11.1 日志配置
 
 ```bash
 # JSON 格式（默认，适合日志采集系统）
@@ -508,7 +597,7 @@ threshold = 90.0
 -log-format text -log-level debug -log-output stderr
 ```
 
-### 10.2 日志级别
+### 11.2 日志级别
 
 | 级别 | 用途 |
 |------|------|
@@ -517,7 +606,7 @@ threshold = 90.0
 | `warn` | 警告信息，如配置缺失、降级运行 |
 | `error` | 错误信息，需要关注处理 |
 
-### 10.3 日志组件前缀
+### 11.3 日志组件前缀
 
 每条日志包含组件前缀，便于过滤：
 
@@ -530,7 +619,7 @@ threshold = 90.0
 
 ---
 
-## 11. 守护进程模式
+## 12. 守护进程模式
 
 ```bash
 # 启动守护进程
@@ -544,7 +633,7 @@ kill $(cat /var/run/argus-kernel.pid)
 
 ---
 
-## 12. 离线评估模式
+## 13. 离线评估模式
 
 `argus` 命令提供单机离线评估，无需部署 Kernel 和 Agent：
 
@@ -565,7 +654,7 @@ kill $(cat /var/run/argus-kernel.pid)
 
 ---
 
-## 13. 环境变量参考
+## 14. 环境变量参考
 
 | 环境变量 | 用途 | 优先级 |
 |----------|------|--------|
@@ -577,9 +666,9 @@ kill $(cat /var/run/argus-kernel.pid)
 
 ---
 
-## 14. 故障排查
+## 15. 故障排查
 
-### 14.1 Kernel 启动失败
+### 15.1 Kernel 启动失败
 
 | 症状 | 可能原因 | 解决方案 |
 |------|----------|----------|
@@ -587,7 +676,7 @@ kill $(cat /var/run/argus-kernel.pid)
 | `WARN: server start failed` | 端口被占用 | 更换 `-listen` 地址或释放端口 |
 | 证书错误 | 证书文件损坏或不匹配 | 使用 `-force-regen-certs` 重新生成 |
 
-### 14.2 Agent 连接失败
+### 15.2 Agent 连接失败
 
 | 症状 | 可能原因 | 解决方案 |
 |------|----------|----------|
@@ -595,7 +684,7 @@ kill $(cat /var/run/argus-kernel.pid)
 | `certificate verify failed` | 证书不匹配 | 重新分发证书，确认 `cert_dir` 路径 |
 | `agent: fatal` | 配置错误 | 使用 `-log-level debug` 查看详细错误 |
 
-### 14.3 SPC 数据同步问题
+### 15.3 SPC 数据同步问题
 
 | 症状 | 可能原因 | 解决方案 |
 |------|----------|----------|
@@ -603,7 +692,7 @@ kill $(cat /var/run/argus-kernel.pid)
 | `NVD API rate limited` | 无 API Key 或请求过频 | 配置 `NVD_API_KEY` 环境变量 |
 | `SPC cannot calculate risk` | 缓存为空 | 检查网络连接，确认数据源可访问 |
 
-### 14.4 评分异常
+### 15.4 评分异常
 
 | 症状 | 可能原因 | 解决方案 |
 |------|----------|----------|
