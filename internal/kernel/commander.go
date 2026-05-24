@@ -109,12 +109,14 @@ func (m *CommanderModule) Init(ctx context.Context, kc KernelContext) error {
 
 func (m *CommanderModule) generateAndPersistKey(keyPath, metaPath string) {
 	key := randomHex(32)
+	m.mu.Lock()
 	m.hmacKey = []byte(key)
 	m.keyMeta = keyMetadata{
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(hmacKeyMaxAge),
 		KeyHash:   sha256Hex([]byte(key)),
 	}
+	m.mu.Unlock()
 
 	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
 		logger.WithComponent("commander").Warn("failed to create key directory", "error", err)
@@ -132,6 +134,7 @@ func (m *CommanderModule) generateAndPersistKey(keyPath, metaPath string) {
 }
 
 func (m *CommanderModule) rotateKey(keyPath, metaPath string) {
+	m.mu.Lock()
 	m.prevHMACKey = make([]byte, len(m.hmacKey))
 	copy(m.prevHMACKey, m.hmacKey)
 	m.keyRotatedAt = time.Now()
@@ -143,6 +146,7 @@ func (m *CommanderModule) rotateKey(keyPath, metaPath string) {
 		ExpiresAt: time.Now().Add(hmacKeyMaxAge),
 		KeyHash:   sha256Hex([]byte(newKey)),
 	}
+	m.mu.Unlock()
 
 	if err := os.WriteFile(keyPath, []byte(newKey), 0600); err != nil {
 		logger.WithComponent("commander").Warn("failed to persist rotated HMAC key", "error", err)
@@ -246,7 +250,12 @@ func (m *CommanderModule) AckCommand(hostID string, cmdID string, success bool, 
 }
 
 func (m *CommanderModule) sign(cmdID, action string, params map[string]string) []byte {
-	mac := hmac.New(sha256.New, m.hmacKey)
+	m.mu.RLock()
+	key := make([]byte, len(m.hmacKey))
+	copy(key, m.hmacKey)
+	m.mu.RUnlock()
+
+	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(cmdID + ":" + action))
 	keys := sortedKeys(params)
 	for _, k := range keys {

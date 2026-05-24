@@ -23,10 +23,11 @@ type RegisterResponse struct {
 }
 
 type HeartbeatRequest struct {
-	HostId    string            `json:"host_id"`
-	SessionId string            `json:"session_id"`
-	Result    *AssessmentResult `json:"result,omitempty"`
-	Packages  []string          `json:"packages,omitempty"`
+	HostId        string            `json:"host_id"`
+	SessionId     string            `json:"session_id"`
+	Result        *AssessmentResult `json:"result,omitempty"`
+	Packages      []string          `json:"packages,omitempty"`
+	InstalledCPEs []string          `json:"installed_cpes,omitempty"`
 }
 
 type HeartbeatResponse struct {

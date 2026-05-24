@@ -415,10 +415,11 @@ func (a *Agent) heartbeatCycle() error {
 	}
 
 	heartbeatReq := &apiv1.HeartbeatRequest{
-		HostId:    a.cfg.HostID,
-		SessionId: a.sessionID,
-		Result:    snapshot,
-		Packages:  a.collectPackages(),
+		HostId:        a.cfg.HostID,
+		SessionId:     a.sessionID,
+		Result:        snapshot,
+		Packages:      a.collectPackages(),
+		InstalledCPEs: a.collectCPEs(),
 	}
 
 	heartbeatResp, err := a.client.Heartbeat(heartbeatReq)
@@ -832,6 +833,230 @@ func (a *Agent) safeExec(name string, args []string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	out, err := cmd.Output()
 	return string(out), err
+}
+
+func (a *Agent) collectCPEs() []string {
+	if a.cachedPackages == nil {
+		return nil
+	}
+	cpes := generateCPEsFromPackages(a.cachedPackages)
+	logger.WithComponent("agent").Info("generated CPEs from packages", "cpes", len(cpes), "packages", len(a.cachedPackages))
+	return cpes
+}
+
+func generateCPEsFromPackages(packages []string) []string {
+	cpes := make([]string, 0, len(packages))
+	seen := make(map[string]bool, len(packages))
+
+	for _, pkg := range packages {
+		name, version := splitPkgNameVersion(pkg)
+		if name == "" {
+			continue
+		}
+
+		vendorProduct := lookupVendorProduct(name)
+		if vendorProduct == nil {
+			continue
+		}
+
+		cpeStr := fmt.Sprintf("cpe:2.3:a:%s:%s:%s:*:*:*:*:*:*:*", vendorProduct.vendor, vendorProduct.product, version)
+		if !seen[cpeStr] {
+			seen[cpeStr] = true
+			cpes = append(cpes, cpeStr)
+		}
+	}
+
+	return cpes
+}
+
+type vendorProductEntry struct {
+	vendor  string
+	product string
+}
+
+func splitPkgNameVersion(pkg string) (string, string) {
+	pkg = strings.TrimSpace(pkg)
+	if pkg == "" {
+		return "", ""
+	}
+
+	spaceIdx := strings.IndexByte(pkg, ' ')
+	if spaceIdx > 0 {
+		name := pkg[:spaceIdx]
+		version := pkg[spaceIdx+1:]
+		version = strings.TrimSpace(version)
+		if dashIdx := strings.IndexByte(version, '-'); dashIdx > 0 {
+			version = version[:dashIdx]
+		}
+		return name, version
+	}
+
+	dashIdx := strings.IndexByte(pkg, '-')
+	if dashIdx < 0 {
+		return pkg, "*"
+	}
+
+	hasDigit := false
+	for i := dashIdx + 1; i < len(pkg); i++ {
+		if pkg[i] >= '0' && pkg[i] <= '9' {
+			hasDigit = true
+			break
+		}
+	}
+
+	if !hasDigit {
+		return pkg, "*"
+	}
+
+	name := pkg[:dashIdx]
+	verPart := pkg[dashIdx+1:]
+	if relIdx := strings.IndexByte(verPart, '-'); relIdx > 0 {
+		verPart = verPart[:relIdx]
+	}
+	if dotIdx := strings.LastIndex(verPart, "."); dotIdx > 0 {
+		arch := verPart[dotIdx+1:]
+		if arch == "x86_64" || arch == "amd64" || arch == "aarch64" || arch == "arm64" || arch == "i686" || arch == "i386" || arch == "noarch" || arch == "all" {
+			verPart = verPart[:dotIdx]
+		}
+	}
+	return name, verPart
+}
+
+func lookupVendorProduct(pkgName string) *vendorProductEntry {
+	coreName := pkgName
+	suffixes := []string{
+		"-libs", "-devel", "-static", "-doc", "-debuginfo", "-debugsource",
+		"-common", "-utils", "-tools", "-plugins", "-module", "-modules",
+		"-daemon", "-server", "-client", "-cli", "-bin", "-data", "-lang",
+		"-help", "-license", "-logrotate", "-sysconfig", "-config", "-conf",
+		"-headers", "-dev", "-perl", "-python", "-python3", "-ruby",
+		"-java", "-jni", "-bash", "-zsh", "-fish", "-tcsh",
+		"-compat", "-legacy", "-minimal", "-full", "-core", "-base",
+	}
+	for _, s := range suffixes {
+		if strings.HasSuffix(coreName, s) {
+			coreName = coreName[:len(coreName)-len(s)]
+			break
+		}
+	}
+
+	if entry, ok := cpeVendorMap[coreName]; ok {
+		return entry
+	}
+	if entry, ok := cpeVendorMap[pkgName]; ok {
+		return entry
+	}
+	return nil
+}
+
+var cpeVendorMap = map[string]*vendorProductEntry{
+	"openssl":       {vendor: "openssl", product: "openssl"},
+	"openssh":       {vendor: "openbsd", product: "openssh"},
+	"ssh":           {vendor: "openbsd", product: "openssh"},
+	"nginx":         {vendor: "nginx", product: "nginx"},
+	"httpd":         {vendor: "apache", product: "http_server"},
+	"apache2":       {vendor: "apache", product: "http_server"},
+	"php":           {vendor: "php", product: "php"},
+	"mysql":         {vendor: "oracle", product: "mysql"},
+	"mariadb":       {vendor: "mariadb", product: "mariadb"},
+	"postgresql":    {vendor: "postgresql", product: "postgresql"},
+	"postgres":      {vendor: "postgresql", product: "postgresql"},
+	"redis":         {vendor: "redis", product: "redis"},
+	"docker":        {vendor: "docker", product: "docker"},
+	"docker-ce":     {vendor: "docker", product: "docker"},
+	"containerd":    {vendor: "containerd", product: "containerd"},
+	"runc":          {vendor: "opencontainers", product: "runc"},
+	"kernel":        {vendor: "linux", product: "linux_kernel"},
+	"kernel-core":   {vendor: "linux", product: "linux_kernel"},
+	"glibc":         {vendor: "gnu", product: "glibc"},
+	"glibc-minimal": {vendor: "gnu", product: "glibc"},
+	"systemd":       {vendor: "systemd", product: "systemd"},
+	"sudo":          {vendor: "sudo", product: "sudo"},
+	"curl":          {vendor: "haxx", product: "curl"},
+	"wget":          {vendor: "gnu", product: "wget"},
+	"bind":          {vendor: "isc", product: "bind"},
+	"bind-utils":    {vendor: "isc", product: "bind"},
+	"vsftpd":        {vendor: "vsftpd", product: "vsftpd"},
+	"proftpd":       {vendor: "proftpd", product: "proftpd"},
+	"postfix":       {vendor: "postfix", product: "postfix"},
+	"dovecot":       {vendor: "dovecot", product: "dovecot"},
+	"samba":         {vendor: "samba", product: "samba"},
+	"libcurl":       {vendor: "haxx", product: "curl"},
+	"libxml2":       {vendor: "xmlsoft", product: "libxml2"},
+	"libpng":        {vendor: "libpng", product: "libpng"},
+	"libjpeg":       {vendor: "ijg", product: "libjpeg"},
+	"libtiff":       {vendor: "libtiff", product: "libtiff"},
+	"zlib":          {vendor: "zlib", product: "zlib"},
+	"openssl-libs":  {vendor: "openssl", product: "openssl"},
+	"openssh-server":{vendor: "openbsd", product: "openssh"},
+	"openssh-clients":{vendor: "openbsd", product: "openssh"},
+	"java":          {vendor: "oracle", product: "jdk"},
+	"java-11":       {vendor: "oracle", product: "jdk"},
+	"java-17":       {vendor: "oracle", product: "jdk"},
+	"java-21":       {vendor: "oracle", product: "jdk"},
+	"tomcat":        {vendor: "apache", product: "tomcat"},
+	"nodejs":        {vendor: "nodejs", product: "node.js"},
+	"python3":       {vendor: "python", product: "python"},
+	"python":        {vendor: "python", product: "python"},
+	"perl":          {vendor: "perl", product: "perl"},
+	"ruby":          {vendor: "ruby", product: "ruby"},
+	"go":            {vendor: "golang", product: "go"},
+	"git":           {vendor: "git-scm", product: "git"},
+	"xz":            {vendor: "tukaani", product: "xz"},
+	"xz-libs":       {vendor: "tukaani", product: "xz"},
+	"zstd":          {vendor: "facebook", product: "zstd"},
+	"libssh2":       {vendor: "libssh2", product: "libssh2"},
+	"libssh":        {vendor: "libssh", product: "libssh"},
+	"krb5-libs":     {vendor: "mit", product: "kerberos"},
+	"krb5":          {vendor: "mit", product: "kerberos"},
+	"pam":           {vendor: "linux-pam", product: "linux-pam"},
+	"shadow-utils":  {vendor: "shadow", product: "shadow"},
+	"cryptsetup":    {vendor: "cryptsetup", product: "cryptsetup"},
+	"grub2":         {vendor: "gnu", product: "grub"},
+	"firewalld":     {vendor: "firewalld", product: "firewalld"},
+	"iptables":      {vendor: "netfilter", product: "iptables"},
+	"nftables":      {vendor: "netfilter", product: "nftables"},
+	"fail2ban":      {vendor: "fail2ban", product: "fail2ban"},
+	"audit":         {vendor: "linux-audit", product: "audit"},
+	"auditd":        {vendor: "linux-audit", product: "audit"},
+	"rsyslog":       {vendor: "rsyslog", product: "rsyslog"},
+	"chrony":        {vendor: "chrony", product: "chrony"},
+	"clamav":        {vendor: "clamav", product: "clamav"},
+	"suricata":      {vendor: "oisf", product: "suricata"},
+	"libselinux":    {vendor: "selinuxproject", product: "libselinux"},
+	"selinux-policy":{vendor: "selinuxproject", product: "selinux_policy"},
+	"expat":         {vendor: "libexpat", product: "expat"},
+	"sqlite":        {vendor: "sqlite", product: "sqlite"},
+	"openldap":      {vendor: "openldap", product: "openldap"},
+	"net-snmp":      {vendor: "net-snmp", product: "net-snmp"},
+	"haproxy":       {vendor: "haproxy", product: "haproxy"},
+	"memcached":     {vendor: "memcached", product: "memcached"},
+	"varnish":       {vendor: "varnish-cache", product: "varnish"},
+	"grafana":       {vendor: "grafana", product: "grafana"},
+	"prometheus":    {vendor: "prometheus", product: "prometheus"},
+	"elasticsearch": {vendor: "elastic", product: "elasticsearch"},
+	"logstash":      {vendor: "elastic", product: "logstash"},
+	"kibana":        {vendor: "elastic", product: "kibana"},
+	"mongodb":       {vendor: "mongodb", product: "mongodb"},
+	"rabbitmq":      {vendor: "rabbitmq", product: "rabbitmq"},
+	"kafka":         {vendor: "apache", product: "kafka"},
+	"zookeeper":     {vendor: "apache", product: "zookeeper"},
+	"nginx-mod":     {vendor: "nginx", product: "nginx"},
+	"nginx-core":    {vendor: "nginx", product: "nginx"},
+	"coreutils":     {vendor: "gnu", product: "coreutils"},
+	"bash":          {vendor: "gnu", product: "bash"},
+	"tar":           {vendor: "gnu", product: "tar"},
+	"grep":          {vendor: "gnu", product: "grep"},
+	"sed":           {vendor: "gnu", product: "sed"},
+	"findutils":     {vendor: "gnu", product: "findutils"},
+	"binutils":      {vendor: "gnu", product: "binutils"},
+	"cpio":          {vendor: "gnu", product: "cpio"},
+	"patch":         {vendor: "gnu", product: "patch"},
+	"crontabs":      {vendor: "cronie", product: "cronie"},
+	"cronie":        {vendor: "cronie", product: "cronie"},
+	"polkit":        {vendor: "freedesktop", product: "polkit"},
+	"dbus":          {vendor: "freedesktop", product: "dbus"},
+	"networkmanager":{vendor: "freedesktop", product: "networkmanager"},
 }
 
 func (a *Agent) runChecks() []model.CheckResult {

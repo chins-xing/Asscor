@@ -223,11 +223,13 @@ type SPCConfig struct {
 	CacheRetentionDays int
 	FetchIntervalH     int
 
-	NVD   NVConfig
-	EPSS  EPSSConfig
+	NVD     NVConfig
+	EPSS    EPSSConfig
 	CISAKEV CISAKEVConfig
-	MISP  MISPConfig
-	OSCAL OSCALConfig
+	MISP    MISPConfig
+	OSCAL   OSCALConfig
+	CNNVD   CNNVDConfig
+	CNVD    CNVDConfig
 }
 
 type NVConfig struct {
@@ -263,4 +265,17 @@ type OSCALConfig struct {
 	InputFormat  string
 	ResultsPath  string
 	PlanPath     string
+}
+
+type CNNVDConfig struct {
+	Enabled       bool
+	BaseURL       string
+	APIKey        string
+	SyncIntervalH int
+}
+
+type CNVDConfig struct {
+	Enabled       bool
+	BaseURL       string
+	SyncIntervalH int
 }

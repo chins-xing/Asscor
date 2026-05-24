@@ -121,6 +121,17 @@ func Default() *Config {
 				ResultsPath: "./oscal_results/",
 				PlanPath:    "./oscal_plan/",
 			},
+			CNNVD: model.CNNVDConfig{
+				Enabled:       false,
+				BaseURL:       "https://www.cnnvd.org.cn/home/data",
+				APIKey:        "",
+				SyncIntervalH: 24,
+			},
+			CNVD: model.CNVDConfig{
+				Enabled:       false,
+				BaseURL:       "https://www.cnvd.org.cn/shareData",
+				SyncIntervalH: 24,
+			},
 		},
 		ExtMgrCfg: ExtMgrConfig{
 			Enabled:          true,
@@ -397,6 +408,41 @@ func Parse(content string) (*Config, error) {
 				cfg.SPC.OSCAL.ResultsPath = v
 			case "plan_path":
 				cfg.SPC.OSCAL.PlanPath = v
+			}
+		}
+	}
+
+	if sec, ok := sections["spc.cnnvd"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "enabled":
+				cfg.SPC.CNNVD.Enabled = strings.EqualFold(v, "true") || v == "1"
+			case "base_url":
+				cfg.SPC.CNNVD.BaseURL = v
+			case "api_key":
+				cfg.SPC.CNNVD.APIKey = v
+			case "sync_interval_h":
+				if i, err := strconv.Atoi(v); err == nil {
+					cfg.SPC.CNNVD.SyncIntervalH = i
+				}
+			}
+		}
+		if envKey := os.Getenv("CNNVD_API_KEY"); envKey != "" {
+			cfg.SPC.CNNVD.APIKey = envKey
+		}
+	}
+
+	if sec, ok := sections["spc.cnvd"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "enabled":
+				cfg.SPC.CNVD.Enabled = strings.EqualFold(v, "true") || v == "1"
+			case "base_url":
+				cfg.SPC.CNVD.BaseURL = v
+			case "sync_interval_h":
+				if i, err := strconv.Atoi(v); err == nil {
+					cfg.SPC.CNVD.SyncIntervalH = i
+				}
 			}
 		}
 	}

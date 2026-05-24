@@ -77,14 +77,18 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		asset := s.spc.GetAsset(req.HostId)
 		if asset == nil {
 			asset = &LocalAsset{
-				HostID:   req.HostId,
-				Packages: req.Packages,
+				HostID:        req.HostId,
+				Packages:      req.Packages,
+				InstalledCPEs: req.InstalledCPEs,
 			}
 		} else {
 			asset.Packages = req.Packages
+			if len(req.InstalledCPEs) > 0 {
+				asset.InstalledCPEs = req.InstalledCPEs
+			}
 		}
 		s.spc.UpsertAsset(*asset)
-		logger.WithComponent("kernel").Debug("SPC asset updated from heartbeat", "host_id", req.HostId, "packages", len(req.Packages))
+		logger.WithComponent("kernel").Debug("SPC asset updated from heartbeat", "host_id", req.HostId, "packages", len(req.Packages), "cpes", len(asset.InstalledCPEs))
 	}
 
 	var assessmentResult *apiv1.AssessmentResult
