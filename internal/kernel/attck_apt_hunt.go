@@ -404,11 +404,56 @@ func (m *ATTACKModule) generateBeaconHypotheses(hostID string) []HuntHypothesis 
 
 func (m *ATTACKModule) GetAPTAnalysisReports(hostID string, limit int) []APTAnalysisReport {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	chains := m.attackChains
+	alerts := m.behavioralAlerts
+	beacons := m.beaconDetections
+	hunts := m.huntResults
+	m.mu.RUnlock()
+
+	if len(chains) == 0 && len(alerts) == 0 && len(beacons) == 0 {
+		return nil
+	}
+
+	hostSet := map[string]bool{}
+	if hostID != "" {
+		hostSet[hostID] = true
+	}
 
 	var reports []APTAnalysisReport
-	_ = hostID
-	_ = limit
+
+	if hostID != "" {
+		report, err := m.GenerateAPTAnalysisReport([]string{hostID})
+		if err == nil && report != nil {
+			reports = append(reports, *report)
+		}
+	} else {
+		allHosts := map[string]bool{}
+		for _, c := range chains {
+			for _, h := range c.HostIDs {
+				allHosts[h] = true
+			}
+		}
+		for _, a := range alerts {
+			allHosts[a.HostID] = true
+		}
+		for _, b := range beacons {
+			allHosts[b.HostID] = true
+		}
+		for _, h := range hunts {
+			allHosts[h.HostID] = true
+		}
+
+		for h := range allHosts {
+			report, err := m.GenerateAPTAnalysisReport([]string{h})
+			if err == nil && report != nil {
+				reports = append(reports, *report)
+			}
+		}
+	}
+
+	if limit > 0 && len(reports) > limit {
+		reports = reports[:limit]
+	}
 
 	return reports
 }

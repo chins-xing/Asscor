@@ -110,6 +110,10 @@ type ATTACKModule struct {
 	transMatrix        TransitionMatrix
 	state              PluginState
 	attckVersion       string
+	beaconThreshold    float64
+	attributionThreshold float64
+	autoHunt           bool
+	safeEmulation      bool
 	detectionRules     []DetectionRule
 	alerts             []DetectionAlert
 	anomalies          []AnomalyEvent
@@ -132,13 +136,17 @@ type ATTACKModule struct {
 
 func NewATTACKModule() *ATTACKModule {
 	return &ATTACKModule{
-		aptGroups:          make(map[string]*APTGroupProfile),
-		transMatrix:        make(TransitionMatrix),
-		attckVersion:       "v19",
-		threatActors:       make(map[string]ThreatActorProfile),
-		improvementTracks:  make(map[string]ImprovementTrack),
-		defaultMitigations: make(map[string][]Mitigation),
-		baselines:          make(map[string]BehavioralBaseline),
+		aptGroups:            make(map[string]*APTGroupProfile),
+		transMatrix:          make(TransitionMatrix),
+		attckVersion:         "v19",
+		beaconThreshold:      0.7,
+		attributionThreshold: 0.6,
+		autoHunt:             false,
+		safeEmulation:        true,
+		threatActors:         make(map[string]ThreatActorProfile),
+		improvementTracks:    make(map[string]ImprovementTrack),
+		defaultMitigations:   make(map[string][]Mitigation),
+		baselines:            make(map[string]BehavioralBaseline),
 	}
 }
 
@@ -162,6 +170,24 @@ func (m *ATTACKModule) Priority() int {
 func (m *ATTACKModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
 	m.state = PluginInitialized
+
+	cfg := kc.GetConfigObj()
+	if cfg != nil {
+		m.attckVersion = cfg.ATTACK.Version
+		m.beaconThreshold = cfg.ATTACK.BeaconThreshold
+		m.attributionThreshold = cfg.ATTACK.AttributionThreshold
+		m.autoHunt = cfg.ATTACK.AutoHunt
+		m.safeEmulation = cfg.ATTACK.SafeEmulation
+		if m.attckVersion == "" {
+			m.attckVersion = "v19"
+		}
+		if m.beaconThreshold <= 0 || m.beaconThreshold > 1.0 {
+			m.beaconThreshold = 0.7
+		}
+		if m.attributionThreshold <= 0 || m.attributionThreshold > 1.0 {
+			m.attributionThreshold = 0.6
+		}
+	}
 
 	m.loadDefaultMatrix()
 	m.loadDefaultAPTProfiles()
@@ -251,6 +277,16 @@ func (m *ATTACKModule) Start(ctx context.Context) error {
 
 func (m *ATTACKModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+
+	m.mu.Lock()
+	m.alerts = nil
+	m.anomalies = nil
+	m.iocs = nil
+	m.huntHypotheses = nil
+	m.beaconDetections = nil
+	m.attackChains = nil
+	m.mu.Unlock()
+
 	m.state = PluginStopped
 	logger.WithComponent("attck").Info("stopped")
 	return nil

@@ -146,14 +146,14 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 	}
 
 	m.mu.Lock()
-	m.lastFetch = time.Now()
+	m.lastNVDFetch = time.Now()
 	baseURL := m.nvdConfig.BaseURL
 	apiKey := m.nvdConfig.APIKey
 	since := m.lastUpdate
 	m.mu.Unlock()
 
 	if baseURL == "" {
-		baseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+		baseURL = defaultNVDBaseURL
 	}
 
 	if since.IsZero() {
@@ -447,10 +447,12 @@ func (m *SPCModule) fetchNVDWindow(client *http.Client, baseURL, apiKey string, 
 		}
 
 		m.nvdLimiter <- struct{}{}
-		go func() {
-			time.Sleep(6 * time.Second)
+		t := time.AfterFunc(6*time.Second, func() {
 			<-m.nvdLimiter
-		}()
+		})
+		m.mu.Lock()
+		m.nvdTimers = append(m.nvdTimers, t)
+		m.mu.Unlock()
 
 		prog.SetDesc(fmt.Sprintf("NVD Fetch (%d CVEs) requesting...", len(allCVEs)))
 
@@ -471,9 +473,9 @@ func (m *SPCModule) fetchNVDWindow(client *http.Client, baseURL, apiKey string, 
 			}
 			return allCVEs, fmt.Errorf("NVD API call: %w", err)
 		}
+		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusTooManyRequests {
-			resp.Body.Close()
 			cancel()
 			*retryCount++
 			if *retryCount > maxRetries {
@@ -498,7 +500,6 @@ func (m *SPCModule) fetchNVDWindow(client *http.Client, baseURL, apiKey string, 
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, maxHTTPBodySize))
-			resp.Body.Close()
 			logger.WithComponent("spc").Error("NVD API non-200 response",
 				"status", resp.StatusCode,
 				"body_preview", truncateString(string(body), 500),
@@ -508,11 +509,9 @@ func (m *SPCModule) fetchNVDWindow(client *http.Client, baseURL, apiKey string, 
 
 		var apiResp nvdAPIResponse
 		if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-			resp.Body.Close()
 			logger.WithComponent("spc").Error("NVD response decode failed", "error", err, "collected", len(allCVEs))
 			return allCVEs, fmt.Errorf("NVD response decode: %w", err)
 		}
-		resp.Body.Close()
 
 		logger.WithComponent("spc").Debug("NVD API response",
 			"totalResults", apiResp.TotalResults,
@@ -681,7 +680,7 @@ func (m *SPCModule) FetchFromEPSS() SPCFetchResult {
 
 	dataURL := m.epssConfig.DataURL
 	if dataURL == "" {
-		dataURL = "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz"
+		dataURL = defaultEPSSDataURL
 	}
 
 	client := &http.Client{Timeout: 120 * time.Second}
@@ -805,7 +804,7 @@ func (m *SPCModule) FetchFromCISAKEV() SPCFetchResult {
 
 	catalogURL := m.kevConfig.CatalogURL
 	if catalogURL == "" {
-		catalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+		catalogURL = defaultKEVCatalogURL
 	}
 
 	client := &http.Client{Timeout: 60 * time.Second}

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/argus-security/argus/internal/kernel"
 )
 
 type mockKernel struct {
@@ -105,6 +107,46 @@ func (m *mockKernel) History() *History {
 		return m.history
 	}
 	return NewHistory(100)
+}
+
+func (m *mockKernel) Sources() SourceAccess {
+	return &mockSourceAccess{}
+}
+
+type mockSourceAccess struct{}
+
+func (s *mockSourceAccess) DeploySource(ctx context.Context, spec kernel.SourceSpec, cfg kernel.SourceConfig) error {
+	return nil
+}
+func (s *mockSourceAccess) UninstallSource(ctx context.Context, id string, force bool) error {
+	return nil
+}
+func (s *mockSourceAccess) EnableSource(ctx context.Context, id string) error    { return nil }
+func (s *mockSourceAccess) DisableSource(ctx context.Context, id string) error   { return nil }
+func (s *mockSourceAccess) UpdateSource(ctx context.Context, id string, version string) error {
+	return nil
+}
+func (s *mockSourceAccess) GetSourceStatus(id string) (*kernel.SourceStatus, bool) {
+	return nil, false
+}
+func (s *mockSourceAccess) ListSources(category kernel.SourceCategory) []kernel.SourceStatus {
+	return nil
+}
+func (s *mockSourceAccess) ListAllSources() []kernel.SourceStatus { return nil }
+func (s *mockSourceAccess) ConfigureSource(ctx context.Context, id string, cfg kernel.SourceConfig) error {
+	return nil
+}
+func (s *mockSourceAccess) GetSourceConfig(id string) (*kernel.SourceConfig, bool) {
+	return nil, false
+}
+func (s *mockSourceAccess) GetSourceSpec(id string) (*kernel.SourceSpec, bool) {
+	return nil, false
+}
+func (s *mockSourceAccess) RunSourceNow(ctx context.Context, id string) error {
+	return nil
+}
+func (s *mockSourceAccess) GetAuditLog(sourceID string, limit int) []kernel.AuditLogEntry {
+	return nil
 }
 
 type mockBus struct{}

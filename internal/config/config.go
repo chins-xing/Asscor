@@ -32,6 +32,8 @@ type Config struct {
 
 	SPC model.SPCConfig
 
+	ATTACK model.ATTACKConfig
+
 	Extensions       map[string]bool
 	ExtensionWeights map[string]float64
 
@@ -91,6 +93,7 @@ func Default() *Config {
 			MinPScore:          0.60,
 			CacheRetentionDays: 365,
 			FetchIntervalH:     1,
+			MaxCacheSize:       100000,
 			NVD: model.NVConfig{
 				BaseURL:        "https://services.nvd.nist.gov/rest/json/cves/2.0",
 				APIKey:         "",
@@ -145,6 +148,14 @@ func Default() *Config {
 		},
 		HotloadEnabled:   false,
 		HotloadIntervalS: 30,
+		ATTACK: model.ATTACKConfig{
+			Enabled:              true,
+			Version:              "v19",
+			AutoHunt:             false,
+			BeaconThreshold:      0.7,
+			AttributionThreshold: 0.6,
+			SafeEmulation:        true,
+		},
 	}
 }
 
@@ -313,6 +324,10 @@ func Parse(content string) (*Config, error) {
 				if i, err := strconv.Atoi(v); err == nil {
 					cfg.SPC.FetchIntervalH = i
 				}
+			case "max_cache_size":
+				if i, err := strconv.Atoi(v); err == nil && i > 0 {
+					cfg.SPC.MaxCacheSize = i
+				}
 			}
 		}
 	}
@@ -443,6 +458,29 @@ func Parse(content string) (*Config, error) {
 				if i, err := strconv.Atoi(v); err == nil {
 					cfg.SPC.CNVD.SyncIntervalH = i
 				}
+			}
+		}
+	}
+
+	if sec, ok := sections["attck"]; ok {
+		for k, v := range sec {
+			switch k {
+			case "enabled":
+				cfg.ATTACK.Enabled = strings.EqualFold(v, "true") || v == "1"
+			case "version":
+				cfg.ATTACK.Version = v
+			case "auto_hunt":
+				cfg.ATTACK.AutoHunt = strings.EqualFold(v, "true") || v == "1"
+			case "beacon_threshold":
+				if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 && f <= 1.0 {
+					cfg.ATTACK.BeaconThreshold = f
+				}
+			case "attribution_threshold":
+				if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 && f <= 1.0 {
+					cfg.ATTACK.AttributionThreshold = f
+				}
+			case "safe_emulation":
+				cfg.ATTACK.SafeEmulation = strings.EqualFold(v, "true") || v == "1"
 			}
 		}
 	}

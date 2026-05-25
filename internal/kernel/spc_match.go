@@ -1,7 +1,6 @@
 package kernel
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -165,45 +164,99 @@ func compareVersions(a, b string) int {
 		maxLen = len(bParts)
 	}
 	for i := 0; i < maxLen; i++ {
-		var aNum, bNum int
+		var aPart, bPart versionPart
 		if i < len(aParts) {
-			aNum, _ = strconv.Atoi(aParts[i])
+			aPart = aParts[i]
 		}
 		if i < len(bParts) {
-			bNum, _ = strconv.Atoi(bParts[i])
+			bPart = bParts[i]
 		}
-		if aNum < bNum {
-			return -1
-		}
-		if aNum > bNum {
-			return 1
+		cmp := compareVersionPart(aPart, bPart)
+		if cmp != 0 {
+			return cmp
 		}
 	}
 	return 0
 }
 
-func splitVersion(v string) []string {
+type versionPart struct {
+	numVal   int
+	strVal   string
+	isNumber bool
+}
+
+func compareVersionPart(a, b versionPart) int {
+	if a.isNumber && b.isNumber {
+		if a.numVal < b.numVal {
+			return -1
+		}
+		if a.numVal > b.numVal {
+			return 1
+		}
+		return 0
+	}
+	if a.isNumber && !b.isNumber {
+		return 1
+	}
+	if !a.isNumber && b.isNumber {
+		return -1
+	}
+	if a.strVal < b.strVal {
+		return -1
+	}
+	if a.strVal > b.strVal {
+		return 1
+	}
+	return 0
+}
+
+func splitVersion(v string) []versionPart {
 	v = strings.TrimLeft(v, "v")
-	var parts []string
+	var parts []versionPart
 	var current strings.Builder
+	hasDigit := false
+	hasAlpha := false
+
+	flush := func() {
+		if current.Len() == 0 {
+			return
+		}
+		s := current.String()
+		if !hasAlpha {
+			n, err := strconv.Atoi(s)
+			if err == nil {
+				parts = append(parts, versionPart{numVal: n, strVal: s, isNumber: true})
+				current.Reset()
+				hasDigit = false
+				hasAlpha = false
+				return
+			}
+		}
+		parts = append(parts, versionPart{strVal: s, isNumber: false})
+		current.Reset()
+		hasDigit = false
+		hasAlpha = false
+	}
+
 	for _, ch := range v {
 		if ch == '.' || ch == '-' || ch == '_' {
-			if current.Len() > 0 {
-				parts = append(parts, current.String())
-				current.Reset()
+			flush()
+			continue
+		}
+		if ch >= '0' && ch <= '9' {
+			if hasAlpha {
+				flush()
 			}
-		} else if ch >= '0' && ch <= '9' {
 			current.WriteRune(ch)
+			hasDigit = true
 		} else {
-			if current.Len() > 0 {
-				parts = append(parts, current.String())
-				current.Reset()
+			if hasDigit {
+				flush()
 			}
-			parts = append(parts, fmt.Sprintf("%d", ch))
+			current.WriteRune(ch)
+			hasAlpha = true
 		}
 	}
-	if current.Len() > 0 {
-		parts = append(parts, current.String())
-	}
+	flush()
 	return parts
 }

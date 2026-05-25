@@ -173,6 +173,7 @@ type ConcurrencyModule struct {
 	kernel     KernelContext
 	workerPool *WorkerPool
 	state      PluginState
+	stateMu    sync.RWMutex
 }
 
 func NewConcurrencyModule(maxWorkers int) *ConcurrencyModule {
@@ -200,7 +201,9 @@ func (m *ConcurrencyModule) Priority() int {
 
 func (m *ConcurrencyModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
+	m.stateMu.Lock()
 	m.state = PluginInitialized
+	m.stateMu.Unlock()
 
 	if m.workerPool == nil {
 		m.workerPool = NewWorkerPool(10)
@@ -213,22 +216,28 @@ func (m *ConcurrencyModule) Init(ctx context.Context, kc KernelContext) error {
 }
 
 func (m *ConcurrencyModule) Start(ctx context.Context) error {
+	m.stateMu.Lock()
 	m.state = PluginStarted
+	m.stateMu.Unlock()
 	logger.WithComponent("concurrency").Info("started", "max_workers", m.workerPool.MaxConcurrency())
 	return nil
 }
 
 func (m *ConcurrencyModule) Stop(ctx context.Context) error {
+	m.stateMu.Lock()
 	m.state = PluginStopping
+	m.stateMu.Unlock()
 	m.workerPool.Shutdown()
+	m.stateMu.Lock()
 	m.state = PluginStopped
+	m.stateMu.Unlock()
 	logger.WithComponent("concurrency").Info("stopped")
 	return nil
 }
 
 func (m *ConcurrencyModule) State() PluginState {
-	m.workerPool.metrics.mu.Lock()
-	defer m.workerPool.metrics.mu.Unlock()
+	m.stateMu.RLock()
+	defer m.stateMu.RUnlock()
 	return m.state
 }
 

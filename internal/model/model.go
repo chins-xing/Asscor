@@ -222,6 +222,7 @@ type SPCConfig struct {
 	MinPScore          float64
 	CacheRetentionDays int
 	FetchIntervalH     int
+	MaxCacheSize       int
 
 	NVD     NVConfig
 	EPSS    EPSSConfig
@@ -278,4 +279,13 @@ type CNVDConfig struct {
 	Enabled       bool
 	BaseURL       string
 	SyncIntervalH int
+}
+
+type ATTACKConfig struct {
+	Enabled              bool
+	Version              string
+	AutoHunt             bool
+	BeaconThreshold      float64
+	AttributionThreshold float64
+	SafeEmulation        bool
 }

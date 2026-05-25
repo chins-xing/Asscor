@@ -1,4 +1,4 @@
-﻿package kernel
+package kernel
 
 import (
 	"context"
@@ -16,6 +16,17 @@ import (
 )
 
 const maxHTTPBodySize = 1 << 20
+
+const defaultEPSSDataURL = "https://epss.cyentia.com/epss_scores-current.csv.gz"
+const defaultNVDBaseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+const defaultKEVCatalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+
+var cveSlicePool = sync.Pool{
+	New: func() interface{} {
+		s := make([]SPCCVEScore, 0, 1024)
+		return &s
+	},
+}
 
 type MatchType int
 
@@ -296,7 +307,7 @@ type SPCModule struct {
 	cveCache    []SPCCVEScore
 	cveIndex    map[string]int
 	assetCache  map[string]*LocalAsset
-	lastFetch   time.Time
+	lastNVDFetch time.Time
 	lastUpdate  time.Time
 	fetchResults []SPCFetchResult
 	state       PluginState
@@ -315,6 +326,7 @@ type SPCModule struct {
 	maxCacheSize   int
 	kevCatalog     map[string]bool
 	nvdLimiter     chan struct{}
+	nvdTimers      []*time.Timer
 	done           chan struct{}
 }
 
@@ -336,17 +348,17 @@ func NewSPCModule() *SPCModule {
 			VerifyTLS: true,
 		},
 		nvdConfig: SPCNVDConfig{
-			BaseURL:   "https://services.nvd.nist.gov/rest/json/cves/2.0",
+			BaseURL:   defaultNVDBaseURL,
 			SyncHours: 6,
 		},
 		epssConfig: SPCEPSSConfig{
 			Enabled:       true,
-			DataURL:       "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz",
+			DataURL:       defaultEPSSDataURL,
 			SyncIntervalH: 24,
 		},
 		kevConfig: SPCKEVConfig{
 			Enabled:       true,
-			CatalogURL:    "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+			CatalogURL:    defaultKEVCatalogURL,
 			SyncIntervalH: 24,
 		},
 		oscalConfig: SPCOscalConfig{
@@ -384,14 +396,14 @@ func (m *SPCModule) Init(ctx context.Context, kc KernelContext) error {
 		m.enabled = false
 		m.minPScore = 0.60
 		m.fetchInterval = 24 * time.Hour
-		m.nvdConfig.BaseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+		m.nvdConfig.BaseURL = defaultNVDBaseURL
 		m.nvdConfig.APIKey = os.Getenv("NVD_API_KEY")
 		m.nvdConfig.SyncHours = 24
 		m.epssConfig.Enabled = true
-		m.epssConfig.DataURL = "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz"
+		m.epssConfig.DataURL = defaultEPSSDataURL
 		m.epssConfig.SyncIntervalH = 24
 		m.kevConfig.Enabled = true
-		m.kevConfig.CatalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+		m.kevConfig.CatalogURL = defaultKEVCatalogURL
 		m.kevConfig.SyncIntervalH = 24
 		m.mispConfig.BaseURL = ""
 		m.mispConfig.APIKey = os.Getenv("MISP_API_KEY")
@@ -399,60 +411,7 @@ func (m *SPCModule) Init(ctx context.Context, kc KernelContext) error {
 		m.mispConfig.SyncHours = 24
 		m.mispConfig.TLPFilter = "white,green"
 	} else {
-		spcCfg := cfg.SPC
-		m.enabled = spcCfg.Enabled
-		m.minPScore = spcCfg.MinPScore
-		m.fetchInterval = time.Duration(spcCfg.FetchIntervalH) * time.Hour
-
-		m.nvdConfig.BaseURL = spcCfg.NVD.BaseURL
-		m.nvdConfig.APIKey = spcCfg.NVD.APIKey
-		m.nvdConfig.SyncHours = spcCfg.NVD.SyncIntervalH
-
-		if m.nvdConfig.APIKey == "" {
-			m.nvdConfig.APIKey = os.Getenv("NVD_API_KEY")
-		}
-
-		m.epssConfig.Enabled = spcCfg.EPSS.Enabled
-		m.epssConfig.DataURL = spcCfg.EPSS.DataURL
-		m.epssConfig.SyncIntervalH = spcCfg.EPSS.SyncIntervalH
-		if m.epssConfig.DataURL == "" {
-			m.epssConfig.DataURL = "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz"
-		}
-
-		m.kevConfig.Enabled = spcCfg.CISAKEV.Enabled
-		m.kevConfig.CatalogURL = spcCfg.CISAKEV.CatalogURL
-		m.kevConfig.SyncIntervalH = spcCfg.CISAKEV.SyncIntervalH
-		if m.kevConfig.CatalogURL == "" {
-			m.kevConfig.CatalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
-		}
-
-		m.mispConfig.BaseURL = spcCfg.MISP.BaseURL
-		m.mispConfig.APIKey = spcCfg.MISP.APIKey
-		m.mispConfig.VerifyTLS = spcCfg.MISP.VerifyTLS
-		m.mispConfig.SyncHours = spcCfg.MISP.SyncIntervalH
-		m.mispConfig.TLPFilter = spcCfg.MISP.TLPFilter
-
-		if m.mispConfig.APIKey == "" {
-			m.mispConfig.APIKey = os.Getenv("MISP_API_KEY")
-		}
-
-		m.cnnvdConfig.Enabled = spcCfg.CNNVD.Enabled
-		m.cnnvdConfig.BaseURL = spcCfg.CNNVD.BaseURL
-		m.cnnvdConfig.APIKey = spcCfg.CNNVD.APIKey
-		m.cnnvdConfig.SyncIntervalH = spcCfg.CNNVD.SyncIntervalH
-		if m.cnnvdConfig.BaseURL == "" {
-			m.cnnvdConfig.BaseURL = "https://www.cnnvd.org.cn/home/data"
-		}
-		if m.cnnvdConfig.APIKey == "" {
-			m.cnnvdConfig.APIKey = os.Getenv("CNNVD_API_KEY")
-		}
-
-		m.cnvdConfig.Enabled = spcCfg.CNVD.Enabled
-		m.cnvdConfig.BaseURL = spcCfg.CNVD.BaseURL
-		m.cnvdConfig.SyncIntervalH = spcCfg.CNVD.SyncIntervalH
-		if m.cnvdConfig.BaseURL == "" {
-			m.cnvdConfig.BaseURL = "https://www.cnvd.org.cn/shareData"
-		}
+		m.ConfigureFromConfig(cfg)
 	}
 
 	if m.enabled && m.nvdConfig.APIKey == "" {
@@ -503,6 +462,14 @@ func (m *SPCModule) Start(ctx context.Context) error {
 
 func (m *SPCModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+
+	m.mu.Lock()
+	for _, t := range m.nvdTimers {
+		t.Stop()
+	}
+	m.nvdTimers = nil
+	m.mu.Unlock()
+
 	select {
 	case <-m.done:
 	case <-ctx.Done():
@@ -556,7 +523,7 @@ func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
 
 	m.nvdConfig.BaseURL = spcCfg.NVD.BaseURL
 	if m.nvdConfig.BaseURL == "" {
-		m.nvdConfig.BaseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+		m.nvdConfig.BaseURL = defaultNVDBaseURL
 	}
 	m.nvdConfig.APIKey = spcCfg.NVD.APIKey
 	if m.nvdConfig.APIKey == "" {
@@ -572,7 +539,7 @@ func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
 	m.epssConfig.Enabled = spcCfg.EPSS.Enabled
 	m.epssConfig.DataURL = spcCfg.EPSS.DataURL
 	if m.epssConfig.DataURL == "" {
-		m.epssConfig.DataURL = "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz"
+		m.epssConfig.DataURL = defaultEPSSDataURL
 	}
 	m.epssConfig.SyncIntervalH = spcCfg.EPSS.SyncIntervalH
 	if m.epssConfig.SyncIntervalH == 0 {
@@ -582,7 +549,7 @@ func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
 	m.kevConfig.Enabled = spcCfg.CISAKEV.Enabled
 	m.kevConfig.CatalogURL = spcCfg.CISAKEV.CatalogURL
 	if m.kevConfig.CatalogURL == "" {
-		m.kevConfig.CatalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+		m.kevConfig.CatalogURL = defaultKEVCatalogURL
 	}
 	m.kevConfig.SyncIntervalH = spcCfg.CISAKEV.SyncIntervalH
 	if m.kevConfig.SyncIntervalH == 0 {
@@ -602,6 +569,28 @@ func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
 	m.mispConfig.TLPFilter = spcCfg.MISP.TLPFilter
 	if m.mispConfig.TLPFilter == "" {
 		m.mispConfig.TLPFilter = "white"
+	}
+
+	m.cnnvdConfig.Enabled = spcCfg.CNNVD.Enabled
+	m.cnnvdConfig.BaseURL = spcCfg.CNNVD.BaseURL
+	m.cnnvdConfig.APIKey = spcCfg.CNNVD.APIKey
+	m.cnnvdConfig.SyncIntervalH = spcCfg.CNNVD.SyncIntervalH
+	if m.cnnvdConfig.BaseURL == "" {
+		m.cnnvdConfig.BaseURL = "https://www.cnnvd.org.cn/home/data"
+	}
+	if m.cnnvdConfig.APIKey == "" {
+		m.cnnvdConfig.APIKey = os.Getenv("CNNVD_API_KEY")
+	}
+
+	m.cnvdConfig.Enabled = spcCfg.CNVD.Enabled
+	m.cnvdConfig.BaseURL = spcCfg.CNVD.BaseURL
+	m.cnvdConfig.SyncIntervalH = spcCfg.CNVD.SyncIntervalH
+	if m.cnvdConfig.BaseURL == "" {
+		m.cnvdConfig.BaseURL = "https://www.cnvd.org.cn/shareData"
+	}
+
+	if spcCfg.MaxCacheSize > 0 {
+		m.maxCacheSize = spcCfg.MaxCacheSize
 	}
 }
 
@@ -699,14 +688,20 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		cpeIndex[i] = entries
 	}
 
-	cves := make([]SPCCVEScore, len(m.cveCache))
-	copy(cves, m.cveCache)
+	cvesPtr := cveSlicePool.Get().(*[]SPCCVEScore)
+	cves := (*cvesPtr)[:0]
+	cves = append(cves, m.cveCache...)
 	asset := m.assetCache[hostID]
 	kevCatalog := make(map[string]bool, len(m.kevCatalog))
 	for k, v := range m.kevCatalog {
 		kevCatalog[k] = v
 	}
 	m.mu.RUnlock()
+
+	defer func() {
+		*cvesPtr = cves[:0]
+		cveSlicePool.Put(cvesPtr)
+	}()
 
 	logger.WithComponent("spc").Info("Calculate called",
 		"host_id", hostID,
