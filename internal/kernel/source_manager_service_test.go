@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	apiv1 "github.com/argus-security/argus/api/v1"
+	apiv1 "github.com/asscor/asscor/api/v1"
 )
 
 func TestSourceManagerServiceImpl_ListSources(t *testing.T) {
@@ -222,7 +222,7 @@ func TestBuildSourceManagerServiceDesc(t *testing.T) {
 	svc := NewSourceManagerServiceImpl(m)
 
 	desc := BuildSourceManagerServiceDesc(svc)
-	if desc.ServiceName != "argus.v1.SourceManagerService" {
+	if desc.ServiceName != "ASSCOR.v1.SourceManagerService" {
 		t.Errorf("unexpected service name: %s", desc.ServiceName)
 	}
 

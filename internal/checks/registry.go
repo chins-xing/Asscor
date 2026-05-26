@@ -3,7 +3,7 @@ package checks
 import (
 	"sync"
 
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/model"
 )
 
 var (

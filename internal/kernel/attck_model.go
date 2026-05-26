@@ -212,7 +212,7 @@ type ControlMapping struct {
 	TechniqueID   string   `json:"technique_id"`
 	TechniqueName string   `json:"technique_name"`
 	TacticID      string   `json:"tactic_id"`
-	ArgusChecks   []string `json:"argus_checks"`
+	AsscorChecks   []string `json:"asscor_checks"`
 	DetectionRules []string `json:"detection_rules"`
 	Mitigations   []Mitigation `json:"mitigations"`
 	CoverageLevel string   `json:"coverage_level"`
@@ -225,7 +225,7 @@ type Mitigation struct {
 	Description string   `json:"description"`
 	Category    string   `json:"category"`
 	Effectiveness float64 `json:"effectiveness"`
-	ArgusCheck  string   `json:"argus_check,omitempty"`
+	AsscorCheck  string   `json:"asscor_check,omitempty"`
 }
 
 type AssessmentReport struct {

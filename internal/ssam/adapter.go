@@ -1,8 +1,8 @@
 package ssam
 
 import (
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/model"
 )
 
 func ConfigToWeights(cfg *config.Config) []WeightConfig {

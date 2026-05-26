@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 func (m *ATTACKModule) AddIOC(entry IOCEntry) error {
@@ -54,14 +54,14 @@ func (m *ATTACKModule) enrichTechniqueFromIOC(entry IOCEntry) {
 			for tj, tech := range tactic.Techniques {
 				if tech.ID == techID {
 					found := false
-					for _, check := range tech.ArgusChecks {
+					for _, check := range tech.AsscorChecks {
 						if check == "ioc:"+entry.ID {
 							found = true
 							break
 						}
 					}
 					if !found {
-						m.tactics[ti].Techniques[tj].ArgusChecks = append(tech.ArgusChecks, "ioc:"+entry.ID)
+						m.tactics[ti].Techniques[tj].AsscorChecks = append(tech.AsscorChecks, "ioc:"+entry.ID)
 					}
 				}
 			}

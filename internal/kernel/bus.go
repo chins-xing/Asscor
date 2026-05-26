@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type Message struct {

@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/adapter"
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/adapter"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
 )
 
 type AdapterIntegrationModule struct {
@@ -31,7 +31,7 @@ func (m *AdapterIntegrationModule) Info() PluginInfo {
 		Name:        "adapter_integration",
 		Version:     "1.0.0",
 		Description: "Adapter integration — runs external tool adapters and feeds findings into the assessment pipeline",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 

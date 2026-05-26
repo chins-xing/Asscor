@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type AgentRecord struct {
@@ -34,7 +34,7 @@ func (m *HeartbeatModule) Info() PluginInfo {
 		Name:        "heartbeat",
 		Version:     "1.2.0",
 		Description: "Heartbeat monitor — tracks Agent liveness, triggers alerts on timeout (default 60s)",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 

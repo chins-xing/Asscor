@@ -1,4 +1,4 @@
-module github.com/argus-security/argus
+module github.com/asscor/asscor
 
 go 1.26
 

@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/argus-security/argus/internal/checks/linux"
+	"github.com/asscor/asscor/internal/checks/linux"
 )
 
 func TestGetAll_ContainsEFChecks(t *testing.T) {

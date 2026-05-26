@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/model"
-	"github.com/argus-security/argus/internal/version"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
+	"github.com/asscor/asscor/internal/version"
 )
 
 type AssessmentRecord struct {
@@ -211,7 +211,7 @@ func (m *PersistenceModule) Info() PluginInfo {
 		Name:        "persistence",
 		Version:     "1.2.0",
 		Description: "Persistence manager — JSONL-based 3-tier storage with daily rotation and batch flush",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 
@@ -491,7 +491,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			GeneratedAt:   time.Now(),
 			HostID:        ar.HostID,
 			Hostname:      ar.Hostname,
-			Framework:     "ARGUS",
+			Framework:     "ASSCOR",
 			SSAMVersion:   version.SSAMVersion,
 			FinalScore:    ar.FinalScore,
 			Threshold:     ar.Threshold,

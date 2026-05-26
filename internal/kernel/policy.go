@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
 )
 
 type HostStatus int
@@ -56,7 +56,7 @@ func (m *PolicyModule) Info() PluginInfo {
 		Name:        "policy",
 		Version:     "1.2.0",
 		Description: "Policy manager — evaluates scores against thresholds and triggers automated actions",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/argus-security/argus/internal/adapter"
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/adapter"
+	"github.com/asscor/asscor/internal/model"
 )
 
 type nucleiResultItem struct {

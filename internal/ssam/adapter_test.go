@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/model"
 )
 
 func TestConfigToWeights(t *testing.T) {

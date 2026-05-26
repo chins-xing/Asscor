@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type Kernel struct {

@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	apiv1 "github.com/argus-security/argus/api/v1"
-	"github.com/argus-security/argus/internal/logger"
+	apiv1 "github.com/asscor/asscor/api/v1"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type ctxKey string
@@ -232,7 +232,7 @@ func (s *Server) Stop() {
 func BuildServiceDesc(kernelSvc *KernelServiceImpl, agentSvc *AgentServiceImpl) []*apiv1.ServiceDesc {
 	return []*apiv1.ServiceDesc{
 		{
-			ServiceName: "argus.v1.KernelService",
+			ServiceName: "ASSCOR.v1.KernelService",
 			Methods: map[string]apiv1.MethodHandler{
 				"Register": func(ctx context.Context, payload []byte) ([]byte, error) {
 					var req apiv1.RegisterRequest
@@ -259,7 +259,7 @@ func BuildServiceDesc(kernelSvc *KernelServiceImpl, agentSvc *AgentServiceImpl) 
 			},
 		},
 		{
-			ServiceName: "argus.v1.AgentService",
+			ServiceName: "ASSCOR.v1.AgentService",
 			Methods: map[string]apiv1.MethodHandler{
 				"GetSnapshot": func(ctx context.Context, payload []byte) ([]byte, error) {
 					var req apiv1.SnapshotRequest

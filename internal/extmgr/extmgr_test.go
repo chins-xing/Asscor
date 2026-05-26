@@ -357,7 +357,7 @@ func TestExtensionSpecJSON(t *testing.T) {
 		Version: "1.2.3-beta",
 		ExtType: ExtTypeAdapter,
 		Description: "An adapter extension",
-		Author: "Argus Team",
+		Author: "ASSCOR Team",
 		License: "MIT",
 		Source: SourceSpec{
 			URL:      "https://ext.example.com/json-ext.zip",
@@ -539,7 +539,7 @@ func TestDetectSourceType(t *testing.T) {
 		{"http://example.com/ext.tar.gz", "http"},
 		{"git://github.com/user/repo.git", "git"},
 		{"git+https://github.com/user/repo", "git"},
-		{"https://github.com/argus/extensions.git", "git"},
+		{"https://github.com/ASSCOR/extensions.git", "git"},
 		{"https://gitlab.com/group/project.git", "git"},
 		{"/local/path/to/ext", "local"},
 		{"C:\\local\\path", "local"},

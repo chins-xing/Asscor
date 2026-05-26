@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 func (m *ATTACKModule) RegisterDetectionRule(rule DetectionRule) error {
@@ -438,8 +438,8 @@ func (m *ATTACKModule) findDetectionGaps() []string {
 	var gaps []string
 	for _, tactic := range m.tactics {
 		for _, tech := range tactic.Techniques {
-			if len(tech.ArgusChecks) > 0 && !ruleTechs[tech.ID] {
-				gaps = append(gaps, fmt.Sprintf("%s (%s) — has Argus checks but no detection rule", tech.ID, tactic.Name))
+			if len(tech.AsscorChecks) > 0 && !ruleTechs[tech.ID] {
+				gaps = append(gaps, fmt.Sprintf("%s (%s) — has ASSCOR checks but no detection rule", tech.ID, tactic.Name))
 			}
 		}
 	}

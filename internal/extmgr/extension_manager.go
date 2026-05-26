@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/checks"
-	"github.com/argus-security/argus/internal/engine"
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/checks"
+	"github.com/asscor/asscor/internal/engine"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
 )
 
 type ManagerConfig struct {

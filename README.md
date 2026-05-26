@@ -1,10 +1,10 @@
 # SSAM 1.3 — 系统安全可接受性模型
 
-> **ARGUS 项目** 实现了 SSAM（系统安全可接受性模型）核心算法。
+> **ASSCOR 项目** 实现了 SSAM（系统安全可接受性模型）核心算法。
 >
-> Argus——希腊神话中的百眼巨人，全视、警惕、永不闭目。这个名字本身就是项目的隐喻：持续监控每一台主机的安全状态，不放过任何一个弱点。眼睛是项目的灵魂元素，也是 ARGUS 最核心的意象。
+> ASSCOR——希腊神话中的百眼巨人，全视、警惕、永不闭目。这个名字本身就是项目的隐喻：持续监控每一台主机的安全状态，不放过任何一个弱点。眼睛是项目的灵魂元素，也是 ASSCOR 最核心的意象。
 
-**算法版本：** SSAM 1.3 | **项目版本：** ARGUS v0.1.2-MVP  
+**算法版本：** SSAM 1.3 | **项目版本：** ASSCOR v0.1.2-MVP  
 **日期：** 2026-05-25  
 **状态：** 发布
 
@@ -12,11 +12,11 @@
 
 系统安全可接受性模型（System Security Acceptability Model，SSAM）1.3 是一种多维度、可计算、可演进的安全评估框架。它通过四个互不重叠的核心能力域——攻击面管理、业务连续性、操作可信度、韧性——与独立边缘修正因子、动态威胁系数及安全态势计算相结合，将系统安全状态量化为一个 0–100 的分数。本白皮书系统阐述 SSAM 1.3 的理论基础、核心规则、评估方法，并重点介绍韧性维度的增强：可接受沦陷指标（Acceptable Compromise Index，ACI），以及新引入的安全态势计算模块（Security Posture Calculator，SPC），通过全局漏洞情报与本地资产清单的交叉比对，实现个体化的风险评估。所有参数均可由管理员按场景自定义，实现"定义权归模型，决策权归人"的安全度量实践。
 
-ARGUS 不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系统的"安全可接受性"聚合判断层，提供面向业务风险的统一视图。同时，SSAM 1.3 已实现与中国等级保护制度（GB/T 22239-2019）的双向映射，可作为等保合规效果的持续性量化验证工具。
+ASSCOR 不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系统的"安全可接受性"聚合判断层，提供面向业务风险的统一视图。同时，SSAM 1.3 已实现与中国等级保护制度（GB/T 22239-2019）的双向映射，可作为等保合规效果的持续性量化验证工具。
 
 ## 1. 引言
 
-安全评估长期面临两大困境：合规清单无法应对高级威胁，而红队演练又难以重复度量。ARGUS 项目旨在提供一种可计算、可演进、可配置的中间道路，让系统管理员像查看健康仪表盘一样，快速掌握当前的安全可接受程度。
+安全评估长期面临两大困境：合规清单无法应对高级威胁，而红队演练又难以重复度量。ASSCOR 项目旨在提供一种可计算、可演进、可配置的中间道路，让系统管理员像查看健康仪表盘一样，快速掌握当前的安全可接受程度。
 
 SSAM 1.3 的核心创新包括：
 
@@ -178,11 +178,11 @@ SSAM 1.3 已与 GB/T 22239-2019《信息安全技术 网络安全等级保护基
 
 ### 6.3 双向验证
 
-ARGUS 项目评估结果可与等保测评报告交叉验证：若等保三级通过而 SSAM < 80，可能存在配置漂移或防护未持续生效；反之若 SSAM ≥ 80 而等保未通过，则说明部分人工审查项需重点整改。
+ASSCOR 项目评估结果可与等保测评报告交叉验证：若等保三级通过而 SSAM < 80，可能存在配置漂移或防护未持续生效；反之若 SSAM ≥ 80 而等保未通过，则说明部分人工审查项需重点整改。
 
 ## 7. 动态扩展与社区驱动
 
-ARGUS 内置攻击向量插件槽（AVD），每个 AVD 定义为 {ID, 域, 检测逻辑, 分值, 紧急标记}。管理员或社区可编写 AVD 注册到引擎，使模型随威胁演进持续扩展。
+ASSCOR 内置攻击向量插件槽（AVD），每个 AVD 定义为 {ID, 域, 检测逻辑, 分值, 紧急标记}。管理员或社区可编写 AVD 注册到引擎，使模型随威胁演进持续扩展。
 
 ## 8. 配置与管理员自定义
 
@@ -203,11 +203,11 @@ compliance_framework = GB/T 22239-2019 Level 3
 ## 9. 项目结构
 
 ```
-argus/
+ASSCOR/
 ├── cmd/
 │   ├── kernel/        # 微内核服务端入口（gRPC + JSONRPC 双协议栈）
 │   ├── agent/         # Agent 客户端入口（gRPC + JSONRPC）
-│   └── argus/         # 独立评估工具入口
+│   └── ASSCOR/         # 独立评估工具入口
 ├── internal/
 │   ├── kernel/        # 内核核心模块（assessor, policy, spc, cti,
 │   │                   #  adapter_integration, config_watcher,
@@ -217,9 +217,9 @@ argus/
 │   │                   #  attck_apt_chain, attck_apt_detect,
 │   │                   #  attck_apt_attribution, attck_apt_hunt 等）
 │   ├── ssam/          # SSAM 独立算法模块（engine, interfaces, adapter,
-│   │                   #  defaults, errors — 可脱离 Argus 独立使用）
+│   │                   #  defaults, errors — 可脱离 ASSCOR 独立使用）
 │   ├── agent/         # Agent 核心模块（collector, executor）
-│   ├── engine/        # Argus 评估引擎（含适配器流水线集成，内部调用 ssam 包）
+│   ├── engine/        # ASSCOR 评估引擎（含适配器流水线集成，内部调用 ssam 包）
 │   ├── adapter/       # 外部工具适配器框架（21 个适配器：11 探测器 + 10 管理类）
 │   │   ├── scanner/   #   探测器适配器（Trivy, Nuclei, Lynis, OpenSCAP 等）
 │   │   └── management/#   管理类适配器（Ansible, NetBox, FreeIPA, Jira 等）
@@ -242,16 +242,16 @@ argus/
 
 ```bash
 # 使用独立评估工具
-./argus-linux-amd64-v0.1.2-MVP
+./ASSCOR-linux-amd64-v0.1.2-MVP
 
 # 输出 JSON 格式报告
-./argus-linux-amd64-v0.1.2-MVP -json
+./ASSCOR-linux-amd64-v0.1.2-MVP -json
 
 # 指定默认配置文件
-./argus-linux-amd64-v0.1.2-MVP -config config.ini
+./ASSCOR-linux-amd64-v0.1.2-MVP -config config.ini
 
 # 使用行业专用配置（政府/金融/医疗等）
-./argus-linux-amd64-v0.1.2-MVP -config config/config.gov.ini
+./ASSCOR-linux-amd64-v0.1.2-MVP -config config/config.gov.ini
 ```
 
 ### 10.2 分布式模式
@@ -259,35 +259,35 @@ argus/
 **启动 Kernel（Windows/Linux）：**
 ```bash
 # Windows（JSONRPC 默认端口 50051，gRPC 默认端口 50052）
-argus-kernel.exe -listen 0.0.0.0:50051 -no-mtls
+ASSCOR-kernel.exe -listen 0.0.0.0:50051 -no-mtls
 
 # Linux（使用行业配置）
-./argus-kernel-linux-amd64-v0.1.2-MVP -listen 0.0.0.0:50051 -no-mtls -config config/config.fin.ini
+./ASSCOR-kernel-linux-amd64-v0.1.2-MVP -listen 0.0.0.0:50051 -no-mtls -config config/config.fin.ini
 
 # 启用 mTLS（自动生成自签名证书）
-./argus-kernel-linux-amd64-v0.1.2-MVP -listen 0.0.0.0:50051
+./ASSCOR-kernel-linux-amd64-v0.1.2-MVP -listen 0.0.0.0:50051
 ```
 
 **启动 Agent（Linux）：**
 ```bash
 # 使用命令行参数
-./argus-agent-linux-amd64 -kernel 192.168.1.100:50051 -host-id server01
+./ASSCOR-agent-linux-amd64 -kernel 192.168.1.100:50051 -host-id server01
 
 # 或使用配置文件
-./argus-agent-linux-amd64 -config agent.ini
+./ASSCOR-agent-linux-amd64 -config agent.ini
 ```
 
 Agent 配置文件 `agent.ini` 支持心跳间隔、重连策略、mTLS 等参数自定义，详见文件内注释。
 
-## 11. 与 ARGUS μKernel 的联动
+## 11. 与 ASSCOR μKernel 的联动
 
-ARGUS μKernel 是风险评估与指令分发中心，采用微内核 + Agent 架构，通过 **gRPC 原生协议 + JSONRPC 兼容层** 双协议栈通信，均支持 mTLS 加密。Agent 负责本地检查执行与状态上报，内核汇聚计算并自动下发修复指令，实现"评估→诊断→修复"闭环。
+ASSCOR μKernel 是风险评估与指令分发中心，采用微内核 + Agent 架构，通过 **gRPC 原生协议 + JSONRPC 兼容层** 双协议栈通信，均支持 mTLS 加密。Agent 负责本地检查执行与状态上报，内核汇聚计算并自动下发修复指令，实现"评估→诊断→修复"闭环。
 
 ### 核心能力
 
 | 模块 | 功能 |
 |------|------|
-| **SSAM 算法引擎 (internal/ssam)** | 独立算法模块，实现 SSAM 1.3 评分公式、域评分、边缘因子计算、钩子机制；可脱离 Argus 框架独立使用 |
+| **SSAM 算法引擎 (internal/ssam)** | 独立算法模块，实现 SSAM 1.3 评分公式、域评分、边缘因子计算、钩子机制；可脱离 ASSCOR 框架独立使用 |
 | **评估引擎 (Assessor)** | 加载检查项并发评估，通过 SSAM 模块计算四域得分 + 边缘因子 + SPC 修正 |
 | **依赖注入容器 (DI Container)** | 基于反射的 IoC 容器，支持接口绑定、命名绑定、结构体字段注入（`inject` tag）、确定性匹配 |
 | **消息总线 (Bus)** | 发布-订阅模式事件总线，支持同步/异步发布、goroutine 并发控制、信号量防泄漏 |
@@ -328,15 +328,15 @@ Agent ──gRPC/mTLS──▶ Kernel gRPC Server (:50052)
 
 ## 12. 总结
 
-SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。四个核心域与边缘因子、威胁系数、SPC 态势修正共同形成完整的风险评估体系。引入等保映射后，ARGUS 项目既是对抗高级威胁的战术工具，也是衡量合规持续有效性的战略仪表盘。它不仅回答"系统安全吗"，更回答"在当下威胁中，我们的安全程度是否可以被接受"。
+SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。四个核心域与边缘因子、威胁系数、SPC 态势修正共同形成完整的风险评估体系。引入等保映射后，ASSCOR 项目既是对抗高级威胁的战术工具，也是衡量合规持续有效性的战略仪表盘。它不仅回答"系统安全吗"，更回答"在当下威胁中，我们的安全程度是否可以被接受"。
 
-## 12.1 SSAM 与 Argus 框架解耦架构
+## 12.1 SSAM 与 ASSCOR 框架解耦架构
 
-自 v0.1.1-MVP 起，SSAM 算法已从 Argus 框架中完全解耦为独立模块 `internal/ssam`，两者通过标准化接口松耦合协作：
+自 v0.1.1-MVP 起，SSAM 算法已从 ASSCOR 框架中完全解耦为独立模块 `internal/ssam`，两者通过标准化接口松耦合协作：
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  Argus Kernel                    │
+│                  ASSCOR Kernel                    │
 │  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
 │  │ Assessor │─▶│ DI       │─▶│ SSAM Engine   │  │
 │  │ Module   │  │ Container│  │ (internal/ssam)│  │
@@ -353,15 +353,15 @@ SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。�
 **关键设计原则：**
 
 - **接口隔离**：SSAM 通过 `Provider` 聚合接口暴露能力（`ScoringProvider` + `DomainProvider` + `EdgeFactorProvider` + `HookProvider`）
-- **依赖注入**：Argus 通过 DI 容器绑定 `ssam.ScoringProvider` → `Engine` 实例，框架不直接依赖 Engine 具体类型
-- **数据格式标准化**：`AssessmentInput` / `AssessmentOutput` 作为 DTO，`adapter.go` 负责 Argus model ↔ SSAM 格式转换
+- **依赖注入**：ASSCOR 通过 DI 容器绑定 `ssam.ScoringProvider` → `Engine` 实例，框架不直接依赖 Engine 具体类型
+- **数据格式标准化**：`AssessmentInput` / `AssessmentOutput` 作为 DTO，`adapter.go` 负责 ASSCOR model ↔ SSAM 格式转换
 - **独立可用**：`internal/ssam` 无外部依赖（仅 `config`、`model`、`logger`），可直接 `go get` 引入第三方项目
 
 详细接口规范与接入指南请参阅 [docs/SSAM接口规范与接入指南.md](docs/SSAM接口规范与接入指南.md)。
 
 ## 13. ATT&CK V19 威胁分析模块
 
-ARGUS v0.1.2-MVP 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。该模块作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
+ASSCOR v0.1.2-MVP 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。该模块作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
 
 ### 13.1 四大核心子模块
 
@@ -453,7 +453,7 @@ ATTACKModule (Plugin v2.0.0)
 - **SSAM 1.2** — 引入 ACI、SPC、等保映射、AVD 扩展机制、μKernel 联动
 - **SSAM 1.3** — 移除4项重叠边缘因子（SYN Cookie/供应链/自动封禁/资源紧张），SPC 引入平方和衰减，增加边缘因子合规等级覆盖，内置冲突检测
 
-### ARGUS v0.1.2-MVP ATT&CK V19 模块扩展记录
+### ASSCOR v0.1.2-MVP ATT&CK V19 模块扩展记录
 
 #### ATT&CK V19 四大核心子模块
 
@@ -465,8 +465,14 @@ ATTACKModule (Plugin v2.0.0)
 #### APT 攻击分析与检测增强
 
 - **攻击链重构引擎** — 基于告警、异常、IOC 多源证据，按 ATT&CK 战术顺序（初始访问→执行→持久化→…→命令控制）自动重构多阶段攻击链，支持多主机关联
+- **攻击链因果推理** — 20 条 ATT&CK 技术间因果规则构建有向图，提升时序排序精度和阶段置信度（最高 +0.2 加成）
 - **行为检测引擎** — 行为指标注册与评估（阈值比较/窗口检测）、主机行为基线管理（指标更新/偏差检测）、C2 信标检测（网络连接时间序列间隔抖动分析，jitter<0.3 评分≥0.7）
+- **群体基线** — 按角色聚合同类主机基线均值，缓解首次部署冷启动误报
 - **APT 归因引擎** — 多源证据融合算法（TTP 重叠权重 60% + IOC 匹配权重 40%），APT 组织匹配置信度评分，行业对齐加成，替代行为体排序
+- **贝叶斯归因网络** — 4 节点贝叶斯网络（TTP重叠/IOC匹配/行业对齐/杀伤链一致性）→ 归因概率分布推理
+- **信标信誉库过滤** — 内置 12 条信誉规则（NTP/DNS/OS更新/开发工具），过滤合法低抖动服务误报
+- **YARA/Sigma 规则引擎** — 支持规则加载、关键词匹配和结果输出，增强狩猎自动化
+- **跨主机网络流量分析** — 按源主机聚合异常连接，计算横向移动评分，建立横向移动证据
 - **威胁狩猎框架** — 狩猎假设 CRUD、基于攻击技术转移矩阵自动生成假设（告警驱动+异常驱动+信标驱动）、假设执行与确认、狩猎结果存储
 
 #### SPC 模块增强
@@ -476,8 +482,9 @@ ATTACKModule (Plugin v2.0.0)
 - **NVD API 并发分片请求** — 无 API Key 时 4 并发×30 天窗口，有 API Key 时 2 并发×60 天窗口，指数退避重试
 - **CNNVD/CNVD 数据源接入** — 新增 CNNVDConfig/CNVDConfig 配置结构体，实现 FetchFromCNNVD/FetchFromCNVD 方法，支持中文严重等级映射
 - **SPC 文件拆分** — 按功能边界将 spc.go 拆分为 spc.go（核心）、spc_fetch.go（数据拉取）、spc_match.go（CPE 匹配）、spc_persist.go（持久化）四个模块
+- **SPC 缓存增量更新** — AddCVE/AddCVEs/MergeCVEs 支持 upsert 语义，已存在的 CVE 自动合并更新（EPSS 分数变化、KEV 状态更新等），避免全量替换开销
 
-### ARGUS v0.1.2-MVP 修复记录
+### ASSCOR v0.1.2-MVP 修复记录
 
 #### 第一批修复（基础设施与协议层）
 
@@ -535,11 +542,11 @@ ATTACKModule (Plugin v2.0.0)
 - **格式化输出** — 统一支持文本表格和 JSON 两种输出格式，通过 `--json` 参数切换
 - **HMAC 密钥管理** — 密钥元数据（创建时间/过期时间/哈希）、自动轮换（90 天）、文件权限 `0600`
 
-> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 1.3。ARGUS 是实现 SSAM 的开源项目框架，当前版本 v0.1.2-MVP。两者版本号独立演进。
+> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 1.3。ASSCOR 是实现 SSAM 的开源项目框架，当前版本 v0.1.2-MVP。两者版本号独立演进。
 
 #### 第三批修复（SSAM 解耦与二次审计 — 2026-05-22）
 
-**架构重构 — SSAM 算法与 Argus 框架解耦：**
+**架构重构 — SSAM 算法与 ASSCOR 框架解耦：**
 
 - **SSAM 独立模块** — 将 SSAM 核心算法抽取为独立包 `internal/ssam`，包含接口定义（`Provider` 四子接口）、数据结构（`AssessmentInput`/`AssessmentOutput` DTO）、算法实现（`Engine`）、配置适配（`adapter.go`）、默认值（`defaults.go`）、输入验证（`errors.go`）
 - **依赖注入集成** — 在 `AssessorModule.Init` 中将 SSAM Engine 实例注册到 DI 容器（`Bind((*ssam.ScoringProvider)(nil), engine)`），框架通过接口消费 SSAM 能力

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type HandlerFunc func(ctx context.Context, service, method string, payload []byte) ([]byte, error)

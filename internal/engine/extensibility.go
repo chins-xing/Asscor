@@ -6,8 +6,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
 )
 
 type AssessmentPhase string

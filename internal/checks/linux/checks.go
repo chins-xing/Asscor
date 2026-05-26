@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/argus-security/argus/internal/common"
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/common"
+	"github.com/asscor/asscor/internal/model"
 )
 
 func All() []model.CheckItem {

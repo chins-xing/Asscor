@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 func (m *ATTACKModule) PerformGapAnalysis(hostID string) (*AssessmentReport, error) {
@@ -32,7 +32,7 @@ func (m *ATTACKModule) PerformGapAnalysis(hostID string) (*AssessmentReport, err
 				TechniqueID:   tech.ID,
 				TechniqueName: tech.Name,
 				TacticID:      tactic.ID,
-				ArgusChecks:   tech.ArgusChecks,
+				AsscorChecks:   tech.AsscorChecks,
 			}
 
 			for _, r := range m.detectionRules {
@@ -43,7 +43,7 @@ func (m *ATTACKModule) PerformGapAnalysis(hostID string) (*AssessmentReport, err
 
 			mapping.Mitigations = m.getMitigationsForTechnique(tech.ID)
 
-			hasCheck := len(tech.ArgusChecks) > 0
+			hasCheck := len(tech.AsscorChecks) > 0
 			hasDetection := len(mapping.DetectionRules) > 0
 			hasMitigation := len(mapping.Mitigations) > 0
 
@@ -93,12 +93,12 @@ func (m *ATTACKModule) PerformGapAnalysis(hostID string) (*AssessmentReport, err
 					gap.GapType = "detection_gap"
 					gap.Severity = "high"
 					gap.Description = fmt.Sprintf("No detection rules for %s", tech.ID)
-					gap.CurrentState = fmt.Sprintf("%d Argus checks, %d mitigations", len(tech.ArgusChecks), len(mapping.Mitigations))
+					gap.CurrentState = fmt.Sprintf("%d ASSCOR checks, %d mitigations", len(tech.AsscorChecks), len(mapping.Mitigations))
 					gap.DesiredState = "Add detection rule"
 				case !hasCheck:
 					gap.GapType = "control_gap"
 					gap.Severity = "medium"
-					gap.Description = fmt.Sprintf("No Argus security checks for %s", tech.ID)
+					gap.Description = fmt.Sprintf("No ASSCOR security checks for %s", tech.ID)
 					gap.CurrentState = fmt.Sprintf("%d detection rules, %d mitigations", len(mapping.DetectionRules), len(mapping.Mitigations))
 					gap.DesiredState = "Implement security check"
 				case !hasMitigation:
@@ -325,7 +325,7 @@ func (m *ATTACKModule) GetControlMapping(techniqueID string) *ControlMapping {
 					TechniqueID:   tech.ID,
 					TechniqueName: tech.Name,
 					TacticID:      tactic.ID,
-					ArgusChecks:   tech.ArgusChecks,
+					AsscorChecks:   tech.AsscorChecks,
 				}
 
 				for _, r := range m.detectionRules {
@@ -336,7 +336,7 @@ func (m *ATTACKModule) GetControlMapping(techniqueID string) *ControlMapping {
 
 				mapping.Mitigations = m.getMitigationsForTechnique(tech.ID)
 
-				hasCheck := len(tech.ArgusChecks) > 0
+				hasCheck := len(tech.AsscorChecks) > 0
 				hasDetection := len(mapping.DetectionRules) > 0
 				hasMitigation := len(mapping.Mitigations) > 0
 

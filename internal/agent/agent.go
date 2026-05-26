@@ -20,15 +20,15 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/version"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/version"
 	"syscall"
 	"time"
 
-	apiv1 "github.com/argus-security/argus/api/v1"
-	"github.com/argus-security/argus/internal/checks"
-	"github.com/argus-security/argus/internal/common"
-	"github.com/argus-security/argus/internal/model"
+	apiv1 "github.com/asscor/asscor/api/v1"
+	"github.com/asscor/asscor/internal/checks"
+	"github.com/asscor/asscor/internal/common"
+	"github.com/asscor/asscor/internal/model"
 )
 
 type AgentConfig struct {
@@ -53,7 +53,7 @@ func DefaultConfig() AgentConfig {
 		KernelAddr:       "localhost:50051",
 		HostID:           hostname,
 		Hostname:         hostname,
-		Version:          version.ARGUSVersion,
+		Version:          version.ASSCORVersion,
 		HeartbeatSec:     2,
 		CheckIntervalSec: 3600,
 		CheckTimeoutSec:  10,
@@ -84,7 +84,7 @@ func NewAgent(cfg AgentConfig) *Agent {
 	allChecks := checks.GetAll()
 	logger.WithComponent("agent").Info("loaded platform checks", "count", len(allChecks), "os", runtime.GOOS, "arch", runtime.GOARCH)
 
-	hmacKeyConfigured := cfg.HMACKey != "" || os.Getenv("ARGUS_HMAC_KEY") != ""
+	hmacKeyConfigured := cfg.HMACKey != "" || os.Getenv("ASSCOR_HMAC_KEY") != ""
 	if !hmacKeyConfigured {
 		logger.WithComponent("agent").Warn("HMAC key not configured, remote commands will be rejected")
 	}
@@ -665,7 +665,7 @@ func (a *Agent) verifyCommandSignature(cmd *apiv1.Command) bool {
 
 	hmacKey := a.cfg.HMACKey
 	if hmacKey == "" {
-		hmacKey = os.Getenv("ARGUS_HMAC_KEY")
+		hmacKey = os.Getenv("ASSCOR_HMAC_KEY")
 	}
 	if hmacKey == "" {
 		if !a.hmacKeyWarned.Load() {

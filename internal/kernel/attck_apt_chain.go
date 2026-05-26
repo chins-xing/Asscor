@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 var tacticOrderMap = map[string]int{
@@ -201,9 +201,7 @@ func (m *ATTACKModule) buildAttackStages(alerts []DetectionAlert, anomalies []An
 		return stages[i].Timestamp.Before(stages[j].Timestamp)
 	})
 
-	for i := range stages {
-		stages[i].Order = i + 1
-	}
+	stages = m.applyCausalReasoning(stages)
 
 	return stages
 }

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/argus-security/argus/internal/common"
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/common"
+	"github.com/asscor/asscor/internal/model"
 )
 
 func ksAll() []model.CheckItem {
@@ -53,7 +53,7 @@ func ks001() model.CheckItem {
 }
 
 func checkKernelCVEs(kernelVer string) int {
-	cveDBPath := "/var/lib/argus/cve_cache.json"
+	cveDBPath := "/var/lib/ASSCOR/cve_cache.json"
 	if _, err := os.Stat(cveDBPath); os.IsNotExist(err) {
 		return 0
 	}
@@ -330,7 +330,7 @@ func ks008() model.CheckItem {
 				return true, "未检测到已加载的eBPF程序"
 			}
 
-			baselinePath := "/etc/argus/ebpf_baseline.txt"
+			baselinePath := "/etc/ASSCOR/ebpf_baseline.txt"
 			if _, statErr := os.Stat(baselinePath); os.IsNotExist(statErr) {
 				return true, fmt.Sprintf("检测到 %d 个eBPF程序（无基线文件，跳过比对）", progCount)
 			}

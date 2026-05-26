@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type WorkerPool struct {
@@ -187,7 +187,7 @@ func (m *ConcurrencyModule) Info() PluginInfo {
 		Name:        "concurrency",
 		Version:     "1.2.0",
 		Description: "Concurrency controller — WorkerPool with semaphore-based throttling, health checks, metrics",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 

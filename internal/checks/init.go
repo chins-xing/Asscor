@@ -1,7 +1,7 @@
 package checks
 
 import (
-	"github.com/argus-security/argus/internal/checks/linux"
+	"github.com/asscor/asscor/internal/checks/linux"
 )
 
 func init() {

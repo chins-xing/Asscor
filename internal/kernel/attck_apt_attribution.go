@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 func (m *ATTACKModule) performAttribution(stages []AttackStage, iocs []IOCEntry) *AttributionResult {

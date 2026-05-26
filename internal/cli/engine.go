@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/kernel"
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/kernel"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type ExitCode int

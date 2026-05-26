@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/adapter"
-	"github.com/argus-security/argus/internal/checks"
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/model"
-	"github.com/argus-security/argus/internal/ssam"
+	"github.com/asscor/asscor/internal/adapter"
+	"github.com/asscor/asscor/internal/checks"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
+	"github.com/asscor/asscor/internal/ssam"
 )
 
 type SPCProvider interface {

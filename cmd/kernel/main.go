@@ -11,13 +11,13 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/argus-security/argus/internal/cli"
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/kernel"
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/version"
+	"github.com/asscor/asscor/internal/cli"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/kernel"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/version"
 
-	_ "github.com/argus-security/argus/internal/checks"
+	_ "github.com/asscor/asscor/internal/checks"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 	verifyCerts := flag.Bool("verify-certs", false, "verify certificate chain consistency and exit")
 	forceRegenCerts := flag.Bool("force-regen-certs", false, "force regenerate all TLS certificates")
 	daemon := flag.Bool("daemon", false, "run as background daemon")
-	pidFile := flag.String("pid-file", "", "PID file path (default: argus-kernel.pid in current directory)")
+	pidFile := flag.String("pid-file", "", "PID file path (default: ASSCOR-kernel.pid in current directory)")
 	logFormat := flag.String("log-format", "json", "log format: json, text")
 	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
 	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
@@ -181,8 +181,8 @@ k.SetConfig("config_path", resolvedConfigPath)
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stderr, "\nARGUS \u00b5Kernel\n")
-	fmt.Fprintf(os.Stderr, "  Framework: %s   SSAM: %s\n", version.ARGUSVersion, version.SSAMVersion)
+	fmt.Fprintf(os.Stderr, "\nASSCOR \u00b5Kernel\n")
+	fmt.Fprintf(os.Stderr, "  Framework: %s   SSAM: %s\n", version.ASSCORVersion, version.SSAMVersion)
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "  Listen:   %s (mTLS: %v)\n", *listenAddr, !*noMTLS)
 	fmt.Fprintf(os.Stderr, "  Log:      %s (%s) -> %s\n", *logFormat, *logLevel, logger.CurrentOutput())
@@ -222,8 +222,8 @@ k.SetConfig("config_path", resolvedConfigPath)
 		grpcStarted = true
 	}
 
-	log.Info("ARGUS μKernel started",
-		"version", version.ARGUSVersion,
+	log.Info("ASSCOR μKernel started",
+		"version", version.ASSCORVersion,
 		"ssam_version", version.SSAMVersion,
 		"listen", *listenAddr,
 		"mtls", !*noMTLS,
@@ -262,7 +262,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 func daemonize(pidFilePath string) error {
 	if pidFilePath == "" {
-		pidFilePath = "argus-kernel.pid"
+		pidFilePath = "ASSCOR-kernel.pid"
 	}
 
 	absPidFile, err := filepath.Abs(pidFilePath)

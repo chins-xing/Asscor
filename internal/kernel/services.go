@@ -6,9 +6,9 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	apiv1 "github.com/argus-security/argus/api/v1"
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/model"
+	apiv1 "github.com/asscor/asscor/api/v1"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
 )
 
 type KernelServiceImpl struct {

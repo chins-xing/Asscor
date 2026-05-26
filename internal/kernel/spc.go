@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
 )
 
 const maxHTTPBodySize = 1 << 20
@@ -372,7 +372,7 @@ func (m *SPCModule) Info() PluginInfo {
 		Name:        "spc",
 		Version:     "1.2.0",
 		Description: "Security Posture Calculator 鈥?computes individualized risk posture from global CVE data, MISP, ATT&CK, and local asset inventory",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 
@@ -1227,6 +1227,7 @@ type SPCInterface interface {
 	Calculate(hostID string, assetPackages []string) SPCCorrection
 	AddCVE(score SPCCVEScore)
 	AddCVEs(scores []SPCCVEScore)
+	MergeCVEs(cves []SPCCVEScore) (added int, updated int)
 	GetCVEs() []SPCCVEScore
 	GetCVECount() int
 	GetKEVCount() int

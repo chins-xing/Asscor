@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/argus-security/argus/internal/kernel"
+	"github.com/asscor/asscor/internal/kernel"
 )
 
 var sourceCmdInfo = CommandInfo{

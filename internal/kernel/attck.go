@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type ATTACKTactic struct {
@@ -27,7 +27,7 @@ type ATTACKTechnique struct {
 	ID           string   `json:"id"`
 	Name         string   `json:"name"`
 	SubTechniques []string `json:"sub_techniques,omitempty"`
-	ArgusChecks  []string `json:"argus_checks"`
+	AsscorChecks  []string `json:"asscor_checks"`
 	Detected     bool     `json:"detected"`
 	Prevented    bool     `json:"prevented"`
 	Weight       float64  `json:"weight"`
@@ -132,6 +132,10 @@ type ATTACKModule struct {
 	beaconDetections   []BeaconDetection
 	huntHypotheses     []HuntHypothesis
 	huntResults        []HuntResult
+	yaraRules          []YARARule
+	sigmaRules         []SigmaRule
+	crossHostConns     []CrossHostConnection
+	lateralEvidences   []LateralMovementEvidence
 }
 
 func NewATTACKModule() *ATTACKModule {
@@ -155,7 +159,7 @@ func (m *ATTACKModule) Info() PluginInfo {
 		Name:        "attck",
 		Version:     "2.0.0",
 		Description: "MITRE ATT&CK V19 — detection analytics, threat intelligence, adversary emulation, assessment & engineering",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 
@@ -285,6 +289,10 @@ func (m *ATTACKModule) Stop(ctx context.Context) error {
 	m.huntHypotheses = nil
 	m.beaconDetections = nil
 	m.attackChains = nil
+	m.yaraRules = nil
+	m.sigmaRules = nil
+	m.crossHostConns = nil
+	m.lateralEvidences = nil
 	m.mu.Unlock()
 
 	m.state = PluginStopped
@@ -543,10 +551,10 @@ func (m *ATTACKModule) buildTechniques(tacticID string, ids []string, checks map
 		t := ATTACKTechnique{
 			ID:          id,
 			Name:        "Technique " + id,
-			ArgusChecks: checks[id],
+			AsscorChecks: checks[id],
 			Weight:      1.0,
 		}
-		if len(t.ArgusChecks) > 0 {
+		if len(t.AsscorChecks) > 0 {
 			t.Detected = true
 			t.Prevented = true
 		}
@@ -681,10 +689,10 @@ func (m *ATTACKModule) CalculateCoverage(checkResults map[string]bool) []ATTACKC
 			detPassed := tech.Detected
 			prevPassed := tech.Prevented
 
-			if checkResults != nil && len(tech.ArgusChecks) > 0 {
+			if checkResults != nil && len(tech.AsscorChecks) > 0 {
 				allDetPassed := true
 				allPrevPassed := true
-				for _, check := range tech.ArgusChecks {
+				for _, check := range tech.AsscorChecks {
 					if passed, ok := checkResults[check]; ok && !passed {
 						allDetPassed = false
 						allPrevPassed = false
@@ -967,8 +975,8 @@ func (m *ATTACKModule) generateRecommendations(detected []string, paths []Predic
 
 			for _, tactic := range m.tactics {
 				for _, tech := range tactic.Techniques {
-					if tech.ID == endTech && len(tech.ArgusChecks) > 0 {
-						recs = append(recs, "加固 "+tech.ID+" "+tactic.Name+": "+strings.Join(tech.ArgusChecks, ","))
+					if tech.ID == endTech && len(tech.AsscorChecks) > 0 {
+						recs = append(recs, "加固 "+tech.ID+" "+tactic.Name+": "+strings.Join(tech.AsscorChecks, ","))
 						break
 					}
 				}
@@ -1006,9 +1014,9 @@ func (m *ATTACKModule) AssessKillChain(hostID string, checkResults map[string]bo
 					continue
 				}
 				for _, tech := range tactic.Techniques {
-					if len(tech.ArgusChecks) > 0 {
-						totalChecks += len(tech.ArgusChecks)
-						for _, check := range tech.ArgusChecks {
+					if len(tech.AsscorChecks) > 0 {
+						totalChecks += len(tech.AsscorChecks)
+						for _, check := range tech.AsscorChecks {
 							if checkResults != nil {
 								if passed, ok := checkResults[check]; ok && passed {
 									passedChecks++
@@ -1093,15 +1101,15 @@ func (m *ATTACKModule) AddTechniqueToTactic(tacticID string, tech ATTACKTechniqu
 	}
 }
 
-func (m *ATTACKModule) UpdateCheckMapping(techID string, argusChecks []string) {
+func (m *ATTACKModule) UpdateCheckMapping(techID string, AsscorChecks []string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	for ti, tactic := range m.tactics {
 		for tj, tech := range tactic.Techniques {
 			if tech.ID == techID {
-				m.tactics[ti].Techniques[tj].ArgusChecks = argusChecks
-				if len(argusChecks) > 0 {
+				m.tactics[ti].Techniques[tj].AsscorChecks = AsscorChecks
+				if len(AsscorChecks) > 0 {
 					m.tactics[ti].Techniques[tj].Detected = true
 					m.tactics[ti].Techniques[tj].Prevented = true
 				}
@@ -1129,7 +1137,7 @@ type ATTACKInterface interface {
 	AssessKillChain(hostID string, checkResults map[string]bool) KillChainAssessment
 	GetTransitionMatrix() TransitionMatrix
 	AddTechniqueToTactic(tacticID string, tech ATTACKTechnique)
-	UpdateCheckMapping(techID string, argusChecks []string)
+	UpdateCheckMapping(techID string, AsscorChecks []string)
 	UpsertAPTGroup(profile APTGroupProfile)
 	Version() string
 	RegisterDetectionRule(rule DetectionRule) error
@@ -1192,4 +1200,17 @@ type ATTACKInterface interface {
 	ExecuteHunt(hypothesisID string, hostID string) (*HuntResult, error)
 	GetHuntResults(hostID string, limit int) []HuntResult
 	AutoGenerateHypotheses(hostID string) ([]HuntHypothesis, error)
+	ComputeGroupBaseline(role string) *GroupBaseline
+	ApplyGroupBaseline(hostID string, role string) bool
+	BuildBayesianAttributionNetwork() *BayesianNetwork
+	PerformBayesianAttribution(chainID string) (*BayesianInferenceResult, error)
+	FilterBeaconWithReputation(detections []BeaconDetection) []BeaconDetection
+	AddReputationEntry(entry ReputationEntry)
+	GetReputationEntries(category string) []ReputationEntry
+	LoadYARARules(rules []YARARule) int
+	LoadSigmaRules(rules []SigmaRule) int
+	MatchYARARules(hostID string, filePaths []string, fileContents map[string]string) []RuleMatchResult
+	MatchSigmaRules(hostID string, logEntries []map[string]string) []RuleMatchResult
+	AnalyzeCrossHostConnections(connections []CrossHostConnection) []LateralMovementEvidence
+	ComputeCausalChain(techniqueIDs []string) *CausalChain
 }

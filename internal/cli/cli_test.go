@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/argus-security/argus/internal/kernel"
+	"github.com/asscor/asscor/internal/kernel"
 )
 
 type mockKernel struct {
@@ -362,8 +362,8 @@ func TestEngine_ExecuteHelp(t *testing.T) {
 	if result.ExitCode != ExitOK {
 		t.Errorf("ExitCode = %d, want %d", result.ExitCode, ExitOK)
 	}
-	if !strings.Contains(result.Output, "ARGUS") {
-		t.Error("Help output should contain 'ARGUS'")
+	if !strings.Contains(result.Output, "ASSCOR") {
+		t.Error("Help output should contain 'ASSCOR'")
 	}
 }
 

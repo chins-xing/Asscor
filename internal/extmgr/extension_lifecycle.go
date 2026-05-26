@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type extensionRecord struct {

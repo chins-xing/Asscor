@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	apiv1 "github.com/argus-security/argus/api/v1"
-	"github.com/argus-security/argus/internal/logger"
+	apiv1 "github.com/asscor/asscor/api/v1"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type SourceManagerServiceImpl struct {
@@ -205,7 +205,7 @@ func (s *SourceManagerServiceImpl) GetAuditLog(ctx context.Context, req *apiv1.S
 
 func BuildSourceManagerServiceDesc(svc *SourceManagerServiceImpl) *apiv1.ServiceDesc {
 	return &apiv1.ServiceDesc{
-		ServiceName: "argus.v1.SourceManagerService",
+		ServiceName: "ASSCOR.v1.SourceManagerService",
 		Methods: map[string]apiv1.MethodHandler{
 			"ListSources": func(ctx context.Context, payload []byte) ([]byte, error) {
 				var req apiv1.ListSourcesRequest

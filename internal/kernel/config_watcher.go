@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type ConfigWatcherModule struct {
@@ -36,7 +36,7 @@ func (m *ConfigWatcherModule) Info() PluginInfo {
 		Name:        "config_watcher",
 		Version:     "1.0.0",
 		Description: "Watches config.ini for changes and hot-reloads weights and parameters",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 func (m *ATTACKModule) CreateScenario(scenario EmulationScenario) error {
@@ -200,7 +200,7 @@ func (m *ATTACKModule) generateSafeCommands(techID string) []EmulationCommand {
 			Description: fmt.Sprintf("Safe reconnaissance for %s", techID),
 			Platform:    "linux",
 			Executor:    "shell",
-			Command:     fmt.Sprintf("echo '[ARGUS-EMU] Scouting for %s'", techID),
+			Command:     fmt.Sprintf("echo '[ASSCOR-EMU] Scouting for %s'", techID),
 			SafeMode:    true,
 			Timeout:     10,
 		},
@@ -209,7 +209,7 @@ func (m *ATTACKModule) generateSafeCommands(techID string) []EmulationCommand {
 			Description: fmt.Sprintf("Verify detection capability for %s", techID),
 			Platform:    "linux",
 			Executor:    "shell",
-			Command:     fmt.Sprintf("echo '[ARGUS-EMU] Verifying detection for %s'", techID),
+			Command:     fmt.Sprintf("echo '[ASSCOR-EMU] Verifying detection for %s'", techID),
 			SafeMode:    true,
 			Timeout:     5,
 		},
@@ -410,7 +410,7 @@ func (m *ATTACKModule) loadDefaultScenarios() {
 					Order: 1, Name: "Spear Phishing", TacticID: "TA0001", TechniqueID: "T1566",
 					Description: "Simulate phishing email delivery",
 					Commands: []EmulationCommand{
-						{ID: "cmd-phish-1", Description: "Simulate phishing email", Platform: "linux", Executor: "shell", Command: "echo '[ARGUS-EMU] Phishing simulation'", SafeMode: true, Timeout: 5},
+						{ID: "cmd-phish-1", Description: "Simulate phishing email", Platform: "linux", Executor: "shell", Command: "echo '[ASSCOR-EMU] Phishing simulation'", SafeMode: true, Timeout: 5},
 					},
 					ExpectedDetections: []string{"DET-009"}, RiskLevel: "high",
 				},
@@ -418,7 +418,7 @@ func (m *ATTACKModule) loadDefaultScenarios() {
 					Order: 2, Name: "Command Execution", TacticID: "TA0002", TechniqueID: "T1059",
 					Description: "Simulate command execution after initial access",
 					Commands: []EmulationCommand{
-						{ID: "cmd-exec-1", Description: "Simulate script execution", Platform: "linux", Executor: "shell", Command: "echo '[ARGUS-EMU] Script execution'", SafeMode: true, Timeout: 5},
+						{ID: "cmd-exec-1", Description: "Simulate script execution", Platform: "linux", Executor: "shell", Command: "echo '[ASSCOR-EMU] Script execution'", SafeMode: true, Timeout: 5},
 					},
 					ExpectedDetections: []string{"DET-002"}, RiskLevel: "high",
 				},
@@ -426,7 +426,7 @@ func (m *ATTACKModule) loadDefaultScenarios() {
 					Order: 3, Name: "Credential Dumping", TacticID: "TA0006", TechniqueID: "T1003",
 					Description: "Simulate credential access",
 					Commands: []EmulationCommand{
-						{ID: "cmd-cred-1", Description: "Simulate credential dump", Platform: "linux", Executor: "shell", Command: "echo '[ARGUS-EMU] Credential access'", SafeMode: true, Timeout: 5},
+						{ID: "cmd-cred-1", Description: "Simulate credential dump", Platform: "linux", Executor: "shell", Command: "echo '[ASSCOR-EMU] Credential access'", SafeMode: true, Timeout: 5},
 					},
 					ExpectedDetections: []string{"DET-003"}, RiskLevel: "critical",
 				},
@@ -434,7 +434,7 @@ func (m *ATTACKModule) loadDefaultScenarios() {
 					Order: 4, Name: "Lateral Movement", TacticID: "TA0008", TechniqueID: "T1021",
 					Description: "Simulate lateral movement via SSH",
 					Commands: []EmulationCommand{
-						{ID: "cmd-lat-1", Description: "Simulate SSH lateral movement", Platform: "linux", Executor: "shell", Command: "echo '[ARGUS-EMU] Lateral movement'", SafeMode: true, Timeout: 5},
+						{ID: "cmd-lat-1", Description: "Simulate SSH lateral movement", Platform: "linux", Executor: "shell", Command: "echo '[ASSCOR-EMU] Lateral movement'", SafeMode: true, Timeout: 5},
 					},
 					ExpectedDetections: []string{"DET-004"}, RiskLevel: "medium",
 				},
@@ -442,7 +442,7 @@ func (m *ATTACKModule) loadDefaultScenarios() {
 					Order: 5, Name: "Data Exfiltration", TacticID: "TA0010", TechniqueID: "T1048",
 					Description: "Simulate data exfiltration",
 					Commands: []EmulationCommand{
-						{ID: "cmd-exfil-1", Description: "Simulate data exfiltration", Platform: "linux", Executor: "shell", Command: "echo '[ARGUS-EMU] Exfiltration'", SafeMode: true, Timeout: 5},
+						{ID: "cmd-exfil-1", Description: "Simulate data exfiltration", Platform: "linux", Executor: "shell", Command: "echo '[ASSCOR-EMU] Exfiltration'", SafeMode: true, Timeout: 5},
 					},
 					ExpectedDetections: []string{"DET-005"}, RiskLevel: "high",
 				},

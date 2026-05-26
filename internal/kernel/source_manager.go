@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/adapter"
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/adapter"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type SourceState string
@@ -129,7 +129,7 @@ func (m *SourceManagerModule) Info() PluginInfo {
 		Name:        "source_manager",
 		Version:     "1.0.0",
 		Description: "External source lifecycle management — deploy, configure, enable/disable, update, uninstall",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 

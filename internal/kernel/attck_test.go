@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/argus-security/argus/internal/config"
+	"github.com/asscor/asscor/internal/config"
 )
 
 func newTestATTACKModule() *ATTACKModule {

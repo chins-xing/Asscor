@@ -194,7 +194,7 @@ func (o *Output) KeyValue(key, value string) {
 }
 
 func (o *Output) Prompt() string {
-	return fmt.Sprintf("%sargus>%s ", o.colors.Bold+o.colors.Green, o.colors.Reset)
+	return fmt.Sprintf("%sasscor>%s ", o.colors.Bold+o.colors.Green, o.colors.Reset)
 }
 
 type Completer struct {
@@ -233,7 +233,7 @@ func NewTerminal(engine *Engine) *Terminal {
 
 func (t *Terminal) Run() error {
 	t.running = true
-	t.output.Info("ARGUS \u00b5Kernel CLI — type 'help' for commands, 'exit' to quit")
+	t.output.Info("ASSCOR \u00b5Kernel CLI — type 'help' for commands, 'exit' to quit")
 	fmt.Fprintln(t.output.stdout)
 
 	for t.running {

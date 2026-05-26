@@ -28,24 +28,24 @@ type CertPair struct {
 
 func DefaultCAConfig() CertConfig {
 	return CertConfig{
-		Organization: "ARGUS Security CA",
-		CommonName:   "ARGUS Root CA",
+		Organization: "ASSCOR Security CA",
+		CommonName:   "ASSCOR Root CA",
 		ValidDays:    3650,
 	}
 }
 
 func DefaultServerCertConfig() CertConfig {
 	return CertConfig{
-		Organization: "ARGUS Security",
-		CommonName:   "ARGUS Kernel Server",
+		Organization: "ASSCOR Security",
+		CommonName:   "ASSCOR Kernel Server",
 		ValidDays:    365,
 	}
 }
 
 func DefaultAgentConfig(hostID string) CertConfig {
 	return CertConfig{
-		Organization: "ARGUS Security",
-		CommonName:   fmt.Sprintf("ARGUS Agent %s", hostID),
+		Organization: "ASSCOR Security",
+		CommonName:   fmt.Sprintf("ASSCOR Agent %s", hostID),
 		ValidDays:    365,
 	}
 }

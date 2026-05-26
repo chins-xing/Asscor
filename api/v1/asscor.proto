@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package argus.v1;
+package asscor.v1;
 
-option go_package = "github.com/argus-security/argus/api/v1;apiv1";
+option go_package = "github.com/asscor/asscor/api/v1;apiv1";
 
 service KernelService {
   rpc Register(RegisterRequest) returns (RegisterResponse);

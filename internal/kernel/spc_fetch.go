@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/common"
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/common"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 func (m *SPCModule) FetchFromAllSources() []SPCFetchResult {
@@ -189,7 +189,10 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 
 	m.mu.Lock()
 	for _, cve := range cves {
-		if _, exists := m.cveIndex[cve.CVEID]; !exists {
+		if idx, exists := m.cveIndex[cve.CVEID]; exists {
+			m.mergeCVEInPlace(idx, cve)
+			result.CVEUpdated++
+		} else {
 			if len(m.cveCache) >= m.maxCacheSize {
 				logger.WithComponent("spc").Warn("CVE cache reached max size", "max", m.maxCacheSize)
 				break
@@ -202,7 +205,7 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 	m.mu.Unlock()
 
 	result.Duration = time.Since(start)
-	logger.WithComponent("spc").Info("NVD fetch completed", "duration", result.Duration, "added", result.CVEAdded)
+	logger.WithComponent("spc").Info("NVD fetch completed", "duration", result.Duration, "added", result.CVEAdded, "updated", result.CVEUpdated)
 	return result
 }
 
@@ -1260,7 +1263,10 @@ func (m *SPCModule) FetchFromMISP() SPCFetchResult {
 
 	m.mu.Lock()
 	for _, cve := range cves {
-		if _, exists := m.cveIndex[cve.CVEID]; !exists {
+		if idx, exists := m.cveIndex[cve.CVEID]; exists {
+			m.mergeCVEInPlace(idx, cve)
+			result.CVEUpdated++
+		} else {
 			if len(m.cveCache) >= m.maxCacheSize {
 				break
 			}
@@ -1278,7 +1284,7 @@ func (m *SPCModule) FetchFromMISP() SPCFetchResult {
 	m.mu.Unlock()
 
 	result.Duration = time.Since(start)
-	logger.WithComponent("spc").Info("MISP fetch completed", "duration", result.Duration, "added", result.CVEAdded)
+	logger.WithComponent("spc").Info("MISP fetch completed", "duration", result.Duration, "added", result.CVEAdded, "updated", result.CVEUpdated)
 	return result
 }
 
@@ -1588,6 +1594,7 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 	}
 
 	added := 0
+	updated := 0
 	m.mu.Lock()
 	for _, rec := range records {
 		if len(m.cveCache) >= m.maxCacheSize {
@@ -1614,7 +1621,10 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 			APTGroupAssoc:   rec.APTGroupAssoc,
 		}
 
-		if _, exists := m.cveIndex[cve.CVEID]; !exists {
+		if idx, exists := m.cveIndex[cve.CVEID]; exists {
+			m.mergeCVEInPlace(idx, cve)
+			updated++
+		} else {
 			m.cveIndex[cve.CVEID] = len(m.cveCache)
 			m.cveCache = append(m.cveCache, cve)
 			added++
@@ -1622,7 +1632,7 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 	}
 	m.mu.Unlock()
 
-	logger.WithComponent("spc").Info("OSCAL import completed", "format", format, "added", added)
+	logger.WithComponent("spc").Info("OSCAL import completed", "format", format, "added", added, "updated", updated)
 	return added, nil
 }
 

@@ -1,4 +1,4 @@
-# ARGUS 使用手册
+# ASSCOR 使用手册
 
 > 版本：v0.1.2-MVP | SSAM 1.3 | 最后更新：2026-05-25
 
@@ -26,7 +26,7 @@
 
 ## 1. 概述
 
-ARGUS 是一个开源的分布式安全可接受性评估系统，实现了系统安全可接受性模型（SSAM）1.3。系统通过四个互斥核心域评估主机安全状态，并集成 MITRE ATT&CK V19 威胁分析框架，提供从安全评估、威胁检测到 APT 攻击分析的完整能力链。
+ASSCOR 是一个开源的分布式安全可接受性评估系统，实现了系统安全可接受性模型（SSAM）1.3。系统通过四个互斥核心域评估主机安全状态，并集成 MITRE ATT&CK V19 威胁分析框架，提供从安全评估、威胁检测到 APT 攻击分析的完整能力链。
 
 | 核心域 | 权重 | 评估内容 |
 |--------|------|----------|
@@ -69,10 +69,10 @@ SSAM_final = (Σ(S_i × W_i) / ΣW_i) × ΠM_j × μ × P_score
 
 ```bash
 # 1. 部署 Kernel
-./argus-kernel-linux-x86_64 -config config.ini -listen :50051
+./ASSCOR-kernel-linux-x86_64 -config config.ini -listen :50051
 
 # 2. 在目标主机部署 Agent
-./argus-agent-linux-x86_64 -kernel 192.168.1.10:50051 -tls
+./ASSCOR-agent-linux-x86_64 -kernel 192.168.1.10:50051 -tls
 
 # 3. Kernel 启动后进入交互式 CLI
 # 直接在终端输入命令即可操作
@@ -82,8 +82,8 @@ SSAM_final = (Σ(S_i × W_i) / ΣW_i) × ΠM_j × μ × P_score
 
 ```bash
 # 单机模式：直接在本地执行评估
-./argus -config config.ini          # 文本报告
-./argus -config config.ini -json    # JSON 报告
+./ASSCOR -config config.ini          # 文本报告
+./ASSCOR -config config.ini -json    # JSON 报告
 ```
 
 ---
@@ -92,7 +92,7 @@ SSAM_final = (Σ(S_i × W_i) / ΣW_i) × ΠM_j × μ × P_score
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  ARGUS Kernel                    │
+│                  ASSCOR Kernel                    │
 │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ │
 │  │Assess│ │Policy│ │ SPC  │ │ CTI  │ │Cmdr  │ │
 │  └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘ │
@@ -129,7 +129,7 @@ SSAM_final = (Σ(S_i × W_i) / ΣW_i) × ΠM_j × μ × P_score
 ### 4.1 命令行参数
 
 ```
-argus-kernel [选项]
+ASSCOR-kernel [选项]
 ```
 
 | 参数 | 默认值 | 说明 |
@@ -141,7 +141,7 @@ argus-kernel [选项]
 | `-verify-certs` | `false` | 验证证书链一致性后退出 |
 | `-force-regen-certs` | `false` | 强制重新生成所有 TLS 证书 |
 | `-daemon` | `false` | 以守护进程模式运行 |
-| `-pid-file` | `argus-kernel.pid` | PID 文件路径 |
+| `-pid-file` | `ASSCOR-kernel.pid` | PID 文件路径 |
 | `-log-format` | `json` | 日志格式：`json`、`text` |
 | `-log-level` | `info` | 日志级别：`debug`、`info`、`warn`、`error` |
 | `-log-output` | `stderr` | 日志输出：`stderr`、`stdout`、或文件路径 |
@@ -150,19 +150,19 @@ argus-kernel [选项]
 
 ```bash
 # 标准启动（mTLS 启用）
-./argus-kernel-linux-x86_64 -config /etc/argus/config.ini -listen :50051
+./ASSCOR-kernel-linux-x86_64 -config /etc/ASSCOR/config.ini -listen :50051
 
 # 开发模式（无 mTLS）
-./argus-kernel-linux-x86_64 -no-mtls -log-level debug -log-format text
+./ASSCOR-kernel-linux-x86_64 -no-mtls -log-level debug -log-format text
 
 # 守护进程模式
-./argus-kernel-linux-x86_64 -daemon -pid-file /var/run/argus-kernel.pid
+./ASSCOR-kernel-linux-x86_64 -daemon -pid-file /var/run/ASSCOR-kernel.pid
 
 # 验证证书
-./argus-kernel-linux-x86_64 -verify-certs -cert-dir /etc/argus/certs
+./ASSCOR-kernel-linux-x86_64 -verify-certs -cert-dir /etc/ASSCOR/certs
 
 # 重新生成证书
-./argus-kernel-linux-x86_64 -force-regen-certs -cert-dir /etc/argus/certs
+./ASSCOR-kernel-linux-x86_64 -force-regen-certs -cert-dir /etc/ASSCOR/certs
 ```
 
 ### 4.3 启动输出
@@ -170,7 +170,7 @@ argus-kernel [选项]
 Kernel 启动后将显示加载状态：
 
 ```
-ARGUS μKernel
+ASSCOR μKernel
   Framework: v0.1.2-MVP   SSAM: 1.3
 
   Listen:   :50051 (mTLS: true)
@@ -199,7 +199,7 @@ ARGUS μKernel
 ### 5.1 命令行参数
 
 ```
-argus-agent [选项]
+ASSCOR-agent [选项]
 ```
 
 | 参数 | 默认值 | 说明 |
@@ -218,13 +218,13 @@ argus-agent [选项]
 
 ```bash
 # 连接远程 Kernel（mTLS）
-./argus-agent-linux-x86_64 -kernel 192.168.1.10:50051 -tls -cert-dir /etc/argus/certs
+./ASSCOR-agent-linux-x86_64 -kernel 192.168.1.10:50051 -tls -cert-dir /etc/ASSCOR/certs
 
 # 指定主机 ID
-./argus-agent-linux-x86_64 -kernel 10.0.0.5:50051 -tls -host-id web-server-01
+./ASSCOR-agent-linux-x86_64 -kernel 10.0.0.5:50051 -tls -host-id web-server-01
 
 # 开发模式
-./argus-agent-linux-x86_64 -kernel localhost:50051 -tls-skip-verify -log-level debug
+./ASSCOR-agent-linux-x86_64 -kernel localhost:50051 -tls-skip-verify -log-level debug
 ```
 
 ### 5.3 Agent 配置文件
@@ -236,12 +236,12 @@ Agent 支持独立的 INI 配置文件（默认 `agent.ini`），格式如下：
 kernel_addr = 192.168.1.10:50051
 host_id = web-server-01
 tls_enabled = true
-cert_dir = /etc/argus/certs
+cert_dir = /etc/ASSCOR/certs
 
 [logging]
 format = json
 level = info
-output = /var/log/argus-agent.log
+output = /var/log/ASSCOR-agent.log
 ```
 
 命令行参数优先级高于配置文件。
@@ -250,7 +250,7 @@ output = /var/log/argus-agent.log
 
 ## 6. TLS 证书管理
 
-ARGUS 使用 mTLS（双向 TLS）保障 Kernel 与 Agent 间的通信安全。
+ASSCOR 使用 mTLS（双向 TLS）保障 Kernel 与 Agent 间的通信安全。
 
 ### 6.1 自动证书生成
 
@@ -270,10 +270,10 @@ certs/
 
 ```bash
 # 验证证书链一致性
-./argus-kernel-linux-x86_64 -verify-certs -cert-dir /etc/argus/certs
+./ASSCOR-kernel-linux-x86_64 -verify-certs -cert-dir /etc/ASSCOR/certs
 
 # 强制重新生成所有证书（旧证书将被删除）
-./argus-kernel-linux-x86_64 -force-regen-certs -cert-dir /etc/argus/certs
+./ASSCOR-kernel-linux-x86_64 -force-regen-certs -cert-dir /etc/ASSCOR/certs
 ```
 
 ### 6.3 证书分发
@@ -510,7 +510,7 @@ threshold = 90.0
 
 ## 10. ATT&CK V19 威胁分析模块
 
-ARGUS v0.1.2-MVP 集成 MITRE ATT&CK V19 框架，作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行。模块提供从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。
+ASSCOR v0.1.2-MVP 集成 MITRE ATT&CK V19 框架，作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行。模块提供从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。
 
 ### 10.1 四大核心子模块
 
@@ -559,28 +559,28 @@ safe_emulation = true           # 仿真是否默认安全模式
 
 ```
 # 查看检测摘要
-argus> attck summary
+ASSCOR> attck summary
 
 # 注册检测规则
-argus> attck rule add --name "suspicious_powershell" --technique T1059 --severity high
+ASSCOR> attck rule add --name "suspicious_powershell" --technique T1059 --severity high
 
 # 查看 IOC 列表
-argus> attck ioc list --type ip
+ASSCOR> attck ioc list --type ip
 
 # 执行差距分析
-argus> attck gap --host=web-server-01
+ASSCOR> attck gap --host=web-server-01
 
 # 重构攻击链
-argus> attck chain --host=web-server-01
+ASSCOR> attck chain --host=web-server-01
 
 # 执行 APT 归因
-argus> attck attribute --chain=<chainID>
+ASSCOR> attck attribute --chain=<chainID>
 
 # 生成狩猎假设
-argus> attck hunt generate --host=web-server-01
+ASSCOR> attck hunt generate --host=web-server-01
 
 # 执行对手仿真
-argus> attck emulate --scenario=<scenarioID> --host=web-server-01 --safe
+ASSCOR> attck emulate --scenario=<scenarioID> --host=web-server-01 --safe
 ```
 
 ---
@@ -591,7 +591,7 @@ argus> attck emulate --scenario=<scenarioID> --host=web-server-01 --safe
 
 ```bash
 # JSON 格式（默认，适合日志采集系统）
--log-format json -log-level info -log-output /var/log/argus-kernel.log
+-log-format json -log-level info -log-output /var/log/ASSCOR-kernel.log
 
 # 文本格式（适合人工阅读）
 -log-format text -log-level debug -log-output stderr
@@ -623,26 +623,26 @@ argus> attck emulate --scenario=<scenarioID> --host=web-server-01 --safe
 
 ```bash
 # 启动守护进程
-./argus-kernel-linux-x86_64 -daemon -pid-file /var/run/argus-kernel.pid
+./ASSCOR-kernel-linux-x86_64 -daemon -pid-file /var/run/ASSCOR-kernel.pid
 
 # 停止守护进程
-kill $(cat /var/run/argus-kernel.pid)
+kill $(cat /var/run/ASSCOR-kernel.pid)
 ```
 
-守护进程模式下，日志自动重定向到 `argus-kernel.log`。
+守护进程模式下，日志自动重定向到 `ASSCOR-kernel.log`。
 
 ---
 
 ## 13. 离线评估模式
 
-`argus` 命令提供单机离线评估，无需部署 Kernel 和 Agent：
+`ASSCOR` 命令提供单机离线评估，无需部署 Kernel 和 Agent：
 
 ```bash
 # 文本报告
-./argus -config config.ini
+./ASSCOR -config config.ini
 
 # JSON 报告
-./argus -config config.ini -json
+./ASSCOR -config config.ini -json
 ```
 
 | 参数 | 默认值 | 说明 |

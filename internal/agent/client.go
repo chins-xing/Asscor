@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	apiv1 "github.com/argus-security/argus/api/v1"
+	apiv1 "github.com/asscor/asscor/api/v1"
 )
 
 type Client struct {
@@ -76,7 +76,7 @@ func (c *Client) Connected() bool {
 
 func (c *Client) Register(req *apiv1.RegisterRequest) (*apiv1.RegisterResponse, error) {
 	var resp apiv1.RegisterResponse
-	err := c.call("argus.v1.KernelService", "Register", req, &resp)
+	err := c.call("ASSCOR.v1.KernelService", "Register", req, &resp)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (c *Client) Register(req *apiv1.RegisterRequest) (*apiv1.RegisterResponse, 
 
 func (c *Client) Heartbeat(req *apiv1.HeartbeatRequest) (*apiv1.HeartbeatResponse, error) {
 	var resp apiv1.HeartbeatResponse
-	err := c.call("argus.v1.KernelService", "Heartbeat", req, &resp)
+	err := c.call("ASSCOR.v1.KernelService", "Heartbeat", req, &resp)
 	if err != nil {
 		return nil, err
 	}

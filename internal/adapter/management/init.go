@@ -1,6 +1,6 @@
 package management
 
-import "github.com/argus-security/argus/internal/adapter"
+import "github.com/asscor/asscor/internal/adapter"
 
 func init() {
 	adapter.Register(NewAnsibleAdapter())

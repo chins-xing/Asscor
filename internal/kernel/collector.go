@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	apiv1 "github.com/argus-security/argus/api/v1"
-	"github.com/argus-security/argus/internal/logger"
+	apiv1 "github.com/asscor/asscor/api/v1"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type LogCollectorModule struct {
@@ -28,7 +28,7 @@ func (m *LogCollectorModule) Info() PluginInfo {
 		Name:        "log_collector",
 		Version:     "1.2.0",
 		Description: "Log collector — receives Agent log streams, writes to append-only file, forwards to SIEM",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 
@@ -44,10 +44,10 @@ func (m *LogCollectorModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
 	m.state = PluginInitialized
 
-	m.logPath = "argus-kernel.log"
+	m.logPath = "ASSCOR-kernel.log"
 	if cfg := kc.GetConfigObj(); cfg != nil {
 		if cfg.DataDir != "" {
-			m.logPath = filepath.Join(cfg.DataDir, "argus-kernel.log")
+			m.logPath = filepath.Join(cfg.DataDir, "ASSCOR-kernel.log")
 		}
 	}
 

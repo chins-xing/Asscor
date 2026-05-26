@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	apiv1 "github.com/argus-security/argus/api/v1"
-	"github.com/argus-security/argus/internal/logger"
+	apiv1 "github.com/asscor/asscor/api/v1"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type CommanderModule struct {
@@ -43,7 +43,7 @@ func (m *CommanderModule) Info() PluginInfo {
 		Name:        "commander",
 		Version:     "1.2.0",
 		Description: "Command dispatcher — signs and distributes commands to Agents via gRPC, manages retry and timeout",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 
@@ -59,12 +59,12 @@ func (m *CommanderModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
 	m.pendingCmds = make(map[string]map[string]*apiv1.Command)
 
-	keyPath := filepath.Join("certs", "argus-hmac-key")
-	metaPath := filepath.Join("certs", "argus-hmac-key-meta.json")
+	keyPath := filepath.Join("certs", "ASSCOR-hmac-key")
+	metaPath := filepath.Join("certs", "ASSCOR-hmac-key-meta.json")
 
 	key := kc.Config()["hmac_key"]
 	if key == "" {
-		key = os.Getenv("ARGUS_HMAC_KEY")
+		key = os.Getenv("ASSCOR_HMAC_KEY")
 	}
 	if key == "" {
 		savedKey, err := os.ReadFile(keyPath)

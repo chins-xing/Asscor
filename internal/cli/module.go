@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/kernel"
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/kernel"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type kernelBridge struct {
@@ -203,7 +203,7 @@ type logBridge struct {
 }
 
 func (l *logBridge) ReadLogs(hostID string, limit int, level string) ([]LogEntry, error) {
-	logPath := "argus-kernel.log"
+	logPath := "ASSCOR-kernel.log"
 	f, err := os.Open(logPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open log file: %w", err)
@@ -468,7 +468,7 @@ func (m *CLIModule) Info() kernel.PluginInfo {
 		Name:        "cli",
 		Version:     "1.0.0",
 		Description: "Command-line interface — interactive CLI with command registration, completion, history, and plugin extensibility",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 
@@ -519,7 +519,7 @@ func (m *CLIModule) Start(ctx context.Context) error {
 	}
 
 	if logger.CurrentOutput() == "stderr" || logger.CurrentOutput() == "stdout" {
-		logPath := "argus-kernel.log"
+		logPath := "ASSCOR-kernel.log"
 		if err := logger.RedirectToFile(logPath); err != nil {
 			logger.WithComponent("cli").Warn("failed to redirect logs to file, CLI output may be interleaved", "path", logPath, "error", err)
 		} else {

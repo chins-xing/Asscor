@@ -199,7 +199,7 @@ type AgentServiceServer interface {
 
 func RegisterKernelServiceServer(s grpc.ServiceRegistrar, srv KernelServiceServer) {
 	desc := &grpc.ServiceDesc{
-		ServiceName: "argus.v1.KernelService",
+		ServiceName: "ASSCOR.v1.KernelService",
 		HandlerType: (*KernelServiceServer)(nil),
 		Methods: []grpc.MethodDesc{
 			{
@@ -214,7 +214,7 @@ func RegisterKernelServiceServer(s grpc.ServiceRegistrar, srv KernelServiceServe
 					}
 					info := &grpc.UnaryServerInfo{
 						Server:     srv,
-						FullMethod: "/argus.v1.KernelService/Register",
+						FullMethod: "/ASSCOR.v1.KernelService/Register",
 					}
 					handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 						return srv.(KernelServiceServer).Register(ctx, req.(*PBRegisterRequest))
@@ -234,7 +234,7 @@ func RegisterKernelServiceServer(s grpc.ServiceRegistrar, srv KernelServiceServe
 					}
 					info := &grpc.UnaryServerInfo{
 						Server:     srv,
-						FullMethod: "/argus.v1.KernelService/Heartbeat",
+						FullMethod: "/ASSCOR.v1.KernelService/Heartbeat",
 					}
 					handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 						return srv.(KernelServiceServer).Heartbeat(ctx, req.(*PBHeartbeatRequest))
@@ -244,14 +244,14 @@ func RegisterKernelServiceServer(s grpc.ServiceRegistrar, srv KernelServiceServe
 			},
 		},
 		Streams:  []grpc.StreamDesc{},
-		Metadata: "api/v1/argus.proto",
+		Metadata: "api/v1/ASSCOR.proto",
 	}
 	s.RegisterService(desc, srv)
 }
 
 func RegisterAgentServiceServer(s grpc.ServiceRegistrar, srv AgentServiceServer) {
 	desc := &grpc.ServiceDesc{
-		ServiceName: "argus.v1.AgentService",
+		ServiceName: "ASSCOR.v1.AgentService",
 		HandlerType: (*AgentServiceServer)(nil),
 		Methods: []grpc.MethodDesc{
 			{
@@ -266,7 +266,7 @@ func RegisterAgentServiceServer(s grpc.ServiceRegistrar, srv AgentServiceServer)
 					}
 					info := &grpc.UnaryServerInfo{
 						Server:     srv,
-						FullMethod: "/argus.v1.AgentService/GetSnapshot",
+						FullMethod: "/ASSCOR.v1.AgentService/GetSnapshot",
 					}
 					handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 						return srv.(AgentServiceServer).GetSnapshot(ctx, req.(*PBSnapshotRequest))
@@ -286,7 +286,7 @@ func RegisterAgentServiceServer(s grpc.ServiceRegistrar, srv AgentServiceServer)
 					}
 					info := &grpc.UnaryServerInfo{
 						Server:     srv,
-						FullMethod: "/argus.v1.AgentService/ExecuteCommand",
+						FullMethod: "/ASSCOR.v1.AgentService/ExecuteCommand",
 					}
 					handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 						return srv.(AgentServiceServer).ExecuteCommand(ctx, req.(*PBCommandRequest))
@@ -302,7 +302,7 @@ func RegisterAgentServiceServer(s grpc.ServiceRegistrar, srv AgentServiceServer)
 				ClientStreams:  true,
 			},
 		},
-		Metadata: "api/v1/argus.proto",
+		Metadata: "api/v1/ASSCOR.proto",
 	}
 	s.RegisterService(desc, srv)
 }
@@ -322,7 +322,7 @@ func NewKernelServiceClient(cc grpc.ClientConnInterface) KernelServiceClient {
 
 func (c *kernelServiceClient) Register(ctx context.Context, req *PBRegisterRequest, opts ...grpc.CallOption) (*PBRegisterResponse, error) {
 	resp := new(PBRegisterResponse)
-	err := c.cc.Invoke(ctx, "/argus.v1.KernelService/Register", req, resp, opts...)
+	err := c.cc.Invoke(ctx, "/ASSCOR.v1.KernelService/Register", req, resp, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +331,7 @@ func (c *kernelServiceClient) Register(ctx context.Context, req *PBRegisterReque
 
 func (c *kernelServiceClient) Heartbeat(ctx context.Context, req *PBHeartbeatRequest, opts ...grpc.CallOption) (*PBHeartbeatResponse, error) {
 	resp := new(PBHeartbeatResponse)
-	err := c.cc.Invoke(ctx, "/argus.v1.KernelService/Heartbeat", req, resp, opts...)
+	err := c.cc.Invoke(ctx, "/ASSCOR.v1.KernelService/Heartbeat", req, resp, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +379,7 @@ func NewAgentServiceClient(cc grpc.ClientConnInterface) AgentServiceClient {
 
 func (c *agentServiceClient) GetSnapshot(ctx context.Context, req *PBSnapshotRequest, opts ...grpc.CallOption) (*PBSnapshotResponse, error) {
 	resp := new(PBSnapshotResponse)
-	err := c.cc.Invoke(ctx, "/argus.v1.AgentService/GetSnapshot", req, resp, opts...)
+	err := c.cc.Invoke(ctx, "/ASSCOR.v1.AgentService/GetSnapshot", req, resp, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +388,7 @@ func (c *agentServiceClient) GetSnapshot(ctx context.Context, req *PBSnapshotReq
 
 func (c *agentServiceClient) ExecuteCommand(ctx context.Context, req *PBCommandRequest, opts ...grpc.CallOption) (*PBCommandResponse, error) {
 	resp := new(PBCommandResponse)
-	err := c.cc.Invoke(ctx, "/argus.v1.AgentService/ExecuteCommand", req, resp, opts...)
+	err := c.cc.Invoke(ctx, "/ASSCOR.v1.AgentService/ExecuteCommand", req, resp, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +400,7 @@ func (c *agentServiceClient) StreamLogs(ctx context.Context, opts ...grpc.CallOp
 		StreamName:    "StreamLogs",
 		ServerStreams:  false,
 		ClientStreams:  true,
-	}, "/argus.v1.AgentService/StreamLogs", opts...)
+	}, "/ASSCOR.v1.AgentService/StreamLogs", opts...)
 	if err != nil {
 		return nil, err
 	}

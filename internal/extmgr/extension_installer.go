@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type DownloadStrategy interface {
@@ -151,7 +151,7 @@ type ExtensionInstaller struct {
 }
 
 func NewExtensionInstaller(extensionsDir string) *ExtensionInstaller {
-	tmpDir := filepath.Join(os.TempDir(), "argus-extensions")
+	tmpDir := filepath.Join(os.TempDir(), "ASSCOR-extensions")
 	os.MkdirAll(tmpDir, 0755)
 
 	return &ExtensionInstaller{

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/argus-security/argus/internal/model"
+	"github.com/asscor/asscor/internal/model"
 )
 
 func TestWorkerPool(t *testing.T) {

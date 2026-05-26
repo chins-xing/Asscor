@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/engine"
-	"github.com/argus-security/argus/internal/kernel"
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/engine"
+	"github.com/asscor/asscor/internal/kernel"
+	"github.com/asscor/asscor/internal/logger"
 
-	_ "github.com/argus-security/argus/internal/checks"
+	_ "github.com/asscor/asscor/internal/checks"
 )
 
 type spcAdapter struct {

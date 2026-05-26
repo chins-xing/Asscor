@@ -6,9 +6,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/argus-security/argus/internal/agent"
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/version"
+	"github.com/asscor/asscor/internal/agent"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/version"
 )
 
 func main() {
@@ -62,7 +62,7 @@ func main() {
 		cfg.Hostname = hostname
 	}
 
-	log.Info("starting agent", "version", version.ARGUSVersion, "ssam_version", version.SSAMVersion, "host_id", cfg.HostID, "kernel_addr", cfg.KernelAddr)
+	log.Info("starting agent", "version", version.ASSCORVersion, "ssam_version", version.SSAMVersion, "host_id", cfg.HostID, "kernel_addr", cfg.KernelAddr)
 
 	agt := agent.NewAgent(cfg)
 	if err := agt.Run(); err != nil {

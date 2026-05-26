@@ -6,13 +6,14 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 func (m *SPCModule) AddCVE(score SPCCVEScore) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, exists := m.cveIndex[score.CVEID]; exists {
+	if idx, exists := m.cveIndex[score.CVEID]; exists {
+		m.mergeCVEInPlace(idx, score)
 		return
 	}
 	if len(m.cveCache) >= m.maxCacheSize {
@@ -27,7 +28,8 @@ func (m *SPCModule) AddCVEs(scores []SPCCVEScore) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, score := range scores {
-		if _, exists := m.cveIndex[score.CVEID]; exists {
+		if idx, exists := m.cveIndex[score.CVEID]; exists {
+			m.mergeCVEInPlace(idx, score)
 			continue
 		}
 		if len(m.cveCache) >= m.maxCacheSize {
@@ -37,6 +39,69 @@ func (m *SPCModule) AddCVEs(scores []SPCCVEScore) {
 		m.cveIndex[score.CVEID] = len(m.cveCache)
 		m.cveCache = append(m.cveCache, score)
 	}
+}
+
+func (m *SPCModule) mergeCVEInPlace(idx int, incoming SPCCVEScore) {
+	existing := &m.cveCache[idx]
+	if incoming.CVSS > existing.CVSS {
+		existing.CVSS = incoming.CVSS
+	}
+	if incoming.CVSSVector != "" && existing.CVSSVector == "" {
+		existing.CVSSVector = incoming.CVSSVector
+	}
+	if incoming.EPSS > 0 && incoming.EPSS != existing.EPSS {
+		existing.EPSS = incoming.EPSS
+	}
+	if incoming.EPSSPercent > 0 && incoming.EPSSPercent != existing.EPSSPercent {
+		existing.EPSSPercent = incoming.EPSSPercent
+	}
+	if incoming.InKEV && !existing.InKEV {
+		existing.InKEV = true
+	}
+	if incoming.HasPublicPoC && !existing.HasPublicPoC {
+		existing.HasPublicPoC = true
+	}
+	if !incoming.DateModified.IsZero() && incoming.DateModified.After(existing.DateModified) {
+		existing.DateModified = incoming.DateModified
+	}
+	if len(incoming.AffectedCPEs) > 0 && len(existing.AffectedCPEs) == 0 {
+		existing.AffectedCPEs = incoming.AffectedCPEs
+	}
+	if len(incoming.AttckTechniques) > 0 && len(existing.AttckTechniques) == 0 {
+		existing.AttckTechniques = incoming.AttckTechniques
+	}
+	if len(incoming.MISPGalaxyTags) > 0 && len(existing.MISPGalaxyTags) == 0 {
+		existing.MISPGalaxyTags = incoming.MISPGalaxyTags
+	}
+	if len(incoming.APTGroupAssoc) > 0 && len(existing.APTGroupAssoc) == 0 {
+		existing.APTGroupAssoc = incoming.APTGroupAssoc
+	}
+	if len(incoming.CWEs) > 0 && len(existing.CWEs) == 0 {
+		existing.CWEs = incoming.CWEs
+	}
+	if incoming.Description != "" && existing.Description == "" {
+		existing.Description = incoming.Description
+	}
+}
+
+func (m *SPCModule) MergeCVEs(cves []SPCCVEScore) (added int, updated int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, cve := range cves {
+		if idx, exists := m.cveIndex[cve.CVEID]; exists {
+			m.mergeCVEInPlace(idx, cve)
+			updated++
+		} else {
+			if len(m.cveCache) >= m.maxCacheSize {
+				logger.WithComponent("spc").Warn("CVE cache reached max size in MergeCVEs", "max", m.maxCacheSize)
+				break
+			}
+			m.cveIndex[cve.CVEID] = len(m.cveCache)
+			m.cveCache = append(m.cveCache, cve)
+			added++
+		}
+	}
+	return
 }
 
 func (m *SPCModule) GetCVEs() []SPCCVEScore {

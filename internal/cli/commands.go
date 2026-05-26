@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/argus-security/argus/internal/version"
+	"github.com/asscor/asscor/internal/version"
 )
 
 var helpCmdInfo = CommandInfo{
@@ -44,8 +44,8 @@ func helpCmdHandler(ctx *CommandContext) *CommandResult {
 	}
 
 	var b strings.Builder
-	b.WriteString("\n  ARGUS \u00b5Kernel CLI\n")
-	b.WriteString(fmt.Sprintf("  Framework: %s   SSAM: %s\n\n", version.ARGUSVersion, version.SSAMVersion))
+	b.WriteString("\n  ASSCOR \u00b5Kernel CLI\n")
+	b.WriteString(fmt.Sprintf("  Framework: %s   SSAM: %s\n\n", version.ASSCORVersion, version.SSAMVersion))
 
 	categories := []CommandCategory{CategoryCore, CategoryAgent, CategoryAssess, CategorySPC, CategoryPlugin, CategorySource, CategorySystem, CategoryDebug}
 	categoryLabels := map[CommandCategory]string{
@@ -103,7 +103,7 @@ func helpCompletions(ctx *CommandContext, partial string) []string {
 var versionCmdInfo = CommandInfo{
 	Name:        "version",
 	Short:       "Show version information",
-	Description: "Display ARGUS framework and SSAM model version",
+	Description: "Display ASSCOR framework and SSAM model version",
 	Usage:       "version",
 	Category:    CategoryCore,
 	Examples: []string{
@@ -114,7 +114,7 @@ var versionCmdInfo = CommandInfo{
 
 func versionCmdHandler(ctx *CommandContext) *CommandResult {
 	info := map[string]string{
-		"framework":     version.ARGUSVersion,
+		"framework":     version.ASSCORVersion,
 		"ssam":          version.SSAMVersion,
 		"go":            "",
 		"build_time":    "",
@@ -126,7 +126,7 @@ func versionCmdHandler(ctx *CommandContext) *CommandResult {
 	}
 
 	var b strings.Builder
-	b.WriteString("\n  ARGUS Security Assessment Framework\n")
+	b.WriteString("\n  ASSCOR Security Assessment Framework\n")
 	b.WriteString(fmt.Sprintf("  Framework Version:  %s\n", info["framework"]))
 	b.WriteString(fmt.Sprintf("  SSAM Model:         %s\n", info["ssam"]))
 	b.WriteString("\n")

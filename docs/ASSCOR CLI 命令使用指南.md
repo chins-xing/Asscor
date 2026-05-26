@@ -1,4 +1,4 @@
-# ARGUS CLI 命令使用指南
+# ASSCOR CLI 命令使用指南
 
 > 版本：v0.1.2-MVP | SSAM 1.3 | 最后更新：2026-05-25
 
@@ -24,20 +24,20 @@
 
 ## 1. CLI 概述
 
-ARGUS Kernel 内置交互式 CLI 终端，Kernel 启动后自动进入。CLI 提供命令注册、自动补全、历史记录和插件扩展能力。
+ASSCOR Kernel 内置交互式 CLI 终端，Kernel 启动后自动进入。CLI 提供命令注册、自动补全、历史记录和插件扩展能力。
 
 ### 进入 CLI
 
-Kernel 启动后，日志自动重定向到 `argus-kernel.log`，终端进入交互模式：
+Kernel 启动后，日志自动重定向到 `ASSCOR-kernel.log`，终端进入交互模式：
 
 ```
-ARGUS μKernel
+ASSCOR μKernel
   Framework: v0.1.2-MVP   SSAM: 1.3
   Listen:   :50051 (mTLS: true)
   ...
-  CLI active: logs redirected to argus-kernel.log
+  CLI active: logs redirected to ASSCOR-kernel.log
 
-argus>
+ASSCOR>
 ```
 
 ### 命令语法
@@ -91,7 +91,7 @@ help [command]
 **示例**：
 
 ```
-argus> help
+ASSCOR> help
   Core:
     help              Show help information
     version           Show version information
@@ -105,7 +105,7 @@ argus> help
 
   ...
 
-argus> help spc
+ASSCOR> help spc
   spc — Security Posture Calculator
   Usage: spc <summary|cve|kev|score|fetch>
   ...
@@ -113,7 +113,7 @@ argus> help spc
 
 ### 3.2 version — 版本信息
 
-显示 ARGUS 框架版本和 SSAM 模型版本。
+显示 ASSCOR 框架版本和 SSAM 模型版本。
 
 **用法**：
 
@@ -124,8 +124,8 @@ version
 **示例**：
 
 ```
-argus> version
-  ARGUS Framework: v0.1.2-MVP
+ASSCOR> version
+  ASSCOR Framework: v0.1.2-MVP
   SSAM Model:      1.3
 ```
 
@@ -148,7 +148,7 @@ status [options]
 **示例**：
 
 ```
-argus> status
+ASSCOR> status
 
   Kernel Status
   ─────────────────────────────────────────
@@ -156,7 +156,7 @@ argus> status
   Healthy:   14
   Unhealthy: 0
 
-argus> status --json
+ASSCOR> status --json
 ```
 
 ---
@@ -198,15 +198,15 @@ assess [host] [options]
 **示例**：
 
 ```
-argus> assess
+ASSCOR> assess
   Assessment Result
   ─────────────────────────────────────────
   Host:    local
   Result:  ...
 
-argus> assess web-server-01
-argus> assess --domain=attack_surface
-argus> assess --json
+ASSCOR> assess web-server-01
+ASSCOR> assess --domain=attack_surface
+ASSCOR> assess --json
 ```
 
 ---
@@ -244,7 +244,7 @@ spc <action> [options]
 **示例**：
 
 ```
-argus> spc summary
+ASSCOR> spc summary
 
   SPC Summary
   ─────────────────────────────────────────
@@ -253,12 +253,12 @@ argus> spc summary
   last_fetch          2026-05-24T18:30:00Z
   cache_size_mb       12.5
 
-argus> spc cve --cvss-min=9.0
-argus> spc cve --cvss-min=9.0 --kev-only
-argus> spc kev
-argus> spc score --host=web-server-01
-argus> spc fetch
-argus> spc summary --json
+ASSCOR> spc cve --cvss-min=9.0
+ASSCOR> spc cve --cvss-min=9.0 --kev-only
+ASSCOR> spc kev
+ASSCOR> spc score --host=web-server-01
+ASSCOR> spc fetch
+ASSCOR> spc summary --json
 ```
 
 ---
@@ -300,14 +300,14 @@ agent <action> [options]
 **示例**：
 
 ```
-argus> agent list
-argus> agent list --filter=active=true
-argus> agent list --limit=10
-argus> agent status --host=web-server-01
-argus> agent stop --host=db-master-01
-argus> agent restart --all
-argus> agent config --host=web-01 --set threshold=80
-argus> agent command --host=web-01 --action=scan
+ASSCOR> agent list
+ASSCOR> agent list --filter=active=true
+ASSCOR> agent list --limit=10
+ASSCOR> agent status --host=web-server-01
+ASSCOR> agent stop --host=db-master-01
+ASSCOR> agent restart --all
+ASSCOR> agent config --host=web-01 --set threshold=80
+ASSCOR> agent command --host=web-01 --action=scan
 ```
 
 ### 6.2 log — Agent 日志查看
@@ -340,11 +340,11 @@ log <action> [options]
 **示例**：
 
 ```
-argus> log show
-argus> log show --host=web-01 --level=error
-argus> log show --limit=100
-argus> log export --host=db-01 --format=csv --output=logs.csv
-argus> log export --format=json --output=logs.json
+ASSCOR> log show
+ASSCOR> log show --host=web-01 --level=error
+ASSCOR> log show --limit=100
+ASSCOR> log export --host=db-01 --format=csv --output=logs.csv
+ASSCOR> log export --format=json --output=logs.json
 ```
 
 ---
@@ -394,7 +394,7 @@ attck <action> [options]
 **示例**：
 
 ```
-argus> attck summary
+ASSCOR> attck summary
 
   ATT&CK V19 Module Summary
   ─────────────────────────────────────────
@@ -419,10 +419,10 @@ argus> attck summary
 **示例**：
 
 ```
-argus> attck rule add --name "suspicious_powershell" --technique T1059 --severity high
-argus> attck rule list
-argus> attck rule evaluate --rule=<ruleID> --host=web-server-01
-argus> attck rule delete --rule=<ruleID>
+ASSCOR> attck rule add --name "suspicious_powershell" --technique T1059 --severity high
+ASSCOR> attck rule list
+ASSCOR> attck rule evaluate --rule=<ruleID> --host=web-server-01
+ASSCOR> attck rule delete --rule=<ruleID>
 ```
 
 ### 7.4 attck alert — 告警管理
@@ -435,9 +435,9 @@ argus> attck rule delete --rule=<ruleID>
 **示例**：
 
 ```
-argus> attck alert list --severity=high
-argus> attck alert list --host=web-server-01
-argus> attck alert ack --alert=<alertID>
+ASSCOR> attck alert list --severity=high
+ASSCOR> attck alert list --host=web-server-01
+ASSCOR> attck alert ack --alert=<alertID>
 ```
 
 ### 7.5 attck ioc — IOC 管理
@@ -453,11 +453,11 @@ argus> attck alert ack --alert=<alertID>
 **示例**：
 
 ```
-argus> attck ioc add --type=ip --value=10.0.0.1 --confidence=0.8 --technique=T1071
-argus> attck ioc list --type=domain
-argus> attck ioc search --value=10.0.0
-argus> attck ioc delete --id=<iocID>
-argus> attck ioc expire
+ASSCOR> attck ioc add --type=ip --value=10.0.0.1 --confidence=0.8 --technique=T1071
+ASSCOR> attck ioc list --type=domain
+ASSCOR> attck ioc search --value=10.0.0
+ASSCOR> attck ioc delete --id=<iocID>
+ASSCOR> attck ioc expire
 ```
 
 ### 7.6 attck gap — 防御差距分析
@@ -467,7 +467,7 @@ argus> attck ioc expire
 **示例**：
 
 ```
-argus> attck gap --host=web-server-01
+ASSCOR> attck gap --host=web-server-01
 
   Gap Analysis: web-server-01
   ─────────────────────────────────────────
@@ -487,7 +487,7 @@ argus> attck gap --host=web-server-01
 **示例**：
 
 ```
-argus> attck chain --host=web-server-01
+ASSCOR> attck chain --host=web-server-01
 
   Attack Chain: CHAIN-20260525-001
   ─────────────────────────────────────────
@@ -509,7 +509,7 @@ argus> attck chain --host=web-server-01
 **示例**：
 
 ```
-argus> attck attribute --chain=CHAIN-20260525-001
+ASSCOR> attck attribute --chain=CHAIN-20260525-001
 
   Attribution Result
   ─────────────────────────────────────────
@@ -532,10 +532,10 @@ argus> attck attribute --chain=CHAIN-20260525-001
 **示例**：
 
 ```
-argus> attck hunt generate --host=web-server-01
-argus> attck hunt list
-argus> attck hunt execute --id=<hypothesisID> --host=web-server-01
-argus> attck hunt confirm --id=<hypothesisID> --status=confirmed
+ASSCOR> attck hunt generate --host=web-server-01
+ASSCOR> attck hunt list
+ASSCOR> attck hunt execute --id=<hypothesisID> --host=web-server-01
+ASSCOR> attck hunt confirm --id=<hypothesisID> --status=confirmed
 ```
 
 ### 7.10 attck emulate — 对手仿真
@@ -550,9 +550,9 @@ argus> attck hunt confirm --id=<hypothesisID> --status=confirmed
 **示例**：
 
 ```
-argus> attck emulate generate --actor=APT29
-argus> attck emulate run --scenario=<scenarioID> --host=web-server-01 --safe
-argus> attck emulate results --scenario=<scenarioID>
+ASSCOR> attck emulate generate --actor=APT29
+ASSCOR> attck emulate run --scenario=<scenarioID> --host=web-server-01 --safe
+ASSCOR> attck emulate results --scenario=<scenarioID>
 ```
 
 ### 7.11 attck improve — 持续改进追踪
@@ -567,10 +567,10 @@ argus> attck emulate results --scenario=<scenarioID>
 **示例**：
 
 ```
-argus> attck improve create --name=" Harden credential policy"
-argus> attck improve list
-argus> attck improve update --track=<trackID> --action=<actionID> --status=completed
-argus> attck improve progress --track=<trackID>
+ASSCOR> attck improve create --name=" Harden credential policy"
+ASSCOR> attck improve list
+ASSCOR> attck improve update --track=<trackID> --action=<actionID> --status=completed
+ASSCOR> attck improve progress --track=<trackID>
 ```
 
 ---
@@ -604,7 +604,7 @@ plugin <action> [name]
 **示例**：
 
 ```
-argus> plugin list
+ASSCOR> plugin list
 
   Plugin List
   ─────────────────────────────────────────
@@ -623,8 +623,8 @@ argus> plugin list
   source_manager    v1.0.0  External source management
   cli               v1.0.0  Command-line interface
 
-argus> plugin info spc
-argus> plugin health
+ASSCOR> plugin info spc
+ASSCOR> plugin health
 ```
 
 ---
@@ -668,16 +668,16 @@ source <action> [name] [options]
 **示例**：
 
 ```
-argus> source list
-argus> source list --category scanner
-argus> source info trivy
-argus> source enable trivy
-argus> source disable trivy
-argus> source update trivy --version 0.50.0
-argus> source uninstall trivy --force
-argus> source run trivy
-argus> source config trivy
-argus> source audit trivy --limit 20
+ASSCOR> source list
+ASSCOR> source list --category scanner
+ASSCOR> source info trivy
+ASSCOR> source enable trivy
+ASSCOR> source disable trivy
+ASSCOR> source update trivy --version 0.50.0
+ASSCOR> source uninstall trivy --force
+ASSCOR> source run trivy
+ASSCOR> source config trivy
+ASSCOR> source audit trivy --limit 20
 ```
 
 ---
@@ -709,9 +709,9 @@ config [key] [options]
 **示例**：
 
 ```
-argus> config
-argus> config threshold
-argus> config --json
+ASSCOR> config
+ASSCOR> config threshold
+ASSCOR> config --json
 ```
 
 ### 10.2 health — 健康检查
@@ -727,7 +727,7 @@ health [options]
 **示例**：
 
 ```
-argus> health
+ASSCOR> health
 
   Health Check Results
   ─────────────────────────────────────────
@@ -738,7 +738,7 @@ argus> health
   ✓ policy            OK
   ...
 
-argus> health --json
+ASSCOR> health --json
 ```
 
 ---
@@ -771,7 +771,7 @@ history [count] [options]
 **示例**：
 
 ```
-argus> history
+ASSCOR> history
 
   Command History
   ──────────────────────────────────────────────────────────────────────
@@ -781,9 +781,9 @@ argus> history
   2     OK     15ms         spc summary
   3     1      3ms          assess unknown-host
 
-argus> history 50
-argus> history --failed
-argus> history --clear
+ASSCOR> history 50
+ASSCOR> history --failed
+ASSCOR> history --clear
 ```
 
 ---
@@ -877,7 +877,7 @@ type Command interface {
 
 ```bash
 # 在脚本中调用（通过管道）
-echo "spc summary --json" | ./argus-kernel-linux-x86_64
+echo "spc summary --json" | ./ASSCOR-kernel-linux-x86_64
 ```
 
 ### 13.4 退出码

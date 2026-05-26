@@ -1,6 +1,6 @@
 package engine
 
 import (
-	_ "github.com/argus-security/argus/internal/adapter/management"
-	_ "github.com/argus-security/argus/internal/adapter/scanner"
+	_ "github.com/asscor/asscor/internal/adapter/management"
+	_ "github.com/asscor/asscor/internal/adapter/scanner"
 )

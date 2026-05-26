@@ -45,6 +45,6 @@ func daemonizePlatform(pidFilePath string) error {
 		return fmt.Errorf("write pid file: %w", err)
 	}
 
-	fmt.Printf("ARGUS μKernel started as daemon (PID: %d, PID file: %s)\n", pid, pidFilePath)
+	fmt.Printf("ASSCOR μKernel started as daemon (PID: %d, PID file: %s)\n", pid, pidFilePath)
 	return nil
 }

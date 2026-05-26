@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/checks"
-	"github.com/argus-security/argus/internal/config"
-	"github.com/argus-security/argus/internal/engine"
-	"github.com/argus-security/argus/internal/logger"
-	"github.com/argus-security/argus/internal/model"
-	"github.com/argus-security/argus/internal/ssam"
+	"github.com/asscor/asscor/internal/checks"
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/engine"
+	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
+	"github.com/asscor/asscor/internal/ssam"
 )
 
 type AssessorModule struct {
@@ -30,8 +30,8 @@ func (m *AssessorModule) Info() PluginInfo {
 	return PluginInfo{
 		Name:        "assessor",
 		Version:     "1.2.0",
-		Description: "ARGUS assessment engine — computes domain scores and final acceptability score",
-		Author:      "ARGUS Core Team",
+		Description: "ASSCOR assessment engine — computes domain scores and final acceptability score",
+		Author:      "ASSCOR Core Team",
 	}
 }
 

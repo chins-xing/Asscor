@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argus-security/argus/internal/logger"
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type CTIModule struct {
@@ -26,7 +26,7 @@ func (m *CTIModule) Info() PluginInfo {
 		Name:        "cti",
 		Version:     "1.2.0",
 		Description: "Cyber Threat Intelligence manager — computes global threat coefficient μ from OTX/MISP feeds",
-		Author:      "ARGUS Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 

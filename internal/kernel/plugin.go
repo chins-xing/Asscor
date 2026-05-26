@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/argus-security/argus/internal/config"
+	"github.com/asscor/asscor/internal/config"
 )
 
 type PluginState int

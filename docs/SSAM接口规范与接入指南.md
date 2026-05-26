@@ -1,9 +1,9 @@
 # SSAM 接口规范与接入指南
 
-> **版本**：SSAM 1.3 | **模块路径**：`github.com/argus-security/argus/internal/ssam`  
+> **版本**：SSAM 1.3 | **模块路径**：`github.com/asscor/asscor/internal/ssam`  
 > **日期**：2026-05-25 | **状态**：发布
 
-本文档详细说明 SSAM 独立算法模块的接口规范、数据结构定义、配置适配机制及接入方式。SSAM 模块可脱离 Argus 框架独立使用，也可通过依赖注入与 Argus 内核松耦合集成。
+本文档详细说明 SSAM 独立算法模块的接口规范、数据结构定义、配置适配机制及接入方式。SSAM 模块可脱离 ASSCOR 框架独立使用，也可通过依赖注入与 ASSCOR 内核松耦合集成。
 
 ---
 
@@ -15,7 +15,7 @@
 |------|------|
 | `interfaces.go` | 核心接口定义与 DTO 数据结构 |
 | `engine.go` | 评分引擎实现（`Engine` 结构体） |
-| `adapter.go` | Argus 配置/模型与 SSAM 格式的双向转换 |
+| `adapter.go` | ASSCOR 配置/模型与 SSAM 格式的双向转换 |
 | `defaults.go` | 默认权重、边缘因子及 `NewDefaultEngine()` 工厂函数 |
 | `errors.go` | 错误类型定义与输入/输出验证函数 |
 
@@ -316,7 +316,7 @@ HookPostEdge 钩子
 
 ### 5.1 方式一：独立使用（推荐用于第三方集成）
 
-SSAM 模块可完全脱离 Argus 框架独立使用：
+SSAM 模块可完全脱离 ASSCOR 框架独立使用：
 
 ```go
 package main
@@ -326,7 +326,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/argus-security/argus/internal/ssam"
+    "github.com/asscor/asscor/internal/ssam"
 )
 
 func main() {
@@ -457,9 +457,9 @@ engine.RegisterHook(ssam.HookPostEdge, "enrich-metadata", func(
 }, 20)
 ```
 
-### 5.5 方式五：通过 Argus DI 容器集成
+### 5.5 方式五：通过 ASSCOR DI 容器集成
 
-在 Argus 内核中，SSAM Engine 通过依赖注入容器注册和消费：
+在 ASSCOR 内核中，SSAM Engine 通过依赖注入容器注册和消费：
 
 **注册端（AssessorModule.Init）：**
 
@@ -492,14 +492,14 @@ func (m *MyModule) Init(ctx context.Context, kc KernelContext) error {
 
 ## 6. 配置适配
 
-`adapter.go` 提供 Argus 配置/模型与 SSAM 格式之间的双向转换函数：
+`adapter.go` 提供 ASSCOR 配置/模型与 SSAM 格式之间的双向转换函数：
 
 ### 6.1 配置转换
 
 | 函数 | 方向 | 说明 |
 |------|------|------|
-| `ConfigToWeights(cfg)` | Config → SSAM | 将 Argus 配置的权重转为 `[]WeightConfig` |
-| `ConfigToEdgeFactors(cfg)` | Config → SSAM | 将 Argus 配置的边缘因子转为 `[]EdgeFactorConfig` |
+| `ConfigToWeights(cfg)` | Config → SSAM | 将 ASSCOR 配置的权重转为 `[]WeightConfig` |
+| `ConfigToEdgeFactors(cfg)` | Config → SSAM | 将 ASSCOR 配置的边缘因子转为 `[]EdgeFactorConfig` |
 
 **config.ini 对应配置段：**
 
@@ -632,9 +632,9 @@ engine := ssam.NewDefaultEngine()
 
 ---
 
-## 11. Argus 内核基础设施接口
+## 11. ASSCOR 内核基础设施接口
 
-以下接口属于 Argus 内核（`internal/kernel`），与 SSAM 模块配合使用。
+以下接口属于 ASSCOR 内核（`internal/kernel`），与 SSAM 模块配合使用。
 
 ### 11.1 DI 容器
 
@@ -739,7 +739,7 @@ import (
     "strings"
     "time"
 
-    "github.com/argus-security/argus/internal/ssam"
+    "github.com/asscor/asscor/internal/ssam"
 )
 
 func main() {
@@ -836,4 +836,4 @@ go test ./internal/ssam/... -v -run TestHooks
 - 输入验证（nil、空字段、越界值）
 - 上下文取消
 - 并发安全
-- Argus 配置适配双向转换
+- ASSCOR 配置适配双向转换
