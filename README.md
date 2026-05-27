@@ -4,9 +4,9 @@
 >
 > ASSCOR——**ASS**ess + **COR**e（评估 + 内核）。SSAM 是评估算法内核，ASSCOR 是承载它的框架内核：双核一体，算法与架构同构。全视、警惕、永不闭目——持续监控每一台主机的安全状态，不放过任何一个弱点。
 >
-> **SSAM V2.0 现已独立为开源 Go 模块 [github.com/asscor/ssam](https://github.com/asscor/ssam)**（位于 `ssam-lib/`），是一个零外部依赖的纯函数式风险评估引擎。ASSCOR 平台（`internal/ssam/`）作为薄适配层，通过依赖注入委托给 ssam-lib。详情见[项目拆分说明](#121-ssam-v20-项目拆分)。
+> **SSAM V2.0 现已独立为开源 Go 模块 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam)**（同时也位于 `ssam-lib/`），是一个零外部依赖的纯函数式风险评估引擎。ASSCOR 平台（`internal/ssam/`）作为薄适配层，通过依赖注入委托给 ssam-lib。详情见[项目拆分说明](#121-ssam-v20-项目拆分)。
 
-**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.2.0  
+**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.1.3-mvp  
 **日期：** 2026-05-28  
 **状态：** 发布
 
