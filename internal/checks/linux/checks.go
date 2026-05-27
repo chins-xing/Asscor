@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -114,8 +115,8 @@ func as002() model.CheckItem {
 	return model.CheckItem{
 		ID:            "AS-002",
 		Domain:        model.DomainAttackSurface,
-		Name:          "开放端口检查",
-		Description:   "检查监听端口是否仅限业务所需",
+		Name:          "开放端口数量",
+		Description:   "检查监听端口总数是否在合理范围内（阈值20）",
 		Delta:         -8,
 		ComplianceRef: "L3-CE-23",
 		Platform:      "linux",
@@ -150,13 +151,22 @@ func as002() model.CheckItem {
 			if len(uniquePorts) > 20 {
 				return false, fmt.Sprintf("监听端口过多(%d个，阈值20): [%s]", len(uniquePorts), strings.Join(portStrs, ", "))
 			}
-			return true, fmt.Sprintf("当前监听 %d 个端口: [%s]", len(uniquePorts), strings.Join(portStrs, ", "))
+			return true, fmt.Sprintf("当前监听 %d 个端口: [%s]（暴露面详情见AS-005）", len(uniquePorts), strings.Join(portStrs, ", "))
 		},
 	}
 }
 
 func sortSlice(s []int) {
 	sort.Ints(s)
+}
+
+func joinKeys(m map[string]bool) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ", ")
 }
 
 func as003() model.CheckItem {
@@ -735,7 +745,7 @@ func ot007() model.CheckItem {
 					continue
 				}
 				perm := info.Mode().Perm()
-				if perm&0077 != 0 {
+				if perm&0022 != 0 {
 					issues = append(issues, fmt.Sprintf("%s 权限=%04o (存在'其他'或'组'写权限)", path, perm))
 				}
 			}
@@ -769,7 +779,9 @@ func rs001() model.CheckItem {
 				return true, "未检测到包管理器，跳过更新检查"
 			}
 			if err != nil {
-				return true, "更新检查完成 (可能无更新或检查出错)"
+				if strings.TrimSpace(out) == "" {
+					return true, "更新检查完成，无待更新包"
+				}
 			}
 			lines := strings.Split(strings.TrimSpace(out), "\n")
 			count := 0
@@ -1276,7 +1288,7 @@ func ot008() model.CheckItem {
 				}
 				content := string(data)
 				for _, call := range requiredCalls {
-					if strings.Contains(content, "-S "+call) || strings.Contains(content, "-a") {
+					if strings.Contains(content, "-S "+call) || strings.Contains(content, "-S\t"+call) {
 						found = append(found, call)
 					}
 				}
@@ -1286,9 +1298,9 @@ func ot008() model.CheckItem {
 				uniqueFound[f] = true
 			}
 			if len(uniqueFound) >= 3 {
-				return true, fmt.Sprintf("auditd规则覆盖 %d 个关键系统调用", len(uniqueFound))
+				return true, fmt.Sprintf("auditd规则覆盖 %d 个关键系统调用: %s", len(uniqueFound), joinKeys(uniqueFound))
 			}
-			return false, fmt.Sprintf("auditd规则仅覆盖 %d 个关键系统调用 (建议>=3)", len(uniqueFound))
+			return false, fmt.Sprintf("auditd规则仅覆盖 %d 个关键系统调用 (建议>=3): %s", len(uniqueFound), joinKeys(uniqueFound))
 		},
 	}
 }
@@ -1639,8 +1651,8 @@ func ot018() model.CheckItem {
 		Platform:      "linux",
 		Check: func() (bool, string) {
 			logFiles := []string{"/var/log/syslog", "/var/log/messages", "/var/log/auth.log"}
-			idPattern := `[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]`
-			phonePattern := `1[3-9]\d{9}`
+			idPattern := regexp.MustCompile(`[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]`)
+			phonePattern := regexp.MustCompile(`1[3-9]\d{9}`)
 			for _, f := range logFiles {
 				data, err := os.ReadFile(f)
 				if err != nil {
@@ -1650,7 +1662,7 @@ func ot018() model.CheckItem {
 				if len(content) > 10000 {
 					content = content[:10000]
 				}
-				if strings.Contains(content, idPattern) || strings.Contains(content, phonePattern) {
+				if idPattern.MatchString(content) || phonePattern.MatchString(content) {
 					return false, fmt.Sprintf("日志文件 %s 中可能包含明文敏感信息", f)
 				}
 			}
@@ -1725,9 +1737,9 @@ func ot020() model.CheckItem {
 				uniqueCovered[c] = true
 			}
 			if len(uniqueCovered) >= 4 {
-				return true, fmt.Sprintf("auditd覆盖 %d 个特权操作", len(uniqueCovered))
+				return true, fmt.Sprintf("auditd覆盖 %d 个特权操作: %s", len(uniqueCovered), joinKeys(uniqueCovered))
 			}
-			return false, fmt.Sprintf("auditd仅覆盖 %d 个特权操作 (建议>=4)", len(uniqueCovered))
+			return false, fmt.Sprintf("auditd仅覆盖 %d 个特权操作 (建议>=4): %s", len(uniqueCovered), joinKeys(uniqueCovered))
 		},
 	}
 }

@@ -289,7 +289,7 @@ func (m *ATTACKModule) AutoGenerateHypotheses(hostID string) ([]HuntHypothesis, 
 				Name:        fmt.Sprintf("Auto-generated: predict %s after %s on %s", nextTech, techID, hostID),
 				Description: fmt.Sprintf("Based on observed technique %s, predict adversary may use %s next", techID, nextTech),
 				TechniqueID: nextTech,
-				TacticIDs:   []string{m.getTacticForTechnique(nextTech)},
+				TacticIDs:   []string{m.getTacticForTechniqueLocked(nextTech)},
 				DataSource:  "transition_prediction",
 				Query:       fmt.Sprintf("technique:%s AND host:%s", nextTech, hostID),
 				Priority:    "high",
@@ -306,7 +306,7 @@ func (m *ATTACKModule) AutoGenerateHypotheses(hostID string) ([]HuntHypothesis, 
 			Name:        fmt.Sprintf("Anomaly-driven: investigate %s on %s", techID, hostID),
 			Description: fmt.Sprintf("Anomalous behavior detected for technique %s, investigate further", techID),
 			TechniqueID: techID,
-			TacticIDs:   []string{m.getTacticForTechnique(techID)},
+			TacticIDs:   []string{m.getTacticForTechniqueLocked(techID)},
 			DataSource:  "anomaly_driven",
 			Query:       fmt.Sprintf("anomaly:%s AND host:%s", techID, hostID),
 			Priority:    "medium",
@@ -444,15 +444,14 @@ func (m *ATTACKModule) GetAPTAnalysisReports(hostID string, limit int) []APTAnal
 		}
 
 		for h := range allHosts {
+			if limit > 0 && len(reports) >= limit {
+				break
+			}
 			report, err := m.GenerateAPTAnalysisReport([]string{h})
 			if err == nil && report != nil {
 				reports = append(reports, *report)
 			}
 		}
-	}
-
-	if limit > 0 && len(reports) > limit {
-		reports = reports[:limit]
 	}
 
 	return reports

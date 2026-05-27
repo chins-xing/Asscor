@@ -69,6 +69,9 @@ func (m *ATTACKModule) performAttribution(stages []AttackStage, iocs []IOCEntry)
 		}
 
 		combinedScore := techScore*0.6 + iocScore*0.4
+		if combinedScore > 1.0 {
+			combinedScore = 1.0
+		}
 		if iocScore > 0 && techScore > 0 {
 			combinedScore = math.Min(combinedScore+0.1, 1.0)
 		}
@@ -298,18 +301,11 @@ func (m *ATTACKModule) checkSectorAlignment(stages []AttackStage, group *APTGrou
 }
 
 func (m *ATTACKModule) normalizeAttributionConfidence(rawScore float64, overlapCount int, evidenceCount int) float64 {
-	confidence := rawScore
+	cappedOverlap := math.Min(float64(overlapCount), 10.0)
+	cappedEvidence := math.Min(float64(evidenceCount), 10.0)
 
-	if overlapCount >= 5 {
-		confidence = math.Min(confidence+0.1, 1.0)
-	} else if overlapCount >= 3 {
-		confidence = math.Min(confidence+0.05, 1.0)
-	}
-
-	if evidenceCount >= 3 {
-		confidence = math.Min(confidence+0.05, 1.0)
-	}
-
+	confidence := rawScore * (1.0 + 0.05*cappedOverlap) * (1.0 + 0.02*cappedEvidence)
+	confidence = math.Min(confidence, 1.0)
 	confidence = math.Max(confidence, 0.1)
 
 	return confidence
@@ -349,9 +345,9 @@ func (m *ATTACKModule) PerformAttribution(chainID string) (*AttributionResult, e
 
 func (m *ATTACKModule) GenerateAPTAnalysisReport(hostIDs []string) (*APTAnalysisReport, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	if len(hostIDs) == 0 {
+		m.mu.Unlock()
 		return nil, fmt.Errorf("at least one host ID is required")
 	}
 
@@ -426,6 +422,8 @@ func (m *ATTACKModule) GenerateAPTAnalysisReport(hostIDs []string) (*APTAnalysis
 		Recommendations:  recommendations,
 		Timestamp:        time.Now(),
 	}
+
+	m.mu.Unlock()
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
 		Topic:   "attck.apt.report_generated",

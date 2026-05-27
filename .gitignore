@@ -33,6 +33,12 @@ build/
 # data
 data/
 
+#Asscor
+Asscor/
+
+# Audit reports (generated documentation, not tracked)
+docs/audits/
+
 #.trae
 .trae/
 

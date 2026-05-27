@@ -10,8 +10,7 @@ import (
 )
 
 func (m *ATTACKModule) PerformGapAnalysis(hostID string) (*AssessmentReport, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
 
 	report := &AssessmentReport{
 		ID:              fmt.Sprintf("assess-%d", time.Now().UnixNano()),
@@ -131,6 +130,10 @@ func (m *ATTACKModule) PerformGapAnalysis(hostID string) (*AssessmentReport, err
 	report.Recommendations = m.generateAssessmentRecommendations(report)
 
 	m.assessmentReports = append(m.assessmentReports, *report)
+	if len(m.assessmentReports) > 1000 {
+		m.assessmentReports = m.assessmentReports[len(m.assessmentReports)-1000:]
+	}
+	m.mu.Unlock()
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
 		Topic:   "attck.assessment.complete",
@@ -475,21 +478,4 @@ func (m *ATTACKModule) CalculateImprovementProgress(trackID string) (float64, er
 
 	progress := float64(completed) / float64(len(track.Actions))
 	return math.Round(progress*1000) / 1000, nil
-}
-
-func (m *ATTACKModule) loadDefaultMitigations() {
-	m.defaultMitigations = map[string][]Mitigation{
-		"T1566": {{ID: "M1049", Name: "Antivirus/Antimalware", Description: "Use anti-phishing features", Category: "detection", Effectiveness: 0.6}},
-		"T1190": {{ID: "M1050", Name: "Application Isolation", Description: "Isolate web-facing applications", Category: "prevention", Effectiveness: 0.7}},
-		"T1059": {{ID: "M1038", Name: "Execution Prevention", Description: "Block script execution", Category: "prevention", Effectiveness: 0.6}},
-		"T1003": {{ID: "M1026", Name: "Privileged Account Management", Description: "Limit credential dumping", Category: "prevention", Effectiveness: 0.6}},
-		"T1021": {{ID: "M1035", Name: "Limit Access to Resource Over Network", Description: "Restrict network service access", Category: "prevention", Effectiveness: 0.7}},
-		"T1078": {{ID: "M1026", Name: "Privileged Account Management", Description: "Manage privileged accounts", Category: "prevention", Effectiveness: 0.7}},
-		"T1070": {{ID: "M1029", Name: "Remote Data Storage", Description: "Store logs remotely", Category: "prevention", Effectiveness: 0.8}},
-		"T1486": {{ID: "M1053", Name: "Data Backup", Description: "Maintain offline backups", Category: "recovery", Effectiveness: 0.9}},
-		"T1053": {{ID: "M1026", Name: "Privileged Account Management", Description: "Restrict scheduled task creation", Category: "prevention", Effectiveness: 0.6}},
-		"T1548": {{ID: "M1026", Name: "Privileged Account Management", Description: "Manage sudo privileges", Category: "prevention", Effectiveness: 0.7}},
-		"T1048": {{ID: "M1037", Name: "Filter Network Traffic", Description: "Filter egress traffic", Category: "prevention", Effectiveness: 0.6}},
-		"T1071": {{ID: "M1031", Name: "Network Intrusion Prevention", Description: "Use NIPS to detect C2", Category: "detection", Effectiveness: 0.6}},
-	}
 }

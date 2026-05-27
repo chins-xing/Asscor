@@ -183,6 +183,12 @@ func (m *ATTACKModule) GenerateScenarioFromActor(actorID string) (*EmulationScen
 }
 
 func (m *ATTACKModule) getTacticForTechnique(techID string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.getTacticForTechniqueLocked(techID)
+}
+
+func (m *ATTACKModule) getTacticForTechniqueLocked(techID string) string {
 	for _, tactic := range m.tactics {
 		for _, tech := range tactic.Techniques {
 			if tech.ID == techID {
@@ -262,7 +268,6 @@ func (m *ATTACKModule) assessDifficulty(phases []EmulationPhase) string {
 
 func (m *ATTACKModule) RunEmulation(scenarioID, hostID string, safeMode bool) (*EmulationResult, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	var scenario *EmulationScenario
 	for i := range m.scenarios {
@@ -272,6 +277,7 @@ func (m *ATTACKModule) RunEmulation(scenarioID, hostID string, safeMode bool) (*
 		}
 	}
 	if scenario == nil {
+		m.mu.Unlock()
 		return nil, fmt.Errorf("scenario not found: %s", scenarioID)
 	}
 
@@ -338,6 +344,10 @@ func (m *ATTACKModule) RunEmulation(scenarioID, hostID string, safeMode bool) (*
 	result.Recommendations = m.generateEmulationRecommendations(result)
 
 	m.emulationResults = append(m.emulationResults, *result)
+	if len(m.emulationResults) > 1000 {
+		m.emulationResults = m.emulationResults[len(m.emulationResults)-1000:]
+	}
+	m.mu.Unlock()
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
 		Topic:   "attck.emulation.complete",

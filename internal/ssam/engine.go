@@ -10,6 +10,8 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
+const minPScore = 0.60
+
 type Engine struct {
 	mu           sync.RWMutex
 	weights      map[string]float64
@@ -71,6 +73,9 @@ func (e *Engine) ComputeScore(ctx context.Context, input *AssessmentInput) (*Ass
 	}
 	if output.SPCScore == 0 {
 		output.SPCScore = 1.0
+	}
+	if output.SPCScore < minPScore {
+		output.SPCScore = minPScore
 	}
 
 	e.ExecuteHooks(ctx, HookPreScore, input, output)

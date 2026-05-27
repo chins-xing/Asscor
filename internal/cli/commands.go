@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/version"
 )
 
@@ -640,4 +641,257 @@ func parsePositiveInt(s string) (int, error) {
 		return 0, fmt.Errorf("must be positive")
 	}
 	return n, nil
+}
+
+var attckCmdInfo = CommandInfo{
+	Name:        "attck",
+	Short:       "MITRE ATT&CK analysis",
+	Description: "Query ATT&CK V19 module: coverage, kill chain, APT matching, detection rules, threat intelligence",
+	Usage:       "attck <summary|coverage|killchain|apt|detect|ti>",
+	Category:    CategoryATTACK,
+	Params: []CommandParam{
+		{Name: "action", Description: "Action: summary, coverage, killchain, apt, detect, ti", Required: true, EnumValues: []string{"summary", "coverage", "killchain", "apt", "detect", "ti"}},
+	},
+	Options: []CommandOption{
+		{Name: "host", Short: "H", Description: "Target host ID", Default: "local"},
+		{Name: "limit", Short: "n", Description: "Limit number of results", Default: "20"},
+	},
+	Examples: []string{
+		"attck summary",
+		"attck coverage",
+		"attck killchain --host=web01",
+		"attck apt",
+		"attck detect",
+		"attck ti",
+	},
+}
+
+func attckCmdHandler(ctx *CommandContext) *CommandResult {
+	if len(ctx.Args) == 0 {
+		return &CommandResult{
+			ExitCode: ExitUsage,
+			Err:      fmt.Errorf("attck: action required"),
+			Output:   formatHelp(attckCmdInfo),
+		}
+	}
+
+	action := ctx.Args[0]
+	attckPlugin, ok := ctx.Kernel.GetPlugin("attck")
+	if !ok {
+		return &CommandResult{ExitCode: ExitError, Err: fmt.Errorf("ATT&CK module not available"), Output: "ATT&CK module not available\n"}
+	}
+
+	hostID := "local"
+	if v, ok := ctx.Options["host"]; ok && v != "" {
+		hostID = v
+	}
+
+	switch action {
+	case "summary":
+		type summaryProvider interface {
+			GetLastAnalysis(hostID string) map[string]interface{}
+		}
+		sp, ok := attckPlugin.(summaryProvider)
+		if !ok {
+			return &CommandResult{ExitCode: ExitError, Output: "ATT&CK module does not support summary\n"}
+		}
+		data := sp.GetLastAnalysis(hostID)
+		if ctx.JSON {
+			jsonData, _ := json.MarshalIndent(data, "", "  ")
+			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
+		}
+
+		var b strings.Builder
+		b.WriteString("\n  ATT&CK V19 Summary\n")
+		b.WriteString("  ─────────────────────────────────────────\n")
+		if v, ok := data["attck_version"]; ok {
+			b.WriteString(fmt.Sprintf("  %-20s %v\n", "Version:", v))
+		}
+		if v, ok := data["tactics_count"]; ok {
+			b.WriteString(fmt.Sprintf("  %-20s %v\n", "Tactics:", v))
+		}
+		if v, ok := data["apt_groups"]; ok {
+			b.WriteString(fmt.Sprintf("  %-20s %v\n", "APT Groups:", v))
+		}
+		if v, ok := data["detection_rules"]; ok {
+			b.WriteString(fmt.Sprintf("  %-20s %v\n", "Detection Rules:", v))
+		}
+		if v, ok := data["threat_actors"]; ok {
+			b.WriteString(fmt.Sprintf("  %-20s %v\n", "Threat Actors:", v))
+		}
+		if v, ok := data["scenarios"]; ok {
+			b.WriteString(fmt.Sprintf("  %-20s %v\n", "Emulation Scenarios:", v))
+		}
+		if v, ok := data["auto_hunt"]; ok {
+			b.WriteString(fmt.Sprintf("  %-20s %v\n", "Auto Hunt:", v))
+		}
+		if v, ok := data["beacon_threshold"]; ok {
+			b.WriteString(fmt.Sprintf("  %-20s %v\n", "Beacon Threshold:", v))
+		}
+		b.WriteString("\n")
+		return &CommandResult{ExitCode: ExitOK, Output: b.String()}
+
+	case "coverage":
+		type coverageProvider interface {
+			CalculateCoverage(checkResults map[string]bool) []kernel.ATTACKCoverage
+		}
+		cp, ok := attckPlugin.(coverageProvider)
+		if !ok {
+			return &CommandResult{ExitCode: ExitError, Output: "ATT&CK module does not support coverage\n"}
+		}
+		coverages := cp.CalculateCoverage(nil)
+		if ctx.JSON {
+			jsonData, _ := json.MarshalIndent(coverages, "", "  ")
+			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
+		}
+
+		var b strings.Builder
+		b.WriteString("\n  ATT&CK Coverage Analysis\n")
+		b.WriteString("  ──────────────────────────────────────────────────────────────────────────\n")
+		b.WriteString(fmt.Sprintf("  %-10s %-20s %6s %8s %8s %8s %s\n", "TACTIC", "NAME", "TECHS", "DET%", "PREV%", "COMP%", "RISK"))
+		b.WriteString("  ──────────────────────────────────────────────────────────────────────────\n")
+		for _, cov := range coverages {
+			b.WriteString(fmt.Sprintf("  %-10s %-20s %6d %7.0f%% %7.0f%% %7.0f%% %s\n",
+				cov.TacticID, cov.TacticName, cov.TotalTechniques,
+				cov.CoverageDet, cov.CoveragePrev, cov.CoverageComp, cov.RiskLevel))
+		}
+		b.WriteString("\n")
+		return &CommandResult{ExitCode: ExitOK, Output: b.String()}
+
+	case "killchain":
+		type killChainProvider interface {
+			AssessKillChain(hostID string, checkResults map[string]bool) kernel.KillChainAssessment
+		}
+		kp, ok := attckPlugin.(killChainProvider)
+		if !ok {
+			return &CommandResult{ExitCode: ExitError, Output: "ATT&CK module does not support kill chain\n"}
+		}
+		kc := kp.AssessKillChain(hostID, nil)
+		if ctx.JSON {
+			jsonData, _ := json.MarshalIndent(kc, "", "  ")
+			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
+		}
+
+		var b strings.Builder
+		b.WriteString("\n  Kill Chain Assessment\n")
+		b.WriteString("  ──────────────────────────────────────────────────────────────────────────\n")
+		b.WriteString(fmt.Sprintf("  Overall Score: %.1f   Weakest Stage: %s\n\n", kc.OverallScore, kc.WeakestStage))
+		b.WriteString(fmt.Sprintf("  %-16s %6s %8s %8s %s\n", "STAGE", "SCORE", "STATUS", "PASSED", "TOTAL"))
+		b.WriteString("  ──────────────────────────────────────────────────────────────────────────\n")
+		for _, stage := range kc.Stages {
+			b.WriteString(fmt.Sprintf("  %-16s %6.1f %8s %8d %6d\n",
+				stage.Name, stage.Score, stage.Status, stage.ChecksPassed, stage.ChecksTotal))
+		}
+		b.WriteString("\n")
+		return &CommandResult{ExitCode: ExitOK, Output: b.String()}
+
+	case "apt":
+		type aptProvider interface {
+			ListAPTGroups() []string
+			GetAPTGroup(groupID string) *kernel.APTGroupProfile
+		}
+		ap, ok := attckPlugin.(aptProvider)
+		if !ok {
+			return &CommandResult{ExitCode: ExitError, Output: "ATT&CK module does not support APT\n"}
+		}
+		groups := ap.ListAPTGroups()
+		if ctx.JSON {
+			var profiles []*kernel.APTGroupProfile
+			for _, gid := range groups {
+				if p := ap.GetAPTGroup(gid); p != nil {
+					profiles = append(profiles, p)
+				}
+			}
+			jsonData, _ := json.MarshalIndent(profiles, "", "  ")
+			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
+		}
+
+		var b strings.Builder
+		b.WriteString("\n  APT Group Profiles\n")
+		b.WriteString("  ──────────────────────────────────────────────────────────────────────────\n")
+		b.WriteString(fmt.Sprintf("  %-8s %-20s %-12s %s\n", "ID", "NAME", "TARGETS", "ALIASES"))
+		b.WriteString("  ──────────────────────────────────────────────────────────────────────────\n")
+		for _, gid := range groups {
+			if p := ap.GetAPTGroup(gid); p != nil {
+				targets := strings.Join(p.PrimaryTargets, ", ")
+				aliases := strings.Join(p.Aliases, ", ")
+				b.WriteString(fmt.Sprintf("  %-8s %-20s %-12s %s\n", p.GroupID, p.Name, targets, aliases))
+			}
+		}
+		b.WriteString("\n")
+		return &CommandResult{ExitCode: ExitOK, Output: b.String()}
+
+	case "detect":
+		type detectProvider interface {
+			GetDetectionSummary() kernel.DetectionSummary
+		}
+		dp, ok := attckPlugin.(detectProvider)
+		if !ok {
+			return &CommandResult{ExitCode: ExitError, Output: "ATT&CK module does not support detection\n"}
+		}
+		summary := dp.GetDetectionSummary()
+		if ctx.JSON {
+			jsonData, _ := json.MarshalIndent(summary, "", "  ")
+			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
+		}
+
+		var b strings.Builder
+		b.WriteString("\n  Detection Summary\n")
+		b.WriteString("  ─────────────────────────────────────────\n")
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Total Rules:", summary.TotalRules))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Active Rules:", summary.ActiveRules))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Total Alerts:", summary.TotalAlerts))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Open Alerts:", summary.OpenAlerts))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Anomalies:", summary.Anomalies))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Correlations:", summary.Correlations))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Coverage Gaps:", len(summary.CoverageGaps)))
+		if len(summary.CoverageGaps) > 0 {
+			b.WriteString("\n  Coverage Gaps:\n")
+			for _, gap := range summary.CoverageGaps {
+				b.WriteString(fmt.Sprintf("    • %s\n", gap))
+			}
+		}
+		if len(summary.AlertsBySeverity) > 0 {
+			b.WriteString("\n  Alerts by Severity:\n")
+			for sev, count := range summary.AlertsBySeverity {
+				b.WriteString(fmt.Sprintf("    %-12s %d\n", sev+":", count))
+			}
+		}
+		b.WriteString("\n")
+		return &CommandResult{ExitCode: ExitOK, Output: b.String()}
+
+	case "ti":
+		type tiProvider interface {
+			GetTISummary() map[string]interface{}
+		}
+		tp, ok := attckPlugin.(tiProvider)
+		if !ok {
+			return &CommandResult{ExitCode: ExitError, Output: "ATT&CK module does not support TI\n"}
+		}
+		data := tp.GetTISummary()
+		if ctx.JSON {
+			jsonData, _ := json.MarshalIndent(data, "", "  ")
+			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
+		}
+
+		var b strings.Builder
+		b.WriteString("\n  Threat Intelligence Summary\n")
+		b.WriteString("  ─────────────────────────────────────────\n")
+		for k, v := range data {
+			b.WriteString(fmt.Sprintf("  %-24s %v\n", k+":", v))
+		}
+		b.WriteString("\n")
+		return &CommandResult{ExitCode: ExitOK, Output: b.String()}
+
+	default:
+		return &CommandResult{
+			ExitCode: ExitUsage,
+			Err:      fmt.Errorf("unknown attck action: %s", action),
+			Output:   fmt.Sprintf("Unknown action '%s'. Use: summary, coverage, killchain, apt, detect, ti\n", action),
+		}
+	}
+}
+
+func attckCompletions(ctx *CommandContext, partial string) []string {
+	return []string{"summary", "coverage", "killchain", "apt", "detect", "ti"}
 }

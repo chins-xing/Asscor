@@ -127,23 +127,25 @@ type AttackStage struct {
 
 ```go
 type MultiIndicatorCorrelation struct {
-    HostID         string    // 主机标识
-    CorrelatedAt   time.Time // 关联时间
-    AlertCount     int       // 关联告警数
-    AnomalyCount   int       // 关联异常数
-    IOCCount       int       // 关联 IOC 数
-    BeaconCount    int       // 关联信标检测数
-    Techniques     []string  // 涉及的 ATT&CK 技术
-    Severity       string    // 综合严重等级
-    Confidence     float64   // 关联置信度
+    ID              string    // 关联唯一标识
+    IndicatorIDs    []string  // 关联的指标 ID 列表（格式: "alert:ID"/"anomaly:ID"/"ioc:ID"）
+    TechniqueIDs    []string  // 涉及的 ATT&CK 技术 ID
+    TacticIDs       []string  // 涉及的 ATT&CK 战术 ID
+    HostIDs         []string  // 涉及的主机列表（支持多主机关联）
+    Score           float64   // 关联评分 (0-1)
+    Description     string    // 关联描述
+    CorrelationType string    // 关联类型
+    Timestamp       time.Time // 关联时间
 }
 ```
 
-关联置信度计算：
+关联评分计算：
 
 $$
-Confidence = \min(1.0, \frac{AlertCount \times 0.3 + AnomalyCount \times 0.2 + IOCCount \times 0.3 + BeaconCount \times 0.2}{Threshold})
+Score = \min\left(1.0, \frac{AlertCount \times 0.3 + AnomalyCount \times 0.2 + IOCCount \times 0.3 + BeaconCount \times 0.2}{Threshold}\right)
 $$
+
+其中 $Threshold = 2.0$（默认阈值，可配置），各类指标的权重反映其证据强度：告警和 IOC 权重较高（0.3），异常和信标权重较低（0.2）。仅当 $SourceCount \geq 2$ 时才输出关联结果。
 
 ## 3. 行为检测引擎
 
@@ -211,16 +213,17 @@ $$
 
 ```go
 type BehavioralAlert struct {
-    ID           string    // 告警 ID
-    HostID       string    // 主机标识
-    IndicatorID  string    // 触发的行为指标 ID
-    Metric       string    // 异常指标名
-    BaselineValue float64  // 基线值
-    ActualValue  float64   // 实际值
-    Deviation    float64   // 偏差程度
-    Severity     string    // 严重等级
-    TechniqueID  string    // ATT&CK 技术 ID
-    Timestamp    time.Time // 告警时间
+    ID            string            // 告警 ID
+    IndicatorID   string            // 触发的行为指标 ID
+    IndicatorName string            // 触发的行为指标名称
+    TechniqueID   string            // ATT&CK 技术 ID
+    HostID        string            // 主机标识
+    ObservedValue float64           // 观测值
+    BaselineValue float64           // 基线值
+    Deviation     float64           // 偏差程度
+    Severity      string            // 严重等级
+    Fields        map[string]string // 附加字段（可选）
+    Timestamp     time.Time         // 告警时间
 }
 ```
 
@@ -289,13 +292,13 @@ APT 归因引擎回答一个关键问题：**观察到的攻击行为最可能�
 
 **证据源一：TTP 重叠（权重 60%）**
 
-计算观察到的技术与已知 APT 组织技术画像的重叠度：
+计算观察到的技术与已知 APT 组织技术画像的加权匹配度：
 
 $$
-S_{ttp}(g) = \frac{|T_{observed} \cap T_{group}(g)|}{|T_{observed}|} \times \frac{\sum_{t \in T_{observed} \cap T_{group}(g)} w(t)}{|T_{observed} \cap T_{group}(g)|}
+S_{ttp}(g) = \frac{\sum_{t \in T_{observed} \cap T_{group}(g)} w_{obs}(t) \times w_{group}(t)}{\sum_{t \in T_{group}(g)} w_{group}(t)}
 $$
 
-其中 $w(t)$ 为技术 $t$ 的置信度权重（来自告警/异常的置信度分数）。
+其中 $w_{obs}(t)$ 为观察到的技术 $t$ 的置信度权重（来自告警/异常），$w_{group}(t)$ 为该技术在 APT 组织画像中的权重。分母使用 APT 组织的全部技术权重和，使评分反映"观察到的行为在该组织已知画像中的占比"——即精确率导向。这避免了"大而全"的组织（技术画像覆盖面广）因分母小而获得虚高分数的问题，降低误归因风险。
 
 **证据源二：IOC 匹配（权重 40%）**
 
@@ -527,6 +530,8 @@ type ATTACKInterface interface {
     GetBaseline(hostID string) *BehavioralBaseline
 }
 ```
+
+> **注**：以上仅列出 28 个核心方法。完整接口还包含覆盖率分析、杀伤链评估、风险预测、差距分析、YARA/Sigma 规则引擎、因果推理、群体基线、贝叶斯归因、信标信誉库过滤、跨主机流量分析等扩展方法，共计 60+ 方法。详见 `api/v1/` 中的接口定义。
 
 ### 6.3 SPC 联动
 

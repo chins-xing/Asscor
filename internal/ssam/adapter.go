@@ -36,31 +36,31 @@ func ConfigToEdgeFactors(cfg *config.Config) []EdgeFactorConfig {
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-SYNCOOKIE", Name: "SYN Cookie Disabled",
-		Factor: cfg.EdgeFactors.SYNCookieDisabled, TriggerCheck: "EF-SYNCOOKIE",
+		Factor: cfg.EdgeFactors.SYNCookieDisabled, TriggerCheck: "RS-005",
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-SELINUX", Name: "SELinux Disabled",
-		Factor: cfg.EdgeFactors.SELinuxDisabled, TriggerCheck: "EF-SELINUX",
+		Factor: cfg.EdgeFactors.SELinuxDisabled, TriggerCheck: "OT-005",
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-APPARMOR", Name: "AppArmor Disabled",
-		Factor: cfg.EdgeFactors.AppArmorDisabled, TriggerCheck: "EF-APPARMOR",
+		Factor: cfg.EdgeFactors.AppArmorDisabled, TriggerCheck: "OT-005",
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-NO-SIEM", Name: "SIEM Integration Missing",
-		Factor: cfg.EdgeFactors.NoSIEM, TriggerCheck: "EF-NO-SIEM",
+		Factor: cfg.EdgeFactors.NoSIEM, TriggerCheck: "RS-007",
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-NO-IDS", Name: "IDS/IPS Missing",
-		Factor: cfg.EdgeFactors.NoIDS, TriggerCheck: "EF-NO-IDS",
+		Factor: cfg.EdgeFactors.NoIDS, TriggerCheck: "RS-006",
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-3FA", Name: "3FA Not Met",
 		Factor: 0.82, TriggerCheck: "EF-002", CascadeTo: "EF-002FA", CascadeValue: 0.82, CascadeOnly: true,
 	})
-	for id, factor := range cfg.EdgeFactorsCustom {
+	for id, cfg := range cfg.EdgeFactorsCustom {
 		result = append(result, EdgeFactorConfig{
-			ID: id, Name: id, Factor: factor,
+			ID: id, Name: id, Factor: cfg.Factor, TriggerCheck: cfg.TriggerCheck,
 		})
 	}
 	return result

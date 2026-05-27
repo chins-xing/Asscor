@@ -77,6 +77,12 @@ type DashboardReport struct {
 
 	Checks []CheckDetail `json:"checks"`
 
+	ATTACKCoverage      []model.ATTACKCoverageInfo    `json:"attck_coverage,omitempty"`
+	ATTACKKillChain     *model.ATTACKKillChainInfo     `json:"attck_kill_chain,omitempty"`
+	ATTACKAPTMatches    []model.ATTACKAPTMatchInfo     `json:"attck_apt_matches,omitempty"`
+	ATTACKPredictedRisk *model.ATTACKPredictedRiskInfo `json:"attck_predicted_risk,omitempty"`
+	ATTACKFailedTechs   []string                       `json:"attck_failed_techniques,omitempty"`
+
 	ComplianceFramework string `json:"compliance_framework,omitempty"`
 }
 
@@ -507,6 +513,22 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		report.Summary.TotalChecks = rec.CheckCount
 		report.Summary.PassedChecks = passedCount
 		report.Summary.FailedChecks = rec.FailedCount
+
+		if len(ar.ATTACKCoverage) > 0 {
+			report.ATTACKCoverage = ar.ATTACKCoverage
+		}
+		if ar.ATTACKKillChain != nil {
+			report.ATTACKKillChain = ar.ATTACKKillChain
+		}
+		if len(ar.ATTACKAPTMatches) > 0 {
+			report.ATTACKAPTMatches = ar.ATTACKAPTMatches
+		}
+		if ar.ATTACKPredictedRisk != nil {
+			report.ATTACKPredictedRisk = ar.ATTACKPredictedRisk
+		}
+		if len(ar.ATTACKFailedTechs) > 0 {
+			report.ATTACKFailedTechs = ar.ATTACKFailedTechs
+		}
 
 		if err := m.WriteDashboardReport(report); err != nil {
 			logger.WithComponent("persistence").Error("write dashboard report error", "error", err)

@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -108,7 +109,11 @@ func (m *CommanderModule) Init(ctx context.Context, kc KernelContext) error {
 }
 
 func (m *CommanderModule) generateAndPersistKey(keyPath, metaPath string) {
-	key := randomHex(32)
+	key, err := randomHex(32)
+	if err != nil {
+		logger.WithComponent("commander").Error("failed to generate HMAC key, HMAC signing disabled", "error", err)
+		return
+	}
 	m.mu.Lock()
 	m.hmacKey = []byte(key)
 	m.keyMeta = keyMetadata{
@@ -139,7 +144,12 @@ func (m *CommanderModule) rotateKey(keyPath, metaPath string) {
 	copy(m.prevHMACKey, m.hmacKey)
 	m.keyRotatedAt = time.Now()
 
-	newKey := randomHex(32)
+	newKey, err := randomHex(32)
+	if err != nil {
+		logger.WithComponent("commander").Error("failed to rotate HMAC key, keeping previous key", "error", err)
+		m.mu.Unlock()
+		return
+	}
 	m.hmacKey = []byte(newKey)
 	m.keyMeta = keyMetadata{
 		CreatedAt: time.Now(),
@@ -294,19 +304,20 @@ func (m *CommanderModule) onPolicyAction(ctx context.Context, msg Message) error
 	return nil
 }
 
-func randomHex(n int) string {
+func randomHex(n int) (string, error) {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		logger.WithComponent("commander").Error("crypto/rand read failed", "error", err)
-		for i := range b {
-			b[i] = byte(i)
-		}
+		return "", fmt.Errorf("crypto/rand read failed: %w", err)
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(b), nil
 }
 
 func generateCmdID(hostID, action string) string {
-	h := sha256.Sum256([]byte(hostID + ":" + action + ":" + randomHex(8)))
+	rnd, err := randomHex(8)
+	if err != nil {
+		rnd = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	h := sha256.Sum256([]byte(hostID + ":" + action + ":" + rnd))
 	return hex.EncodeToString(h[:8])
 }
 

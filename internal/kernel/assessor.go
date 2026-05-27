@@ -120,6 +120,7 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	result := m.engine.Assess(hostID, hostID)
 
 	m.applySPCAndCTI(hostID, result)
+	m.applyATTACK(hostID, result)
 
 	if result.SPCScore != 1.0 || result.ThreatCoeff != m.cfg.ThreatCoeff {
 		result.FinalScore = m.recomputeFinalScore(result)
@@ -169,6 +170,7 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 		result.SPCScore = 1.0
 	} else {
 		m.applySPCAndCTI(hostID, result)
+		m.applyATTACK(hostID, result)
 		result.FinalScore = m.recomputeFinalScore(result)
 	}
 
@@ -253,6 +255,127 @@ func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentR
 
 	result.SPCScore = spcScore
 	result.ThreatCoeff = threatCoeff
+}
+
+func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResult) {
+	impl, ok := m.kernel.Container().Resolve((*ATTACKInterface)(nil))
+	if !ok {
+		return
+	}
+	attck, ok := impl.(ATTACKInterface)
+	if !ok {
+		return
+	}
+
+	checkResults := make(map[string]bool)
+	for _, c := range result.Checks {
+		checkResults[c.CheckID] = c.Passed
+	}
+
+	coverages := attck.CalculateCoverage(checkResults)
+	if len(coverages) > 0 {
+		result.ATTACKCoverage = make([]model.ATTACKCoverageInfo, len(coverages))
+		for i, cov := range coverages {
+			result.ATTACKCoverage[i] = model.ATTACKCoverageInfo{
+				TacticID:        cov.TacticID,
+				TacticName:      cov.TacticName,
+				TotalTechniques: cov.TotalTechniques,
+				CoveredDet:      cov.CoveredDet,
+				CoverageDet:     cov.CoverageDet,
+				CoveragePrev:    cov.CoveragePrev,
+				CoverageComp:    cov.CoverageComp,
+				RiskLevel:       cov.RiskLevel,
+			}
+		}
+	}
+
+	killChain := attck.AssessKillChain(hostID, checkResults)
+	if killChain.OverallScore > 0 || len(killChain.Stages) > 0 {
+		kcInfo := &model.ATTACKKillChainInfo{
+			OverallScore: killChain.OverallScore,
+			WeakestStage: killChain.WeakestStage,
+			Stages:       make([]model.ATTACKKillChainStage, len(killChain.Stages)),
+		}
+		for i, stage := range killChain.Stages {
+			kcInfo.Stages[i] = model.ATTACKKillChainStage{
+				Name:         stage.Name,
+				Score:        stage.Score,
+				Status:       stage.Status,
+				ChecksPassed: stage.ChecksPassed,
+				ChecksTotal:  stage.ChecksTotal,
+			}
+		}
+		result.ATTACKKillChain = kcInfo
+	}
+
+	var weakTacticIDs []string
+	for _, cov := range coverages {
+		if cov.CoverageDet < 50 {
+			weakTacticIDs = append(weakTacticIDs, cov.TacticID)
+		}
+	}
+
+	var failedTechIDs []string
+	for _, cov := range coverages {
+		if cov.CoverageDet < 100 {
+			for _, tactic := range attck.GetAllTactics() {
+				if tactic.ID == cov.TacticID {
+					for _, tech := range tactic.Techniques {
+						if len(tech.AsscorChecks) > 0 {
+							allFailed := false
+							for _, check := range tech.AsscorChecks {
+								if passed, ok := checkResults[check]; ok && !passed {
+									allFailed = true
+									break
+								}
+							}
+							if allFailed {
+								failedTechIDs = append(failedTechIDs, tech.ID)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if len(weakTacticIDs) > 0 && len(failedTechIDs) > 0 {
+		aptMatches := attck.MatchAPTGroup(failedTechIDs)
+		if len(aptMatches) > 0 {
+			result.ATTACKAPTMatches = make([]model.ATTACKAPTMatchInfo, len(aptMatches))
+			for i, match := range aptMatches {
+				result.ATTACKAPTMatches[i] = model.ATTACKAPTMatchInfo{
+					GroupID:     match.GroupID,
+					GroupName:   match.GroupName,
+					Similarity:  match.Similarity,
+					Confidence:  match.Confidence,
+					OverlapTech: match.OverlapTech,
+				}
+			}
+		}
+	}
+
+	if len(failedTechIDs) > 0 {
+		result.ATTACKFailedTechs = failedTechIDs
+
+		predictedRisk := attck.PredictRisk(hostID, failedTechIDs, 3)
+		if predictedRisk.MaxRiskScore > 0 {
+			result.ATTACKPredictedRisk = &model.ATTACKPredictedRiskInfo{
+				MaxRiskScore:    predictedRisk.MaxRiskScore,
+				EnhancedThreat:  predictedRisk.EnhancedThreat,
+				PredictedPaths:  len(predictedRisk.PredictedPaths),
+				Recommendations: predictedRisk.Recommendations,
+			}
+		}
+	}
+
+	logger.WithComponent("assessor").Info("ATT&CK analysis applied",
+		"host_id", hostID,
+		"coverages", len(coverages),
+		"kill_chain_score", killChain.OverallScore,
+		"apt_matches", len(result.ATTACKAPTMatches),
+		"failed_techniques", len(failedTechIDs),
+		"predicted_risk", result.ATTACKPredictedRisk != nil)
 }
 
 func (m *AssessorModule) syncACIToAsset(spc SPCInterface, hostID string, result *model.AssessmentResult) {

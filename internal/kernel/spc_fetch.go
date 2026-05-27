@@ -1384,7 +1384,10 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 		return nil
 	}
 
-	req, err := http.NewRequest("POST", client.config.BaseURL+"/events/restSearch",
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", client.config.BaseURL+"/events/restSearch",
 		strings.NewReader(string(body)))
 	if err != nil {
 		logger.WithComponent("spc").Error("MISP request creation failed", "error", err)
@@ -1536,7 +1539,10 @@ func (m *SPCModule) ConfigureMISP(baseURL, apiKey string) error {
 		}
 	}
 
-	req, err := http.NewRequest("GET", baseURL+"/users/view/me", nil)
+	mispCtx, mispCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer mispCancel()
+
+	req, err := http.NewRequestWithContext(mispCtx, "GET", baseURL+"/users/view/me", nil)
 	if err != nil {
 		return fmt.Errorf("MISP test request: %w", err)
 	}

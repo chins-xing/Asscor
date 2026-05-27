@@ -28,6 +28,7 @@ const (
 	CategoryCore    CommandCategory = "core"
 	CategoryAssess  CommandCategory = "assess"
 	CategorySPC     CommandCategory = "spc"
+	CategoryATTACK  CommandCategory = "attck"
 	CategoryPlugin  CommandCategory = "plugin"
 	CategorySystem  CommandCategory = "system"
 	CategoryDebug   CommandCategory = "debug"
@@ -479,6 +480,7 @@ func (e *Engine) RegisterBuiltinCommands() {
 		{pluginCmdInfo, pluginCmdHandler, pluginCompletions},
 		{configCmdInfo, configCmdHandler, configCompletions},
 		{spcCmdInfo, spcCmdHandler, spcCompletions},
+		{attckCmdInfo, attckCmdHandler, attckCompletions},
 		{assessCmdInfo, assessCmdHandler, nil},
 		{healthCmdInfo, healthCmdHandler, nil},
 		{historyCmdInfo, historyCmdHandler, historyCompletions},
@@ -500,6 +502,7 @@ func (e *Engine) RegisterBuiltinCommands() {
 		"st":    "status",
 		"h":     "history",
 		"ag":    "agent",
+		"ak":    "attck",
 	}
 	for alias, target := range aliases {
 		if err := e.registry.RegisterAlias(alias, target); err != nil {

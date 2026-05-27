@@ -283,7 +283,7 @@ func TestEdgeFactorTriggering(t *testing.T) {
 	e := NewEngine()
 	e.SetEdgeFactors([]EdgeFactorConfig{
 		{ID: "EF-002FA", Name: "2FA Missing", Factor: 0.85, TriggerCheck: "EF-001"},
-		{ID: "EF-SYNCOOKIE", Name: "SYN Cookie", Factor: 0.75, TriggerCheck: "RS-006"},
+		{ID: "EF-SYNCOOKIE", Name: "SYN Cookie", Factor: 0.75, TriggerCheck: "RS-005"},
 	})
 
 	checks := []CheckInput{
@@ -301,7 +301,7 @@ func TestEdgeFactorTriggering(t *testing.T) {
 		t.Error("EF-002FA should be active when EF-001 fails")
 	}
 	if factorMap["EF-SYNCOOKIE"].Active {
-		t.Error("EF-SYNCOOKIE should not be active when RS-006 passes")
+		t.Error("EF-SYNCOOKIE should not be active when RS-005 passes")
 	}
 }
 

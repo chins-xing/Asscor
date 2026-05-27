@@ -169,7 +169,52 @@ type AssessmentResult struct {
 	ThreatCoeff        float64           `json:"threat_coefficient"`
 	SPCScore           float64           `json:"spc_score,omitempty"`
 	SPCCVEs            []SPCCVEInfo      `json:"spc_cves,omitempty"`
+	ATTACKCoverage     []ATTACKCoverageInfo `json:"attck_coverage,omitempty"`
+	ATTACKKillChain    *ATTACKKillChainInfo `json:"attck_kill_chain,omitempty"`
+	ATTACKAPTMatches   []ATTACKAPTMatchInfo `json:"attck_apt_matches,omitempty"`
+	ATTACKPredictedRisk *ATTACKPredictedRiskInfo `json:"attck_predicted_risk,omitempty"`
+	ATTACKFailedTechs  []string             `json:"attck_failed_techniques,omitempty"`
 	Checks             []CheckResult     `json:"checks"`
+}
+
+type ATTACKCoverageInfo struct {
+	TacticID        string  `json:"tactic_id"`
+	TacticName      string  `json:"tactic_name"`
+	TotalTechniques int     `json:"total_techniques"`
+	CoveredDet      int     `json:"covered_detection"`
+	CoverageDet     float64 `json:"coverage_detection"`
+	CoveragePrev    float64 `json:"coverage_prevention"`
+	CoverageComp    float64 `json:"coverage_composite"`
+	RiskLevel       string  `json:"risk_level"`
+}
+
+type ATTACKKillChainInfo struct {
+	Stages       []ATTACKKillChainStage `json:"stages"`
+	OverallScore float64                `json:"overall_score"`
+	WeakestStage string                 `json:"weakest_stage"`
+}
+
+type ATTACKKillChainStage struct {
+	Name         string  `json:"name"`
+	Score        float64 `json:"score"`
+	Status       string  `json:"status"`
+	ChecksPassed int     `json:"checks_passed"`
+	ChecksTotal  int     `json:"checks_total"`
+}
+
+type ATTACKAPTMatchInfo struct {
+	GroupID     string   `json:"group_id"`
+	GroupName   string   `json:"group_name"`
+	Similarity  float64  `json:"similarity"`
+	Confidence  string   `json:"confidence"`
+	OverlapTech []string `json:"overlap_techniques"`
+}
+
+type ATTACKPredictedRiskInfo struct {
+	MaxRiskScore    float64  `json:"max_risk_score"`
+	EnhancedThreat  float64  `json:"enhanced_threat_coeff"`
+	PredictedPaths  int      `json:"predicted_paths"`
+	Recommendations []string `json:"recommendations,omitempty"`
 }
 
 type SPCCVEInfo struct {
@@ -191,15 +236,14 @@ type Weights struct {
 }
 
 func (w *Weights) Normalize() {
-	sum := w.AttackSurface + w.BusinessContinuity + w.OperationTrust + w.Resilience + w.KernelSecurity
-	if sum == 0 || sum == 100 {
+	coreSum := w.AttackSurface + w.BusinessContinuity + w.OperationTrust + w.Resilience
+	if coreSum == 0 || coreSum == 100 {
 		return
 	}
-	w.AttackSurface = w.AttackSurface / sum * 100
-	w.BusinessContinuity = w.BusinessContinuity / sum * 100
-	w.OperationTrust = w.OperationTrust / sum * 100
-	w.Resilience = w.Resilience / sum * 100
-	w.KernelSecurity = w.KernelSecurity / sum * 100
+	w.AttackSurface = w.AttackSurface / coreSum * 100
+	w.BusinessContinuity = w.BusinessContinuity / coreSum * 100
+	w.OperationTrust = w.OperationTrust / coreSum * 100
+	w.Resilience = w.Resilience / coreSum * 100
 }
 
 func (w Weights) Get(domain string) float64 {

@@ -18,7 +18,6 @@ func newTestATTACKModule() *ATTACKModule {
 	m.loadDefaultDetectionRules()
 	m.loadDefaultThreatActors()
 	m.loadDefaultScenarios()
-	m.loadDefaultMitigations()
 	m.loadDefaultBehavioralIndicators()
 	return m
 }

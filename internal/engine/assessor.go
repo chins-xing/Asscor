@@ -25,6 +25,66 @@ type SPCProvider interface {
 	Calculate(hostID string, assetPackages []string) SPCCorrection
 }
 
+type ATTACKProvider interface {
+	CalculateCoverage(checkResults map[string]bool) []ATTACKCoverageResult
+	AssessKillChain(hostID string, checkResults map[string]bool) ATTACKKillChainResult
+	MatchAPTGroup(detectedTechniques []string) []ATTACKAPTMatch
+	PredictRisk(hostID string, detectedTechniques []string, maxDepth int) ATTACKPredictedRisk
+	GetAllTactics() []ATTACKTacticInfo
+}
+
+type ATTACKCoverageResult struct {
+	TacticID        string
+	TacticName      string
+	TotalTechniques int
+	CoveredDet      int
+	CoverageDet     float64
+	CoveragePrev    float64
+	CoverageComp    float64
+	RiskLevel       string
+}
+
+type ATTACKKillChainResult struct {
+	OverallScore float64
+	WeakestStage string
+	Stages       []ATTACKKillChainStage
+}
+
+type ATTACKKillChainStage struct {
+	Name         string
+	Score        float64
+	Status       string
+	ChecksPassed int
+	ChecksTotal  int
+}
+
+type ATTACKAPTMatch struct {
+	GroupID     string
+	GroupName   string
+	Similarity  float64
+	Confidence  string
+	OverlapTech []string
+}
+
+type ATTACKPredictedRisk struct {
+	MaxRiskScore    float64
+	EnhancedThreat  float64
+	PredictedPaths  int
+	Recommendations []string
+}
+
+type ATTACKTacticInfo struct {
+	ID          string
+	Name        string
+	Techniques  []ATTACKTechniqueInfo
+}
+
+type ATTACKTechniqueInfo struct {
+	ID           string
+	Name         string
+	AsscorChecks []string
+}
+
 type SPCLocalAsset struct {
 	HostID        string
 	NetworkZone   string
@@ -53,13 +113,14 @@ type SPCCorrection struct {
 }
 
 type Assessor struct {
-	cfg           *config.Config
-	scoringEngine *DynamicScoringEngine
-	ssamEngine    *ssam.Engine
-	spcProvider   SPCProvider
-	maxWorkers    int
-	resultsCache  sync.Map
-	mu            sync.RWMutex
+	cfg             *config.Config
+	scoringEngine   *DynamicScoringEngine
+	ssamEngine      *ssam.Engine
+	spcProvider     SPCProvider
+	attackProvider  ATTACKProvider
+	maxWorkers      int
+	resultsCache    sync.Map
+	mu              sync.RWMutex
 }
 
 func NewAssessor(cfg *config.Config) *Assessor {
@@ -93,6 +154,10 @@ func NewAssessor(cfg *config.Config) *Assessor {
 
 func (a *Assessor) SetSPCProvider(provider SPCProvider) {
 	a.spcProvider = provider
+}
+
+func (a *Assessor) SetATTACKProvider(provider ATTACKProvider) {
+	a.attackProvider = provider
 }
 
 func (a *Assessor) SSAMEngine() *ssam.Engine {
@@ -190,6 +255,8 @@ func (a *Assessor) Assess(hostID string, hostname string) *model.AssessmentResul
 	} else {
 		ssam.OutputToModel(ssamOutput, result)
 	}
+
+	a.applyATTACK(hostID, result)
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostScore, result)
 
@@ -393,6 +460,8 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 		ssam.OutputToModel(ssamOutput, result)
 	}
 
+	a.applyATTACK(hostID, result)
+
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostScore, result)
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreReport, result)
@@ -512,13 +581,13 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 
 	customFactors := a.cfg.EdgeFactorsCustom
 	if len(customFactors) == 0 {
-		customFactors = map[string]float64{
-			"EF-002FA":     a.cfg.EdgeFactors.TwoFactorFailure,
-			"EF-SYNCOOKIE": 0.75,
-			"EF-SELINUX":   0.80,
-			"EF-APPARMOR":  0.82,
-			"EF-NO-SIEM":   0.90,
-			"EF-NO-IDS":    0.88,
+		customFactors = map[string]config.CustomEdgeFactorConfig{
+			"EF-002FA":     {Factor: a.cfg.EdgeFactors.TwoFactorFailure, TriggerCheck: "EF-001"},
+			"EF-SYNCOOKIE": {Factor: 0.75, TriggerCheck: "RS-005"},
+			"EF-SELINUX":   {Factor: 0.80, TriggerCheck: "OT-005"},
+			"EF-APPARMOR":  {Factor: 0.82, TriggerCheck: "OT-005"},
+			"EF-NO-SIEM":   {Factor: 0.90, TriggerCheck: "RS-007"},
+			"EF-NO-IDS":    {Factor: 0.88, TriggerCheck: "RS-006"},
 		}
 	}
 
@@ -529,13 +598,13 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		switch check.CheckID {
 		case "EF-001":
 			if v, ok := customFactors["EF-002FA"]; ok {
-				localFactors["EF-002FA"] = v
+				localFactors["EF-002FA"] = v.Factor
 			} else {
 				localFactors["EF-002FA"] = a.cfg.EdgeFactors.TwoFactorFailure
 			}
 		case "EF-002":
 			if v, ok := customFactors["EF-3FA"]; ok {
-				localFactors["EF-3FA"] = v
+				localFactors["EF-3FA"] = v.Factor
 			} else {
 				localFactors["EF-3FA"] = 0.82
 			}
@@ -543,8 +612,8 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 				localFactors["EF-002FA"] = 0.82
 			}
 		default:
-			if penalty, ok := customFactors[check.CheckID]; ok && penalty < 1.0 {
-				localFactors[check.CheckID] = penalty
+			if penalty, ok := customFactors[check.CheckID]; ok && penalty.Factor < 1.0 {
+				localFactors[check.CheckID] = penalty.Factor
 			}
 		}
 	}
@@ -576,6 +645,113 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		mapped.NoIDS = v
 	}
 	result.EdgeFactors = mapped
+}
+
+func (a *Assessor) applyATTACK(hostID string, result *model.AssessmentResult) {
+	if a.attackProvider == nil {
+		return
+	}
+
+	checkResults := make(map[string]bool)
+	for _, c := range result.Checks {
+		checkResults[c.CheckID] = c.Passed
+	}
+
+	coverages := a.attackProvider.CalculateCoverage(checkResults)
+	if len(coverages) > 0 {
+		result.ATTACKCoverage = make([]model.ATTACKCoverageInfo, len(coverages))
+		for i, cov := range coverages {
+			result.ATTACKCoverage[i] = model.ATTACKCoverageInfo{
+				TacticID:        cov.TacticID,
+				TacticName:      cov.TacticName,
+				TotalTechniques: cov.TotalTechniques,
+				CoveredDet:      cov.CoveredDet,
+				CoverageDet:     cov.CoverageDet,
+				CoveragePrev:    cov.CoveragePrev,
+				CoverageComp:    cov.CoverageComp,
+				RiskLevel:       cov.RiskLevel,
+			}
+		}
+	}
+
+	killChain := a.attackProvider.AssessKillChain(hostID, checkResults)
+	if killChain.OverallScore > 0 || len(killChain.Stages) > 0 {
+		kcInfo := &model.ATTACKKillChainInfo{
+			OverallScore: killChain.OverallScore,
+			WeakestStage: killChain.WeakestStage,
+			Stages:       make([]model.ATTACKKillChainStage, len(killChain.Stages)),
+		}
+		for i, stage := range killChain.Stages {
+			kcInfo.Stages[i] = model.ATTACKKillChainStage{
+				Name:         stage.Name,
+				Score:        stage.Score,
+				Status:       stage.Status,
+				ChecksPassed: stage.ChecksPassed,
+				ChecksTotal:  stage.ChecksTotal,
+			}
+		}
+		result.ATTACKKillChain = kcInfo
+	}
+
+	var failedTechIDs []string
+	for _, cov := range coverages {
+		if cov.CoverageDet < 100 {
+			for _, tactic := range a.attackProvider.GetAllTactics() {
+				if tactic.ID == cov.TacticID {
+					for _, tech := range tactic.Techniques {
+						if len(tech.AsscorChecks) > 0 {
+							allFailed := false
+							for _, check := range tech.AsscorChecks {
+								if passed, ok := checkResults[check]; ok && !passed {
+									allFailed = true
+									break
+								}
+							}
+							if allFailed {
+								failedTechIDs = append(failedTechIDs, tech.ID)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if len(failedTechIDs) > 0 {
+		aptMatches := a.attackProvider.MatchAPTGroup(failedTechIDs)
+		if len(aptMatches) > 0 {
+			result.ATTACKAPTMatches = make([]model.ATTACKAPTMatchInfo, len(aptMatches))
+			for i, match := range aptMatches {
+				result.ATTACKAPTMatches[i] = model.ATTACKAPTMatchInfo{
+					GroupID:     match.GroupID,
+					GroupName:   match.GroupName,
+					Similarity:  match.Similarity,
+					Confidence:  match.Confidence,
+					OverlapTech: match.OverlapTech,
+				}
+			}
+		}
+
+		predRisk := a.attackProvider.PredictRisk(hostID, failedTechIDs, 3)
+		if predRisk.MaxRiskScore > 0 || predRisk.PredictedPaths > 0 {
+			result.ATTACKPredictedRisk = &model.ATTACKPredictedRiskInfo{
+				MaxRiskScore:    predRisk.MaxRiskScore,
+				EnhancedThreat:  predRisk.EnhancedThreat,
+				PredictedPaths:  predRisk.PredictedPaths,
+				Recommendations: predRisk.Recommendations,
+			}
+		}
+	}
+
+	result.ATTACKFailedTechs = failedTechIDs
+
+	logger.WithComponent("assessor").Info("ATT&CK analysis applied",
+		"host_id", hostID,
+		"coverage_tactics", len(coverages),
+		"kill_chain_score", killChain.OverallScore,
+		"apt_matches", len(result.ATTACKAPTMatches),
+		"failed_techniques", len(failedTechIDs),
+		"predicted_risk", result.ATTACKPredictedRisk != nil)
 }
 
 func (a *Assessor) computeDynamicFinalScore(scores *model.DynamicDomainScores, result *model.AssessmentResult) float64 {
@@ -655,10 +831,28 @@ func (a *Assessor) PrintReport(result *model.AssessmentResult) string {
 
 	report += fmt.Sprintf("\n[ Edge Factor Report ]\n")
 	report += fmt.Sprintf("---------------------------------------------------------------\n")
+	efMap := map[string]float64{
+		"EF-002FA":     result.EdgeFactors.TwoFactorFailure,
+		"EF-SYNCOOKIE": result.EdgeFactors.SYNCookieDisabled,
+		"EF-SELINUX":   result.EdgeFactors.SELinuxDisabled,
+		"EF-APPARMOR":  result.EdgeFactors.AppArmorDisabled,
+		"EF-NO-SIEM":   result.EdgeFactors.NoSIEM,
+		"EF-NO-IDS":    result.EdgeFactors.NoIDS,
+	}
 	for _, ef := range model.ListEdgeFactors() {
-		if ef.Active {
-			report += fmt.Sprintf("  %-12s : %-30s factor=%.2f (ACTIVE)\n", ef.ID, ef.Name, ef.Factor)
+		if val, ok := efMap[ef.ID]; ok && val > 0 && val < 1.0 {
+			report += fmt.Sprintf("  %-12s : %-30s factor=%.2f (ACTIVE)\n", ef.ID, ef.Name, val)
 		}
+	}
+	hasEF := false
+	for _, val := range efMap {
+		if val > 0 && val < 1.0 {
+			hasEF = true
+			break
+		}
+	}
+	if !hasEF {
+		report += fmt.Sprintf("  (no active edge factors)\n")
 	}
 
 	for domain, checks := range checksByDomain {
@@ -691,6 +885,58 @@ func (a *Assessor) PrintReport(result *model.AssessmentResult) string {
 	report += fmt.Sprintf("  Threat Coeff: %.2f    SPC Score: %.2f\n",
 		result.ThreatCoeff, result.SPCScore)
 	report += fmt.Sprintf("---------------------------------------------------------------\n")
+
+	if len(result.ATTACKCoverage) > 0 || result.ATTACKKillChain != nil || len(result.ATTACKAPTMatches) > 0 {
+		report += fmt.Sprintf("\n[ ATT&CK Coverage Analysis ]\n")
+		report += fmt.Sprintf("---------------------------------------------------------------\n")
+		for _, cov := range result.ATTACKCoverage {
+			report += fmt.Sprintf("  %-6s %-22s Det=%5.1f%% Prev=%5.1f%% Comp=%5.1f%% [%s]\n",
+				cov.TacticID, cov.TacticName,
+				cov.CoverageDet*100, cov.CoveragePrev*100, cov.CoverageComp*100,
+				cov.RiskLevel)
+		}
+
+		if result.ATTACKKillChain != nil {
+			report += fmt.Sprintf("\n[ Kill Chain Assessment ]\n")
+			report += fmt.Sprintf("---------------------------------------------------------------\n")
+			for _, stage := range result.ATTACKKillChain.Stages {
+				report += fmt.Sprintf("  %-12s : %6.1f/100  [%s]  (%d/%d checks)\n",
+					stage.Name, stage.Score, stage.Status,
+					stage.ChecksPassed, stage.ChecksTotal)
+			}
+			report += fmt.Sprintf("  Overall: %.1f/100    Weakest: %s\n",
+				result.ATTACKKillChain.OverallScore, result.ATTACKKillChain.WeakestStage)
+		}
+
+		if len(result.ATTACKAPTMatches) > 0 {
+			report += fmt.Sprintf("\n[ APT Group Matches ]\n")
+			report += fmt.Sprintf("---------------------------------------------------------------\n")
+			for _, match := range result.ATTACKAPTMatches {
+				report += fmt.Sprintf("  %s (%s)  similarity=%.2f  confidence=%s  overlap=%v\n",
+					match.GroupName, match.GroupID, match.Similarity, match.Confidence, match.OverlapTech)
+			}
+		}
+
+		if result.ATTACKPredictedRisk != nil {
+			report += fmt.Sprintf("\n[ Predictive Risk ]\n")
+			report += fmt.Sprintf("---------------------------------------------------------------\n")
+			report += fmt.Sprintf("  Max Risk Score: %.2f    Enhanced Threat: %.2f    Predicted Paths: %d\n",
+				result.ATTACKPredictedRisk.MaxRiskScore,
+				result.ATTACKPredictedRisk.EnhancedThreat,
+				result.ATTACKPredictedRisk.PredictedPaths)
+			if len(result.ATTACKPredictedRisk.Recommendations) > 0 {
+				report += fmt.Sprintf("  Recommendations:\n")
+				for _, rec := range result.ATTACKPredictedRisk.Recommendations {
+					report += fmt.Sprintf("    - %s\n", rec)
+				}
+			}
+		}
+
+		if len(result.ATTACKFailedTechs) > 0 {
+			report += fmt.Sprintf("\n  Failed Techniques: %v\n", result.ATTACKFailedTechs)
+		}
+		report += fmt.Sprintf("---------------------------------------------------------------\n")
+	}
 
 	return report
 }

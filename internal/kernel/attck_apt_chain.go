@@ -18,9 +18,9 @@ var tacticOrderMap = map[string]int{
 
 func (m *ATTACKModule) ReconstructAttackChain(hostIDs []string) (*AttackChain, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	if len(hostIDs) == 0 {
+		m.mu.Unlock()
 		return nil, fmt.Errorf("at least one host ID is required")
 	}
 
@@ -48,12 +48,14 @@ func (m *ATTACKModule) ReconstructAttackChain(hostIDs []string) (*AttackChain, e
 	}
 
 	if len(relevantAlerts) == 0 && len(relevantAnomalies) == 0 {
+		m.mu.Unlock()
 		return nil, fmt.Errorf("no unacknowledged alerts or high-score anomalies found for specified hosts")
 	}
 
 	stages := m.buildAttackStages(relevantAlerts, relevantAnomalies, relevantIOCs)
 
 	if len(stages) == 0 {
+		m.mu.Unlock()
 		return nil, fmt.Errorf("could not reconstruct any attack stages from available evidence")
 	}
 
@@ -80,6 +82,10 @@ func (m *ATTACKModule) ReconstructAttackChain(hostIDs []string) (*AttackChain, e
 	}
 
 	m.attackChains = append(m.attackChains, *chain)
+	if len(m.attackChains) > 5000 {
+		m.attackChains = m.attackChains[len(m.attackChains)-5000:]
+	}
+	m.mu.Unlock()
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
 		Topic:   "attck.apt.chain_detected",
@@ -114,7 +120,7 @@ func (m *ATTACKModule) buildAttackStages(alerts []DetectionAlert, anomalies []An
 	for _, a := range alerts {
 		key := a.TechniqueID
 		if _, ok := candidates[key]; !ok {
-			tacticName := m.getTacticName(a.TacticIDs[0])
+			tacticName := m.getTacticNameLocked(a.TacticIDs[0])
 			candidates[key] = &stageCandidate{
 				tacticID:      a.TacticIDs[0],
 				tacticName:    tacticName,
@@ -139,8 +145,8 @@ func (m *ATTACKModule) buildAttackStages(alerts []DetectionAlert, anomalies []An
 		}
 		key := a.TechniqueID
 		if _, ok := candidates[key]; !ok {
-			tacticID := m.getTacticForTechnique(a.TechniqueID)
-			tacticName := m.getTacticName(tacticID)
+			tacticID := m.getTacticForTechniqueLocked(a.TechniqueID)
+			tacticName := m.getTacticNameLocked(tacticID)
 			candidates[key] = &stageCandidate{
 				tacticID:      tacticID,
 				tacticName:    tacticName,
@@ -382,12 +388,19 @@ func (m *ATTACKModule) CorrelateMultiIndicator(hostIDs []string) []MultiIndicato
 			evidence = append(evidence, fmt.Sprintf("IOC: %s=%s", ioc.Type, ioc.Value))
 		}
 
-		score := float64(sourceCount) / 3.0
-		if len(alerts) > 0 && len(iocs) > 0 {
-			score = math.Min(score+0.2, 1.0)
+		alertCount := len(alerts)
+		anomalyCount := len(anomalies)
+		iocCount := len(iocs)
+		beaconCount := 0
+		for _, d := range m.beaconDetections {
+			if d.TechniqueID == techID && (len(hostIDs) == 0 || hostSet[d.HostID]) {
+				beaconCount++
+			}
 		}
 
-		tacticID := m.getTacticForTechnique(techID)
+		score := math.Min(1.0, (float64(alertCount)*0.3+float64(anomalyCount)*0.2+float64(iocCount)*0.3+float64(beaconCount)*0.2)/2.0)
+
+		tacticID := m.getTacticForTechniqueLocked(techID)
 		tacticIDs = append(tacticIDs, tacticID)
 
 		correlations = append(correlations, MultiIndicatorCorrelation{
@@ -455,7 +468,7 @@ func (m *ATTACKModule) correlateByTransitions(alertByTech map[string][]Detection
 				ID:              fmt.Sprintf("mic-trans-%d", time.Now().UnixNano()),
 				IndicatorIDs:    indicatorIDs,
 				TechniqueIDs:    []string{fromTech, toTech},
-				TacticIDs:       []string{m.getTacticForTechnique(fromTech), m.getTacticForTechnique(toTech)},
+				TacticIDs:       []string{m.getTacticForTechniqueLocked(fromTech), m.getTacticForTechniqueLocked(toTech)},
 				HostIDs:         uniqueStrings(commonHosts),
 				Score:           math.Round(prob*1000) / 1000,
 				Description:     fmt.Sprintf("Transition correlation: %s → %s (probability=%.2f, %d shared hosts)", fromTech, toTech, prob, len(commonHosts)),

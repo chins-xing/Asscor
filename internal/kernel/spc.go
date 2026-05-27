@@ -21,13 +21,6 @@ const defaultEPSSDataURL = "https://epss.cyentia.com/epss_scores-current.csv.gz"
 const defaultNVDBaseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 const defaultKEVCatalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
-var cveSlicePool = sync.Pool{
-	New: func() interface{} {
-		s := make([]SPCCVEScore, 0, 1024)
-		return &s
-	},
-}
-
 type MatchType int
 
 const (
@@ -46,6 +39,8 @@ func (m MatchType) Factor() float64 {
 		return 0.7
 	case MatchCPEProduct:
 		return 0.3
+	case MatchCPEVendor:
+		return 0.15
 	default:
 		return 0.0
 	}
@@ -153,6 +148,35 @@ func classifyAction(pscore float64) SPCAction {
 	}
 }
 
+type CVESource string
+
+const (
+	SourceNVD   CVESource = "nvd"
+	SourceKEV   CVESource = "kev"
+	SourceEPSS  CVESource = "epss"
+	SourceMISP  CVESource = "misp"
+	SourceCNNVD CVESource = "cnnvd"
+	SourceCNVD  CVESource = "cnvd"
+	SourceOSCAL CVESource = "oscal"
+)
+
+var cveSourcePriority = map[CVESource]int{
+	SourceNVD:   100,
+	SourceKEV:   90,
+	SourceEPSS:  80,
+	SourceMISP:  70,
+	SourceCNNVD: 60,
+	SourceCNVD:  50,
+	SourceOSCAL: 40,
+}
+
+func (s CVESource) Priority() int {
+	if p, ok := cveSourcePriority[s]; ok {
+		return p
+	}
+	return 0
+}
+
 type SPCCVEScore struct {
 	CVEID        string    `json:"cve_id"`
 	Description  string    `json:"description"`
@@ -170,6 +194,7 @@ type SPCCVEScore struct {
 	OSCALFindingUUID string  `json:"oscal_finding_uuid,omitempty"`
 	APTGroupAssoc    []string `json:"apt_group_assoc,omitempty"`
 	CWEs            []string `json:"cwes,omitempty"`
+	Source         CVESource `json:"source,omitempty"`
 	Matched       bool      `json:"matched"`
 	MatchType     MatchType `json:"match_type"`
 	Exposure      ExposureLevel `json:"exposure"`
@@ -328,6 +353,7 @@ type SPCModule struct {
 	nvdLimiter     chan struct{}
 	nvdTimers      []*time.Timer
 	done           chan struct{}
+	cancelFunc     context.CancelFunc
 }
 
 func NewSPCModule() *SPCModule {
@@ -470,6 +496,10 @@ func (m *SPCModule) Stop(ctx context.Context) error {
 	m.nvdTimers = nil
 	m.mu.Unlock()
 
+	if m.cancelFunc != nil {
+		m.cancelFunc()
+	}
+
 	select {
 	case <-m.done:
 	case <-ctx.Done():
@@ -597,6 +627,11 @@ func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
 func (m *SPCModule) fetchLoop() {
 	defer close(m.done)
 
+	fetchCtx, fetchCancel := context.WithCancel(context.Background())
+	m.mu.Lock()
+	m.cancelFunc = fetchCancel
+	m.mu.Unlock()
+
 	m.FetchFromAllSources()
 
 	ticker := time.NewTicker(m.fetchInterval)
@@ -607,6 +642,9 @@ func (m *SPCModule) fetchLoop() {
 
 	for {
 		select {
+		case <-fetchCtx.Done():
+			m.saveCacheToDisk()
+			return
 		case <-m.kernel.Context().Done():
 			m.saveCacheToDisk()
 			return
@@ -619,26 +657,37 @@ func (m *SPCModule) fetchLoop() {
 }
 
 func (m *SPCModule) cleanupOldCVEs() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	cutoff := time.Now().AddDate(0, 0, -365)
-	before := len(m.cveCache)
-	kept := make([]SPCCVEScore, 0, before)
-	for _, cve := range m.cveCache {
+
+	m.mu.RLock()
+	cacheCopy := make([]SPCCVEScore, len(m.cveCache))
+	copy(cacheCopy, m.cveCache)
+	m.mu.RUnlock()
+
+	kept := make([]SPCCVEScore, 0, len(cacheCopy))
+	removedInBatch := 0
+	for _, cve := range cacheCopy {
 		if cve.DateModified.After(cutoff) || cve.InKEV {
 			kept = append(kept, cve)
+		} else {
+			removedInBatch++
 		}
 	}
-	m.cveCache = kept
-	m.cveIndex = make(map[string]int, len(kept))
+
+	if removedInBatch == 0 {
+		return
+	}
+
+	m.mu.Lock()
+	newIndex := make(map[string]int, len(kept))
 	for i, cve := range kept {
-		m.cveIndex[cve.CVEID] = i
+		newIndex[cve.CVEID] = i
 	}
-	removed := before - len(m.cveCache)
-	if removed > 0 {
-		logger.WithComponent("spc").Info("cleaned old CVE records", "removed", removed, "kept", len(m.cveCache))
-	}
+	m.cveCache = kept
+	m.cveIndex = newIndex
+	m.mu.Unlock()
+
+	logger.WithComponent("spc").Info("cleaned old CVE records", "removed", removedInBatch, "kept", len(kept))
 }
 
 func (m *SPCModule) UpsertAsset(asset LocalAsset) {
@@ -658,7 +707,23 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		m.kernel.Extensions().Execute(m.kernel.Context(), "spc.pre_calculate", hostID)
 	}
 
+	var cves []SPCCVEScore
+	var asset *LocalAsset
+	var kevCatalog map[string]bool
+
 	m.mu.RLock()
+	cves = make([]SPCCVEScore, len(m.cveCache))
+	copy(cves, m.cveCache)
+	if a, ok := m.assetCache[hostID]; ok {
+		assetCopy := *a
+		asset = &assetCopy
+	}
+	kevCatalog = make(map[string]bool, len(m.kevCatalog))
+	for k, v := range m.kevCatalog {
+		kevCatalog[k] = v
+	}
+	m.mu.RUnlock()
+
 	type cpeIndexEntry struct {
 		original string
 		lower    string
@@ -666,10 +731,10 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		product  string
 	}
 
-	cpeIndex := make([][]cpeIndexEntry, len(m.cveCache))
-	for i := range m.cveCache {
-		entries := make([]cpeIndexEntry, 0, len(m.cveCache[i].AffectedCPEs))
-		for _, cpe := range m.cveCache[i].AffectedCPEs {
+	cpeIndex := make([][]cpeIndexEntry, len(cves))
+	for i := range cves {
+		entries := make([]cpeIndexEntry, 0, len(cves[i].AffectedCPEs))
+		for _, cpe := range cves[i].AffectedCPEs {
 			lower := strings.ToLower(cpe)
 			parts := strings.SplitN(lower, ":", 6)
 			vendor := ""
@@ -687,21 +752,6 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		}
 		cpeIndex[i] = entries
 	}
-
-	cvesPtr := cveSlicePool.Get().(*[]SPCCVEScore)
-	cves := (*cvesPtr)[:0]
-	cves = append(cves, m.cveCache...)
-	asset := m.assetCache[hostID]
-	kevCatalog := make(map[string]bool, len(m.kevCatalog))
-	for k, v := range m.kevCatalog {
-		kevCatalog[k] = v
-	}
-	m.mu.RUnlock()
-
-	defer func() {
-		*cvesPtr = cves[:0]
-		cveSlicePool.Put(cvesPtr)
-	}()
 
 	logger.WithComponent("spc").Info("Calculate called",
 		"host_id", hostID,
@@ -765,105 +815,23 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		cve := &cves[i]
 		matchStats.total++
 
-		matchType := MatchNone
-		matched := false
-
-		if len(cve.AffectedCPEs) == 0 {
-			lowerDesc := strings.ToLower(cve.Description)
-			for name := range pkgNameSet {
-				if len(name) < 2 {
-					continue
-				}
-				if strings.Contains(lowerDesc, name) {
-					matchType = MatchCPEProduct
-					matched = true
-					matchStats.byDesc++
-					break
-				}
-			}
-		} else if len(installedCPESet) > 0 {
-			for _, entry := range cpeIndex[i] {
-				for installedCPE := range installedCPESet {
-					mt := m.compareCPE(installedCPE, entry.original)
-					if mt > matchType {
-						matchType = mt
-						matched = true
-					}
-				}
-				if matched && matchType == MatchExactVersion {
-					break
-				}
-			}
-
-			if matched {
-				switch matchType {
-				case MatchExactVersion:
-					matchStats.byExact++
-				case MatchVersionRange:
-					matchStats.byProduct++
-				case MatchCPEProduct:
-					matchStats.byProduct++
-				case MatchCPEVendor:
-					matchStats.byVendor++
-				}
-			}
-
-			if !matched {
-				for _, entry := range cpeIndex[i] {
-					if pkgNameSet[entry.product] {
-						matchType = MatchCPEProduct
-						matched = true
-						matchStats.byProduct++
-						break
-					}
-					if pkgNameSet[entry.vendor] && len(entry.vendor) >= 2 {
-						matchType = MatchCPEVendor
-						matched = true
-						matchStats.byVendor++
-						break
-					}
-				}
-			}
-		} else {
-			for _, entry := range cpeIndex[i] {
-				if pkgNameSet[entry.product] {
-					matchType = MatchCPEProduct
-					matched = true
-					matchStats.byProduct++
-					break
-				}
-				if pkgNameSet[entry.vendor] && len(entry.vendor) >= 2 {
-					matchType = MatchCPEVendor
-					matched = true
-					matchStats.byVendor++
-					break
-				}
-			}
-
-			if !matched {
-				for name := range pkgNameSet {
-					if len(name) < 2 {
-						continue
-					}
-					for _, entry := range cpeIndex[i] {
-						if strings.Contains(entry.lower, name) {
-							matchType = MatchCPEProduct
-							matched = true
-							matchStats.byProduct++
-							break
-						}
-					}
-					if matched {
-						break
-					}
-				}
-			}
-		}
+		matchType, matched := m.matchCPE(cve, asset, assetPackages)
 
 		if !matched {
 			continue
 		}
 		matchStats.matched++
+
+		switch matchType {
+		case MatchExactVersion:
+			matchStats.byExact++
+		case MatchVersionRange:
+			matchStats.byProduct++
+		case MatchCPEProduct:
+			matchStats.byProduct++
+		case MatchCPEVendor:
+			matchStats.byVendor++
+		}
 		if len(cve.AffectedCPEs) == 0 {
 			matchStats.noCPEs++
 		}
@@ -879,7 +847,7 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		cvssFactor := math.Min(1.0, cve.CVSS/10.0)
 		epssFactor := 0.0
 		if cve.EPSS > 0 {
-			epssFactor = math.Min(1.0, -math.Log1p(-cve.EPSS)/5.0)
+			epssFactor = math.Min(1.0, cve.EPSS)
 		}
 		kevFactor := 0.0
 		if cve.InKEV {

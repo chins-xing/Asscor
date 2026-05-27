@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -825,14 +824,7 @@ func (a *Agent) extractPackagesFromChecks() []string {
 }
 
 func (a *Agent) safeExec(name string, args []string) (string, error) {
-	if !common.IsCommandAllowed(name) {
-		return "", fmt.Errorf("command %s not in allowlist", name)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
-	out, err := cmd.Output()
-	return string(out), err
+	return common.RunCmdTimeout(30*time.Second, name, args...)
 }
 
 func (a *Agent) collectCPEs() []string {

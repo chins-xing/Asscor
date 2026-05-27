@@ -10,11 +10,16 @@ import (
 	"github.com/asscor/asscor/internal/model"
 )
 
+type CustomEdgeFactorConfig struct {
+	Factor       float64
+	TriggerCheck string
+}
+
 type Config struct {
 	Weights      model.Weights
 	Threshold    float64
 	EdgeFactors       model.EdgeFactors
-	EdgeFactorsCustom map[string]float64
+	EdgeFactorsCustom map[string]CustomEdgeFactorConfig
 	ThreatCoeff  float64
 	SPCEnabled   bool
 	ComplianceFramework string
@@ -489,13 +494,18 @@ func Parse(content string) (*Config, error) {
 
 	if sec, ok := sections["edge_factors.custom"]; ok {
 		if cfg.EdgeFactorsCustom == nil {
-			cfg.EdgeFactorsCustom = make(map[string]float64)
+			cfg.EdgeFactorsCustom = make(map[string]CustomEdgeFactorConfig)
 		}
+		triggerSec := sections["edge_factors.custom_triggers"]
 		for k, v := range sec {
 			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 && f < 1.0 {
 				model.SetEdgeFactorValue(k, f)
 				model.SetEdgeFactorActive(k, false)
-				cfg.EdgeFactorsCustom[k] = f
+				tc := triggerSec[k]
+				cfg.EdgeFactorsCustom[k] = CustomEdgeFactorConfig{
+					Factor:       f,
+					TriggerCheck: tc,
+				}
 			}
 		}
 	}

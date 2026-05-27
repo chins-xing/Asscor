@@ -8,7 +8,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
+)
+
+const (
+	maxAlerts           = 10000
+	maxAnomalies        = 5000
+	maxIOCs             = 50000
+	maxTTPTracks        = 10000
+	maxEmulationResults = 1000
+	maxAssessmentReports = 500
+	maxAttackChains     = 5000
+	maxBehavioralAlerts = 10000
+	maxBeaconDetections = 5000
+	maxHuntHypotheses   = 5000
+	maxHuntResults      = 5000
 )
 
 type ATTACKTactic struct {
@@ -124,7 +140,6 @@ type ATTACKModule struct {
 	emulationResults   []EmulationResult
 	assessmentReports  []AssessmentReport
 	improvementTracks  map[string]ImprovementTrack
-	defaultMitigations map[string][]Mitigation
 	attackChains       []AttackChain
 	behavioralIndicators []BehavioralIndicator
 	baselines          map[string]BehavioralBaseline
@@ -134,8 +149,26 @@ type ATTACKModule struct {
 	huntResults        []HuntResult
 	yaraRules          []YARARule
 	sigmaRules         []SigmaRule
+	reputationDB       []ReputationEntry
 	crossHostConns     []CrossHostConnection
 	lateralEvidences   []LateralMovementEvidence
+	analysisHistory    map[string][]HostAnalysisRecord
+}
+
+type HostAnalysisRecord struct {
+	HostID            string               `json:"host_id"`
+	Timestamp         time.Time            `json:"timestamp"`
+	AssessmentScore   float64              `json:"assessment_score"`
+	FailedChecks      []string             `json:"failed_checks"`
+	FailedTechniques  []string             `json:"failed_techniques"`
+	Coverages         []ATTACKCoverage     `json:"coverages"`
+	KillChain         KillChainAssessment  `json:"kill_chain"`
+	APTMatches        []APTMatchResult     `json:"apt_matches"`
+	PredictedRisk     *PredictiveRisk      `json:"predicted_risk,omitempty"`
+	AttackChainID     string               `json:"attack_chain_id,omitempty"`
+	GapAnalysisID     string               `json:"gap_analysis_id,omitempty"`
+	HuntHypothesesGen int                  `json:"hunt_hypotheses_generated"`
+	AlertsTriggered   int                  `json:"alerts_triggered"`
 }
 
 func NewATTACKModule() *ATTACKModule {
@@ -149,9 +182,59 @@ func NewATTACKModule() *ATTACKModule {
 		safeEmulation:        true,
 		threatActors:         make(map[string]ThreatActorProfile),
 		improvementTracks:    make(map[string]ImprovementTrack),
-		defaultMitigations:   make(map[string][]Mitigation),
+		reputationDB: []ReputationEntry{
+			{Destination: "ntp.org", Service: "ntp", Category: "time_sync", IsLegitimate: true, Reason: "standard NTP service", Source: "builtin"},
+			{Destination: "time.windows.com", Service: "ntp", Category: "time_sync", IsLegitimate: true, Reason: "Windows NTP service", Source: "builtin"},
+			{Destination: "time.google.com", Service: "ntp", Category: "time_sync", IsLegitimate: true, Reason: "Google NTP service", Source: "builtin"},
+			{Destination: "pool.ntp.org", Service: "ntp", Category: "time_sync", IsLegitimate: true, Reason: "NTP pool service", Source: "builtin"},
+			{Destination: "updates.microsoft.com", Service: "https", Category: "os_update", IsLegitimate: true, Reason: "Windows Update", Source: "builtin"},
+			{Destination: "update.googleapis.com", Service: "https", Category: "os_update", IsLegitimate: true, Reason: "Chrome/Android update", Source: "builtin"},
+			{Destination: "api.github.com", Service: "https", Category: "dev_tool", IsLegitimate: true, Reason: "GitHub API", Source: "builtin"},
+			{Destination: "registry.npmjs.org", Service: "https", Category: "dev_tool", IsLegitimate: true, Reason: "npm registry", Source: "builtin"},
+			{Destination: "pypi.org", Service: "https", Category: "dev_tool", IsLegitimate: true, Reason: "Python package index", Source: "builtin"},
+			{Destination: "dns.google", Service: "dns", Category: "dns", IsLegitimate: true, Reason: "Google DNS", Source: "builtin"},
+			{Destination: "1.1.1.1", Service: "dns", Category: "dns", IsLegitimate: true, Reason: "Cloudflare DNS", Source: "builtin"},
+			{Destination: "8.8.8.8", Service: "dns", Category: "dns", IsLegitimate: true, Reason: "Google DNS", Source: "builtin"},
+		},
 		baselines:            make(map[string]BehavioralBaseline),
+		analysisHistory:      make(map[string][]HostAnalysisRecord),
 	}
+}
+
+func (m *ATTACKModule) ConfigureFromConfig(cfg *config.Config) {
+	if cfg == nil {
+		m.loadDefaultMatrix()
+		m.loadDefaultAPTProfiles()
+		m.buildTransitionMatrix()
+		m.loadDefaultDetectionRules()
+		m.loadDefaultThreatActors()
+		m.loadDefaultScenarios()
+		m.loadDefaultBehavioralIndicators()
+		return
+	}
+
+	m.attckVersion = cfg.ATTACK.Version
+	m.beaconThreshold = cfg.ATTACK.BeaconThreshold
+	m.attributionThreshold = cfg.ATTACK.AttributionThreshold
+	m.autoHunt = cfg.ATTACK.AutoHunt
+	m.safeEmulation = cfg.ATTACK.SafeEmulation
+	if m.attckVersion == "" {
+		m.attckVersion = "v19"
+	}
+	if m.beaconThreshold <= 0 || m.beaconThreshold > 1.0 {
+		m.beaconThreshold = 0.7
+	}
+	if m.attributionThreshold <= 0 || m.attributionThreshold > 1.0 {
+		m.attributionThreshold = 0.6
+	}
+
+	m.loadDefaultMatrix()
+	m.loadDefaultAPTProfiles()
+	m.buildTransitionMatrix()
+	m.loadDefaultDetectionRules()
+	m.loadDefaultThreatActors()
+	m.loadDefaultScenarios()
+	m.loadDefaultBehavioralIndicators()
 }
 
 func (m *ATTACKModule) Info() PluginInfo {
@@ -199,7 +282,6 @@ func (m *ATTACKModule) Init(ctx context.Context, kc KernelContext) error {
 	m.loadDefaultDetectionRules()
 	m.loadDefaultThreatActors()
 	m.loadDefaultScenarios()
-	m.loadDefaultMitigations()
 	m.loadDefaultBehavioralIndicators()
 
 	kc.Container().Bind((*ATTACKInterface)(nil), m)
@@ -275,12 +357,15 @@ func (m *ATTACKModule) Init(ctx context.Context, kc KernelContext) error {
 
 func (m *ATTACKModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
+	m.kernel.Bus().Subscribe(TopicAssessorResult, "attck", m.onAssessmentResult)
 	logger.WithComponent("attck").Info("started", "version", m.attckVersion)
 	return nil
 }
 
 func (m *ATTACKModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+
+	m.kernel.Bus().UnsubscribeAll("attck")
 
 	m.mu.Lock()
 	m.alerts = nil
@@ -308,6 +393,318 @@ func (m *ATTACKModule) State() PluginState {
 
 func (m *ATTACKModule) Version() string {
 	return m.attckVersion
+}
+
+func (m *ATTACKModule) extractFailedTechniques(checkResults map[string]bool) []string {
+	failed := make(map[string]bool)
+	for _, tactic := range m.tactics {
+		for _, tech := range tactic.Techniques {
+			for _, check := range tech.AsscorChecks {
+				if passed, ok := checkResults[check]; ok && !passed {
+					failed[tech.ID] = true
+					break
+				}
+			}
+		}
+	}
+	result := make([]string, 0, len(failed))
+	for techID := range failed {
+		result = append(result, techID)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func (m *ATTACKModule) extractFailedChecks(checkResults map[string]bool) []string {
+	var failed []string
+	for checkID, passed := range checkResults {
+		if !passed {
+			failed = append(failed, checkID)
+		}
+	}
+	sort.Strings(failed)
+	return failed
+}
+
+func trimSlice[T any](s []T, maxLen int) []T {
+	if len(s) > maxLen {
+		return s[len(s)-maxLen:]
+	}
+	return s
+}
+
+func (m *ATTACKModule) storeAnalysisRecord(record HostAnalysisRecord) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	history := m.analysisHistory[record.HostID]
+	history = append(history, record)
+	if len(history) > 50 {
+		history = history[len(history)-50:]
+	}
+	m.analysisHistory[record.HostID] = history
+}
+
+func (m *ATTACKModule) GetHostAnalysisHistory(hostID string, limit int) []HostAnalysisRecord {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	history := m.analysisHistory[hostID]
+	if len(history) == 0 {
+		return nil
+	}
+
+	if limit <= 0 || limit > len(history) {
+		limit = len(history)
+	}
+
+	start := len(history) - limit
+	result := make([]HostAnalysisRecord, limit)
+	copy(result, history[start:])
+	return result
+}
+
+func (m *ATTACKModule) onAssessmentResult(ctx context.Context, msg Message) error {
+	result, ok := msg.Payload.(*model.AssessmentResult)
+	if !ok {
+		return nil
+	}
+
+	hostID := result.HostID
+	checkResults := make(map[string]bool)
+	for _, c := range result.Checks {
+		checkResults[c.CheckID] = c.Passed
+	}
+
+	record := HostAnalysisRecord{
+		HostID:          hostID,
+		Timestamp:       time.Now(),
+		AssessmentScore: result.FinalScore,
+		FailedChecks:    m.extractFailedChecks(checkResults),
+		FailedTechniques: m.extractFailedTechniques(checkResults),
+	}
+
+	logger.WithComponent("attck").Info("assessment pipeline started",
+		"host_id", hostID,
+		"failed_checks", len(record.FailedChecks),
+		"failed_techniques", len(record.FailedTechniques),
+	)
+
+	coverages := m.CalculateCoverage(checkResults)
+	record.Coverages = coverages
+
+	m.kernel.Extensions().Execute(ctx, "attck.coverage.complete", coverages)
+
+	killChain := m.AssessKillChain(hostID, checkResults)
+	record.KillChain = killChain
+
+	var weakTactics []string
+	for _, cov := range coverages {
+		if cov.CoverageDet < 50 {
+			weakTactics = append(weakTactics, cov.TacticID)
+		}
+	}
+
+	var aptMatches []APTMatchResult
+	if len(weakTactics) > 0 {
+		aptMatches = m.MatchAPTGroup(weakTactics)
+	}
+	record.APTMatches = aptMatches
+
+	if len(aptMatches) > 0 {
+		m.kernel.Extensions().Execute(ctx, "attck.apt.matched", aptMatches)
+	}
+
+	alertsTriggered := 0
+	if len(record.FailedTechniques) > 0 {
+		alertsTriggered = m.triggerAlertsForFailedChecks(ctx, hostID, checkResults)
+	}
+	record.AlertsTriggered = alertsTriggered
+
+	huntGen := 0
+	if m.autoHunt && len(record.FailedTechniques) > 0 {
+		hypotheses, err := m.AutoGenerateHypotheses(hostID)
+		if err == nil {
+			huntGen = len(hypotheses)
+		}
+	}
+	record.HuntHypothesesGen = huntGen
+
+	var chainID string
+	if len(record.FailedTechniques) >= 3 {
+		chain, err := m.ReconstructAttackChain([]string{hostID})
+		if err == nil && chain != nil {
+			chainID = chain.ID
+		}
+	}
+	record.AttackChainID = chainID
+
+	if chainID != "" {
+		attribution, err := m.PerformAttribution(chainID)
+		if err == nil && attribution != nil {
+			m.kernel.Extensions().Execute(ctx, "attck.apt.attribution", attribution)
+		}
+	}
+
+	var gapID string
+	if len(record.FailedTechniques) > 0 {
+		gapReport, err := m.PerformGapAnalysis(hostID)
+		if err == nil && gapReport != nil {
+			gapID = gapReport.ID
+		}
+	}
+	record.GapAnalysisID = gapID
+
+	if len(record.FailedTechniques) > 0 {
+		predictedRisk := m.PredictRisk(hostID, record.FailedTechniques, 3)
+		record.PredictedRisk = &predictedRisk
+		m.kernel.Extensions().Execute(ctx, "attck.risk.predicted", predictedRisk)
+
+		if predictedRisk.EnhancedThreat > 1.0 {
+			m.kernel.Bus().Publish(ctx, Message{
+				Topic: "attck.threat.enhanced",
+				Payload: map[string]interface{}{
+					"host_id":       hostID,
+					"threat_coeff":  predictedRisk.EnhancedThreat,
+					"max_risk":      predictedRisk.MaxRiskScore,
+					"techniques":    record.FailedTechniques,
+				},
+				Source: "attck",
+			})
+		}
+	}
+
+	m.storeAnalysisRecord(record)
+
+	m.kernel.Bus().Publish(ctx, Message{
+		Topic: "attck.analysis.complete",
+		Payload: map[string]interface{}{
+			"host_id":            hostID,
+			"coverages":          coverages,
+			"kill_chain":         killChain,
+			"apt_matches":        aptMatches,
+			"failed_techniques":  record.FailedTechniques,
+			"alerts_triggered":   alertsTriggered,
+			"hunt_generated":     huntGen,
+			"attack_chain_id":    chainID,
+			"gap_analysis_id":    gapID,
+		},
+		Source: "attck",
+	})
+
+	logger.WithComponent("attck").Info("assessment pipeline completed",
+		"host_id", hostID,
+		"tactics_analyzed", len(coverages),
+		"kill_chain_score", killChain.OverallScore,
+		"apt_matches", len(aptMatches),
+		"failed_techniques", len(record.FailedTechniques),
+		"alerts_triggered", alertsTriggered,
+		"hunt_hypotheses", huntGen,
+		"attack_chain", chainID,
+		"gap_analysis", gapID,
+	)
+
+	return nil
+}
+
+func (m *ATTACKModule) triggerAlertsForFailedChecks(ctx context.Context, hostID string, checkResults map[string]bool) int {
+	triggered := 0
+
+	failedTechs := m.extractFailedTechniques(checkResults)
+	if len(failedTechs) == 0 {
+		return 0
+	}
+
+	failedTechSet := make(map[string]bool, len(failedTechs))
+	for _, t := range failedTechs {
+		failedTechSet[t] = true
+	}
+
+	m.mu.RLock()
+	rules := make([]DetectionRule, len(m.detectionRules))
+	copy(rules, m.detectionRules)
+	m.mu.RUnlock()
+
+	for _, rule := range rules {
+		if !rule.Enabled {
+			continue
+		}
+
+		if !failedTechSet[rule.TechniqueID] {
+			continue
+		}
+
+		fields := make(map[string]string)
+		for checkID, passed := range checkResults {
+			if !passed {
+				fields[checkID] = "failed"
+			}
+		}
+
+		alert, err := m.EvaluateDetectionRule(rule.ID, hostID, "", fields)
+		if err != nil || alert == nil {
+			continue
+		}
+
+		triggered++
+		m.kernel.Extensions().Execute(ctx, "attck.detection.alert", alert)
+	}
+
+	return triggered
+}
+
+func (m *ATTACKModule) GetLastAnalysis(hostID string) map[string]interface{} {
+	m.mu.RLock()
+	history := m.analysisHistory[hostID]
+	m.mu.RUnlock()
+
+	if len(history) > 0 {
+		latest := history[len(history)-1]
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		return map[string]interface{}{
+			"host_id":           hostID,
+			"attck_version":     m.attckVersion,
+			"tactics_count":     len(m.tactics),
+			"last_assessment":   latest.Timestamp,
+			"assessment_score":  latest.AssessmentScore,
+			"failed_checks":     len(latest.FailedChecks),
+			"failed_techniques": len(latest.FailedTechniques),
+			"coverages":         latest.Coverages,
+			"kill_chain":        latest.KillChain,
+			"apt_matches":       latest.APTMatches,
+			"apt_groups":        len(m.aptGroups),
+			"detection_rules":   len(m.detectionRules),
+			"threat_actors":     len(m.threatActors),
+			"scenarios":         len(m.scenarios),
+			"auto_hunt":         m.autoHunt,
+			"beacon_threshold":  m.beaconThreshold,
+			"alerts_triggered":  latest.AlertsTriggered,
+			"hunt_generated":    latest.HuntHypothesesGen,
+			"attack_chain_id":   latest.AttackChainID,
+			"gap_analysis_id":   latest.GapAnalysisID,
+		}
+	}
+
+	coverages := m.CalculateCoverage(nil)
+	killChain := m.AssessKillChain(hostID, nil)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return map[string]interface{}{
+		"host_id":          hostID,
+		"attck_version":    m.attckVersion,
+		"tactics_count":    len(m.tactics),
+		"coverages":        coverages,
+		"kill_chain":       killChain,
+		"apt_groups":       len(m.aptGroups),
+		"detection_rules":  len(m.detectionRules),
+		"threat_actors":    len(m.threatActors),
+		"scenarios":        len(m.scenarios),
+		"auto_hunt":        m.autoHunt,
+		"beacon_threshold": m.beaconThreshold,
+	}
 }
 
 func (m *ATTACKModule) loadDefaultMatrix() {
@@ -669,10 +1066,7 @@ func (m *ATTACKModule) GetTechniquesByTactic(tacticID string) []ATTACKTechnique 
 	return nil
 }
 
-func (m *ATTACKModule) CalculateCoverage(checkResults map[string]bool) []ATTACKCoverage {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
+func (m *ATTACKModule) calculateCoverageLocked(checkResults map[string]bool) []ATTACKCoverage {
 	results := make([]ATTACKCoverage, 0, len(m.tactics))
 
 	for _, tactic := range m.tactics {
@@ -746,6 +1140,14 @@ func (m *ATTACKModule) CalculateCoverage(checkResults map[string]bool) []ATTACKC
 		})
 	}
 
+	return results
+}
+
+func (m *ATTACKModule) CalculateCoverage(checkResults map[string]bool) []ATTACKCoverage {
+	m.mu.RLock()
+	results := m.calculateCoverageLocked(checkResults)
+	m.mu.RUnlock()
+
 	m.kernel.Extensions().Execute(m.kernel.Context(), "attck.coverage.complete", results)
 	return results
 }
@@ -786,7 +1188,6 @@ func (m *ATTACKModule) GetCoverageSummary(checkResults map[string]bool) map[stri
 
 func (m *ATTACKModule) MatchAPTGroup(detectedTechniques []string) []APTMatchResult {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
 
 	detectedSet := make(map[string]bool)
 	for _, t := range detectedTechniques {
@@ -818,6 +1219,9 @@ func (m *ATTACKModule) MatchAPTGroup(detectedTechniques []string) []APTMatchResu
 
 		jaccard := float64(len(intersection)) / float64(len(union))
 		similarity := jaccard * weightedSum
+		if similarity > 1.0 {
+			similarity = 1.0
+		}
 
 		confidence := "low"
 		switch {
@@ -841,15 +1245,21 @@ func (m *ATTACKModule) MatchAPTGroup(detectedTechniques []string) []APTMatchResu
 		return results[i].Similarity > results[j].Similarity
 	})
 
+	var highConfResults []APTMatchResult
 	for _, r := range results {
 		if r.Confidence == "high" {
-			m.kernel.Bus().Publish(m.kernel.Context(), Message{
-				Topic:   "apt.threat.matched",
-				Payload: r,
-				Source:  "attck",
-			})
-			m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.matched", r)
+			highConfResults = append(highConfResults, r)
 		}
+	}
+	m.mu.RUnlock()
+
+	for _, r := range highConfResults {
+		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+			Topic:   "apt.threat.matched",
+			Payload: r,
+			Source:  "attck",
+		})
+		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.matched", r)
 	}
 
 	return results
@@ -858,7 +1268,17 @@ func (m *ATTACKModule) MatchAPTGroup(detectedTechniques []string) []APTMatchResu
 func (m *ATTACKModule) GetAPTGroup(groupID string) *APTGroupProfile {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.aptGroups[groupID]
+	if g, ok := m.aptGroups[groupID]; ok {
+		cp := *g
+		cp.Techniques = make(map[string]float64, len(g.Techniques))
+		for k, v := range g.Techniques {
+			cp.Techniques[k] = v
+		}
+		cp.Aliases = make([]string, len(g.Aliases))
+		copy(cp.Aliases, g.Aliases)
+		return &cp
+	}
+	return nil
 }
 
 func (m *ATTACKModule) ListAPTGroups() []string {
@@ -878,7 +1298,6 @@ func (m *ATTACKModule) PredictRisk(hostID string, detectedTechniques []string, m
 	}
 
 	m.mu.RLock()
-	defer m.mu.RUnlock()
 
 	predicted := PredictiveRisk{
 		HostID:      hostID,
@@ -904,6 +1323,7 @@ func (m *ATTACKModule) PredictRisk(hostID string, detectedTechniques []string, m
 
 	recommendations = m.generateRecommendations(detectedTechniques, predicted.PredictedPaths)
 	predicted.Recommendations = recommendations
+	m.mu.RUnlock()
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
 		Topic:   "apt.risk.predicted",
@@ -987,22 +1407,7 @@ func (m *ATTACKModule) generateRecommendations(detected []string, paths []Predic
 	return recs
 }
 
-func (m *ATTACKModule) AssessKillChain(hostID string, checkResults map[string]bool) KillChainAssessment {
-	stages := []KillChainStage{
-		{Name: "侦察", Tactics: []string{"TA0043", "TA0042"}, Score: 100},
-		{Name: "投递", Tactics: []string{"TA0001"}, Score: 100},
-		{Name: "突破", Tactics: []string{"TA0002"}, Score: 100},
-		{Name: "提权", Tactics: []string{"TA0004"}, Score: 100},
-		{Name: "驻留", Tactics: []string{"TA0003"}, Score: 100},
-		{Name: "横向移动", Tactics: []string{"TA0008"}, Score: 100},
-		{Name: "窃取", Tactics: []string{"TA0010", "TA0009"}, Score: 100},
-		{Name: "防御规避", Tactics: []string{"TA0005"}, Score: 100},
-		{Name: "破坏", Tactics: []string{"TA0040"}, Score: 100},
-	}
-
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
+func (m *ATTACKModule) assessKillChainLocked(hostID string, checkResults map[string]bool, stages []KillChainStage) KillChainAssessment {
 	for si := range stages {
 		stage := &stages[si]
 		totalChecks := 0
@@ -1068,6 +1473,26 @@ func (m *ATTACKModule) AssessKillChain(hostID string, checkResults map[string]bo
 		WeakestStage:   weakestStage,
 		AssessmentTime: time.Now(),
 	}
+}
+
+func (m *ATTACKModule) AssessKillChain(hostID string, checkResults map[string]bool) KillChainAssessment {
+	stages := []KillChainStage{
+		{Name: "侦察", Tactics: []string{"TA0043", "TA0042"}, Score: 100},
+		{Name: "投递", Tactics: []string{"TA0001"}, Score: 100},
+		{Name: "突破", Tactics: []string{"TA0002"}, Score: 100},
+		{Name: "提权", Tactics: []string{"TA0004"}, Score: 100},
+		{Name: "驻留", Tactics: []string{"TA0003"}, Score: 100},
+		{Name: "横向移动", Tactics: []string{"TA0008"}, Score: 100},
+		{Name: "窃取", Tactics: []string{"TA0010", "TA0009"}, Score: 100},
+		{Name: "防御规避", Tactics: []string{"TA0005"}, Score: 100},
+		{Name: "破坏", Tactics: []string{"TA0040"}, Score: 100},
+	}
+
+	m.mu.RLock()
+	result := m.assessKillChainLocked(hostID, checkResults, stages)
+	m.mu.RUnlock()
+
+	return result
 }
 
 func (m *ATTACKModule) GetTransitionMatrix() TransitionMatrix {
@@ -1213,4 +1638,6 @@ type ATTACKInterface interface {
 	MatchSigmaRules(hostID string, logEntries []map[string]string) []RuleMatchResult
 	AnalyzeCrossHostConnections(connections []CrossHostConnection) []LateralMovementEvidence
 	ComputeCausalChain(techniqueIDs []string) *CausalChain
+	GetHostAnalysisHistory(hostID string, limit int) []HostAnalysisRecord
+	GetLastAnalysis(hostID string) map[string]interface{}
 }

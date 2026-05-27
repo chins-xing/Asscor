@@ -43,16 +43,22 @@ func (m *SPCModule) AddCVEs(scores []SPCCVEScore) {
 
 func (m *SPCModule) mergeCVEInPlace(idx int, incoming SPCCVEScore) {
 	existing := &m.cveCache[idx]
-	if incoming.CVSS > existing.CVSS {
+
+	incomingPriority := incoming.Source.Priority()
+	existingPriority := existing.Source.Priority()
+
+	if incoming.CVSS > 0 && incomingPriority >= existingPriority {
+		existing.CVSS = incoming.CVSS
+	} else if incoming.CVSS > existing.CVSS {
 		existing.CVSS = incoming.CVSS
 	}
-	if incoming.CVSSVector != "" && existing.CVSSVector == "" {
+	if incoming.CVSSVector != "" && (existing.CVSSVector == "" || incomingPriority > existingPriority) {
 		existing.CVSSVector = incoming.CVSSVector
 	}
-	if incoming.EPSS > 0 && incoming.EPSS != existing.EPSS {
+	if incoming.EPSS > 0 && (existing.EPSS == 0 || incomingPriority > existingPriority) {
 		existing.EPSS = incoming.EPSS
 	}
-	if incoming.EPSSPercent > 0 && incoming.EPSSPercent != existing.EPSSPercent {
+	if incoming.EPSSPercent > 0 && (existing.EPSSPercent == 0 || incomingPriority > existingPriority) {
 		existing.EPSSPercent = incoming.EPSSPercent
 	}
 	if incoming.InKEV && !existing.InKEV {
@@ -64,23 +70,26 @@ func (m *SPCModule) mergeCVEInPlace(idx int, incoming SPCCVEScore) {
 	if !incoming.DateModified.IsZero() && incoming.DateModified.After(existing.DateModified) {
 		existing.DateModified = incoming.DateModified
 	}
-	if len(incoming.AffectedCPEs) > 0 && len(existing.AffectedCPEs) == 0 {
+	if len(incoming.AffectedCPEs) > 0 && (len(existing.AffectedCPEs) == 0 || incomingPriority > existingPriority) {
 		existing.AffectedCPEs = incoming.AffectedCPEs
 	}
-	if len(incoming.AttckTechniques) > 0 && len(existing.AttckTechniques) == 0 {
+	if len(incoming.AttckTechniques) > 0 && (len(existing.AttckTechniques) == 0 || incomingPriority > existingPriority) {
 		existing.AttckTechniques = incoming.AttckTechniques
 	}
-	if len(incoming.MISPGalaxyTags) > 0 && len(existing.MISPGalaxyTags) == 0 {
+	if len(incoming.MISPGalaxyTags) > 0 && (len(existing.MISPGalaxyTags) == 0 || incomingPriority > existingPriority) {
 		existing.MISPGalaxyTags = incoming.MISPGalaxyTags
 	}
-	if len(incoming.APTGroupAssoc) > 0 && len(existing.APTGroupAssoc) == 0 {
+	if len(incoming.APTGroupAssoc) > 0 && (len(existing.APTGroupAssoc) == 0 || incomingPriority > existingPriority) {
 		existing.APTGroupAssoc = incoming.APTGroupAssoc
 	}
-	if len(incoming.CWEs) > 0 && len(existing.CWEs) == 0 {
+	if len(incoming.CWEs) > 0 && (len(existing.CWEs) == 0 || incomingPriority > existingPriority) {
 		existing.CWEs = incoming.CWEs
 	}
-	if incoming.Description != "" && existing.Description == "" {
+	if incoming.Description != "" && (existing.Description == "" || incomingPriority > existingPriority) {
 		existing.Description = incoming.Description
+	}
+	if incomingPriority > existingPriority {
+		existing.Source = incoming.Source
 	}
 }
 

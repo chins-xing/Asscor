@@ -3,6 +3,7 @@ package kernel
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -85,7 +86,6 @@ func (m *ATTACKModule) DeleteDetectionRule(ruleID string) bool {
 
 func (m *ATTACKModule) EvaluateDetectionRule(ruleID, hostID, rawLog string, fields map[string]string) (*DetectionAlert, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	var rule *DetectionRule
 	for i := range m.detectionRules {
@@ -95,16 +95,21 @@ func (m *ATTACKModule) EvaluateDetectionRule(ruleID, hostID, rawLog string, fiel
 		}
 	}
 	if rule == nil {
+		m.mu.Unlock()
 		return nil, fmt.Errorf("detection rule not found: %s", ruleID)
 	}
 	if !rule.Enabled {
+		m.mu.Unlock()
 		return nil, fmt.Errorf("detection rule is disabled: %s", ruleID)
 	}
 
 	matched := m.matchRule(rule, rawLog, fields)
 	if !matched {
+		m.mu.Unlock()
 		return nil, nil
 	}
+
+	sanitizedLog := sanitizeRawLog(rawLog)
 
 	alert := DetectionAlert{
 		ID:          fmt.Sprintf("alert-%d", time.Now().UnixNano()),
@@ -115,13 +120,18 @@ func (m *ATTACKModule) EvaluateDetectionRule(ruleID, hostID, rawLog string, fiel
 		Severity:    rule.Severity,
 		HostID:      hostID,
 		Description: rule.Description,
-		RawLog:      rawLog,
+		RawLog:      sanitizedLog,
 		Fields:      fields,
 		Status:      "new",
 		Timestamp:   time.Now(),
 	}
 
 	m.alerts = append(m.alerts, alert)
+	if len(m.alerts) > 10000 {
+		m.alerts = m.alerts[len(m.alerts)-10000:]
+	}
+
+	m.mu.Unlock()
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
 		Topic:   "attck.detection.alert",
@@ -192,7 +202,6 @@ func (m *ATTACKModule) AcknowledgeAlert(alertID string) bool {
 
 func (m *ATTACKModule) RecordAnomaly(event AnomalyEvent) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	if event.ID == "" {
 		event.ID = fmt.Sprintf("anomaly-%d", time.Now().UnixNano())
@@ -202,6 +211,11 @@ func (m *ATTACKModule) RecordAnomaly(event AnomalyEvent) {
 	}
 
 	m.anomalies = append(m.anomalies, event)
+	if len(m.anomalies) > 5000 {
+		m.anomalies = m.anomalies[len(m.anomalies)-5000:]
+	}
+
+	m.mu.Unlock()
 
 	if event.Score > 0.7 && event.TechniqueID != "" {
 		m.kernel.Bus().Publish(m.kernel.Context(), Message{
@@ -260,6 +274,7 @@ func (m *ATTACKModule) CorrelateAlerts(hostID string) []CorrelationResult {
 		}
 	}
 
+	idx := 0
 	for tacticID, alerts := range tacticGroups {
 		if len(alerts) < 2 {
 			continue
@@ -284,7 +299,7 @@ func (m *ATTACKModule) CorrelateAlerts(hostID string) []CorrelationResult {
 		isKillChain := m.isKillChainProgression(hostAlerts)
 
 		result := CorrelationResult{
-			ID:           fmt.Sprintf("corr-%d", time.Now().UnixNano()),
+			ID:           fmt.Sprintf("corr-%d-%d", time.Now().UnixNano(), idx),
 			AlertIDs:     alertIDs,
 			TechniqueIDs: uniqueTechs,
 			TacticIDs:    []string{tacticID},
@@ -296,6 +311,7 @@ func (m *ATTACKModule) CorrelateAlerts(hostID string) []CorrelationResult {
 		}
 
 		results = append(results, result)
+		idx++
 	}
 
 	sort.Slice(results, func(i, j int) bool {
@@ -447,6 +463,12 @@ func (m *ATTACKModule) findDetectionGaps() []string {
 }
 
 func (m *ATTACKModule) getTacticName(tacticID string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.getTacticNameLocked(tacticID)
+}
+
+func (m *ATTACKModule) getTacticNameLocked(tacticID string) string {
 	for _, t := range m.tactics {
 		if t.ID == tacticID {
 			return t.Name
@@ -518,4 +540,10 @@ func (m *ATTACKModule) loadDefaultDetectionRules() {
 			Tags: []string{"command_and_control", "beaconing"}, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 		},
 	}
+}
+
+var sanitizeLogPattern = regexp.MustCompile(`(?i)(password|passwd|api_key|apikey|token|secret|authorization|credential)[=:]\s*\S+`)
+
+func sanitizeRawLog(rawLog string) string {
+	return sanitizeLogPattern.ReplaceAllString(rawLog, `$1=***REDACTED***`)
 }

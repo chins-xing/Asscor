@@ -118,20 +118,7 @@ type LateralMovementEvidence struct {
 	Timestamp      time.Time            `json:"timestamp"`
 }
 
-var defaultReputationDB = []ReputationEntry{
-	{Destination: "ntp.org", Service: "ntp", Category: "time_sync", IsLegitimate: true, Reason: "standard NTP service", Source: "builtin"},
-	{Destination: "time.windows.com", Service: "ntp", Category: "time_sync", IsLegitimate: true, Reason: "Windows NTP service", Source: "builtin"},
-	{Destination: "time.google.com", Service: "ntp", Category: "time_sync", IsLegitimate: true, Reason: "Google NTP service", Source: "builtin"},
-	{Destination: "pool.ntp.org", Service: "ntp", Category: "time_sync", IsLegitimate: true, Reason: "NTP pool service", Source: "builtin"},
-	{Destination: "updates.microsoft.com", Service: "https", Category: "os_update", IsLegitimate: true, Reason: "Windows Update", Source: "builtin"},
-	{Destination: "update.googleapis.com", Service: "https", Category: "os_update", IsLegitimate: true, Reason: "Chrome/Android update", Source: "builtin"},
-	{Destination: "api.github.com", Service: "https", Category: "dev_tool", IsLegitimate: true, Reason: "GitHub API", Source: "builtin"},
-	{Destination: "registry.npmjs.org", Service: "https", Category: "dev_tool", IsLegitimate: true, Reason: "npm registry", Source: "builtin"},
-	{Destination: "pypi.org", Service: "https", Category: "dev_tool", IsLegitimate: true, Reason: "Python package index", Source: "builtin"},
-	{Destination: "dns.google", Service: "dns", Category: "dns", IsLegitimate: true, Reason: "Google DNS", Source: "builtin"},
-	{Destination: "1.1.1.1", Service: "dns", Category: "dns", IsLegitimate: true, Reason: "Cloudflare DNS", Source: "builtin"},
-	{Destination: "8.8.8.8", Service: "dns", Category: "dns", IsLegitimate: true, Reason: "Google DNS", Source: "builtin"},
-}
+
 
 func (m *ATTACKModule) ComputeGroupBaseline(role string) *GroupBaseline {
 	m.mu.RLock()
@@ -609,17 +596,13 @@ func (m *ATTACKModule) inferBayesian(network *BayesianNetwork, evidence map[stri
 
 func (m *ATTACKModule) FilterBeaconWithReputation(detections []BeaconDetection) []BeaconDetection {
 	m.mu.RLock()
-	reputationMap := make(map[string]ReputationEntry)
-	for _, entry := range defaultReputationDB {
-		reputationMap[entry.Destination] = entry
-	}
-	m.mu.RUnlock()
+	defer m.mu.RUnlock()
 
 	var filtered []BeaconDetection
 	for _, det := range detections {
 		isKnownLegitimate := false
 
-		for _, entry := range defaultReputationDB {
+		for _, entry := range m.reputationDB {
 			if strings.Contains(strings.ToLower(det.Destination), strings.ToLower(entry.Destination)) {
 				if entry.IsLegitimate && entry.Category == "time_sync" && det.Jitter < 0.1 {
 					isKnownLegitimate = true
@@ -646,7 +629,7 @@ func (m *ATTACKModule) AddReputationEntry(entry ReputationEntry) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	defaultReputationDB = append(defaultReputationDB, entry)
+	m.reputationDB = append(m.reputationDB, entry)
 	logger.WithComponent("attck.beacon").Info("reputation entry added",
 		"destination", entry.Destination, "category", entry.Category, "legitimate", entry.IsLegitimate)
 }
@@ -656,7 +639,7 @@ func (m *ATTACKModule) GetReputationEntries(category string) []ReputationEntry {
 	defer m.mu.RUnlock()
 
 	var result []ReputationEntry
-	for _, entry := range defaultReputationDB {
+	for _, entry := range m.reputationDB {
 		if category != "" && entry.Category != category {
 			continue
 		}
@@ -678,6 +661,7 @@ func (m *ATTACKModule) LoadYARARules(rules []YARARule) int {
 			continue
 		}
 		rules[i].Enabled = true
+		m.yaraRules = append(m.yaraRules, rules[i])
 		loaded++
 	}
 
@@ -698,6 +682,7 @@ func (m *ATTACKModule) LoadSigmaRules(rules []SigmaRule) int {
 			continue
 		}
 		rules[i].Enabled = true
+		m.sigmaRules = append(m.sigmaRules, rules[i])
 		loaded++
 	}
 
@@ -706,8 +691,8 @@ func (m *ATTACKModule) LoadSigmaRules(rules []SigmaRule) int {
 }
 
 func (m *ATTACKModule) MatchYARARules(hostID string, filePaths []string, fileContents map[string]string) []RuleMatchResult {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	var results []RuleMatchResult
 
@@ -738,8 +723,8 @@ func (m *ATTACKModule) MatchYARARules(hostID string, filePaths []string, fileCon
 }
 
 func (m *ATTACKModule) MatchSigmaRules(hostID string, logEntries []map[string]string) []RuleMatchResult {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	var results []RuleMatchResult
 

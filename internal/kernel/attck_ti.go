@@ -37,6 +37,9 @@ func (m *ATTACKModule) AddIOC(entry IOCEntry) error {
 	}
 
 	m.iocs = append(m.iocs, entry)
+	if len(m.iocs) > 50000 {
+		m.iocs = m.iocs[len(m.iocs)-50000:]
+	}
 
 	m.enrichTechniqueFromIOC(entry)
 
@@ -216,6 +219,9 @@ func (m *ATTACKModule) AddTTPTrack(track TTPTrack) error {
 	}
 
 	m.ttpTracks = append(m.ttpTracks, track)
+	if len(m.ttpTracks) > 10000 {
+		m.ttpTracks = m.ttpTracks[len(m.ttpTracks)-10000:]
+	}
 
 	logger.WithComponent("attck.ti").Info("added TTP track", "id", track.ID, "technique", track.TechniqueID)
 	return nil
@@ -239,8 +245,8 @@ func (m *ATTACKModule) GetTTPTracks(actorID, techniqueID string) []TTPTrack {
 }
 
 func (m *ATTACKModule) EnrichAlertWithTI(alertID string) (*DetectionAlert, map[string]interface{}) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	var alert *DetectionAlert
 	for i := range m.alerts {

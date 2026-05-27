@@ -1,6 +1,7 @@
 package linux
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -52,6 +53,13 @@ func ks001() model.CheckItem {
 	}
 }
 
+type cveCacheEntry struct {
+	CVEID           string   `json:"cve_id"`
+	Description     string   `json:"description"`
+	AffectedVersions []string `json:"affected_versions"`
+	KernelVersions  []string `json:"kernel_versions"`
+}
+
 func checkKernelCVEs(kernelVer string) int {
 	cveDBPath := "/var/lib/ASSCOR/cve_cache.json"
 	if _, err := os.Stat(cveDBPath); os.IsNotExist(err) {
@@ -61,12 +69,30 @@ func checkKernelCVEs(kernelVer string) int {
 	if err != nil {
 		return 0
 	}
-	content := string(data)
+
+	var entries []cveCacheEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return 0
+	}
+
 	count := 0
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, kernelVer) && strings.Contains(line, "CVE") {
-			count++
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.CVEID, "CVE-") {
+			continue
+		}
+		for _, kv := range entry.KernelVersions {
+			if kv == kernelVer {
+				count++
+				break
+			}
+		}
+		if count == 0 {
+			for _, av := range entry.AffectedVersions {
+				if av == kernelVer {
+					count++
+					break
+				}
+			}
 		}
 	}
 	return count
@@ -313,8 +339,8 @@ func ks008() model.CheckItem {
 		ComplianceRef: "KS-08",
 		Platform:      "linux",
 		Check: func() (bool, string) {
-			out, err := common.RunCmdQuiet("bpftool", "prog", "list")
-			if !err {
+			out, ok := common.RunCmdQuiet("bpftool", "prog", "list")
+			if !ok {
 				return true, "bpftool 不可用，跳过eBPF审计"
 			}
 
@@ -423,8 +449,8 @@ func ks010() model.CheckItem {
 		ComplianceRef: "KS-10",
 		Platform:      "linux",
 		Check: func() (bool, string) {
-			out, err := common.RunCmdQuiet("mokutil", "--sb-state")
-			if err {
+			out, ok := common.RunCmdQuiet("mokutil", "--sb-state")
+			if ok {
 				if strings.Contains(strings.ToLower(out), "secureboot enabled") {
 					return true, "Secure Boot 已启用"
 				}
@@ -526,8 +552,8 @@ func ks012() model.CheckItem {
 				}
 			}
 
-			lsmOut, _ := common.RunCmdQuiet("cat", "/sys/kernel/security/lsm")
-			lsmOut = strings.TrimSpace(lsmOut)
+			lsmOutBytes, _ := os.ReadFile("/sys/kernel/security/lsm")
+			lsmOut := strings.TrimSpace(string(lsmOutBytes))
 
 			if len(activeLSMs) > 0 {
 				return true, fmt.Sprintf("活跃LSM: %s", strings.Join(activeLSMs, ", "))
