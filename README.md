@@ -272,16 +272,16 @@ ASSCOR/
 
 ```bash
 # 使用独立评估工具
-./ASSCOR-linux-amd64-v0.1.2-MVP
+./ASSCOR-linux-amd64-v0.1.3-mvp
 
 # 输出 JSON 格式报告
-./ASSCOR-linux-amd64-v0.1.2-MVP -json
+./ASSCOR-linux-amd64-v0.1.3-mvp -json
 
 # 指定默认配置文件
-./ASSCOR-linux-amd64-v0.1.2-MVP -config config.ini
+./ASSCOR-linux-amd64-v0.1.3-mvp -config config.ini
 
 # 使用行业专用配置（政府/金融/医疗等）
-./ASSCOR-linux-amd64-v0.1.2-MVP -config config/config.gov.ini
+./ASSCOR-linux-amd64-v0.1.3-mvp -config config/config.gov.ini
 ```
 
 ### 10.2 分布式模式
@@ -292,10 +292,10 @@ ASSCOR/
 ASSCOR-kernel.exe -listen 0.0.0.0:50051 -no-mtls
 
 # Linux（使用行业配置）
-./ASSCOR-kernel-linux-amd64-v0.1.2-MVP -listen 0.0.0.0:50051 -no-mtls -config config/config.fin.ini
+./ASSCOR-kernel-linux-amd64-v0.1.3-mvp -listen 0.0.0.0:50051 -no-mtls -config config/config.fin.ini
 
 # 启用 mTLS（自动生成自签名证书）
-./ASSCOR-kernel-linux-amd64-v0.1.2-MVP -listen 0.0.0.0:50051
+./ASSCOR-kernel-linux-amd64-v0.1.3-mvp -listen 0.0.0.0:50051
 ```
 
 **启动 Agent（Linux）：**
@@ -395,7 +395,7 @@ SSAM 2.0 提供了一套严谨且可进化的安全可接受性度量标准。�
 
 ## 13. ATT&CK V19 威胁分析模块
 
-ASSCOR v0.1.2-MVP 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。该模块作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
+ASSCOR v0.1.3-mvp 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。该模块作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
 
 ### 13.1 四大核心子模块
 
@@ -487,7 +487,7 @@ ATTACKModule (Plugin v2.0.0)
 - **SSAM 1.2** — 引入 ACI、SPC、等保映射、AVD 扩展机制、μKernel 联动
 - **SSAM 1.3** — 移除4项重叠边缘因子（SYN Cookie/供应链/自动封禁/资源紧张），SPC 引入平方和衰减，增加边缘因子合规等级覆盖，内置冲突检测
 
-### ASSCOR v0.1.2-MVP ATT&CK V19 模块扩展记录
+### ASSCOR v0.1.3-mvp ATT&CK V19 模块扩展记录
 
 #### ATT&CK V19 四大核心子模块
 
@@ -518,7 +518,7 @@ ATTACKModule (Plugin v2.0.0)
 - **SPC 文件拆分** — 按功能边界将 spc.go 拆分为 spc.go（核心）、spc_fetch.go（数据拉取）、spc_match.go（CPE 匹配）、spc_persist.go（持久化）四个模块
 - **SPC 缓存增量更新** — AddCVE/AddCVEs/MergeCVEs 支持 upsert 语义，已存在的 CVE 自动合并更新（EPSS 分数变化、KEV 状态更新等），避免全量替换开销
 
-### ASSCOR v0.1.2-MVP 修复记录
+### ASSCOR v0.1.3-mvp 修复记录
 
 #### 第一批修复（基础设施与协议层）
 
