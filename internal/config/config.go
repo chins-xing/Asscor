@@ -449,6 +449,9 @@ func Parse(content string) (*Config, error) {
 		}
 		if envKey := os.Getenv("CNNVD_API_KEY"); envKey != "" {
 			cfg.SPC.CNNVD.APIKey = envKey
+			logger.WithComponent("config").Info("CNNVD API key loaded from environment variable", "source", "CNNVD_API_KEY")
+		} else if cfg.SPC.CNNVD.APIKey != "" {
+			logger.WithComponent("config").Info("CNNVD API key loaded from configuration file", "key_length", len(cfg.SPC.CNNVD.APIKey))
 		}
 	}
 

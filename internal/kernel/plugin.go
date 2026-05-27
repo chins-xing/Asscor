@@ -90,6 +90,11 @@ const (
 	TopicCTIUpdated      = "cti.updated"
 	TopicCommandEnqueued = "command.enqueued"
 	TopicCommandResult   = "command.result"
+	TopicAgentHeartbeat  = "agent.heartbeat"
+	TopicConfigReloaded  = "config.reloaded"
+	TopicCTIThreatDetected = "cti.threat_detected"
+	TopicAdapterFindings = "adapter.findings"
+	TopicSourceManagerDeployed = "source_manager.deployed"
 
 	MessageProtocolVersion = "1.0"
 )

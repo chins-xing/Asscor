@@ -1,6 +1,6 @@
 # ASSCOR CLI 命令使用指南
 
-> 版本：v0.1.2-MVP | SSAM 1.3 | 最后更新：2026-05-25
+> 版本：v0.2.0 | SSAM 2.0 | 最后更新：2026-05-28
 
 ---
 
@@ -32,7 +32,7 @@ Kernel 启动后，日志自动重定向到 `ASSCOR-kernel.log`，终端进入�
 
 ```
 ASSCOR μKernel
-  Framework: v0.1.2-MVP   SSAM: 1.3
+  Framework: v0.2.0   SSAM: 2.0
   Listen:   :50051 (mTLS: true)
   ...
   CLI active: logs redirected to ASSCOR-kernel.log
@@ -125,8 +125,8 @@ version
 
 ```
 ASSCOR> version
-  ASSCOR Framework: v0.1.2-MVP
-  SSAM Model:      1.3
+  ASSCOR Framework: v0.2.0
+  SSAM Model:      2.0
 ```
 
 ### 3.3 status — 内核状态

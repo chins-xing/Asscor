@@ -69,6 +69,12 @@ func (m *CTIModule) State() PluginState {
 }
 
 func (m *CTIModule) updateLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithComponent("cti").Error("updateLoop panic recovered", "panic", r)
+		}
+	}()
+
 	ticker := time.NewTicker(m.updateInterval)
 	defer ticker.Stop()
 

@@ -120,7 +120,6 @@ func ModelToInput(result *model.AssessmentResult) *AssessmentInput {
 	return &AssessmentInput{
 		HostID:      result.HostID,
 		Hostname:    result.Hostname,
-		Timestamp:   result.Timestamp,
 		Threshold:   result.Threshold,
 		Checks:      CheckResultsToInputs(result.Checks),
 		ThreatCoeff: result.ThreatCoeff,
@@ -138,4 +137,16 @@ func OutputToModel(output *AssessmentOutput, result *model.AssessmentResult) {
 	result.EdgeFactors = EdgeFactorsToModel(output.EdgeFactors)
 	result.ThreatCoeff = output.ThreatCoeff
 	result.SPCScore = output.SPCScore
+}
+
+func OutputV2ToModel(output *AssessmentOutputV2, result *model.AssessmentResult) {
+	if output == nil || result == nil {
+		return
+	}
+	result.FinalScore = output.FinalScore.Total
+	result.Acceptable = output.Acceptable
+	result.DomainScores = DomainScoresToOutput(output.DomainScores)
+	result.EdgeFactors = EdgeFactorsToModel(output.EdgeFactors)
+	result.ThreatCoeff = output.FinalScore.Layers.Threat.Coeff
+	result.SPCScore = output.FinalScore.Layers.Exposure.Coeff
 }

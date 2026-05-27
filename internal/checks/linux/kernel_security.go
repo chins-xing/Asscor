@@ -234,7 +234,10 @@ func ks005() model.CheckItem {
 				return true, fmt.Sprintf("KPTI 已启用（检测到 %d 个CPU标记）", ptiCount)
 			}
 
-			dmesgOut, _ := common.RunCmdQuiet("dmesg")
+			dmesgOut, ok := common.RunCmdQuiet("dmesg")
+			if !ok {
+				return false, "无法执行dmesg命令确认KPTI状态"
+			}
 			if strings.Contains(strings.ToLower(dmesgOut), "page tables isolation") ||
 				strings.Contains(strings.ToLower(dmesgOut), "kpti") {
 				return true, "KPTI 已启用（dmesg确认）"
@@ -460,7 +463,10 @@ func ks010() model.CheckItem {
 				return false, fmt.Sprintf("mokutil 返回: %s", strings.TrimSpace(out))
 			}
 
-			dmesgOut, _ := common.RunCmdQuiet("dmesg")
+			dmesgOut, ok := common.RunCmdQuiet("dmesg")
+			if !ok {
+				return false, "无法执行dmesg命令确认Secure Boot状态"
+			}
 			if strings.Contains(strings.ToLower(dmesgOut), "secure boot") {
 				if strings.Contains(strings.ToLower(dmesgOut), "enabled") {
 					return true, "Secure Boot 已启用（dmesg确认）"

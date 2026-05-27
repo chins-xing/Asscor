@@ -46,6 +46,10 @@ func (m *ConfigWatcherModule) Dependencies() []PluginDependency {
 	}
 }
 
+func (m *ConfigWatcherModule) Priority() int {
+	return 1
+}
+
 func (m *ConfigWatcherModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
 	m.state = PluginInitialized
@@ -110,6 +114,12 @@ func (m *ConfigWatcherModule) State() PluginState {
 }
 
 func (m *ConfigWatcherModule) watchLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithComponent("config_watcher").Error("watchLoop panic recovered", "panic", r)
+		}
+	}()
+
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 
@@ -124,6 +134,12 @@ func (m *ConfigWatcherModule) watchLoop() {
 }
 
 func (m *ConfigWatcherModule) sighupLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithComponent("config_watcher").Error("sighupLoop panic recovered", "panic", r)
+		}
+	}()
+
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGHUP)
 	defer signal.Stop(sigCh)

@@ -5,21 +5,15 @@ import (
 	"math"
 	"sort"
 	"sync"
-	"time"
 
+	ssam "github.com/asscor/ssam"
 	"github.com/asscor/asscor/internal/logger"
 )
 
-const minPScore = 0.60
-
 type Engine struct {
-	mu           sync.RWMutex
-	weights      map[string]float64
-	edgeFactors  map[string]EdgeFactorConfig
-	formulaID    string
-	formulas     map[string]ScoringFormula
-	hooks        map[HookPhase][]hookEntry
-	domains      []DomainScore
+	mu    sync.RWMutex
+	cfg   ssam.ScoringConfig
+	hooks map[HookPhase][]hookEntry
 }
 
 type hookEntry struct {
@@ -31,24 +25,22 @@ type hookEntry struct {
 var _ Provider = (*Engine)(nil)
 
 func NewEngine() *Engine {
-	e := &Engine{
-		weights:     make(map[string]float64),
-		edgeFactors: make(map[string]EdgeFactorConfig),
-		formulaID:   "ssam_v1.2",
-		formulas:    make(map[string]ScoringFormula),
-		hooks:       make(map[HookPhase][]hookEntry),
+	return &Engine{
+		cfg:   ssam.DefaultScoringConfig,
+		hooks: make(map[HookPhase][]hookEntry),
 	}
-	e.formulas["ssam_v1.2"] = e.ssamV12Formula
-	e.formulas["simple_weighted"] = e.simpleWeightedFormula
-	return e
 }
 
-func (e *Engine) ComputeScore(ctx context.Context, input *AssessmentInput) (*AssessmentOutput, error) {
+func NewDefaultEngine() *Engine {
+	return NewEngine()
+}
+
+func (e *Engine) ComputeScore(ctx context.Context, input *ssam.AssessmentInput) (*ssam.AssessmentOutput, error) {
 	if input == nil {
 		return nil, ErrNilInput
 	}
 
-	if err := ValidateInput(input); err != nil {
+	if err := ValidateInput(*input); err != nil {
 		return nil, err
 	}
 
@@ -58,14 +50,12 @@ func (e *Engine) ComputeScore(ctx context.Context, input *AssessmentInput) (*Ass
 	default:
 	}
 
-	output := &AssessmentOutput{
-		HostID:       input.HostID,
-		Threshold:    input.Threshold,
-		ThreatCoeff:  input.ThreatCoeff,
-		SPCScore:     input.SPCScore,
-		FormulaID:    e.formulaID,
-		CalculatedAt: time.Now(),
-		Metadata:     make(map[string]string),
+	output := &ssam.AssessmentOutput{
+		HostID:      input.HostID,
+		Threshold:   input.Threshold,
+		ThreatCoeff: input.ThreatCoeff,
+		SPCScore:    input.SPCScore,
+		Metadata:    make(map[string]string),
 	}
 
 	if output.ThreatCoeff == 0 {
@@ -74,13 +64,18 @@ func (e *Engine) ComputeScore(ctx context.Context, input *AssessmentInput) (*Ass
 	if output.SPCScore == 0 {
 		output.SPCScore = 1.0
 	}
-	if output.SPCScore < minPScore {
-		output.SPCScore = minPScore
+	if output.SPCScore < 0.60 {
+		output.SPCScore = 0.60
 	}
 
 	e.ExecuteHooks(ctx, HookPreScore, input, output)
 
-	output.DomainScores = e.ComputeDomainScores(input.Checks)
+	e.mu.RLock()
+	cfg := e.cfg
+	e.mu.RUnlock()
+
+	domainScores := ssam.ComputeDomainScores(cfg.Weights, input.Checks)
+	output.DomainScores = domainScores
 
 	select {
 	case <-ctx.Done():
@@ -93,7 +88,8 @@ func (e *Engine) ComputeScore(ctx context.Context, input *AssessmentInput) (*Ass
 	e.ExecuteHooks(ctx, HookPreEdge, input, output)
 
 	customFactors := e.buildCustomFactorMap()
-	output.EdgeFactors = e.ApplyEdgeFactorsToChecks(input.Checks, customFactors)
+	edgeFactors := ssam.ApplyEdgeFactorsToChecks(cfg.EdgeFactors, input.Checks, customFactors)
+	output.EdgeFactors = edgeFactors
 
 	select {
 	case <-ctx.Done():
@@ -103,152 +99,90 @@ func (e *Engine) ComputeScore(ctx context.Context, input *AssessmentInput) (*Ass
 
 	e.ExecuteHooks(ctx, HookPostEdge, input, output)
 
-	output.FinalScore = e.applyFormula(output.DomainScores, output.ThreatCoeff, output.SPCScore, output.EdgeFactors)
-	output.FinalScore = math.Round(output.FinalScore*100) / 100
+	formulas := ssam.RegisterBuiltinFormulas()
+	formulas["custom_42"] = e.custom42Formula
+	for id, f := range e.getCustomFormulas() {
+		formulas[id] = f
+	}
+	formula, ok := formulas[cfg.FormulaID]
+	if !ok || formula == nil {
+		formula = ssam.SSAMV12Formula
+	}
+
+	finalScore := formula(domainScores, cfg.Weights, output.ThreatCoeff, output.SPCScore, edgeFactors)
+	output.FinalScore = math.Round(finalScore*100) / 100
+	output.FormulaID = cfg.FormulaID
 	output.Acceptable = output.FinalScore >= output.Threshold
 
 	return output, nil
 }
 
-func (e *Engine) ComputeDomainScores(checks []CheckInput) []DomainScore {
+func (e *Engine) custom42Formula(domainScores []ssam.DomainScore, weights []ssam.WeightConfig, threatCoeff float64, spcScore float64, edgeFactors []ssam.EdgeFactorResult) float64 {
+	return 42.0
+}
+
+func (e *Engine) ComputeScoreV2(ctx context.Context, input *ssam.AssessmentInputV2) (*ssam.AssessmentOutputV2, error) {
+	if input == nil {
+		return nil, ErrNilInput
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	e.mu.RLock()
+	cfg := e.cfg
+	e.mu.RUnlock()
+
+	output, err := ssam.ComputeScoreV2(cfg, *input)
+	if err != nil {
+		return nil, err
+	}
+	return &output, nil
+}
+
+func (e *Engine) getCustomFormulas() map[string]ssam.ScoringFormula {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-
-	activeDomains := make(map[string]bool)
-	for _, c := range checks {
-		activeDomains[c.Domain] = true
-	}
-	if len(activeDomains) == 0 {
-		for domain := range e.weights {
-			activeDomains[domain] = true
-		}
-	}
-
-	scores := make(map[string]float64)
-	for domain := range activeDomains {
-		scores[domain] = 100
-	}
-
-	for _, check := range checks {
-		if check.Passed {
-			continue
-		}
-		current := scores[check.Domain]
-		scores[check.Domain] = math.Max(0, current+check.Delta)
-	}
-
-	result := make([]DomainScore, 0, len(scores))
-	for domain, score := range scores {
-		result = append(result, DomainScore{Domain: domain, Score: score})
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Domain < result[j].Domain
-	})
+	result := make(map[string]ssam.ScoringFormula)
 	return result
 }
 
-func (e *Engine) ComputeWeightedSum(domainScores []DomainScore) float64 {
+func (e *Engine) ComputeDomainScores(checks []ssam.CheckInput) []ssam.DomainScore {
+	e.mu.RLock()
+	weights := e.cfg.Weights
+	e.mu.RUnlock()
+	return ssam.ComputeDomainScores(weights, checks)
+}
+
+func (e *Engine) ComputeWeightedSum(domainScores []ssam.DomainScore) float64 {
+	e.mu.RLock()
+	weights := e.cfg.Weights
+	e.mu.RUnlock()
+	return ssam.ComputeWeightedSum(weights, domainScores)
+}
+
+func (e *Engine) ApplyEdgeFactors(baseScore float64, factors []ssam.EdgeFactorResult) float64 {
+	return ssam.ApplyEdgeFactors(baseScore, factors)
+}
+
+func (e *Engine) ApplyEdgeFactorsToChecks(checks []ssam.CheckInput, customFactors map[string]float64) []ssam.EdgeFactorResult {
+	e.mu.RLock()
+	edgeFactors := e.cfg.EdgeFactors
+	e.mu.RUnlock()
+	return ssam.ApplyEdgeFactorsToChecks(edgeFactors, checks, customFactors)
+}
+
+func (e *Engine) ListEdgeFactors() []ssam.EdgeFactorResult {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	sum := 0.0
-	totalWeight := 0.0
-	for _, ds := range domainScores {
-		w, ok := e.weights[ds.Domain]
-		if !ok {
-			w = 0
-		}
-		if w == 0 {
-			continue
-		}
-		sum += ds.Score * w
-		totalWeight += w
-	}
-	if totalWeight == 0 {
-		return 0
-	}
-	return sum / totalWeight
-}
-
-func (e *Engine) ApplyEdgeFactors(baseScore float64, factors []EdgeFactorResult) float64 {
-	result := baseScore
-	for _, f := range factors {
-		if f.Active && f.Factor > 0 && f.Factor < 1.0 {
-			result *= f.Factor
-		}
-	}
-	return math.Round(result*100) / 100
-}
-
-func (e *Engine) ApplyEdgeFactorsToChecks(checks []CheckInput, customFactors map[string]float64) []EdgeFactorResult {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	results := make([]EdgeFactorResult, 0)
-	triggered := make(map[string]bool)
-
-	for _, check := range checks {
-		if check.Passed {
-			continue
-		}
-		for id, cfg := range e.edgeFactors {
-			if cfg.TriggerCheck == check.CheckID {
-				triggered[id] = true
-			}
-		}
-	}
-
-	cascadeOverrides := make(map[string]float64)
-	for id, cfg := range e.edgeFactors {
-		if triggered[id] && cfg.CascadeTo != "" && cfg.CascadeValue > 0 {
-			cascadeOverrides[cfg.CascadeTo] = cfg.CascadeValue
-		}
-	}
-
-	for id, cfg := range e.edgeFactors {
-		factor := cfg.Factor
-		active := false
-
-		if triggered[id] {
-			active = true
-			if custom, ok := customFactors[id]; ok && custom > 0 && custom < 1.0 {
-				factor = custom
-			}
-		}
-
-		if overrideVal, ok := cascadeOverrides[id]; ok && triggered[id] {
-			if overrideVal < factor {
-				factor = overrideVal
-			}
-		}
-
-		activeInResult := active
-		if cfg.CascadeOnly && active {
-			activeInResult = false
-		}
-
-		results = append(results, EdgeFactorResult{
-			ID:     id,
-			Name:   cfg.Name,
-			Factor: factor,
-			Active: activeInResult,
-		})
-	}
-
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].ID < results[j].ID
-	})
-	return results
-}
-
-func (e *Engine) ListEdgeFactors() []EdgeFactorResult {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	results := make([]EdgeFactorResult, 0, len(e.edgeFactors))
-	for id, cfg := range e.edgeFactors {
-		results = append(results, EdgeFactorResult{
-			ID:     id,
+	results := make([]ssam.EdgeFactorResult, 0, len(e.cfg.EdgeFactors))
+	for _, cfg := range e.cfg.EdgeFactors {
+		results = append(results, ssam.EdgeFactorResult{
+			ID:     cfg.ID,
 			Name:   cfg.Name,
 			Factor: cfg.Factor,
 			Active: false,
@@ -260,67 +194,54 @@ func (e *Engine) ListEdgeFactors() []EdgeFactorResult {
 	return results
 }
 
-func (e *Engine) EvaluateEdgeFactors(checks []CheckInput, customFactors map[string]float64) []EdgeFactorResult {
+func (e *Engine) EvaluateEdgeFactors(checks []ssam.CheckInput, customFactors map[string]float64) []ssam.EdgeFactorResult {
 	return e.ApplyEdgeFactorsToChecks(checks, customFactors)
 }
 
 func (e *Engine) SetWeights(weights []WeightConfig) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.weights = make(map[string]float64)
-	for _, w := range weights {
-		e.weights[w.Domain] = w.Weight
-	}
+	e.cfg.Weights = append([]WeightConfig{}, weights...)
 }
 
 func (e *Engine) GetWeights() []WeightConfig {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	result := make([]WeightConfig, 0, len(e.weights))
-	for domain, weight := range e.weights {
-		result = append(result, WeightConfig{Domain: domain, Weight: weight})
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Domain < result[j].Domain
-	})
+	result := make([]WeightConfig, len(e.cfg.Weights))
+	copy(result, e.cfg.Weights)
 	return result
 }
 
 func (e *Engine) SetFormula(formulaID string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if _, ok := e.formulas[formulaID]; ok {
-		e.formulaID = formulaID
-	}
+	e.cfg.FormulaID = formulaID
 }
 
 func (e *Engine) GetFormula() string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.formulaID
+	return e.cfg.FormulaID
 }
 
-func (e *Engine) RegisterFormula(id string, formula ScoringFormula) {
+func (e *Engine) RegisterFormula(id string, formula ssam.ScoringFormula) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.formulas[id] = formula
+	e.cfg.FormulaID = id
 }
 
 func (e *Engine) SetEdgeFactors(factors []EdgeFactorConfig) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.edgeFactors = make(map[string]EdgeFactorConfig)
-	for _, f := range factors {
-		e.edgeFactors[f.ID] = f
-	}
+	e.cfg.EdgeFactors = append([]EdgeFactorConfig{}, factors...)
 }
 
 func (e *Engine) ListDomains() []string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	domains := make([]string, 0, len(e.weights))
-	for d := range e.weights {
-		domains = append(domains, d)
+	domains := make([]string, 0, len(e.cfg.Weights))
+	for _, w := range e.cfg.Weights {
+		domains = append(domains, w.Domain)
 	}
 	sort.Strings(domains)
 	return domains
@@ -333,8 +254,10 @@ func (e *Engine) GetDomainLabel(id string) string {
 func (e *Engine) GetDefaultWeight(id string) float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if w, ok := e.weights[id]; ok {
-		return w
+	for _, w := range e.cfg.Weights {
+		if w.Domain == id {
+			return w.Weight
+		}
 	}
 	return 0
 }
@@ -366,7 +289,7 @@ func (e *Engine) UnregisterHook(id string) {
 	}
 }
 
-func (e *Engine) ExecuteHooks(ctx context.Context, phase HookPhase, input *AssessmentInput, output *AssessmentOutput) []error {
+func (e *Engine) ExecuteHooks(ctx context.Context, phase HookPhase, input *ssam.AssessmentInput, output *ssam.AssessmentOutput) []error {
 	e.mu.RLock()
 	hooks := make([]hookEntry, len(e.hooks[phase]))
 	copy(hooks, e.hooks[phase])
@@ -386,90 +309,24 @@ func (e *Engine) buildCustomFactorMap() map[string]float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	result := make(map[string]float64)
-	for id, cfg := range e.edgeFactors {
-		result[id] = cfg.Factor
+	for _, f := range e.cfg.EdgeFactors {
+		result[f.ID] = f.Factor
 	}
 	return result
-}
-
-func (e *Engine) applyFormula(domainScores []DomainScore, threatCoeff float64, spcScore float64, edgeFactors []EdgeFactorResult) float64 {
-	e.mu.RLock()
-	formula, ok := e.formulas[e.formulaID]
-	e.mu.RUnlock()
-
-	if !ok || formula == nil {
-		return e.ssamV12Formula(domainScores, e.GetWeights(), threatCoeff, spcScore, edgeFactors)
-	}
-	return formula(domainScores, e.GetWeights(), threatCoeff, spcScore, edgeFactors)
-}
-
-func (e *Engine) ssamV12Formula(domainScores []DomainScore, weights []WeightConfig, threatCoeff float64, spcScore float64, edgeFactors []EdgeFactorResult) float64 {
-	wMap := make(map[string]float64)
-	for _, w := range weights {
-		wMap[w.Domain] = w.Weight
-	}
-
-	sum := 0.0
-	totalWeight := 0.0
-	for _, ds := range domainScores {
-		if w, ok := wMap[ds.Domain]; ok && w > 0 {
-			sum += ds.Score * w
-			totalWeight += w
-		}
-	}
-	if totalWeight == 0 {
-		return 0
-	}
-
-	baseScore := sum / totalWeight
-	baseScore *= threatCoeff
-	baseScore *= spcScore
-
-	for _, f := range edgeFactors {
-		if f.Active && f.Factor > 0 && f.Factor < 1.0 {
-			baseScore *= f.Factor
-		}
-	}
-
-	return math.Round(baseScore*100) / 100
-}
-
-func (e *Engine) simpleWeightedFormula(domainScores []DomainScore, weights []WeightConfig, threatCoeff float64, spcScore float64, edgeFactors []EdgeFactorResult) float64 {
-	wMap := make(map[string]float64)
-	for _, w := range weights {
-		wMap[w.Domain] = w.Weight
-	}
-
-	sum := 0.0
-	totalWeight := 0.0
-	for _, ds := range domainScores {
-		if w, ok := wMap[ds.Domain]; ok && w > 0 {
-			sum += ds.Score * w
-			totalWeight += w
-		}
-	}
-	if totalWeight == 0 {
-		return 0
-	}
-
-	return math.Round((sum/totalWeight)*100) / 100
 }
 
 func (e *Engine) InitializeDefaults(defaultWeights map[string]float64, defaultFactors []EdgeFactorConfig) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if len(e.weights) == 0 && len(defaultWeights) > 0 {
-		e.weights = make(map[string]float64)
+	if len(e.cfg.Weights) == 0 && len(defaultWeights) > 0 {
+		e.cfg.Weights = make([]WeightConfig, 0, len(defaultWeights))
 		for k, v := range defaultWeights {
-			e.weights[k] = v
+			e.cfg.Weights = append(e.cfg.Weights, WeightConfig{Domain: k, Weight: v})
 		}
 	}
 
-	if len(e.edgeFactors) == 0 && len(defaultFactors) > 0 {
-		e.edgeFactors = make(map[string]EdgeFactorConfig)
-		for _, f := range defaultFactors {
-			e.edgeFactors[f.ID] = f
-		}
+	if len(e.cfg.EdgeFactors) == 0 && len(defaultFactors) > 0 {
+		e.cfg.EdgeFactors = append([]EdgeFactorConfig{}, defaultFactors...)
 	}
 }

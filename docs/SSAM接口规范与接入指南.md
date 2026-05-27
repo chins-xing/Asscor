@@ -1,23 +1,35 @@
 # SSAM 接口规范与接入指南
 
-> **版本**：SSAM 1.3 | **模块路径**：`github.com/asscor/asscor/internal/ssam`  
-> **日期**：2026-05-25 | **状态**：发布
+> **版本**：SSAM 2.0 | **模块路径**：`github.com/asscor/ssam`  
+> **ASSCOR 适配层**：`f:\Argus\internal\ssam\` (薄适配层，委托给 ssam-lib)  
+> **日期**：2026-05-28 | **状态**：发布
 
-本文档详细说明 SSAM 独立算法模块的接口规范、数据结构定义、配置适配机制及接入方式。SSAM 模块可脱离 ASSCOR 框架独立使用，也可通过依赖注入与 ASSCOR 内核松耦合集成。
+本文档详细说明 SSAM 独立算法模块的接口规范、数据结构定义、配置适配机制及接入方式。SSAM V2.0 已独立为纯函数式 Go 模块 `github.com/asscor/ssam`（位于 `ssam-lib/`），可脱离 ASSCOR 框架独立使用。ASSCOR 平台通过 `internal/ssam/` 薄适配层委托调用 ssam-lib。
 
 ---
 
 ## 1. 模块概览
 
-`internal/ssam` 包实现 SSAM 1.3 评分算法，包含以下文件：
+`github.com/asscor/ssam`（`ssam-lib/`）是 SSAM V2.0 的纯函数式引擎，零外部依赖。包含以下文件：
 
 | 文件 | 职责 |
 |------|------|
-| `interfaces.go` | 核心接口定义与 DTO 数据结构 |
-| `engine.go` | 评分引擎实现（`Engine` 结构体） |
-| `adapter.go` | ASSCOR 配置/模型与 SSAM 格式的双向转换 |
-| `defaults.go` | 默认权重、边缘因子及 `NewDefaultEngine()` 工厂函数 |
-| `errors.go` | 错误类型定义与输入/输出验证函数 |
+| `ssam.go` | Engine 核心实现：`Provider` 接口、输入验证、钩子机制、公式调度 |
+| `types.go` | V1.x 数据类型定义（`AssessmentInput`, `AssessmentOutput` 等），保持向后兼容 |
+| `types_v2.go` | V2.0 数据类型：`RiskContext`, `RiskLayerDetail`, `RiskLayers`, `FinalScore`, `AssessmentInputV2`, `AssessmentOutputV2`, `ScoringFormulaV2` |
+| `formulas.go` | V1.x 公式实现（`ssam_v1.2`, `simple_weighted`），保持向后兼容 |
+| `formulas_v2.go` | V2.0 公式 `SSAMV20Formula`：三层语义模型（本征/暴露/威胁）独立风险层评估 |
+| `ir.go` | SSAM IR JSON 中间表示：`AssessmentOutputV2.ToIR()` 输出机器可读的结构化评估结果 |
+| `ast.go` | Formula DSL/AST：`ParseFormula(expression)` 解析公式字符串为 AST；`EvaluateFormula(ast, ctx)` 求值 |
+| `formulas_ast.go` | AST 驱动的公式实现，支持运行时动态构造评分公式 |
+| `engine_test.go` | 完整测试覆盖（V1.x 回归 + V2.0 三层模型 + IR 导出 + AST 解析） |
+
+ASSCOR 适配层（`internal/ssam/`）精简为两个文件：
+
+| 文件 | 职责 |
+|------|------|
+| `adapter.go` | ASSCOR 配置/模型与 SSAM 格式的双向转换（委托给 ssam-lib Engine） |
+| `defaults.go` | 默认权重、边缘因子及工厂函数 |
 
 ---
 
@@ -65,6 +77,7 @@ type ScoringProvider interface {
 | `ApplyEdgeFactors` | 对基础分应用活跃边缘因子的乘法修正 |
 | `SetWeights` / `GetWeights` | 动态设置/获取核心域权重 |
 | `SetFormula` / `GetFormula` | 切换/获取评分公式（内置 `ssam_v1.2` 和 `simple_weighted`） |
+| `SetFormulaV2` / `GetFormulaV2` | 切换/获取 V2.0 评分公式（内置 `ssam_v2.0`，使用三层语义模型） |
 
 ### 2.3 DomainProvider — 域信息接口
 
@@ -246,7 +259,206 @@ EdgeFactorConfig{
 
 ---
 
-## 4. 评分流程
+## 3.5 SSAM V2.0 数据类型（types_v2.go）
+
+### 3.5.1 RiskContext — 风险上下文
+
+```go
+type RiskContext struct {
+    ThreatCoeff    float64            `json:"threat_coefficient"`
+    SPCScore       float64            `json:"spc_score"`
+    WeightShifts   map[string]float64 `json:"weight_shifts,omitempty"`
+    EdgeFactors    []EdgeFactorResult `json:"edge_factors"`
+    Threshold      float64            `json:"threshold"`
+    CVEContext     []CVESummary       `json:"cve_context,omitempty"`
+    ThreatActors   []string           `json:"threat_actors,omitempty"`
+}
+```
+
+### 3.5.2 RiskLayerDetail / RiskLayers — 三层风险层
+
+```go
+type RiskLayerDetail struct {
+    Score       float64           `json:"score"`
+    Weight      float64           `json:"weight"`
+    Description string            `json:"description"`
+    Factors     []string          `json:"factors"`
+    Details     map[string]float64 `json:"details,omitempty"`
+}
+
+type RiskLayers struct {
+    Intrinsic RiskLayerDetail `json:"intrinsic"`
+    Exposure  RiskLayerDetail `json:"exposure"`
+    Threat    RiskLayerDetail `json:"threat"`
+}
+```
+
+| 风险层 | 含义 | 典型输入 |
+|--------|------|----------|
+| **Intrinsic（本征风险）** | 系统自身的配置安全基线，与外部环境无关 | 核心域得分、边缘因子 |
+| **Exposure（暴露风险）** | 系统对外暴露的脆弱性面 | SPC P_score、端口暴露、CVE 匹配 |
+| **Threat（威胁风险）** | 当前威胁环境的影响 | CTI μ 系数、威胁组织活跃度、KEV 在野利用 |
+
+### 3.5.3 FinalScore — V2.0 最终评分
+
+```go
+type FinalScore struct {
+    Value      float64             `json:"value"`
+    Acceptable bool                `json:"acceptable"`
+    Threshold  float64             `json:"threshold"`
+    Layers     RiskLayers          `json:"layers"`
+    FormulaID  string              `json:"formula_id"`
+    Metadata   map[string]string   `json:"metadata,omitempty"`
+}
+```
+
+### 3.5.4 AssessmentInputV2 — V2.0 评估输入
+
+```go
+type AssessmentInputV2 struct {
+    HostID    string       `json:"host_id"`
+    Hostname  string       `json:"hostname"`
+    Timestamp time.Time    `json:"timestamp"`
+    Context   RiskContext  `json:"context"`
+    Checks    []CheckInput `json:"checks"`
+}
+```
+
+### 3.5.5 AssessmentOutputV2 — V2.0 评估输出
+
+```go
+type AssessmentOutputV2 struct {
+    HostID       string              `json:"host_id"`
+    FinalScore   FinalScore          `json:"final_score"`
+    DomainScores []DomainScore       `json:"domain_scores"`
+    EdgeFactors  []EdgeFactorResult  `json:"edge_factors"`
+    CalculatedAt time.Time           `json:"calculated_at"`
+}
+```
+
+`AssessmentOutputV2` 提供 `.ToIR()` 方法，导出声明的 SSAM IR JSON 结构（见 §13）。
+
+### 3.5.6 ScoringFormulaV2 — V2.0 公式接口
+
+```go
+type ScoringFormulaV2 interface {
+    ID() string
+    Compute(ctx context.Context, input *AssessmentInputV2) (*AssessmentOutputV2, error)
+    ValidateInput(input *AssessmentInputV2) error
+}
+```
+
+内置实现：
+- `SSAMV20Formula`（`formulas_v2.go`）：三层独立风险层评估，消除旧版 ThreatCoeff/SPCScore 的双重罚分问题
+- `ASTFormula`（`formulas_ast.go`）：通过 Formula DSL 动态构造的公式
+
+---
+
+## 4. SSAM V2.0 三层语义模型
+
+SSAM V2.0 的核心创新是用三个独立的风险层取代 V1.x 中 ThreatCoeff 和 SPCScore 的单一乘法叠加。每个层有独立的语义、权重和输入：
+
+```
+AssessmentInputV2
+    │
+    ├── 本征风险层 (Intrinsic)
+    │   ├── 核心域加权得分 (SSAM v1.2 核心公式)
+    │   ├── 边缘因子乘法修正
+    │   └── 输出：Intrinsic Score ∈ [0, 100]
+    │
+    ├── 暴露风险层 (Exposure)
+    │   ├── SPC P_score 转换
+    │   ├── CVE 数量 / 严重度
+    │   ├── 端口暴露面
+    │   └── 输出：Exposure Score ∈ [0, 100]
+    │
+    ├── 威胁风险层 (Threat)
+    │   ├── CTI μ 系数转换
+    │   ├── KEV 在野利用状态
+    │   ├── 威胁组织活跃度
+    │   └── 输出：Threat Score ∈ [0, 100]
+    │
+    ▼
+FinalScore = Σ(LayerScore_i × LayerWeight_i) / ΣLayerWeight_i
+```
+
+**与 V1.x 的关键差异：**
+
+| 特性 | V1.x (ssam_v1.2) | V2.0 (ssam_v2.0) |
+|------|------------------|-------------------|
+| 外部因素处理 | ThreatCoeff × SPCScore 双乘数叠加 | 三层独立评分 + 加权平均 |
+| 双重罚分 | 一个低 SPC 分数同时被乘以 μ，导致过度惩罚 | 各层独立计算，权重可调 |
+| 可解释性 | 最终分数难以分解为"哪部分导致" | RiskLayers 提供逐层分解 |
+| 灵活性 | 公式固定 | 通过 AST/DSL 动态配置层权重和组合方式 |
+
+---
+
+## 5. SSAM IR（中间表示）
+
+SSAM V2.0 引入 SSAMIR——评估结果的声明式 JSON 中间表示。通过 `AssessmentOutputV2.ToIR()` 导出：
+
+```json
+{
+  "ssamir_version": "1.0",
+  "host_id": "prod-web-01",
+  "timestamp": "2026-05-28T10:30:00Z",
+  "formula_id": "ssam_v2.0",
+  "final_score": {
+    "value": 72.35,
+    "acceptable": false,
+    "threshold": 80.0
+  },
+  "layers": {
+    "intrinsic": { "score": 82.0, "weight": 0.50, "description": "..." },
+    "exposure":  { "score": 60.0, "weight": 0.30, "description": "..." },
+    "threat":    { "score": 70.0, "weight": 0.20, "description": "..." }
+  },
+  "domain_scores": {
+    "attack_surface": 78.0,
+    "business_continuity": 90.0,
+    "operation_trust": 85.0,
+    "resilience": 72.0
+  },
+  "edge_factors": [...]
+}
+```
+
+SSAM IR 的设计目标：
+- **下游工具链消费**：SIEM、SOC Dashboard、合规审计系统可直接解析
+- **跨语言互操作**：纯 JSON，任何语言可解析
+- **版本化兼容**：`ssamir_version` 字段保证前向/后向兼容
+
+---
+
+## 6. Formula DSL / AST
+
+SSAM V2.0 提供公式 DSL，允许在运行时通过字符串表达式构造评分公式，无需修改代码：
+
+```go
+import "github.com/asscor/ssam"
+
+ast, err := ssam.ParseFormula("intrinsic * 0.5 + exposure * 0.3 + threat * 0.2")
+if err != nil {
+    log.Fatal(err)
+}
+
+engine := ssam.NewDefaultEngine()
+engine.SetFormulaAST(ast)
+
+output, err := engine.ComputeScoreV2(ctx, inputV2)
+```
+
+支持的 DSL 语法：
+- 变量：`intrinsic`, `exposure`, `threat`（三层风险层得分）
+- 运算符：`+`, `-`, `*`, `/`, `(`, `)`
+- 字面量：整数和浮点数
+- 函数：`min(a,b)`, `max(a,b)`, `round(x)`, `sqrt(x)`
+
+DSL 表达式会被 `ParseFormula()` 编译为 AST，由 `EvaluateFormula()` 高效求值，无需运行时字符串解析。
+
+---
+
+## 7. 评分流程
 
 `ComputeScore` 的完整执行流程：
 
@@ -312,9 +524,9 @@ HookPostEdge 钩子
 
 ---
 
-## 5. 接入方式
+## 8. 接入方式
 
-### 5.1 方式一：独立使用（推荐用于第三方集成）
+### 8.1 方式一：独立使用（推荐用于第三方集成）
 
 SSAM 模块可完全脱离 ASSCOR 框架独立使用：
 
@@ -326,7 +538,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/asscor/asscor/internal/ssam"
+    "github.com/asscor/ssam"
 )
 
 func main() {
@@ -367,7 +579,7 @@ func main() {
 }
 ```
 
-### 5.2 方式二：自定义配置
+### 8.2 方式二：自定义配置
 
 ```go
 engine := ssam.NewEngine()
@@ -388,7 +600,7 @@ engine.SetEdgeFactors([]ssam.EdgeFactorConfig{
 engine.SetFormula("ssam_v1.2")
 ```
 
-### 5.3 方式三：注册自定义公式
+### 8.3 方式三：注册自定义公式
 
 ```go
 engine := ssam.NewDefaultEngine()
@@ -432,7 +644,7 @@ engine.RegisterFormula("custom_v1", func(
 engine.SetFormula("custom_v1")
 ```
 
-### 5.4 方式四：使用钩子扩展评分流程
+### 8.4 方式四：使用钩子扩展评分流程
 
 ```go
 engine := ssam.NewDefaultEngine()
@@ -457,7 +669,7 @@ engine.RegisterHook(ssam.HookPostEdge, "enrich-metadata", func(
 }, 20)
 ```
 
-### 5.5 方式五：通过 ASSCOR DI 容器集成
+### 8.5 方式五：通过 ASSCOR DI 容器集成
 
 在 ASSCOR 内核中，SSAM Engine 通过依赖注入容器注册和消费：
 
@@ -490,11 +702,11 @@ func (m *MyModule) Init(ctx context.Context, kc KernelContext) error {
 
 ---
 
-## 6. 配置适配
+## 9. 配置适配
 
 `adapter.go` 提供 ASSCOR 配置/模型与 SSAM 格式之间的双向转换函数：
 
-### 6.1 配置转换
+### 9.1 配置转换
 
 | 函数 | 方向 | 说明 |
 |------|------|------|
@@ -520,7 +732,7 @@ no_siem = 0.90
 no_ids = 0.88
 ```
 
-### 6.2 模型转换
+### 9.2 模型转换
 
 | 函数 | 方向 | 说明 |
 |------|------|------|
@@ -530,7 +742,7 @@ no_ids = 0.88
 | `ModelToInput(result)` | model → SSAM | `*model.AssessmentResult` → `*AssessmentInput` |
 | `OutputToModel(output, result)` | SSAM → model | 将 `AssessmentOutput` 写入 `*model.AssessmentResult` |
 
-### 6.3 边缘因子 ID 映射
+### 9.3 边缘因子 ID 映射
 
 | SSAM ID | model 字段 | config.ini 键 |
 |---------|-----------|---------------|
@@ -544,7 +756,7 @@ no_ids = 0.88
 
 ---
 
-## 7. 输入验证
+## 10. 输入验证
 
 `ValidateInput` 在 `ComputeScore` 入口自动调用，验证规则如下：
 
@@ -569,7 +781,7 @@ if err := ssam.ValidateInput(input); err != nil {
 
 ---
 
-## 8. 默认值
+## 11. 默认值
 
 `defaults.go` 提供的默认配置：
 
@@ -602,18 +814,15 @@ engine := ssam.NewDefaultEngine()
 
 ---
 
-## 9. 并发安全
+## 12. 并发安全
 
-`Engine` 的所有公开方法均为并发安全：
+ssam-lib（`github.com/asscor/ssam`）是纯函数式库，零 goroutine、零锁、零共享状态。评估函数是无副作用的纯函数：相同的输入产生相同的输出，天然线程安全。并发调用由调用方管理。
 
-- 读操作使用 `sync.RWMutex` 的 `RLock()` 保护
-- 写操作（`SetWeights`、`SetEdgeFactors`、`RegisterHook` 等）使用 `Lock()` 保护
-- `ComputeScore` 内部通过 RLock/RUnlock 保护权重和边缘因子读取
-- 钩子执行时先复制钩子切片再释放锁，避免死锁
+ASSCOR 适配层（`internal/ssam/`）的 `Engine` 包装器在读写权重、边缘因子、钩子配置时使用 `sync.RWMutex` 保护，但核心计算路径为无锁纯函数调用 ssam-lib。
 
 ---
 
-## 10. 错误处理
+## 13. 错误处理
 
 | 错误变量 | 含义 |
 |----------|------|
@@ -632,11 +841,11 @@ engine := ssam.NewDefaultEngine()
 
 ---
 
-## 11. ASSCOR 内核基础设施接口
+## 14. ASSCOR 内核基础设施接口
 
 以下接口属于 ASSCOR 内核（`internal/kernel`），与 SSAM 模块配合使用。
 
-### 11.1 DI 容器
+### 14.1 DI 容器
 
 ```go
 container := kernel.NewContainer()
@@ -660,7 +869,7 @@ type MyModule struct {
 }
 ```
 
-### 11.2 消息总线
+### 14.2 消息总线
 
 ```go
 bus := kernel.NewBus(1000)
@@ -678,7 +887,7 @@ bus.PublishSync(ctx, msg)
 bus.Unsubscribe("assessor.result", "my-handler")
 ```
 
-### 11.3 熔断器
+### 14.3 熔断器
 
 ```go
 cb := kernel.NewCircuitBreaker(kernel.CircuitBreakerConfig{
@@ -696,9 +905,9 @@ _, failures, successes := cb.Stats("spc", "fetch")
 cb.Reset("spc", "fetch")
 ```
 
-熔断器通过拦截器模式集成到请求链路中（见 11.4 拦截器链）。
+熔断器通过拦截器模式集成到请求链路中（见 14.4 拦截器链）。
 
-### 11.4 拦截器链
+### 14.4 拦截器链
 
 ```go
 chain := kernel.NewInterceptorChain()
@@ -724,7 +933,7 @@ handler := chain.Then(func(ctx context.Context, svc, method string, payload []by
 
 ---
 
-## 12. 完整集成示例
+## 15. 完整集成示例
 
 以下示例展示如何将 SSAM 模块集成到自定义安全评估系统中：
 
@@ -739,7 +948,7 @@ import (
     "strings"
     "time"
 
-    "github.com/asscor/asscor/internal/ssam"
+    "github.com/asscor/ssam"
 )
 
 func main() {

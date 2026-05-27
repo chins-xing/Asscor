@@ -161,8 +161,10 @@ func (k *Kernel) UnregisterPlugin(name string) error {
 
 	if rec.plugin.State() == PluginStarted {
 		go func() {
-			_ = rec.plugin.Stop(k.ctx)
-		}()
+		if err := rec.plugin.Stop(k.ctx); err != nil {
+			logger.WithComponent("kernel").Error("plugin stop failed", "plugin", rec.plugin.Info().Name, "error", err)
+		}
+	}()
 	}
 
 	k.extPoints.UnregisterPlugin(name)

@@ -79,6 +79,12 @@ func (m *AdapterIntegrationModule) State() PluginState {
 }
 
 func (m *AdapterIntegrationModule) syncLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithComponent("adapter_integration").Error("syncLoop panic recovered", "panic", r)
+		}
+	}()
+
 	m.RunAdapters(context.Background())
 
 	ticker := time.NewTicker(m.syncInterval)

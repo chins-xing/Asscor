@@ -770,7 +770,7 @@ func rs001() model.CheckItem {
 			var out string
 			var err error
 			if _, e := os.Stat("/usr/bin/apt"); e == nil {
-				out, err = common.RunCmd("apt", "list", "--upgradable", "2>/dev/null")
+				out, err = common.RunCmd("apt", "list", "--upgradable")
 			} else if _, e := os.Stat("/usr/bin/yum"); e == nil {
 				out, err = common.RunCmd("yum", "check-update", "-q")
 			} else if _, e := os.Stat("/usr/bin/dnf"); e == nil {

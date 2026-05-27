@@ -443,7 +443,6 @@ func (m *AssessorModule) recomputeFinalScore(result *model.AssessmentResult) flo
 	ssamInput := &ssam.AssessmentInput{
 		HostID:      result.HostID,
 		Hostname:    result.Hostname,
-		Timestamp:   result.Timestamp,
 		Threshold:   result.Threshold,
 		Checks:      ssam.CheckResultsToInputs(result.Checks),
 		ThreatCoeff: result.ThreatCoeff,

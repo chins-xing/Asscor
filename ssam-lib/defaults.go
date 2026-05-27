@@ -17,9 +17,8 @@ var DefaultEdgeFactors = []EdgeFactorConfig{
 	{ID: "EF-3FA", Name: "3FA Not Met", Factor: 0.82, TriggerCheck: "EF-002", CascadeTo: "EF-002FA", CascadeValue: 0.82, CascadeOnly: true},
 }
 
-func NewDefaultEngine() *Engine {
-	e := NewEngine()
-	e.SetWeights(DefaultWeights)
-	e.SetEdgeFactors(DefaultEdgeFactors)
-	return e
+var DefaultScoringConfig = ScoringConfig{
+	Weights:     DefaultWeights,
+	EdgeFactors: DefaultEdgeFactors,
+	FormulaID:   "ssam_v1.2",
 }

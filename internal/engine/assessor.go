@@ -232,7 +232,6 @@ func (a *Assessor) Assess(hostID string, hostname string) *model.AssessmentResul
 	ssamInput := &ssam.AssessmentInput{
 		HostID:      result.HostID,
 		Hostname:    result.Hostname,
-		Timestamp:   result.Timestamp,
 		Threshold:   result.Threshold,
 		Checks:      ssam.CheckResultsToInputs(result.Checks),
 		ThreatCoeff: a.cfg.ThreatCoeff,
@@ -436,7 +435,6 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 	ssamInput := &ssam.AssessmentInput{
 		HostID:      result.HostID,
 		Hostname:    result.Hostname,
-		Timestamp:   result.Timestamp,
 		Threshold:   result.Threshold,
 		Checks:      ssam.CheckResultsToInputs(result.Checks),
 		ThreatCoeff: a.cfg.ThreatCoeff,

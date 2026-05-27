@@ -231,7 +231,9 @@ func (m *PersistenceModule) Priority() int {
 
 func (m *PersistenceModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
+	m.mu.Lock()
 	m.state = PluginInitialized
+	m.mu.Unlock()
 
 	if impl, ok := kc.Container().ResolveNamed("config"); ok {
 		if c, ok := impl.(*config.Config); ok {
@@ -255,7 +257,9 @@ func (m *PersistenceModule) Init(ctx context.Context, kc KernelContext) error {
 }
 
 func (m *PersistenceModule) Start(ctx context.Context) error {
+	m.mu.Lock()
 	m.state = PluginStarted
+	m.mu.Unlock()
 
 	m.kernel.Bus().Subscribe(TopicAssessorResult, "persistence", m.onAssessmentResult)
 	m.kernel.Bus().Subscribe(TopicAgentRegistered, "persistence", m.onAgentRegistered)
@@ -267,7 +271,9 @@ func (m *PersistenceModule) Start(ctx context.Context) error {
 }
 
 func (m *PersistenceModule) Stop(ctx context.Context) error {
+	m.mu.Lock()
 	m.state = PluginStopping
+	m.mu.Unlock()
 
 	m.kernel.Bus().UnsubscribeAll("persistence")
 
@@ -287,12 +293,17 @@ func (m *PersistenceModule) Stop(ctx context.Context) error {
 }
 
 func (m *PersistenceModule) State() PluginState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.state
 }
 
 func (m *PersistenceModule) HealthCheck(ctx context.Context) error {
-	if m.state != PluginStarted {
-		return fmt.Errorf("persistence not started (state=%s)", m.state)
+	m.mu.Lock()
+	state := m.state
+	m.mu.Unlock()
+	if state != PluginStarted {
+		return fmt.Errorf("persistence not started (state=%s)", state)
 	}
 	info, err := os.Stat(m.dataDir)
 	if err != nil {
@@ -389,6 +400,12 @@ func (m *PersistenceModule) flushAll() {
 }
 
 func (m *PersistenceModule) flushLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithComponent("persistence").Error("flushLoop panic recovered", "panic", r)
+		}
+	}()
+
 	for {
 		select {
 		case <-m.flushTicker.C:
@@ -464,7 +481,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		}
 
 		if err := m.WriteAssessment(rec); err != nil {
-			logger.WithComponent("persistence").Error("write assessment error", "error", err)
+			logger.WithComponent("persistence").Error("write assessment failed", "host_id", ar.HostID, "error", err)
 		} else {
 			logger.WithComponent("persistence").Info("assessment written", "host_id", ar.HostID, "score", ar.FinalScore)
 		}

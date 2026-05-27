@@ -5,10 +5,19 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 
 	apiv1 "github.com/asscor/asscor/api/v1"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
+)
+
+var (
+	hostIDPattern    = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
+	cpePattern       = regexp.MustCompile(`^cpe:2\.3:[aoh]:[^:]*:[^:]*:[^:]*:.*$`)
+	maxPackages      = 50000
+	maxCPEs          = 50000
+	maxPackageLen    = 256
 )
 
 type KernelServiceImpl struct {
@@ -47,6 +56,18 @@ func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterReq
 			SessionId: "",
 		}, fmt.Errorf("host_id is required")
 	}
+	if len(req.HostId) > 128 {
+		return &apiv1.RegisterResponse{
+			Accepted:  false,
+			SessionId: "",
+		}, fmt.Errorf("host_id too long (max 128 characters)")
+	}
+	if !hostIDPattern.MatchString(req.HostId) {
+		return &apiv1.RegisterResponse{
+			Accepted:  false,
+			SessionId: "",
+		}, fmt.Errorf("host_id contains invalid characters (allowed: a-z, A-Z, 0-9, ._-)")
+	}
 	if req.Version == "" {
 		return &apiv1.RegisterResponse{
 			Accepted:  false,
@@ -74,6 +95,29 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 	}
 
 	if s.spc != nil && s.spc.Enabled() && len(req.Packages) > 0 {
+		if len(req.Packages) > maxPackages {
+			logger.WithComponent("kernel").Warn("heartbeat packages exceed limit, truncating", "host_id", req.HostId, "count", len(req.Packages), "max", maxPackages)
+			req.Packages = req.Packages[:maxPackages]
+		}
+		if len(req.InstalledCPEs) > maxCPEs {
+			logger.WithComponent("kernel").Warn("heartbeat CPEs exceed limit, truncating", "host_id", req.HostId, "count", len(req.InstalledCPEs), "max", maxCPEs)
+			req.InstalledCPEs = req.InstalledCPEs[:maxCPEs]
+		}
+
+		for i := range req.Packages {
+			if len(req.Packages[i]) > maxPackageLen {
+				req.Packages[i] = req.Packages[i][:maxPackageLen]
+			}
+		}
+
+		validCPEs := make([]string, 0, len(req.InstalledCPEs))
+		for _, cpeStr := range req.InstalledCPEs {
+			if cpePattern.MatchString(cpeStr) {
+				validCPEs = append(validCPEs, cpeStr)
+			}
+		}
+		req.InstalledCPEs = validCPEs
+
 		asset := s.spc.GetAsset(req.HostId)
 		if asset == nil {
 			asset = &LocalAsset{

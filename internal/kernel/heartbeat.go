@@ -77,8 +77,11 @@ func (m *HeartbeatModule) State() PluginState {
 }
 
 func (m *HeartbeatModule) HealthCheck(ctx context.Context) error {
-	if m.state != PluginStarted {
-		return fmt.Errorf("heartbeat not started (state=%s)", m.state)
+	m.mu.RLock()
+	state := m.state
+	m.mu.RUnlock()
+	if state != PluginStarted {
+		return fmt.Errorf("heartbeat not started (state=%s)", state)
 	}
 	m.mu.RLock()
 	agentCount := len(m.agents)
@@ -171,6 +174,12 @@ func (m *HeartbeatModule) IsAlive(hostID string) bool {
 }
 
 func (m *HeartbeatModule) monitorLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithComponent("heartbeat").Error("monitorLoop panic recovered", "panic", r)
+		}
+	}()
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 

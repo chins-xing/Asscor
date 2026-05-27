@@ -1,11 +1,13 @@
-# SSAM 1.3 — 系统安全可接受性模型
+# SSAM 2.0 — 系统安全可接受性模型
 
 > **ASSCOR 项目** 实现了 SSAM（系统安全可接受性模型）核心算法。
 >
 > ASSCOR——**ASS**ess + **COR**e（评估 + 内核）。SSAM 是评估算法内核，ASSCOR 是承载它的框架内核：双核一体，算法与架构同构。全视、警惕、永不闭目——持续监控每一台主机的安全状态，不放过任何一个弱点。
+>
+> **SSAM V2.0 现已独立为开源 Go 模块 [github.com/asscor/ssam](https://github.com/asscor/ssam)**（位于 `ssam-lib/`），是一个零外部依赖的纯函数式风险评估引擎。ASSCOR 平台（`internal/ssam/`）作为薄适配层，通过依赖注入委托给 ssam-lib。详情见[项目拆分说明](#121-ssam-v20-项目拆分)。
 
-**算法版本：** SSAM 1.3 | **项目版本：** ASSCOR v0.1.2-MVP  
-**日期：** 2026-05-25  
+**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.2.0  
+**日期：** 2026-05-28  
 **状态：** 发布
 
 ## 摘要
@@ -47,7 +49,7 @@ SSAM 1.3 的核心创新包括：
 
 某些全局性安全能力无法归属单一域，但缺失时会削弱整体安全水平。边缘因子以乘法修正方式反映高级防护缺失。
 
-> **SSAM 1.3 变更：** 供应链校验、自动封禁、资源紧张等项已移入对应核心域检查项（OT-004、RS-003、BC-003），以消除双重扣分。SYN Cookie 仍保留为边缘因子（因其在网络层全局生效）。
+> **SSAM 1.3 变更：** 供应链校验、自动封禁、资源紧张等项已移入对应核心域检查项（OT-004、RS-003、BC-003），以消除双重扣分。SYN Cookie 仍保留为边缘因子（因其在网络层全局生效）。SSAM V2.0 引入三层语义模型（本征/暴露/威胁），以独立风险层取代旧版 ThreatCoeff/SPCScore 双重罚分机制。
 
 | 独立属性 | 缺失时因子 | 说明 |
 |----------|------------|------|
@@ -224,6 +226,17 @@ ASSCOR/
 │   ├── kernel/        # 微内核服务端入口（gRPC + JSONRPC 双协议栈）
 │   ├── agent/         # Agent 客户端入口（gRPC + JSONRPC）
 │   └── ASSCOR/         # 独立评估工具入口
+├── ssam-lib/          # SSAM V2.0 纯函数式引擎（独立 Go module: github.com/asscor/ssam）
+│   ├── types.go       #   V1.x 数据类型 (AssessmentInput/Output)
+│   ├── types_v2.go    #   V2.0 数据类型 (RiskContext, RiskLayers, AssessmentInputV2/OutputV2)
+│   ├── formulas.go    #   V1.x 公式实现 (ssam_v1.2, simple_weighted)
+│   ├── formulas_v2.go #   V2.0 公式 (SSAMV20Formula, 三层语义模型)
+│   ├── ir.go          #   SSAM IR JSON 中间表示导出
+│   ├── ast.go         #   Formula DSL / AST 解析与求值引擎
+│   ├── formulas_ast.go#   AST 驱动的公式实现
+│   ├── ssam.go        #   Engine 核心：Provider 接口、校验、钩子
+│   ├── engine_test.go #   完整测试覆盖
+│   └── go.mod         #   独立 Go module，零外部依赖
 ├── internal/
 │   ├── kernel/        # 内核核心模块（assessor, policy, spc, cti,
 │   │                   #  adapter_integration, config_watcher,
@@ -232,8 +245,9 @@ ASSCOR/
 │   │                   #  attck_emulation, attck_assessment,
 │   │                   #  attck_apt_chain, attck_apt_detect,
 │   │                   #  attck_apt_attribution, attck_apt_hunt 等）
-│   ├── ssam/          # SSAM 独立算法模块（engine, interfaces, adapter,
-│   │                   #  defaults, errors — 可脱离 ASSCOR 独立使用）
+│   ├── ssam/          # SSAM 薄适配层（委托给 ssam-lib）
+│   │                   #  adapter.go — ASSCOR config/model ↔ ssam 格式转换
+│   │                   #  defaults.go — 默认权重、边缘因子
 │   ├── agent/         # Agent 核心模块（collector, executor）
 │   ├── engine/        # ASSCOR 评估引擎（含适配器流水线集成，内部调用 ssam 包）
 │   ├── adapter/       # 外部工具适配器框架（21 个适配器：11 探测器 + 10 管理类）
@@ -303,7 +317,7 @@ ASSCOR μKernel 是风险评估与指令分发中心，采用微内核 + Agent �
 
 | 模块 | 功能 |
 |------|------|
-| **SSAM 算法引擎 (internal/ssam)** | 独立算法模块，实现 SSAM 1.3 评分公式、域评分、边缘因子计算、钩子机制；可脱离 ASSCOR 框架独立使用 |
+| **SSAM 算法引擎 (ssam-lib + internal/ssam)** | ssam-lib（`github.com/asscor/ssam`）为独立纯函数式引擎，实现 SSAM V2.0 三层语义模型评分公式、域评分、边缘因子计算、钩子机制、SSAM IR、Formula DSL/AST；`internal/ssam` 为薄适配层，委托给 ssam-lib |
 | **评估引擎 (Assessor)** | 加载检查项并发评估，通过 SSAM 模块计算四域得分 + 边缘因子 + SPC 修正 |
 | **依赖注入容器 (DI Container)** | 基于反射的 IoC 容器，支持接口绑定、命名绑定、结构体字段注入（`inject` tag）、确定性匹配 |
 | **消息总线 (Bus)** | 发布-订阅模式事件总线，支持同步/异步发布、goroutine 并发控制、信号量防泄漏 |
@@ -344,34 +358,38 @@ Agent ──gRPC/mTLS──▶ Kernel gRPC Server (:50052)
 
 ## 12. 总结
 
-SSAM 1.3 提供了一套严谨且可进化的安全可接受性度量标准。四个核心域与边缘因子、威胁系数、SPC 态势修正共同形成完整的风险评估体系。引入等保映射后，ASSCOR 项目既是对抗高级威胁的战术工具，也是衡量合规持续有效性的战略仪表盘。它不仅回答"系统安全吗"，更回答"在当下威胁中，我们的安全程度是否可以被接受"。
+SSAM 2.0 提供了一套严谨且可进化的安全可接受性度量标准。四个核心域与边缘因子、威胁系数、SPC 态势修正共同形成完整的风险评估体系。引入等保映射后，ASSCOR 项目既是对抗高级威胁的战术工具，也是衡量合规持续有效性的战略仪表盘。它不仅回答"系统安全吗"，更回答"在当下威胁中，我们的安全程度是否可以被接受"。
 
-## 12.1 SSAM 与 ASSCOR 框架解耦架构
+## 12.1 SSAM V2.0 项目拆分
 
-自 v0.1.1-MVP 起，SSAM 算法已从 ASSCOR 框架中完全解耦为独立模块 `internal/ssam`，两者通过标准化接口松耦合协作：
+自 SSAM V2.0 起，核心评分算法已独立为纯函数式库 [github.com/asscor/ssam](https://github.com/asscor/ssam)（位于 `ssam-lib/`），ASSCOR 平台通过 `internal/ssam/` 薄适配层委托调用：
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  ASSCOR Kernel                    │
+│                  ASSCOR Platform                  │
 │  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
-│  │ Assessor │─▶│ DI       │─▶│ SSAM Engine   │  │
-│  │ Module   │  │ Container│  │ (internal/ssam)│  │
-│  └──────────┘  └──────────┘  └───────────────┘  │
+│  │ Assessor │─▶│ DI       │─▶│ ssam Adapter  │  │
+│  │ Module   │  │ Container│  │(internal/ssam) │  │
+│  └──────────┘  └──────────┘  └───────┬───────┘  │
 │       │              ▲              │            │
 │       ▼              │              ▼            │
 │  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
-│  │ Adapter  │  │ Config   │  │ Adapter       │  │
-│  │ Pipeline │  │ Adapter  │  │ (model↔ssam)  │  │
-│  └──────────┘  └──────────┘  └───────────────┘  │
+│  │ Adapter  │  │ Config   │  │ ssam-lib      │  │
+│  │ Pipeline │  │ Adapter  │  │(github.com/   │  │
+│  └──────────┘  └──────────┘  │ asscor/ssam)  │  │
+│                              └───────────────┘  │
 └─────────────────────────────────────────────────┘
 ```
 
 **关键设计原则：**
 
-- **接口隔离**：SSAM 通过 `Provider` 聚合接口暴露能力（`ScoringProvider` + `DomainProvider` + `EdgeFactorProvider` + `HookProvider`）
-- **依赖注入**：ASSCOR 通过 DI 容器绑定 `ssam.ScoringProvider` → `Engine` 实例，框架不直接依赖 Engine 具体类型
-- **数据格式标准化**：`AssessmentInput` / `AssessmentOutput` 作为 DTO，`adapter.go` 负责 ASSCOR model ↔ SSAM 格式转换
-- **独立可用**：`internal/ssam` 无外部依赖（仅 `config`、`model`、`logger`），可直接 `go get` 引入第三方项目
+- **纯函数式内核**：ssam-lib 零外部依赖、无 goroutine、无锁、无 I/O、无 RPC、无插件——纯 Go 函数库
+- **接口隔离**：SSAM 通过 `Provider` 聚合接口暴露能力（`ScoringProvider` + `DomainProvider` + `EdgeFactorProvider` + `HookProvider`）。V2.0 新增 `ScoringFormulaV2` 接口支持三层语义模型
+- **依赖注入**：ASSCOR 通过 DI 容器绑定 `ssam.ScoringProvider` → Engine 实例，框架不直接依赖 Engine 具体类型
+- **数据格式标准化**：`AssessmentInput` / `AssessmentOutput` 作为 V1.x DTO 保持向后兼容；`AssessmentInputV2` / `AssessmentOutputV2` 提供 V2.0 三层风险层详情
+- **独立可用**：`github.com/asscor/ssam` 可被任意 Go 项目通过 `go get` 引入，无需 ASSCOR 框架
+- **SSAM IR**：`AssessmentOutputV2.ToIR()` 输出机器可读的 JSON 中间表示（SSAMIR），便于下游工具链消费
+- **Formula DSL / AST**：`formulas_ast.go` 提供 `ParseFormula(expression string) (FormulaAST, error)` 及 `EvaluateFormula`，支持运行时动态构造评分公式
 
 详细接口规范与接入指南请参阅 [docs/SSAM接口规范与接入指南.md](docs/SSAM接口规范与接入指南.md)。
 
@@ -558,7 +576,7 @@ ATTACKModule (Plugin v2.0.0)
 - **格式化输出** — 统一支持文本表格和 JSON 两种输出格式，通过 `--json` 参数切换
 - **HMAC 密钥管理** — 密钥元数据（创建时间/过期时间/哈希）、自动轮换（90 天）、文件权限 `0600`
 
-> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 1.3。ASSCOR 是实现 SSAM 的开源项目框架，当前版本 v0.1.2-MVP。两者版本号独立演进。
+> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/asscor/ssam](https://github.com/asscor/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.2.0。两者版本号独立演进。
 
 #### 第三批修复（SSAM 解耦与二次审计 — 2026-05-22）
 

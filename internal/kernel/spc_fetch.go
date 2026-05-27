@@ -632,7 +632,10 @@ func (m *SPCModule) parseNVDCVE(cve nvdCVE) SPCCVEScore {
 		}
 	}
 
-	pubDate, _ := time.Parse("2006-01-02T15:04:05.000", cve.Published)
+	pubDate, err := time.Parse("2006-01-02T15:04:05.000", cve.Published)
+	if err != nil {
+		logger.WithComponent("spc").Debug("failed to parse published date", "cve_id", cve.ID, "error", err)
+	}
 	modDate, _ := time.Parse("2006-01-02T15:04:05.000", cve.LastModified)
 	if pubDate.IsZero() {
 		pubDate, _ = time.Parse(time.RFC3339, cve.Published)
@@ -739,8 +742,16 @@ func (m *SPCModule) FetchFromEPSS() SPCFetchResult {
 			continue
 		}
 
-		epssVal, _ := strconv.ParseFloat(epssStr, 64)
-		percentileVal, _ := strconv.ParseFloat(percentileStr, 64)
+		epssVal, err := strconv.ParseFloat(epssStr, 64)
+		if err != nil {
+			logger.WithComponent("spc").Debug("failed to parse EPSS value", "cve_id", cveID, "raw", epssStr, "error", err)
+			continue
+		}
+		percentileVal, err := strconv.ParseFloat(percentileStr, 64)
+		if err != nil {
+			logger.WithComponent("spc").Debug("failed to parse EPSS percentile", "cve_id", cveID, "raw", percentileStr, "error", err)
+			continue
+		}
 		parsed++
 		epssUpdates[cveID] = [2]float64{epssVal, percentileVal}
 
@@ -1387,6 +1398,8 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
+	const mispMaxRetries = 3
+
 	req, err := http.NewRequestWithContext(ctx, "POST", client.config.BaseURL+"/events/restSearch",
 		strings.NewReader(string(body)))
 	if err != nil {
@@ -1398,32 +1411,56 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.client.Do(req)
-	if err != nil {
-		logger.WithComponent("spc").Error("MISP API call failed", "error", err)
-		return nil
-	}
-	defer resp.Body.Close()
+	var lastErr error
+	for attempt := 0; attempt <= mispMaxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(1<<uint(attempt-1)) * 10 * time.Second
+			logger.WithComponent("spc").Warn("MISP API retrying",
+				"attempt", attempt, "backoff", backoff)
+			time.Sleep(backoff)
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		logger.WithComponent("spc").Error("MISP API returned error status", "status", resp.StatusCode)
-		return nil
+		resp, err := client.client.Do(req)
+		if err != nil {
+			lastErr = err
+			logger.WithComponent("spc").Error("MISP API call failed", "error", err, "attempt", attempt+1)
+			continue
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("MISP API rate limited (429)")
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			resp.Body.Close()
+			lastErr = fmt.Errorf("MISP API returned status %d: %s", resp.StatusCode, string(body))
+			continue
+		}
+
+		var eventResp mispEventResponse
+		if err := json.NewDecoder(resp.Body).Decode(&eventResp); err != nil {
+			resp.Body.Close()
+			lastErr = err
+			logger.WithComponent("spc").Error("MISP response decode failed", "error", err, "attempt", attempt+1)
+			continue
+		}
+		resp.Body.Close()
+
+		var cves []SPCCVEScore
+		for _, item := range eventResp.Response {
+			parsed := m.parseMISPEvent(item.Event)
+			cves = append(cves, parsed...)
+		}
+
+		logger.WithComponent("spc").Info("MISP fetched events", "events", len(eventResp.Response), "cves", len(cves))
+		return cves
 	}
 
-	var eventResp mispEventResponse
-	if err := json.NewDecoder(resp.Body).Decode(&eventResp); err != nil {
-		logger.WithComponent("spc").Error("MISP response decode failed", "error", err)
-		return nil
-	}
-
-	var cves []SPCCVEScore
-	for _, item := range eventResp.Response {
-		parsed := m.parseMISPEvent(item.Event)
-		cves = append(cves, parsed...)
-	}
-
-	logger.WithComponent("spc").Info("MISP fetched events", "events", len(eventResp.Response), "cves", len(cves))
-	return cves
+	logger.WithComponent("spc").Error("MISP fetch failed after all retries", "error", lastErr)
+	return nil
 }
 
 func (m *SPCModule) parseMISPEvent(event mispEvent) []SPCCVEScore {

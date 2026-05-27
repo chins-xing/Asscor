@@ -4,12 +4,19 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/asscor/asscor/internal/logger"
 )
 
+var cveIDPattern = regexp.MustCompile(`^CVE-\d{4}-\d{4,}$`)
+
 func (m *SPCModule) AddCVE(score SPCCVEScore) {
+	if !cveIDPattern.MatchString(score.CVEID) {
+		logger.WithComponent("spc").Warn("invalid CVE ID ignored in AddCVE", "cve_id", score.CVEID)
+		return
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if idx, exists := m.cveIndex[score.CVEID]; exists {
@@ -28,6 +35,10 @@ func (m *SPCModule) AddCVEs(scores []SPCCVEScore) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, score := range scores {
+		if !cveIDPattern.MatchString(score.CVEID) {
+			logger.WithComponent("spc").Debug("invalid CVE ID skipped in AddCVEs", "cve_id", score.CVEID)
+			continue
+		}
 		if idx, exists := m.cveIndex[score.CVEID]; exists {
 			m.mergeCVEInPlace(idx, score)
 			continue

@@ -56,6 +56,8 @@ func (r *RateLimiter) startAutoCleanup() {
 }
 
 func (r *RateLimiter) Stop() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.cleanupTick != nil {
 		r.cleanupTick.Stop()
 	}

@@ -202,6 +202,9 @@ func NewATTACKModule() *ATTACKModule {
 }
 
 func (m *ATTACKModule) ConfigureFromConfig(cfg *config.Config) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if cfg == nil {
 		m.loadDefaultMatrix()
 		m.loadDefaultAPTProfiles()
@@ -276,6 +279,7 @@ func (m *ATTACKModule) Init(ctx context.Context, kc KernelContext) error {
 		}
 	}
 
+	m.mu.Lock()
 	m.loadDefaultMatrix()
 	m.loadDefaultAPTProfiles()
 	m.buildTransitionMatrix()
@@ -283,6 +287,7 @@ func (m *ATTACKModule) Init(ctx context.Context, kc KernelContext) error {
 	m.loadDefaultThreatActors()
 	m.loadDefaultScenarios()
 	m.loadDefaultBehavioralIndicators()
+	m.mu.Unlock()
 
 	kc.Container().Bind((*ATTACKInterface)(nil), m)
 
@@ -392,6 +397,8 @@ func (m *ATTACKModule) State() PluginState {
 }
 
 func (m *ATTACKModule) Version() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.attckVersion
 }
 
