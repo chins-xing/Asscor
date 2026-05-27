@@ -84,7 +84,7 @@ package main
 
 import (
     "fmt"
-    ssam "github.com/asscor/ssam"
+    ssam "github.com/chins-xing/ssam"
 )
 
 func main() {

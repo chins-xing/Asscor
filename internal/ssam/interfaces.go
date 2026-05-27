@@ -3,7 +3,7 @@ package ssam
 import (
 	"context"
 
-	ssam "github.com/asscor/ssam"
+	ssam "github.com/chins-xing/ssam"
 )
 
 type HookPhase string

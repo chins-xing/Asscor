@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	ssam "github.com/asscor/ssam"
+	ssam "github.com/chins-xing/ssam"
 	"github.com/asscor/asscor/internal/logger"
 )
 

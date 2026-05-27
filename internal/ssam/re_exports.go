@@ -1,7 +1,7 @@
 package ssam
 
 import (
-	ssam "github.com/asscor/ssam"
+	ssam "github.com/chins-xing/ssam"
 )
 
 type (

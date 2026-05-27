@@ -1,16 +1,16 @@
-# SSAM 接口规范与接入指南
+﻿# SSAM 接口规范与接入指南
 
-> **版本**：SSAM 2.0 | **模块路径**：`github.com/asscor/ssam`  
+> **版本**：SSAM 2.0 | **模块路径**：`github.com/chins-xing/ssam`  
 > **ASSCOR 适配层**：`f:\Argus\internal\ssam\` (薄适配层，委托给 ssam-lib)  
 > **日期**：2026-05-28 | **状态**：发布
 
-本文档详细说明 SSAM 独立算法模块的接口规范、数据结构定义、配置适配机制及接入方式。SSAM V2.0 已独立为纯函数式 Go 模块 `github.com/asscor/ssam`（位于 `ssam-lib/`），可脱离 ASSCOR 框架独立使用。ASSCOR 平台通过 `internal/ssam/` 薄适配层委托调用 ssam-lib。
+本文档详细说明 SSAM 独立算法模块的接口规范、数据结构定义、配置适配机制及接入方式。SSAM V2.0 已独立为纯函数式 Go 模块 `github.com/chins-xing/ssam`（位于 `ssam-lib/`），可脱离 ASSCOR 框架独立使用。ASSCOR 平台通过 `internal/ssam/` 薄适配层委托调用 ssam-lib。
 
 ---
 
 ## 1. 模块概览
 
-`github.com/asscor/ssam`（`ssam-lib/`）是 SSAM V2.0 的纯函数式引擎，零外部依赖。包含以下文件：
+`github.com/chins-xing/ssam`（`ssam-lib/`）是 SSAM V2.0 的纯函数式引擎，零外部依赖。包含以下文件：
 
 | 文件 | 职责 |
 |------|------|
@@ -435,7 +435,7 @@ SSAM IR 的设计目标：
 SSAM V2.0 提供公式 DSL，允许在运行时通过字符串表达式构造评分公式，无需修改代码：
 
 ```go
-import "github.com/asscor/ssam"
+import "github.com/chins-xing/ssam"
 
 ast, err := ssam.ParseFormula("intrinsic * 0.5 + exposure * 0.3 + threat * 0.2")
 if err != nil {
@@ -538,7 +538,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/asscor/ssam"
+    "github.com/chins-xing/ssam"
 )
 
 func main() {
@@ -816,7 +816,7 @@ engine := ssam.NewDefaultEngine()
 
 ## 12. 并发安全
 
-ssam-lib（`github.com/asscor/ssam`）是纯函数式库，零 goroutine、零锁、零共享状态。评估函数是无副作用的纯函数：相同的输入产生相同的输出，天然线程安全。并发调用由调用方管理。
+ssam-lib（`github.com/chins-xing/ssam`）是纯函数式库，零 goroutine、零锁、零共享状态。评估函数是无副作用的纯函数：相同的输入产生相同的输出，天然线程安全。并发调用由调用方管理。
 
 ASSCOR 适配层（`internal/ssam/`）的 `Engine` 包装器在读写权重、边缘因子、钩子配置时使用 `sync.RWMutex` 保护，但核心计算路径为无锁纯函数调用 ssam-lib。
 
@@ -948,7 +948,7 @@ import (
     "strings"
     "time"
 
-    "github.com/asscor/ssam"
+    "github.com/chins-xing/ssam"
 )
 
 func main() {
