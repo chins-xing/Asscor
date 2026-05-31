@@ -163,7 +163,12 @@ func (a *Agent) runOnce(ctx context.Context) error {
 				if consecutiveErrors >= a.cfg.MaxRetries {
 					return fmt.Errorf("max retries exceeded: %w", err)
 				}
-				timer.Reset(time.Duration(a.cfg.HeartbeatSec) * time.Second)
+				backoff := time.Duration(a.cfg.HeartbeatSec) * time.Second * time.Duration(1<<uint(consecutiveErrors-1))
+				if backoff > 60*time.Second {
+					backoff = 60 * time.Second
+				}
+				logger.WithComponent("agent").Info("retrying with backoff", "backoff", backoff)
+				timer.Reset(backoff)
 				continue
 			}
 			consecutiveErrors = 0

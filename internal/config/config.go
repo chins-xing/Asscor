@@ -48,6 +48,8 @@ type Config struct {
 
 	HotloadEnabled bool
 	HotloadIntervalS int
+
+	PrismDefaultTransmission float64
 }
 
 type ExtMgrConfig struct {
@@ -153,6 +155,7 @@ func Default() *Config {
 		},
 		HotloadEnabled:   false,
 		HotloadIntervalS: 30,
+		PrismDefaultTransmission: 0.3,
 		ATTACK: model.ATTACKConfig{
 			Enabled:              true,
 			Version:              "v19",
@@ -162,6 +165,13 @@ func Default() *Config {
 			SafeEmulation:        true,
 		},
 	}
+}
+
+func (c *Config) GetPrismDefaultTransmission() float64 {
+	if c.PrismDefaultTransmission <= 0 {
+		return 0.3
+	}
+	return c.PrismDefaultTransmission
 }
 
 func Load(path string) (*Config, error) {

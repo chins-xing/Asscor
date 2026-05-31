@@ -35,8 +35,8 @@ func DefaultServerConfig() ServerConfig {
 		ListenAddr:       ":50051",
 		MaxRecvMsgSize:   16 * 1024 * 1024,
 		MaxSendMsgSize:   16 * 1024 * 1024,
-		KeepaliveTime:    30 * time.Second,
-		KeepaliveTimeout: 10 * time.Second,
+		KeepaliveTime:    60 * time.Second,
+		KeepaliveTimeout: 35 * time.Second,
 		MaxConns:         100,
 	}
 }

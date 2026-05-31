@@ -12,13 +12,26 @@ import (
 	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
+	ascorprism "github.com/asscor/asscor/internal/prism"
 	"github.com/asscor/asscor/internal/ssam"
+	prismlib "github.com/chins-xing/prism"
 )
 
+type ScoringEngineProvider interface {
+	Assess(hostID string, hostname string) *model.AssessmentResult
+	AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
+	SSAMEngine() *ssam.Engine
+	ReloadWeights(cfg *config.Config)
+	ValidateEdgeFactors(registeredChecks []model.CheckItem) []string
+	PrintReport(result *model.AssessmentResult) string
+}
+
 type AssessorModule struct {
-	kernel KernelContext
-	cfg    *config.Config
-	engine *engine.Assessor
+	kernel      KernelContext
+	cfg         *config.Config
+	engine      ScoringEngineProvider
+	prismEngine *ascorprism.Engine
+	failTracker map[string]map[string]int64
 
 	mu      sync.RWMutex
 	results map[string]*model.AssessmentResult
@@ -38,6 +51,7 @@ func (m *AssessorModule) Info() PluginInfo {
 func (m *AssessorModule) Dependencies() []PluginDependency {
 	return []PluginDependency{
 		{Name: "config", Interface: (*config.Config)(nil)},
+		{Interface: (*ScoringEngineProvider)(nil)},
 	}
 }
 
@@ -49,6 +63,7 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
 	m.state = PluginInitialized
 	m.results = make(map[string]*model.AssessmentResult)
+	m.failTracker = make(map[string]map[string]int64)
 
 	if impl, ok := kc.Container().ResolveNamed("config"); ok {
 		if c, ok := impl.(*config.Config); ok {
@@ -59,7 +74,20 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 		m.cfg = config.Default()
 	}
 
-	m.engine = engine.NewAssessor(m.cfg)
+	if impl, ok := kc.Container().Resolve((*ScoringEngineProvider)(nil)); ok {
+		if engine, ok := impl.(ScoringEngineProvider); ok {
+			m.engine = engine
+		}
+	}
+
+	if m.engine == nil {
+		logger.WithComponent("assessor").Error("ScoringEngineProvider not found in DI container")
+		return fmt.Errorf("ScoringEngineProvider not registered")
+	}
+
+	m.prismEngine = ascorprism.NewEngine()
+	logger.WithComponent("assessor").Info("prism engine initialized", "version", "v3.1")
+
 
 	kc.Container().Bind((*ssam.ScoringProvider)(nil), m.engine.SSAMEngine())
 
@@ -127,6 +155,8 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 		result.Acceptable = result.FinalScore >= result.Threshold
 	}
 
+	m.applyPrismToResult(hostID, result, time.Now().Unix())
+
 	m.mu.Lock()
 	m.results[hostID] = result
 	m.mu.Unlock()
@@ -175,6 +205,8 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	}
 
 	logger.WithComponent("assessor").Info("assessment score computed", "host_id", hostID, "score", result.FinalScore, "spc_score", result.SPCScore, "threat_coeff", result.ThreatCoeff)
+
+	m.applyPrismToResult(hostID, result, time.Now().Unix())
 
 	m.mu.Lock()
 	m.results[hostID] = result
@@ -535,3 +567,208 @@ func (m *AssessorModule) extractPackagesFromChecks(checks []model.CheckResult) [
 	}
 	return pkgs
 }
+
+func (m *AssessorModule) applyPrismToResult(hostID string, result *model.AssessmentResult, nowUnix int64) {
+	m.updateFailTracker(hostID, result, nowUnix)
+
+	node := m.buildNodeState(hostID, result)
+	allNodes, allEdges := m.collectTopologySnapshot(hostID, result)
+	incomingEdges := filterIncoming(hostID, allEdges)
+
+	prismResult := m.prismEngine.ComputeDynamicScore(node, incomingEdges, allNodes, nowUnix)
+
+	result.PrismScore = prismResult.PrismScore
+	result.PrismExternalRisk = prismResult.ExternalRisk
+	result.PrismPropRisk = prismResult.PropagatedRisk
+	result.PrismPropPenalty = prismResult.PropPenalty
+	result.PrismDebtRaw = prismResult.DebtRaw
+	result.PrismDebtPenalty = prismResult.DebtPenalty
+
+	logger.WithComponent("assessor").Info("prism score computed",
+		"host_id", hostID,
+		"ssam_score", result.FinalScore,
+		"prism_score", result.PrismScore,
+		"debt_penalty", result.PrismDebtPenalty,
+		"prop_penalty", result.PrismPropPenalty,
+	)
+}
+
+func (m *AssessorModule) updateFailTracker(hostID string, result *model.AssessmentResult, nowUnix int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	failMap, exists := m.failTracker[hostID]
+	if !exists {
+		failMap = make(map[string]int64)
+		m.failTracker[hostID] = failMap
+	}
+
+	for _, c := range result.Checks {
+		if !c.Passed {
+			if _, tracked := failMap[c.CheckID]; !tracked {
+				failMap[c.CheckID] = nowUnix
+			}
+		} else {
+			delete(failMap, c.CheckID)
+		}
+	}
+}
+
+func (m *AssessorModule) buildNodeState(hostID string, result *model.AssessmentResult) *prismlib.NodeState {
+	m.mu.RLock()
+	failMap := m.failTracker[hostID]
+	m.mu.RUnlock()
+
+	node := &prismlib.NodeState{
+		HostID:    hostID,
+		SSAMScore: result.FinalScore,
+	}
+
+	for _, c := range result.Checks {
+		if !c.Passed {
+			failAt := int64(0)
+			if failMap != nil {
+				if t, ok := failMap[c.CheckID]; ok {
+					failAt = t
+				}
+			}
+			node.FailedChecks = append(node.FailedChecks, prismlib.CheckFailure{
+				CheckID:  c.CheckID,
+				Delta:    c.Delta,
+				FailUnix: failAt,
+			})
+		}
+	}
+
+	return node
+}
+
+func (m *AssessorModule) collectTopologySnapshot(currentHostID string, currentResult *model.AssessmentResult) (map[string]*prismlib.NodeState, []prismlib.EdgeState) {
+	nodes := make(map[string]*prismlib.NodeState)
+	edges := make([]prismlib.EdgeState, 0)
+
+	nodes[currentHostID] = &prismlib.NodeState{
+		HostID:    currentHostID,
+		SSAMScore: currentResult.FinalScore,
+	}
+
+	defaultTransmission := m.cfg.GetPrismDefaultTransmission()
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for id, res := range m.results {
+		if id == currentHostID {
+			continue
+		}
+		nodes[id] = &prismlib.NodeState{
+			HostID:    id,
+			SSAMScore: res.FinalScore,
+		}
+		edges = append(edges, prismlib.EdgeState{
+			Source:           id,
+			Target:           currentHostID,
+			RiskTransmission: defaultTransmission,
+		})
+	}
+
+	return nodes, edges
+}
+
+func filterIncoming(hostID string, edges []prismlib.EdgeState) []prismlib.EdgeState {
+	var result []prismlib.EdgeState
+	for _, e := range edges {
+		if e.Target == hostID {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
+type TopologyProvider interface {
+	GetEdges(hostID string) []prismlib.EdgeState
+	GetAllNodes() map[string]*prismlib.NodeState
+}
+
+type ScoringEngineModule struct {
+	kernel KernelContext
+	cfg    *config.Config
+	engine *engine.Assessor
+
+	state PluginState
+}
+
+func NewScoringEngineModule(cfg *config.Config) *ScoringEngineModule {
+	if cfg == nil {
+		cfg = config.Default()
+	}
+	return &ScoringEngineModule{
+		cfg:    cfg,
+		engine: engine.NewAssessor(cfg),
+		state:  PluginUnregistered,
+	}
+}
+
+func (m *ScoringEngineModule) Info() PluginInfo {
+	return PluginInfo{
+		Name:        "scoring_engine",
+		Version:     "1.0.0",
+		Description: "SSAM scoring engine provider - implements ScoringEngineProvider interface",
+		Author:      "ASSCOR Core Team",
+	}
+}
+
+func (m *ScoringEngineModule) Dependencies() []PluginDependency {
+	return []PluginDependency{
+		{Name: "config", Interface: (*config.Config)(nil)},
+	}
+}
+
+func (m *ScoringEngineModule) Priority() int {
+	return 35
+}
+
+func (m *ScoringEngineModule) Init(ctx context.Context, kc KernelContext) error {
+	m.kernel = kc
+	m.state = PluginInitialized
+	return nil
+}
+
+func (m *ScoringEngineModule) Start(ctx context.Context) error {
+	m.state = PluginStarted
+	return nil
+}
+
+func (m *ScoringEngineModule) Stop(ctx context.Context) error {
+	m.state = PluginStopped
+	return nil
+}
+
+func (m *ScoringEngineModule) State() PluginState {
+	return m.state
+}
+
+func (m *ScoringEngineModule) Assess(hostID string, hostname string) *model.AssessmentResult {
+	return m.engine.Assess(hostID, hostname)
+}
+
+func (m *ScoringEngineModule) AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
+	return m.engine.AssessFromResults(hostID, hostname, checkResults)
+}
+
+func (m *ScoringEngineModule) SSAMEngine() *ssam.Engine {
+	return m.engine.SSAMEngine()
+}
+
+func (m *ScoringEngineModule) ReloadWeights(cfg *config.Config) {
+	m.engine.ReloadWeights(cfg)
+}
+
+func (m *ScoringEngineModule) ValidateEdgeFactors(registeredChecks []model.CheckItem) []string {
+	return m.engine.ValidateEdgeFactors(registeredChecks)
+}
+
+func (m *ScoringEngineModule) PrintReport(result *model.AssessmentResult) string {
+	return m.engine.PrintReport(result)
+}
+
+var _ ScoringEngineProvider = (*ScoringEngineModule)(nil)

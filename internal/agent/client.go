@@ -26,7 +26,7 @@ func NewClient(addr string, tlsConfig *tls.Config) *Client {
 	return &Client{
 		addr:      addr,
 		tlsConfig: tlsConfig,
-		deadline:  10 * time.Second,
+		deadline:  30 * time.Second,
 	}
 }
 

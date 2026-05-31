@@ -847,7 +847,7 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		cvssFactor := math.Min(1.0, cve.CVSS/10.0)
 		epssFactor := 0.0
 		if cve.EPSS > 0 {
-			epssFactor = math.Min(1.0, cve.EPSS)
+			epssFactor = math.Min(1.0, -math.Log(1-cve.EPSS)/5)
 		}
 		kevFactor := 0.0
 		if cve.InKEV {

@@ -124,6 +124,9 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 	k.Container().BindNamed("config", (*config.Config)(nil), cfg)
 
+	scoringEngine := kernel.NewScoringEngineModule(cfg)
+	k.Container().Bind((*kernel.ScoringEngineProvider)(nil), scoringEngine)
+
 	assessor := &kernel.AssessorModule{}
 	policy := &kernel.PolicyModule{}
 	spc := kernel.NewSPCModule()
@@ -139,7 +142,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 	sourceManager := kernel.NewSourceManagerModule()
 	cliModule := cli.NewCLIModule()
 
-	for _, p := range []kernel.Plugin{heartbeat, spc, cti, assessor, policy, commander, logCollector, persistence, concurrency, attck, configWatcher, adapterIntegration, sourceManager, cliModule} {
+	for _, p := range []kernel.Plugin{heartbeat, spc, cti, scoringEngine, assessor, policy, commander, logCollector, persistence, concurrency, attck, configWatcher, adapterIntegration, sourceManager, cliModule} {
 		if err := k.RegisterPlugin(p); err != nil {
 			log.Error("register plugin failed", "error", err)
 			os.Exit(1)

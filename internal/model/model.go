@@ -174,6 +174,12 @@ type AssessmentResult struct {
 	ATTACKAPTMatches   []ATTACKAPTMatchInfo `json:"attck_apt_matches,omitempty"`
 	ATTACKPredictedRisk *ATTACKPredictedRiskInfo `json:"attck_predicted_risk,omitempty"`
 	ATTACKFailedTechs  []string             `json:"attck_failed_techniques,omitempty"`
+	PrismScore         float64           `json:"prism_score,omitempty"`
+	PrismExternalRisk  float64           `json:"prism_external_risk,omitempty"`
+	PrismPropRisk      float64           `json:"prism_prop_risk,omitempty"`
+	PrismPropPenalty   float64           `json:"prism_prop_penalty,omitempty"`
+	PrismDebtRaw       float64           `json:"prism_debt_raw,omitempty"`
+	PrismDebtPenalty   float64           `json:"prism_debt_penalty,omitempty"`
 	Checks             []CheckResult     `json:"checks"`
 }
 

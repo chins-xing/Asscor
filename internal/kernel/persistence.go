@@ -35,6 +35,9 @@ type AssessmentRecord struct {
 	NoIDS          float64   `json:"no_ids,omitempty"`
 	ThreatCoeff    float64   `json:"threat_coefficient"`
 	SPCScore       float64   `json:"spc_score,omitempty"`
+	PrismScore     float64   `json:"prism_score,omitempty"`
+	PrismPropRisk  float64   `json:"prism_prop_risk,omitempty"`
+	PrismDebtRaw   float64   `json:"prism_debt_raw,omitempty"`
 	CheckCount     int       `json:"check_count"`
 	FailedCount    int       `json:"failed_count"`
 	Checks         []CheckDetail `json:"checks,omitempty"`
@@ -68,6 +71,10 @@ type DashboardReport struct {
 	EdgeFactors map[string]float64 `json:"edge_factors"`
 	ThreatCoeff float64            `json:"threat_coefficient"`
 	SPCScore    float64            `json:"spc_score"`
+
+	PrismScore    float64 `json:"prism_score,omitempty"`
+	PrismPropRisk float64 `json:"prism_prop_risk,omitempty"`
+	PrismDebtRaw  float64 `json:"prism_debt_raw,omitempty"`
 
 	Summary struct {
 		TotalChecks  int `json:"total_checks"`
@@ -470,6 +477,9 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			NoIDS:          ar.EdgeFactors.NoIDS,
 			ThreatCoeff:    ar.ThreatCoeff,
 			SPCScore:       ar.SPCScore,
+			PrismScore:     ar.PrismScore,
+			PrismPropRisk:  ar.PrismPropRisk,
+			PrismDebtRaw:   ar.PrismDebtRaw,
 			CheckCount:     len(ar.Checks),
 			Checks:         checkDetails,
 		}
@@ -524,6 +534,9 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			EdgeFactors:   edgeFactors,
 			ThreatCoeff:   ar.ThreatCoeff,
 			SPCScore:      ar.SPCScore,
+			PrismScore:    ar.PrismScore,
+			PrismPropRisk: ar.PrismPropRisk,
+			PrismDebtRaw:  ar.PrismDebtRaw,
 			Checks:        checkDetails,
 			ComplianceFramework: m.cfg.ComplianceFramework,
 		}
