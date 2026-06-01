@@ -1,4 +1,4 @@
-﻿# ASSCOR 使用手册
+# ASSCOR 使用手册
 
 > 版本：v0.2.0 | SSAM 2.0 | 最后更新：2026-05-28
 
@@ -376,6 +376,8 @@ kernel_security = 10        # 内核安全扩展权重
 
 SPC 模块通过 NVD/EPSS/CISA KEV/CNNVD/CNVD 等外部漏洞数据源与本地资产比对，输出个体化修正因子 P_score（0.60–1.00）。
 
+> ⚠️ **评估方法声明（已知局限性）**：SPC 的验证逻辑基于 CPE 字符串匹配——将已安装软件包名称/版本与 CVE 数据库中的受影响产品版本进行交叉比对。它**不执行**漏洞利用验证、运行时可达性分析、二进制分析、或替代缓解措施验证。匹配结果可能产生假阳性（已通过 WAF/虚拟补丁缓解但未更新版本号的漏洞）和假阴性（版本号匹配但存在定制变种）。SPC 定位为"漏洞情报聚合与版本比对引擎"，而非"漏洞利用验证器"，目前暂无计划引入深度验证能力。
+
 ### 8.1 基本配置
 
 ```ini
@@ -701,3 +703,165 @@ kill $(cat /var/run/ASSCOR-kernel.pid)
 | 评分始终为 100 | 所有检查项通过 | 正常现象，表示系统安全状态良好 |
 | 评分异常偏低 | 检查项 Delta 值过大 | 检查 `[check_deltas]` 配置是否合理 |
 | P_score 为 0.60 | 存在高危 CVE 匹配 | 使用 `spc cve` 命令查看匹配的 CVE 详情 |
+
+---
+
+## 16. CLI 命令参考
+
+### 16.1 CLI 概述
+
+ASSCOR Kernel 内置交互式 CLI 终端，Kernel 启动后自动进入。CLI 提供命令注册、自动补全、历史记录和插件扩展能力。
+
+**进入 CLI**：Kernel 启动后，日志自动重定向到 `ASSCOR-kernel.log`，终端进入交互模式：
+
+```
+ASSCOR μKernel
+  Framework: v0.2.0   SSAM: 2.0
+  Listen:   :50051 (mTLS: true)
+  CLI active: logs redirected to ASSCOR-kernel.log
+
+ASSCOR>
+```
+
+**命令语法**：`command <subcommand|param> [options]`。选项使用 `--name=value` 或 `--name value` 格式，布尔选项使用 `--flag` 开启。输入 `Ctrl+D` 或 `Ctrl+C` 退出。
+
+### 16.2 通用选项
+
+| 选项 | 短选项 | 说明 |
+|------|--------|------|
+| `--verbose` | `-v` | 显示详细输出 |
+| `--json` | `-j` | 以 JSON 格式输出 |
+| `--quiet` | `-q` | 抑制非必要输出 |
+| `--help` | `-h` | 显示命令帮助 |
+
+### 16.3 核心命令
+
+**help** — 显示命令帮助或列出所有可用命令：`help [command]`
+
+**version** — 显示 ASSCOR 框架版本和 SSAM 模型版本：`version`
+
+**status** — 显示当前 Kernel 状态，包括插件状态、运行时间和资源使用：`status [--format=json]`
+
+### 16.4 评估命令
+
+**assess** — 触发对指定主机的安全可接受性评估。
+
+```
+用法：assess [host] [options]
+参数：host — 目标主机 ID（默认 local）
+选项：--format=json, --domain=attack_surface|business_continuity|operation_trust|resilience
+```
+
+### 16.5 SPC 命令
+
+**spc** — 查询 SPC 模块的 CVE 缓存、P-score、KEV 数量和修正数据。
+
+```
+用法：spc <summary|cve|kev|score|fetch> [options]
+选项：--limit=N（默认20）, --cvss-min=N, --kev-only, --host=HOST
+示例：
+  ASSCOR> spc summary
+  ASSCOR> spc cve --cvss-min=9.0 --kev-only
+  ASSCOR> spc score --host=web-server-01
+  ASSCOR> spc fetch
+```
+
+### 16.6 Agent 管理命令
+
+**agent** — 管理已注册的 Agent。
+
+```
+用法：agent <list|status|start|stop|restart|config|command> [options]
+选项：--host=HOST, --all, --filter=key=value, --limit=N（默认50）, --watch
+示例：
+  ASSCOR> agent list --filter=active=true
+  ASSCOR> agent status --host=web-server-01
+  ASSCOR> agent stop --host=db-master-01
+  ASSCOR> agent command --host=web-01 --action=scan
+```
+
+**log** — 查看、过滤和导出 Agent 运行日志。
+
+```
+用法：log <show|export> [options]
+选项：--host=HOST, --level=debug|info|warn|error, --limit=N（默认50）, --format=json|csv, --output=PATH
+```
+
+### 16.7 ATT&CK 命令
+
+**attck** — 操作 ATT&CK V19 模块，包括检测规则管理、IOC 管理、差距分析、攻击链重构、APT 归因和威胁狩猎。
+
+```
+用法：attck <summary|rule|alert|anomaly|ioc|actor|gap|control|chain|attribute|hunt|emulate|improve> [options]
+选项：--host=HOST, --severity=critical|high|medium|low, --technique=T1234, --limit=N（默认20）, --format=json
+```
+
+核心子命令示例：
+
+```
+ASSCOR> attck summary                                      # 模块概览
+ASSCOR> attck rule add --name "suspicious_powershell" --technique T1059 --severity high
+ASSCOR> attck ioc add --type=ip --value=10.0.0.1 --confidence=0.8 --technique=T1071
+ASSCOR> attck gap --host=web-server-01                     # 防御差距分析
+ASSCOR> attck chain --host=web-server-01                   # 攻击链重构
+ASSCOR> attck attribute --chain=CHAIN-20260525-001         # APT 归因
+ASSCOR> attck hunt generate --host=web-server-01           # 生成狩猎假设
+ASSCOR> attck emulate generate --actor=APT29               # 生成对手仿真
+ASSCOR> attck improve create --name="Harden credential policy"  # 持续改进追踪
+```
+
+### 16.8 插件管理命令
+
+**plugin** — 列出、查看和管理 Kernel 插件。
+
+```
+用法：plugin <list|info|health> [name]
+示例：
+  ASSCOR> plugin list
+  ASSCOR> plugin info spc
+  ASSCOR> plugin health
+```
+
+### 16.9 外部源管理命令
+
+**source** — 部署、配置、启停和审计外部集成源。
+
+```
+用法：source <list|info|deploy|enable|disable|update|uninstall|run|config|audit> [name] [options]
+选项：--category=scanner|management, --version=VERSION, --force, --limit=N（默认50）
+```
+
+### 16.10 系统命令
+
+**config** — 查看当前 Kernel 配置：`config [key] [--format=json]`
+
+**health** — 对所有 Kernel 插件执行健康检查：`health [--json]`
+
+### 16.11 调试命令
+
+**history** — 查看命令执行历史记录：`history [count] [--failed] [--clear]`
+
+### 16.12 交互式终端功能
+
+- **自动补全**：输入命令后按 `Tab` 键触发（命令名、子命令、选项均可补全）
+- **命令历史**：使用 `↑`/`↓` 箭头键浏览历史命令
+- **脚本集成**：所有命令支持 `--json` 选项输出结构化 JSON：`echo "spc summary --json" | ./ASSCOR-kernel-linux-x86_64`
+- **退出码**：0=成功，1=执行错误，2=用法错误，130=用户取消
+
+### 16.13 插件注册自定义命令
+
+```go
+cliPlugin, ok := k.Container().Resolve((*cli.CLIInterface)(nil))
+if ok {
+    cliMod := cliPlugin.(cli.CLIInterface)
+    cliMod.RegisterCommand(cli.NewBaseCommand(
+        cli.CommandInfo{
+            Name: "mycmd", Short: "My custom command",
+            Usage: "mycmd [args]", Category: cli.CategoryPlugin,
+        },
+        func(ctx *cli.CommandContext) *cli.CommandResult {
+            return &cli.CommandResult{ExitCode: cli.ExitOK, Output: "Custom command executed\n"}
+        },
+    ))
+}
+```
