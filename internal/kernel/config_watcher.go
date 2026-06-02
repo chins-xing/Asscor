@@ -41,9 +41,7 @@ func (m *ConfigWatcherModule) Info() PluginInfo {
 }
 
 func (m *ConfigWatcherModule) Dependencies() []PluginDependency {
-	return []PluginDependency{
-		{Name: "assessor", Interface: (*AssessorInterface)(nil)},
-	}
+	return nil
 }
 
 func (m *ConfigWatcherModule) Priority() int {
@@ -53,14 +51,6 @@ func (m *ConfigWatcherModule) Priority() int {
 func (m *ConfigWatcherModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
 	m.state = PluginInitialized
-
-	if impl, ok := kc.Container().Resolve((*AssessorInterface)(nil)); ok {
-		if a, ok2 := impl.(AssessorInterface); ok2 {
-			m.assessor = a
-		} else {
-			logger.WithComponent("config_watcher").Warn("assessor has unexpected type in DI container")
-		}
-	}
 
 	cfg := kc.GetConfigObj()
 	if cfg != nil && cfg.HotloadIntervalS > 0 {
@@ -81,6 +71,15 @@ func (m *ConfigWatcherModule) Init(ctx context.Context, kc KernelContext) error 
 
 func (m *ConfigWatcherModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
+
+	// Resolve assessor here (not in Init) because ConfigWatcher (P=1) starts before Assessor (P=40)
+	if impl, ok := m.kernel.Container().Resolve((*AssessorInterface)(nil)); ok {
+		if a, ok2 := impl.(AssessorInterface); ok2 {
+			m.assessor = a
+		} else {
+			logger.WithComponent("config_watcher").Warn("assessor has unexpected type in DI container")
+		}
+	}
 
 	hotloadEnabled := true
 	if cfg := m.kernel.GetConfigObj(); cfg != nil {

@@ -83,7 +83,13 @@ type PriorityPlugin interface {
 | 10 | CTIModule | 网络威胁情报 |
 | 20 | SPCModule | 安全态势计算 |
 | 21 | ATTACKModule | ATT&CK 知识库与行为分析 |
-| 100 | 其余业务模块 | 在基础设施就绪后启动 |
+| 35 | ScoringEngineModule | SSAM 评分引擎 |
+| 40 | AssessorModule | 评估调度器 |
+| 45 | AdapterIntegrationModule | 外部适配器集成 |
+| 50 | PolicyModule | 策略引擎 |
+| 55 | SourceManagerModule | 外部源管理 |
+| 60 | CommanderModule | 命令下发 |
+| 70 | LogCollectorModule | 日志收集 |
 
 ### 1.3 HealthCheckable（健康检查）
 

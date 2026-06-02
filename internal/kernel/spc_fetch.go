@@ -22,29 +22,28 @@ import (
 )
 
 func (m *SPCModule) FetchFromAllSources() []SPCFetchResult {
-	results := make([]SPCFetchResult, 0)
+	sourceCount := 1 // NVD
+	if m.epssConfig.Enabled {
+		sourceCount++
+	}
+	if m.kevConfig.Enabled {
+		sourceCount++
+	}
+	if m.mispConfig.BaseURL != "" {
+		sourceCount++
+	}
+	if m.cnnvdConfig.Enabled {
+		sourceCount++
+	}
+	if m.cnvdConfig.Enabled {
+		sourceCount++
+	}
+
+	results := make([]SPCFetchResult, 0, sourceCount)
 
 	mp := common.NewMultiProgress()
 
-	sources := 0
-	sources++
-	if m.epssConfig.Enabled {
-		sources++
-	}
-	if m.kevConfig.Enabled {
-		sources++
-	}
-	if m.mispConfig.BaseURL != "" {
-		sources++
-	}
-	if m.cnnvdConfig.Enabled {
-		sources++
-	}
-	if m.cnvdConfig.Enabled {
-		sources++
-	}
-
-	overallBar := mp.AddBar("spc_overall", int64(sources), "SPC Sync")
+	overallBar := mp.AddBar("spc_overall", int64(sourceCount), "SPC Sync")
 
 	result := m.FetchFromNVD()
 	results = append(results, result)
@@ -873,7 +872,7 @@ func (m *SPCModule) FetchFromCISAKEV() SPCFetchResult {
 		CWEs        []string
 		Description string
 	}
-	var entries []kevEntry
+	var entries = make([]kevEntry, 0, len(kevCatalog.Vulnerabilities))
 	for _, vuln := range kevCatalog.Vulnerabilities {
 		cveID := strings.TrimSpace(vuln.CVEID)
 		if cveID == "" {
@@ -1028,7 +1027,7 @@ func (m *SPCModule) FetchFromCNNVD() SPCFetchResult {
 		return result
 	}
 
-	var cves []SPCCVEScore
+	var cves = make([]SPCCVEScore, 0, len(cnnvdResp.Data))
 	for _, item := range cnnvdResp.Data {
 		cveID := strings.TrimSpace(item.CveID)
 		if cveID == "" {
@@ -1177,7 +1176,7 @@ func (m *SPCModule) FetchFromCNVD() SPCFetchResult {
 		return result
 	}
 
-	var cves []SPCCVEScore
+	var cves = make([]SPCCVEScore, 0, len(cnvdResp.Data))
 	for _, item := range cnvdResp.Data {
 		cveID := strings.TrimSpace(item.CveID)
 		if cveID == "" {
@@ -1520,7 +1519,7 @@ func (m *SPCModule) parseMISPEvent(event mispEvent) []SPCCVEScore {
 
 	pubDate, _ := time.Parse("2006-01-02", event.Date)
 
-	var results []SPCCVEScore
+	var results = make([]SPCCVEScore, 0, len(cveIDs))
 	for _, cveID := range cveIDs {
 		results = append(results, SPCCVEScore{
 			CVEID:          cveID,

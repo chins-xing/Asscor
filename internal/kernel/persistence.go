@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -130,10 +131,11 @@ type CVECacheRecord struct {
 }
 
 type jsonlWriter struct {
-	mu   sync.Mutex
-	file *os.File
-	path string
-	day  int
+	mu     sync.Mutex
+	file   *os.File
+	buf    *bufio.Writer
+	path   string
+	day    int
 }
 
 func (w *jsonlWriter) write(data []byte) error {
@@ -142,9 +144,13 @@ func (w *jsonlWriter) write(data []byte) error {
 
 	today := time.Now().YearDay()
 	if w.day != today && w.day != 0 {
+		if w.buf != nil {
+			w.buf.Flush()
+		}
 		if w.file != nil {
 			w.file.Close()
 			w.file = nil
+			w.buf = nil
 		}
 	}
 
@@ -160,13 +166,16 @@ func (w *jsonlWriter) write(data []byte) error {
 			return fmt.Errorf("open jsonl: %w", err)
 		}
 		w.file = f
+		w.buf = bufio.NewWriterSize(f, 4096)
 		w.day = today
 	}
 
-	_, err := w.file.Write(append(data, '\n'))
+	_, err := w.buf.Write(append(data, '\n'))
 	if err != nil && w.file != nil {
+		w.buf.Flush()
 		w.file.Close()
 		w.file = nil
+		w.buf = nil
 		w.day = 0
 	}
 	return err
@@ -175,6 +184,11 @@ func (w *jsonlWriter) write(data []byte) error {
 func (w *jsonlWriter) sync() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.buf != nil {
+		if err := w.buf.Flush(); err != nil {
+			return err
+		}
+	}
 	if w.file != nil {
 		return w.file.Sync()
 	}
@@ -184,9 +198,13 @@ func (w *jsonlWriter) sync() error {
 func (w *jsonlWriter) close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.buf != nil {
+		w.buf.Flush()
+	}
 	if w.file != nil {
 		err := w.file.Close()
 		w.file = nil
+		w.buf = nil
 		return err
 	}
 	return nil
