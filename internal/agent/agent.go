@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -29,6 +30,10 @@ import (
 	"github.com/asscor/asscor/internal/common"
 	"github.com/asscor/asscor/internal/model"
 )
+
+// ErrKernelUnreachable is returned when the agent fails to contact the kernel
+// after max_retries heartbeat attempts. The Run loop should exit on this error.
+var ErrKernelUnreachable = errors.New("kernel unreachable: max heartbeat retries exceeded")
 
 type AgentConfig struct {
 	KernelAddr       string
@@ -114,6 +119,10 @@ func (a *Agent) Run() error {
 
 	for a.running.Load() {
 		if err := a.runOnce(ctx); err != nil {
+			if errors.Is(err, ErrKernelUnreachable) {
+				logger.WithComponent("agent").Info("kernel unreachable after max retries, shutting down")
+				return nil
+			}
 			logger.WithComponent("agent").Error("session error", "error", err)
 			a.sessionID = ""
 			if a.client != nil {
@@ -161,7 +170,7 @@ func (a *Agent) runOnce(ctx context.Context) error {
 				consecutiveErrors++
 				logger.WithComponent("agent").Error("cycle error", "consecutive", consecutiveErrors, "max_retries", a.cfg.MaxRetries, "error", err)
 				if consecutiveErrors >= a.cfg.MaxRetries {
-					return fmt.Errorf("max retries exceeded: %w", err)
+					return ErrKernelUnreachable
 				}
 				backoff := time.Duration(a.cfg.HeartbeatSec) * time.Second * time.Duration(1<<uint(consecutiveErrors-1))
 				if backoff > 60*time.Second {
@@ -625,6 +634,91 @@ func (a *Agent) printAssessmentReport(result *apiv1.AssessmentResult) {
 		}
 	}
 	fmt.Println("---------------------------------------------------------------")
+
+	if len(result.ATTACKCoverage) > 0 || result.ATTACKKillChain != nil || len(result.ATTACKAPTMatches) > 0 {
+		fmt.Println()
+		fmt.Println("===============================================================")
+		fmt.Println("[ ATT&CK Analysis ]")
+		fmt.Println("===============================================================")
+
+		if len(result.ATTACKCoverage) > 0 {
+			fmt.Println()
+			fmt.Println("--- ATT&CK Coverage ---")
+			for _, cov := range result.ATTACKCoverage {
+				bar := ""
+				filled := int(cov.CoverageDet / 10)
+				for i := 0; i < 10; i++ {
+					if i < filled {
+						bar += "="
+					} else {
+						bar += " "
+					}
+				}
+				fmt.Printf("  %-20s [%s] %d/%d (%.0f%%)\n",
+					cov.TacticName, bar, cov.CoveredDet, cov.TotalTechniques, cov.CoverageDet)
+			}
+		}
+
+		if result.ATTACKKillChain != nil {
+			fmt.Println()
+			fmt.Println("--- Kill Chain Assessment ---")
+			fmt.Printf("  Overall Score: %.0f/100\n", result.ATTACKKillChain.OverallScore)
+			fmt.Printf("  Weakest Stage: %s\n", result.ATTACKKillChain.WeakestStage)
+			for _, stage := range result.ATTACKKillChain.Stages {
+				bar := ""
+				filled := int(stage.Score / 10)
+				for i := 0; i < 10; i++ {
+					if i < filled {
+						bar += "="
+					} else {
+						bar += " "
+					}
+				}
+				marker := "  "
+				if stage.Name == result.ATTACKKillChain.WeakestStage {
+					marker = " *"
+				}
+				fmt.Printf("%s %-20s [%s] %.0f (%s)\n",
+					marker, stage.Name, bar, stage.Score, stage.Status)
+			}
+		}
+
+		if len(result.ATTACKAPTMatches) > 0 {
+			fmt.Println()
+			fmt.Println("--- APT Group Matches ---")
+			for _, apt := range result.ATTACKAPTMatches {
+				fmt.Printf("  %s (%s): %.0f%% [%s]\n",
+					apt.GroupName, apt.GroupID, apt.Similarity*100, apt.Confidence)
+				if len(apt.OverlapTech) > 0 {
+					fmt.Printf("    Overlap: %v\n", apt.OverlapTech)
+				}
+			}
+		}
+
+		if result.ATTACKPredictedRisk != nil {
+			fmt.Println()
+			fmt.Println("--- Predicted Risk ---")
+			fmt.Printf("  Max Risk Score: %.2f\n", result.ATTACKPredictedRisk.MaxRiskScore)
+			fmt.Printf("  Enhanced Threat Coeff: %.2f\n", result.ATTACKPredictedRisk.EnhancedThreat)
+			fmt.Printf("  Predicted Paths: %d\n", result.ATTACKPredictedRisk.PredictedPaths)
+			if len(result.ATTACKPredictedRisk.Recommendations) > 0 {
+				fmt.Println("  Recommendations:")
+				for _, rec := range result.ATTACKPredictedRisk.Recommendations {
+					fmt.Printf("    - %s\n", rec)
+				}
+			}
+		}
+
+		if len(result.ATTACKFailedTechs) > 0 {
+			fmt.Println()
+			fmt.Println("--- Failed Techniques ---")
+			for _, tech := range result.ATTACKFailedTechs {
+				fmt.Printf("  - %s\n", tech)
+			}
+		}
+		fmt.Println("---------------------------------------------------------------")
+	}
+
 	fmt.Println()
 
 	passed := 0

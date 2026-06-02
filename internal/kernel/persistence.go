@@ -39,9 +39,20 @@ type AssessmentRecord struct {
 	PrismScore     float64   `json:"prism_score,omitempty"`
 	PrismPropRisk  float64   `json:"prism_prop_risk,omitempty"`
 	PrismDebtRaw   float64   `json:"prism_debt_raw,omitempty"`
+	PrismExternalRisk float64 `json:"prism_external_risk,omitempty"`
+	PrismPropPenalty  float64 `json:"prism_prop_penalty,omitempty"`
+	PrismDebtPenalty  float64 `json:"prism_debt_penalty,omitempty"`
+	SPCCVEs        []model.SPCCVEInfo `json:"spc_cves,omitempty"`
+	DomainWeightShift map[string]float64 `json:"domain_weight_shift,omitempty"`
 	CheckCount     int       `json:"check_count"`
 	FailedCount    int       `json:"failed_count"`
 	Checks         []CheckDetail `json:"checks,omitempty"`
+
+	ATTACKCoverage      []model.ATTACKCoverageInfo    `json:"attck_coverage,omitempty"`
+	ATTACKKillChain     *model.ATTACKKillChainInfo     `json:"attck_kill_chain,omitempty"`
+	ATTACKAPTMatches    []model.ATTACKAPTMatchInfo     `json:"attck_apt_matches,omitempty"`
+	ATTACKPredictedRisk *model.ATTACKPredictedRiskInfo `json:"attck_predicted_risk,omitempty"`
+	ATTACKFailedTechs   []string                       `json:"attck_failed_techniques,omitempty"`
 }
 
 type CheckDetail struct {
@@ -76,6 +87,11 @@ type DashboardReport struct {
 	PrismScore    float64 `json:"prism_score,omitempty"`
 	PrismPropRisk float64 `json:"prism_prop_risk,omitempty"`
 	PrismDebtRaw  float64 `json:"prism_debt_raw,omitempty"`
+	PrismExternalRisk float64 `json:"prism_external_risk,omitempty"`
+	PrismPropPenalty  float64 `json:"prism_prop_penalty,omitempty"`
+	PrismDebtPenalty  float64 `json:"prism_debt_penalty,omitempty"`
+	SPCCVEs        []model.SPCCVEInfo `json:"spc_cves,omitempty"`
+	DomainWeightShift map[string]float64 `json:"domain_weight_shift,omitempty"`
 
 	Summary struct {
 		TotalChecks  int `json:"total_checks"`
@@ -498,6 +514,9 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			PrismScore:     ar.PrismScore,
 			PrismPropRisk:  ar.PrismPropRisk,
 			PrismDebtRaw:   ar.PrismDebtRaw,
+			PrismExternalRisk: ar.PrismExternalRisk,
+			PrismPropPenalty:  ar.PrismPropPenalty,
+			PrismDebtPenalty:  ar.PrismDebtPenalty,
 			CheckCount:     len(ar.Checks),
 			Checks:         checkDetails,
 		}
@@ -506,6 +525,28 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			if !c.Passed {
 				rec.FailedCount++
 			}
+		}
+
+		if len(ar.SPCCVEs) > 0 {
+			rec.SPCCVEs = ar.SPCCVEs
+		}
+		if len(ar.DomainWeightShift) > 0 {
+			rec.DomainWeightShift = ar.DomainWeightShift
+		}
+		if len(ar.ATTACKCoverage) > 0 {
+			rec.ATTACKCoverage = ar.ATTACKCoverage
+		}
+		if ar.ATTACKKillChain != nil {
+			rec.ATTACKKillChain = ar.ATTACKKillChain
+		}
+		if len(ar.ATTACKAPTMatches) > 0 {
+			rec.ATTACKAPTMatches = ar.ATTACKAPTMatches
+		}
+		if ar.ATTACKPredictedRisk != nil {
+			rec.ATTACKPredictedRisk = ar.ATTACKPredictedRisk
+		}
+		if len(ar.ATTACKFailedTechs) > 0 {
+			rec.ATTACKFailedTechs = ar.ATTACKFailedTechs
 		}
 
 		if err := m.WriteAssessment(rec); err != nil {
@@ -555,6 +596,9 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			PrismScore:    ar.PrismScore,
 			PrismPropRisk: ar.PrismPropRisk,
 			PrismDebtRaw:  ar.PrismDebtRaw,
+			PrismExternalRisk: ar.PrismExternalRisk,
+			PrismPropPenalty:  ar.PrismPropPenalty,
+			PrismDebtPenalty:  ar.PrismDebtPenalty,
 			Checks:        checkDetails,
 			ComplianceFramework: m.cfg.ComplianceFramework,
 		}
@@ -562,6 +606,12 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		report.Summary.PassedChecks = passedCount
 		report.Summary.FailedChecks = rec.FailedCount
 
+		if len(ar.SPCCVEs) > 0 {
+			report.SPCCVEs = ar.SPCCVEs
+		}
+		if len(ar.DomainWeightShift) > 0 {
+			report.DomainWeightShift = ar.DomainWeightShift
+		}
 		if len(ar.ATTACKCoverage) > 0 {
 			report.ATTACKCoverage = ar.ATTACKCoverage
 		}

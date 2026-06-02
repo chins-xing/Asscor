@@ -241,6 +241,86 @@ func convertAssessmentResult(r *model.AssessmentResult) *apiv1.AssessmentResult 
 		SpcScore:     r.SPCScore,
 		SpcCVEs:      spcCVEs,
 		Checks:       checks,
+
+		ATTACKCoverage:      convertATTACKCoverage(r.ATTACKCoverage),
+		ATTACKKillChain:     convertATTACKKillChain(r.ATTACKKillChain),
+		ATTACKAPTMatches:    convertATTACKAPTMatch(r.ATTACKAPTMatches),
+		ATTACKPredictedRisk: convertATTACKPredictedRisk(r.ATTACKPredictedRisk),
+		ATTACKFailedTechs:   r.ATTACKFailedTechs,
+	}
+}
+
+func convertATTACKCoverage(src []model.ATTACKCoverageInfo) []apiv1.ATTACKCoverageInfo {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make([]apiv1.ATTACKCoverageInfo, 0, len(src))
+	for _, c := range src {
+		dst = append(dst, apiv1.ATTACKCoverageInfo{
+			TacticID:        c.TacticID,
+			TacticName:      c.TacticName,
+			TotalTechniques: c.TotalTechniques,
+			CoveredDet:      c.CoveredDet,
+			CoverageDet:     c.CoverageDet,
+			CoveragePrev:    c.CoveragePrev,
+			CoverageComp:    c.CoverageComp,
+			RiskLevel:       c.RiskLevel,
+		})
+	}
+	return dst
+}
+
+func convertATTACKKillChain(src *model.ATTACKKillChainInfo) *apiv1.ATTACKKillChainInfo {
+	if src == nil {
+		return nil
+	}
+	stages := make([]apiv1.ATTACKKillChainStage, 0, len(src.Stages))
+	for _, s := range src.Stages {
+		stages = append(stages, apiv1.ATTACKKillChainStage{
+			Name:         s.Name,
+			Score:        s.Score,
+			Status:       s.Status,
+			ChecksPassed: s.ChecksPassed,
+			ChecksTotal:  s.ChecksTotal,
+		})
+	}
+	return &apiv1.ATTACKKillChainInfo{
+		Stages:       stages,
+		OverallScore: src.OverallScore,
+		WeakestStage: src.WeakestStage,
+	}
+}
+
+func convertATTACKAPTMatch(src []model.ATTACKAPTMatchInfo) []apiv1.ATTACKAPTMatchInfo {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make([]apiv1.ATTACKAPTMatchInfo, 0, len(src))
+	for _, m := range src {
+		overlap := make([]string, len(m.OverlapTech))
+		copy(overlap, m.OverlapTech)
+		dst = append(dst, apiv1.ATTACKAPTMatchInfo{
+			GroupID:     m.GroupID,
+			GroupName:   m.GroupName,
+			Similarity:  m.Similarity,
+			Confidence:  m.Confidence,
+			OverlapTech: overlap,
+		})
+	}
+	return dst
+}
+
+func convertATTACKPredictedRisk(src *model.ATTACKPredictedRiskInfo) *apiv1.ATTACKPredictedRiskInfo {
+	if src == nil {
+		return nil
+	}
+	recs := make([]string, len(src.Recommendations))
+	copy(recs, src.Recommendations)
+	return &apiv1.ATTACKPredictedRiskInfo{
+		MaxRiskScore:    src.MaxRiskScore,
+		EnhancedThreat:  src.EnhancedThreat,
+		PredictedPaths:  src.PredictedPaths,
+		Recommendations: recs,
 	}
 }
 
@@ -298,6 +378,11 @@ func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotR
 					"no_ids":              ar.EdgeFactors.NoIDS,
 				},
 				Checks: checks,
+				ATTACKCoverage:      convertATTACKCoverage(ar.ATTACKCoverage),
+				ATTACKKillChain:     convertATTACKKillChain(ar.ATTACKKillChain),
+				ATTACKAPTMatches:    convertATTACKAPTMatch(ar.ATTACKAPTMatches),
+				ATTACKPredictedRisk: convertATTACKPredictedRisk(ar.ATTACKPredictedRisk),
+				ATTACKFailedTechs:   ar.ATTACKFailedTechs,
 			}
 		}
 	}

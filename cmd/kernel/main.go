@@ -16,6 +16,7 @@ import (
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/version"
+	"github.com/asscor/asscor/internal/webui"
 
 	_ "github.com/asscor/asscor/internal/checks"
 )
@@ -32,6 +33,7 @@ func main() {
 	logFormat := flag.String("log-format", "json", "log format: json, text")
 	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
 	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
+	webuiPort := flag.Int("webui-port", 8087, "Web UI dashboard port (0 to disable)")
 	flag.Parse()
 
 	resolvedConfigPath := *configPath
@@ -142,7 +144,14 @@ k.SetConfig("config_path", resolvedConfigPath)
 	sourceManager := kernel.NewSourceManagerModule()
 	cliModule := cli.NewCLIModule()
 
-	for _, p := range []kernel.Plugin{heartbeat, spc, cti, scoringEngine, assessor, policy, commander, logCollector, persistence, concurrency, attck, configWatcher, adapterIntegration, sourceManager, cliModule} {
+	plugins := []kernel.Plugin{heartbeat, spc, cti, scoringEngine, assessor, policy, commander, logCollector, persistence, concurrency, attck, configWatcher, adapterIntegration, sourceManager, cliModule}
+
+	if *webuiPort > 0 {
+		webuiModule := webui.New(*webuiPort)
+		plugins = append(plugins, webuiModule)
+	}
+
+	for _, p := range plugins {
 		if err := k.RegisterPlugin(p); err != nil {
 			log.Error("register plugin failed", "error", err)
 			os.Exit(1)
