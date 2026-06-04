@@ -35,6 +35,8 @@ type ScoringProvider interface {
 	ApplyEdgeFactors(baseScore float64, factors []ssam.EdgeFactorResult) float64
 	SetWeights(weights []WeightConfig)
 	GetWeights() []WeightConfig
+	SetEdgeFactors(factors []EdgeFactorConfig)
+	InitializeDefaults(defaultWeights map[string]float64, defaultFactors []EdgeFactorConfig)
 	SetFormula(formulaID string)
 	GetFormula() string
 }

@@ -204,6 +204,9 @@ func (ic *Interceptors) Stop() {
 	if ic.RateLimiter != nil {
 		ic.RateLimiter.Stop()
 	}
+	if ic.CircuitBreaker != nil {
+		ic.CircuitBreaker.Stop()
+	}
 }
 
 func parseFloat64(s string) (float64, error) {

@@ -147,7 +147,7 @@ func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
 		return nil
 	}
 
-	var buf []byte
+	buf := make([]byte, 0, len(entries)*256)
 	for _, entry := range entries {
 		record := map[string]interface{}{
 			"timestamp": time.Unix(entry.Timestamp, 0).Format(time.RFC3339Nano),
@@ -166,11 +166,6 @@ func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
 	}
 
 	_, err := m.writer.Write(buf)
-	if err == nil {
-		if f, ok := m.writer.(*os.File); ok {
-			f.Sync()
-		}
-	}
 	return err
 }
 

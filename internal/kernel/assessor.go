@@ -20,17 +20,22 @@ import (
 type ScoringEngineProvider interface {
 	Assess(hostID string, hostname string) *model.AssessmentResult
 	AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
-	SSAMEngine() *ssam.Engine
+	SSAMEngine() ssam.ScoringProvider
+	RecomputeFinalScore(result *model.AssessmentResult) float64
 	ReloadWeights(cfg *config.Config)
 	ValidateEdgeFactors(registeredChecks []model.CheckItem) []string
 	PrintReport(result *model.AssessmentResult) string
+}
+
+type PrismEngineProvider interface {
+	ComputeDynamicScore(node *prismlib.NodeState, incomingEdges []prismlib.EdgeState, allNodes map[string]*prismlib.NodeState, nowUnix int64) prismlib.AssetRiskResult
 }
 
 type AssessorModule struct {
 	kernel      KernelContext
 	cfg         *config.Config
 	engine      ScoringEngineProvider
-	prismEngine *ascorprism.Engine
+	prismEngine PrismEngineProvider
 	failTracker map[string]map[string]int64
 
 	mu      sync.RWMutex
@@ -85,9 +90,16 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 		return fmt.Errorf("ScoringEngineProvider not registered")
 	}
 
-	m.prismEngine = ascorprism.NewEngine()
-	logger.WithComponent("assessor").Info("prism engine initialized", "version", "v3.1")
+	if impl, ok := kc.Container().Resolve((*PrismEngineProvider)(nil)); ok {
+		if prism, ok := impl.(PrismEngineProvider); ok {
+			m.prismEngine = prism
+		}
+	}
 
+	if m.prismEngine == nil {
+		m.prismEngine = ascorprism.NewEngine()
+		logger.WithComponent("assessor").Info("prism engine initialized (default)", "version", "v3.1")
+	}
 
 	kc.Container().Bind((*ssam.ScoringProvider)(nil), m.engine.SSAMEngine())
 
@@ -151,7 +163,7 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	m.applyATTACK(hostID, result)
 
 	if result.SPCScore != 1.0 || result.ThreatCoeff != m.cfg.ThreatCoeff {
-		result.FinalScore = m.recomputeFinalScore(result)
+		result.FinalScore = m.engine.RecomputeFinalScore(result)
 		result.Acceptable = result.FinalScore >= result.Threshold
 	}
 
@@ -201,7 +213,7 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	} else {
 		m.applySPCAndCTI(hostID, result)
 		m.applyATTACK(hostID, result)
-		result.FinalScore = m.recomputeFinalScore(result)
+		result.FinalScore = m.engine.RecomputeFinalScore(result)
 	}
 
 	logger.WithComponent("assessor").Info("assessment score computed", "host_id", hostID, "score", result.FinalScore, "spc_score", result.SPCScore, "threat_coeff", result.ThreatCoeff)
@@ -461,34 +473,6 @@ func (m *AssessorModule) syncACIToAsset(spc SPCInterface, hostID string, result 
 	if changed {
 		spc.UpsertAsset(*asset)
 	}
-}
-
-func (m *AssessorModule) recomputeFinalScore(result *model.AssessmentResult) float64 {
-	if result.SPCScore == 0 {
-		result.SPCScore = 1.0
-	}
-	if result.ThreatCoeff == 0 {
-		result.ThreatCoeff = 1.0
-	}
-
-	ssamEngine := m.engine.SSAMEngine()
-	ssamInput := &ssam.AssessmentInput{
-		HostID:      result.HostID,
-		Hostname:    result.Hostname,
-		Threshold:   result.Threshold,
-		Checks:      ssam.CheckResultsToInputs(result.Checks),
-		ThreatCoeff: result.ThreatCoeff,
-		SPCScore:    result.SPCScore,
-	}
-
-	ssamOutput, err := ssamEngine.ComputeScore(context.Background(), ssamInput)
-	if err != nil {
-		logger.WithComponent("assessor").Error("ssam recompute failed", "error", err)
-		return 0
-	}
-
-	ssam.OutputToModel(ssamOutput, result)
-	return ssamOutput.FinalScore
 }
 
 func (m *AssessorModule) GetResult(hostID string) *model.AssessmentResult {
@@ -755,8 +739,12 @@ func (m *ScoringEngineModule) AssessFromResults(hostID string, hostname string, 
 	return m.engine.AssessFromResults(hostID, hostname, checkResults)
 }
 
-func (m *ScoringEngineModule) SSAMEngine() *ssam.Engine {
+func (m *ScoringEngineModule) SSAMEngine() ssam.ScoringProvider {
 	return m.engine.SSAMEngine()
+}
+
+func (m *ScoringEngineModule) RecomputeFinalScore(result *model.AssessmentResult) float64 {
+	return m.engine.RecomputeFinalScore(result)
 }
 
 func (m *ScoringEngineModule) ReloadWeights(cfg *config.Config) {

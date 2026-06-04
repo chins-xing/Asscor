@@ -115,7 +115,7 @@ type SPCCorrection struct {
 type Assessor struct {
 	cfg             *config.Config
 	scoringEngine   *DynamicScoringEngine
-	ssamEngine      *ssam.Engine
+	ssamEngine      ssam.ScoringProvider
 	spcProvider     SPCProvider
 	attackProvider  ATTACKProvider
 	maxWorkers      int
@@ -160,7 +160,7 @@ func (a *Assessor) SetATTACKProvider(provider ATTACKProvider) {
 	a.attackProvider = provider
 }
 
-func (a *Assessor) SSAMEngine() *ssam.Engine {
+func (a *Assessor) SSAMEngine() ssam.ScoringProvider {
 	return a.ssamEngine
 }
 
@@ -984,6 +984,33 @@ func (a *Assessor) RegisterHook(id string, phase AssessmentPhase, hook Assessmen
 
 func (a *Assessor) UnregisterHook(id string) {
 	a.scoringEngine.Hooks().Unregister(id)
+}
+
+func (a *Assessor) RecomputeFinalScore(result *model.AssessmentResult) float64 {
+	if result.SPCScore == 0 {
+		result.SPCScore = 1.0
+	}
+	if result.ThreatCoeff == 0 {
+		result.ThreatCoeff = 1.0
+	}
+
+	ssamInput := &ssam.AssessmentInput{
+		HostID:      result.HostID,
+		Hostname:    result.Hostname,
+		Threshold:   result.Threshold,
+		Checks:      ssam.CheckResultsToInputs(result.Checks),
+		ThreatCoeff: result.ThreatCoeff,
+		SPCScore:    result.SPCScore,
+	}
+
+	ssamOutput, err := a.ssamEngine.ComputeScore(context.Background(), ssamInput)
+	if err != nil {
+		logger.WithComponent("assessor").Error("ssam recompute failed", "error", err)
+		return 0
+	}
+
+	ssam.OutputToModel(ssamOutput, result)
+	return ssamOutput.FinalScore
 }
 
 func hashCheckResults(results []model.CheckResult) string {

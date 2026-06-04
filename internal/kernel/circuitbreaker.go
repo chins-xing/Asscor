@@ -91,9 +91,11 @@ func (r *circuitRecord) stats(windowSize time.Duration) (failures, successes int
 }
 
 type CircuitBreaker struct {
-	mu      sync.RWMutex
-	records map[string]*circuitRecord
-	cfg     CircuitBreakerConfig
+	mu           sync.RWMutex
+	records      map[string]*circuitRecord
+	cfg          CircuitBreakerConfig
+	stopCleanup  chan struct{}
+	cleanupTicker *time.Ticker
 }
 
 func NewCircuitBreaker(cfg CircuitBreakerConfig) *CircuitBreaker {
@@ -109,10 +111,45 @@ func NewCircuitBreaker(cfg CircuitBreakerConfig) *CircuitBreaker {
 	if cfg.WindowSize <= 0 {
 		cfg.WindowSize = 60 * time.Second
 	}
-	return &CircuitBreaker{
-		records: make(map[string]*circuitRecord),
-		cfg:     cfg,
+	cb := &CircuitBreaker{
+		records:      make(map[string]*circuitRecord),
+		cfg:          cfg,
+		stopCleanup:  make(chan struct{}),
+		cleanupTicker: time.NewTicker(5 * time.Minute),
 	}
+	go cb.cleanupLoop()
+	return cb
+}
+
+func (cb *CircuitBreaker) cleanupLoop() {
+	for {
+		select {
+		case <-cb.cleanupTicker.C:
+			cb.cleanupStaleRecords()
+		case <-cb.stopCleanup:
+			return
+		}
+	}
+}
+
+func (cb *CircuitBreaker) cleanupStaleRecords() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	staleThreshold := 15 * time.Minute
+	now := time.Now()
+	for k, rec := range cb.records {
+		if now.Sub(rec.lastStateChange) > staleThreshold {
+			state := CircuitState(atomic.LoadInt32(&rec.state))
+			if state == StateClosed {
+				delete(cb.records, k)
+			}
+		}
+	}
+}
+
+func (cb *CircuitBreaker) Stop() {
+	close(cb.stopCleanup)
+	cb.cleanupTicker.Stop()
 }
 
 func key(service, method string) string {

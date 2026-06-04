@@ -99,10 +99,15 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 				p.metrics.mu.Unlock()
 				logger.WithComponent("workerpool").Warn("task timed out, cancelling", "timeout", timeout)
 				taskCancel()
-				// 这里不需要单独的wg.Add，因为外层已经有了，我们只需要等待done即可
+				drainTimer := time.NewTimer(5 * time.Second)
 				select {
 				case <-done:
+					drainTimer.Stop()
+				case <-drainTimer.C:
+					logger.WithComponent("workerpool").Error("task did not complete after timeout + drain period, goroutine may leak")
+					drainTimer.Stop()
 				case <-p.ctx.Done():
+					drainTimer.Stop()
 				}
 			}
 		case <-p.ctx.Done():

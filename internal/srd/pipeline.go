@@ -1,0 +1,174 @@
+package srd
+
+import (
+	"context"
+	"os"
+	"sync"
+	"time"
+
+	"github.com/asscor/asscor/internal/logger"
+	ascorprism "github.com/asscor/asscor/internal/prism"
+	prismlib "github.com/chins-xing/prism"
+)
+
+// Pipeline processes ExternalAssessmentReport through the Prism engine.
+// It normalizes external tool output into Prism NodeState and computes SRD scores.
+type Pipeline struct {
+	cfg      Config
+	prism    *ascorprism.Engine
+	mu       sync.RWMutex
+	snapshots map[string]*prismlib.NodeState
+}
+
+// NewPipeline creates a new SRD pipeline.
+func NewPipeline(cfg Config) *Pipeline {
+	return &Pipeline{
+		cfg:       cfg,
+		prism:     ascorprism.NewEngine(),
+		snapshots: make(map[string]*prismlib.NodeState),
+	}
+}
+
+// Process converts an external assessment report into a Prism result and stores a topology snapshot.
+func (p *Pipeline) Process(ctx context.Context, report *ExternalAssessmentReport) *SRDResult {
+	if report == nil {
+		return nil
+	}
+
+	node := p.reportToNodeState(report)
+	nowUnix := time.Now().Unix()
+
+	p.mu.Lock()
+	p.snapshots[report.HostID] = node
+	allNodes := make(map[string]*prismlib.NodeState, len(p.snapshots))
+	for id, n := range p.snapshots {
+		allNodes[id] = n
+	}
+	incomingEdges := p.buildIncomingEdges(report.HostID, allNodes)
+	p.mu.Unlock()
+
+	prismResult := p.prism.ComputeDynamicScore(node, incomingEdges, allNodes, nowUnix)
+
+	logger.WithComponent("srd").Debug("external report processed",
+		"tool", report.Tool,
+		"host", report.HostID,
+		"items", len(report.Items),
+		"raw_score", report.RawScore,
+		"ssam_score", prismResult.SsamScore,
+		"prism_score", prismResult.PrismScore,
+	)
+
+	return &SRDResult{
+		Report:       report,
+		PrismResult:  &prismResult,
+		ProcessedAt:  time.Now(),
+	}
+}
+
+// ProcessFromFile reads an external report file, detects the tool type, and processes it.
+func (p *Pipeline) ProcessFromFile(ctx context.Context, path string) (*SRDResult, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Try each registered adapter in order: specific tools first, then generic.
+	for _, toolID := range []string{"openscap", "lynis"} {
+		if ad, ok := Get(toolID); ok && ad.SupportsFormat(path) && ad.IsEnabled(p.cfg) {
+			report, err := ad.Parse(ctx, data)
+			if err == nil && report != nil {
+				return p.Process(ctx, report), nil
+			}
+		}
+	}
+
+	// Fall back to generic adapter.
+	if ad, ok := Get("generic"); ok && ad.IsEnabled(p.cfg) {
+		report, err := ad.Parse(ctx, data)
+		if err == nil && report != nil {
+			return p.Process(ctx, report), nil
+		}
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+// ProcessFromBytes detects the adapter by content and processes the report.
+func (p *Pipeline) ProcessFromBytes(ctx context.Context, toolID string, data []byte) (*SRDResult, error) {
+	var ad Adapter
+	if toolID != "" {
+		var ok bool
+		ad, ok = Get(toolID)
+		if !ok {
+			return nil, nil
+		}
+	} else {
+		// Auto-detect by content.
+		for _, id := range []string{"openscap", "lynis"} {
+			if a, ok := Get(id); ok && a.IsEnabled(p.cfg) {
+				report, err := a.Parse(ctx, data)
+				if err == nil && report != nil {
+					return p.Process(ctx, report), nil
+				}
+			}
+		}
+		if ad == nil {
+			ad, _ = Get("generic")
+		}
+	}
+
+	if ad == nil {
+		return nil, nil
+	}
+
+	report, err := ad.Parse(ctx, data)
+	if err != nil {
+		return nil, err
+	}
+	return p.Process(ctx, report), nil
+}
+
+func (p *Pipeline) reportToNodeState(report *ExternalAssessmentReport) *prismlib.NodeState {
+	node := &prismlib.NodeState{
+		HostID:    report.HostID,
+		SSAMScore: report.RawScore,
+	}
+
+	for _, item := range report.Items {
+		if item.Result == "fail" {
+			failAt := item.FailAt
+			if failAt == 0 {
+				failAt = report.ScanTime.Unix()
+			}
+			node.FailedChecks = append(node.FailedChecks, prismlib.CheckFailure{
+				CheckID:  item.CheckID,
+				Delta:    item.Delta,
+				FailUnix: failAt,
+			})
+		}
+	}
+
+	return node
+}
+
+func (p *Pipeline) buildIncomingEdges(hostID string, allNodes map[string]*prismlib.NodeState) []prismlib.EdgeState {
+	edges := make([]prismlib.EdgeState, 0, len(allNodes))
+	for id := range allNodes {
+		if id != hostID {
+			edges = append(edges, prismlib.EdgeState{
+				Source:           id,
+				Target:           hostID,
+				RiskTransmission: 0.1, // default transmission weight
+			})
+		}
+	}
+	return edges
+}
+
+// SRDResult holds the processed external report and its Prism-computed score.
+type SRDResult struct {
+	Report      *ExternalAssessmentReport
+	PrismResult *prismlib.AssetRiskResult
+	ProcessedAt time.Time
+}

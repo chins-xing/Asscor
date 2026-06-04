@@ -304,6 +304,8 @@ func (k *Kernel) Shutdown() error {
 
 	k.cancel()
 
+	k.bus.Stop()
+
 	k.extPoints.Execute(k.ctx, "kernel.post_stop", nil)
 
 	k.closeOnce.Do(func() {

@@ -38,6 +38,7 @@ type Bus struct {
 	dispatchSem chan struct{}
 	maxGoroutines chan struct{}
 	metrics     BusMetrics
+	stopped     int32
 }
 
 func NewBus(queueSize int) *Bus {
@@ -102,6 +103,10 @@ func (b *Bus) UnsubscribeAll(id string) {
 }
 
 func (b *Bus) Publish(ctx context.Context, msg Message) {
+	if atomic.LoadInt32(&b.stopped) == 1 {
+		return
+	}
+
 	b.mu.RLock()
 	subs := make([]subscriber, len(b.subscribers[msg.Topic]))
 	copy(subs, b.subscribers[msg.Topic])
@@ -191,4 +196,11 @@ func (b *Bus) Topics() []string {
 		topics = append(topics, t)
 	}
 	return topics
+}
+
+func (b *Bus) Stop() {
+	atomic.StoreInt32(&b.stopped, 1)
+	b.mu.Lock()
+	b.subscribers = make(map[string][]subscriber)
+	b.mu.Unlock()
 }

@@ -26,7 +26,9 @@ type HeartbeatModule struct {
 	agents  map[string]*AgentRecord
 	state   PluginState
 
-	timeout time.Duration
+	timeout  time.Duration
+	stopCh   chan struct{}
+	stopped  bool
 }
 
 func (m *HeartbeatModule) Info() PluginInfo {
@@ -50,6 +52,7 @@ func (m *HeartbeatModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
 	m.agents = make(map[string]*AgentRecord)
 	m.timeout = 60 * time.Second
+	m.stopCh = make(chan struct{})
 	m.state = PluginInitialized
 
 	kc.Container().Bind((*HeartbeatInterface)(nil), m)
@@ -65,6 +68,12 @@ func (m *HeartbeatModule) Start(ctx context.Context) error {
 
 func (m *HeartbeatModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+	m.mu.Lock()
+	if !m.stopped {
+		m.stopped = true
+		close(m.stopCh)
+	}
+	m.mu.Unlock()
 	m.state = PluginStopped
 	logger.WithComponent("heartbeat").Info("stopped")
 	return nil
@@ -186,6 +195,8 @@ func (m *HeartbeatModule) monitorLoop() {
 	for {
 		select {
 		case <-m.kernel.Context().Done():
+			return
+		case <-m.stopCh:
 			return
 		case <-ticker.C:
 			m.checkTimeouts()

@@ -19,6 +19,8 @@ type CTIModule struct {
 	state         PluginState
 
 	updateInterval time.Duration
+	stopCh         chan struct{}
+	stopped        bool
 }
 
 func (m *CTIModule) Info() PluginInfo {
@@ -42,6 +44,7 @@ func (m *CTIModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
 	m.coefficient = 1.0
 	m.updateInterval = 15 * time.Minute
+	m.stopCh = make(chan struct{})
 	m.state = PluginInitialized
 
 	kc.Container().Bind((*CTIInterface)(nil), m)
@@ -57,6 +60,12 @@ func (m *CTIModule) Start(ctx context.Context) error {
 
 func (m *CTIModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+	m.mu.Lock()
+	if !m.stopped {
+		m.stopped = true
+		close(m.stopCh)
+	}
+	m.mu.Unlock()
 	m.state = PluginStopped
 	logger.WithComponent("cti").Info("stopped")
 	return nil
@@ -81,6 +90,8 @@ func (m *CTIModule) updateLoop() {
 	for {
 		select {
 		case <-m.kernel.Context().Done():
+			return
+		case <-m.stopCh:
 			return
 		case <-ticker.C:
 			m.updateCoefficient()

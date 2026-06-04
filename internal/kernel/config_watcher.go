@@ -22,6 +22,8 @@ type ConfigWatcherModule struct {
 	lastMod  time.Time
 	state    PluginState
 	assessor AssessorInterface
+	stopCh   chan struct{}
+	stopped  bool
 }
 
 func NewConfigWatcherModule(configPath string) *ConfigWatcherModule {
@@ -51,6 +53,7 @@ func (m *ConfigWatcherModule) Priority() int {
 func (m *ConfigWatcherModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
 	m.state = PluginInitialized
+	m.stopCh = make(chan struct{})
 
 	cfg := kc.GetConfigObj()
 	if cfg != nil && cfg.HotloadIntervalS > 0 {
@@ -101,6 +104,12 @@ func (m *ConfigWatcherModule) Start(ctx context.Context) error {
 }
 
 func (m *ConfigWatcherModule) Stop(ctx context.Context) error {
+	m.mu.Lock()
+	if !m.stopped {
+		m.stopped = true
+		close(m.stopCh)
+	}
+	m.mu.Unlock()
 	m.state = PluginStopped
 	logger.WithComponent("config_watcher").Info("stopped")
 	return nil
@@ -126,6 +135,8 @@ func (m *ConfigWatcherModule) watchLoop() {
 		select {
 		case <-m.kernel.Context().Done():
 			return
+		case <-m.stopCh:
+			return
 		case <-ticker.C:
 			m.checkAndReload()
 		}
@@ -146,6 +157,8 @@ func (m *ConfigWatcherModule) sighupLoop() {
 	for {
 		select {
 		case <-m.kernel.Context().Done():
+			return
+		case <-m.stopCh:
 			return
 		case <-sigCh:
 			logger.WithComponent("config_watcher").Info("SIGHUP received, forcing config reload")
