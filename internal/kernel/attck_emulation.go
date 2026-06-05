@@ -344,9 +344,7 @@ func (m *ATTACKModule) RunEmulation(scenarioID, hostID string, safeMode bool) (*
 	result.Recommendations = m.generateEmulationRecommendations(result)
 
 	m.emulationResults = append(m.emulationResults, *result)
-	if len(m.emulationResults) > 1000 {
-		m.emulationResults = m.emulationResults[len(m.emulationResults)-1000:]
-	}
+	m.emulationResults = trimSlice(m.emulationResults, maxEmulationResults)
 	m.mu.Unlock()
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{

@@ -24,8 +24,12 @@ func (m *SPCModule) AddCVE(score SPCCVEScore) {
 		return
 	}
 	if len(m.cveCache) >= m.maxCacheSize {
-		logger.WithComponent("spc").Warn("CVE cache reached max size in AddCVE", "max", m.maxCacheSize)
-		return
+		if score.InKEV {
+			m.evictLowestPriorityCVE()
+		} else {
+			logger.WithComponent("spc").Debug("CVE cache full, non-KEV CVE dropped", "max", m.maxCacheSize, "cve_id", score.CVEID)
+			return
+		}
 	}
 	m.cveIndex[score.CVEID] = len(m.cveCache)
 	m.cveCache = append(m.cveCache, score)
@@ -44,8 +48,12 @@ func (m *SPCModule) AddCVEs(scores []SPCCVEScore) {
 			continue
 		}
 		if len(m.cveCache) >= m.maxCacheSize {
-			logger.WithComponent("spc").Warn("CVE cache reached max size in AddCVEs", "max", m.maxCacheSize, "added_so_far", len(m.cveCache))
-			break
+			if score.InKEV {
+				m.evictLowestPriorityCVE()
+			} else {
+				logger.WithComponent("spc").Debug("CVE cache full in AddCVEs, non-KEV CVE skipped", "max", m.maxCacheSize, "cve_id", score.CVEID)
+				continue
+			}
 		}
 		m.cveIndex[score.CVEID] = len(m.cveCache)
 		m.cveCache = append(m.cveCache, score)
@@ -104,6 +112,36 @@ func (m *SPCModule) mergeCVEInPlace(idx int, incoming SPCCVEScore) {
 	}
 }
 
+func (m *SPCModule) evictLowestPriorityCVE() {
+	worstIdx := -1
+	worstScore := 0.0
+	for i := range m.cveCache {
+		cve := &m.cveCache[i]
+		if cve.InKEV {
+			continue
+		}
+		score := cve.CVSS*10 + cve.EPSS*20
+		if worstIdx == -1 || score < worstScore {
+			worstIdx = i
+			worstScore = score
+		}
+	}
+	if worstIdx == -1 {
+		logger.WithComponent("spc").Warn("CVE cache full, all entries are KEV-listed, cannot evict")
+		return
+	}
+	evictedID := m.cveCache[worstIdx].CVEID
+	m.cveCache = append(m.cveCache[:worstIdx], m.cveCache[worstIdx+1:]...)
+	delete(m.cveIndex, evictedID)
+	for id, idx := range m.cveIndex {
+		if idx > worstIdx {
+			m.cveIndex[id] = idx - 1
+		}
+	}
+	logger.WithComponent("spc").Info("evicted lowest-priority CVE to make room",
+		"evicted_cve", evictedID, "cache_size", len(m.cveCache))
+}
+
 func (m *SPCModule) MergeCVEs(cves []SPCCVEScore) (added int, updated int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -113,8 +151,12 @@ func (m *SPCModule) MergeCVEs(cves []SPCCVEScore) (added int, updated int) {
 			updated++
 		} else {
 			if len(m.cveCache) >= m.maxCacheSize {
-				logger.WithComponent("spc").Warn("CVE cache reached max size in MergeCVEs", "max", m.maxCacheSize)
-				break
+				if cve.InKEV {
+					m.evictLowestPriorityCVE()
+				} else {
+					logger.WithComponent("spc").Debug("CVE cache full in MergeCVEs, non-KEV CVE skipped", "max", m.maxCacheSize, "cve_id", cve.CVEID)
+					continue
+				}
 			}
 			m.cveIndex[cve.CVEID] = len(m.cveCache)
 			m.cveCache = append(m.cveCache, cve)

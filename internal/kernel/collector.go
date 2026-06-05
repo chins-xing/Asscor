@@ -131,11 +131,6 @@ func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
 	}
 	data = append(data, '\n')
 	_, err = m.writer.Write(data)
-	if err == nil {
-		if f, ok := m.writer.(*os.File); ok {
-			f.Sync()
-		}
-	}
 	return err
 }
 

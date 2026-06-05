@@ -39,6 +39,7 @@ type Bus struct {
 	maxGoroutines chan struct{}
 	metrics     BusMetrics
 	stopped     int32
+	wg          sync.WaitGroup
 }
 
 func NewBus(queueSize int) *Bus {
@@ -123,6 +124,7 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 				"subscriber", sub.id, "topic", msg.Topic)
 			continue
 		}
+		b.wg.Add(1)
 		go func(s subscriber) {
 			acquired := false
 			defer func() {
@@ -134,6 +136,7 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 					atomic.AddInt64(&b.metrics.PanicCount, 1)
 					logger.WithComponent("bus").Error("subscriber panic", "subscriber", s.id, "topic", msg.Topic, "panic", r, "total_panics", atomic.LoadInt64(&b.metrics.PanicCount))
 				}
+				b.wg.Done()
 			}()
 			select {
 			case b.dispatchSem <- struct{}{}:
@@ -203,4 +206,16 @@ func (b *Bus) Stop() {
 	b.mu.Lock()
 	b.subscribers = make(map[string][]subscriber)
 	b.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		b.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		logger.WithComponent("bus").Warn("bus stop drain timed out, some handlers may still be running")
+	}
 }

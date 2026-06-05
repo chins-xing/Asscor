@@ -9,10 +9,47 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/asscor/asscor/internal/common"
 	"github.com/asscor/asscor/internal/model"
 )
+
+var (
+	idPattern    = regexp.MustCompile(`[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]`)
+	phonePattern = regexp.MustCompile(`1[3-9]\d{9}`)
+	fileCache    = &fileReadCache{data: make(map[string]cachedFile)}
+)
+
+type cachedFile struct {
+	content  []byte
+	deadline time.Time
+}
+
+type fileReadCache struct {
+	mu   sync.RWMutex
+	data map[string]cachedFile
+}
+
+func (c *fileReadCache) read(path string) ([]byte, error) {
+	c.mu.RLock()
+	if entry, ok := c.data[path]; ok && time.Now().Before(entry.deadline) {
+		c.mu.RUnlock()
+		return entry.content, nil
+	}
+	c.mu.RUnlock()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	c.mu.Lock()
+	c.data[path] = cachedFile{content: data, deadline: time.Now().Add(30 * time.Second)}
+	c.mu.Unlock()
+	return data, nil
+}
 
 func All() []model.CheckItem {
 	items := []model.CheckItem{
@@ -1651,8 +1688,6 @@ func ot018() model.CheckItem {
 		Platform:      "linux",
 		Check: func() (bool, string) {
 			logFiles := []string{"/var/log/syslog", "/var/log/messages", "/var/log/auth.log"}
-			idPattern := regexp.MustCompile(`[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]`)
-			phonePattern := regexp.MustCompile(`1[3-9]\d{9}`)
 			for _, f := range logFiles {
 				data, err := os.ReadFile(f)
 				if err != nil {

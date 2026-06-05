@@ -413,35 +413,6 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 	}
 	m.mu.RUnlock()
 
-	type cpeIndexEntry struct {
-		original string
-		lower    string
-		vendor   string
-		product  string
-	}
-
-	cpeIndex := make([][]cpeIndexEntry, len(cves))
-	for i := range cves {
-		entries := make([]cpeIndexEntry, 0, len(cves[i].AffectedCPEs))
-		for _, cpe := range cves[i].AffectedCPEs {
-			lower := strings.ToLower(cpe)
-			parts := strings.SplitN(lower, ":", 6)
-			vendor := ""
-			product := ""
-			if len(parts) >= 5 {
-				vendor = parts[3]
-				product = parts[4]
-			}
-			entries = append(entries, cpeIndexEntry{
-				original: cpe,
-				lower:    lower,
-				vendor:   vendor,
-				product:  product,
-			})
-		}
-		cpeIndex[i] = entries
-	}
-
 	logger.WithComponent("spc").Info("Calculate called",
 		"host_id", hostID,
 		"cve_cache_size", len(cves),

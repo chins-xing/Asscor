@@ -158,6 +158,7 @@ func (m *ATTACKModule) EvaluateBehavioralIndicators(hostID string, metrics map[s
 
 		alerts = append(alerts, alert)
 		m.behavioralAlerts = append(m.behavioralAlerts, alert)
+		m.behavioralAlerts = trimSlice(m.behavioralAlerts, maxBehavioralAlerts)
 	}
 
 	if len(alerts) > 0 {
@@ -273,6 +274,7 @@ func (m *ATTACKModule) DetectBeaconing(hostID string, events []TimeSeriesPoint) 
 	}
 
 	m.beaconDetections = append(m.beaconDetections, detection)
+	m.beaconDetections = trimSlice(m.beaconDetections, maxBeaconDetections)
 
 	logger.WithComponent("attck.behavioral").Info("beaconing detected",
 		"host", hostID, "interval", detection.Interval, "jitter", detection.Jitter, "score", score)

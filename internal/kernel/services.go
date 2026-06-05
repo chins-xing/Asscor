@@ -135,8 +135,6 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		logger.WithComponent("kernel").Debug("SPC asset updated from heartbeat", "host_id", req.HostId, "packages", len(req.Packages), "cpes", len(asset.InstalledCPEs))
 	}
 
-	var assessmentResult *apiv1.AssessmentResult
-
 	if req.Result != nil && s.assessor != nil {
 		logger.WithComponent("kernel").Info("processing check results", "count", len(req.Result.Checks), "host_id", req.HostId)
 
@@ -160,10 +158,10 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 			}
 		}
 
-		result := s.assessor.EvaluateFromResults(req.HostId, hostname, checkResults)
-		logger.WithComponent("kernel").Info("assessment result", "host_id", req.HostId, "score", result.FinalScore, "acceptable", result.Acceptable, "checks", len(result.Checks))
-
-		assessmentResult = convertAssessmentResult(result)
+		go func() {
+			result := s.assessor.EvaluateFromResults(req.HostId, hostname, checkResults)
+			logger.WithComponent("kernel").Info("assessment result", "host_id", req.HostId, "score", result.FinalScore, "acceptable", result.Acceptable, "checks", len(result.Checks))
+		}()
 	}
 
 	var pendingCmds []*apiv1.Command
@@ -180,7 +178,6 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		Ok:                true,
 		ThreatCoefficient: threatCoeff,
 		PendingCommands:   pendingCmds,
-		AssessmentResult:  assessmentResult,
 	}, nil
 }
 

@@ -82,9 +82,7 @@ func (m *ATTACKModule) ReconstructAttackChain(hostIDs []string) (*AttackChain, e
 	}
 
 	m.attackChains = append(m.attackChains, *chain)
-	if len(m.attackChains) > 5000 {
-		m.attackChains = m.attackChains[len(m.attackChains)-5000:]
-	}
+	m.attackChains = trimSlice(m.attackChains, maxAttackChains)
 	m.mu.Unlock()
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{

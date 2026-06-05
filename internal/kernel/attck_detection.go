@@ -127,9 +127,7 @@ func (m *ATTACKModule) EvaluateDetectionRule(ruleID, hostID, rawLog string, fiel
 	}
 
 	m.alerts = append(m.alerts, alert)
-	if len(m.alerts) > 10000 {
-		m.alerts = m.alerts[len(m.alerts)-10000:]
-	}
+	m.alerts = trimSlice(m.alerts, maxAlerts)
 
 	m.mu.Unlock()
 
@@ -211,9 +209,7 @@ func (m *ATTACKModule) RecordAnomaly(event AnomalyEvent) {
 	}
 
 	m.anomalies = append(m.anomalies, event)
-	if len(m.anomalies) > 5000 {
-		m.anomalies = m.anomalies[len(m.anomalies)-5000:]
-	}
+	m.anomalies = trimSlice(m.anomalies, maxAnomalies)
 
 	m.mu.Unlock()
 

@@ -159,13 +159,7 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 
 	result := m.engine.Assess(hostID, hostID)
 
-	m.applySPCAndCTI(hostID, result)
-	m.applyATTACK(hostID, result)
-
-	if result.SPCScore != 1.0 || result.ThreatCoeff != m.cfg.ThreatCoeff {
-		result.FinalScore = m.engine.RecomputeFinalScore(result)
-		result.Acceptable = result.FinalScore >= result.Threshold
-	}
+	m.applyCTIOnly(result)
 
 	m.applyPrismToResult(hostID, result, time.Now().Unix())
 
@@ -299,6 +293,22 @@ func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentR
 
 	result.SPCScore = spcScore
 	result.ThreatCoeff = threatCoeff
+}
+
+func (m *AssessorModule) applyCTIOnly(result *model.AssessmentResult) {
+	ctiCoeff := m.cfg.ThreatCoeff
+	if impl, ok := m.kernel.Container().Resolve((*CTIInterface)(nil)); ok {
+		if cti, ok2 := impl.(CTIInterface); ok2 {
+			ctiCoeff = cti.GetCoefficient()
+		}
+	}
+	if ctiCoeff != result.ThreatCoeff {
+		if result.ThreatCoeff > 0 {
+			result.FinalScore = result.FinalScore * ctiCoeff / result.ThreatCoeff
+		}
+		result.ThreatCoeff = ctiCoeff
+		result.Acceptable = result.FinalScore >= result.Threshold
+	}
 }
 
 func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResult) {

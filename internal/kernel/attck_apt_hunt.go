@@ -42,6 +42,7 @@ func (m *ATTACKModule) CreateHuntHypothesis(hypothesis HuntHypothesis) error {
 	}
 
 	m.huntHypotheses = append(m.huntHypotheses, hypothesis)
+	m.huntHypotheses = trimSlice(m.huntHypotheses, maxHuntHypotheses)
 	logger.WithComponent("attck.hunt").Info("created hunt hypothesis", "id", hypothesis.ID, "technique", hypothesis.TechniqueID, "priority", hypothesis.Priority)
 	return nil
 }
@@ -143,6 +144,7 @@ func (m *ATTACKModule) ExecuteHunt(hypothesisID string, hostID string) (*HuntRes
 	}
 
 	m.huntResults = append(m.huntResults, *result)
+	m.huntResults = trimSlice(m.huntResults, maxHuntResults)
 
 	for i, h := range m.huntHypotheses {
 		if h.ID == hypothesisID {
@@ -336,6 +338,8 @@ func (m *ATTACKModule) AutoGenerateHypotheses(hostID string) ([]HuntHypothesis, 
 
 	logger.WithComponent("attck.hunt").Info("auto-generated hunt hypotheses",
 		"host", hostID, "total", len(hypotheses), "new", len(newHypotheses))
+
+	m.huntHypotheses = trimSlice(m.huntHypotheses, maxHuntHypotheses)
 
 	return newHypotheses, nil
 }
