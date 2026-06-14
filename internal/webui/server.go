@@ -49,6 +49,8 @@ type hostSummary struct {
 	FailedCount int    `json:"failed_count"`
 	SPCScore   float64 `json:"spc_score,omitempty"`
 	PrismScore float64 `json:"prism_score,omitempty"`
+	PrismSemanticState string `json:"prism_semantic_state,omitempty"`
+	PrismInferenceTrend string `json:"prism_inference_trend,omitempty"`
 	Timestamp  string  `json:"timestamp"`
 }
 
@@ -73,6 +75,8 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			FailedCount: countFailed(ar.Checks),
 			SPCScore:    ar.SPCScore,
 			PrismScore:  ar.PrismScore,
+			PrismSemanticState: ar.PrismSemanticState,
+			PrismInferenceTrend: ar.PrismInferenceTrend,
 			Timestamp:   ts,
 		})
 		totalScore += ar.FinalScore
@@ -156,6 +160,8 @@ type reportResponse struct {
 	ThreatCoeff float64 `json:"threat_coefficient"`
 	SPCScore    float64 `json:"spc_score,omitempty"`
 	PrismScore  float64 `json:"prism_score,omitempty"`
+	PrismSemanticState string `json:"prism_semantic_state,omitempty"`
+	PrismInferenceTrend string `json:"prism_inference_trend,omitempty"`
 
 	CheckCount  int               `json:"check_count"`
 	FailedCount int               `json:"failed_count"`
@@ -182,6 +188,8 @@ func (m *Module) handleReport(w http.ResponseWriter, hostID string) {
 		ThreatCoeff: ar.ThreatCoeff,
 		SPCScore:   ar.SPCScore,
 		PrismScore: ar.PrismScore,
+		PrismSemanticState: ar.PrismSemanticState,
+		PrismInferenceTrend: ar.PrismInferenceTrend,
 		CheckCount: len(ar.Checks),
 		FailedCount: countFailed(ar.Checks),
 		Checks:     ar.Checks,

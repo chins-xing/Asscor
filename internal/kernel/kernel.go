@@ -152,19 +152,25 @@ func (k *Kernel) RegisterPlugin(p Plugin) error {
 
 func (k *Kernel) UnregisterPlugin(name string) error {
 	k.mu.Lock()
-	defer k.mu.Unlock()
-
 	rec, exists := k.plugins[name]
 	if !exists {
+		k.mu.Unlock()
 		return fmt.Errorf("plugin %s not found", name)
 	}
+	k.mu.Unlock()
 
 	if rec.plugin.State() == PluginStarted {
-		go func() {
 		if err := rec.plugin.Stop(k.ctx); err != nil {
 			logger.WithComponent("kernel").Error("plugin stop failed", "plugin", rec.plugin.Info().Name, "error", err)
 		}
-	}()
+	}
+
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	// Recheck existence after lock reacquisition
+	if _, exists := k.plugins[name]; !exists {
+		return fmt.Errorf("plugin %s was removed concurrently", name)
 	}
 
 	k.extPoints.UnregisterPlugin(name)

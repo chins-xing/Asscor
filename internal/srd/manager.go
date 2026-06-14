@@ -240,6 +240,7 @@ func (m *Manager) registerAdapters() {
 	Register(newOpenSCAPAdapter())
 	Register(newLynisAdapter())
 	Register(newGenericAdapter())
+	Register(newAtomicRedAdapter())
 }
 
 func (m *Manager) loadConfig(cfgObj interface{}) {
@@ -294,6 +295,25 @@ func (m *Manager) publishResult(ctx context.Context, result *SRDResult) {
 		"debt_penalty": pr.DebtPenalty,
 		"propagated_risk": pr.PropagatedRisk,
 		"debt_raw": pr.DebtRaw,
+		"collapse_modifier": pr.CollapseModifier,
+		"risk_velocity": pr.RiskVelocity,
+	}
+
+	if result.SemanticResult != nil {
+		payload["semantic_state"] = result.SemanticResult.CurrentState
+		payload["semantic_state_vector"] = result.SemanticResult.StateVector
+		payload["semantic_stable"] = result.SemanticResult.StableMembership
+		payload["semantic_degraded"] = result.SemanticResult.DegradedMembership
+		payload["semantic_untrusted"] = result.SemanticResult.UntrustedMembership
+		payload["semantic_collapse"] = result.SemanticResult.CollapseMembership
+	}
+
+	if result.InferenceResult != nil {
+		payload["inference_trend"] = result.InferenceResult.Trend
+		payload["inference_confidence"] = result.InferenceResult.Confidence
+		payload["inference_collapse_risk"] = result.InferenceResult.CollapseRisk
+		payload["inference_horizon_days"] = result.InferenceResult.HorizonDays
+		payload["inference_model"] = "MarkovChain"
 	}
 
 	m.kernel.Bus().Publish(ctx, TopicSRDResult, payload)
@@ -307,7 +327,7 @@ func (m *Manager) scanLoop() {
 	}()
 
 	// Perform initial scan.
-	m.performScan(context.Background())
+	m.performScan(m.kernel.Context())
 
 	ticker := time.NewTicker(time.Duration(m.cfg.SyncIntervalSec) * time.Second)
 	defer ticker.Stop()
@@ -317,7 +337,7 @@ func (m *Manager) scanLoop() {
 		case <-m.kernel.Context().Done():
 			return
 		case <-ticker.C:
-			m.performScan(context.Background())
+			m.performScan(m.kernel.Context())
 		}
 	}
 }

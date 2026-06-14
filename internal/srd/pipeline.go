@@ -49,6 +49,9 @@ func (p *Pipeline) Process(ctx context.Context, report *ExternalAssessmentReport
 
 	prismResult := p.prism.ComputeDynamicScore(node, incomingEdges, allNodes, nowUnix)
 
+	semantic := p.prism.ComputeSemanticState(&prismResult)
+	future := p.prism.PredictFuture(semantic, nil)
+
 	logger.WithComponent("srd").Debug("external report processed",
 		"tool", report.Tool,
 		"host", report.HostID,
@@ -56,12 +59,16 @@ func (p *Pipeline) Process(ctx context.Context, report *ExternalAssessmentReport
 		"raw_score", report.RawScore,
 		"ssam_score", prismResult.SsamScore,
 		"prism_score", prismResult.PrismScore,
+		"semantic_state", semantic.CurrentState,
+		"inference_trend", future.Trend,
 	)
 
 	return &SRDResult{
-		Report:       report,
-		PrismResult:  &prismResult,
-		ProcessedAt:  time.Now(),
+		Report:          report,
+		PrismResult:     &prismResult,
+		SemanticResult:  semantic,
+		InferenceResult: future,
+		ProcessedAt:     time.Now(),
 	}
 }
 
@@ -166,9 +173,11 @@ func (p *Pipeline) buildIncomingEdges(hostID string, allNodes map[string]*prisml
 	return edges
 }
 
-// SRDResult holds the processed external report and its Prism-computed score.
+// SRDResult holds the processed external report and its full Prism-computed analysis.
 type SRDResult struct {
 	Report      *ExternalAssessmentReport
 	PrismResult *prismlib.AssetRiskResult
+	SemanticResult *prismlib.SemanticRiskReport
+	InferenceResult *prismlib.FutureRiskReport
 	ProcessedAt time.Time
 }

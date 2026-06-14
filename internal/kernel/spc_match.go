@@ -5,6 +5,18 @@ import (
 	"strings"
 )
 
+// Common package name suffixes to strip when normalizing package names for CVE matching.
+// These represent sub-packages, development headers, language bindings, etc.
+var pkgSuffixes = []string{
+	"-libs", "-devel", "-static", "-doc", "-debuginfo", "-debugsource",
+	"-common", "-utils", "-tools", "-plugins", "-module", "-modules",
+	"-daemon", "-server", "-client", "-cli", "-bin", "-data", "-lang",
+	"-help", "-license", "-logrotate", "-sysconfig", "-config", "-conf",
+	"-headers", "-dev", "-perl", "-python", "-python3", "-ruby",
+	"-java", "-jni", "-bash", "-zsh", "-fish", "-tcsh",
+	"-compat", "-legacy", "-minimal", "-full", "-core", "-base",
+}
+
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -15,16 +27,6 @@ func truncateString(s string, maxLen int) string {
 func extractPkgNames(packages []string) []string {
 	names := make([]string, 0, len(packages)*2)
 	seen := make(map[string]bool, len(packages)*2)
-
-	suffixes := []string{
-		"-libs", "-devel", "-static", "-doc", "-debuginfo", "-debugsource",
-		"-common", "-utils", "-tools", "-plugins", "-module", "-modules",
-		"-daemon", "-server", "-client", "-cli", "-bin", "-data", "-lang",
-		"-help", "-license", "-logrotate", "-sysconfig", "-config", "-conf",
-		"-headers", "-dev", "-perl", "-python", "-python3", "-ruby",
-		"-java", "-jni", "-bash", "-zsh", "-fish", "-tcsh",
-		"-compat", "-legacy", "-minimal", "-full", "-core", "-base",
-	}
 
 	for _, pkg := range packages {
 		name := pkg
@@ -52,7 +54,7 @@ func extractPkgNames(packages []string) []string {
 		}
 
 		stripped := baseName
-		for _, suffix := range suffixes {
+		for _, suffix := range pkgSuffixes {
 			if strings.HasSuffix(stripped, suffix) {
 				core := stripped[:len(stripped)-len(suffix)]
 				if core != "" && len(core) >= 2 && !seen[core] {

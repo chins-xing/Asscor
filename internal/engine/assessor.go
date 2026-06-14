@@ -936,6 +936,36 @@ func (a *Assessor) PrintReport(result *model.AssessmentResult) string {
 		report += fmt.Sprintf("---------------------------------------------------------------\n")
 	}
 
+	if result.PrismScore > 0 {
+		report += fmt.Sprintf("\n[ Prism Risk Dynamics ]\n")
+		report += fmt.Sprintf("---------------------------------------------------------------\n")
+		report += fmt.Sprintf("  Prism Score: %.2f/100    External Risk: %.4f    Risk Velocity: %+.2f\n",
+			result.PrismScore, result.PrismExternalRisk, result.PrismRiskVelocity)
+		report += fmt.Sprintf("  Propagated Risk: %.4f    Prop Penalty: %.4f    Debt Penalty: %.4f\n",
+			result.PrismPropRisk, result.PrismPropPenalty, result.PrismDebtPenalty)
+
+		if result.PrismSemanticState != "" {
+			report += fmt.Sprintf("\n  [ Semantic State ]\n")
+			report += fmt.Sprintf("    Dominant: %s  |  S=%.2f  D=%.2f  U=%.2f  C=%.2f\n",
+				result.PrismSemanticState,
+				result.PrismStableMem, result.PrismDegradedMem,
+				result.PrismUntrustedMem, result.PrismCollapseMem)
+		}
+
+		if result.PrismInferenceTrend != "" {
+			report += fmt.Sprintf("\n  [ Inference (%dd) ]\n", result.PrismInferenceHorizonDays)
+			report += fmt.Sprintf("    Trend: %s  |  Confidence: %.2f  |  Collapse Risk: %.2f\n",
+				result.PrismInferenceTrend, result.PrismInferenceConfidence,
+				result.PrismInferenceCollapseRisk)
+			report += fmt.Sprintf("    Future: S=%.2f  D=%.2f  U=%.2f  C=%.2f\n",
+				result.PrismInferenceFutureVector[0],
+				result.PrismInferenceFutureVector[1],
+				result.PrismInferenceFutureVector[2],
+				result.PrismInferenceFutureVector[3])
+		}
+		report += fmt.Sprintf("---------------------------------------------------------------\n")
+	}
+
 	return report
 }
 

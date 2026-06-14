@@ -16,6 +16,58 @@ import (
 	"github.com/asscor/asscor/internal/version"
 )
 
+// PrismResultFields holds the Prism engine output fields shared by AssessmentRecord and DashboardReport.
+type PrismResultFields struct {
+	PrismScore     float64 `json:"prism_score,omitempty"`
+	PrismPropRisk  float64 `json:"prism_prop_risk,omitempty"`
+	PrismDebtRaw   float64 `json:"prism_debt_raw,omitempty"`
+	PrismExternalRisk float64 `json:"prism_external_risk,omitempty"`
+	PrismPropPenalty  float64 `json:"prism_prop_penalty,omitempty"`
+	PrismDebtPenalty  float64 `json:"prism_debt_penalty,omitempty"`
+	PrismCollapseModifier float64 `json:"prism_collapse_modifier,omitempty"`
+	PrismRiskVelocity     float64 `json:"prism_risk_velocity,omitempty"`
+	PrismSemanticState    string  `json:"prism_semantic_state,omitempty"`
+	PrismStateVector      [4]float64 `json:"prism_state_vector,omitempty"`
+	PrismStableMem        float64 `json:"prism_stable_membership,omitempty"`
+	PrismDegradedMem      float64 `json:"prism_degraded_membership,omitempty"`
+	PrismUntrustedMem     float64 `json:"prism_untrusted_membership,omitempty"`
+	PrismCollapseMem      float64 `json:"prism_collapse_membership,omitempty"`
+	PrismInferenceTrend        string     `json:"prism_inference_trend,omitempty"`
+	PrismInferenceConfidence   float64    `json:"prism_inference_confidence,omitempty"`
+	PrismInferenceCollapseRisk float64    `json:"prism_inference_collapse_risk,omitempty"`
+	PrismInferenceFutureVector [4]float64 `json:"prism_inference_future_vector,omitempty"`
+	PrismInferenceModel        string     `json:"prism_inference_model,omitempty"`
+	PrismInferenceHorizonDays  int        `json:"prism_inference_horizon_days,omitempty"`
+	PrismIR                    json.RawMessage `json:"prism_ir,omitempty"`
+}
+
+// prismFieldsFromResult populates PrismResultFields from an AssessmentResult.
+func prismFieldsFromResult(ar *model.AssessmentResult) PrismResultFields {
+	return PrismResultFields{
+		PrismScore:                ar.PrismScore,
+		PrismPropRisk:             ar.PrismPropRisk,
+		PrismDebtRaw:              ar.PrismDebtRaw,
+		PrismExternalRisk:         ar.PrismExternalRisk,
+		PrismPropPenalty:          ar.PrismPropPenalty,
+		PrismDebtPenalty:          ar.PrismDebtPenalty,
+		PrismCollapseModifier:     ar.PrismCollapseModifier,
+		PrismRiskVelocity:         ar.PrismRiskVelocity,
+		PrismSemanticState:        ar.PrismSemanticState,
+		PrismStateVector:          ar.PrismStateVector,
+		PrismStableMem:            ar.PrismStableMem,
+		PrismDegradedMem:          ar.PrismDegradedMem,
+		PrismUntrustedMem:         ar.PrismUntrustedMem,
+		PrismCollapseMem:          ar.PrismCollapseMem,
+		PrismInferenceTrend:        ar.PrismInferenceTrend,
+		PrismInferenceConfidence:   ar.PrismInferenceConfidence,
+		PrismInferenceCollapseRisk: ar.PrismInferenceCollapseRisk,
+		PrismInferenceFutureVector: ar.PrismInferenceFutureVector,
+		PrismInferenceModel:        ar.PrismInferenceModel,
+		PrismInferenceHorizonDays:  ar.PrismInferenceHorizonDays,
+		PrismIR:                    ar.PrismIR,
+	}
+}
+
 type AssessmentRecord struct {
 	Timestamp      time.Time `json:"timestamp"`
 	HostID         string    `json:"host_id"`
@@ -36,12 +88,7 @@ type AssessmentRecord struct {
 	NoIDS          float64   `json:"no_ids,omitempty"`
 	ThreatCoeff    float64   `json:"threat_coefficient"`
 	SPCScore       float64   `json:"spc_score,omitempty"`
-	PrismScore     float64   `json:"prism_score,omitempty"`
-	PrismPropRisk  float64   `json:"prism_prop_risk,omitempty"`
-	PrismDebtRaw   float64   `json:"prism_debt_raw,omitempty"`
-	PrismExternalRisk float64 `json:"prism_external_risk,omitempty"`
-	PrismPropPenalty  float64 `json:"prism_prop_penalty,omitempty"`
-	PrismDebtPenalty  float64 `json:"prism_debt_penalty,omitempty"`
+	PrismResultFields
 	SPCCVEs        []model.SPCCVEInfo `json:"spc_cves,omitempty"`
 	DomainWeightShift map[string]float64 `json:"domain_weight_shift,omitempty"`
 	CheckCount     int       `json:"check_count"`
@@ -84,12 +131,7 @@ type DashboardReport struct {
 	ThreatCoeff float64            `json:"threat_coefficient"`
 	SPCScore    float64            `json:"spc_score"`
 
-	PrismScore    float64 `json:"prism_score,omitempty"`
-	PrismPropRisk float64 `json:"prism_prop_risk,omitempty"`
-	PrismDebtRaw  float64 `json:"prism_debt_raw,omitempty"`
-	PrismExternalRisk float64 `json:"prism_external_risk,omitempty"`
-	PrismPropPenalty  float64 `json:"prism_prop_penalty,omitempty"`
-	PrismDebtPenalty  float64 `json:"prism_debt_penalty,omitempty"`
+	PrismResultFields
 	SPCCVEs        []model.SPCCVEInfo `json:"spc_cves,omitempty"`
 	DomainWeightShift map[string]float64 `json:"domain_weight_shift,omitempty"`
 
@@ -511,12 +553,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			NoIDS:          ar.EdgeFactors.NoIDS,
 			ThreatCoeff:    ar.ThreatCoeff,
 			SPCScore:       ar.SPCScore,
-			PrismScore:     ar.PrismScore,
-			PrismPropRisk:  ar.PrismPropRisk,
-			PrismDebtRaw:   ar.PrismDebtRaw,
-			PrismExternalRisk: ar.PrismExternalRisk,
-			PrismPropPenalty:  ar.PrismPropPenalty,
-			PrismDebtPenalty:  ar.PrismDebtPenalty,
+			PrismResultFields:   prismFieldsFromResult(ar),
 			CheckCount:     len(ar.Checks),
 			Checks:         checkDetails,
 		}
@@ -593,12 +630,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			EdgeFactors:   edgeFactors,
 			ThreatCoeff:   ar.ThreatCoeff,
 			SPCScore:      ar.SPCScore,
-			PrismScore:    ar.PrismScore,
-			PrismPropRisk: ar.PrismPropRisk,
-			PrismDebtRaw:  ar.PrismDebtRaw,
-			PrismExternalRisk: ar.PrismExternalRisk,
-			PrismPropPenalty:  ar.PrismPropPenalty,
-			PrismDebtPenalty:  ar.PrismDebtPenalty,
+			PrismResultFields: prismFieldsFromResult(ar),
 			Checks:        checkDetails,
 			ComplianceFramework: m.cfg.ComplianceFramework,
 		}

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"time"
@@ -174,13 +175,36 @@ type AssessmentResult struct {
 	ATTACKAPTMatches   []ATTACKAPTMatchInfo `json:"attck_apt_matches,omitempty"`
 	ATTACKPredictedRisk *ATTACKPredictedRiskInfo `json:"attck_predicted_risk,omitempty"`
 	ATTACKFailedTechs  []string             `json:"attck_failed_techniques,omitempty"`
-	PrismScore         float64           `json:"prism_score,omitempty"`
-	PrismExternalRisk  float64           `json:"prism_external_risk,omitempty"`
-	PrismPropRisk      float64           `json:"prism_prop_risk,omitempty"`
-	PrismPropPenalty   float64           `json:"prism_prop_penalty,omitempty"`
-	PrismDebtRaw       float64           `json:"prism_debt_raw,omitempty"`
-	PrismDebtPenalty   float64           `json:"prism_debt_penalty,omitempty"`
-	Checks             []CheckResult     `json:"checks"`
+	// Prism Core Layer
+	PrismScore           float64 `json:"prism_score,omitempty"`
+	PrismExternalRisk    float64 `json:"prism_external_risk,omitempty"`
+	PrismPropRisk        float64 `json:"prism_prop_risk,omitempty"`
+	PrismPropPenalty     float64 `json:"prism_prop_penalty,omitempty"`
+	PrismDebtRaw         float64 `json:"prism_debt_raw,omitempty"`
+	PrismDebtPenalty     float64 `json:"prism_debt_penalty,omitempty"`
+	PrismCollapseModifier float64 `json:"prism_collapse_modifier,omitempty"`
+	PrismRiskVelocity    float64 `json:"prism_risk_velocity,omitempty"`
+
+	// Prism Semantic Layer
+	PrismSemanticState    string     `json:"prism_semantic_state,omitempty"`
+	PrismStateVector      [4]float64 `json:"prism_state_vector,omitempty"`
+	PrismStableMem        float64    `json:"prism_stable_membership,omitempty"`
+	PrismDegradedMem      float64    `json:"prism_degraded_membership,omitempty"`
+	PrismUntrustedMem     float64    `json:"prism_untrusted_membership,omitempty"`
+	PrismCollapseMem      float64    `json:"prism_collapse_membership,omitempty"`
+
+	// Prism Inference Layer
+	PrismInferenceTrend        string     `json:"prism_inference_trend,omitempty"`
+	PrismInferenceConfidence   float64    `json:"prism_inference_confidence,omitempty"`
+	PrismInferenceCollapseRisk float64    `json:"prism_inference_collapse_risk,omitempty"`
+	PrismInferenceFutureVector [4]float64 `json:"prism_inference_future_vector,omitempty"`
+	PrismInferenceModel        string     `json:"prism_inference_model,omitempty"`
+	PrismInferenceHorizonDays  int        `json:"prism_inference_horizon_days,omitempty"`
+
+	// Prism IR (full intermediate representation)
+	PrismIR json.RawMessage `json:"prism_ir,omitempty"`
+
+	Checks []CheckResult `json:"checks"`
 }
 
 type ATTACKCoverageInfo struct {

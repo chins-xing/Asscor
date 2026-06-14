@@ -29,6 +29,7 @@ type ScoringEngineProvider interface {
 
 type PrismEngineProvider interface {
 	ComputeDynamicScore(node *prismlib.NodeState, incomingEdges []prismlib.EdgeState, allNodes map[string]*prismlib.NodeState, nowUnix int64) prismlib.AssetRiskResult
+	Config() prismlib.PrismConfig
 }
 
 type AssessorModule struct {
@@ -569,19 +570,66 @@ func (m *AssessorModule) applyPrismToResult(hostID string, result *model.Assessm
 	allNodes, allEdges := m.collectTopologySnapshot(hostID, result)
 	incomingEdges := filterIncoming(hostID, allEdges)
 
+	cfg := m.prismEngine.Config()
 	prismResult := m.prismEngine.ComputeDynamicScore(node, incomingEdges, allNodes, nowUnix)
 
+	// Core Layer
 	result.PrismScore = prismResult.PrismScore
 	result.PrismExternalRisk = prismResult.ExternalRisk
 	result.PrismPropRisk = prismResult.PropagatedRisk
 	result.PrismPropPenalty = prismResult.PropPenalty
 	result.PrismDebtRaw = prismResult.DebtRaw
 	result.PrismDebtPenalty = prismResult.DebtPenalty
+	result.PrismCollapseModifier = prismResult.CollapseModifier
+	result.PrismRiskVelocity = prismResult.RiskVelocity
+
+	// Semantic Layer
+	semantic := prismlib.ComputeSemanticState(&prismResult, cfg)
+	if semantic != nil {
+		result.PrismSemanticState = semantic.CurrentState
+		result.PrismStateVector = semantic.StateVector
+		result.PrismStableMem = semantic.StableMembership
+		result.PrismDegradedMem = semantic.DegradedMembership
+		result.PrismUntrustedMem = semantic.UntrustedMembership
+		result.PrismCollapseMem = semantic.CollapseMembership
+	}
+
+	// Inference Layer
+	future := prismlib.PredictFuture(semantic, nil, cfg)
+	if future != nil {
+		result.PrismInferenceTrend = future.Trend
+		result.PrismInferenceConfidence = future.Confidence
+		result.PrismInferenceCollapseRisk = future.CollapseRisk
+		result.PrismInferenceFutureVector = [4]float64{
+			future.StableProb, future.DegradedProb,
+			future.UntrustedProb, future.CollapseProb,
+		}
+		result.PrismInferenceModel = "MarkovChain"
+		result.PrismInferenceHorizonDays = future.HorizonDays
+	}
+
+	// Prism IR
+	if semantic != nil && future != nil {
+		edges := make([]prismlib.EdgeState, len(incomingEdges))
+		for i, e := range incomingEdges {
+			edges[i] = prismlib.EdgeState{
+				Source:           e.Source,
+				Target:           e.Target,
+				RiskTransmission: e.RiskTransmission,
+			}
+		}
+		prismIR := prismlib.NewIR(*node, edges, cfg, prismResult, *semantic, *future, "MarkovChain")
+		if data, err := prismIR.MarshalJSON(); err == nil {
+			result.PrismIR = data
+		}
+	}
 
 	logger.WithComponent("assessor").Info("prism score computed",
 		"host_id", hostID,
 		"ssam_score", result.FinalScore,
 		"prism_score", result.PrismScore,
+		"semantic_state", result.PrismSemanticState,
+		"inference_trend", result.PrismInferenceTrend,
 		"debt_penalty", result.PrismDebtPenalty,
 		"prop_penalty", result.PrismPropPenalty,
 	)

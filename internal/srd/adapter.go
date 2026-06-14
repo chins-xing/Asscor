@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -16,15 +17,22 @@ type Adapter interface {
 	SupportsFormat(path string) bool
 }
 
-var registeredAdapters = make(map[string]Adapter)
+var (
+	registeredAdapters = make(map[string]Adapter)
+	adapterMu          sync.RWMutex
+)
 
 // Register adds an adapter to the global registry.
 func Register(ad Adapter) {
+	adapterMu.Lock()
+	defer adapterMu.Unlock()
 	registeredAdapters[ad.ToolID()] = ad
 }
 
 // List returns all registered adapters.
 func List() []Adapter {
+	adapterMu.RLock()
+	defer adapterMu.RUnlock()
 	out := make([]Adapter, 0, len(registeredAdapters))
 	for _, a := range registeredAdapters {
 		out = append(out, a)
@@ -34,6 +42,8 @@ func List() []Adapter {
 
 // Get returns the adapter for the given tool ID.
 func Get(toolID string) (Adapter, bool) {
+	adapterMu.RLock()
+	defer adapterMu.RUnlock()
 	a, ok := registeredAdapters[toolID]
 	return a, ok
 }
