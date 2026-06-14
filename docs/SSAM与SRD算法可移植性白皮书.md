@@ -1,7 +1,7 @@
 # SSAM 与 SRD 算法可移植性白皮书
 
-**版本**：v1.0
-**日期**：2026-06-01
+**版本**：v1.1
+**日期**：2026-06-09
 **状态**：发布
 **配套文档**：SSAM 2.0 白皮书（第一篇章）、SRD 白皮书、工程实现白皮书（第三篇章）、ASSCOR 扩展体系白皮书
 
@@ -155,7 +155,7 @@ ssam-lib 依赖树：
 |------|-----|
 | Module 路径 | `github.com/chins-xing/prism` |
 | Go 版本要求 | 1.21 |
-| 源文件数 | 5 个 .go 文件（含测试） |
+| 源文件数 | 7 个 .go 文件（含测试 8 个） |
 | 外部依赖 | **0** |
 | 标准库依赖 | `math`, `sort` |
 
@@ -165,9 +165,11 @@ ssam-lib 依赖树：
 |------|------|:---:|
 | `types.go` | 数据模型 (NodeState, EdgeState, PrismConfig, AssetRiskResult, PathResult, CheckFailure) | 6 类型 |
 | `config.go` | 默认配置 (DebtAlpha=1.2, PropCap=0.25, DebtCap=0.30, DebtNormDays=1500, PathDecay=0.80, MaxPathDepth=5, ScoreFloor=0.40) | 1 函数 |
-| `core.go` | 核心评分 (ComputeDynamicScore) | 1 函数 |
+| `core.go` | Core Layer — 确定性数值求值 (ComputeDynamicScore) | 1 函数 |
+| `semantic.go` | Semantic Layer — 四态模糊隶属度映射 (ComputeStateMembership, trapezoidUp/Down, triangular) | 1 核心函数 |
+| `inference.go` | Inference Layer — 马尔可夫链状态预测 (PredictFuture, MarkovDefaultTransition, matMulVec4, determineTrend) | 2 核心函数 |
 | `paths.go` | 路径搜索 (FindPropagationPaths) | 1 函数 |
-| `core_test.go` | 完整测试套件 (10 个测试用例) | 0 |
+| `core_test.go` | 完整测试套件 (10+ 个测试用例) | 0 |
 
 ### 3.3 依赖分析
 
@@ -219,9 +221,11 @@ prism-lib 完全独立于 ASSCOR，通过 `PrismConfig` 值类型接收配置，
 
 | 维度 | 状态 |
 |------|------|
-| 核心计算函数 | ✅ 已实现 (core.go) |
+| Core Layer 计算函数 | ✅ 已实现 (core.go) |
+| Semantic Layer 隶属度映射 | ✅ 已实现 (semantic.go) |
+| Inference Layer 马尔可夫预测 | ✅ 已实现 (inference.go) |
 | 路径搜索 | ✅ 已实现 (paths.go) |
-| 单元测试覆盖 | ✅ 10 个测试用例 |
+| 单元测试覆盖 | ✅ 10+ 测试用例 |
 | JSON IR | ❌ 未实现 |
 | 跨语言验证套件 | ❌ 未实现 |
 
@@ -330,16 +334,18 @@ SSAM 和 Prism 之间的最大差距在于**中间表示（IR）**：
 
 | 指标 | SSAM (ssam-lib) | SRD / Prism (prism-lib) |
 |------|:---:|:---:|
-| 源文件数 | 15 | 5 |
+| 源文件数 | 15 | 7 |
 | 外部依赖 | 0 | 0 |
 | 标准库依赖 | 7 个包 | 2 个包 |
 | 导出类型 | 16 | 6 |
-| 导出函数 | 21 | 4 |
-| 代码行数 (不含测试) | ~800 | ~200 |
-| 测试用例数 | 多个 | 10 |
+| 导出函数 | 21 | 7 |
+| 代码行数 (不含测试) | ~800 | ~350 |
+| 测试用例数 | 多个 | 10+ |
 | JSON IR | ✅ | ❌ |
 | 公式 DSL/AST | ✅ | ❌ |
 | 多版本公式 | ✅ (v1.2 + v2.0) | ❌ (单版本) |
+| 语义层 (Semantic Layer) | ✅ (V2.0 三层模型) | ✅ (四态隶属度) |
+| 推理层 (Inference Layer) | ❌ | ✅ (马尔可夫链预测) |
 | 独立 Go Module | ✅ | ✅ |
 | 可嵌入平台 | 6+ | 依赖 SSAM 输出 |
 
@@ -347,4 +353,4 @@ SSAM 和 Prism 之间的最大差距在于**中间表示（IR）**：
 
 ## 结论
 
-SSAM 和 Prism 均具备优秀的可移植性，是 ASSCOR 项目中最容易独立部署和跨语言移植的两个模块。其核心设计模式——"零外部依赖的纯函数式核心 + 适配层"——为后续的任何平台迁移提供了坚实的基础。两者的主要差距在于中间表示成熟度：SSAM 已具备完整的 JSON IR 和公式 DSL，Prism 在这两方面仍有提升空间。补齐这些差距后，两个算法库将具有完全等效的可移植性。
+SSAM 和 Prism 均具备优秀的可移植性，是 ASSCOR 项目中最容易独立部署和跨语言移植的两个模块。其核心设计模式——"零外部依赖的纯函数式核心 + 适配层"——为后续的任何平台迁移提供了坚实的基础。两者功能互补：SSAM 侧重安全性评分与 IR/AST 成熟度，Prism 侧重风险动力学状态推理。Prism 在三层架构（Core/Semantic/Inference）已全部实现，其 Semantic Layer（四态隶属度）和 Inference Layer（马尔可夫链预测）提供了 SSAM 所不具备的模糊语义与状态推理能力。两者的主要差距在于中间表示成熟度：SSAM 已具备完整的 JSON IR 和公式 DSL，Prism 在 JSON IR 方面仍有提升空间。补齐后两个算法库将具有完全等效的可移植性。

@@ -2,7 +2,7 @@
 
 > **版本**：SSAM 2.0 | **模块路径**：`github.com/chins-xing/ssam`  
 > **ASSCOR 适配层**：`f:\Argus\internal\ssam\` (薄适配层，委托给 ssam-lib)  
-> **日期**：2026-05-28 | **状态**：发布
+> **日期**：2026-06-09 | **状态**：发布
 
 本文档详细说明 SSAM 独立算法模块的接口规范、数据结构定义、配置适配机制及接入方式。SSAM V2.0 已独立为纯函数式 Go 模块 `github.com/chins-xing/ssam`（位于 `ssam-lib/`），可脱离 ASSCOR 框架独立使用。ASSCOR 平台通过 `internal/ssam/` 薄适配层委托调用 ssam-lib。
 

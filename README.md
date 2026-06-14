@@ -1,4 +1,4 @@
-﻿# SSAM 2.0 — 系统安全可接受性模型
+# SSAM 2.0 — 系统安全可接受性模型
 
 > **ASSCOR 项目** 实现了 SSAM（系统安全可接受性模型）核心算法。
 >
@@ -6,21 +6,21 @@
 >
 > **SSAM V2.0 现已独立为开源 Go 模块 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam)**（同时也位于 `ssam-lib/`），是一个零外部依赖的纯函数式风险评估引擎。ASSCOR 平台（`internal/ssam/`）作为薄适配层，通过依赖注入委托给 ssam-lib。详情见[项目拆分说明](#121-ssam-v20-项目拆分)。
 
-**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.1.3-mvp  
-**日期：** 2026-05-28  
+**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.1.4-mvp  
+**日期：** 2026-06-09  
 **状态：** 发布
 
 ## 摘要
 
-系统安全可接受性模型（System Security Acceptability Model，SSAM）1.3 是一种多维度、可计算、可演进的安全评估框架。它通过四个互不重叠的核心能力域——攻击面管理、业务连续性、操作可信度、韧性——与独立边缘修正因子、动态威胁系数及安全态势计算相结合，将系统安全状态量化为一个 0–100 的分数。本白皮书系统阐述 SSAM 1.3 的理论基础、核心规则、评估方法，并重点介绍韧性维度的增强：可接受沦陷指标（Acceptable Compromise Index，ACI），以及新引入的安全态势计算模块（Security Posture Calculator，SPC），通过全局漏洞情报与本地资产清单的交叉比对，实现个体化的风险评估。所有参数均可由管理员按场景自定义，实现"定义权归模型，决策权归人"的安全度量实践。
+系统安全可接受性模型（System Security Acceptability Model，SSAM）2.0 是一种多维度、可计算、可演进的安全评估框架。它通过四个互不重叠的核心能力域——攻击面管理、业务连续性、操作可信度、韧性——与独立边缘修正因子、动态威胁系数及安全态势计算相结合，将系统安全状态量化为一个 0–100 的分数。本白皮书系统阐述 SSAM 2.0 的理论基础、核心规则、评估方法，并重点介绍韧性维度的增强：可接受沦陷指标（Acceptable Compromise Index，ACI），以及安全态势计算模块（Security Posture Calculator，SPC），通过全局漏洞情报与本地资产清单的交叉比对，实现个体化的风险评估。所有参数均可由管理员按场景自定义，实现"定义权归模型，决策权归人"的安全度量实践。
 
-ASSCOR 不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系统的"安全可接受性"聚合判断层，提供面向业务风险的统一视图。同时，SSAM 1.3 已实现与中国等级保护制度（GB/T 22239-2019）的双向映射，可作为等保合规效果的持续性量化验证工具。
+ASSCOR 不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系统的"安全可接受性"聚合判断层，提供面向业务风险的统一视图。同时，SSAM 2.0 已实现与中国等级保护制度（GB/T 22239-2019）的双向映射，可作为等保合规效果的持续性量化验证工具。
 
 ## 1. 引言
 
 安全评估长期面临两大困境：合规清单无法应对高级威胁，而红队演练又难以重复度量。ASSCOR 项目旨在提供一种可计算、可演进、可配置的中间道路，让系统管理员像查看健康仪表盘一样，快速掌握当前的安全可接受程度。
 
-SSAM 1.3 的核心创新包括：
+SSAM 2.0 的核心创新包括：
 
 - 四核心域互斥设计，消除重复评分
 - 边缘因子以乘法修正方式反映高级防护缺失
@@ -69,7 +69,7 @@ SSAM 1.3 的核心创新包括：
 
 ## 3. 评估公式
 
-SSAM 1.3 的最终评估值由核心域加权得分、边缘因子修正、威胁态势系数及安全态势计算修正共同决定。SPC 1.3 采用平方和开方（√∑Penalty²）替代线性求和，防止大量低危 CVE 过早触底。
+SSAM 2.0 的最终评估值由核心域加权得分、边缘因子修正、威胁态势系数及安全态势计算修正共同决定。SPC 采用平方和开方（√∑Penalty²）替代线性求和，防止大量低危 CVE 过早触底。
 
 $$
 SSAM_{final} = \left( \frac{\sum_{i=1}^{4} (S_i \times W_i)}{\sum_{i=1}^{4} W_i} \right) \times \prod_{j=1}^{m} M_j \times \mu \times P_{score}
@@ -90,7 +90,7 @@ $$
 
 ## 4. 韧性指标增强：可接受沦陷指标（ACI）
 
-传统的韧性评估关注系统抵御攻击的能力，但现实中"完全不被攻破"难以保证。SSAM 1.3 在韧性核心域中引入可接受沦陷指标（ACI），用于衡量：当系统的某一部分已被攻破时，能否将损害控制在可接受范围内，并维持核心业务的运行。
+传统的韧性评估关注系统抵御攻击的能力，但现实中"完全不被攻破"难以保证。SSAM 2.0 在韧性核心域中引入可接受沦陷指标（ACI），用于衡量：当系统的某一部分已被攻破时，能否将损害控制在可接受范围内，并维持核心业务的运行。
 
 ACI 与抗打击韧性指标互为补充：前者衡量"破防后"，后者衡量"破防前"。两者不重叠、不重复扣分。
 
@@ -126,7 +126,7 @@ ACI 各项的扣分值直接在韧性域百分制内加减，扣至 0 分为止�
 
 ### 5.1 设计目标
 
-SSAM 1.3 引入安全态势计算模块（Security Posture Calculator，SPC），解决"全局漏洞情报"与"单台主机实际风险"之间的鸿沟。SPC 通过持续追踪全球权威漏洞库，结合本地资产清单，为每台受管主机输出个体化的态势修正向量。
+SSAM 2.0 引入安全态势计算模块（Security Posture Calculator，SPC），解决"全局漏洞情报"与"单台主机实际风险"之间的鸿沟。SPC 通过持续追踪全球权威漏洞库，结合本地资产清单，为每台受管主机输出个体化的态势修正向量。
 
 ### 5.2 数据源体系
 
@@ -180,7 +180,7 @@ $P_{score}$ 下限为 0.60，防止 SPC 单方面"杀死"主机评分。多 CVE 
 
 ## 6. 等级保护制度接入
 
-SSAM 1.3 已与 GB/T 22239-2019《信息安全技术 网络安全等级保护基本要求》（等保 2.0）建立映射关系。四个核心域覆盖等保"安全通信网络"、"安全区域边界"、"安全计算环境"和"安全管理中心"中可自动化评估的部分，物理安全、人员管理等人工审查项不在此列。
+SSAM 2.0 已与 GB/T 22239-2019《信息安全技术 网络安全等级保护基本要求》（等保 2.0）建立映射关系。四个核心域覆盖等保"安全通信网络"、"安全区域边界"、"安全计算环境"和"安全管理中心"中可自动化评估的部分，物理安全、人员管理等人工审查项不在此列。
 
 ### 6.1 等保等级与 SSAM 阈值联动
 
@@ -237,6 +237,14 @@ ASSCOR/
 │   ├── ssam.go        #   Engine 核心：Provider 接口、校验、钩子
 │   ├── engine_test.go #   完整测试覆盖
 │   └── go.mod         #   独立 Go module，零外部依赖
+├── prism-lib/         # Prism 风险动力学引擎（独立 Go module: github.com/chins-xing/prism）
+│   ├── types.go       #   数据模型 (NodeState, PrismConfig, AssetRiskResult)
+│   ├── config.go      #   默认配置 (DebtAlpha, PropCap, ScoreFloor 等)
+│   ├── core.go        #   Core Layer — 确定性数值求值
+│   ├── semantic.go    #   Semantic Layer — 四态模糊隶属度映射
+│   ├── inference.go   #   Inference Layer — 马尔可夫链状态预测
+│   ├── paths.go       #   风险传播路径搜索
+│   └── go.mod         #   独立 Go module，零外部依赖
 ├── internal/
 │   ├── kernel/        # 内核核心模块（assessor, policy, spc, cti,
 │   │                   #  adapter_integration, config_watcher,
@@ -248,12 +256,18 @@ ASSCOR/
 │   ├── ssam/          # SSAM 薄适配层（委托给 ssam-lib）
 │   │                   #  adapter.go — ASSCOR config/model ↔ ssam 格式转换
 │   │                   #  defaults.go — 默认权重、边缘因子
+│   ├── prism/         # Prism 薄适配层（委托给 prism-lib）
+│   │                   #  engine.go — 线程安全包装，集成到 ASSCOR 内核
+│   ├── srd/           # SRD 数据流管线
+│   │                   #  manager.go — 风险状态管理器
+│   │                   #  pipeline.go — 数据处理管线
+│   │                   #  adapter.go — 外部工具数据适配
 │   ├── agent/         # Agent 核心模块（collector, executor）
 │   ├── engine/        # ASSCOR 评估引擎（含适配器流水线集成，内部调用 ssam 包）
 │   ├── adapter/       # 外部工具适配器框架（21 个适配器：11 探测器 + 10 管理类）
 │   │   ├── scanner/   #   探测器适配器（Trivy, Nuclei, Lynis, OpenSCAP 等）
 │   │   └── management/#   管理类适配器（Ansible, NetBox, FreeIPA, Jira 等）
-│   ├── checks/        # 检查项库（Linux/Windows，等保映射 53+9 项）
+│   ├── checks/        # 检查项库（Linux/Windows，等保映射 59+9 项）
 │   ├── model/         # 数据模型定义
 │   ├── config/        # 配置解析器（INI 格式，支持行业模板覆盖）
 │   └── version/       # 版本信息
@@ -318,6 +332,7 @@ ASSCOR μKernel 是风险评估与指令分发中心，采用微内核 + Agent �
 | 模块 | 功能 |
 |------|------|
 | **SSAM 算法引擎 (ssam-lib + internal/ssam)** | ssam-lib（`github.com/chins-xing/ssam`）为独立纯函数式引擎，实现 SSAM V2.0 三层语义模型评分公式、域评分、边缘因子计算、钩子机制、SSAM IR、Formula DSL/AST；`internal/ssam` 为薄适配层，委托给 ssam-lib |
+| **Prism 风险动力学引擎 (prism-lib + internal/prism)** | prism-lib（`github.com/chins-xing/prism`）为独立纯函数式引擎，实现 SRD 三层架构——Core Layer（确定性求值）、Semantic Layer（四态模糊隶属度映射）、Inference Layer（马尔可夫链状态预测）；`internal/prism` 为线程安全适配层，`internal/srd` 为 SRD 数据流管线 |
 | **评估引擎 (Assessor)** | 加载检查项并发评估，通过 SSAM 模块计算四域得分 + 边缘因子 + SPC 修正 |
 | **依赖注入容器 (DI Container)** | 基于反射的 IoC 容器，支持接口绑定、命名绑定、结构体字段注入（`inject` tag）、确定性匹配 |
 | **消息总线 (Bus)** | 发布-订阅模式事件总线，支持同步/异步发布、goroutine 并发控制、信号量防泄漏 |
@@ -393,9 +408,41 @@ SSAM 2.0 提供了一套严谨且可进化的安全可接受性度量标准。�
 
 详细接口规范与接入指南请参阅 [docs/SSAM接口规范与接入指南.md](docs/SSAM接口规范与接入指南.md)。
 
+## 12.2 Prism (SRD) 项目拆分
+
+Prism 是 SRD（Systemic Risk Dynamics）理论的工程实现——一个零外部依赖的纯函数式风险动力学引擎，独立为 Go 模块 [github.com/chins-xing/prism](https://github.com/chins-xing/prism)（位于 `prism-lib/`）。ASSCOR 平台通过 `internal/prism/` 薄适配层委托调用：
+
+```
+ASSCOR Platform
+    │
+    ├── internal/prism/  (线程安全适配层：engine.go)
+    │       │
+    │       └── 委托给 → prism-lib/  (github.com/chins-xing/prism)
+    │                        ├── types.go      — 数据模型 (NodeState, PrismConfig, AssetRiskResult)
+    │                        ├── config.go     — 默认配置参数
+    │                        ├── core.go       — Core Layer 确定性求值
+    │                        ├── semantic.go   — Semantic Layer 四态隶属度
+    │                        ├── inference.go  — Inference Layer 马尔可夫链预测
+    │                        └── paths.go      — 风险传播路径搜索
+    │
+    └── internal/srd/   (SRD 数据流管线)
+                             ├── manager.go   — 风险状态管理器
+                             ├── pipeline.go  — 数据处理管线
+                             ├── adapter.go   — 外部工具数据适配
+                             └── ...          — lynis/openscap/generic 适配器
+```
+
+**Prism 三层架构**：
+
+| 层 | 文件 | 职责 | 关键输出 |
+|:---|:---|:---|:---|
+| **Core Layer** | `core.go` | 确定性数值求值——外部风险、传播风险、安全债务、正交化动态评分 | `PrismScore`（0-100） |
+| **Semantic Layer** | `semantic.go` | 将 Core Layer 的 `PrismScore` 映射为四态隶属度向量 | `[μ_Stable, μ_Degraded, μ_Untrusted, μ_Collapse]` |
+| **Inference Layer** | `inference.go` | 基于马尔可夫链预测 N 步后的状态概率分布与趋势判断 | 未来状态分布、趋势（improving/stable/degrading/collapsing） |
+
 ## 13. ATT&CK V19 威胁分析模块
 
-ASSCOR v0.1.3-mvp 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。该模块作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
+ASSCOR v0.1.4-mvp 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。该模块作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
 
 ### 13.1 四大核心子模块
 
@@ -576,7 +623,7 @@ ATTACKModule (Plugin v2.0.0)
 - **格式化输出** — 统一支持文本表格和 JSON 两种输出格式，通过 `--json` 参数切换
 - **HMAC 密钥管理** — 密钥元数据（创建时间/过期时间/哈希）、自动轮换（90 天）、文件权限 `0600`
 
-> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.2.0。两者版本号独立演进。
+> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.1.4-mvp。两者版本号独立演进。
 
 #### 第三批修复（SSAM 解耦与二次审计 — 2026-05-22）
 
@@ -610,3 +657,22 @@ ATTACKModule (Plugin v2.0.0)
 - 移除 `engine/assessor.go` 中无调用点的 `checkPassed()` 方法
 - 移除 `model/edge_factor_chain.go` 中无调用点的 `EdgeFactorChain.Apply()` 方法和 `ResetEdgeFactorsForTesting()` 函数
 - 清理 `model/edge_factor_chain.go` 中不再使用的 `math` 导入
+
+#### 第四批修复（Prism 三层架构补全 + 管理适配器测试 — 2026-06-09）
+
+**Prism 风险动力学引擎 — Semantic Layer 与 Inference Layer 实现：**
+
+- **Semantic Layer (`prism-lib/semantic.go`)** — 实现四态模糊隶属度映射函数（`ComputeStateMembership`），将 Core Layer 的 PrismScore 映射为 [μ_Stable, μ_Degraded, μ_Untrusted, μ_Collapse] 四态向量，使用梯形隶属度函数（trapezoidUp/trapezoidDown/triangular），阈值可通过 PrismConfig 配置。
+- **Inference Layer (`prism-lib/inference.go`)** — 实现基于马尔可夫链的状态预测（`PredictFuture`），使用 4×4 状态转移矩阵（专家先验），支持 N 步预测（默认 30 天），输出趋势判断（improving/stable/degrading/collapsing）；塌缩检测（collapsing 趋势→触发 collapseProb 计算）。
+- **债务衰减修正 (`computeCollapseModifier`)** — CollapseModifier 仅当失败检查项数量 ≥ 2 时触发生效（单失败项不启动塌缩），引入 nFactor（√nFailures）调整分母。
+- **趋势判断重构 (`determineTrend`)** — 优先判断塌缩概率（当前 >0.3 且未来 >0.3 → collapsing；未来-当前 >0.1 → collapsing），再依次判断 improving/degrading/stable。
+
+**管理类适配器测试覆盖：**
+
+- **management_test.go** — 新增 35 项测试用例，覆盖全部 10 个管理类适配器的属性验证、解析逻辑、状态判断、注册检查、Validate 统一性。P0 适配器 11 项（Ansible/NetBox/Snipe-IT）、P1 适配器 10 项（FreeIPA/Keycloak/WazuhSIEM/Rundeck）、P2 适配器 6 项（Jira/Terraform/OpenTofu）。
+
+**文档更新：**
+
+- **版本升级** — SSAM 算法版本 1.3 → 2.0，ASSCOR 项目版本 v0.1.3-mvp → v0.1.4-mvp
+- **README.md** — 新增 §12.2 Prism 项目拆分说明、更新项目结构（prism-lib/internal/prism/internal/srd）、核心能力表新增 Prism 引擎条目
+- **白皮书** — 工程实现白皮书新增 Prism/SRD 三层架构集成章节；SSAM 与 SRD 可移植性白皮书更新 prism-lib 文件统计（5→7，新增 semantic.go/inference.go，标准库依赖 2→3 个包）；外部接入源完整清单更新实施状态与完成度
