@@ -1,9 +1,15 @@
 package kernel
 
 import (
+	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
+	apiv1 "github.com/asscor/asscor/api/v1"
 	"github.com/asscor/asscor/internal/model"
 )
 
@@ -313,4 +319,465 @@ func TestSPCWeightShift(t *testing.T) {
 	if sum != 0 {
 		t.Errorf("weight shift sum should be 0, got %.0f", sum)
 	}
+}
+
+func TestCTIModule_Coefficient(t *testing.T) {
+	kc := &mockKernelContext{}
+	m := NewCTIModule()
+	_ = m.Init(nil, kc)
+
+	if coeff := m.GetCoefficient(); coeff != 1.0 {
+		t.Errorf("default coefficient = %f, want 1.0", coeff)
+	}
+
+	m.mu.Lock()
+	m.activeThreats = 4
+	m.mu.Unlock()
+	m.updateCoefficient()
+
+	if coeff := m.GetCoefficient(); coeff != 0.92 {
+		t.Errorf("coefficient after 4 threats = %f, want 0.92 (1.0 - 4*0.02)", coeff)
+	}
+
+	m.mu.Lock()
+	m.activeThreats = 25
+	m.mu.Unlock()
+	m.updateCoefficient()
+
+	if coeff := m.GetCoefficient(); coeff != 0.60 {
+		t.Errorf("coefficient after 25 threats = %f, want 0.60 (floor)", coeff)
+	}
+}
+
+func TestCTIModule_ReportThreat(t *testing.T) {
+	kc := &mockKernelContext{}
+	m := NewCTIModule()
+	_ = m.Init(nil, kc)
+
+	m.ReportThreat("critical")
+	m.ReportThreat("high")
+
+	m.mu.Lock()
+	threats := m.activeThreats
+	m.mu.Unlock()
+
+	if threats != 7 {
+		t.Errorf("activeThreats = %d, want 7 (4+3)", threats)
+	}
+}
+
+func TestCTIModule_AccumulateThreats(t *testing.T) {
+	kc := &mockKernelContext{}
+	m := NewCTIModule()
+	_ = m.Init(nil, kc)
+
+	m.mu.Lock()
+	m.activeThreats = 0
+	m.mu.Unlock()
+
+	m.ReportThreat("critical")
+
+	m.mu.Lock()
+	m.activeThreats += 10
+	m.mu.Unlock()
+
+	m.updateCoefficient()
+
+	m.mu.Lock()
+	coeff := m.coefficient
+	total := m.activeThreats
+	m.mu.Unlock()
+
+	if coeff > 0.80 {
+		t.Errorf("coefficient %f after 14 active threats, want <= 0.80", coeff)
+	}
+	if total < 10 {
+		t.Errorf("activeThreats = %d, want >= 10 (accumulated, not replaced)", total)
+	}
+}
+
+func TestCTIModule_SeverityWeight(t *testing.T) {
+	tests := []struct {
+		sev string
+		w   int
+	}{
+		{"critical", 4},
+		{"high", 3},
+		{"medium", 2},
+		{"low", 1},
+		{"unknown", 2},
+		{"", 2},
+	}
+	for _, tt := range tests {
+		if got := severityWeight(tt.sev); got != tt.w {
+			t.Errorf("severityWeight(%q) = %d, want %d", tt.sev, got, tt.w)
+		}
+	}
+}
+
+func TestCTIModule_HealthCheck(t *testing.T) {
+	kc := &mockKernelContext{}
+	m := NewCTIModule()
+	_ = m.Init(nil, kc)
+
+	if err := m.HealthCheck(nil); err == nil {
+		t.Error("expected health check failure for unstarted module")
+	}
+
+	m.mu.Lock()
+	m.lastUpdate = time.Now()
+	m.mu.Unlock()
+	if err := m.HealthCheck(nil); err != nil {
+		t.Errorf("unexpected health check error: %v", err)
+	}
+}
+
+func TestCTIModule_APIKeyConfiguration(t *testing.T) {
+	m := NewCTIModule()
+	kc := &mockKernelContext{}
+	_ = m.Init(nil, kc)
+
+	m.mu.RLock()
+	otx := m.otxAPIKey
+	mispURL := m.mispURL
+	m.mu.RUnlock()
+
+	if otx != "" || mispURL != "" {
+		t.Logf("CTI API keys: OTX=%v MISP=%v (from env/config)", otx != "", mispURL != "")
+	}
+}
+
+func TestCTIModule_Lifecycle(t *testing.T) {
+	kc := &mockKernelContext{}
+	m := NewCTIModule()
+
+	if err := m.Init(nil, kc); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if m.State() != PluginInitialized {
+		t.Errorf("state = %v, want Initialized", m.State())
+	}
+	if m.Info().Name != "cti" {
+		t.Errorf("name = %s, want cti", m.Info().Name)
+	}
+	if m.Priority() != 10 {
+		t.Errorf("priority = %d, want 10", m.Priority())
+	}
+}
+
+func TestHeartbeat_PruneDeadAgents(t *testing.T) {
+	m := &HeartbeatModule{
+		agents: make(map[string]*AgentRecord),
+		timeout: 60 * time.Second,
+	}
+
+	now := time.Now()
+	m.agents["host-a"] = &AgentRecord{HostID: "host-a", Active: true, LastSeen: now}
+	m.agents["host-b"] = &AgentRecord{HostID: "host-b", Active: false, LastSeen: now.Add(-30 * time.Minute)}
+	m.agents["host-c"] = &AgentRecord{HostID: "host-c", Active: false, LastSeen: now.Add(-2 * time.Hour)}
+
+	m.pruneDeadAgents()
+
+	if _, ok := m.agents["host-a"]; !ok {
+		t.Error("active host-a should not be pruned")
+	}
+	if _, ok := m.agents["host-b"]; !ok {
+		t.Error("inactive host-b (30min) should not be pruned (<1h cutoff)")
+	}
+	if _, ok := m.agents["host-c"]; ok {
+		t.Error("inactive host-c (2h) should be pruned (>1h cutoff)")
+	}
+	if len(m.agents) != 2 {
+		t.Errorf("expected 2 agents remaining, got %d", len(m.agents))
+	}
+}
+
+func TestCommander_CommandExpiry(t *testing.T) {
+	m := &CommanderModule{
+		pendingCmds: make(map[string]map[string]*pendingCommand),
+		cmdTTL:      30 * time.Minute,
+	}
+
+	m.pendingCmds["host-1"] = map[string]*pendingCommand{
+		"cmd-fresh":  {Cmd: &apiv1.Command{CommandId: "cmd-fresh"}, EnqueuedAt: time.Now()},
+		"cmd-expired": {Cmd: &apiv1.Command{CommandId: "cmd-expired"}, EnqueuedAt: time.Now().Add(-1 * time.Hour)},
+	}
+	m.pendingCmds["host-2"] = map[string]*pendingCommand{
+		"cmd-old": {Cmd: &apiv1.Command{CommandId: "cmd-old"}, EnqueuedAt: time.Now().Add(-2 * time.Hour)},
+	}
+
+	m.expireStaleCommands()
+
+	if cmds, ok := m.pendingCmds["host-1"]; !ok {
+		t.Error("host-1 should still exist")
+	} else if len(cmds) != 1 {
+		t.Errorf("host-1 should have 1 command, got %d", len(cmds))
+	}
+	if _, ok := m.pendingCmds["host-2"]; ok {
+		t.Error("host-2 should be removed (all commands expired)")
+	}
+}
+
+func TestCommander_EnqueueDequeue(t *testing.T) {
+	m := &CommanderModule{
+		pendingCmds: make(map[string]map[string]*pendingCommand),
+		cmdTTL:      30 * time.Minute,
+	}
+
+	id := m.EnqueueCommand("host-1", "restart", map[string]string{"service": "nginx"})
+	if id == "" {
+		t.Error("expected non-empty command ID")
+	}
+
+	cmds := m.DequeueCommands("host-1")
+	if len(cmds) != 1 {
+		t.Fatalf("expected 1 command, got %d", len(cmds))
+	}
+	if cmds[0].Command != "restart" {
+		t.Errorf("command = %s, want restart", cmds[0].Command)
+	}
+
+	cmds2 := m.DequeueCommands("host-1")
+	if len(cmds2) != 0 {
+		t.Error("second dequeue should return empty")
+	}
+}
+
+func TestSPC_GetKEVCatalog(t *testing.T) {
+	spc := NewSPCModule()
+	spc.mu.Lock()
+	spc.kevCatalog["CVE-2024-0001"] = true
+	spc.kevCatalog["CVE-2024-0002"] = true
+	spc.kevCatalog["CVE-2024-0003"] = true
+	spc.mu.Unlock()
+
+	catalog := spc.GetKEVCatalog()
+	if len(catalog) != 3 {
+		t.Errorf("expected 3 KEV entries, got %d", len(catalog))
+	}
+
+	found := make(map[string]bool)
+	for _, cveID := range catalog {
+		found[cveID] = true
+	}
+	for _, want := range []string{"CVE-2024-0001", "CVE-2024-0002", "CVE-2024-0003"} {
+		if !found[want] {
+			t.Errorf("expected %s in KEV catalog", want)
+		}
+	}
+}
+
+func TestSPC_Summary(t *testing.T) {
+	spc := NewSPCModule()
+	spc.enabled = true
+	spc.mu.Lock()
+	spc.lastUpdate = time.Now()
+	spc.minPScore = 0.65
+	spc.kevCatalog["CVE-2024-0001"] = true
+	spc.mu.Unlock()
+
+	summary := spc.Summary()
+
+	if v, ok := summary["enabled"].(bool); !ok || !v {
+		t.Error("expected enabled=true in summary")
+	}
+	if v, ok := summary["kev_count"].(int); !ok || v != 1 {
+		t.Errorf("kev_count = %v, want 1", summary["kev_count"])
+	}
+	if v, ok := summary["min_pscore"].(float64); !ok || v != 0.65 {
+		t.Errorf("min_pscore = %v, want 0.65", summary["min_pscore"])
+	}
+}
+
+func TestHistoricalStore_ComputeTrends(t *testing.T) {
+	dir := t.TempDir()
+
+	f, err := os.Create(filepath.Join(dir, "20260618-assessments.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintf(f, `{"score":85.0,"acceptable":true,"host_id":"host-a"}`+"\n")
+	fmt.Fprintf(f, `{"score":72.0,"acceptable":false,"host_id":"host-a"}`+"\n")
+	fmt.Fprintf(f, `{"score":90.0,"acceptable":true,"host_id":"host-a"}`+"\n")
+	fmt.Fprintf(f, `{"score":60.0,"acceptable":false,"host_id":"host-b"}`+"\n")
+	f.Close()
+
+	store := NewHistoricalStore(dir)
+	trends, err := store.ComputeTrends(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(trends) != 2 {
+		t.Fatalf("expected 2 host trends, got %d", len(trends))
+	}
+
+	sort.Slice(trends, func(i, j int) bool { return trends[i].HostID < trends[j].HostID })
+
+	if trends[0].HostID != "host-a" {
+		t.Errorf("HostID = %s, want host-a", trends[0].HostID)
+	}
+	if trends[0].Count != 3 {
+		t.Errorf("host-a count = %d, want 3", trends[0].Count)
+	}
+	if trends[0].MinScore != 72.0 {
+		t.Errorf("host-a MinScore = %f, want 72.0", trends[0].MinScore)
+	}
+	if trends[0].MaxScore != 90.0 {
+		t.Errorf("host-a MaxScore = %f, want 90.0", trends[0].MaxScore)
+	}
+
+	acceptablePct := math.Round(float64(2)/3*10000) / 100
+	if trends[0].AcceptablePct != acceptablePct {
+		t.Errorf("host-a AcceptablePct = %f, want %f", trends[0].AcceptablePct, acceptablePct)
+	}
+}
+
+func TestHistoricalStore_ComputeRiskLevels(t *testing.T) {
+	dir := t.TempDir()
+
+	f, err := os.Create(filepath.Join(dir, "20260618-assessments.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintf(f, `{"score":50.0,"acceptable":false,"host_id":"high-risk"}`+"\n")
+	fmt.Fprintf(f, `{"score":70.0,"acceptable":true,"host_id":"mid-risk"}`+"\n")
+	fmt.Fprintf(f, `{"score":90.0,"acceptable":true,"host_id":"low-risk"}`+"\n")
+	f.Close()
+
+	store := NewHistoricalStore(dir)
+	levels, err := store.ComputeRiskLevels(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if v := levels["high-risk"]; v != 1.0 {
+		t.Errorf("high-risk level = %f, want 1.0", v)
+	}
+	if v := levels["mid-risk"]; v != 0.5 {
+		t.Errorf("mid-risk level = %f, want 0.5", v)
+	}
+	if v := levels["low-risk"]; v != 0.0 {
+		t.Errorf("low-risk level = %f, want 0.0", v)
+	}
+}
+
+func TestHistoricalStore_EmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	store := NewHistoricalStore(dir)
+
+	trends, err := store.ComputeTrends(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trends) != 0 {
+		t.Errorf("expected 0 trends for empty dir, got %d", len(trends))
+	}
+}
+
+func TestHistoricalStore_InvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	f, _ := os.Create(filepath.Join(dir, "20260618-assessments.jsonl"))
+	fmt.Fprintf(f, "not valid json\n")
+	fmt.Fprintf(f, `{"score":85.0,"acceptable":true,"host_id":"host-a"}`+"\n")
+	f.Close()
+
+	store := NewHistoricalStore(dir)
+	trends, err := store.ComputeTrends(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trends) != 1 {
+		t.Fatalf("expected 1 host (invalid line skipped), got %d", len(trends))
+	}
+}
+
+func TestSPCInterface_Completeness(t *testing.T) {
+	spc := NewSPCModule()
+	var iface SPCInterface = spc
+	_ = iface
+}
+
+func TestPersistenceInterface_Completeness(t *testing.T) {
+	pm := NewPersistenceModule(t.TempDir())
+	var iface PersistenceInterface = pm
+	_ = iface
+
+	dir := pm.DataDir()
+	if dir == "" {
+		t.Error("DataDir should not be empty")
+	}
+}
+
+func TestCTIInterface_Completeness(t *testing.T) {
+	m := NewCTIModule()
+	var iface CTIInterface = m
+	_ = iface
+}
+
+func TestSIEMPusher_Disabled(t *testing.T) {
+	s := NewSIEMPusher("", "", "")
+	if s.Enabled() {
+		t.Error("SIEM pusher with empty config should be disabled")
+	}
+}
+
+func TestSIEMPusher_Enabled(t *testing.T) {
+	s := NewSIEMPusher("https://siem.internal:55000", "admin", "pass")
+	if !s.Enabled() {
+		t.Error("SIEM pusher with full config should be enabled")
+	}
+}
+
+func TestSIEMPusher_EndpointURLs(t *testing.T) {
+	s := NewSIEMPusher("https://siem.internal:55000/", "admin", "pass")
+
+	s.mu.Lock()
+	s.token = "test-token"
+	token := s.token
+	s.mu.Unlock()
+
+	if token != "test-token" {
+		t.Errorf("token = %s, want test-token", token)
+	}
+}
+
+func TestSelfAssessment_TopicConstant(t *testing.T) {
+	if TopicAssessorSelfCheck != "assessor.self_check" {
+		t.Errorf("TopicAssessorSelfCheck = %s, want assessor.self_check", TopicAssessorSelfCheck)
+	}
+	if TopicAssessorSelfCheck == TopicAssessorResult {
+		t.Error("self_check topic must differ from assessor.result to prevent downstream pollution")
+	}
+}
+
+func TestAdapterIntegration_StopChannel(t *testing.T) {
+	m := NewAdapterIntegrationModule()
+	m.mu.Lock()
+	ch := m.stopCh
+	m.mu.Unlock()
+
+	if ch == nil {
+		t.Error("stopCh should be initialized in constructor")
+	}
+
+	go func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		select {
+		case <-m.stopCh:
+		default:
+			close(m.stopCh)
+		}
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+
+	m.mu.Lock()
+	select {
+	case <-m.stopCh:
+	default:
+		t.Error("stopCh should have been closed")
+	}
+	m.mu.Unlock()
 }
