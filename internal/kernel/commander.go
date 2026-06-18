@@ -23,12 +23,20 @@ type CommanderModule struct {
 	hmacKey []byte
 
 	mu          sync.RWMutex
-	pendingCmds map[string]map[string]*apiv1.Command
+	pendingCmds map[string]map[string]*pendingCommand
 	state       PluginState
 
 	keyMeta     keyMetadata
 	prevHMACKey []byte
 	keyRotatedAt time.Time
+
+	cmdTTL      time.Duration
+	cleanupDone chan struct{}
+}
+
+type pendingCommand struct {
+	Cmd         *apiv1.Command
+	EnqueuedAt  time.Time
 }
 
 type keyMetadata struct {
@@ -58,7 +66,8 @@ func (m *CommanderModule) Priority() int {
 
 func (m *CommanderModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
-	m.pendingCmds = make(map[string]map[string]*apiv1.Command)
+	m.pendingCmds = make(map[string]map[string]*pendingCommand)
+	m.cmdTTL = 30 * time.Minute
 
 	keyPath := filepath.Join("certs", "ASSCOR-hmac-key")
 	metaPath := filepath.Join("certs", "ASSCOR-hmac-key-meta.json")
@@ -181,17 +190,56 @@ func sha256Hex(data []byte) string {
 
 func (m *CommanderModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
+	m.cleanupDone = make(chan struct{})
 	m.kernel.Bus().Subscribe(TopicPolicyAction, "commander", m.onPolicyAction)
+	go m.cleanupExpiredCommands()
 	logger.WithComponent("commander").Info("started")
 	return nil
 }
 
 func (m *CommanderModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+	if m.cleanupDone != nil {
+		close(m.cleanupDone)
+	}
 	m.kernel.Bus().UnsubscribeAll("commander")
 	m.state = PluginStopped
 	logger.WithComponent("commander").Info("stopped")
 	return nil
+}
+
+func (m *CommanderModule) cleanupExpiredCommands() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-m.kernel.Context().Done():
+			return
+		case <-m.cleanupDone:
+			return
+		case <-ticker.C:
+			m.expireStaleCommands()
+		}
+	}
+}
+
+func (m *CommanderModule) expireStaleCommands() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cutoff := time.Now().Add(-m.cmdTTL)
+	for hostID, cmds := range m.pendingCmds {
+		for cmdID, pc := range cmds {
+			if pc.EnqueuedAt.Before(cutoff) {
+				delete(cmds, cmdID)
+				logger.WithComponent("commander").Info("expired stale command",
+					"host_id", hostID, "cmd_id", cmdID, "enqueued_at", pc.EnqueuedAt.Format(time.RFC3339))
+			}
+		}
+		if len(cmds) == 0 {
+			delete(m.pendingCmds, hostID)
+		}
+	}
 }
 
 func (m *CommanderModule) State() PluginState {
@@ -213,9 +261,9 @@ func (m *CommanderModule) EnqueueCommand(hostID string, action string, params ma
 	defer m.mu.Unlock()
 
 	if m.pendingCmds[hostID] == nil {
-		m.pendingCmds[hostID] = make(map[string]*apiv1.Command)
+		m.pendingCmds[hostID] = make(map[string]*pendingCommand)
 	}
-	m.pendingCmds[hostID][cmdID] = cmd
+	m.pendingCmds[hostID][cmdID] = &pendingCommand{Cmd: cmd, EnqueuedAt: time.Now()}
 
 	return cmdID
 }
@@ -230,8 +278,8 @@ func (m *CommanderModule) DequeueCommands(hostID string) []*apiv1.Command {
 	}
 
 	result := make([]*apiv1.Command, 0, len(cmds))
-	for _, cmd := range cmds {
-		result = append(result, cmd)
+	for _, pc := range cmds {
+		result = append(result, pc.Cmd)
 	}
 
 	delete(m.pendingCmds, hostID)

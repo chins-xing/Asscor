@@ -56,6 +56,8 @@ func sourceCmdHandler(ctx *CommandContext) *CommandResult {
 		return sourceListHandler(ctx, srcAccess)
 	case "info":
 		return sourceInfoHandler(ctx, srcAccess)
+	case "deploy":
+		return sourceDeployHandler(ctx, srcAccess)
 	case "enable":
 		return sourceEnableHandler(ctx, srcAccess)
 	case "disable":
@@ -123,6 +125,27 @@ func sourceListHandler(ctx *CommandContext, src SourceAccess) *CommandResult {
 	b.WriteString(fmt.Sprintf("\n  Total: %d  Enabled: %d  Disabled: %d\n\n", len(sources), enabled, len(sources)-enabled))
 
 	return &CommandResult{ExitCode: ExitOK, Output: b.String(), Data: sources}
+}
+
+func sourceDeployHandler(ctx *CommandContext, src SourceAccess) *CommandResult {
+	if len(ctx.Args) < 2 {
+		return &CommandResult{ExitCode: ExitUsage, Err: fmt.Errorf("source deploy: <id> required"), Output: "Usage: source deploy <id> [--version <v>]\n"}
+	}
+	id := ctx.Args[1]
+	version := ctx.Options["version"]
+	category := ctx.Options["category"]
+	if version == "" {
+		version = "latest"
+	}
+	if category == "" {
+		category = "scanner"
+	}
+	spec := kernel.SourceSpec{ID: id, Category: kernel.SourceCategory(category), Version: version}
+	err := src.DeploySource(ctx.Ctx, spec, kernel.SourceConfig{})
+	if err != nil {
+		return &CommandResult{ExitCode: ExitError, Err: err, Output: fmt.Sprintf("Deploy failed: %v\n", err)}
+	}
+	return &CommandResult{ExitCode: ExitOK, Output: fmt.Sprintf("Source '%s' (version %s) deployed successfully\n", id, version)}
 }
 
 func sourceInfoHandler(ctx *CommandContext, src SourceAccess) *CommandResult {

@@ -1,12 +1,16 @@
 package kernel
 
 import (
+	"archive/tar"
 	"bufio"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -277,7 +281,11 @@ type PersistenceModule struct {
 	writers     map[string]*jsonlWriter
 	flushTicker *time.Ticker
 	flushDone   chan struct{}
+	cleanupDone chan struct{}
+	backupDone  chan struct{}
 	bufSize     int
+	retentionDays int
+	history     *HistoricalStore
 
 	enabled  bool
 	state    PluginState
@@ -292,6 +300,7 @@ func NewPersistenceModule(dataDir string) *PersistenceModule {
 		writers: make(map[string]*jsonlWriter),
 		bufSize: 64,
 		enabled: true,
+		retentionDays: 90,
 	}
 }
 
@@ -333,6 +342,9 @@ func (m *PersistenceModule) Init(ctx context.Context, kc KernelContext) error {
 
 	m.flushTicker = time.NewTicker(30 * time.Second)
 	m.flushDone = make(chan struct{})
+	m.cleanupDone = make(chan struct{})
+	m.backupDone = make(chan struct{})
+	m.history = NewHistoricalStore(m.dataDir)
 
 	kc.Container().Bind((*PersistenceInterface)(nil), m)
 
@@ -349,6 +361,8 @@ func (m *PersistenceModule) Start(ctx context.Context) error {
 	m.kernel.Bus().Subscribe(TopicAgentTimeout, "persistence", m.onAgentTimeout)
 
 	go m.flushLoop()
+	go m.cleanupLoop()
+	go m.backupLoop()
 	logger.WithComponent("persistence").Info("started", "data_dir", m.dataDir)
 	return nil
 }
@@ -361,6 +375,8 @@ func (m *PersistenceModule) Stop(ctx context.Context) error {
 	m.kernel.Bus().UnsubscribeAll("persistence")
 
 	close(m.flushDone)
+	close(m.cleanupDone)
+	close(m.backupDone)
 	m.flushTicker.Stop()
 	m.flushAll()
 
@@ -508,8 +524,245 @@ func (m *PersistenceModule) RotateAll() {
 	m.mu.Unlock()
 }
 
+func (m *PersistenceModule) cleanupLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithComponent("persistence").Error("cleanupLoop panic recovered", "panic", r)
+		}
+	}()
+
+	cleanupTicker := time.NewTicker(24 * time.Hour)
+	defer cleanupTicker.Stop()
+
+	m.cleanupOldLogs()
+
+	for {
+		select {
+		case <-cleanupTicker.C:
+			m.cleanupOldLogs()
+		case <-m.cleanupDone:
+			return
+		}
+	}
+}
+
+func (m *PersistenceModule) cleanupOldLogs() {
+	cutoff := time.Now().AddDate(0, 0, -m.retentionDays)
+	entries, err := os.ReadDir(m.dataDir)
+	if err != nil {
+		logger.WithComponent("persistence").Error("failed to read data dir for cleanup", "error", err)
+		return
+	}
+
+	var removed int
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			path := filepath.Join(m.dataDir, entry.Name())
+			if err := os.Remove(path); err != nil {
+				logger.WithComponent("persistence").Warn("failed to remove old log", "path", path, "error", err)
+			} else {
+				removed++
+			}
+		}
+	}
+	if removed > 0 {
+		logger.WithComponent("persistence").Info("cleaned up old logs",
+			"removed", removed, "retention_days", m.retentionDays)
+	}
+}
+
+func (m *PersistenceModule) backupLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithComponent("persistence").Error("backupLoop panic recovered", "panic", r)
+		}
+	}()
+
+	snapshotTicker := time.NewTicker(1 * time.Hour)
+	archiveTicker := time.NewTicker(24 * time.Hour)
+	defer snapshotTicker.Stop()
+	defer archiveTicker.Stop()
+
+	for {
+		select {
+		case <-snapshotTicker.C:
+			m.createHourlySnapshot()
+		case <-archiveTicker.C:
+			m.createDailyArchive()
+		case <-m.backupDone:
+			m.createHourlySnapshot()
+			m.createDailyArchive()
+			return
+		}
+	}
+}
+
+func (m *PersistenceModule) createHourlySnapshot() {
+	snapshotDir := filepath.Join(m.dataDir, "snapshots")
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		logger.WithComponent("persistence").Error("failed to create snapshot dir", "error", err)
+		return
+	}
+
+	timestamp := time.Now().Format("20060102-150405")
+	snapshotName := fmt.Sprintf("snapshot-%s.jsonl", timestamp)
+	snapshotPath := filepath.Join(snapshotDir, snapshotName)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var totalEntries int
+	snapshotFile, err := os.Create(snapshotPath)
+	if err != nil {
+		logger.WithComponent("persistence").Error("failed to create snapshot file", "error", err)
+		return
+	}
+	defer snapshotFile.Close()
+
+	entries, err := os.ReadDir(m.dataDir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+		src := filepath.Join(m.dataDir, entry.Name())
+		f, err := os.Open(src)
+		if err != nil {
+			continue
+		}
+		n, _ := io.Copy(snapshotFile, f)
+		f.Close()
+		if n > 0 {
+			totalEntries++
+		}
+	}
+
+	logger.WithComponent("persistence").Info("hourly snapshot created",
+		"path", snapshotPath, "entries", totalEntries)
+
+	m.pruneSnapshots(snapshotDir, 24)
+}
+
+func (m *PersistenceModule) pruneSnapshots(dir string, maxKeep int) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	if len(entries) <= maxKeep {
+		return
+	}
+
+	for i := 0; i < len(entries)-maxKeep; i++ {
+		path := filepath.Join(dir, entries[i].Name())
+		os.Remove(path)
+	}
+}
+
+func (m *PersistenceModule) createDailyArchive() {
+	archiveDir := filepath.Join(m.dataDir, "archives")
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		logger.WithComponent("persistence").Error("failed to create archive dir", "error", err)
+		return
+	}
+
+	timestamp := time.Now().Format("20060102")
+	archiveName := fmt.Sprintf("asscor-data-%s.tar.gz", timestamp)
+	archivePath := filepath.Join(archiveDir, archiveName)
+
+	f, err := os.Create(archivePath)
+	if err != nil {
+		logger.WithComponent("persistence").Error("failed to create archive file", "error", err)
+		return
+	}
+	defer f.Close()
+
+	gzw := gzip.NewWriter(f)
+	defer gzw.Close()
+	tw := tar.NewWriter(gzw)
+	defer tw.Close()
+
+	entries, err := os.ReadDir(m.dataDir)
+	if err != nil {
+		return
+	}
+
+	var archived int
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+		src := filepath.Join(m.dataDir, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			continue
+		}
+		header.Name = entry.Name()
+		if err := tw.WriteHeader(header); err != nil {
+			continue
+		}
+
+		srcFile, err := os.Open(src)
+		if err != nil {
+			continue
+		}
+		io.Copy(tw, srcFile)
+		srcFile.Close()
+		archived++
+	}
+
+	logger.WithComponent("persistence").Info("daily archive created",
+		"path", archivePath, "files", archived)
+
+	m.pruneArchives(archiveDir, 90)
+}
+
+func (m *PersistenceModule) pruneArchives(dir string, maxDays int) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -maxDays)
+	for _, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			os.Remove(path)
+			logger.WithComponent("persistence").Info("pruned old archive", "path", path)
+		}
+	}
+}
+
 func (m *PersistenceModule) DataDir() string {
 	return m.dataDir
+}
+
+func (m *PersistenceModule) ComputeTrends(days int) ([]HostTrend, error) {
+	return m.history.ComputeTrends(days)
+}
+
+func (m *PersistenceModule) ComputeRiskLevels(days int) (map[string]float64, error) {
+	return m.history.ComputeRiskLevels(days)
 }
 
 func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message) error {
@@ -758,4 +1011,6 @@ type PersistenceInterface interface {
 	WriteCVECache(record CVECacheRecord) error
 	RotateAll()
 	DataDir() string
+	ComputeTrends(days int) ([]HostTrend, error)
+	ComputeRiskLevels(days int) (map[string]float64, error)
 }

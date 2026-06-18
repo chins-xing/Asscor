@@ -859,6 +859,8 @@ type SPCInterface interface {
 	GetCVEs() []SPCCVEScore
 	GetCVECount() int
 	GetKEVCount() int
+	GetKEVCatalog() []string
+	Summary() map[string]interface{}
 	ClearCache()
 	UpsertAsset(asset LocalAsset)
 	GetAsset(hostID string) *LocalAsset

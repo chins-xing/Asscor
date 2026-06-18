@@ -82,6 +82,7 @@ type MessageProtocol struct {
 
 const (
 	TopicAssessorResult  = "assessor.result"
+	TopicAssessorSelfCheck = "assessor.self_check"
 	TopicPolicyAction    = "policy.action"
 	TopicAgentRegistered = "agent.registered"
 	TopicAgentTimeout    = "agent.timeout"

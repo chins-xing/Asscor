@@ -2,7 +2,13 @@ package kernel
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"math"
+	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,13 +27,25 @@ type CTIModule struct {
 	updateInterval time.Duration
 	stopCh         chan struct{}
 	stopped        bool
+
+	otxAPIKey    string
+	mispURL      string
+	mispAPIKey   string
+	sourcesLastPulse time.Time
+}
+
+func NewCTIModule() *CTIModule {
+	return &CTIModule{
+		coefficient:    1.0,
+		updateInterval: 15 * time.Minute,
+	}
 }
 
 func (m *CTIModule) Info() PluginInfo {
 	return PluginInfo{
 		Name:        "cti",
-		Version:     "1.2.0",
-		Description: "Cyber Threat Intelligence manager — computes global threat coefficient μ from OTX/MISP feeds",
+		Version:     "1.3.0",
+		Description: "Cyber Threat Intelligence manager — fetches OTX pulses and MISP events, computes global threat coefficient μ",
 		Author:      "ASSCOR Core Team",
 	}
 }
@@ -47,6 +65,22 @@ func (m *CTIModule) Init(ctx context.Context, kc KernelContext) error {
 	m.stopCh = make(chan struct{})
 	m.state = PluginInitialized
 
+	m.otxAPIKey = os.Getenv("OTX_API_KEY")
+	m.mispURL = os.Getenv("MISP_URL")
+	m.mispAPIKey = os.Getenv("MISP_API_KEY")
+
+	if cfg := kc.GetConfigObj(); cfg != nil {
+		if m.otxAPIKey == "" {
+			m.otxAPIKey = cfg.AdapterConfig["otx_api_key"]
+		}
+		if m.mispURL == "" {
+			m.mispURL = cfg.AdapterConfig["misp_url"]
+		}
+		if m.mispAPIKey == "" {
+			m.mispAPIKey = cfg.AdapterConfig["misp_api_key"]
+		}
+	}
+
 	kc.Container().Bind((*CTIInterface)(nil), m)
 	return nil
 }
@@ -54,7 +88,7 @@ func (m *CTIModule) Init(ctx context.Context, kc KernelContext) error {
 func (m *CTIModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
 	go m.updateLoop()
-	logger.WithComponent("cti").Info("started", "coefficient", m.coefficient)
+	logger.WithComponent("cti").Info("started", "coefficient", m.coefficient, "otx_configured", m.otxAPIKey != "", "misp_configured", m.mispURL != "")
 	return nil
 }
 
@@ -94,25 +128,191 @@ func (m *CTIModule) updateLoop() {
 		case <-m.stopCh:
 			return
 		case <-ticker.C:
+			m.updateFromFeeds()
 			m.updateCoefficient()
 		}
 	}
 }
 
+func (m *CTIModule) updateFromFeeds() {
+	var totalWeight int
+
+	if m.otxAPIKey != "" {
+		weight := m.fetchOTXPulses()
+		totalWeight += weight
+	}
+
+	if m.mispURL != "" && m.mispAPIKey != "" {
+		weight := m.fetchMISPEvents()
+		totalWeight += weight
+	}
+
+	m.mu.Lock()
+	if totalWeight > 0 {
+		m.activeThreats += totalWeight
+	}
+	m.mu.Unlock()
+}
+
+func (m *CTIModule) fetchOTXPulses() int {
+	type otxPulseIndicator struct {
+		Type string `json:"type"`
+	}
+
+	type otxPulse struct {
+		ID          string               `json:"id"`
+		Name        string               `json:"name"`
+		Description string               `json:"description"`
+		TLP         string               `json:"tlp"`
+		Adversary   string               `json:"adversary"`
+		Created     string               `json:"created"`
+		Modified    string               `json:"modified"`
+		Indicators  []otxPulseIndicator  `json:"indicators"`
+		Tags        []string             `json:"tags"`
+	}
+
+	type otxResponse struct {
+		Count  int       `json:"count"`
+		Next   string    `json:"next"`
+		Results []otxPulse `json:"results"`
+	}
+
+	url := "https://otx.alienvault.com/api/v1/pulses/subscribed?limit=50"
+	if !m.sourcesLastPulse.IsZero() {
+		modified := m.sourcesLastPulse.Format(time.RFC3339)
+		url += "&modified_since=" + modified
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		logger.WithComponent("cti").Warn("OTX request build failed", "error", err)
+		return 0
+	}
+	req.Header.Set("X-OTX-API-KEY", m.otxAPIKey)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.WithComponent("cti").Warn("OTX fetch failed", "error", err)
+		return 0
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0
+	}
+
+	var otxResp otxResponse
+	if err := json.Unmarshal(body, &otxResp); err != nil {
+		logger.WithComponent("cti").Warn("OTX parse failed", "error", err)
+		return 0
+	}
+
+	var weight int
+	cutoff := time.Now().Add(-24 * time.Hour)
+	for _, pulse := range otxResp.Results {
+		created, err := time.Parse(time.RFC3339, pulse.Created)
+		if err != nil {
+			continue
+		}
+		if created.Before(cutoff) {
+			continue
+		}
+		pulseWeight := 1
+		if stringsContainAny(pulse.Tags, "apt", "malware", "ransomware", "exploit") {
+			pulseWeight = 4
+		} else if stringsContainAny(pulse.Tags, "phishing", "c2", "botnet") {
+			pulseWeight = 3
+		} else if stringsContainAny(pulse.Tags, "trojan", "backdoor", "rat") {
+			pulseWeight = 2
+		}
+		weight += pulseWeight * (1 + len(pulse.Indicators)/10)
+	}
+
+	m.sourcesLastPulse = time.Now()
+	logger.WithComponent("cti").Info("OTX pulses fetched",
+		"pulses", otxResp.Count, "recent_weight", weight)
+	return weight
+}
+
+func stringsContainAny(tags []string, needles ...string) bool {
+	for _, tag := range tags {
+		lower := strings.ToLower(tag)
+		for _, n := range needles {
+			if strings.Contains(lower, n) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (m *CTIModule) fetchMISPEvents() int {
+	if m.mispURL == "" || m.mispAPIKey == "" {
+		return 0
+	}
+
+	type mispEvent struct {
+		Event struct {
+			ID   string `json:"id"`
+			Info string `json:"info"`
+			Tag  []struct {
+				Name string `json:"name"`
+			} `json:"Tag"`
+		} `json:"Event"`
+	}
+
+	url := strings.TrimRight(m.mispURL, "/") + "/events/index"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		logger.WithComponent("cti").Warn("MISP request build failed", "error", err)
+		return 0
+	}
+	req.Header.Set("Authorization", m.mispAPIKey)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.WithComponent("cti").Warn("MISP fetch failed", "error", err)
+		return 0
+	}
+	defer resp.Body.Close()
+
+	var events []mispEvent
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return 0
+	}
+
+	var weight int
+	cutoff := time.Now().Add(-24 * time.Hour)
+	for _, e := range events {
+		for _, tag := range e.Event.Tag {
+			lower := strings.ToLower(tag.Name)
+			if strings.Contains(lower, "tlp:red") || strings.Contains(lower, "apt") {
+				weight += 4
+				break
+			} else if strings.Contains(lower, "tlp:amber") {
+				weight += 3
+				break
+			} else if strings.Contains(lower, "tlp:green") {
+				weight += 1
+				break
+			}
+		}
+	}
+	_ = cutoff
+
+	logger.WithComponent("cti").Info("MISP events fetched",
+		"events", len(events), "weight", weight)
+	return weight
+}
+
 func (m *CTIModule) updateCoefficient() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	if m.activeThreats > 0 {
-		decay := m.activeThreats / 4
-		if decay < 1 {
-			decay = 1
-		}
-		m.activeThreats -= decay
-		if m.activeThreats < 0 {
-			m.activeThreats = 0
-		}
-	}
 
 	base := 1.0
 	threatPenalty := float64(m.activeThreats) * 0.02
@@ -169,7 +369,7 @@ func (m *CTIModule) HealthCheck(ctx context.Context) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if time.Since(m.lastUpdate) > m.updateInterval*3 {
-		return context.DeadlineExceeded
+		return fmt.Errorf("cti: last update %v ago, expected within %v", time.Since(m.lastUpdate), m.updateInterval*3)
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package management
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,21 +42,72 @@ func (f *FreeIPAAdapter) Fetch(ctx context.Context, config map[string]string) ([
 func (f *FreeIPAAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) {
 	now := time.Now()
 	text := string(raw)
-	usersFound := strings.Count(text, "User login:")
+	lines := strings.Split(text, "\n")
 
-	return []*adapter.NormalizedFinding{{
-		ID:          "FREEIPA-USERS",
-		Source:      "freeipa",
-		ToolName:    "FreeIPA",
-		Timestamp:   now,
-		FindingType: adapter.FindingIdentity,
-		Severity:    adapter.SeverityInfo,
-		Title:       "FreeIPA Identity Source",
-		Passed:      usersFound > 0,
-		Detail:      fmt.Sprintf("FreeIPA directory accessible, %d users found", usersFound),
-		Domain:      model.DomainOperationTrust,
-		DelegatedTo: "freeipa",
-	}}, nil
+	var findings []*adapter.NormalizedFinding
+	var currentUser string
+	var disabledUsers []string
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "User login:") {
+			currentUser = strings.TrimSpace(strings.TrimPrefix(line, "User login:"))
+			continue
+		}
+		if currentUser != "" && strings.Contains(line, "Account disabled: True") {
+			disabledUsers = append(disabledUsers, currentUser)
+		}
+		if currentUser != "" && strings.HasPrefix(line, "UID:") {
+			findings = append(findings, &adapter.NormalizedFinding{
+				ID:          "FREEIPA-USER-" + currentUser,
+				Source:      "freeipa",
+				ToolName:    "FreeIPA",
+				Timestamp:   now,
+				FindingType: adapter.FindingIdentity,
+				Severity:    adapter.SeverityInfo,
+				Title:       "FreeIPA User: " + currentUser,
+				Passed:      true,
+				Detail:      fmt.Sprintf("User %s found in FreeIPA directory", currentUser),
+				Domain:      model.DomainOperationTrust,
+				DelegatedTo: "freeipa",
+				Metadata:    map[string]string{"username": currentUser},
+			})
+		}
+	}
+
+	if len(findings) == 0 {
+		findings = append(findings, &adapter.NormalizedFinding{
+			ID:          "FREEIPA-USERS",
+			Source:      "freeipa",
+			ToolName:    "FreeIPA",
+			Timestamp:   now,
+			FindingType: adapter.FindingIdentity,
+			Severity:    adapter.SeverityMedium,
+			Title:       "FreeIPA Identity Source",
+			Passed:      false,
+			Detail:      "FreeIPA directory accessible, no users found",
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "freeipa",
+		})
+	}
+
+	for _, du := range disabledUsers {
+		findings = append(findings, &adapter.NormalizedFinding{
+			ID:          "FREEIPA-DISABLED-" + du,
+			Source:      "freeipa",
+			ToolName:    "FreeIPA",
+			Timestamp:   now,
+			FindingType: adapter.FindingIdentity,
+			Severity:    adapter.SeverityMedium,
+			Title:       "FreeIPA Disabled Account: " + du,
+			Passed:      false,
+			Detail:      fmt.Sprintf("User %s is disabled in FreeIPA — should be deprovisioned", du),
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "freeipa",
+		})
+	}
+
+	return findings, nil
 }
 
 func (f *FreeIPAAdapter) Map(findings []*adapter.NormalizedFinding) []*adapter.NormalizedFinding {
@@ -108,20 +160,67 @@ func (k *KeycloakAdapter) Fetch(ctx context.Context, config map[string]string) (
 
 func (k *KeycloakAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) {
 	now := time.Now()
-	accessible := len(raw) > 0 && raw[0] == '['
 
-	return []*adapter.NormalizedFinding{{
-		ID:          "KEYCLOAK-STATUS",
-		Source:      "keycloak",
-		ToolName:    "Keycloak",
-		Timestamp:   now,
-		FindingType: adapter.FindingIdentity,
-		Title:       "Keycloak Identity Provider",
-		Passed:      accessible,
-		Detail:      fmt.Sprintf("Keycloak API %s", map[bool]string{true: "accessible", false: "not accessible"}[accessible]),
-		Domain:      model.DomainOperationTrust,
-		DelegatedTo: "keycloak",
-	}}, nil
+	type keycloakRealm struct {
+		ID      string `json:"id"`
+		Realm   string `json:"realm"`
+		Enabled bool   `json:"enabled"`
+	}
+
+	var realms []keycloakRealm
+	if err := json.Unmarshal(raw, &realms); err != nil {
+		return []*adapter.NormalizedFinding{{
+			ID:          "KEYCLOAK-STATUS",
+			Source:      "keycloak",
+			ToolName:    "Keycloak",
+			Timestamp:   now,
+			FindingType: adapter.FindingIdentity,
+			Title:       "Keycloak Identity Provider",
+			Passed:      false,
+			Detail:      fmt.Sprintf("Keycloak API unreachable or invalid response: %v", err),
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "keycloak",
+		}}, nil
+	}
+
+	var findings []*adapter.NormalizedFinding
+	for _, realm := range realms {
+		passed := realm.Enabled
+		detail := fmt.Sprintf("Realm %s (%s)", realm.Realm, realm.ID)
+		if !realm.Enabled {
+			detail += " — DISABLED"
+		}
+		findings = append(findings, &adapter.NormalizedFinding{
+			ID:          "KEYCLOAK-REALM-" + realm.ID,
+			Source:      "keycloak",
+			ToolName:    "Keycloak",
+			Timestamp:   now,
+			FindingType: adapter.FindingIdentity,
+			Title:       "Keycloak Realm: " + realm.Realm,
+			Passed:      passed,
+			Detail:      detail,
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "keycloak",
+			Metadata:    map[string]string{"realm_id": realm.ID, "realm": realm.Realm},
+		})
+	}
+
+	if len(findings) == 0 {
+		findings = append(findings, &adapter.NormalizedFinding{
+			ID:          "KEYCLOAK-STATUS",
+			Source:      "keycloak",
+			ToolName:    "Keycloak",
+			Timestamp:   now,
+			FindingType: adapter.FindingIdentity,
+			Title:       "Keycloak Identity Provider",
+			Passed:      true,
+			Detail:      "Keycloak API accessible, no realms configured",
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "keycloak",
+		})
+	}
+
+	return findings, nil
 }
 
 func (k *KeycloakAdapter) Map(findings []*adapter.NormalizedFinding) []*adapter.NormalizedFinding {
@@ -178,20 +277,48 @@ func (w *WazuhSIEMAdapter) Fetch(ctx context.Context, config map[string]string) 
 
 func (w *WazuhSIEMAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) {
 	now := time.Now()
-	accessible := strings.Contains(string(raw), "token")
 
-	return []*adapter.NormalizedFinding{{
+	type wazuhAuthResponse struct {
+		Data struct {
+			Token string `json:"token"`
+		} `json:"data"`
+		Error int `json:"error"`
+	}
+
+	var authResp wazuhAuthResponse
+	if err := json.Unmarshal(raw, &authResp); err != nil || authResp.Error != 0 {
+		return []*adapter.NormalizedFinding{{
+			ID:          "WAZUH-SIEM-STATUS",
+			Source:      "wazuh_siem",
+			ToolName:    "Wazuh SIEM",
+			Timestamp:   now,
+			FindingType: adapter.FindingAlert,
+			Title:       "Wazuh SIEM Integration",
+			Passed:      false,
+			Detail:      "Wazuh SIEM API authentication failed",
+			Severity:    adapter.SeverityHigh,
+			Domain:      model.DomainResilience,
+			DelegatedTo: "wazuh_siem",
+		}}, nil
+	}
+
+	var findings []*adapter.NormalizedFinding
+	findings = append(findings, &adapter.NormalizedFinding{
 		ID:          "WAZUH-SIEM-STATUS",
 		Source:      "wazuh_siem",
 		ToolName:    "Wazuh SIEM",
 		Timestamp:   now,
 		FindingType: adapter.FindingAlert,
 		Title:       "Wazuh SIEM Integration",
-		Passed:      accessible,
-		Detail:      fmt.Sprintf("Wazuh SIEM API %s", map[bool]string{true: "authenticated", false: "unreachable"}[accessible]),
+		Passed:      true,
+		Detail:      "Wazuh SIEM API authenticated successfully",
+		Severity:    adapter.SeverityInfo,
 		Domain:      model.DomainResilience,
 		DelegatedTo: "wazuh_siem",
-	}}, nil
+		Metadata:    map[string]string{"auth_status": "ok"},
+	})
+
+	return findings, nil
 }
 
 func (w *WazuhSIEMAdapter) Map(findings []*adapter.NormalizedFinding) []*adapter.NormalizedFinding {
@@ -248,20 +375,60 @@ func (r *RundeckAdapter) Fetch(ctx context.Context, config map[string]string) ([
 
 func (r *RundeckAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) {
 	now := time.Now()
-	accessible := strings.Contains(string(raw), "system")
 
-	return []*adapter.NormalizedFinding{{
+	type rundeckSystemInfo struct {
+		System struct {
+			Timestamp struct {
+				Epoch int64  `json:"epoch"`
+				Date  string `json:"date"`
+			} `json:"timestamp"`
+			Rundeck struct {
+				Version  string `json:"version"`
+				NodeName string `json:"node"`
+			} `json:"rundeck"`
+			Executions struct {
+				Active bool `json:"active"`
+			} `json:"executions"`
+		} `json:"system"`
+	}
+
+	var info rundeckSystemInfo
+	if err := json.Unmarshal(raw, &info); err != nil {
+		return []*adapter.NormalizedFinding{{
+			ID:          "RUNDECK-STATUS",
+			Source:      "rundeck",
+			ToolName:    "Rundeck",
+			Timestamp:   now,
+			FindingType: adapter.FindingConfigState,
+			Title:       "Rundeck Job Orchestrator",
+			Passed:      false,
+			Detail:      fmt.Sprintf("Rundeck API unreachable: %v", err),
+			Severity:    adapter.SeverityMedium,
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "rundeck",
+		}}, nil
+	}
+
+	findings := []*adapter.NormalizedFinding{{
 		ID:          "RUNDECK-STATUS",
 		Source:      "rundeck",
 		ToolName:    "Rundeck",
 		Timestamp:   now,
 		FindingType: adapter.FindingConfigState,
 		Title:       "Rundeck Job Orchestrator",
-		Passed:      accessible,
-		Detail:      fmt.Sprintf("Rundeck API %s", map[bool]string{true: "accessible", false: "not accessible"}[accessible]),
+		Passed:      info.System.Executions.Active,
+		Detail:      fmt.Sprintf("Rundeck %s (node: %s), executor %s", info.System.Rundeck.Version, info.System.Rundeck.NodeName, map[bool]string{true: "active", false: "inactive"}[info.System.Executions.Active]),
+		Severity:    adapter.SeverityInfo,
 		Domain:      model.DomainOperationTrust,
 		DelegatedTo: "rundeck",
-	}}, nil
+		Metadata: map[string]string{
+			"version":  info.System.Rundeck.Version,
+			"node":     info.System.Rundeck.NodeName,
+			"executor": fmt.Sprintf("%v", info.System.Executions.Active),
+		},
+	}}
+
+	return findings, nil
 }
 
 func (r *RundeckAdapter) Map(findings []*adapter.NormalizedFinding) []*adapter.NormalizedFinding {

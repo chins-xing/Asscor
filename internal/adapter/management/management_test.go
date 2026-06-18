@@ -362,23 +362,22 @@ func TestFreeIPAAdapterProperties(t *testing.T) {
 
 func TestFreeIPAAdapterParse_WithUsers(t *testing.T) {
 	f := NewFreeIPAAdapter()
-	raw := []byte("User login: alice\nUser login: bob\nUser login: charlie\n")
+	raw := []byte("User login: alice\n  UID: 1000\n  Account disabled: False\nUser login: bob\n  UID: 1001\n  Account disabled: True\nUser login: charlie\n  UID: 1002\n  Account disabled: False\n")
 	findings, err := f.Parse(raw)
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	if len(findings) != 1 {
-		t.Fatalf("expected 1 finding, got %d", len(findings))
+	if len(findings) != 4 {
+		t.Fatalf("expected 4 findings (3 users + 1 disabled), got %d", len(findings))
 	}
-	finding := findings[0]
-	if finding.ID != "FREEIPA-USERS" {
-		t.Errorf("ID = %s, want FREEIPA-USERS", finding.ID)
+	if findings[0].ID != "FREEIPA-USER-alice" {
+		t.Errorf("ID = %s, want FREEIPA-USER-alice", findings[0].ID)
 	}
-	if !finding.Passed {
-		t.Error("with users, should pass")
+	if !findings[0].Passed {
+		t.Error("active user should pass")
 	}
-	if finding.Domain != model.DomainOperationTrust {
-		t.Errorf("Domain = %s, want %s", finding.Domain, model.DomainOperationTrust)
+	if findings[0].Domain != model.DomainOperationTrust {
+		t.Errorf("Domain = %s, want %s", findings[0].Domain, model.DomainOperationTrust)
 	}
 }
 
@@ -389,9 +388,15 @@ func TestFreeIPAAdapterParse_NoUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 summary finding, got %d", len(findings))
+	}
 	finding := findings[0]
 	if finding.Passed {
-		t.Error("no users, should not pass")
+		t.Error("no users found — directory check should report failure")
+	}
+	if finding.Severity != adapter.SeverityMedium {
+		t.Errorf("Severity = %v, want Medium for empty directory", finding.Severity)
 	}
 }
 
@@ -404,18 +409,17 @@ func TestKeycloakAdapterProperties(t *testing.T) {
 
 func TestKeycloakAdapterParse_Accessible(t *testing.T) {
 	k := NewKeycloakAdapter()
-	raw := []byte(`[{"realm":"master"},{"realm":"app-realm"}]`)
+	raw := []byte(`[{"id":"abc","realm":"master","enabled":true},{"id":"def","realm":"app-realm","enabled":false}]`)
 	findings, err := k.Parse(raw)
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	if len(findings) != 1 {
-		t.Fatalf("expected 1 finding, got %d", len(findings))
+	if len(findings) != 2 {
+		t.Fatalf("expected 2 realm findings, got %d", len(findings))
 	}
 	if !findings[0].Passed {
-		t.Error("JSON array should be accessible")
+		t.Error("master realm (enabled=true) should pass")
 	}
-	// Keycloak is a management adapter without delegation rules.
 }
 
 func TestKeycloakAdapterParse_NotAccessible(t *testing.T) {
@@ -474,13 +478,13 @@ func TestRundeckAdapterProperties(t *testing.T) {
 
 func TestRundeckAdapterParse_Accessible(t *testing.T) {
 	r := NewRundeckAdapter()
-	raw := []byte(`{"system":{"rundeck":{"version":"4.0.0"}}}`)
+	raw := []byte(`{"system":{"rundeck":{"version":"4.0.0","node":"rundeck01"},"executions":{"active":false}}}`)
 	findings, err := r.Parse(raw)
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	if !findings[0].Passed {
-		t.Error("response with 'system' should pass")
+	if findings[0].Passed {
+		t.Error("executor inactive — should not pass")
 	}
 	if findings[0].Domain != model.DomainOperationTrust {
 		t.Errorf("Domain = %s, want %s", findings[0].Domain, model.DomainOperationTrust)
@@ -513,13 +517,13 @@ func TestJiraAdapterProperties(t *testing.T) {
 
 func TestJiraAdapterParse_Accessible(t *testing.T) {
 	j := NewJiraAdapter()
-	raw := []byte(`{"self":"https://jira.internal/rest/api/2/user?username=admin","name":"admin"}`)
+	raw := []byte(`{"self":"https://jira.internal/rest/api/2/user?username=admin","name":"admin","displayName":"Admin User","active":true,"emailAddress":"admin@internal"}`)
 	findings, err := j.Parse(raw)
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
 	if !findings[0].Passed {
-		t.Error("response with 'self' should pass")
+		t.Error("active user should pass")
 	}
 	if findings[0].Domain != model.DomainOperationTrust {
 		t.Errorf("Domain = %s, want %s", findings[0].Domain, model.DomainOperationTrust)
@@ -552,14 +556,16 @@ func TestTerraformAdapterParse_WithResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
+	if len(findings) != 2 {
+		t.Fatalf("expected 2 resource type findings, got %d", len(findings))
+	}
 	f := findings[0]
-	if f.ID != "TERRAFORM-STATE" {
-		t.Errorf("ID = %s, want TERRAFORM-STATE", f.ID)
+	if f.ID != "TERRAFORM-RESOURCE-aws_instance" && f.ID != "TERRAFORM-RESOURCE-aws_ami" {
+		t.Errorf("ID = %s, want TERRAFORM-RESOURCE-<type>", f.ID)
 	}
 	if !f.Passed {
-		t.Error("Terraform state should always pass")
+		t.Error("Terraform managed resources should be reported as passed")
 	}
-	// Terraform is a management adapter without delegation rules.
 }
 
 func TestTerraformAdapterParse_NoResources(t *testing.T) {
@@ -571,7 +577,7 @@ func TestTerraformAdapterParse_NoResources(t *testing.T) {
 	}
 	f := findings[0]
 	if !f.Passed {
-		t.Error("version-only response should still pass")
+		t.Error("terraform binary found — should still report as accessible")
 	}
 }
 
@@ -589,12 +595,15 @@ func TestOpenTofuAdapterParse_WithResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
+	if len(findings) != 2 {
+		t.Fatalf("expected 2 resource type findings, got %d", len(findings))
+	}
 	f := findings[0]
-	if f.ID != "OPENTOFU-STATE" {
-		t.Errorf("ID = %s, want OPENTOFU-STATE", f.ID)
+	if f.ID != "OPENTOFU-RESOURCE-docker_container" && f.ID != "OPENTOFU-RESOURCE-docker_image" {
+		t.Errorf("ID = %s, want OPENTOFU-RESOURCE-<type>", f.ID)
 	}
 	if !f.Passed {
-		t.Error("OpenTofu state should always pass")
+		t.Error("OpenTofu managed resources should be reported as passed")
 	}
 }
 
@@ -606,7 +615,7 @@ func TestOpenTofuAdapterParse_NoResources(t *testing.T) {
 		t.Fatalf("Parse error: %v", err)
 	}
 	if !findings[0].Passed {
-		t.Error("version-only response should still pass")
+		t.Error("opentofu binary found — should still report as accessible")
 	}
 }
 

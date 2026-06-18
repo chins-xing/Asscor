@@ -51,6 +51,36 @@ var delegationRules = map[string][]DelegationRule{
 	"nikto": {
 		{CheckID: "AS-099-K", Domain: "attack_surface", Criteria: nil},
 	},
+	"ansible": {
+		{CheckID: "MG-099-AN", Domain: "operation_trust", Criteria: nil},
+	},
+	"netbox": {
+		{CheckID: "MG-099-NB", Domain: "business_continuity", Criteria: nil},
+	},
+	"snipe_it": {
+		{CheckID: "MG-099-SN", Domain: "business_continuity", Criteria: nil},
+	},
+	"freeipa": {
+		{CheckID: "OT-099-FI", Domain: "operation_trust", Criteria: nil},
+	},
+	"keycloak": {
+		{CheckID: "OT-099-KC", Domain: "operation_trust", Criteria: nil},
+	},
+	"wazuh_siem": {
+		{CheckID: "RS-099-WS", Domain: "resilience", Criteria: nil},
+	},
+	"rundeck": {
+		{CheckID: "OT-099-RD", Domain: "operation_trust", Criteria: nil},
+	},
+	"jira": {
+		{CheckID: "OT-099-JR", Domain: "operation_trust", Criteria: nil},
+	},
+	"terraform": {
+		{CheckID: "OT-099-TF", Domain: "operation_trust", Criteria: nil},
+	},
+	"opentofu": {
+		{CheckID: "OT-099-OT", Domain: "operation_trust", Criteria: nil},
+	},
 }
 
 func GetDelegationRules(adapterID string) []DelegationRule {

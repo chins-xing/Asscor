@@ -192,6 +192,28 @@ func (m *SPCModule) GetKEVCount() int {
 	return count
 }
 
+func (m *SPCModule) GetKEVCatalog() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]string, 0, len(m.kevCatalog))
+	for cveID := range m.kevCatalog {
+		result = append(result, cveID)
+	}
+	return result
+}
+
+func (m *SPCModule) Summary() map[string]interface{} {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return map[string]interface{}{
+		"cve_cache_size": len(m.cveCache),
+		"kev_count":      len(m.kevCatalog),
+		"enabled":        m.enabled,
+		"last_update":    m.lastUpdate.Format(time.RFC3339),
+		"min_pscore":     m.minPScore,
+	}
+}
+
 func (m *SPCModule) ClearCache() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

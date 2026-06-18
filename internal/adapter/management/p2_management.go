@@ -2,6 +2,7 @@ package management
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,17 @@ import (
 	"github.com/asscor/asscor/internal/adapter"
 	"github.com/asscor/asscor/internal/model"
 )
+
+type tfResource struct {
+	Mode string `json:"mode"`
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+type tfState struct {
+	Version   int          `json:"version"`
+	Resources []tfResource `json:"resources"`
+}
 
 // ===== Jira Adapter (MG-008, P2) =====
 
@@ -62,7 +74,31 @@ func (j *JiraAdapter) Fetch(ctx context.Context, config map[string]string) ([]by
 
 func (j *JiraAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) {
 	now := time.Now()
-	accessible := strings.Contains(string(raw), "self")
+
+	type jiraUser struct {
+		Self        string `json:"self"`
+		Name        string `json:"name"`
+		DisplayName string `json:"displayName"`
+		Active      bool   `json:"active"`
+		Email       string `json:"emailAddress"`
+	}
+
+	var user jiraUser
+	if err := json.Unmarshal(raw, &user); err != nil {
+		return []*adapter.NormalizedFinding{{
+			ID:          "JIRA-STATUS",
+			Source:      "jira",
+			ToolName:    "Jira",
+			Timestamp:   now,
+			FindingType: adapter.FindingConfigState,
+			Title:       "Jira Issue Tracker",
+			Passed:      false,
+			Detail:      fmt.Sprintf("Jira API unreachable: %v", err),
+			Severity:    adapter.SeverityMedium,
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "jira",
+		}}, nil
+	}
 
 	return []*adapter.NormalizedFinding{{
 		ID:          "JIRA-STATUS",
@@ -71,10 +107,11 @@ func (j *JiraAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) {
 		Timestamp:   now,
 		FindingType: adapter.FindingConfigState,
 		Title:       "Jira Issue Tracker",
-		Passed:      accessible,
-		Detail:      fmt.Sprintf("Jira API %s", map[bool]string{true: "accessible", false: "not accessible"}[accessible]),
+		Passed:      user.Active,
+		Detail:      fmt.Sprintf("Jira API accessible (user: %s, active: %v)", user.DisplayName, user.Active),
 		Domain:      model.DomainOperationTrust,
 		DelegatedTo: "jira",
+		Metadata:    map[string]string{"display_name": user.DisplayName, "email": user.Email},
 	}}, nil
 }
 
@@ -124,28 +161,54 @@ func (t *TerraformAdapter) Fetch(ctx context.Context, config map[string]string) 
 
 func (t *TerraformAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) {
 	now := time.Now()
-	text := string(raw)
-	hasResources := strings.Contains(text, "resources")
 
-	resourcesCount := 0
-	if hasResources {
-		resourcesCount = strings.Count(text, `"mode"`)
-		resourcesCount /= 2
+	var state tfState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		text := string(raw)
+		hasResources := strings.Contains(text, "resources")
+		resourcesCount := 0
+		if hasResources {
+			resourcesCount = strings.Count(text, `"mode"`) / 2
+		}
+		return []*adapter.NormalizedFinding{{
+			ID:          "TERRAFORM-STATE",
+			Source:      "terraform",
+			ToolName:    "Terraform",
+			Timestamp:   now,
+			FindingType: adapter.FindingConfigState,
+			Severity:    adapter.SeverityInfo,
+			Title:       "Terraform Infrastructure as Code",
+			Passed:      true,
+			Detail:      fmt.Sprintf("Terraform accessible (non-JSON output, %d resources detected)", resourcesCount),
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "terraform",
+		}}, nil
 	}
 
-	return []*adapter.NormalizedFinding{{
-		ID:          "TERRAFORM-STATE",
-		Source:      "terraform",
-		ToolName:    "Terraform",
-		Timestamp:   now,
-		FindingType: adapter.FindingConfigState,
-		Severity:    adapter.SeverityInfo,
-		Title:       "Terraform Infrastructure as Code",
-		Passed:      true,
-		Detail:      fmt.Sprintf("Terraform state found, %d resources managed", resourcesCount),
-		Domain:      model.DomainOperationTrust,
-		DelegatedTo: "terraform",
-	}}, nil
+	var findings []*adapter.NormalizedFinding
+	resourcesByType := make(map[string]int)
+	for _, r := range state.Resources {
+		resourcesByType[r.Type]++
+	}
+
+	for resType, count := range resourcesByType {
+		findings = append(findings, &adapter.NormalizedFinding{
+			ID:          "TERRAFORM-RESOURCE-" + resType,
+			Source:      "terraform",
+			ToolName:    "Terraform",
+			Timestamp:   now,
+			FindingType: adapter.FindingConfigState,
+			Severity:    adapter.SeverityInfo,
+			Title:       "Terraform Resource: " + resType,
+			Passed:      true,
+			Detail:      fmt.Sprintf("%d × %s resources managed by Terraform", count, resType),
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "terraform",
+			Metadata:    map[string]string{"resource_type": resType, "count": fmt.Sprintf("%d", count)},
+		})
+	}
+
+	return findings, nil
 }
 
 func (t *TerraformAdapter) Map(findings []*adapter.NormalizedFinding) []*adapter.NormalizedFinding {
@@ -199,28 +262,54 @@ func (o *OpenTofuAdapter) Fetch(ctx context.Context, config map[string]string) (
 
 func (o *OpenTofuAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) {
 	now := time.Now()
-	text := string(raw)
-	hasResources := strings.Contains(text, "resources")
 
-	resourcesCount := 0
-	if hasResources {
-		resourcesCount = strings.Count(text, `"mode"`)
-		resourcesCount /= 2
+	var state tfState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		text := string(raw)
+		hasResources := strings.Contains(text, "resources")
+		resourcesCount := 0
+		if hasResources {
+			resourcesCount = strings.Count(text, `"mode"`) / 2
+		}
+		return []*adapter.NormalizedFinding{{
+			ID:          "OPENTOFU-STATE",
+			Source:      "opentofu",
+			ToolName:    "OpenTofu",
+			Timestamp:   now,
+			FindingType: adapter.FindingConfigState,
+			Severity:    adapter.SeverityInfo,
+			Title:       "OpenTofu Infrastructure as Code",
+			Passed:      true,
+			Detail:      fmt.Sprintf("OpenTofu accessible (non-JSON output, %d resources detected)", resourcesCount),
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "opentofu",
+		}}, nil
 	}
 
-	return []*adapter.NormalizedFinding{{
-		ID:          "OPENTOFU-STATE",
-		Source:      "opentofu",
-		ToolName:    "OpenTofu",
-		Timestamp:   now,
-		FindingType: adapter.FindingConfigState,
-		Severity:    adapter.SeverityInfo,
-		Title:       "OpenTofu Infrastructure as Code",
-		Passed:      true,
-		Detail:      fmt.Sprintf("OpenTofu state found, %d resources managed", resourcesCount),
-		Domain:      model.DomainOperationTrust,
-		DelegatedTo: "opentofu",
-	}}, nil
+	var findings []*adapter.NormalizedFinding
+	resourcesByType := make(map[string]int)
+	for _, r := range state.Resources {
+		resourcesByType[r.Type]++
+	}
+
+	for resType, count := range resourcesByType {
+		findings = append(findings, &adapter.NormalizedFinding{
+			ID:          "OPENTOFU-RESOURCE-" + resType,
+			Source:      "opentofu",
+			ToolName:    "OpenTofu",
+			Timestamp:   now,
+			FindingType: adapter.FindingConfigState,
+			Severity:    adapter.SeverityInfo,
+			Title:       "OpenTofu Resource: " + resType,
+			Passed:      true,
+			Detail:      fmt.Sprintf("%d × %s resources managed by OpenTofu", count, resType),
+			Domain:      model.DomainOperationTrust,
+			DelegatedTo: "opentofu",
+			Metadata:    map[string]string{"resource_type": resType, "count": fmt.Sprintf("%d", count)},
+		})
+	}
+
+	return findings, nil
 }
 
 func (o *OpenTofuAdapter) Map(findings []*adapter.NormalizedFinding) []*adapter.NormalizedFinding {

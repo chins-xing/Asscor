@@ -229,6 +229,21 @@ func (m *HeartbeatModule) checkTimeouts() {
 		}
 		m.mu.Unlock()
 	}
+
+	m.pruneDeadAgents()
+}
+
+func (m *HeartbeatModule) pruneDeadAgents() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cutoff := time.Now().Add(-1 * time.Hour)
+	for id, agent := range m.agents {
+		if !agent.Active && agent.LastSeen.Before(cutoff) {
+			delete(m.agents, id)
+			logger.WithComponent("heartbeat").Info("pruned dead agent", "host_id", id, "last_seen", agent.LastSeen.Format(time.RFC3339))
+		}
+	}
 }
 
 type HeartbeatInterface interface {

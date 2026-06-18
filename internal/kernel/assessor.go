@@ -42,7 +42,9 @@ type AssessorModule struct {
 	mu      sync.RWMutex
 	results map[string]*model.AssessmentResult
 
-	state PluginState
+	siemPusher    *SIEMPusher
+	state         PluginState
+	selfCheckDone chan struct{}
 }
 
 func (m *AssessorModule) Info() PluginInfo {
@@ -102,6 +104,8 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 		logger.WithComponent("assessor").Info("prism engine initialized (default)", "version", "v3.1")
 	}
 
+	m.setupSIEMPusher()
+
 	kc.Container().Bind((*ssam.ScoringProvider)(nil), m.engine.SSAMEngine())
 
 	warnings := m.engine.ValidateEdgeFactors(checks.GetAll())
@@ -125,18 +129,80 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 	return nil
 }
 
+func (m *AssessorModule) setupSIEMPusher() {
+	if m.cfg == nil {
+		return
+	}
+	apiURL := m.cfg.AdapterConfig["wazuh_siem.api_url"]
+	username := m.cfg.AdapterConfig["wazuh_siem.username"]
+	password := m.cfg.AdapterConfig["wazuh_siem.password"]
+	m.siemPusher = NewSIEMPusher(apiURL, username, password)
+	if m.siemPusher.Enabled() {
+		logger.WithComponent("assessor").Info("SIEM push integration enabled", "url", apiURL)
+	}
+}
+
+func (m *AssessorModule) pushToSIEM(ctx context.Context, result *model.AssessmentResult) {
+	if m.siemPusher != nil && m.siemPusher.Enabled() {
+		go m.siemPusher.PushAssessment(ctx, result)
+	}
+}
+
 func (m *AssessorModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
+	m.selfCheckDone = make(chan struct{})
+	go m.selfAssessmentLoop()
 	logger.WithComponent("assessor").Info("started")
 	return nil
 }
 
 func (m *AssessorModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+	close(m.selfCheckDone)
 	m.kernel.Bus().UnsubscribeAll("assessor")
 	m.state = PluginStopped
 	logger.WithComponent("assessor").Info("stopped")
 	return nil
+}
+
+func (m *AssessorModule) selfAssessmentLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithComponent("assessor").Error("selfAssessmentLoop panic", "panic", r)
+		}
+	}()
+
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.kernel.Context().Done():
+			return
+		case <-m.selfCheckDone:
+			return
+		case <-ticker.C:
+			m.runSelfAssessment()
+		}
+	}
+}
+
+func (m *AssessorModule) runSelfAssessment() {
+	result := m.engine.Assess("kernel", "kernel")
+
+	logger.WithComponent("assessor").Info("kernel self-assessment completed",
+		"score", result.FinalScore, "acceptable", result.Acceptable)
+
+	if result.FinalScore < 90 {
+		logger.WithComponent("assessor").Warn("kernel self-assessment below threshold",
+			"score", result.FinalScore, "threshold", 90)
+
+		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+			Topic:   TopicAssessorSelfCheck,
+			Payload: result,
+			Source:  "assessor.self_check",
+		})
+	}
 }
 
 func (m *AssessorModule) State() PluginState {
@@ -168,7 +234,9 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	m.results[hostID] = result
 	m.mu.Unlock()
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
+		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
+
+	m.pushToSIEM(m.kernel.Context(), result)
 
 	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
 		Topic:   TopicAssessorResult,
@@ -219,7 +287,9 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	m.results[hostID] = result
 	m.mu.Unlock()
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
+		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
+
+	m.pushToSIEM(m.kernel.Context(), result)
 
 	subCount := m.kernel.Bus().SubscriberCount(TopicAssessorResult)
 	logger.WithComponent("assessor").Debug("publishing assessor.result", "subscribers", subCount)

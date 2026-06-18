@@ -17,12 +17,14 @@ type AdapterIntegrationModule struct {
 	adapterCfg   map[string]string
 	syncInterval time.Duration
 	state        PluginState
+	stopCh       chan struct{}
 }
 
 func NewAdapterIntegrationModule() *AdapterIntegrationModule {
 	return &AdapterIntegrationModule{
 		adapterCfg:   make(map[string]string),
 		syncInterval: 6 * time.Hour,
+		stopCh:       make(chan struct{}),
 	}
 }
 
@@ -60,6 +62,7 @@ func (m *AdapterIntegrationModule) Init(ctx context.Context, kc KernelContext) e
 
 func (m *AdapterIntegrationModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
+	m.stopCh = make(chan struct{})
 	go m.syncLoop()
 	logger.WithComponent("adapter_integration").Info("started")
 	return nil
@@ -67,6 +70,15 @@ func (m *AdapterIntegrationModule) Start(ctx context.Context) error {
 
 func (m *AdapterIntegrationModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+	m.mu.Lock()
+	if m.stopCh != nil {
+		select {
+		case <-m.stopCh:
+		default:
+			close(m.stopCh)
+		}
+	}
+	m.mu.Unlock()
 	m.state = PluginStopped
 	logger.WithComponent("adapter_integration").Info("stopped")
 	return nil
@@ -93,6 +105,8 @@ func (m *AdapterIntegrationModule) syncLoop() {
 	for {
 		select {
 		case <-m.kernel.Context().Done():
+			return
+		case <-m.stopCh:
 			return
 		case <-ticker.C:
 			m.RunAdapters(context.Background())

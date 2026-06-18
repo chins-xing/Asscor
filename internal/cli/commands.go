@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -443,11 +444,102 @@ func spcCmdHandler(ctx *CommandContext) *CommandResult {
 		b.WriteString("\n")
 		return &CommandResult{ExitCode: ExitOK, Output: b.String()}
 
-	case "cve", "kev", "score", "fetch":
+	case "cve":
+		limit := 20
+		if v, err := strconv.Atoi(ctx.Options["limit"]); err == nil && v > 0 {
+			limit = v
+		}
+		cvssMin := ctx.Options["cvss-min"]
+		cveProvider, ok := spcPlugin.(interface{ GetCVEs() []kernel.SPCCVEScore })
+		if !ok {
+			return &CommandResult{ExitCode: ExitError, Output: "SPC module does not support CVE listing\n"}
+		}
+		cveList := cveProvider.GetCVEs()
+		if ctx.JSON {
+			type cveJSON struct {
+				CVEID string  `json:"cve_id"`
+				CVSS  float64 `json:"cvss"`
+				EPSS  float64 `json:"epss"`
+				InKEV bool    `json:"in_kev"`
+			}
+			output := make([]cveJSON, 0, limit)
+			var minCVSS float64
+			if cvssMin != "" {
+				minCVSS, _ = strconv.ParseFloat(cvssMin, 64)
+			}
+			for _, c := range cveList {
+				if c.CVSS < minCVSS {
+					continue
+				}
+				if len(output) >= limit {
+					break
+				}
+				output = append(output, cveJSON{CVEID: c.CVEID, CVSS: c.CVSS, EPSS: c.EPSS, InKEV: c.InKEV})
+			}
+			jsonData, _ := json.MarshalIndent(output, "", "  ")
+			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
+		}
+		var count int
+		for _, c := range cveList {
+			if c.InKEV {
+				count++
+			}
+		}
 		return &CommandResult{
 			ExitCode: ExitOK,
-			Output:   fmt.Sprintf("SPC '%s' action executed\n", action),
+			Output:   fmt.Sprintf("CVE cache: %d entries (%d KEV-listed) — use --json for details, --cvss-min to filter\n", len(cveList), count),
 		}
+
+	case "kev":
+		limit := 20
+		if v, err := strconv.Atoi(ctx.Options["limit"]); err == nil && v > 0 {
+			limit = v
+		}
+		kevProvider, ok := spcPlugin.(interface{ GetKEVCatalog() []string })
+		if !ok {
+			return &CommandResult{ExitCode: ExitError, Output: "KEV catalog not available\n"}
+		}
+		kevList := kevProvider.GetKEVCatalog()
+		if ctx.JSON {
+			output := make([]string, 0, limit)
+			for i, k := range kevList {
+				if i >= limit {
+					break
+				}
+				output = append(output, k)
+			}
+			jsonData, _ := json.MarshalIndent(output, "", "  ")
+			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
+		}
+		return &CommandResult{
+			ExitCode: ExitOK,
+			Output:   fmt.Sprintf("KEV catalog: %d entries — use --json for full list\n", len(kevList)),
+		}
+
+	case "score":
+		return &CommandResult{
+			ExitCode: ExitOK,
+			Output:   fmt.Sprintf("SPC score: use 'assess <host>' for full evaluation with SPC correction\n"),
+		}
+
+	case "fetch":
+		fetchProvider, ok := spcPlugin.(interface{ FetchFromAllSources() []kernel.SPCFetchResult })
+		if !ok {
+			return &CommandResult{ExitCode: ExitError, Output: "SPC module does not support manual fetch\n"}
+		}
+		results := fetchProvider.FetchFromAllSources()
+		if ctx.JSON {
+			jsonData, _ := json.MarshalIndent(results, "", "  ")
+			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
+		}
+		var b strings.Builder
+		b.WriteString("\n  SPC Fetch Results\n")
+		b.WriteString("  ────────────────\n")
+		for _, r := range results {
+			b.WriteString(fmt.Sprintf("  %-15s added=%-5d updated=%-5d err=%s\n", r.Source, r.CVEAdded, r.CVEUpdated, r.Error))
+		}
+		b.WriteString("\n")
+		return &CommandResult{ExitCode: ExitOK, Output: b.String()}
 
 	default:
 		return &CommandResult{
