@@ -13,6 +13,7 @@ import (
 
 func (m *Module) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", m.handleIndex)
+	mux.HandleFunc("/api/health", m.handleHealth)
 	mux.HandleFunc("/api/dashboard", m.handleDashboard)
 	mux.HandleFunc("/api/hosts", m.handleHosts)
 	mux.HandleFunc("/api/hosts/", m.handleHostDetail)
@@ -27,6 +28,36 @@ func (m *Module) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(indexHTML))
+}
+
+// ──────────────────────────── API: Health ────────────────────────────────
+
+func (m *Module) handleHealth(w http.ResponseWriter, r *http.Request) {
+	m.mu.RLock()
+	hostCount := len(m.latest)
+	var acceptable int
+	var totalScore float64
+	for _, ar := range m.latest {
+		if ar.Acceptable {
+			acceptable++
+		}
+		totalScore += ar.FinalScore
+	}
+	m.mu.RUnlock()
+
+	avgScore := 0.0
+	if hostCount > 0 {
+		avgScore = totalScore / float64(hostCount)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":       "ok",
+		"hosts":        hostCount,
+		"acceptable":   acceptable,
+		"unacceptable": hostCount - acceptable,
+		"avg_score":    avgScore,
+	})
 }
 
 // ──────────────────────────── API: Dashboard ────────────────────────────

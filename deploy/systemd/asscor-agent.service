@@ -1,0 +1,28 @@
+[Unit]
+Description=ASSCOR Agent - Host Security Assessment Probe
+Documentation=https://github.com/asscor/asscor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=asscor
+Group=asscor
+WorkingDirectory=/opt/asscor/agent
+ExecStart=/opt/asscor/agent/ASSCOR-agent-linux-amd64 \
+    --config=/opt/asscor/agent/agent.ini \
+    --kernel=127.0.0.1:50051 \
+    --log-format=text \
+    --log-level=info
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=15
+LimitNOFILE=65536
+
+# Agent needs elevated privileges for system checks
+NoNewPrivileges=no
+PrivateTmp=yes
+ReadWritePaths=/opt/asscor/agent /var/run
+
+[Install]
+WantedBy=multi-user.target
