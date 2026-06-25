@@ -3,6 +3,7 @@ package kernel
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,7 @@ type AssessorModule struct {
 	results map[string]*model.AssessmentResult
 
 	siemPusher    *SIEMPusher
+	consoleReport bool
 	state         PluginState
 	selfCheckDone chan struct{}
 }
@@ -105,6 +107,7 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 	}
 
 	m.setupSIEMPusher()
+	m.setupConsoleReport()
 
 	kc.Container().Bind((*ssam.ScoringProvider)(nil), m.engine.SSAMEngine())
 
@@ -146,6 +149,27 @@ func (m *AssessorModule) pushToSIEM(ctx context.Context, result *model.Assessmen
 	if m.siemPusher != nil && m.siemPusher.Enabled() {
 		go m.siemPusher.PushAssessment(ctx, result)
 	}
+}
+
+func (m *AssessorModule) setupConsoleReport() {
+	if m.cfg == nil {
+		return
+	}
+	v := os.Getenv("ASSCOR_CONSOLE_REPORT")
+	if v == "" {
+		v = m.cfg.AdapterConfig["console_report"]
+	}
+	m.consoleReport = v == "true" || v == "yes" || v == "1"
+	if m.consoleReport {
+		logger.WithComponent("assessor").Info("console assessment report enabled")
+	}
+}
+
+func (m *AssessorModule) printConsoleReport(result *model.AssessmentResult) {
+	if !m.consoleReport || m.engine == nil || result == nil {
+		return
+	}
+	fmt.Fprint(os.Stderr, m.engine.PrintReport(result))
 }
 
 func (m *AssessorModule) Start(ctx context.Context) error {
@@ -237,6 +261,7 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
 
 	m.pushToSIEM(m.kernel.Context(), result)
+	m.printConsoleReport(result)
 
 	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
 		Topic:   TopicAssessorResult,
@@ -290,6 +315,7 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
 
 	m.pushToSIEM(m.kernel.Context(), result)
+	m.printConsoleReport(result)
 
 	subCount := m.kernel.Bus().SubscriberCount(TopicAssessorResult)
 	logger.WithComponent("assessor").Debug("publishing assessor.result", "subscribers", subCount)

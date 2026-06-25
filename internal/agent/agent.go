@@ -49,6 +49,9 @@ type AgentConfig struct {
 	TLSSkipVerify    bool
 	CertDir          string
 	HMACKey          string
+	LogFormat        string
+	LogLevel         string
+	LogOutput        string
 }
 
 func DefaultConfig() AgentConfig {
@@ -65,6 +68,9 @@ func DefaultConfig() AgentConfig {
 		ReconnectSec:     5,
 		TLSEnabled:       true,
 		TLSSkipVerify:    false,
+		LogFormat:        "json",
+		LogLevel:         "info",
+		LogOutput:        "stderr",
 	}
 }
 

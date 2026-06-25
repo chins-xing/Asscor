@@ -18,23 +18,16 @@ func main() {
 	tlsEnabled := flag.Bool("tls", false, "enable mTLS connection")
 	tlsSkipVerify := flag.Bool("tls-skip-verify", false, "skip TLS certificate verification (DEVELOPMENT ONLY)")
 	certDir := flag.String("cert-dir", "certs", "TLS certificate directory")
-	logFormat := flag.String("log-format", "json", "log format: json, text")
-	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
-	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
+	logFormat := flag.String("log-format", "", "log format: json, text")
+	logLevel := flag.String("log-level", "", "log level: debug, info, warn, error")
+	logOutput := flag.String("log-output", "", "log output: stderr, stdout, or file path")
 	flag.Parse()
-
-	logger.Init(logger.Config{
-		Format: *logFormat,
-		Level:  *logLevel,
-		Output: *logOutput,
-	})
-	log := logger.WithComponent("agent")
 
 	cfg := agent.DefaultConfig()
 
 	if err := loadConfigFile(*configPath, &cfg); err != nil {
 		if !os.IsNotExist(err) {
-			log.Warn("cannot load config", "path", *configPath, "error", err)
+			fmt.Fprintf(os.Stderr, "agent: warning: cannot load config %s: %v\n", *configPath, err)
 		}
 	}
 
@@ -55,6 +48,23 @@ func main() {
 	if *certDir != "" {
 		cfg.CertDir = *certDir
 	}
+
+	if *logFormat != "" {
+		cfg.LogFormat = *logFormat
+	}
+	if *logLevel != "" {
+		cfg.LogLevel = *logLevel
+	}
+	if *logOutput != "" {
+		cfg.LogOutput = *logOutput
+	}
+
+	logger.Init(logger.Config{
+		Format: cfg.LogFormat,
+		Level:  cfg.LogLevel,
+		Output: cfg.LogOutput,
+	})
+	log := logger.WithComponent("agent")
 
 	if cfg.HostID == "" {
 		hostname, _ := os.Hostname()
@@ -130,6 +140,12 @@ func loadConfigFile(path string, cfg *agent.AgentConfig) error {
 				cfg.CertDir = val
 			case "hmac_key":
 				cfg.HMACKey = val
+			case "log_format":
+				cfg.LogFormat = val
+			case "log_level":
+				cfg.LogLevel = val
+			case "log_output":
+				cfg.LogOutput = val
 			}
 		}
 	}
