@@ -21,6 +21,7 @@ type LogCollectorModule struct {
 	mu     sync.RWMutex
 	writer io.Writer
 	state  PluginState
+	flushDone chan struct{}
 }
 
 func (m *LogCollectorModule) Info() PluginInfo {
@@ -78,20 +79,54 @@ func (m *LogCollectorModule) Init(ctx context.Context, kc KernelContext) error {
 
 func (m *LogCollectorModule) Start(ctx context.Context) error {
 	m.state = PluginStarted
+	m.flushDone = make(chan struct{})
+	go m.flushLoop()
 	logger.WithComponent("log_collector").Info("started", "path", m.logPath)
 	return nil
 }
 
 func (m *LogCollectorModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+	if m.flushDone != nil {
+		select {
+		case <-m.flushDone:
+		default:
+			close(m.flushDone)
+		}
+	}
 	m.mu.Lock()
 	if f, ok := m.writer.(*os.File); ok && f != os.Stdout && f != os.Stderr {
+		f.Sync()
 		f.Close()
 	}
 	m.mu.Unlock()
 	m.state = PluginStopped
 	logger.WithComponent("log_collector").Info("stopped")
 	return nil
+}
+
+func (m *LogCollectorModule) flushLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithComponent("log_collector").Error("flushLoop panic", "panic", r)
+		}
+	}()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.flushDone:
+			return
+		case <-ticker.C:
+			m.mu.RLock()
+			if f, ok := m.writer.(*os.File); ok && f != os.Stdout && f != os.Stderr {
+				f.Sync()
+			}
+			m.mu.RUnlock()
+		}
+	}
 }
 
 func (m *LogCollectorModule) State() PluginState {

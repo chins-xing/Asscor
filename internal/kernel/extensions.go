@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type ExtensionPoint struct {
@@ -99,6 +101,8 @@ func (r *ExtensionRegistry) Execute(ctx context.Context, pointName string, data 
 	for _, ext := range exts {
 		if err := ext.handler(ctx, data); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", ext.pluginID, err))
+			logger.WithComponent("extensions").Warn("extension handler error",
+				"point", pointName, "plugin", ext.pluginID, "error", err)
 		}
 	}
 	return errs

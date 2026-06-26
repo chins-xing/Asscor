@@ -548,6 +548,12 @@ func (m *CLIModule) Stop(ctx context.Context) error {
 	if m.engine != nil {
 		m.engine.Stop()
 	}
+	select {
+	case <-m.done:
+	case <-time.After(5 * time.Second):
+		logger.WithComponent("cli").Warn("terminal goroutine did not exit in time")
+		close(m.done)
+	}
 	logger.RedirectToStderr()
 	m.state = kernel.PluginStopped
 	logger.WithComponent("cli").Info("CLI module stopped")

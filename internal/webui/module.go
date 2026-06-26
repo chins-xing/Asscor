@@ -124,7 +124,15 @@ func (m *Module) Stop(ctx context.Context) error {
 		}
 	}
 
-	close(m.done)
+	m.mu.Lock()
+	if m.done != nil {
+		select {
+		case <-m.done:
+		default:
+			close(m.done)
+		}
+	}
+	m.mu.Unlock()
 
 	m.mu.Lock()
 	m.state = kernel.PluginStopped

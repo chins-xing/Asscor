@@ -182,8 +182,15 @@ func (m *AssessorModule) Start(ctx context.Context) error {
 
 func (m *AssessorModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
-	close(m.selfCheckDone)
-	m.kernel.Bus().UnsubscribeAll("assessor")
+	m.mu.Lock()
+	if m.selfCheckDone != nil {
+		select {
+		case <-m.selfCheckDone:
+		default:
+			close(m.selfCheckDone)
+		}
+	}
+	m.mu.Unlock()
 	m.state = PluginStopped
 	logger.WithComponent("assessor").Info("stopped")
 	return nil

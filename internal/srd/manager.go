@@ -50,6 +50,7 @@ type Manager struct {
 	mu       sync.RWMutex
 	history  map[string][]*SRDResult // hostID -> results
 	scanDirs []string
+	stopCh   chan struct{}
 }
 
 type KernelContext interface {
@@ -124,16 +125,8 @@ func (m *Manager) Init(ctx context.Context, kc KernelContext) error {
 
 func (m *Manager) Start(ctx context.Context) error {
 	m.state = PluginStarted
+	m.stopCh = make(chan struct{})
 
-	// Register self as an interface for other modules to query.
-	// (Requires kernel DI container support; skip if not available.)
-	if m.kernel != nil {
-		// Note: actual DI binding requires kernel.Container().Bind(),
-		// which needs the kernel to support dynamic interface registration.
-		// The SRDManagerInterface can be resolved via direct reference if needed.
-	}
-
-	// Initial scan of configured directories.
 	go m.scanLoop()
 
 	logger.WithComponent("srd_adapters").Info("started")
@@ -142,6 +135,13 @@ func (m *Manager) Start(ctx context.Context) error {
 
 func (m *Manager) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+	if m.stopCh != nil {
+		select {
+		case <-m.stopCh:
+		default:
+			close(m.stopCh)
+		}
+	}
 	m.state = PluginStopped
 	logger.WithComponent("srd_adapters").Info("stopped")
 	return nil
@@ -335,6 +335,8 @@ func (m *Manager) scanLoop() {
 	for {
 		select {
 		case <-m.kernel.Context().Done():
+			return
+		case <-m.stopCh:
 			return
 		case <-ticker.C:
 			m.performScan(m.kernel.Context())

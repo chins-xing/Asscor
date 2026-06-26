@@ -368,15 +368,21 @@ func (m *PersistenceModule) Start(ctx context.Context) error {
 }
 
 func (m *PersistenceModule) Stop(ctx context.Context) error {
-	m.mu.Lock()
 	m.state = PluginStopping
+	m.mu.Lock()
+	closeChannel := func(ch chan struct{}) {
+		if ch != nil {
+			select {
+			case <-ch:
+			default:
+				close(ch)
+			}
+		}
+	}
+	closeChannel(m.flushDone)
+	closeChannel(m.cleanupDone)
+	closeChannel(m.backupDone)
 	m.mu.Unlock()
-
-	m.kernel.Bus().UnsubscribeAll("persistence")
-
-	close(m.flushDone)
-	close(m.cleanupDone)
-	close(m.backupDone)
 	m.flushTicker.Stop()
 	m.flushAll()
 

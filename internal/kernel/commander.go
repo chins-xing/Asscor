@@ -199,9 +199,15 @@ func (m *CommanderModule) Start(ctx context.Context) error {
 
 func (m *CommanderModule) Stop(ctx context.Context) error {
 	m.state = PluginStopping
+	m.mu.Lock()
 	if m.cleanupDone != nil {
-		close(m.cleanupDone)
+		select {
+		case <-m.cleanupDone:
+		default:
+			close(m.cleanupDone)
+		}
 	}
+	m.mu.Unlock()
 	m.kernel.Bus().UnsubscribeAll("commander")
 	m.state = PluginStopped
 	logger.WithComponent("commander").Info("stopped")
