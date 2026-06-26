@@ -330,6 +330,8 @@ func (m *ExtensionManager) onExtensionInstalled(spec ExtensionSpec) {
 			}, 50)
 			logger.WithComponent("extmgr").Info("registered hook from extension", "extension_id", spec.ID)
 		}
+	case ExtTypeCLICommand:
+		m.registerCLICommand(spec)
 	}
 }
 
@@ -348,6 +350,8 @@ func (m *ExtensionManager) onExtensionDisabled(spec ExtensionSpec) {
 		model.UnregisterDomain(spec.ID)
 	case ExtTypeEdgeFactor:
 		model.SetEdgeFactorValue(spec.ID, 1.0)
+	case ExtTypeCLICommand:
+		logger.WithComponent("extmgr").Info("CLI command extension disabled", "extension_id", spec.ID)
 	}
 }
 
@@ -384,6 +388,23 @@ func (m *ExtensionManager) registerCheckModule(spec ExtensionSpec) {
 			logger.WithComponent("extmgr").Debug("found check source in extension", "extension_id", spec.ID, "dir", entry.Name(), "file", f.Name())
 		}
 	}
+}
+
+func (m *ExtensionManager) registerCLICommand(spec ExtensionSpec) {
+	cmdName := spec.ID
+	cmdDesc := spec.Description
+	if cmdDesc == "" {
+		cmdDesc = spec.Name
+	}
+
+	cmdConfig := spec.CustomConfig
+	cmdCategory := cmdConfig["category"]
+	if cmdCategory == "" {
+		cmdCategory = "custom"
+	}
+
+	logger.WithComponent("extmgr").Info("CLI command extension registered",
+		"extension_id", spec.ID, "command", cmdName, "category", cmdCategory)
 }
 
 func (m *ExtensionManager) executeHook(ctx context.Context, spec ExtensionSpec, result *model.AssessmentResult) error {

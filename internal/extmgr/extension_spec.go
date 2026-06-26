@@ -12,13 +12,14 @@ import (
 type ExtensionType string
 
 const (
-	ExtTypeCheckModule  ExtensionType = "check_module"
+	ExtTypeCheckModule   ExtensionType = "check_module"
 	ExtTypeScoringPlugin ExtensionType = "scoring_plugin"
-	ExtTypeAdapter      ExtensionType = "adapter"
-	ExtTypeHook         ExtensionType = "hook"
-	ExtTypeDomain       ExtensionType = "domain"
-	ExtTypeEdgeFactor   ExtensionType = "edge_factor"
-	ExtTypeCustom       ExtensionType = "custom"
+	ExtTypeAdapter       ExtensionType = "adapter"
+	ExtTypeHook          ExtensionType = "hook"
+	ExtTypeDomain        ExtensionType = "domain"
+	ExtTypeEdgeFactor    ExtensionType = "edge_factor"
+	ExtTypeCLICommand    ExtensionType = "cli_command"
+	ExtTypeCustom        ExtensionType = "custom"
 )
 
 type ExtensionState string

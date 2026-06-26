@@ -527,6 +527,10 @@ func (m *CLIModule) Start(ctx context.Context) error {
 		}
 	}
 
+	if errs := m.kernel.Extensions().Execute(m.kernel.Context(), "cli.command.register", m); len(errs) > 0 {
+		logger.WithComponent("cli").Warn("cli.command.register extension errors", "count", len(errs))
+	}
+
 	go func() {
 		term := NewTerminal(m.engine)
 		if err := term.Run(); err != nil {
