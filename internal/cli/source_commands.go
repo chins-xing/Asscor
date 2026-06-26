@@ -103,13 +103,17 @@ func sourceListHandler(ctx *CommandContext, src SourceAccess) *CommandResult {
 	var b strings.Builder
 	b.WriteString("\n  External Sources\n")
 	b.WriteString("  ─────────────────────────────────────────────────────────────────────\n")
-	b.WriteString(fmt.Sprintf("  %-14s %-20s %-10s %-5s %-8s %-10s %s\n",
-		"ID", "NAME", "CATEGORY", "PRI", "STATE", "VERSION", "ENABLED"))
+	b.WriteString(fmt.Sprintf("  %-14s %-8s %-10s %-10s %s\n",
+		"ID", "STATE", "VERSION", "ENABLED", "FINDINGS"))
 	b.WriteString("  ─────────────────────────────────────────────────────────────────────\n")
 
 	for _, s := range sources {
-		b.WriteString(fmt.Sprintf("  %-14s %-20s %-10s %-5s %-8s %-10s %v\n",
-			s.ID, truncate(s.ID, 20), s.ID, "", s.State, s.Version, s.Enabled))
+		enabledStr := "no"
+		if s.Enabled {
+			enabledStr = "yes"
+		}
+		b.WriteString(fmt.Sprintf("  %-14s %-8s %-10s %-10s %v\n",
+			s.ID, s.State, s.Version, enabledStr, s.Findings))
 	}
 
 	if len(sources) == 0 {

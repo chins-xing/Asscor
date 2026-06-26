@@ -105,6 +105,116 @@ func DefaultInferenceModel() InferenceModel {
 
 func (m *MarkovChainModel) Name() string { return m.name }
 
+// ----------------------------------------------------------
+// Bayesian Inference Model
+// ----------------------------------------------------------
+
+// BayesModel uses Bayesian belief update with conditional probability tables.
+// Instead of fixed transition probabilities, it incorporates evidence (observed
+// check failures, external threat scores) to update the posterior state belief.
+type BayesModel struct {
+	name string
+	// CPT[state][evidence][nextState] — conditional P(nextState | state, evidence)
+	cpt [4][2][4]float64
+}
+
+// NewBayesModel creates a Bayesian inference model. The CPT is derived from
+// the Markov transition matrix: strong evidence (failure=1) shifts probabilities
+// toward degraded states; weak evidence (failure=0) shifts toward stable states.
+func NewBayesModel() *BayesModel {
+	// Base transition from Markov priors
+	base := MarkovDefaultTransition()
+
+	var cpt [4][2][4]float64
+	for state := 0; state < 4; state++ {
+		// evidence=0 (good news): shift toward stable
+		for j := 0; j < 4; j++ {
+			if j <= state {
+				cpt[state][0][j] = base[state][j] * 1.2
+			} else {
+				cpt[state][0][j] = base[state][j] * 0.5
+			}
+		}
+
+		// evidence=1 (bad news): shift toward degraded
+		for j := 0; j < 4; j++ {
+			if j >= state {
+				cpt[state][1][j] = base[state][j] * 1.3
+			} else {
+				cpt[state][1][j] = base[state][j] * 0.3
+			}
+		}
+	}
+
+	// Normalize each row
+	for state := 0; state < 4; state++ {
+		for ev := 0; ev < 2; ev++ {
+			sum := 0.0
+			for j := 0; j < 4; j++ {
+				sum += cpt[state][ev][j]
+			}
+			if sum > 0 {
+				for j := 0; j < 4; j++ {
+					cpt[state][ev][j] /= sum
+				}
+			}
+		}
+	}
+
+	return &BayesModel{name: "BayesNet", cpt: cpt}
+}
+
+func (b *BayesModel) Name() string { return b.name }
+
+func (b *BayesModel) Predict(current [4]float64, steps int) (future [4]float64, confidence float64) {
+	if steps <= 0 {
+		return current, 1.0
+	}
+
+	// Evidence score from current state: higher Collapse/Untrusted probability → more bad-news evidence
+	evidenceWeight := current[2]*0.5 + current[3]*0.8
+
+	// Blend transitions based on evidence: interleave good-news and bad-news transitions
+	posterior := current
+	for k := 0; k < steps; k++ {
+		var next [4]float64
+		for i := 0; i < 4; i++ {
+			good := matMulVec4SingleState(i, b.cpt[i][0])
+			bad := matMulVec4SingleState(i, b.cpt[i][1])
+			for j := 0; j < 4; j++ {
+				blended := (1.0-evidenceWeight)*good[j] + evidenceWeight*bad[j]
+				next[j] += posterior[i] * blended
+			}
+		}
+		posterior = next
+	}
+
+	// Confidence: posterior entropy reduction vs prior entropy
+	priorEntropy := 0.0
+	for _, p := range current {
+		if p > 1e-12 {
+			priorEntropy -= p * math.Log2(p)
+		}
+	}
+	posteriorEntropy := 0.0
+	for _, p := range posterior {
+		if p > 1e-12 {
+			posteriorEntropy -= p * math.Log2(p)
+		}
+	}
+	maxEntropy := math.Log2(4.0)
+
+	entropyGain := (priorEntropy - posteriorEntropy) / maxEntropy
+	horizonDecay := 1.0 / (1.0 + float64(steps)*0.02)
+
+	confidence = math.Max(0.0, math.Min(1.0, (entropyGain+1.0)/2.0*horizonDecay))
+	return posterior, confidence
+}
+
+func matMulVec4SingleState(state int, row [4]float64) [4]float64 {
+	return row
+}
+
 // Predict projects the state vector forward by k steps using matrix exponentiation.
 func (m *MarkovChainModel) Predict(current [4]float64, steps int) (future [4]float64, confidence float64) {
 	if steps <= 0 {

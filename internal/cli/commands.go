@@ -49,7 +49,7 @@ func helpCmdHandler(ctx *CommandContext) *CommandResult {
 	b.WriteString("\n  ASSCOR \u00b5Kernel CLI\n")
 	b.WriteString(fmt.Sprintf("  Framework: %s   SSAM: %s\n\n", version.ASSCORVersion, version.SSAMVersion))
 
-	categories := []CommandCategory{CategoryCore, CategoryAgent, CategoryAssess, CategorySPC, CategoryPlugin, CategorySource, CategorySystem, CategoryDebug}
+	categories := []CommandCategory{CategoryCore, CategoryAgent, CategoryAssess, CategorySPC, CategoryATTACK, CategoryPlugin, CategorySource, CategorySystem, CategoryDebug}
 	categoryLabels := map[CommandCategory]string{
 		CategoryCore:   "Core Commands",
 		CategoryAgent:  "Agent Management",
@@ -517,9 +517,39 @@ func spcCmdHandler(ctx *CommandContext) *CommandResult {
 		}
 
 	case "score":
+		hostID := ctx.Options["host"]
+		if hostID == "" {
+			hostID = "localhost"
+		}
+		calcProvider, ok := spcPlugin.(interface {
+			Calculate(hostID string, assetPackages []string) kernel.SPCCorrection
+			GetAsset(hostID string) *kernel.LocalAsset
+		})
+		if !ok {
+			return &CommandResult{ExitCode: ExitError, Output: "SPC module does not support Calculate\n"}
+		}
+
+		var packages []string
+		if asset := calcProvider.GetAsset(hostID); asset != nil {
+			packages = asset.Packages
+		}
+
+		correction := calcProvider.Calculate(hostID, packages)
+
+		if ctx.JSON {
+			jsonData, _ := json.MarshalIndent(map[string]interface{}{
+				"host_id":  hostID,
+				"score":    correction.Score,
+				"penalties": len(correction.Weights),
+				"weights":  correction.Weights,
+			}, "", "  ")
+			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
+		}
+
 		return &CommandResult{
 			ExitCode: ExitOK,
-			Output:   fmt.Sprintf("SPC score: use 'assess <host>' for full evaluation with SPC correction\n"),
+			Output: fmt.Sprintf("SPC score for %s: %.4f (penalties: %d)\n",
+				hostID, correction.Score, len(correction.Weights)),
 		}
 
 	case "fetch":

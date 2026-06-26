@@ -992,6 +992,9 @@ func (a *Assessor) ReloadWeights(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
+
+	a.cfg = cfg
+
 	w := cfg.Weights
 	a.scoringEngine.SetWeight(model.DomainAttackSurface, w.AttackSurface)
 	a.scoringEngine.SetWeight(model.DomainBusinessContinuity, w.BusinessContinuity)
