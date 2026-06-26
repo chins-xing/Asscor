@@ -180,7 +180,10 @@ func (cb *CircuitBreaker) state(k string) CircuitState {
 	state := CircuitState(atomic.LoadInt32(&rec.state))
 
 	if state == StateOpen {
-		if time.Since(rec.lastStateChange) > cb.cfg.Timeout {
+		rec.mu.Lock()
+		lastChange := rec.lastStateChange
+		rec.mu.Unlock()
+		if time.Since(lastChange) > cb.cfg.Timeout {
 			if atomic.CompareAndSwapInt32(&rec.state, int32(StateOpen), int32(StateHalfOpen)) {
 				rec.lastStateChange = time.Now()
 				if cb.cfg.OnStateChange != nil {

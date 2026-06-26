@@ -44,7 +44,11 @@ func (c *InterceptorChain) Then(handler HandlerFunc) HandlerFunc {
 }
 
 func (c *InterceptorChain) Interceptors() []Interceptor {
-	return c.interceptors
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	cp := make([]Interceptor, len(c.interceptors))
+	copy(cp, c.interceptors)
+	return cp
 }
 
 type InterceptorEvent struct {

@@ -50,7 +50,7 @@ type Server struct {
 
 	interceptors *Interceptors
 
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	listener net.Listener
 	connSem  chan struct{}
 	ctx      context.Context
@@ -158,8 +158,11 @@ func (s *Server) handleConn(conn net.Conn) {
 	ctx := context.WithValue(s.ctx, ctxKey("client_addr"), clientAddr)
 
 	var dispatch HandlerFunc
-	if s.interceptors != nil && len(s.interceptors.Chain.Interceptors()) > 0 {
-		dispatch = s.interceptors.Chain.Then(func(ctx context.Context, service, method string, payload []byte) ([]byte, error) {
+	s.mu.RLock()
+	ic := s.interceptors
+	s.mu.RUnlock()
+	if ic != nil && len(ic.Chain.Interceptors()) > 0 {
+		dispatch = ic.Chain.Then(func(ctx context.Context, service, method string, payload []byte) ([]byte, error) {
 			return s.registry.Dispatch(ctx, service, method, payload)
 		})
 	}

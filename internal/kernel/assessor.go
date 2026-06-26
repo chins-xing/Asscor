@@ -845,6 +845,7 @@ type TopologyProvider interface {
 }
 
 type ScoringEngineModule struct {
+	mu     sync.Mutex
 	kernel KernelContext
 	cfg    *config.Config
 	engine *engine.Assessor
@@ -883,22 +884,30 @@ func (m *ScoringEngineModule) Priority() int {
 }
 
 func (m *ScoringEngineModule) Init(ctx context.Context, kc KernelContext) error {
+	m.mu.Lock()
 	m.kernel = kc
 	m.state = PluginInitialized
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *ScoringEngineModule) Start(ctx context.Context) error {
+	m.mu.Lock()
 	m.state = PluginStarted
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *ScoringEngineModule) Stop(ctx context.Context) error {
+	m.mu.Lock()
 	m.state = PluginStopped
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *ScoringEngineModule) State() PluginState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.state
 }
 
