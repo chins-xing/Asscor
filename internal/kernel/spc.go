@@ -185,8 +185,11 @@ func (m *SPCModule) Stop(ctx context.Context) error {
 	m.nvdTimers = nil
 	m.mu.Unlock()
 
-	if m.cancelFunc != nil {
-		m.cancelFunc()
+	m.mu.Lock()
+	cancel := m.cancelFunc
+	m.mu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
 
 	select {
@@ -213,6 +216,8 @@ func (m *SPCModule) HealthCheck(ctx context.Context) error {
 }
 
 func (m *SPCModule) Enabled() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.enabled
 }
 

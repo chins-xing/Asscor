@@ -80,7 +80,9 @@ func (s *Server) RegisterService(desc *apiv1.ServiceDesc) {
 }
 
 func (s *Server) SetInterceptors(interceptors *Interceptors) {
+	s.mu.Lock()
 	s.interceptors = interceptors
+	s.mu.Unlock()
 }
 
 func (s *Server) Start() error {

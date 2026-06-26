@@ -138,7 +138,10 @@ func (cb *CircuitBreaker) cleanupStaleRecords() {
 	staleThreshold := 15 * time.Minute
 	now := time.Now()
 	for k, rec := range cb.records {
-		if now.Sub(rec.lastStateChange) > staleThreshold {
+		rec.mu.Lock()
+		lastChange := rec.lastStateChange
+		rec.mu.Unlock()
+		if now.Sub(lastChange) > staleThreshold {
 			state := CircuitState(atomic.LoadInt32(&rec.state))
 			if state == StateClosed {
 				delete(cb.records, k)
@@ -205,7 +208,9 @@ func (cb *CircuitBreaker) recordFailure(k string) {
 			ratio := float64(failures) / float64(total)
 			if ratio >= cb.cfg.FailureRatio {
 				if atomic.CompareAndSwapInt32(&rec.state, int32(StateClosed), int32(StateOpen)) {
+					rec.mu.Lock()
 					rec.lastStateChange = time.Now()
+					rec.mu.Unlock()
 					if cb.cfg.OnStateChange != nil {
 						cb.cfg.OnStateChange(k, "opened")
 					}
@@ -214,7 +219,9 @@ func (cb *CircuitBreaker) recordFailure(k string) {
 		}
 	case StateHalfOpen:
 		if atomic.CompareAndSwapInt32(&rec.state, int32(StateHalfOpen), int32(StateOpen)) {
+			rec.mu.Lock()
 			rec.lastStateChange = time.Now()
+			rec.mu.Unlock()
 			if cb.cfg.OnStateChange != nil {
 				cb.cfg.OnStateChange(k, "reopened")
 			}
@@ -234,8 +241,8 @@ func (cb *CircuitBreaker) recordSuccess(k string) {
 		if atomic.CompareAndSwapInt32(&rec.state, int32(StateHalfOpen), int32(StateClosed)) {
 			rec.mu.Lock()
 			rec.window = rec.window[:0]
-			rec.mu.Unlock()
 			rec.lastStateChange = time.Now()
+			rec.mu.Unlock()
 			if cb.cfg.OnStateChange != nil {
 				cb.cfg.OnStateChange(k, "closed")
 			}

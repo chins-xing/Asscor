@@ -277,13 +277,18 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
 	logger.WithComponent("assessor").Info("EvaluateFromResults called", "host_id", hostID, "checks", len(checkResults))
 
+	m.mu.RLock()
+	threshold := m.cfg.Threshold
+	threatCoeff := m.cfg.ThreatCoeff
+	m.mu.RUnlock()
+
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_evaluate", hostID)
 
 	result := &model.AssessmentResult{
 		HostID:    hostID,
 		Hostname:  hostname,
 		Timestamp: time.Now(),
-		Threshold: m.cfg.Threshold,
+		Threshold: threshold,
 		Checks:    checkResults,
 	}
 
@@ -296,7 +301,7 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 			OperationTrust:     100,
 			Resilience:         100,
 		}
-		result.ThreatCoeff = m.cfg.ThreatCoeff
+		result.ThreatCoeff = threatCoeff
 		result.SPCScore = 1.0
 	} else {
 		m.applySPCAndCTI(hostID, result)
@@ -332,8 +337,11 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 }
 
 func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentResult) {
-	spcScore := 1.0
+	m.mu.RLock()
 	threatCoeff := m.cfg.ThreatCoeff
+	m.mu.RUnlock()
+
+	spcScore := 1.0
 
 	if impl, ok := m.kernel.Container().Resolve((*SPCInterface)(nil)); ok {
 		if spc, ok2 := impl.(SPCInterface); ok2 && spc.Enabled() {
@@ -393,7 +401,9 @@ func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentR
 }
 
 func (m *AssessorModule) applyCTIOnly(result *model.AssessmentResult) {
+	m.mu.RLock()
 	ctiCoeff := m.cfg.ThreatCoeff
+	m.mu.RUnlock()
 	if impl, ok := m.kernel.Container().Resolve((*CTIInterface)(nil)); ok {
 		if cti, ok2 := impl.(CTIInterface); ok2 {
 			ctiCoeff = cti.GetCoefficient()

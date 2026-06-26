@@ -403,8 +403,12 @@ func (m *ATTACKModule) Version() string {
 }
 
 func (m *ATTACKModule) extractFailedTechniques(checkResults map[string]bool) []string {
+	m.mu.RLock()
+	tactics := m.tactics
+	m.mu.RUnlock()
+
 	failed := make(map[string]bool)
-	for _, tactic := range m.tactics {
+	for _, tactic := range tactics {
 		for _, tech := range tactic.Techniques {
 			for _, check := range tech.AsscorChecks {
 				if passed, ok := checkResults[check]; ok && !passed {

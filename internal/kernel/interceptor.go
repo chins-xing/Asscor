@@ -3,6 +3,7 @@ package kernel
 import (
 	"context"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/asscor/asscor/internal/logger"
@@ -13,6 +14,7 @@ type HandlerFunc func(ctx context.Context, service, method string, payload []byt
 type Interceptor func(ctx context.Context, service, method string, payload []byte, handler HandlerFunc) ([]byte, error)
 
 type InterceptorChain struct {
+	mu           sync.Mutex
 	interceptors []Interceptor
 }
 
@@ -21,12 +23,18 @@ func NewInterceptorChain() *InterceptorChain {
 }
 
 func (c *InterceptorChain) Use(interceptors ...Interceptor) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.interceptors = append(c.interceptors, interceptors...)
 }
 
 func (c *InterceptorChain) Then(handler HandlerFunc) HandlerFunc {
-	for i := len(c.interceptors) - 1; i >= 0; i-- {
-		ic := c.interceptors[i]
+	c.mu.Lock()
+	chain := make([]Interceptor, len(c.interceptors))
+	copy(chain, c.interceptors)
+	c.mu.Unlock()
+	for i := len(chain) - 1; i >= 0; i-- {
+		ic := chain[i]
 		next := handler
 		handler = func(ctx context.Context, service, method string, payload []byte) ([]byte, error) {
 			return ic(ctx, service, method, payload, next)

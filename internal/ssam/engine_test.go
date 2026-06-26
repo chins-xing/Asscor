@@ -184,7 +184,8 @@ func TestRegisterCustomFormula(t *testing.T) {
 		{Domain: "attack_surface", Weight: 100},
 	})
 
-	e.RegisterFormula("custom_42", nil)
+	e.RegisterFormula("custom_test", e.custom42Formula)
+	e.SetFormula("custom_test")
 
 	input := &AssessmentInput{
 		HostID:      "test",

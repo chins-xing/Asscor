@@ -11,9 +11,10 @@ import (
 )
 
 type Engine struct {
-	mu    sync.RWMutex
-	cfg   ssam.ScoringConfig
-	hooks map[HookPhase][]hookEntry
+	mu              sync.RWMutex
+	cfg             ssam.ScoringConfig
+	customFormulas  map[string]ssam.ScoringFormula
+	hooks           map[HookPhase][]hookEntry
 }
 
 type hookEntry struct {
@@ -26,8 +27,9 @@ var _ Provider = (*Engine)(nil)
 
 func NewEngine() *Engine {
 	return &Engine{
-		cfg:   ssam.DefaultScoringConfig,
-		hooks: make(map[HookPhase][]hookEntry),
+		cfg:            ssam.DefaultScoringConfig,
+		customFormulas: make(map[string]ssam.ScoringFormula),
+		hooks:          make(map[HookPhase][]hookEntry),
 	}
 }
 
@@ -146,7 +148,10 @@ func (e *Engine) ComputeScoreV2(ctx context.Context, input *ssam.AssessmentInput
 func (e *Engine) getCustomFormulas() map[string]ssam.ScoringFormula {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	result := make(map[string]ssam.ScoringFormula)
+	result := make(map[string]ssam.ScoringFormula, len(e.customFormulas))
+	for k, v := range e.customFormulas {
+		result[k] = v
+	}
 	return result
 }
 
@@ -227,6 +232,7 @@ func (e *Engine) GetFormula() string {
 func (e *Engine) RegisterFormula(id string, formula ssam.ScoringFormula) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.customFormulas[id] = formula
 	e.cfg.FormulaID = id
 }
 
