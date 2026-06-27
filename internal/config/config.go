@@ -201,6 +201,8 @@ func Parse(content string) (*Config, error) {
 				cfg.Weights.OperationTrust = f
 			case "resilience":
 				cfg.Weights.Resilience = f
+			case "kernel_security":
+				cfg.Weights.KernelSecurity = f
 			}
 		}
 	}
