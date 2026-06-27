@@ -460,6 +460,11 @@ SPC 模块运行在 Kernel 端，Agent 通过 mTLS 加密的 gRPC 通道上报�
 | NVD 并发分片请求 | 高 | 无 Key 时 4×30d 并发，有 Key 时 2×60d 并发 | ✅ 已实现 |
 | 指数退避重试 | 高 | 替代固定间隔重试，避免 429 速率限制 | ✅ 已实现 |
 
+## 13. 版本历史
+
+- **v2.0.2** — 2026-06-28 CVE ID校验改为宽松匹配(isCVEID)，支持CVE-TEST-01等非标格式；CVE缓存优先级驱逐(满时驱逐非KEV+低CVSS而非静默丢弃)；SPC Enabled()/cancelFunc数据竞争修复；SPC fetchLoop返回值不再完全丢弃；GetKEVCatalog()/Summary()新增方法供CLI查询
+- **v2.0** — 2026-06-09 基于 SSAM V2.0 三层语义模型重构；CPE精确版本匹配启用；CNNVD/CNVD/MISP数据源接入；OSCAL导入导出；NVD并发分片请求；指数退避重试
+
 ---
 
 > **说明：** SPC 是 SSAM 2.0 的核心组件，当前版本 v2.0。ASSCOR 是实现 SSAM 的开源项目框架，当前版本 v0.2.0。两者版本号独立演进。
