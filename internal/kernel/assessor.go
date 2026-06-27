@@ -157,7 +157,10 @@ func (m *AssessorModule) setupConsoleReport() {
 	}
 	v := os.Getenv("ASSCOR_CONSOLE_REPORT")
 	if v == "" {
-		v = m.cfg.AdapterConfig["console_report"]
+		v = m.cfg.AdapterConfig["webui.console_report"]
+		if v == "" {
+			v = m.cfg.AdapterConfig["console_report"]
+		}
 	}
 	m.consoleReport = v == "true" || v == "yes" || v == "1"
 	if m.consoleReport {
