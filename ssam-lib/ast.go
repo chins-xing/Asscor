@@ -10,6 +10,7 @@ const (
 	OpWeightedSum  = "weighted_sum"
 	OpMultiply     = "multiply"
 	OpDivide       = "divide"
+	OpAdd          = "add"
 	OpMin          = "min"
 	OpMax          = "max"
 	OpProductChain = "product_chain"
@@ -62,6 +63,23 @@ func EvalAST(ast FormulaAST, ctx EvalContext) (float64, error) {
 			return 0, err
 		}
 		return left * right, nil
+
+	case OpAdd:
+		if ast.Left == nil {
+			return 0, fmt.Errorf("ssam: add: left operand is nil")
+		}
+		if ast.Right == nil {
+			return 0, fmt.Errorf("ssam: add: right operand is nil")
+		}
+		left, err := EvalAST(*ast.Left, ctx)
+		if err != nil {
+			return 0, err
+		}
+		right, err := EvalAST(*ast.Right, ctx)
+		if err != nil {
+			return 0, err
+		}
+		return left + right, nil
 
 	case OpDivide:
 		if ast.Left == nil {
@@ -289,6 +307,11 @@ func ASTToFormula(ast FormulaAST) ScoringFormula {
 					pushValue(left / right)
 				}
 
+			case OpAdd:
+				right := pop()
+				left := pop()
+				pushValue(left + right)
+
 			case OpMin:
 				right := pop()
 				left := pop()
@@ -335,7 +358,7 @@ func compileAST(ast FormulaAST) []compiledOp {
 	case OpProductChain:
 		ops = append(ops, compiledOp{op: OpProductChain})
 
-	case OpMultiply, OpDivide, OpMin, OpMax:
+	case OpMultiply, OpDivide, OpAdd, OpMin, OpMax:
 		if ast.Left != nil {
 			ops = append(ops, compileAST(*ast.Left)...)
 		}

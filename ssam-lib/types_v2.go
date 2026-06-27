@@ -7,8 +7,10 @@ type RiskContext struct {
 }
 
 type RiskLayerDetail struct {
-	Coeff        float64  `json:"coeff"`
-	Contributors []string `json:"contributors"`
+	Coeff        float64            `json:"coeff"`
+	Weight       float64            `json:"weight"`
+	Contributors []string           `json:"contributors"`
+	Details      map[string]float64 `json:"details,omitempty"`
 }
 
 type RiskLayers struct {

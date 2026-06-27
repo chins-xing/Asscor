@@ -20,9 +20,9 @@ func SSAMV20Formula(domainScores []DomainScore, weights []WeightConfig, riskCtx 
 		return FinalScore{
 			Total: 0,
 			Layers: RiskLayers{
-				Intrinsic: RiskLayerDetail{Coeff: 0, Contributors: []string{"domain_scores"}},
-				Exposure:  RiskLayerDetail{Coeff: riskCtx.Exposure, Contributors: []string{"exposure_coefficient"}},
-				Threat:    RiskLayerDetail{Coeff: riskCtx.Threat, Contributors: []string{"threat_coefficient"}},
+				Intrinsic: RiskLayerDetail{Coeff: 0, Weight: 0, Contributors: []string{"domain_scores"}},
+				Exposure:  RiskLayerDetail{Coeff: riskCtx.Exposure, Weight: 0, Contributors: []string{"exposure_coefficient"}},
+				Threat:    RiskLayerDetail{Coeff: riskCtx.Threat, Weight: 0, Contributors: []string{"threat_coefficient"}},
 			},
 		}
 	}
@@ -57,22 +57,30 @@ func SSAMV20Formula(domainScores []DomainScore, weights []WeightConfig, riskCtx 
 		threatCoeff = 0.60
 	}
 
-	finalScore := intrinsicCoeff * exposureCoeff * threatCoeff * 100
-	finalScore = math.Round(finalScore*100) / 100
+	intrinsicWeight := 50.0
+	exposureWeight := 30.0
+	threatWeight := 20.0
+	totalLayerWeight := intrinsicWeight + exposureWeight + threatWeight
+
+	weightedAvg := (intrinsicCoeff*intrinsicWeight + exposureCoeff*exposureWeight + threatCoeff*threatWeight) / totalLayerWeight
+	finalScore := math.Round(weightedAvg * 100 * 100) / 100
 
 	return FinalScore{
 		Total: finalScore,
 		Layers: RiskLayers{
 			Intrinsic: RiskLayerDetail{
 				Coeff:        math.Round(intrinsicCoeff*100) / 100,
+				Weight:       intrinsicWeight,
 				Contributors: intrinsicContributors,
 			},
 			Exposure: RiskLayerDetail{
 				Coeff:        exposureCoeff,
+				Weight:       exposureWeight,
 				Contributors: []string{"exposure_coefficient"},
 			},
 			Threat: RiskLayerDetail{
 				Coeff:        threatCoeff,
+				Weight:       threatWeight,
 				Contributors: []string{"threat_coefficient"},
 			},
 		},

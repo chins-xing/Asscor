@@ -49,8 +49,9 @@ func TestSSAMV20Formula_LayerSeparation(t *testing.T) {
 	}
 
 	weightedSum := (80*35 + 90*25 + 70*25 + 85*15) / 100.0
-	intrinsicRaw := weightedSum
-	expectedTotal := math.Round(intrinsicRaw*0.70*0.90*100) / 100
+	intrinsicCoeff := weightedSum / 100.0
+	// Weighted average: (0.8075*50 + 0.70*30 + 0.90*20) / 100 * 100
+	expectedTotal := math.Round((intrinsicCoeff*50+0.70*30+0.90*20)/100*100*100) / 100
 
 	if math.Abs(result.Total-expectedTotal) > 0.02 {
 		t.Errorf("total: expected %.2f, got %.2f", expectedTotal, result.Total)
@@ -96,7 +97,9 @@ func TestSSAMV20Formula_WithEdgeFactors(t *testing.T) {
 	}
 	result := SSAMV20Formula(scores, weights, riskCtx, factors)
 
-	expectedTotal := math.Round(100*0.85*100) / 100
+	// intrinsicCoeff = 1.0 * 0.85 = 0.85
+	// weighted avg: (0.85*50 + 1.0*30 + 1.0*20) / 100 * 100 = 92.50
+	expectedTotal := math.Round((0.85*50+1.0*30+1.0*20)/100*100*100) / 100
 	if result.Total != expectedTotal {
 		t.Errorf("edge factors: expected %.2f, got %.2f", expectedTotal, result.Total)
 	}
