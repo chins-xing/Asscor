@@ -9,7 +9,7 @@ func DefaultConfig() PrismConfig {
 		DebtNormDays: 1500.0,
 		PathDecay:    0.80,
 		MaxPathDepth: 5,
-		ScoreFloor:   0.40,
+		ScoreFloor:   0.15,
 		CollapseBeta: 1.5,
 
 		// Semantic Layer

@@ -175,7 +175,27 @@ func (m *PolicyModule) onAssessmentResult(ctx context.Context, msg Message) erro
 	if !ok {
 		return nil
 	}
-	m.EvaluateHost(result.HostID, result.FinalScore)
+
+	status, actions := m.EvaluateHost(result.HostID, result.FinalScore)
+
+	if result.PrismInferenceTrend == "collapsing" && result.PrismInferenceCollapseRisk > 0.7 {
+		actions = append(actions, PolicyAction{
+			Action:  "isolate_host",
+			Message: fmt.Sprintf("PREEMPTIVE ISOLATION: host %s Prism collapse risk %.2f (trend: %s, SSAM score: %.2f)",
+				result.HostID, result.PrismInferenceCollapseRisk, result.PrismInferenceTrend, result.FinalScore),
+		})
+		actions = append(actions, PolicyAction{
+			Action:  "notify_admin",
+			Message: fmt.Sprintf("Prism preemptive: host %s collapse risk %.2f",
+				result.HostID, result.PrismInferenceCollapseRisk),
+		})
+		logger.WithComponent("policy").Warn("Prism preemptive isolation triggered",
+			"host_id", result.HostID,
+			"prism_collapse_risk", result.PrismInferenceCollapseRisk,
+			"prism_trend", result.PrismInferenceTrend,
+			"policy_status", status)
+	}
+
 	return nil
 }
 
