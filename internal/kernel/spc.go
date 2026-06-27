@@ -85,7 +85,7 @@ func NewSPCModule() *SPCModule {
 func (m *SPCModule) Info() PluginInfo {
 	return PluginInfo{
 		Name:        "spc",
-		Version:     "1.2.0",
+		Version:     "2.0.0",
 		Description: "Security Posture Calculator 鈥?computes individualized risk posture from global CVE data, MISP, ATT&CK, and local asset inventory",
 		Author:      "ASSCOR Core Team",
 	}

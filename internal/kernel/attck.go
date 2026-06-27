@@ -243,7 +243,7 @@ func (m *ATTACKModule) ConfigureFromConfig(cfg *config.Config) {
 func (m *ATTACKModule) Info() PluginInfo {
 	return PluginInfo{
 		Name:        "attck",
-		Version:     "2.0.0",
+		Version:     "1.0.0",
 		Description: "MITRE ATT&CK V19 — detection analytics, threat intelligence, adversary emulation, assessment & engineering",
 		Author:      "ASSCOR Core Team",
 	}

@@ -864,4 +864,17 @@ if ok {
         },
     ))
 }
+
+---
+
+## 版本历史
+
+| 版本 | 日期 | 主要变更 |
+|------|------|----------|
+| v0.2.0 | 2026-06-28 | CLI spc子命令(score/kev/fetch)实现；kernel控制台评估报告(config.ini console_report)；agent日志格式可配置(agent.ini log_format)；source deploy命令；ATT&CK版本/优先级修正；config热重载默认开启；管理适配器Parse升级；系统d service + Dockerfile |
+| v0.1.4-mvp | 2026-06-09 | SSAM V2.0三层语义模型；ATT&CK V19模块；SPC多数据源(CNNVD/CNVD/MISP)；扩展管理器；Prism SRD引擎 |
+| v0.1.3-mvp | 2026-05-25 | gRPC/JSONRPC双协议栈；权重热加载；SPC磁盘持久化；适配器集成模块 |
+| v0.1.2 | 2026-05-22 | HMAC签名修复；关键消息PublishSync；策略管理器互斥switch；CTI严重级别加权 |
+| v0.1.1 | 2026-05-16 | Agent心跳机制；编译产物统一build/目录 |
+| v0.1.0 | 2026-05-13 | 初始发布 |
 ```
