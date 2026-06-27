@@ -1,6 +1,6 @@
 # ASSCOR 使用手册
 
-> 版本：v0.1.4-mvp | SSAM 2.0 | 最后更新：2026-06-09
+> 版本：v0.2.0 | SSAM 2.0 | 最后更新：2026-06-28
 
 ---
 
@@ -187,7 +187,7 @@ ASSCOR μKernel
     {log_collector} v1.0.0 — Agent log collection
     {persistence} v1.0.0 — Data persistence layer
     {concurrency} v1.0.0 — Concurrency control
-    {attck} v2.0.0 — MITRE ATT&CK V19 threat analysis
+    {attck} v1.0.0 — MITRE ATT&CK V19 threat analysis
     {config_watcher} v1.0.0 — Configuration hot-reload
     {adapter_integration} v1.0.0 — External adapter integration
     {source_manager} v1.0.0 — External source management
@@ -514,7 +514,7 @@ threshold = 90.0
 
 ## 10. ATT&CK V19 威胁分析模块
 
-ASSCOR v0.1.3-mvp 集成 MITRE ATT&CK V19 框架，作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行。模块提供从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。
+ASSCOR v0.2.0 集成 MITRE ATT&CK V19 框架，作为 μKernel 插件（`attck`，优先级 21，版本 1.0.0）运行。模块提供从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。
 
 ### 10.1 四大核心子模块
 
