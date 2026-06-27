@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,7 @@ type ScoringEngineProvider interface {
 type PrismEngineProvider interface {
 	ComputeDynamicScore(node *prismlib.NodeState, incomingEdges []prismlib.EdgeState, allNodes map[string]*prismlib.NodeState, nowUnix int64) prismlib.AssetRiskResult
 	Config() prismlib.PrismConfig
+	UpdateConfig(cfg prismlib.PrismConfig)
 }
 
 type AssessorModule struct {
@@ -108,6 +110,7 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 
 	m.setupSIEMPusher()
 	m.setupConsoleReport()
+	m.setupPrismConfig()
 
 	kc.Container().Bind((*ssam.ScoringProvider)(nil), m.engine.SSAMEngine())
 
@@ -166,6 +169,79 @@ func (m *AssessorModule) setupConsoleReport() {
 	if m.consoleReport {
 		logger.WithComponent("assessor").Info("console assessment report enabled")
 	}
+}
+
+func (m *AssessorModule) setupPrismConfig() {
+	if m.cfg == nil || m.prismEngine == nil {
+		return
+	}
+
+	cfg := m.prismEngine.Config()
+	ac := m.cfg.AdapterConfig
+
+	if v := parseFloatConfig(ac["prism.debt_alpha"]); v > 0 {
+		cfg.DebtAlpha = v
+	}
+	if v := parseFloatConfig(ac["prism.prop_cap"]); v > 0 {
+		cfg.PropCap = v
+	}
+	if v := parseFloatConfig(ac["prism.debt_cap"]); v > 0 {
+		cfg.DebtCap = v
+	}
+	if v := parseFloatConfig(ac["prism.debt_norm_days"]); v > 0 {
+		cfg.DebtNormDays = v
+	}
+	if v := parseFloatConfig(ac["prism.path_decay"]); v > 0 {
+		cfg.PathDecay = v
+	}
+	if v := parseIntConfig(ac["prism.max_path_depth"]); v > 0 {
+		cfg.MaxPathDepth = v
+	}
+	if v := parseFloatConfig(ac["prism.score_floor"]); v > 0 {
+		cfg.ScoreFloor = v
+	}
+	if v := parseFloatConfig(ac["prism.collapse_beta"]); v > 0 {
+		cfg.CollapseBeta = v
+	}
+	if v := parseFloatConfig(ac["prism.stable_threshold"]); v > 0 {
+		cfg.StableThreshold = v
+	}
+	if v := parseFloatConfig(ac["prism.degraded_threshold"]); v > 0 {
+		cfg.DegradedThreshold = v
+	}
+	if v := parseFloatConfig(ac["prism.untrusted_threshold"]); v > 0 {
+		cfg.UntrustedThreshold = v
+	}
+	if v := parseIntConfig(ac["prism.horizon_days"]); v > 0 {
+		cfg.HorizonDays = v
+	}
+
+	m.prismEngine.UpdateConfig(cfg)
+	logger.WithComponent("assessor").Info("prism config loaded from config.ini",
+		"score_floor", cfg.ScoreFloor, "horizon_days", cfg.HorizonDays,
+		"debt_alpha", cfg.DebtAlpha, "prop_cap", cfg.PropCap)
+}
+
+func parseFloatConfig(s string) float64 {
+	if s == "" {
+		return 0
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+func parseIntConfig(s string) int {
+	if s == "" {
+		return 0
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 func (m *AssessorModule) printConsoleReport(result *model.AssessmentResult) {
