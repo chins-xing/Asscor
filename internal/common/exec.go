@@ -154,11 +154,38 @@ func RunCmdTimeout(timeout time.Duration, name string, args ...string) (string, 
 	if err != nil {
 		errStr := stderr.String()
 		if errStr != "" {
+			if isPermissionError(errStr) {
+				return stdout.String(), &PermissionError{Msg: errStr}
+			}
 			return stdout.String(), &CommandError{Msg: errStr}
+		}
+		if isPermissionError(err.Error()) {
+			return stdout.String(), &PermissionError{Msg: err.Error()}
 		}
 		return stdout.String(), err
 	}
 	return stdout.String(), nil
+}
+
+func isPermissionError(s string) bool {
+	lower := strings.ToLower(s)
+	return strings.Contains(lower, "permission denied") ||
+		strings.Contains(lower, "operation not permitted") ||
+		strings.Contains(lower, "access denied") ||
+		strings.Contains(lower, "authentication failure")
+}
+
+type PermissionError struct {
+	Msg string
+}
+
+func (e *PermissionError) Error() string {
+	return "permission denied: " + e.Msg
+}
+
+func IsPermissionError(err error) bool {
+	_, ok := err.(*PermissionError)
+	return ok
 }
 
 type CommandError struct {

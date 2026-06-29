@@ -18,6 +18,23 @@ const (
 
 type CheckFunc func() (passed bool, detail string)
 
+// PrivilegeLevel indicates what system privilege a check needs.
+type PrivilegeLevel int
+
+const (
+	PrivNormal PrivilegeLevel = iota
+	PrivRoot
+)
+
+func (p PrivilegeLevel) String() string {
+	switch p {
+	case PrivRoot:
+		return "root"
+	default:
+		return "normal"
+	}
+}
+
 type CheckItem struct {
 	ID            string
 	Domain        string
@@ -27,6 +44,7 @@ type CheckItem struct {
 	ComplianceRef string
 	Platform      string
 	Check         CheckFunc
+	Privilege     PrivilegeLevel
 }
 
 func (c CheckItem) Run() CheckResult {

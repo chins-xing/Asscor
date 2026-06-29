@@ -1161,7 +1161,24 @@ func (a *Agent) runChecks() []model.CheckResult {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 10)
 
+	var rootDetected bool
+	if os.Geteuid() == 0 {
+		rootDetected = true
+	}
+
 	for i, check := range a.checkers {
+		if check.Privilege == model.PrivRoot && !rootDetected {
+			results[i] = model.CheckResult{
+				CheckID: check.ID,
+				Domain:  check.Domain,
+				Name:    check.Name,
+				Passed:  false,
+				Delta:   0,
+				Detail:  "skipped — requires root privileges",
+			}
+			continue
+		}
+
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(idx int, c model.CheckItem) {
