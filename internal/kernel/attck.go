@@ -1159,7 +1159,9 @@ func (m *ATTACKModule) CalculateCoverage(checkResults map[string]bool) []ATTACKC
 	results := m.calculateCoverageLocked(checkResults)
 	m.mu.RUnlock()
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "attck.coverage.complete", results)
+	if m.kernel != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.coverage.complete", results)
+	}
 	return results
 }
 
@@ -1265,12 +1267,14 @@ func (m *ATTACKModule) MatchAPTGroup(detectedTechniques []string) []APTMatchResu
 	m.mu.RUnlock()
 
 	for _, r := range highConfResults {
-		m.kernel.Bus().Publish(m.kernel.Context(), Message{
-			Topic:   "apt.threat.matched",
-			Payload: r,
-			Source:  "attck",
-		})
-		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.matched", r)
+		if m.kernel != nil {
+			m.kernel.Bus().Publish(m.kernel.Context(), Message{
+				Topic:   "apt.threat.matched",
+				Payload: r,
+				Source:  "attck",
+			})
+			m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.matched", r)
+		}
 	}
 
 	return results
@@ -1336,12 +1340,14 @@ func (m *ATTACKModule) PredictRisk(hostID string, detectedTechniques []string, m
 	predicted.Recommendations = recommendations
 	m.mu.RUnlock()
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
-		Topic:   "apt.risk.predicted",
-		Payload: predicted,
-		Source:  "attck",
-	})
-	m.kernel.Extensions().Execute(m.kernel.Context(), "attck.risk.predicted", predicted)
+	if m.kernel != nil {
+		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+			Topic:   "apt.risk.predicted",
+			Payload: predicted,
+			Source:  "attck",
+		})
+		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.risk.predicted", predicted)
+	}
 
 	return predicted
 }

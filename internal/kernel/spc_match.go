@@ -25,47 +25,26 @@ func truncateString(s string, maxLen int) string {
 }
 
 func extractPkgNames(packages []string) []string {
-	names := make([]string, 0, len(packages)*2)
-	seen := make(map[string]bool, len(packages)*2)
-
-	for _, pkg := range packages {
-		name := pkg
-		if idx := strings.IndexByte(name, ' '); idx > 0 {
-			name = name[:idx]
-		}
-
-		baseName := name
-		if idx := strings.IndexByte(name, '-'); idx > 0 {
-			hasDigit := false
-			for i := idx + 1; i < len(name); i++ {
-				if name[i] >= '0' && name[i] <= '9' {
-					hasDigit = true
-					break
-				}
-			}
-			if hasDigit {
-				baseName = name[:idx]
-			}
-		}
-
-		if baseName != "" && len(baseName) >= 2 && !seen[baseName] {
-			names = append(names, baseName)
-			seen[baseName] = true
-		}
-
-		stripped := baseName
-		for _, suffix := range pkgSuffixes {
-			if strings.HasSuffix(stripped, suffix) {
-				core := stripped[:len(stripped)-len(suffix)]
-				if core != "" && len(core) >= 2 && !seen[core] {
-					names = append(names, core)
-					seen[core] = true
-				}
-				stripped = core
-			}
+	if len(packages) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(packages))
+	result := make([]string, 0, len(packages))
+	for _, p := range packages {
+		name := strings.TrimSpace(strings.Split(p, " ")[0])
+		if name != "" && !seen[name] {
+			seen[name] = true
+			result = append(result, name)
 		}
 	}
-	return names
+	return result
+}
+
+func installedCPEsCount(asset *LocalAsset) int {
+	if asset == nil {
+		return 0
+	}
+	return len(asset.InstalledCPEs)
 }
 
 func (m *SPCModule) compareCPE(installed, vuln string) MatchType {

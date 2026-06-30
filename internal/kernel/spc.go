@@ -455,7 +455,7 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		"host_id", hostID,
 		"cve_cache_size", len(cves),
 		"has_asset", asset != nil,
-		"installed_cpes", len(asset.InstalledCPEs),
+		"installed_cpes", installedCPEsCount(asset),
 		"packages_count", len(assetPackages),
 		"pkg_names_count", len(pkgNameSet),
 		"pkg_names_sample", extractPkgNames(pkgSample),
