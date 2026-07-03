@@ -270,11 +270,13 @@ func pluginCmdHandler(ctx *CommandContext) *CommandResult {
 			return &CommandResult{ExitCode: ExitError, Err: fmt.Errorf("plugin %q not found", name), Output: fmt.Sprintf("Plugin %q not found\n", name)}
 		}
 
-		pi, _ := p.(*PluginInfo)
-		if pi == nil {
-			pi = &PluginInfo{Name: name}
+		plugin, ok := p.(kernel.Plugin)
+		var pi kernel.PluginInfo
+		if ok {
+			pi = plugin.Info()
+		} else {
+			pi = kernel.PluginInfo{Name: name}
 		}
-
 		if ctx.JSON {
 			data, _ := json.MarshalIndent(pi, "", "  ")
 			return &CommandResult{ExitCode: ExitOK, Output: string(data) + "\n"}
@@ -284,7 +286,9 @@ func pluginCmdHandler(ctx *CommandContext) *CommandResult {
 		b.WriteString(fmt.Sprintf("\n  Plugin: %s\n", pi.Name))
 		b.WriteString("  ─────────────────────────────────────────\n")
 		b.WriteString(fmt.Sprintf("  Version:     %s\n", pi.Version))
-		b.WriteString(fmt.Sprintf("  State:       %s\n", pi.State))
+		if ok {
+			b.WriteString(fmt.Sprintf("  State:       %s\n", plugin.State()))
+		}
 		b.WriteString(fmt.Sprintf("  Description: %s\n", pi.Description))
 		b.WriteString("\n")
 		return &CommandResult{ExitCode: ExitOK, Output: b.String()}
