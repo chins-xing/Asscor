@@ -332,6 +332,9 @@ func (m *ExtensionManager) onExtensionInstalled(spec ExtensionSpec) {
 		}
 	case ExtTypeCLICommand:
 		m.registerCLICommand(spec)
+	case ExtTypeAdapter, ExtTypeCustom:
+		logger.WithComponent("extmgr").Info("extension installed (type handled by adapter registry)",
+			"extension_id", spec.ID, "type", string(spec.ExtType))
 	}
 }
 

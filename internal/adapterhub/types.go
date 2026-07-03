@@ -2,6 +2,20 @@ package adapterhub
 
 import (
 	"time"
+
+	"github.com/asscor/asscor/internal/adapter"
+)
+
+// Severity is a type alias for adapter.Severity, unifying the two packages.
+type Severity = adapter.Severity
+
+const (
+	SeverityCritical = adapter.SeverityCritical
+	SeverityHigh     = adapter.SeverityHigh
+	SeverityMedium   = adapter.SeverityMedium
+	SeverityLow      = adapter.SeverityLow
+	SeverityInfo     = adapter.SeverityInfo
+	SeverityNone     = adapter.SeverityNone
 )
 
 // Category represents the adapter category.
@@ -121,17 +135,7 @@ type NormalizedFinding struct {
 	Passed      bool
 }
 
-// Severity represents the normalized severity level.
-type Severity string
-
-const (
-	SeverityCritical Severity = "critical"
-	SeverityHigh    Severity = "high"
-	SeverityMedium  Severity = "medium"
-	SeverityLow     Severity = "low"
-	SeverityInfo    Severity = "info"
-	SeverityNone    Severity = "none"
-)
+// Severity is a type alias for adapter.Severity — see top of file.
 
 // Result represents the check result.
 type Result string
