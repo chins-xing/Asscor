@@ -260,6 +260,7 @@ func (a *Assessor) Assess(hostID string, hostname string) *model.AssessmentResul
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostScore, result)
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreReport, result)
+	a.scoringEngine.Hooks().Execute(ctx, PhasePostReport, result)
 
 	return result
 }
@@ -463,6 +464,7 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostScore, result)
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreReport, result)
+	a.scoringEngine.Hooks().Execute(ctx, PhasePostReport, result)
 
 	a.resultsCache.Store(cacheKey, result)
 

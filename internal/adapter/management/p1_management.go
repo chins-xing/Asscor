@@ -74,8 +74,11 @@ func (f *FreeIPAAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error)
 			})
 		}
 	}
+	for i := range findings {
+		adapter.ApplyDelegation(findings[i], "freeipa")
+	}
 
-	if len(findings) == 0 {
+		if len(findings) == 0 {
 		findings = append(findings, &adapter.NormalizedFinding{
 			ID:          "FREEIPA-USERS",
 			Source:      "freeipa",
@@ -105,6 +108,10 @@ func (f *FreeIPAAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error)
 			Domain:      model.DomainOperationTrust,
 			DelegatedTo: "freeipa",
 		})
+	}
+
+	for i := range findings {
+		adapter.ApplyDelegation(findings[i], "freeipa")
 	}
 
 	return findings, nil
@@ -169,7 +176,7 @@ func (k *KeycloakAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error
 
 	var realms []keycloakRealm
 	if err := json.Unmarshal(raw, &realms); err != nil {
-		return []*adapter.NormalizedFinding{{
+		result := &adapter.NormalizedFinding{
 			ID:          "KEYCLOAK-STATUS",
 			Source:      "keycloak",
 			ToolName:    "Keycloak",
@@ -178,9 +185,9 @@ func (k *KeycloakAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error
 			Title:       "Keycloak Identity Provider",
 			Passed:      false,
 			Detail:      fmt.Sprintf("Keycloak API unreachable or invalid response: %v", err),
-			Domain:      model.DomainOperationTrust,
-			DelegatedTo: "keycloak",
-		}}, nil
+		}
+		adapter.ApplyDelegation(result, "keycloak")
+		return []*adapter.NormalizedFinding{result}, nil
 	}
 
 	var findings []*adapter.NormalizedFinding
@@ -199,10 +206,11 @@ func (k *KeycloakAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error
 			Title:       "Keycloak Realm: " + realm.Realm,
 			Passed:      passed,
 			Detail:      detail,
-			Domain:      model.DomainOperationTrust,
-			DelegatedTo: "keycloak",
 			Metadata:    map[string]string{"realm_id": realm.ID, "realm": realm.Realm},
 		})
+	}
+	for i := range findings {
+		adapter.ApplyDelegation(findings[i], "keycloak")
 	}
 
 	if len(findings) == 0 {

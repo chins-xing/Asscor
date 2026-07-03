@@ -15,6 +15,7 @@ import (
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/prism"
 	"github.com/asscor/asscor/internal/version"
 	"github.com/asscor/asscor/internal/webui"
 
@@ -128,6 +129,8 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 	scoringEngine := kernel.NewScoringEngineModule(cfg)
 	k.Container().Bind((*kernel.ScoringEngineProvider)(nil), scoringEngine)
+
+	k.Container().Bind((*kernel.PrismEngineProvider)(nil), prism.NewEngine())
 
 	assessor := &kernel.AssessorModule{}
 	policy := &kernel.PolicyModule{}
