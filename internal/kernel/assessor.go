@@ -918,10 +918,6 @@ func filterIncoming(hostID string, edges []prismlib.EdgeState) []prismlib.EdgeSt
 	return result
 }
 
-type TopologyProvider interface {
-	GetEdges(hostID string) []prismlib.EdgeState
-	GetAllNodes() map[string]*prismlib.NodeState
-}
 
 type ScoringEngineModule struct {
 	mu     sync.Mutex

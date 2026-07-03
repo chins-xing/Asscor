@@ -178,6 +178,12 @@ func ExecuteAdapter(ctx context.Context, a Adapter, config map[string]string) ([
 		return nil, fmt.Errorf("adapter %s parse: %w", a.ID(), err)
 	}
 
+	for _, f := range findings {
+		if f != nil {
+			ApplyDelegation(f, a.ID())
+		}
+	}
+
 	findings = a.Map(findings)
 
 	valid, errs := a.Validate(findings)
