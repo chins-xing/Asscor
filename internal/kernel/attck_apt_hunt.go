@@ -157,9 +157,12 @@ func (m *ATTACKModule) ExecuteHunt(hypothesisID string, hostID string) (*HuntRes
 		m.kernel.Bus().Publish(m.kernel.Context(), Message{
 			Topic:   "attck.apt.hunt_confirmed",
 			Payload: result,
-			Source:  "attck.apt",
-		})
-	}
+				Source:  "attck.apt",
+			})
+			if m.kernel != nil {
+				m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.hunt_confirmed", result)
+			}
+		}
 
 	logger.WithComponent("attck.hunt").Info("hunt executed",
 		"hypothesis", hypothesisID, "host", hostID,

@@ -430,6 +430,9 @@ func (m *ATTACKModule) GenerateAPTAnalysisReport(hostIDs []string) (*APTAnalysis
 		Payload: report,
 		Source:  "attck.apt",
 	})
+	if m.kernel != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.report_generated", report)
+	}
 
 	logger.WithComponent("attck.apt").Info("APT analysis report generated",
 		"hosts", len(hostIDs), "chains", len(chains), "risk_score", report.RiskScore, "risk_level", riskLevel)

@@ -136,6 +136,9 @@ func (m *ATTACKModule) EvaluateDetectionRule(ruleID, hostID, rawLog string, fiel
 		Payload: alert,
 		Source:  "attck.detection",
 	})
+	if m.kernel != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.detection.alert", alert)
+	}
 
 	logger.WithComponent("attck.detection").Info("alert triggered",
 		"alert_id", alert.ID, "rule", rule.ID, "technique", rule.TechniqueID, "host", hostID)
@@ -217,9 +220,12 @@ func (m *ATTACKModule) RecordAnomaly(event AnomalyEvent) {
 		m.kernel.Bus().Publish(m.kernel.Context(), Message{
 			Topic:   "attck.detection.anomaly",
 			Payload: event,
-			Source:  "attck.detection",
-		})
-	}
+				Source:  "attck.detection",
+			})
+			if m.kernel != nil {
+				m.kernel.Extensions().Execute(m.kernel.Context(), "attck.detection.anomaly", event)
+			}
+		}
 
 	logger.WithComponent("attck.detection").Info("anomaly recorded",
 		"anomaly_id", event.ID, "type", event.EventType, "score", event.Score, "technique", event.TechniqueID)

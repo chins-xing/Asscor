@@ -163,6 +163,11 @@ func (m *ATTACKModule) EvaluateBehavioralIndicators(hostID string, metrics map[s
 
 	if len(alerts) > 0 {
 		logger.WithComponent("attck.behavioral").Info("behavioral alerts triggered", "host", hostID, "count", len(alerts))
+		for _, a := range alerts {
+			if m.kernel != nil {
+				m.kernel.Extensions().Execute(m.kernel.Context(), "attck.behavioral.alert", a)
+			}
+		}
 	}
 
 	return alerts
@@ -278,6 +283,10 @@ func (m *ATTACKModule) DetectBeaconing(hostID string, events []TimeSeriesPoint) 
 
 	logger.WithComponent("attck.behavioral").Info("beaconing detected",
 		"host", hostID, "interval", detection.Interval, "jitter", detection.Jitter, "score", score)
+
+	if m.kernel != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.behavioral.beacon", &detection)
+	}
 
 	return []BeaconDetection{detection}
 }

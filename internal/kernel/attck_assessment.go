@@ -140,6 +140,9 @@ func (m *ATTACKModule) PerformGapAnalysis(hostID string) (*AssessmentReport, err
 		Payload: report,
 		Source:  "attck.assessment",
 	})
+	if m.kernel != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.assessment.complete", report)
+	}
 
 	logger.WithComponent("attck.assessment").Info("gap analysis completed",
 		"host", hostID, "total", totalTechs, "covered", coveredTechs,

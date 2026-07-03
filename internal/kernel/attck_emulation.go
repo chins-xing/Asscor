@@ -352,6 +352,9 @@ func (m *ATTACKModule) RunEmulation(scenarioID, hostID string, safeMode bool) (*
 		Payload: result,
 		Source:  "attck.emulation",
 	})
+	if m.kernel != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.emulation.complete", result)
+	}
 
 	logger.WithComponent("attck.emulation").Info("emulation completed",
 		"scenario", scenarioID, "detection_rate", result.DetectionRate,

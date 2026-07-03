@@ -90,6 +90,9 @@ func (m *ATTACKModule) ReconstructAttackChain(hostIDs []string) (*AttackChain, e
 		Payload: chain,
 		Source:  "attck.apt",
 	})
+	if m.kernel != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.chain_detected", chain)
+	}
 
 	logger.WithComponent("attck.apt").Info("attack chain reconstructed",
 		"chain_id", chain.ID, "stages", len(stages), "severity", chain.Severity,
