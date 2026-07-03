@@ -16,70 +16,94 @@ type DelegationCriterion struct {
 
 var delegationRules = map[string][]DelegationRule{
 	"trivy": {
-		{CheckID: "AS-099-T", Domain: "attack_surface", Criteria: []DelegationCriterion{
+		{CheckID: "KS-001", Domain: "kernel_security", Criteria: []DelegationCriterion{
 			{Field: "Resource", Operator: "contains", Value: "kernel"},
 		}},
-		{CheckID: "TS-001", Domain: "attack_surface", Criteria: nil},
+		{CheckID: "AS-005", Domain: "attack_surface", Criteria: nil},
 	},
 	"nuclei": {
-		{CheckID: "AS-099-N", Domain: "attack_surface", Criteria: nil},
+		{CheckID: "AS-006", Domain: "attack_surface", Criteria: []DelegationCriterion{
+			{Field: "Severity", Operator: "eq", Value: "critical"},
+		}},
+		{CheckID: "AS-005", Domain: "attack_surface", Criteria: nil},
 	},
 	"lynis": {
-		{CheckID: "OT-099-L", Domain: "operation_trust", Criteria: nil},
+		{CheckID: "OT-001", Domain: "operation_trust", Criteria: []DelegationCriterion{
+			{Field: "Title", Operator: "contains", Value: "permission"},
+		}},
+		{CheckID: "KS-001", Domain: "kernel_security", Criteria: []DelegationCriterion{
+			{Field: "Title", Operator: "contains", Value: "kernel"},
+		}},
+		{CheckID: "OT-099", Domain: "operation_trust", Criteria: nil},
 	},
 	"openscap": {
-		{CheckID: "OT-099-O", Domain: "operation_trust", Criteria: nil},
+		{CheckID: "OT-001", Domain: "operation_trust", Criteria: nil},
 	},
 	"wazuh_agent": {
-		{CheckID: "RS-099-W", Domain: "resilience", Criteria: nil},
+		{CheckID: "RS-006", Domain: "resilience", Criteria: nil},
 	},
 	"suricata": {
-		{CheckID: "RS-099-S", Domain: "resilience", Criteria: nil},
+		{CheckID: "RS-006", Domain: "resilience", Criteria: []DelegationCriterion{
+			{Field: "Title", Operator: "contains", Value: "alert"},
+		}},
+		{CheckID: "AS-006", Domain: "attack_surface", Criteria: nil},
 	},
 	"falco": {
-		{CheckID: "RS-099-F", Domain: "resilience", Criteria: nil},
+		{CheckID: "RS-006", Domain: "resilience", Criteria: nil},
 	},
 	"clamav": {
-		{CheckID: "RS-099-C", Domain: "resilience", Criteria: nil},
+		{CheckID: "RS-008", Domain: "resilience", Criteria: nil},
 	},
 	"osv_scanner": {
-		{CheckID: "AS-099-V", Domain: "attack_surface", Criteria: nil},
+		{CheckID: "KS-001", Domain: "kernel_security", Criteria: []DelegationCriterion{
+			{Field: "CVE", Operator: "prefix", Value: "CVE"},
+		}},
+		{CheckID: "RS-001", Domain: "resilience", Criteria: nil},
 	},
 	"aide": {
-		{CheckID: "OT-099-A", Domain: "operation_trust", Criteria: nil},
+		{CheckID: "OT-001", Domain: "operation_trust", Criteria: nil},
 	},
 	"nikto": {
-		{CheckID: "AS-099-K", Domain: "attack_surface", Criteria: nil},
+		{CheckID: "AS-006", Domain: "attack_surface", Criteria: nil},
 	},
 	"ansible": {
-		{CheckID: "MG-099-AN", Domain: "operation_trust", Criteria: nil},
+		{CheckID: "OT-001", Domain: "operation_trust", Criteria: nil},
 	},
 	"netbox": {
-		{CheckID: "MG-099-NB", Domain: "business_continuity", Criteria: nil},
+		{CheckID: "BC-005", Domain: "business_continuity", Criteria: nil},
 	},
 	"snipe_it": {
-		{CheckID: "MG-099-SN", Domain: "business_continuity", Criteria: nil},
+		{CheckID: "BC-006", Domain: "business_continuity", Criteria: nil},
 	},
 	"freeipa": {
-		{CheckID: "OT-099-FI", Domain: "operation_trust", Criteria: nil},
+		{CheckID: "OT-004", Domain: "operation_trust", Criteria: []DelegationCriterion{
+			{Field: "Title", Operator: "contains", Value: "Disabled"},
+		}},
+		{CheckID: "OT-099", Domain: "operation_trust", Criteria: nil},
 	},
 	"keycloak": {
-		{CheckID: "OT-099-KC", Domain: "operation_trust", Criteria: nil},
+		{CheckID: "OT-004", Domain: "operation_trust", Criteria: []DelegationCriterion{
+			{Field: "Title", Operator: "contains", Value: "Realms"},
+		}},
+		{CheckID: "OT-099", Domain: "operation_trust", Criteria: nil},
 	},
 	"wazuh_siem": {
-		{CheckID: "RS-099-WS", Domain: "resilience", Criteria: nil},
+		{CheckID: "RS-007", Domain: "resilience", Criteria: nil},
 	},
 	"rundeck": {
-		{CheckID: "OT-099-RD", Domain: "operation_trust", Criteria: nil},
+		{CheckID: "OT-009", Domain: "operation_trust", Criteria: []DelegationCriterion{
+			{Field: "Title", Operator: "contains", Value: "executor"},
+		}},
+		{CheckID: "OT-099", Domain: "operation_trust", Criteria: nil},
 	},
 	"jira": {
-		{CheckID: "OT-099-JR", Domain: "operation_trust", Criteria: nil},
+		{CheckID: "OT-009", Domain: "operation_trust", Criteria: nil},
 	},
 	"terraform": {
-		{CheckID: "OT-099-TF", Domain: "operation_trust", Criteria: nil},
+		{CheckID: "OT-001", Domain: "operation_trust", Criteria: nil},
 	},
 	"opentofu": {
-		{CheckID: "OT-099-OT", Domain: "operation_trust", Criteria: nil},
+		{CheckID: "OT-001", Domain: "operation_trust", Criteria: nil},
 	},
 }
 
