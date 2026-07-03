@@ -104,6 +104,10 @@ func All() []model.CheckItem {
 		rs010(),
 		rs011(),
 		rs012(),
+		rs013(),
+		rs014(),
+		rs015(),
+		rs016(),
 		bc005(),
 		bc006(),
 		bc007(),
@@ -2560,6 +2564,171 @@ func ac008() model.CheckItem {
 				return false, fmt.Sprintf("恢复能力配置不足，仅检测到: %s", recoveryIndicators[0])
 			}
 			return false, "未检测到恢复能力配置 (rear/clonezilla/timeshift/borg/restic或恢复脚本)"
+		},
+	}
+}
+
+// RS-013 容器运行时安全
+// 等保条款: L3-CE-30 | ATT&CK: T1610
+func rs013() model.CheckItem {
+	return model.CheckItem{
+		ID:            "RS-013",
+		Domain:        model.DomainResilience,
+		Name:          "容器运行时安全",
+		Description:   "检查容器运行时是否配置安全策略",
+		Delta:         -8,
+		ComplianceRef: "L3-CE-30",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			var secured []string
+			var issues []string
+			if _, err := os.Stat("/var/run/docker.sock"); err == nil {
+				if _, err := os.Stat("/etc/docker/daemon.json"); err == nil {
+					data, _ := os.ReadFile("/etc/docker/daemon.json")
+					content := strings.ToLower(string(data))
+					if strings.Contains(content, "seccomp") {
+						secured = append(secured, "Docker(seccomp)")
+					}
+					if strings.Contains(content, "apparmor") {
+						secured = append(secured, "Docker(apparmor)")
+					}
+					if strings.Contains(content, "userns-remap") {
+						secured = append(secured, "Docker(userns)")
+					}
+				}
+				if len(secured) == 0 {
+					issues = append(issues, "Docker运行中但未检测到安全配置(daemon.json)")
+				}
+			}
+			if _, err := os.Stat("/run/podman/podman.sock"); err == nil {
+				secured = append(secured, "Podman(运行)")
+			}
+			out, ok := common.RunCmdQuiet("systemctl", "is-active", "containerd")
+			if ok && strings.TrimSpace(out) == "active" {
+				issues = append(issues, "containerd运行中，建议启用镜像签名验证")
+			}
+			if len(secured) > 0 {
+				return true, fmt.Sprintf("容器安全策略: %s", strings.Join(secured, ", "))
+			}
+			if len(issues) == 0 {
+				return true, "未检测到容器运行时或安全策略已配置"
+			}
+			return false, strings.Join(issues, "; ")
+		},
+	}
+}
+
+// RS-014 内核热补丁
+func rs014() model.CheckItem {
+	return model.CheckItem{
+		ID:            "RS-014",
+		Domain:        model.DomainResilience,
+		Name:          "内核热补丁",
+		Description:   "检查内核热补丁(kpatch/kgraft)是否启用以缩短漏洞窗口",
+		Delta:         -6,
+		ComplianceRef: "L4-CE-03",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			indicators := []string{
+				"/sys/kernel/livepatch",
+				"/sys/kernel/kpatch",
+				"/usr/sbin/kpatch",
+			}
+			for _, p := range indicators {
+				if _, err := os.Stat(p); err == nil {
+					return true, fmt.Sprintf("内核热补丁已启用: %s", p)
+				}
+			}
+			out, err := common.RunCmd("uname", "-r")
+			if err == nil {
+				kernel := strings.TrimSpace(out)
+				out2, _ := common.RunCmd("rpm", "-q", fmt.Sprintf("kernel-%s", kernel))
+				if strings.Contains(out2, "-livepatch") || strings.Contains(out2, "-kpatch") {
+					return true, "检测到livepatch内核包"
+				}
+			}
+			return false, "未检测到内核热补丁机制 (kpatch/kgraft/livepatch)"
+		},
+	}
+}
+
+// RS-015 CPU微码更新
+func rs015() model.CheckItem {
+	return model.CheckItem{
+		ID:            "RS-015",
+		Domain:        model.DomainResilience,
+		Name:          "CPU微码更新",
+		Description:   "检查CPU微码是否已更新以缓解硬件漏洞(Spectre/Meltdown等)",
+		Delta:         -8,
+		ComplianceRef: "L4-CE-04",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			data, err := os.ReadFile("/proc/cpuinfo")
+			if err != nil {
+				return false, "无法读取/proc/cpuinfo"
+			}
+			content := string(data)
+			var microcodes []string
+			for _, line := range strings.Split(content, "\n") {
+				if strings.HasPrefix(strings.TrimSpace(line), "microcode") {
+					parts := strings.Split(line, ":")
+					if len(parts) >= 2 {
+						mc := strings.TrimSpace(parts[1])
+						if mc != "0x0" && mc != "0" && mc != "" {
+							microcodes = append(microcodes, mc)
+						}
+					}
+				}
+			}
+			if len(microcodes) > 0 {
+				out, _ := common.RunCmd("dmesg")
+				if strings.Contains(strings.ToLower(out), "microcode updated early") {
+					return true, fmt.Sprintf("CPU微码已加载: %s (early update确认)", strings.Join(microcodes, ", "))
+				}
+				return true, fmt.Sprintf("CPU微码已加载: %s (无法确认early update)", strings.Join(microcodes, ", "))
+			}
+			return false, "CPU微码未加载或版本为0 — 存在Spectre/Meltdown等硬件漏洞风险"
+		},
+	}
+}
+
+// RS-016 安全启动链完整性
+func rs016() model.CheckItem {
+	return model.CheckItem{
+		ID:            "RS-016",
+		Domain:        model.DomainResilience,
+		Name:          "安全启动链完整性",
+		Description:   "检查UEFI SecureBoot/shim/GRUB/内核签名验证链",
+		Delta:         -10,
+		ComplianceRef: "L4-CE-05",
+		Platform:      "linux",
+		Check: func() (bool, string) {
+			var chain []string
+			if _, err := os.Stat("/sys/firmware/efi"); err == nil {
+				data, err := os.ReadFile("/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c")
+				if err == nil && len(data) > 4 && data[4] == 1 {
+					chain = append(chain, "SecureBoot(EFI)")
+				}
+			}
+			if _, err := os.Stat("/sys/kernel/security/lockdown"); err == nil {
+				data, err := os.ReadFile("/sys/kernel/security/lockdown")
+				if err == nil && strings.Contains(string(data), "integrity") {
+					chain = append(chain, "KernelLockdown(integrity)")
+				}
+			}
+			out, err := common.RunCmd("mokutil", "--sb-state")
+			if err == nil && strings.Contains(out, "SecureBoot enabled") {
+				if len(chain) == 0 {
+					chain = append(chain, "SecureBoot(MOK)")
+				}
+			}
+			if len(chain) >= 2 {
+				return true, fmt.Sprintf("安全启动链完整: %s", strings.Join(chain, " → "))
+			}
+			if len(chain) == 1 {
+				return false, fmt.Sprintf("启动链不完整: 仅检测到 %s", chain[0])
+			}
+			return false, "未检测到安全启动链 (SecureBoot/KernelLockdown/MOK)"
 		},
 	}
 }
