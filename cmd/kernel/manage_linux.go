@@ -208,6 +208,48 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, data, 0644)
 }
 
+func upgradeInstallation(installPath string) error {
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("upgrade requires root privileges (use sudo)")
+	}
+
+	binPath := installPath + "/ASSCOR-kernel"
+	backupPath := binPath + ".bak"
+
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		return fmt.Errorf("no existing installation at %s — use --install first", binPath)
+	}
+
+	_ = exec.Command("systemctl", "stop", serviceName).Run()
+
+	if err := os.Rename(binPath, backupPath); err != nil {
+		_ = exec.Command("systemctl", "start", serviceName).Run()
+		return fmt.Errorf("backup existing binary: %w", err)
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("get executable path: %w", err)
+	}
+	if err := copyFile(exe, binPath); err != nil {
+		os.Rename(backupPath, binPath)
+		_ = exec.Command("systemctl", "start", serviceName).Run()
+		return fmt.Errorf("copy new binary: %w (old binary restored)", err)
+	}
+	if err := os.Chmod(binPath, 0755); err != nil {
+		return fmt.Errorf("chmod new binary: %w", err)
+	}
+
+	exec.Command("chown", "asscor:asscor", binPath).Run()
+
+	if err := exec.Command("systemctl", "start", serviceName).Run(); err != nil {
+		return fmt.Errorf("start service after upgrade: %w (old binary at %s)", err, backupPath)
+	}
+
+	fmt.Fprintf(os.Stderr, "Upgrade complete. Old binary: %s\n", backupPath)
+	return nil
+}
+
 func copyDir(src, dst string) error {
 	entries, err := os.ReadDir(src)
 	if err != nil {

@@ -31,8 +31,10 @@ func main() {
 	forceRegenCerts := flag.Bool("force-regen-certs", false, "force regenerate all TLS certificates")
 	daemon := flag.Bool("daemon", false, "run as background daemon")
 	pidFile := flag.String("pid-file", "", "PID file path (default: ASSCOR-kernel.pid in current directory)")
+	showVersion := flag.Bool("version", false, "display version and exit")
 	install := flag.Bool("install", false, "install as systemd service (requires root)")
 	uninstall := flag.Bool("uninstall", false, "remove systemd service and stop kernel")
+	upgrade := flag.Bool("upgrade", false, "upgrade existing installation in-place (requires root)")
 	checkInstall := flag.Bool("check-install", false, "verify installation and exit")
 	installPath := flag.String("install-path", "/opt/asscor", "installation target directory")
 	cliConnect := flag.String("cli", "", "connect to CLI socket (unix socket path, e.g. /opt/asscor/asscor-cli.sock)")
@@ -41,6 +43,11 @@ func main() {
 	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
 	webuiPort := flag.Int("webui-port", 8087, "Web UI dashboard port (0 to disable)")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("ASSCOR Kernel %s (SSAM %s)\n", version.ASSCORVersion, version.SSAMVersion)
+		os.Exit(0)
+	}
 
 	if *install {
 		if err := installService(*installPath); err != nil {
@@ -65,6 +72,14 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stderr, "OK: installation verified at %s\n", *installPath)
+		os.Exit(0)
+	}
+	if *upgrade {
+		if err := upgradeInstallation(*installPath); err != nil {
+			fmt.Fprintf(os.Stderr, "UPGRADE FAILED: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "Upgrade to %s complete\n", version.ASSCORVersion)
 		os.Exit(0)
 	}
 	if *cliConnect != "" {
@@ -127,6 +142,12 @@ func main() {
 		log.Warn("cannot load config, using defaults", "path", resolvedConfigPath, "error", err)
 		cfg = config.Default()
 	}
+
+	log.Info("ASSCOR kernel starting",
+		"version", version.ASSCORVersion,
+		"ssam", version.SSAMVersion,
+		"config", resolvedConfigPath,
+	)
 
 	if cfgLogLevel := cfg.AdapterConfig["log.level"]; cfgLogLevel != "" && *logLevel == "info" {
 		logCfg.Level = cfgLogLevel
