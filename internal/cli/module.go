@@ -447,11 +447,12 @@ func (bb *busBridge) Subscribe(topic, subscriberID string) <-chan interface{} {
 }
 
 type CLIModule struct {
-	kernel  kernel.KernelContext
-	engine  *Engine
-	bridge  *kernelBridge
-	enabled bool
-	done    chan struct{}
+	kernel     kernel.KernelContext
+	engine     *Engine
+	bridge     *kernelBridge
+	enabled    bool
+	done       chan struct{}
+	socketPath string
 
 	mu    sync.RWMutex
 	state kernel.PluginState
@@ -459,7 +460,8 @@ type CLIModule struct {
 
 func NewCLIModule() *CLIModule {
 	return &CLIModule{
-		done: make(chan struct{}),
+		done:       make(chan struct{}),
+		socketPath: defaultSocketPath,
 	}
 }
 
@@ -537,6 +539,8 @@ func (m *CLIModule) Start(ctx context.Context) error {
 			logger.WithComponent("cli").Error("terminal error", "error", err)
 		}
 	}()
+
+	go m.serveCLI(ctx)
 
 	logger.WithComponent("cli").Info("CLI module started", "log_output", logger.CurrentOutput())
 	return nil

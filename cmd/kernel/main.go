@@ -35,6 +35,7 @@ func main() {
 	uninstall := flag.Bool("uninstall", false, "remove systemd service and stop kernel")
 	checkInstall := flag.Bool("check-install", false, "verify installation and exit")
 	installPath := flag.String("install-path", "/opt/asscor", "installation target directory")
+	cliConnect := flag.String("cli", "", "connect to CLI socket (unix socket path, e.g. /opt/asscor/asscor-cli.sock)")
 	logFormat := flag.String("log-format", "json", "log format: json, text")
 	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
 	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
@@ -64,6 +65,10 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stderr, "OK: installation verified at %s\n", *installPath)
+		os.Exit(0)
+	}
+	if *cliConnect != "" {
+		runCLIClient(*cliConnect)
 		os.Exit(0)
 	}
 
