@@ -318,8 +318,6 @@ func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
 }
 
 func (m *SPCModule) fetchLoop() {
-	defer close(m.done)
-
 	fetchCtx, fetchCancel := context.WithCancel(context.Background())
 	m.mu.Lock()
 	m.cancelFunc = fetchCancel
