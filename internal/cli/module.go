@@ -536,7 +536,6 @@ func (m *CLIModule) Start(ctx context.Context) error {
 		if err := term.Run(); err != nil {
 			logger.WithComponent("cli").Error("terminal error", "error", err)
 		}
-		close(m.done)
 	}()
 
 	logger.WithComponent("cli").Info("CLI module started", "log_output", logger.CurrentOutput())

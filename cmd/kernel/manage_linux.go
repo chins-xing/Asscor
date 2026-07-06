@@ -53,6 +53,8 @@ func installService(installPath string) error {
 
 	_ = os.Chmod(configPath, 0644)
 
+	exec.Command("chown", "-R", "asscor:asscor", installPath).Run()
+
 	svcContent := fmt.Sprintf(`[Unit]
 Description=ASSCOR Microkernel - Security Acceptability Assessment Engine
 Documentation=https://github.com/asscor/asscor
