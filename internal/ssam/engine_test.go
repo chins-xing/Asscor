@@ -11,8 +11,8 @@ func TestNewEngine(t *testing.T) {
 	if e == nil {
 		t.Fatal("engine must not be nil")
 	}
-	if e.GetFormula() != "ssam_v1.2" {
-		t.Fatalf("expected default formula ssam_v1.2, got %s", e.GetFormula())
+	if e.GetFormula() != "ssam_v2.0" {
+		t.Fatalf("expected default formula ssam_v2.0, got %s", e.GetFormula())
 	}
 }
 
@@ -114,8 +114,8 @@ func TestComputeScore_SSAMV12(t *testing.T) {
 	if output.HostID != "host-001" {
 		t.Errorf("host_id: expected host-001, got %s", output.HostID)
 	}
-	if output.FormulaID != "ssam_v1.2" {
-		t.Errorf("formula: expected ssam_v1.2, got %s", output.FormulaID)
+	if output.FormulaID != "ssam_v2.0" {
+		t.Errorf("formula: expected ssam_v2.0, got %s", output.FormulaID)
 	}
 	if output.FinalScore <= 0 || output.FinalScore > 100 {
 		t.Errorf("final score out of range: %.2f", output.FinalScore)

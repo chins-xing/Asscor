@@ -101,26 +101,21 @@ func (e *Engine) ComputeScore(ctx context.Context, input *ssam.AssessmentInput) 
 
 	e.ExecuteHooks(ctx, HookPostEdge, input, output)
 
-	formulas := ssam.RegisterBuiltinFormulas()
-	formulas["custom_42"] = e.custom42Formula
-	for id, f := range e.getCustomFormulas() {
-		formulas[id] = f
+	// SSAM V2.0 three-layer weighted average is the authoritative formula.
+	// Custom formulas registered via RegisterFormula take precedence when their ID is selected.
+	var finalScore float64
+	customFormulas := e.getCustomFormulas()
+	if custom, ok := customFormulas[cfg.FormulaID]; ok && custom != nil {
+		finalScore = custom(domainScores, cfg.Weights, output.ThreatCoeff, output.SPCScore, edgeFactors)
+	} else {
+		riskCtx := ssam.RiskContext{
+			Intrinsic: 0,
+			Exposure:  output.SPCScore,
+			Threat:    output.ThreatCoeff,
+		}
+		v2Result := ssam.SSAMV20Formula(domainScores, cfg.Weights, riskCtx, edgeFactors)
+		finalScore = v2Result.Total
 	}
-	formula, ok := formulas[cfg.FormulaID]
-	if !ok || formula == nil {
-		formula = ssam.SSAMV12Formula
-	}
-
-	finalScore := formula(domainScores, cfg.Weights, output.ThreatCoeff, output.SPCScore, edgeFactors)
-
-	// V2 weighted average (always applies as the primary formula)
-	riskCtx := ssam.RiskContext{
-		Intrinsic: 0,
-		Exposure:  output.SPCScore,
-		Threat:    output.ThreatCoeff,
-	}
-	v2Result := ssam.SSAMV20Formula(domainScores, cfg.Weights, riskCtx, edgeFactors)
-	finalScore = v2Result.Total
 	output.FinalScore = math.Round(finalScore*100) / 100
 	output.FormulaID = cfg.FormulaID
 	output.Acceptable = output.FinalScore >= output.Threshold

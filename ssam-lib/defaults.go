@@ -20,5 +20,5 @@ var DefaultEdgeFactors = []EdgeFactorConfig{
 var DefaultScoringConfig = ScoringConfig{
 	Weights:     DefaultWeights,
 	EdgeFactors: DefaultEdgeFactors,
-	FormulaID:   "ssam_v1.2",
+	FormulaID:   "ssam_v2.0",
 }

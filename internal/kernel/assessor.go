@@ -513,6 +513,9 @@ func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResu
 	if !ok {
 		return
 	}
+	if checker, ok := impl.(interface{ IsEnabled() bool }); ok && !checker.IsEnabled() {
+		return
+	}
 
 	checkResults := make(map[string]bool)
 	for _, c := range result.Checks {
@@ -693,6 +696,8 @@ func (m *AssessorModule) ReloadConfig(cfg *config.Config) {
 	m.mu.Unlock()
 
 	m.engine.ReloadWeights(cfg)
+	m.setupPrismConfig()
+	m.setupConsoleReport()
 
 	logger.WithComponent("assessor").Info("config reloaded",
 		"threshold", cfg.Threshold,

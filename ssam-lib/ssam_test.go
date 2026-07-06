@@ -307,8 +307,8 @@ func TestComputeScore_FullPipeline(t *testing.T) {
 	if output.FinalScore <= 0 || output.FinalScore > 100 {
 		t.Errorf("final score out of range: %.2f", output.FinalScore)
 	}
-	if output.FormulaID != "ssam_v1.2" {
-		t.Errorf("formula: expected ssam_v1.2, got %s", output.FormulaID)
+	if output.FormulaID != "ssam_v2.0" {
+		t.Errorf("formula: expected ssam_v2.0, got %s", output.FormulaID)
 	}
 	if len(output.DomainScores) != 4 {
 		t.Errorf("expected 4 domain scores, got %d", len(output.DomainScores))

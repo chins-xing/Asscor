@@ -130,6 +130,7 @@ type ATTACKModule struct {
 	attributionThreshold float64
 	autoHunt           bool
 	safeEmulation      bool
+	enabled            bool
 	detectionRules     []DetectionRule
 	alerts             []DetectionAlert
 	anomalies          []AnomalyEvent
@@ -180,6 +181,7 @@ func NewATTACKModule() *ATTACKModule {
 		attributionThreshold: 0.6,
 		autoHunt:             false,
 		safeEmulation:        true,
+		enabled:              true,
 		threatActors:         make(map[string]ThreatActorProfile),
 		improvementTracks:    make(map[string]ImprovementTrack),
 		reputationDB: []ReputationEntry{
@@ -199,6 +201,13 @@ func NewATTACKModule() *ATTACKModule {
 		baselines:            make(map[string]BehavioralBaseline),
 		analysisHistory:      make(map[string][]HostAnalysisRecord),
 	}
+}
+
+// IsEnabled reports whether the ATT&CK module is enabled via config.
+func (m *ATTACKModule) IsEnabled() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.enabled
 }
 
 func (m *ATTACKModule) ConfigureFromConfig(cfg *config.Config) {
@@ -221,6 +230,7 @@ func (m *ATTACKModule) ConfigureFromConfig(cfg *config.Config) {
 	m.attributionThreshold = cfg.ATTACK.AttributionThreshold
 	m.autoHunt = cfg.ATTACK.AutoHunt
 	m.safeEmulation = cfg.ATTACK.SafeEmulation
+	m.enabled = cfg.ATTACK.Enabled
 	if m.attckVersion == "" {
 		m.attckVersion = "v19"
 	}
