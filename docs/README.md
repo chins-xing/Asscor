@@ -10,6 +10,7 @@
 | [APT攻击分析与检测增强白皮书.md](APT攻击分析与检测增强白皮书.md) | ATT&CK V19 集成与 APT 检测增强 |
 | [ASSCOR 使用手册.md](ASSCOR%20使用手册.md) | 用户操作指南与配置说明 |
 | [ASSCOR 扩展体系白皮书.md](ASSCOR%20扩展体系白皮书.md) | 插件/扩展/适配器开发指南 |
+| [ASSCOR 扩展开发指南.md](ASSCOR%20扩展开发指南.md) | **面向使用者的扩展编写实战指南（8种扩展类型完整代码示例）** |
 | [ASSCOR 扩展白皮书：内核安全域.md](ASSCOR%20扩展白皮书：内核安全域.md) | kernel_security 域的设计与实现 |
 | [ASSCOR 外部接入源完整清单.md](ASSCOR%20外部接入源完整清单.md) | 21个外部工具适配器详情 |
 | [SSAM接口规范与接入指南.md](SSAM接口规范与接入指南.md) | SSAM Provider 接口与集成指南 |
