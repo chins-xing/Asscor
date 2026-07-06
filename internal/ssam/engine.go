@@ -112,6 +112,15 @@ func (e *Engine) ComputeScore(ctx context.Context, input *ssam.AssessmentInput) 
 	}
 
 	finalScore := formula(domainScores, cfg.Weights, output.ThreatCoeff, output.SPCScore, edgeFactors)
+
+	// V2 weighted average (always applies as the primary formula)
+	riskCtx := ssam.RiskContext{
+		Intrinsic: 0,
+		Exposure:  output.SPCScore,
+		Threat:    output.ThreatCoeff,
+	}
+	v2Result := ssam.SSAMV20Formula(domainScores, cfg.Weights, riskCtx, edgeFactors)
+	finalScore = v2Result.Total
 	output.FinalScore = math.Round(finalScore*100) / 100
 	output.FormulaID = cfg.FormulaID
 	output.Acceptable = output.FinalScore >= output.Threshold

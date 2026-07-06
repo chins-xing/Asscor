@@ -755,17 +755,33 @@ func (a *Assessor) applyATTACK(hostID string, result *model.AssessmentResult) {
 }
 
 func (a *Assessor) computeDynamicFinalScore(scores *model.DynamicDomainScores, result *model.AssessmentResult) float64 {
-	baseScore := a.scoringEngine.ComputeWeightedSum(scores)
+	weightedSum := a.scoringEngine.ComputeWeightedSum(scores)
 
-	baseScore *= result.ThreatCoeff
-	baseScore *= result.SPCScore
-
+	intrinsicCoeff := weightedSum / 100.0
 	activeFactors := result.EdgeFactors.ActiveFactors()
 	for _, f := range activeFactors {
-		baseScore *= f
+		intrinsicCoeff *= f
 	}
 
-	return math.Round(baseScore*100) / 100
+	exposureCoeff := result.SPCScore
+	if exposureCoeff < 0.60 {
+		exposureCoeff = 0.60
+	}
+
+	threatCoeff := result.ThreatCoeff
+	if threatCoeff < 0.60 {
+		threatCoeff = 0.60
+	}
+
+	intrinsicWeight := 50.0
+	exposureWeight := 30.0
+	threatWeight := 20.0
+	totalLayerWeight := intrinsicWeight + exposureWeight + threatWeight
+
+	weightedAvg := (intrinsicCoeff*intrinsicWeight + exposureCoeff*exposureWeight + threatCoeff*threatWeight) / totalLayerWeight
+	finalScore := math.Round(weightedAvg * 100 * 100) / 100
+
+	return finalScore
 }
 
 func (a *Assessor) PrintReport(result *model.AssessmentResult) string {
