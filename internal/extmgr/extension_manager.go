@@ -332,8 +332,14 @@ func (m *ExtensionManager) onExtensionInstalled(spec ExtensionSpec) {
 		}
 	case ExtTypeCLICommand:
 		m.registerCLICommand(spec)
+	case ExtTypeScoringPlugin:
+		logger.WithComponent("extmgr").Info("scoring plugin extension installed — register formula via Engine.RegisterFormula",
+			"extension_id", spec.ID, "formula_id", spec.CustomConfig["formula_id"])
 	case ExtTypeAdapter, ExtTypeCustom:
 		logger.WithComponent("extmgr").Info("extension installed (type handled by adapter registry)",
+			"extension_id", spec.ID, "type", string(spec.ExtType))
+	default:
+		logger.WithComponent("extmgr").Warn("unknown extension type in onExtensionInstalled",
 			"extension_id", spec.ID, "type", string(spec.ExtType))
 	}
 }

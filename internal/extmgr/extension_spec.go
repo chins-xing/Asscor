@@ -277,7 +277,7 @@ func (s ExtensionSpec) Validate() error {
 	}
 	switch s.ExtType {
 	case ExtTypeCheckModule, ExtTypeScoringPlugin, ExtTypeAdapter,
-		ExtTypeHook, ExtTypeDomain, ExtTypeEdgeFactor, ExtTypeCustom:
+		ExtTypeHook, ExtTypeDomain, ExtTypeEdgeFactor, ExtTypeCLICommand, ExtTypeCustom:
 	default:
 		return fmt.Errorf("unknown extension type: %s", s.ExtType)
 	}
