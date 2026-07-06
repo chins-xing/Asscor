@@ -21,7 +21,26 @@ func main() {
 	logFormat := flag.String("log-format", "", "log format: json, text")
 	logLevel := flag.String("log-level", "", "log level: debug, info, warn, error")
 	logOutput := flag.String("log-output", "", "log output: stderr, stdout, or file path")
+	install := flag.Bool("install", false, "install agent as systemd service (requires root)")
+	uninstall := flag.Bool("uninstall", false, "remove agent systemd service")
 	flag.Parse()
+
+	if *install {
+		if err := installAgent(); err != nil {
+			fmt.Fprintf(os.Stderr, "agent: install failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "ASSCOR agent installed successfully\n")
+		os.Exit(0)
+	}
+	if *uninstall {
+		if err := uninstallAgent(); err != nil {
+			fmt.Fprintf(os.Stderr, "agent: uninstall failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "ASSCOR agent uninstalled successfully\n")
+		os.Exit(0)
+	}
 
 	cfg := agent.DefaultConfig()
 

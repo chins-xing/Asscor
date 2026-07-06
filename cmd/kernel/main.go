@@ -31,11 +31,41 @@ func main() {
 	forceRegenCerts := flag.Bool("force-regen-certs", false, "force regenerate all TLS certificates")
 	daemon := flag.Bool("daemon", false, "run as background daemon")
 	pidFile := flag.String("pid-file", "", "PID file path (default: ASSCOR-kernel.pid in current directory)")
+	install := flag.Bool("install", false, "install as systemd service (requires root)")
+	uninstall := flag.Bool("uninstall", false, "remove systemd service and stop kernel")
+	checkInstall := flag.Bool("check-install", false, "verify installation and exit")
+	installPath := flag.String("install-path", "/opt/asscor", "installation target directory")
 	logFormat := flag.String("log-format", "json", "log format: json, text")
 	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
 	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
 	webuiPort := flag.Int("webui-port", 8087, "Web UI dashboard port (0 to disable)")
 	flag.Parse()
+
+	if *install {
+		if err := installService(*installPath); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: install failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "ASSCOR kernel installed successfully at %s\n", *installPath)
+		fmt.Fprintf(os.Stderr, "Run: sudo systemctl start asscor-kernel\n")
+		os.Exit(0)
+	}
+	if *uninstall {
+		if err := uninstallService(*installPath); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: uninstall failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "ASSCOR kernel uninstalled successfully\n")
+		os.Exit(0)
+	}
+	if *checkInstall {
+		if err := checkInstallation(*installPath); err != nil {
+			fmt.Fprintf(os.Stderr, "FAIL: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "OK: installation verified at %s\n", *installPath)
+		os.Exit(0)
+	}
 
 	resolvedConfigPath := *configPath
 	if abs, err := filepath.Abs(*configPath); err == nil {
