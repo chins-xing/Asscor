@@ -183,19 +183,18 @@ func (m *SPCModule) Stop(ctx context.Context) error {
 		t.Stop()
 	}
 	m.nvdTimers = nil
+	cancel := m.cancelFunc
+	select {
+	case <-m.done:
+	default:
+		close(m.done)
+	}
 	m.mu.Unlock()
 
-	m.mu.Lock()
-	cancel := m.cancelFunc
-	m.mu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
 
-	select {
-	case <-m.done:
-	case <-ctx.Done():
-	}
 	m.saveCacheToDisk()
 	m.state = PluginStopped
 	logger.WithComponent("spc").Info("stopped")
