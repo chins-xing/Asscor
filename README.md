@@ -6,8 +6,8 @@
 >
 > **SSAM V2.0 现已独立为开源 Go 模块 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam)**（同时也位于 `ssam-lib/`），是一个零外部依赖的纯函数式风险评估引擎。ASSCOR 平台（`internal/ssam/`）作为薄适配层，通过依赖注入委托给 ssam-lib。详情见[项目拆分说明](#121-ssam-v20-项目拆分)。
 
-**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.1.4-mvp  
-**日期：** 2026-06-09  
+**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.2.0  
+**日期：** 2026-07-06  
 **状态：** 发布
 
 ## 摘要
@@ -280,48 +280,48 @@ ASSCOR/
 └── agent.ini          # Agent 默认配置文件
 ```
 
-## 10. 快速开始
+## 10. 部署与快速开始
 
-### 10.1 单机评估模式
+### 10.1 生产部署（systemd, FHS 布局）
 
 ```bash
-# 使用独立评估工具
-./ASSCOR-linux-amd64-v0.1.3-mvp
+# 单二进制安装
+sudo ./ASSCOR-kernel-v0.2.0-linux-amd64 --install
+sudo systemctl start asscor-kernel
+sudo systemctl enable asscor-kernel  # 开机自启
 
-# 输出 JSON 格式报告
-./ASSCOR-linux-amd64-v0.1.3-mvp -json
+# 版本检查
+/opt/asscor/ASSCOR-kernel --version
 
-# 指定默认配置文件
-./ASSCOR-linux-amd64-v0.1.3-mvp -config config.ini
+# 远程 CLI（内核运行中连接）
+/opt/asscor/ASSCOR-kernel --cli /opt/asscor/asscor-cli.sock
 
-# 使用行业专用配置（政府/金融/医疗等）
-./ASSCOR-linux-amd64-v0.1.3-mvp -config config/config.gov.ini
+# 原地升级（无需手动停止）
+sudo ./ASSCOR-kernel-v0.2.1-linux-amd64 --upgrade
+
+# 卸载
+sudo /opt/asscor/ASSCOR-kernel --uninstall
 ```
 
-### 10.2 分布式模式
+**FHS 文件系统布局：**
 
-**启动 Kernel（Windows/Linux）：**
+```
+/etc/asscor/config.ini              # 内核配置
+/etc/asscor/agent.ini               # Agent 配置
+/opt/asscor/ASSCOR-kernel           # 内核二进制
+/opt/asscor/agent/ASSCOR-agent      # Agent 二进制
+/var/lib/asscor/                    # 数据（CVE 缓存/评估记录）
+/var/log/asscor/                    # 日志
+```
+
+### 10.2 Agent 部署
+
 ```bash
-# Windows（JSONRPC 默认端口 50051，gRPC 默认端口 50052）
-ASSCOR-kernel.exe -listen 0.0.0.0:50051 -no-mtls
-
-# Linux（使用行业配置）
-./ASSCOR-kernel-linux-amd64-v0.1.3-mvp -listen 0.0.0.0:50051 -no-mtls -config config/config.fin.ini
-
-# 启用 mTLS（自动生成自签名证书）
-./ASSCOR-kernel-linux-amd64-v0.1.3-mvp -listen 0.0.0.0:50051
+sudo ./ASSCOR-agent-v0.2.0-linux-amd64 --install
+sudo systemctl start asscor-agent
 ```
 
-**启动 Agent（Linux）：**
-```bash
-# 使用命令行参数
-./ASSCOR-agent-linux-amd64 -kernel 192.168.1.100:50051 -host-id server01
-
-# 或使用配置文件
-./ASSCOR-agent-linux-amd64 -config agent.ini
-```
-
-Agent 配置文件 `agent.ini` 支持心跳间隔、重连策略、mTLS 等参数自定义，详见文件内注释。
+Agent 配置 `/etc/asscor/agent.ini` 支持心跳间隔、日志格式、mTLS 等。
 
 ## 11. 与 ASSCOR μKernel 的联动
 
@@ -352,10 +352,11 @@ ASSCOR μKernel 是风险评估与指令分发中心，采用微内核 + Agent �
 | 文件 | 适用场景 | 特点 |
 |------|----------|------|
 | `config.gov.ini` | 政府机构 | 高操作可信度权重(30)，等保三级+ |
-| `config.fin.ini` | 金融行业 | 高韧性权重(20)，等保四级阈值(90) |
-| `config.med.ini` | 医疗健康 | 业务连续性优先，HIPAA 对齐 |
-| `config.edu.ini` | 教育科研 | 开放端口容忍度高，侧重基础防护 |
-| `config.ent.ini` | 企业通用 | 均衡权重，等保三级默认 |
+| `config.bank.ini` | 金融行业 | 高韧性权重(20)，等保四级阈值(90) |
+| `config.hospital.ini` | 医疗健康 | 业务连续性优先 |
+| `config.edu.ini` | 教育科研 | 开放端口容忍度高 |
+| `config.enterprise.ini` | 企业通用 | 均衡权重，等保三级默认 |
+| `config.datacenter.ini` | 数据中心 | 高可用+韧性优先 |
 
 ### 双协议栈架构
 
@@ -442,7 +443,7 @@ ASSCOR Platform
 
 ## 13. ATT&CK V19 威胁分析模块
 
-ASSCOR v0.1.4-mvp 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链，并在此基础上扩展 APT 攻击分析与检测增强子模块。该模块作为 μKernel 插件（`attck`，优先级 80，版本 2.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
+ASSCOR v0.2.0 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链。该模块作为 μKernel 插件（`attck`，优先级 21，版本 1.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
 
 ### 13.1 四大核心子模块
 
@@ -492,7 +493,7 @@ ATT&CK 模块与 SSAM 评估体系形成双向增强闭环：
 ### 13.5 模块架构
 
 ```
-ATTACKModule (Plugin v2.0.0)
+ATTACKModule (Plugin v1.0.0)
 ├── 检测与分析 (Detection & Analytics)
 │   ├── DetectionRule 引擎 — 规则注册/评估/删除
 │   ├── AnomalyEvent 记录 — 异常事件存储与查询
@@ -533,6 +534,20 @@ ATTACKModule (Plugin v2.0.0)
 - **SSAM 1.1** — 四核心域 + 独立属性，消除维度重叠
 - **SSAM 1.2** — 引入 ACI、SPC、等保映射、AVD 扩展机制、μKernel 联动
 - **SSAM 1.3** — 移除4项重叠边缘因子（SYN Cookie/供应链/自动封禁/资源紧张），SPC 引入平方和衰减，增加边缘因子合规等级覆盖，内置冲突检测
+
+### ASSCOR v0.2.0 — 2026-07-06 生产就绪发布
+
+**部署与运维：** systemd 服务管控 (systemctl start/stop/reload)、FHS 合规文件系统布局 (/etc/asscor, /var/lib/asscor, /var/log/asscor)、单二进制 --install/--uninstall/--upgrade/--version 命令、Unix socket 远程 CLI (--cli)、SIGHUP 配置热重载、systemd PIDFile 集成。
+
+**SSAM V2.0 公式修正：** 三层加权平均公式 (Intrinsic 50% / Exposure 30% / Threat 20%) 替代旧版乘积公式，新增 OpAdd AST 运算符。
+
+**安全性修复：** 9 处 goroutine 数据竞争修复 (server/interceptor/circuitbreaker/assessor/spc/attck)、5 个插件 Stop 双调 panic 防护、RegisterFormula 功能缺陷修复、CLI 模块 headless 模式内核过早退出修复、SPC 缓存持久化修复 (Stop 阻塞导致丢失)。
+
+**架构补全：** srd_adapters 通过 SRDPlugin wrapper 桥接注册、ATT&CK 9 个死扩展点全部接线、extmgr ExtTypeAdapter 生命周期补全、adapterhub Severity type alias 统一、适配器管线 ExecuteAdapter 统一 ApplyDelegation、CLI 类型断言 bug 修复、引擎 PhasePostReport 钩子阶段添加。
+
+**功能扩展：** CTI OTX/MISP 威胁情报集成、Wazuh SIEM 双向 outbound 推送、备份存档系统 (hourly snapshot + daily tar.gz)、L2 HistoricalStore 趋势分析、Prism IL 贝叶斯推理模型、韧性域 RS-013~016 四项新检查、Prism ScoreFloor 0.15 优化 + Policy 预防性隔离。
+
+**配置文件：** 6 行业模板补齐 [prism]/[attck]/[spc.cnnvd]/[spc.cnvd] 节 + 适配器路径 + 权重 key、config.ini 新增 data_dir/console_report。
 
 ### ASSCOR v0.1.3-mvp ATT&CK V19 模块扩展记录
 
@@ -623,7 +638,7 @@ ATTACKModule (Plugin v2.0.0)
 - **格式化输出** — 统一支持文本表格和 JSON 两种输出格式，通过 `--json` 参数切换
 - **HMAC 密钥管理** — 密钥元数据（创建时间/过期时间/哈希）、自动轮换（90 天）、文件权限 `0600`
 
-> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.1.4-mvp。两者版本号独立演进。
+> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.2.0。两者版本号独立演进。
 
 #### 第三批修复（SSAM 解耦与二次审计 — 2026-05-22）
 
