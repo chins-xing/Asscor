@@ -9,26 +9,24 @@ Type=simple
 User=asscor
 Group=asscor
 WorkingDirectory=/opt/asscor
+PIDFile=/opt/asscor/ASSCOR-kernel.pid
 ExecStart=/opt/asscor/ASSCOR-kernel \
     --config=/opt/asscor/config.ini \
     --listen=:50051 \
     --webui-port=8087 \
+    --pid-file=/opt/asscor/ASSCOR-kernel.pid \
     --log-format=json \
     --log-level=info \
     --log-output=/opt/asscor/logs/kernel.log
 ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/bin/kill -SIGTERM $MAINPID
 Restart=on-failure
 RestartSec=10
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
 LimitNOFILE=65536
 LimitNPROC=4096
-
-# Security hardening
-NoNewPrivileges=yes
-PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-ReadWritePaths=/opt/asscor/data /opt/asscor/logs /opt/asscor/certs
-ReadOnlyPaths=/opt/asscor/config.ini
 
 [Install]
 WantedBy=multi-user.target

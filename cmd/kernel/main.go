@@ -254,15 +254,32 @@ k.SetConfig("config_path", resolvedConfigPath)
 	}
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
-	select {
-	case sig := <-sigCh:
-		log.Info("shutting down", "signal", sig.String())
-		signal.Stop(sigCh)
-	case <-cliDone:
-		fmt.Fprintf(os.Stderr, "CLI terminal exited, shutting down...\n")
-		log.Info("shutting down", "reason", "cli_terminal_exited")
+	writePIDFile(*pidFile)
+
+loop:
+	for {
+		select {
+		case sig := <-sigCh:
+			switch sig {
+			case syscall.SIGHUP:
+				log.Info("received SIGHUP, reloading configuration")
+				if cfg, err := config.Load(resolvedConfigPath); err == nil {
+					k.SetConfigObj(cfg)
+				}
+				signal.Stop(sigCh)
+				signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+				continue loop
+			default:
+				log.Info("shutting down", "signal", sig.String())
+				signal.Stop(sigCh)
+				break loop
+			}
+		case <-cliDone:
+			log.Info("shutting down", "reason", "cli_terminal_exited")
+			break loop
+		}
 	}
 
 	if serverStarted {
@@ -286,6 +303,19 @@ func daemonize(pidFilePath string) error {
 	}
 
 	return daemonizePlatform(absPidFile)
+}
+
+func writePIDFile(pidFilePath string) {
+	if pidFilePath == "" {
+		return
+	}
+	abs, err := filepath.Abs(pidFilePath)
+	if err != nil {
+		return
+	}
+	if err := os.WriteFile(abs, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "WARN: cannot write PID file %s: %v\n", abs, err)
+	}
 }
 
 func setupTLS(certDir string) *tls.Config {

@@ -6,8 +6,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=asscor
-Group=asscor
+User=root
+Group=root
 WorkingDirectory=/opt/asscor/agent
 ExecStart=/opt/asscor/agent/ASSCOR-agent \
     --config=/opt/asscor/agent/agent.ini \
@@ -18,12 +18,8 @@ ExecStart=/opt/asscor/agent/ASSCOR-agent \
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=15
+KillMode=mixed
 LimitNOFILE=65536
-
-# Agent needs elevated privileges for system checks
-NoNewPrivileges=no
-PrivateTmp=yes
-ReadWritePaths=/opt/asscor/agent /var/run
 
 [Install]
 WantedBy=multi-user.target
