@@ -23,8 +23,14 @@ func main() {
 	logOutput := flag.String("log-output", "", "log output: stderr, stdout, or file path")
 	install := flag.Bool("install", false, "install agent as systemd service (requires root)")
 	uninstall := flag.Bool("uninstall", false, "remove agent systemd service")
+	showVersion := flag.Bool("version", false, "display version and exit")
+	upgrade := flag.Bool("upgrade", false, "upgrade existing agent installation in-place (requires root)")
 	flag.Parse()
 
+	if *showVersion {
+		fmt.Printf("ASSCOR Agent %s (SSAM %s)\n", version.ASSCORVersion, version.SSAMVersion)
+		os.Exit(0)
+	}
 	if *install {
 		if err := installAgent(); err != nil {
 			fmt.Fprintf(os.Stderr, "agent: install failed: %v\n", err)
@@ -39,6 +45,14 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stderr, "ASSCOR agent uninstalled successfully\n")
+		os.Exit(0)
+	}
+	if *upgrade {
+		if err := upgradeAgent(); err != nil {
+			fmt.Fprintf(os.Stderr, "agent: upgrade failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Agent upgraded to %s\n", version.ASSCORVersion)
 		os.Exit(0)
 	}
 

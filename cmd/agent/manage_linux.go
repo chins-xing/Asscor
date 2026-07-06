@@ -84,6 +84,44 @@ func uninstallAgent() error {
 	return nil
 }
 
+func upgradeAgent() error {
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("upgrade requires root privileges (use sudo)")
+	}
+
+	binPath := agentBinDir + "/ASSCOR-agent"
+	backupPath := binPath + ".bak"
+
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		return fmt.Errorf("no existing agent installation — use --install first")
+	}
+
+	_ = exec.Command("systemctl", "stop", agentServiceName).Run()
+
+	if err := os.Rename(binPath, backupPath); err != nil {
+		_ = exec.Command("systemctl", "start", agentServiceName).Run()
+		return fmt.Errorf("backup existing agent: %w", err)
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("get executable path: %w", err)
+	}
+	if err := copyFile(exe, binPath); err != nil {
+		os.Rename(backupPath, binPath)
+		_ = exec.Command("systemctl", "start", agentServiceName).Run()
+		return fmt.Errorf("copy new agent: %w (old restored)", err)
+	}
+	os.Chmod(binPath, 0755)
+
+	if err := exec.Command("systemctl", "start", agentServiceName).Run(); err != nil {
+		return fmt.Errorf("start agent after upgrade: %w (old at %s)", err, backupPath)
+	}
+
+	fmt.Fprintf(os.Stderr, "Agent upgrade complete. Old: %s\n", backupPath)
+	return nil
+}
+
 func copyFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
