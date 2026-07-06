@@ -8,20 +8,21 @@ import (
 	"os/exec"
 )
 
-const agentServiceName = "asscor-agent"
-const agentServiceFile = "/etc/systemd/system/asscor-agent.service"
+const (
+	agentServiceName = "asscor-agent"
+	agentServiceFile = "/etc/systemd/system/asscor-agent.service"
+	agentBinDir      = "/opt/asscor/agent"
+	agentConfigPath  = "/etc/asscor/agent.ini"
+)
 
 func installAgent() error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("install requires root privileges (use sudo)")
 	}
 
-	const installPath = "/opt/asscor/agent"
-	const binPath = installPath + "/ASSCOR-agent"
-	const configPath = installPath + "/agent.ini"
-	const logsDir = "/opt/asscor/logs"
+	logsDir := "/var/log/asscor"
 
-	dirs := []string{installPath, logsDir}
+	dirs := []string{agentBinDir, "/etc/asscor", logsDir}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			return fmt.Errorf("create directory %s: %w", d, err)
@@ -32,16 +33,18 @@ func installAgent() error {
 	if err != nil {
 		return fmt.Errorf("get executable path: %w", err)
 	}
-	if err := copyFile(exe, binPath); err != nil {
+	if err := copyFile(exe, agentBinDir+"/ASSCOR-agent"); err != nil {
 		return fmt.Errorf("copy binary: %w", err)
 	}
-	if err := os.Chmod(binPath, 0755); err != nil {
+	if err := os.Chmod(agentBinDir+"/ASSCOR-agent", 0755); err != nil {
 		return fmt.Errorf("chmod binary: %w", err)
 	}
 
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		copyFile("agent.ini", configPath)
+	if _, err := os.Stat(agentConfigPath); os.IsNotExist(err) {
+		copyFile("agent.ini", agentConfigPath)
 	}
+
+	exec.Command("chown", "-R", "asscor:asscor", agentBinDir, "/etc/asscor").Run()
 
 	svcContent := fmt.Sprintf(`[Unit]
 Description=ASSCOR Agent - Host Security Assessment Probe
@@ -50,7 +53,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%s --config=%s --kernel=127.0.0.1:50051 --log-format=text --log-level=info --log-output=%s/agent.log
+User=root
+Group=root
+ExecStart=%s/ASSCOR-agent --config=%s --kernel=127.0.0.1:50051 --log-format=text --log-level=info --log-output=%s/agent.log
 Restart=always
 RestartSec=15
 KillMode=mixed
@@ -58,7 +63,7 @@ LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
-`, binPath, configPath, logsDir)
+`, agentBinDir, agentConfigPath, logsDir)
 
 	if err := os.WriteFile(agentServiceFile, []byte(svcContent), 0644); err != nil {
 		return fmt.Errorf("write service file: %w", err)
@@ -72,7 +77,6 @@ func uninstallAgent() error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("uninstall requires root privileges (use sudo)")
 	}
-
 	_ = exec.Command("systemctl", "stop", agentServiceName).Run()
 	_ = exec.Command("systemctl", "disable", agentServiceName).Run()
 	os.Remove(agentServiceFile)

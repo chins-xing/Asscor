@@ -1,6 +1,5 @@
 [Unit]
 Description=ASSCOR Agent - Host Security Assessment Probe
-Documentation=https://github.com/asscor/asscor
 After=network-online.target
 Wants=network-online.target
 
@@ -8,14 +7,12 @@ Wants=network-online.target
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/opt/asscor/agent
 ExecStart=/opt/asscor/agent/ASSCOR-agent \
-    --config=/opt/asscor/agent/agent.ini \
+    --config=/etc/asscor/agent.ini \
     --kernel=127.0.0.1:50051 \
     --log-format=text \
     --log-level=info \
-    --log-output=/opt/asscor/logs/agent.log
-ExecReload=/bin/kill -HUP $MAINPID
+    --log-output=/var/log/asscor/agent.log
 Restart=always
 RestartSec=15
 KillMode=mixed

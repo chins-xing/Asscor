@@ -1,6 +1,5 @@
 [Unit]
 Description=ASSCOR Microkernel - Security Acceptability Assessment Engine
-Documentation=https://github.com/asscor/asscor
 After=network-online.target
 Wants=network-online.target
 
@@ -8,25 +7,25 @@ Wants=network-online.target
 Type=simple
 User=asscor
 Group=asscor
-WorkingDirectory=/opt/asscor
-PIDFile=/opt/asscor/ASSCOR-kernel.pid
 ExecStart=/opt/asscor/ASSCOR-kernel \
-    --config=/opt/asscor/config.ini \
+    --config=/etc/asscor/config.ini \
     --listen=:50051 \
     --webui-port=8087 \
     --pid-file=/opt/asscor/ASSCOR-kernel.pid \
     --log-format=json \
     --log-level=info \
-    --log-output=/opt/asscor/logs/kernel.log
+    --log-output=/var/log/asscor/kernel.log
 ExecReload=/bin/kill -HUP $MAINPID
 ExecStop=/bin/kill -SIGTERM $MAINPID
 Restart=on-failure
 RestartSec=10
+PIDFile=/opt/asscor/ASSCOR-kernel.pid
 KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=30
 LimitNOFILE=65536
 LimitNPROC=4096
+ReadWritePaths=/opt/asscor /var/lib/asscor /var/log/asscor
 
 [Install]
 WantedBy=multi-user.target
