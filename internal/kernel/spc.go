@@ -403,16 +403,17 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 	var kevCatalog map[string]bool
 
 	m.mu.RLock()
-	cves = make([]SPCCVEScore, len(m.cveCache))
-	copy(cves, m.cveCache)
+	// Reference the cache slice and KEV map directly instead of deep-copying up
+	// to 100k CVE structs on every assessment. The matching loop is read-only on
+	// these shared structures; per-CVE results are collected in a local penalties
+	// slice. Cache mutation only happens under m.mu.Lock elsewhere (AddCVE/Merge),
+	// and Calculate is invoked synchronously from the assessment path.
+	cves = m.cveCache
 	if a, ok := m.assetCache[hostID]; ok {
 		assetCopy := *a
 		asset = &assetCopy
 	}
-	kevCatalog = make(map[string]bool, len(m.kevCatalog))
-	for k, v := range m.kevCatalog {
-		kevCatalog[k] = v
-	}
+	kevCatalog = m.kevCatalog
 	m.mu.RUnlock()
 
 	logger.WithComponent("spc").Info("Calculate called",
@@ -433,14 +434,23 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 
 	pkgNames := extractPkgNames(assetPackages)
 	pkgNameSet := make(map[string]bool, len(pkgNames))
+	lowerPkgNames := make([]string, 0, len(pkgNames))
 	for _, n := range pkgNames {
-		pkgNameSet[strings.ToLower(n)] = true
+		if len(n) < 2 {
+			continue
+		}
+		ln := strings.ToLower(n)
+		pkgNameSet[ln] = true
+		lowerPkgNames = append(lowerPkgNames, ln)
 	}
 
 	installedCPESet := make(map[string]bool, 0)
+	lowerInstalledCPEs := make([]string, 0)
 	if asset != nil && len(asset.InstalledCPEs) > 0 {
 		for _, cpe := range asset.InstalledCPEs {
-			installedCPESet[strings.ToLower(cpe)] = true
+			lc := strings.ToLower(cpe)
+			installedCPESet[lc] = true
+			lowerInstalledCPEs = append(lowerInstalledCPEs, lc)
 		}
 	}
 
@@ -477,7 +487,7 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		cve := &cves[i]
 		matchStats.total++
 
-		matchType, matched := m.matchCPE(cve, asset, assetPackages)
+		matchType, matched := m.matchCPEFast(cve, lowerPkgNames, lowerInstalledCPEs)
 
 		if !matched {
 			continue
@@ -497,14 +507,9 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		if len(cve.AffectedCPEs) == 0 {
 			matchStats.noCPEs++
 		}
-		cve.Matched = true
-		cve.MatchType = matchType
 
 		exposure := m.determineExposure(asset)
-		cve.Exposure = exposure
-
 		controlLevel := m.determineControlLevel(asset)
-		cve.ControlLevel = controlLevel
 
 		cvssFactor := math.Min(1.0, cve.CVSS/10.0)
 		epssFactor := 0.0
@@ -533,7 +538,7 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 			impact = impact * (1.0 + 0.2*float64(nAptGroups))
 		}
 
-		localFactor := cve.MatchType.Factor() * cve.Exposure.Factor() * cve.ControlLevel.Factor()
+		localFactor := matchType.Factor() * exposure.Factor() * controlLevel.Factor()
 
 		days := time.Since(cve.DatePublished).Hours() / 24
 		if days < 0 {
@@ -635,6 +640,51 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 	}
 
 	return correction
+}
+
+func (m *SPCModule) matchCPEFast(cve *SPCCVEScore, lowerPkgNames []string, lowerInstalledCPEs []string) (MatchType, bool) {
+	if len(cve.AffectedCPEs) == 0 {
+		if len(lowerPkgNames) == 0 {
+			return MatchNone, false
+		}
+		lowerDesc := strings.ToLower(cve.Description)
+		for _, ln := range lowerPkgNames {
+			if strings.Contains(lowerDesc, ln) {
+				return MatchCPEProduct, true
+			}
+		}
+		return MatchNone, false
+	}
+
+	lowerVulnCPEs := make([]string, len(cve.AffectedCPEs))
+	for i, cpe := range cve.AffectedCPEs {
+		lowerVulnCPEs[i] = strings.ToLower(cpe)
+	}
+
+	if len(lowerInstalledCPEs) > 0 {
+		bestMatch := MatchNone
+		for _, myCPE := range lowerInstalledCPEs {
+			for _, vulnCPE := range lowerVulnCPEs {
+				matchLevel := m.compareCPE(myCPE, vulnCPE)
+				if matchLevel > bestMatch {
+					bestMatch = matchLevel
+				}
+			}
+		}
+		if bestMatch > MatchNone {
+			return bestMatch, true
+		}
+	}
+
+	for _, ln := range lowerPkgNames {
+		for _, lowerCPE := range lowerVulnCPEs {
+			if strings.Contains(lowerCPE, ln) {
+				return MatchCPEProduct, true
+			}
+		}
+	}
+
+	return MatchNone, false
 }
 
 func (m *SPCModule) matchCPE(cve *SPCCVEScore, asset *LocalAsset, packages []string) (MatchType, bool) {

@@ -112,7 +112,7 @@ func (m *LogCollectorModule) flushLoop() {
 		}
 	}()
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	for {

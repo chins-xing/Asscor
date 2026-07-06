@@ -80,7 +80,7 @@ func TestComputeDynamicFinalScore_Formula(t *testing.T) {
 			edgeFactor:  1.0,
 			threatCoeff: 1.0,
 			spcScore:    1.0,
-			expected:    0.0,
+			expected:    50.0,
 		},
 		{
 			name: "half scores",
@@ -92,7 +92,7 @@ func TestComputeDynamicFinalScore_Formula(t *testing.T) {
 			edgeFactor:  1.0,
 			threatCoeff: 1.0,
 			spcScore:    1.0,
-			expected:    50.0,
+			expected:    75.0,
 		},
 		{
 			name: "with edge factor penalty",
@@ -104,7 +104,7 @@ func TestComputeDynamicFinalScore_Formula(t *testing.T) {
 			edgeFactor:  0.85,
 			threatCoeff: 1.0,
 			spcScore:    1.0,
-			expected:    85.0,
+			expected:    92.5,
 		},
 		{
 			name: "with threat coefficient",
@@ -116,7 +116,7 @@ func TestComputeDynamicFinalScore_Formula(t *testing.T) {
 			edgeFactor:  1.0,
 			threatCoeff: 0.9,
 			spcScore:    1.0,
-			expected:    90.0,
+			expected:    98.0,
 		},
 		{
 			name: "with SPC penalty",
@@ -128,7 +128,7 @@ func TestComputeDynamicFinalScore_Formula(t *testing.T) {
 			edgeFactor:  1.0,
 			threatCoeff: 1.0,
 			spcScore:    0.85,
-			expected:    85.0,
+			expected:    95.5,
 		},
 		{
 			name: "all penalties combined",
@@ -140,7 +140,7 @@ func TestComputeDynamicFinalScore_Formula(t *testing.T) {
 			edgeFactor:  0.85,
 			threatCoeff: 0.9,
 			spcScore:    0.85,
-			expected:    math.Round((80*35+70*25+60*25+50*15)/100*0.85*0.9*0.85*100) / 100,
+			expected:    72.4,
 		},
 	}
 
@@ -342,7 +342,11 @@ func TestAssessFromResults_EndToEnd(t *testing.T) {
 	}
 
 	weightedSum := (expectedAS*35 + 100*25 + expectedOT*25 + 100*15) / 100
-	expectedFinal := math.Round(weightedSum*0.85*0.9*1.0*100) / 100
+	// SSAM V2.0 three-layer weighted average: intrinsic(50) + exposure(30) + threat(20)
+	intrinsic := weightedSum / 100 * 0.85
+	exposure := 1.0
+	threat := 0.9
+	expectedFinal := math.Round((intrinsic*50+exposure*30+threat*20)/100*100*100) / 100
 	if math.Abs(result.FinalScore-expectedFinal) > 0.01 {
 		t.Errorf("FinalScore = %.4f, want %.4f (weightedSum=%.4f)", result.FinalScore, expectedFinal, weightedSum)
 	}

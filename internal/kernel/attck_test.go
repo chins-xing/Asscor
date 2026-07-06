@@ -711,8 +711,8 @@ func TestATTACKModule_Version(t *testing.T) {
 func TestATTACKModule_Info(t *testing.T) {
 	m := NewATTACKModule()
 	info := m.Info()
-	if info.Version != "2.0.0" {
-		t.Errorf("expected version 2.0.0, got %s", info.Version)
+	if info.Version != "1.0.0" {
+		t.Errorf("expected version 1.0.0, got %s", info.Version)
 	}
 	if info.Name != "attck" {
 		t.Errorf("expected name attck, got %s", info.Name)

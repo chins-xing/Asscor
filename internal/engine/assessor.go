@@ -694,25 +694,33 @@ func (a *Assessor) applyATTACK(hostID string, result *model.AssessmentResult) {
 	}
 
 	var failedTechIDs []string
+	// Fetch tactics once and index by ID instead of copying the whole slice per coverage.
+	allTactics := a.attackProvider.GetAllTactics()
+	tacticByID := make(map[string]ATTACKTacticInfo, len(allTactics))
+	for _, t := range allTactics {
+		tacticByID[t.ID] = t
+	}
 	for _, cov := range coverages {
-		if cov.CoverageDet < 100 {
-			for _, tactic := range a.attackProvider.GetAllTactics() {
-				if tactic.ID == cov.TacticID {
-					for _, tech := range tactic.Techniques {
-						if len(tech.AsscorChecks) > 0 {
-							allFailed := false
-							for _, check := range tech.AsscorChecks {
-								if passed, ok := checkResults[check]; ok && !passed {
-									allFailed = true
-									break
-								}
-							}
-							if allFailed {
-								failedTechIDs = append(failedTechIDs, tech.ID)
-							}
-						}
-					}
+		if cov.CoverageDet >= 100 {
+			continue
+		}
+		tactic, ok := tacticByID[cov.TacticID]
+		if !ok {
+			continue
+		}
+		for _, tech := range tactic.Techniques {
+			if len(tech.AsscorChecks) == 0 {
+				continue
+			}
+			allFailed := false
+			for _, check := range tech.AsscorChecks {
+				if passed, ok := checkResults[check]; ok && !passed {
+					allFailed = true
+					break
 				}
+			}
+			if allFailed {
+				failedTechIDs = append(failedTechIDs, tech.ID)
 			}
 		}
 	}

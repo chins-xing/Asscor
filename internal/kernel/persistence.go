@@ -456,7 +456,7 @@ func (m *PersistenceModule) WriteAssessment(record AssessmentRecord) error {
 }
 
 func (m *PersistenceModule) WriteDashboardReport(report *DashboardReport) error {
-	data, err := json.MarshalIndent(report, "", "  ")
+	data, err := json.Marshal(report)
 	if err != nil {
 		return fmt.Errorf("dashboard marshal: %w", err)
 	}

@@ -137,10 +137,13 @@ func as001() model.CheckItem {
 		Platform:      "linux",
 		Check: func() (bool, string) {
 			dangerous := []string{"telnet", "rsh", "rlogin", "rexec", "chargen", "echo", "discard", "daytime", "time", "tftp", "xinetd"}
+			// Single batched systemctl call instead of one fork per service.
+			args := append([]string{"is-active"}, dangerous...)
+			out, _ := common.RunCmdQuiet("systemctl", args...)
+			lines := strings.Split(strings.TrimSpace(out), "\n")
 			var active []string
-			for _, svc := range dangerous {
-				out, ok := common.RunCmdQuiet("systemctl", "is-active", svc)
-				if ok && strings.TrimSpace(out) == "active" {
+			for i, svc := range dangerous {
+				if i < len(lines) && strings.TrimSpace(lines[i]) == "active" {
 					active = append(active, svc)
 				}
 			}
