@@ -310,28 +310,21 @@ k.SetConfig("config_path", resolvedConfigPath)
 	}
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	writePIDFile(*pidFile)
 
+	// Note: SIGHUP is handled exclusively by the ConfigWatcherModule's sighupLoop,
+	// which performs the full reload chain (SetConfigObj + assessor.ReloadConfig +
+	// config.reloaded event). Do NOT handle SIGHUP here to avoid a redundant,
+	// incomplete reload that races with the config watcher.
 loop:
 	for {
 		select {
 		case sig := <-sigCh:
-			switch sig {
-			case syscall.SIGHUP:
-				log.Info("received SIGHUP, reloading configuration")
-				if cfg, err := config.Load(resolvedConfigPath); err == nil {
-					k.SetConfigObj(cfg)
-				}
-				signal.Stop(sigCh)
-				signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-				continue loop
-			default:
-				log.Info("shutting down", "signal", sig.String())
-				signal.Stop(sigCh)
-				break loop
-			}
+			log.Info("shutting down", "signal", sig.String())
+			signal.Stop(sigCh)
+			break loop
 		case <-cliDone:
 			log.Info("shutting down", "reason", "cli_terminal_exited")
 			break loop
