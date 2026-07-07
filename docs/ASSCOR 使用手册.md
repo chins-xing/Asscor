@@ -1,6 +1,6 @@
 # ASSCOR 使用手册
 
-> 版本：v0.2.0 | SSAM 2.0 | 最后更新：2026-06-28
+> 版本：v0.2.0 | SSAM 2.0 | 最后更新：2026-07-07
 
 ---
 
@@ -67,25 +67,27 @@ SSAM_final = (Σ(S_i × W_i) / ΣW_i) × ΠM_j × μ × P_score
 - Kernel 与 Agent 间网络可达
 - （推荐）NVD API Key：从 https://nvd.nist.gov/developers/request-an-api-key 获取
 
-### 2.2 最小部署
+### 2.2 最小部署（生产，推荐）
 
 ```bash
-# 1. 部署 Kernel
-./ASSCOR-kernel-linux-x86_64 -config config.ini -listen :50051
+# 1. 安装并启动 Kernel（一条命令完成 systemd + FHS + PATH）
+sudo ./ASSCOR-kernel-v0.2.0-linux-amd64 --install
+sudo systemctl start asscor-kernel
 
-# 2. 在目标主机部署 Agent
-./ASSCOR-agent-linux-x86_64 -kernel 192.168.1.10:50051 -tls
+# 2. 安装并启动 Agent（目标主机）
+sudo ./ASSCOR-agent-v0.2.0-linux-amd64 --install
+sudo systemctl start asscor-agent
 
-# 3. Kernel 启动后进入交互式 CLI
-# 直接在终端输入命令即可操作
+# 3. 连接 CLI 管理
+asscor-cli               # status / plugins / history / exit
 ```
 
-### 2.3 离线评估（无需 Agent）
+### 2.3 离线评估（无需 Kernel/Agent）
 
 ```bash
-# 单机模式：直接在本地执行评估
-./ASSCOR -config config.ini          # 文本报告
-./ASSCOR -config config.ini -json    # JSON 报告
+# 单机模式：直接在本地执行评估，结果打印到终端
+./ASSCOR-v0.2.0-linux-amd64 --config=/etc/asscor/config.ini          # 文本报告
+./ASSCOR-v0.2.0-linux-amd64 --config=/etc/asscor/config.ini -json    # JSON 报告
 ```
 
 ---
@@ -136,35 +138,120 @@ ASSCOR-kernel [选项]
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `-config` | `config.ini` | 配置文件路径 |
-| `-listen` | `:50051` | gRPC 监听地址 |
-| `-no-mtls` | `false` | 禁用 mTLS（**仅限开发环境**） |
-| `-cert-dir` | `certs` | TLS 证书目录 |
-| `-verify-certs` | `false` | 验证证书链一致性后退出 |
-| `-force-regen-certs` | `false` | 强制重新生成所有 TLS 证书 |
-| `-daemon` | `false` | 以守护进程模式运行 |
-| `-pid-file` | `ASSCOR-kernel.pid` | PID 文件路径 |
-| `-log-format` | `json` | 日志格式：`json`、`text` |
-| `-log-level` | `info` | 日志级别：`debug`、`info`、`warn`、`error` |
-| `-log-output` | `stderr` | 日志输出：`stderr`、`stdout`、或文件路径 |
+| `--config` | `config.ini` | 配置文件路径 |
+| `--listen` | `:50051` | gRPC 监听地址 |
+| `--webui-port` | `8087` | Web 仪表盘端口（0 禁用） |
+| `--no-mtls` | `false` | 禁用 mTLS（**仅限开发环境**） |
+| `--cert-dir` | `certs` | TLS 证书目录 |
+| `--verify-certs` | `false` | 验证证书链一致性后退出 |
+| `--force-regen-certs` | `false` | 强制重新生成所有 TLS 证书 |
+| `--daemon` | `false` | 以守护进程模式运行 |
+| `--pid-file` | `ASSCOR-kernel.pid` | PID 文件路径 |
+| `--version` | — | 显示版本并退出 |
+| `--install` | — | 安装为 systemd 服务（需 root） |
+| `--uninstall` | — | 卸载 systemd 服务（需 root） |
+| `--upgrade` | — | 原地升级已安装版本（需 root） |
+| `--check-install` | — | 校验安装完整性后退出 |
+| `--cli <socket>` | — | 连接到运行中内核的 CLI（Unix socket） |
+| `--log-format` | `json` | 日志格式：`json`、`text` |
+| `--log-level` | `info` | 日志级别：`debug`、`info`、`warn`、`error` |
+| `--log-output` | `stderr` | 日志输出：`stderr`、`stdout`、或文件路径 |
 
-### 4.2 启动示例
+### 4.2 生产部署（systemd + FHS，推荐）
+
+单二进制自带安装能力，一条命令完成 systemd 服务注册、FHS 目录布局、PATH 符号链接、用户创建：
+
+```bash
+# 安装（需 root）
+sudo ./ASSCOR-kernel-v0.2.0-linux-amd64 --install
+
+# 启动 + 开机自启
+sudo systemctl start asscor-kernel
+sudo systemctl enable asscor-kernel
+
+# 安装 Agent（同一主机或被评估主机）
+sudo ./ASSCOR-agent-v0.2.0-linux-amd64 --install
+sudo systemctl start asscor-agent
+```
+
+**FHS 文件系统布局**：
+
+```
+/etc/asscor/config.ini              # 内核配置
+/etc/asscor/agent.ini               # Agent 配置
+/etc/asscor/config/                 # 6 行业模板
+/opt/asscor/ASSCOR-kernel           # 内核二进制
+/opt/asscor/agent/ASSCOR-agent      # Agent 二进制
+/opt/asscor/asscor-cli.sock         # CLI Unix socket
+/var/lib/asscor/                    # 数据（CVE 缓存、评估记录、备份）
+/var/lib/asscor/latest-assessment.json      # 最新评估报告
+/var/lib/asscor/assessments-<date>.jsonl     # 历史评估记录
+/var/log/asscor/kernel.log          # 内核日志
+/usr/bin/asscor                     # 全局命令（符号链接）
+/usr/bin/asscor-cli                 # CLI 便捷包装脚本
+```
+
+安装后 `asscor` 与 `asscor-cli` 在任意路径（含 `sudo`）可用。
+
+### 4.3 systemctl 管控
+
+| 命令 | 效果 |
+|------|------|
+| `systemctl start asscor-kernel` | 启动服务 |
+| `systemctl stop asscor-kernel` | 停止（SIGTERM → 优雅关闭，保存 CVE 缓存） |
+| `systemctl reload asscor-kernel` | SIGHUP → 热重载 config.ini（权重/阈值/Prism/边缘因子） |
+| `systemctl status asscor-kernel` | 查看状态 |
+| `journalctl -u asscor-kernel -f` | 实时跟踪日志 |
+
+### 4.4 版本升级
+
+```bash
+# 原地升级（自动停止→备份→替换→启动，失败自动回滚）
+sudo ./ASSCOR-kernel-v0.2.1-linux-amd64 --upgrade
+asscor --version         # 确认版本
+```
+
+升级会自动补建 PATH 符号链接并保留旧二进制于 `.bak`。
+
+### 4.5 远程 CLI
+
+内核以 systemd 服务运行时（无交互终端），通过 Unix socket 连接 CLI：
+
+```bash
+asscor-cli               # 便捷方式（自动连接 socket）
+# 或
+asscor --cli /opt/asscor/asscor-cli.sock
+
+asscor> status           # 查看内核状态
+asscor> plugins          # 插件列表
+asscor> exit             # 断开（内核继续运行）
+```
+
+> `exit`/`quit` 仅断开当前 CLI 会话，内核持续运行。只有 `systemctl stop` 才会完整退出内核。
+
+### 4.6 命令行参数（手动运行）
+
+```bash
+ASSCOR-kernel [选项]
+```
+
+### 4.7 启动示例
 
 ```bash
 # 标准启动（mTLS 启用）
-./ASSCOR-kernel-linux-x86_64 -config /etc/ASSCOR/config.ini -listen :50051
+./ASSCOR-kernel-v0.2.0-linux-amd64 --config=/etc/asscor/config.ini --listen=:50051
 
 # 开发模式（无 mTLS）
-./ASSCOR-kernel-linux-x86_64 -no-mtls -log-level debug -log-format text
+./ASSCOR-kernel-v0.2.0-linux-amd64 --no-mtls --log-level=debug --log-format=text
 
 # 守护进程模式
-./ASSCOR-kernel-linux-x86_64 -daemon -pid-file /var/run/ASSCOR-kernel.pid
+./ASSCOR-kernel-v0.2.0-linux-amd64 --daemon --pid-file=/var/run/ASSCOR-kernel.pid
 
 # 验证证书
-./ASSCOR-kernel-linux-x86_64 -verify-certs -cert-dir /etc/ASSCOR/certs
+./ASSCOR-kernel-v0.2.0-linux-amd64 --verify-certs --cert-dir=/etc/asscor/certs
 
 # 重新生成证书
-./ASSCOR-kernel-linux-x86_64 -force-regen-certs -cert-dir /etc/ASSCOR/certs
+./ASSCOR-kernel-v0.2.0-linux-amd64 --force-regen-certs --cert-dir=/etc/asscor/certs
 ```
 
 ### 4.3 启动输出
@@ -206,28 +293,38 @@ ASSCOR-agent [选项]
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `-config` | `agent.ini` | Agent 配置文件路径 |
-| `-kernel` | `127.0.0.1:50051` | Kernel 地址（host:port） |
-| `-host-id` | 主机名 | Agent 主机标识符 |
-| `-tls` | `false` | 启用 mTLS 连接 |
-| `-tls-skip-verify` | `false` | 跳过 TLS 证书验证（**仅限开发环境**） |
-| `-cert-dir` | `certs` | TLS 证书目录 |
-| `-log-format` | `json` | 日志格式 |
-| `-log-level` | `info` | 日志级别 |
-| `-log-output` | `stderr` | 日志输出 |
+| `--config` | `agent.ini` | Agent 配置文件路径 |
+| `--kernel` | `127.0.0.1:50051` | Kernel 地址（host:port） |
+| `--host-id` | 主机名 | Agent 主机标识符 |
+| `--tls` | `false` | 启用 mTLS 连接 |
+| `--tls-skip-verify` | `false` | 跳过 TLS 证书验证（**仅限开发环境**） |
+| `--cert-dir` | `certs` | TLS 证书目录 |
+| `--install` | — | 安装为 systemd 服务（需 root） |
+| `--uninstall` | — | 卸载 systemd 服务（需 root） |
+| `--upgrade` | — | 原地升级（需 root） |
+| `--version` | — | 显示版本并退出 |
+| `--log-format` | `json` | 日志格式 |
+| `--log-level` | `info` | 日志级别 |
+| `--log-output` | `stderr` | 日志输出 |
 
-### 5.2 启动示例
+### 5.2 部署示例
 
 ```bash
-# 连接远程 Kernel（mTLS）
-./ASSCOR-agent-linux-x86_64 -kernel 192.168.1.10:50051 -tls -cert-dir /etc/ASSCOR/certs
+# 生产安装（systemd）
+sudo ./ASSCOR-agent-v0.2.0-linux-amd64 --install
+sudo systemctl start asscor-agent
+
+# 手动运行：连接远程 Kernel（mTLS）
+./ASSCOR-agent-v0.2.0-linux-amd64 --kernel=192.168.1.10:50051 --tls --cert-dir=/etc/asscor/certs
 
 # 指定主机 ID
-./ASSCOR-agent-linux-x86_64 -kernel 10.0.0.5:50051 -tls -host-id web-server-01
+./ASSCOR-agent-v0.2.0-linux-amd64 --kernel=10.0.0.5:50051 --tls --host-id=web-server-01
 
 # 开发模式
-./ASSCOR-agent-linux-x86_64 -kernel localhost:50051 -tls-skip-verify -log-level debug
+./ASSCOR-agent-v0.2.0-linux-amd64 --kernel=localhost:50051 --tls-skip-verify --log-level=debug
 ```
+
+> Agent 需 root 运行以执行系统级检查（读取 `/etc/shadow`、`iptables` 等）。非 root 运行时需要 root 权限的检查项自动跳过并标记。
 
 ### 5.3 Agent 配置文件
 
@@ -272,10 +369,10 @@ certs/
 
 ```bash
 # 验证证书链一致性
-./ASSCOR-kernel-linux-x86_64 -verify-certs -cert-dir /etc/ASSCOR/certs
+./ASSCOR-kernel-v0.2.0-linux-amd64 --verify-certs --cert-dir=/etc/asscor/certs
 
 # 强制重新生成所有证书（旧证书将被删除）
-./ASSCOR-kernel-linux-x86_64 -force-regen-certs -cert-dir /etc/ASSCOR/certs
+./ASSCOR-kernel-v0.2.0-linux-amd64 --force-regen-certs --cert-dir=/etc/asscor/certs
 ```
 
 ### 6.3 证书分发
@@ -627,7 +724,7 @@ ASSCOR> attck emulate --scenario=<scenarioID> --host=web-server-01 --safe
 
 ```bash
 # 启动守护进程
-./ASSCOR-kernel-linux-x86_64 -daemon -pid-file /var/run/ASSCOR-kernel.pid
+./ASSCOR-kernel-v0.2.0-linux-amd64 --daemon --pid-file=/var/run/ASSCOR-kernel.pid
 
 # 停止守护进程
 kill $(cat /var/run/ASSCOR-kernel.pid)
@@ -639,22 +736,37 @@ kill $(cat /var/run/ASSCOR-kernel.pid)
 
 ## 13. 离线评估模式
 
-`ASSCOR` 命令提供单机离线评估，无需部署 Kernel 和 Agent：
+`ASSCOR` 命令提供单机离线评估，无需部署 Kernel 和 Agent，即时输出到终端：
 
 ```bash
-# 文本报告
-./ASSCOR -config config.ini
+# 文本报告（直接打印到终端）
+./ASSCOR-v0.2.0-linux-amd64 --config=/etc/asscor/config.ini
 
-# JSON 报告
-./ASSCOR -config config.ini -json
+# JSON 报告（可重定向到文件）
+./ASSCOR-v0.2.0-linux-amd64 --config=/etc/asscor/config.ini -json > report.json
 ```
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `-config` | `config.ini` | 配置文件路径 |
-| `-json` | `false` | 以 JSON 格式输出 |
+| `--config` | `config.ini` | 配置文件路径 |
+| `--json` | `false` | 以 JSON 格式输出 |
 
-离线评估模式下 SPC 模块仍可工作（如已配置数据源），但无 Agent 上报数据。
+单机模式的完整能力：
+
+- **核心检查**：76+ 项本地安全检查（含 KS 内核安全域）
+- **SPC 态势计算**：如已配置数据源则自动拉取 NVD/EPSS/KEV 并计算
+- **ATT&CK 分析**：覆盖度、Kill Chain、APT 归因、风险预测
+- **外部适配器外派**：config.ini `[adapters]` 中启用的工具（Trivy/Lynis/Suricata/ClamAV/AIDE 等）自动执行并将发现外派到对应检查项
+- **SRD/Prism 三层分析**：Core（动态评分）→ Semantic（模糊状态）→ Inference（趋势预测）
+
+> **报告位置说明**：单机模式的报告**仅输出到终端/stdout**，不写入磁盘。若需持久化历史报告，请使用 Kernel + Agent 模式（报告自动写入 `/var/lib/asscor/`，见 §4.2）。
+
+### 13.1 报告位置对照
+
+| 模式 | 报告位置 |
+|------|----------|
+| 单机 `ASSCOR` | 终端 stdout（`-json > file` 可保存） |
+| Kernel 服务模式 | `/var/lib/asscor/latest-assessment.json`（最新）<br>`/var/lib/asscor/assessments-<date>.jsonl`（历史）<br>WebUI `http://<host>:8087` |
 
 ---
 
@@ -845,7 +957,7 @@ ASSCOR> attck improve create --name="Harden credential policy"  # 持续改进�
 
 - **自动补全**：输入命令后按 `Tab` 键触发（命令名、子命令、选项均可补全）
 - **命令历史**：使用 `↑`/`↓` 箭头键浏览历史命令
-- **脚本集成**：所有命令支持 `--json` 选项输出结构化 JSON：`echo "spc summary --json" | ./ASSCOR-kernel-linux-x86_64`
+- **脚本集成**：所有命令支持 `--json` 选项输出结构化 JSON：`echo "spc summary --json" | asscor-cli`
 - **退出码**：0=成功，1=执行错误，2=用法错误，130=用户取消
 
 ### 16.13 插件注册自定义命令
@@ -871,6 +983,7 @@ if ok {
 
 | 版本 | 日期 | 主要变更 |
 |------|------|----------|
+| v0.2.0 | 2026-07-07 | 单二进制安装(--install/--uninstall/--upgrade/--version)；FHS布局(/etc/asscor,/var/lib/asscor,/var/log/asscor)；systemctl管控+SIGHUP热重载；远程CLI(Unix socket, asscor-cli)；PATH符号链接(/usr/bin/asscor)；单机模式支持适配器外派+SRD三层分析；SSAM V2加权平均评分；persistence路径修复；agent心跳频率优化 |
 | v0.2.0 | 2026-06-28 | CLI spc子命令(score/kev/fetch)实现；kernel控制台评估报告(config.ini console_report)；agent日志格式可配置(agent.ini log_format)；source deploy命令；ATT&CK版本/优先级修正；config热重载默认开启；管理适配器Parse升级；系统d service + Dockerfile |
 | v0.1.4-mvp | 2026-06-09 | SSAM V2.0三层语义模型；ATT&CK V19模块；SPC多数据源(CNNVD/CNVD/MISP)；扩展管理器；Prism SRD引擎 |
 | v0.1.3-mvp | 2026-05-25 | gRPC/JSONRPC双协议栈；权重热加载；SPC磁盘持久化；适配器集成模块 |
