@@ -19,6 +19,7 @@ FROM alpine:3.20
 RUN adduser -D -h /opt/asscor asscor && \
     mkdir -p /opt/asscor/data /opt/asscor/logs /opt/asscor/agent && \
     mkdir -p /etc/asscor/config && \
+    mkdir -p /opt/asscor/certs && \
     mkdir -p /var/lib/asscor && \
     mkdir -p /var/log/asscor
 
