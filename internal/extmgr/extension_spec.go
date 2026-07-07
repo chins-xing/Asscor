@@ -19,6 +19,7 @@ const (
 	ExtTypeDomain        ExtensionType = "domain"
 	ExtTypeEdgeFactor    ExtensionType = "edge_factor"
 	ExtTypeCLICommand    ExtensionType = "cli_command"
+	ExtTypeWebPanel      ExtensionType = "web_panel"
 	ExtTypeCustom        ExtensionType = "custom"
 )
 
@@ -277,7 +278,8 @@ func (s ExtensionSpec) Validate() error {
 	}
 	switch s.ExtType {
 	case ExtTypeCheckModule, ExtTypeScoringPlugin, ExtTypeAdapter,
-		ExtTypeHook, ExtTypeDomain, ExtTypeEdgeFactor, ExtTypeCLICommand, ExtTypeCustom:
+		ExtTypeHook, ExtTypeDomain, ExtTypeEdgeFactor, ExtTypeCLICommand,
+		ExtTypeWebPanel, ExtTypeCustom:
 	default:
 		return fmt.Errorf("unknown extension type: %s", s.ExtType)
 	}

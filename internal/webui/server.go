@@ -17,6 +17,13 @@ func (m *Module) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard", m.handleDashboard)
 	mux.HandleFunc("/api/hosts", m.handleHosts)
 	mux.HandleFunc("/api/hosts/", m.handleHostDetail)
+
+	// Extension-registered routes (web ops panels, custom API endpoints).
+	m.mu.RLock()
+	for pattern, h := range m.extraRoutes {
+		mux.Handle(pattern, h)
+	}
+	m.mu.RUnlock()
 }
 
 // ──────────────────────────── Static Page ───────────────────────────────

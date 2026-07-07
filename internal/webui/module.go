@@ -34,6 +34,9 @@ type Module struct {
 	latest     map[string]*model.AssessmentResult  // hostID -> latest
 	hostnames  map[string]string                   // hostID -> hostname
 
+	// Extension-registered HTTP handlers (populated via webui.route.register).
+	extraRoutes map[string]http.Handler
+
 	done chan struct{}
 }
 
@@ -44,10 +47,11 @@ func New(listenPort int) *Module {
 		listenPort = defaultWebUIPort
 	}
 	return &Module{
-		listenPort: listenPort,
-		history:    make(map[string][]model.AssessmentResult),
-		latest:     make(map[string]*model.AssessmentResult),
-		hostnames:  make(map[string]string),
+		listenPort:  listenPort,
+		history:     make(map[string][]model.AssessmentResult),
+		latest:      make(map[string]*model.AssessmentResult),
+		hostnames:   make(map[string]string),
+		extraRoutes: make(map[string]http.Handler),
 		done:       make(chan struct{}),
 	}
 }
@@ -76,8 +80,27 @@ func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 	m.state = kernel.PluginInitialized
 	m.mu.Unlock()
 
+	// Extension point: plugins may register additional HTTP handlers (web ops
+	// panels, custom API endpoints) by handling this point and calling
+	// m.RegisterHandler on the *Module passed as data.
+	kc.Extensions().RegisterPoint(kernel.ExtensionPoint{
+		Name:        "webui.route.register",
+		Description: "Register additional HTTP routes/handlers on the web server",
+		Version:     "1.0",
+	})
+
 	logger.WithComponent("webui").Info("initialized", "port", m.listenPort)
 	return nil
+}
+
+// RegisterHandler registers an additional HTTP handler at the given pattern.
+// Intended for extension plugins (web ops panels, custom API endpoints).
+// Patterns under /api/ext/ are recommended to avoid collision with core routes.
+func (m *Module) RegisterHandler(pattern string, h http.Handler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.extraRoutes[pattern] = h
+	logger.WithComponent("webui").Info("registered extension route", "pattern", pattern)
 }
 
 func (m *Module) Start(ctx context.Context) error {
@@ -87,6 +110,11 @@ func (m *Module) Start(ctx context.Context) error {
 
 	// Subscribe to assessment results
 	m.kernel.Bus().Subscribe(kernel.TopicAssessorResult, "webui", m.onAssessmentResult)
+
+	// Let extension plugins register additional routes before the server starts.
+	if errs := m.kernel.Extensions().Execute(m.kernel.Context(), "webui.route.register", m); len(errs) > 0 {
+		logger.WithComponent("webui").Warn("webui.route.register extension errors", "count", len(errs))
+	}
 
 	// Start HTTP server
 	mux := http.NewServeMux()

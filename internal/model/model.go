@@ -223,6 +223,9 @@ type AssessmentResult struct {
 	PrismIR json.RawMessage `json:"prism_ir,omitempty"`
 
 	Checks []CheckResult `json:"checks"`
+
+	// Integrity: HMAC-SHA256 over tamper-sensitive fields.
+	Signature string `json:"signature,omitempty"`
 }
 
 type ATTACKCoverageInfo struct {

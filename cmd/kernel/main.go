@@ -217,6 +217,18 @@ k.SetConfig("config_path", resolvedConfigPath)
 		}
 	}
 
+	// Algorithm integrity guard: verify the SSAM/Prism calibration constants
+	// match the expected baseline (R2). Logs a warning on mismatch; enforcement
+	// mode is enabled by setting the expectedAlgoDigest constant in the build.
+	if ok := kernel.VerifyAlgorithmIntegrity(); !ok {
+		log.Error("algorithm integrity verification FAILED — SSAM/Prism constants may be tampered")
+	}
+
+	// Anti-debug check (R5): log if a tracer/debugger is attached.
+	if isDebugged() {
+		log.Warn("debugger/tracer detected — runtime integrity compromised")
+	}
+
 	kernelSvc := kernel.NewKernelServiceImpl(heartbeat, commander, cti, assessor, persistence, spc)
 	agentSvc := kernel.NewAgentServiceImpl(assessor, commander, logCollector)
 

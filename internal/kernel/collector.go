@@ -202,4 +202,13 @@ func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
 type LogCollectorInterface interface {
 	Append(entry *apiv1.LogEntry) error
 	AppendBatch(entries []*apiv1.LogEntry) error
+	LogPath() string
+}
+
+// LogPath returns the path of the collector's log file, enabling readers
+// (CLI log command, web ops panel) to tail/stream it.
+func (m *LogCollectorModule) LogPath() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.logPath
 }
