@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -116,10 +117,10 @@ var versionCmdInfo = CommandInfo{
 
 func versionCmdHandler(ctx *CommandContext) *CommandResult {
 	info := map[string]string{
-		"framework":     version.ASSCORVersion,
-		"ssam":          version.SSAMVersion,
-		"go":            "",
-		"build_time":    "",
+		"framework": version.ASSCORVersion,
+		"ssam":      version.SSAMVersion,
+		"go":        runtime.Version(),
+		"platform":  runtime.GOOS + "/" + runtime.GOARCH,
 	}
 
 	if ctx.JSON {
@@ -131,6 +132,8 @@ func versionCmdHandler(ctx *CommandContext) *CommandResult {
 	b.WriteString("\n  ASSCOR Security Assessment Framework\n")
 	b.WriteString(fmt.Sprintf("  Framework Version:  %s\n", info["framework"]))
 	b.WriteString(fmt.Sprintf("  SSAM Model:         %s\n", info["ssam"]))
+	b.WriteString(fmt.Sprintf("  Go Runtime:         %s\n", info["go"]))
+	b.WriteString(fmt.Sprintf("  Platform:           %s\n", info["platform"]))
 	b.WriteString("\n")
 	return &CommandResult{ExitCode: ExitOK, Output: b.String()}
 }

@@ -108,7 +108,10 @@ func (b *kernelBridge) Sources() SourceAccess {
 }
 
 func (b *kernelBridge) CheckPermission(level PermissionLevel) bool {
-	return true
+	// Local CLI (Unix socket / stdin on the kernel host) runs with operator
+	// privileges. Read/Write/Admin are permitted; Super (destructive kernel
+	// ops) is gated off by default and requires explicit elevation.
+	return level <= PermAdmin
 }
 
 func (b *kernelBridge) Registry() *Registry {
@@ -117,6 +120,41 @@ func (b *kernelBridge) Registry() *Registry {
 
 func (b *kernelBridge) History() *History {
 	return b.engine.History()
+}
+
+func (b *kernelBridge) Diagnostics() map[string]interface{} {
+	diag := make(map[string]interface{})
+
+	bm := b.kernel.Bus().GetMetrics()
+	diag["bus"] = map[string]interface{}{
+		"messages": bm.MessageCount,
+		"errors":   bm.ErrorCount,
+		"panics":   bm.PanicCount,
+	}
+
+	if impl, ok := b.kernel.Container().Resolve((*kernel.WorkerPoolInterface)(nil)); ok {
+		if wp, ok := impl.(kernel.WorkerPoolInterface); ok {
+			diag["worker_pool"] = map[string]interface{}{
+				"active":    wp.ActiveWorkers(),
+				"available": wp.AvailableSlots(),
+				"max":       wp.MaxConcurrency(),
+			}
+		}
+	}
+
+	return diag
+}
+
+func (b *kernelBridge) PolicyStatus(hostID string) (string, bool) {
+	p, ok := b.kernel.GetPlugin("policy")
+	if !ok {
+		return "", false
+	}
+	pol, ok := p.(kernel.PolicyInterface)
+	if !ok {
+		return "", false
+	}
+	return pol.GetHostStatus(hostID).String(), true
 }
 
 type agentBridge struct {

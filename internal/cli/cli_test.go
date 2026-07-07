@@ -95,6 +95,14 @@ func (m *mockKernel) CheckPermission(level PermissionLevel) bool {
 	return m.permLevel >= level
 }
 
+func (m *mockKernel) Diagnostics() map[string]interface{} {
+	return map[string]interface{}{}
+}
+
+func (m *mockKernel) PolicyStatus(hostID string) (string, bool) {
+	return "OK", true
+}
+
 func (m *mockKernel) Registry() *Registry {
 	if m.registry != nil {
 		return m.registry

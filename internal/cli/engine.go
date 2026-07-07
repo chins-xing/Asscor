@@ -170,6 +170,8 @@ type KernelAccess interface {
 	CheckPermission(level PermissionLevel) bool
 	Registry() *Registry
 	History() *History
+	Diagnostics() map[string]interface{}
+	PolicyStatus(hostID string) (string, bool)
 }
 
 type SourceAccess interface {
@@ -487,6 +489,8 @@ func (e *Engine) RegisterBuiltinCommands() {
 		{agentCmdInfo, agentCmdHandler, agentCompletions},
 		{logCmdInfo, logCmdHandler, logCompletions},
 		{sourceCmdInfo, sourceCmdHandler, sourceCompletions},
+		{diagCmdInfo, diagCmdHandler, nil},
+		{policyCmdInfo, policyCmdHandler, nil},
 	}
 
 	for _, b := range builtins {
@@ -497,12 +501,12 @@ func (e *Engine) RegisterBuiltinCommands() {
 
 	aliases := map[string]string{
 		"?":     "help",
-		"ls":    "plugin list",
 		"v":     "version",
 		"st":    "status",
 		"h":     "history",
 		"ag":    "agent",
 		"ak":    "attck",
+		"dg":    "diag",
 	}
 	for alias, target := range aliases {
 		if err := e.registry.RegisterAlias(alias, target); err != nil {
