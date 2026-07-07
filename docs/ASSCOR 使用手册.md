@@ -979,11 +979,124 @@ if ok {
 
 ---
 
+## 15. 自定义扩展（无需编写 Go 代码）
+
+ASSCOR 支持三类无需编写 Go 代码的扩展方式，从零门槛到专业开发逐级递进。
+
+### 15.1 配置文件定义检查项 (`[user_check]`)
+
+在 `config.ini` 中直接添加安全检查，无需任何编程：
+
+```ini
+# 命令检查：执行 shell 命令，exit 0 或输出匹配字符串 = 通过
+[user_check.nginx]
+id = CU-001
+domain = attack_surface
+name = Nginx service status
+description = Check if nginx is running
+command = systemctl is-active nginx
+delta = -8
+output_match = active
+
+# 文件内容检查：检查文件是否存在、内容是否匹配正则
+[user_check.auditd]
+id = CU-002
+domain = operation_trust
+name = Auditd rules
+description = Verify auditd has shadow watch rules
+file_path = /etc/audit/audit.rules
+file_regex = -w /etc/shadow -p wa
+delta = -10
+```
+
+支持的字段：
+
+| 字段 | 必须 | 说明 |
+|------|------|------|
+| `id` | ✅ | 唯一检查 ID，如 `CU-001` |
+| `domain` | ✅ | 归属域（attack_surface / business_continuity / operation_trust / resilience / kernel_security） |
+| `name` | ✅ | 检查名称 |
+| `command` | * | shell 命令（exit 0 = 通过） |
+| `output_match` | 否 | 输出中出现此字符串 = 通过 |
+| `file_path` | * | 要检查的文件路径 |
+| `file_regex` | 否 | 文件内容匹配此正则 = 通过 |
+| `delta` | 否 | 失败扣分（默认 -10） |
+
+> *: `command` 和 `file_path` 至少提供一个。修改后执行 `systemctl reload asscor-kernel` 即可生效。
+
+### 15.2 外部脚本适配器 (`[adapter_script]`)
+
+运行任何语言编写的脚本（Bash/Python/任何），其 JSON stdout 自动成为适配器发现：
+
+```ini
+[adapter_script.my-monitor]
+path = /opt/asscor/scripts/my-monitor.sh
+```
+
+脚本 stdout 格式（JSON 数组）：
+
+```json
+[
+  {
+    "id": "MON-001",
+    "title": "Disk usage warning",
+    "severity": "high",
+    "detail": "/dev/sda1 is 95% full",
+    "domain": "business_continuity",
+    "finding_type": "alert"
+  }
+]
+```
+
+**安全限制**:
+- 脚本路径必须在 `/opt/asscor/scripts/` `/etc/asscor/scripts/` `/var/lib/asscor/scripts/`
+- 脚本必须 root:root 且非 world-writable
+- 拒绝符号链接
+- 30 秒执行超时
+- 1MB 输出上限
+
+### 15.3 Plugin SDK（独立 Go 模块，专业开发）
+
+`pluginsdk/` 提供独立 Go 模块模板，插件通过 JSON-RPC (stdin/stdout) 与内核通信，**零 ASSCOR 源码依赖**：
+
+```
+pluginsdk/
+├── go.mod           # 独立模块定义
+├── sdk.go           # Plugin 接口 + JSON-RPC 循环
+├── cmd/myplugin/    # 完整示例插件
+│   ├── main.go
+│   └── extension.json
+└── README.md
+```
+
+开发流程：复制模板 → 实现 `HandleRequest()` → `go build` → `asscor> source deploy`。
+
+---
+
+## 16. 算法防护配置 (`[integrity]`)
+
+控制 ASSCOR 对 SSAM/Prism 核心算法的完整性保护：
+
+```ini
+[integrity]
+sign_assessment = true    # 评估报告 HMAC-SHA256 签名（防伪造报告）
+verify_algo = true        # 启动时校验 SSAM/Prism 常量完整性
+anti_debug = false        # Linux 反调试检测（需显式开启）
+```
+
+| 模式 | 场景 |
+|------|------|
+| `sign=false, verify=false` | 单二进制轻量部署 |
+| `sign=true, verify=true` | 防护评估报告伪造 + 算法校验（推荐） |
+| `anti_debug=true` | 敏感环境附加反调试 |
+
+---
+
 ## 版本历史
 
 | 版本 | 日期 | 主要变更 |
 |------|------|----------|
-| v0.2.0 | 2026-07-07 | 单二进制安装(--install/--uninstall/--upgrade/--version)；FHS布局(/etc/asscor,/var/lib/asscor,/var/log/asscor)；systemctl管控+SIGHUP热重载；远程CLI(Unix socket, asscor-cli)；PATH符号链接(/usr/bin/asscor)；单机模式支持适配器外派+SRD三层分析；SSAM V2加权平均评分；persistence路径修复；agent心跳频率优化 |
+| v0.2.0 | 2026-07-07 | 单二进制安装(--install/--uninstall/--upgrade/--version)；FHS布局(/etc/asscor,/var/lib/asscor,/var/log/asscor)；systemctl管控+SIGHUP热重载；远程CLI(Unix socket, asscor-cli)；PATH符号链接(/usr/bin/asscor)；单机模式支持适配器外派+SRD三层分析；SSAM V2加权平均评分；persistence路径修复；agent心跳频率优化；config定义检查项([user_check])；外部脚本适配器([adapter_script])；Plugin SDK(pluginsdk/)；算法防护配置([integrity])；CLI diag/policy运维命令 |
 | v0.2.0 | 2026-06-28 | CLI spc子命令(score/kev/fetch)实现；kernel控制台评估报告(config.ini console_report)；agent日志格式可配置(agent.ini log_format)；source deploy命令；ATT&CK版本/优先级修正；config热重载默认开启；管理适配器Parse升级；系统d service + Dockerfile |
 | v0.1.4-mvp | 2026-06-09 | SSAM V2.0三层语义模型；ATT&CK V19模块；SPC多数据源(CNNVD/CNVD/MISP)；扩展管理器；Prism SRD引擎 |
 | v0.1.3-mvp | 2026-05-25 | gRPC/JSONRPC双协议栈；权重热加载；SPC磁盘持久化；适配器集成模块 |

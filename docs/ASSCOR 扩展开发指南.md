@@ -1,33 +1,42 @@
 # ASSCOR 扩展开发指南
 
-**版本**：v1.0 | **适用**：ASSCOR v0.2.0 / SSAM 2.0 | **日期**：2026-07-06
+**版本**：v1.1 | **适用**：ASSCOR v0.2.0 / SSAM 2.0 | **日期**：2026-07-07
 
 ---
 
 ## 摘要
 
-ASSCOR 采用微内核 + 插件架构，提供 **8 种扩展类型**，覆盖从检查项、评分公式、外部工具适配器到 CLI 命令的完整扩展面。每种扩展类型都通过一个专用注册表（registry）接入内核，遵循统一的 `init() → Register()` 自注册或 `ExtensionManager` 生命周期管理模式。本指南面向希望为 ASSCOR 编写自定义扩展的开发者，逐一讲解每种扩展类型的编写方法、注册流程与打包分发方式。
+ASSCOR 采用微内核 + 插件架构，提供 **10 种扩展方式**，覆盖从零门槛配置到专业 Go 开发的完整扩展面。本指南面向希望为 ASSCOR 编写自定义扩展的开发者。
 
 ---
 
 ## 1. 扩展体系总览
 
-### 1.1 八种扩展类型
+### 1.1 十种扩展方式
 
-| 类型 | 用途 | 注册入口 | 接入方式 |
+| 方式 | 门槛 | 注册入口 | 接入方式 |
 |------|------|----------|----------|
-| `check_module` | 新增安全检查项 | `checks.Register()` | 编译期 init() / 扩展包 |
-| `scoring_plugin` | 自定义评分公式 | `Engine.RegisterFormula()` | 运行时 |
-| `adapter` | 外部工具适配器 | `adapter.Register()` | 编译期 init() |
-| `hook` | 评估流程钩子 | `Assessor.RegisterHook()` | 运行时 |
-| `domain` | 新增评估域 | `model.RegisterDomain()` | 运行时 / 配置 |
-| `edge_factor` | 新增边缘修正因子 | `model.RegisterEdgeFactor()` | 编译期 init() / 配置 |
-| `cli_command` | 新增 CLI 命令 | `CLIModule.RegisterCommand()` | 扩展点 |
-| `custom` | 完整内核插件 | `kernel.Plugin` 接口 | 插件注册 |
+| `user_check` | 🟢 零 | `config.ini [user_check.*]` | 编辑配置文件 |
+| `adapter_script` | 🟢 极低 | `config.ini [adapter_script.*]` | 脚本 + 配置 |
+| `check_module` | 🟡 低 | `checks.Register()` | 编译期 init() / 扩展包 |
+| `scoring_plugin` | 🟡 低 | `Engine.RegisterFormula()` | 运行时 |
+| `adapter` | 🟡 低 | `adapter.Register()` | 编译期 init() |
+| `hook` | 🟡 低 | `Assessor.RegisterHook()` | 运行时 |
+| `domain` | 🟡 低 | `model.RegisterDomain()` | 运行时 / 配置 |
+| `edge_factor` | 🟡 低 | `model.RegisterEdgeFactor()` | 编译期 init() / 配置 |
+| `cli_command` | 🟡 低 | `CLIModule.RegisterCommand()` | 扩展点 |
+| `custom` | 🔴 中 | `kernel.Plugin` 接口 | 插件注册 |
+| `web_panel` | 🔴 中 | `webui.route.register` 扩展点 | 运行时 |
 
-### 1.2 两种接入模式
+### 1.2 选择指南
 
-**模式 A — 编译期自注册（推荐用于检查项/适配器/边缘因子）**
+| 需求 | 推荐方式 | 需要写代码 |
+|------|----------|-----------|
+| 添加一个命令检查 | `user_check` | ❌ 不需要 |
+| 运行自定义脚本 | `adapter_script` | ✅ Bash/Python |
+| 对接新扫描工具 | `adapter` | ✅ Go |
+| 自定义评分算法 | `scoring_plugin` | ✅ Go |
+| 完整子系统 | `Plugin SDK` | ✅ Go（独立模块） |
 
 扩展代码作为 Go 包编入二进制，通过 `init()` 函数在启动时自动注册。零运行时依赖，保持单二进制部署优势。
 
@@ -39,7 +48,88 @@ ASSCOR 采用微内核 + 插件架构，提供 **8 种扩展类型**，覆盖从
 
 ## 2. 扩展类型详解
 
-### 2.1 check_module — 安全检查项
+### 2.1 user_check — 配置文件定义检查项（零门槛）
+
+**不需要编写任何代码。** 在 `config.ini` 中添加 `[user_check.<名称>]` 节即可创建检查项。
+
+**编写示例**：
+
+```ini
+[user_check.nginx]
+id = CU-001
+domain = attack_surface
+name = Nginx service status
+command = systemctl is-active nginx
+delta = -8
+output_match = active
+```
+
+**工作原理**：内核启动时解析 `user_check.*` 键，为每个有效的节创建 `model.CheckItem` 并注册到检查项注册表。支持 `command`（命令检查）和 `file_path + file_regex`（文件内容检查）两种模式。
+
+**要点**：
+- 修改后执行 `systemctl reload asscor-kernel`（SIGHUP）即可生效，无需重启
+- `command` 模式通过 shell 执行，exit 0 或输出中含 `output_match` 则为通过
+- `file_path` 模式检查文件存在性（无正则）或内容正则匹配
+
+### 2.2 adapter_script — 外部脚本适配器（极低门槛）
+
+**编写任意语言的脚本**，其 stdout 输出 JSON 数组即自动成为适配器发现。配置一行即可引入。
+
+**编写示例**（Bash 脚本 `/opt/asscor/scripts/my-monitor.sh`）：
+
+```bash
+#!/bin/bash
+echo '[{"id":"MON-001","title":"Disk usage","severity":"high","detail":"95% full"}]'
+```
+
+**配置**（`config.ini`）：
+
+```ini
+[adapter_script.my-monitor]
+path = /opt/asscor/scripts/my-monitor.sh
+```
+
+**安全限制**：路径必须在白名单目录下（`/opt/asscor/scripts/` 等），脚本必须 root:root 且非 world-writable，拒绝符号链接，30 秒超时，1MB 输出上限。
+
+**JSON 字段** (`scriptFinding`):
+
+```go
+type scriptFinding struct {
+    ID          string `json:"id"`
+    Title       string `json:"title"`       // 必须
+    Severity    string `json:"severity"`    // critical/high/medium/low/info
+    Detail      string `json:"detail"`
+    Domain      string `json:"domain"`
+    CheckID     string `json:"check_id"`
+    FindingType string `json:"finding_type"` // vulnerability/misconfig/compliance/alert
+}
+```
+
+### 2.3 Plugin SDK — 独立模块开发（Go 专业开发）
+
+位于 `pluginsdk/` 的独立 Go 模块。插件通过 **JSON-RPC 2.0 协议** 经 stdin/stdout 与内核通信，**零 ASSCOR 源码依赖**。
+
+**核心接口**：
+
+```go
+type Plugin interface {
+    Init(config map[string]string) error
+    HandleRequest(method string, params json.RawMessage) (json.RawMessage, error)
+    Shutdown() error
+}
+```
+
+**开发流程**：
+
+1. 复制 `pluginsdk/cmd/myplugin/` → 你的插件目录
+2. 实现 `HandleRequest()` 方法
+3. `go build -o yourplugin`
+4. 编写 `extension.json` manifest
+5. `asscor> source deploy yourplugin`
+
+**架构**（低耦合）：插件作为独立进程运行，通过 stdin/stdout JSON-RPC 2.0 通信，零共享内存。安全上实现进程隔离、SHA-256 校验和、systemd scoping 资源限制。
+
+### 2.4 check_module — 安全检查项
 
 检查项是 ASSCOR 最常见的扩展。每个检查项归属一个评估域，输出通过/失败与扣分。
 
