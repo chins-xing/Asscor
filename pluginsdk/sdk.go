@@ -1,0 +1,143 @@
+// Package pluginsdk provides the interface and runtime for building independent
+// ASSCOR plugins that communicate via JSON-RPC over stdin/stdout. Plugins written
+// with this SDK can be registered as `custom` extensions and managed via the
+// ASSCOR ExtensionManager without modifying or recompiling the core binary.
+//
+// Architecture (low coupling):
+//   - Plugin runs as a separate process (no shared memory)
+//   - Communication via JSON-RPC 2.0 over stdin/stdout
+//   - Plugin declares its capabilities in a manifest (extension.json)
+//   - ASSCOR ExtensionManager discovers, installs, starts, and stops plugins
+//
+// Security:
+//   - Plugins run in sandboxed processes (no kernel memory access)
+//   - Only stdin/stdout communication channel (no network by default)
+//   - Configurable timeout, memory limits via systemd scoping
+//   - Integrity verified via SHA-256 checksum in manifest
+package pluginsdk
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+)
+
+// Plugin is the interface that all ASSCOR plugins must implement.
+type Plugin interface {
+	// Init is called once after the plugin process starts. The config parameter
+	// contains the plugin-specific configuration from extension.json custom_config.
+	Init(config map[string]string) error
+
+	// HandleRequest processes an RPC request and returns a response.
+	// The method parameter indicates the operation (e.g. "assess", "status").
+	HandleRequest(method string, params json.RawMessage) (json.RawMessage, error)
+
+	// Shutdown is called when the plugin process should gracefully stop.
+	Shutdown() error
+}
+
+// Serve runs the JSON-RPC stdin/stdout loop for the given plugin.
+// It should be called from the plugin's main() function.
+//
+// Example:
+//
+//	func main() {
+//	    pluginsdk.Serve(&MyPlugin{})
+//	}
+func Serve(p Plugin) {
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 1024*1024), 2*1024*1024)
+
+	encoder := json.NewEncoder(os.Stdout)
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var req rpcRequest
+		if err := json.Unmarshal(line, &req); err != nil {
+			writeError(encoder, "", -32700, "parse error: "+err.Error())
+			continue
+		}
+
+		var result json.RawMessage
+		var err error
+
+		switch req.Method {
+		case "init":
+			var cfg map[string]string
+			json.Unmarshal(req.Params, &cfg)
+			err = p.Init(cfg)
+			if err == nil {
+				result = json.RawMessage(`{"status":"ok"}`)
+			}
+		case "shutdown":
+			err = p.Shutdown()
+			if err == nil {
+				writeResponse(encoder, req.ID, json.RawMessage(`{"status":"ok"}`))
+				return
+			}
+		default:
+			result, err = p.HandleRequest(req.Method, req.Params)
+		}
+
+		if err != nil {
+			writeError(encoder, req.ID, -32000, err.Error())
+			continue
+		}
+
+		writeResponse(encoder, req.ID, result)
+	}
+
+	if err := scanner.Err(); err != nil && err != io.EOF {
+		fmt.Fprintf(os.Stderr, "plugin scanner error: %v\n", err)
+	}
+}
+
+type rpcRequest struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      string          `json:"id"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
+}
+
+type rpcResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      string          `json:"id"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *rpcError       `json:"error,omitempty"`
+}
+
+type rpcError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+func writeResponse(w *json.Encoder, id string, result json.RawMessage) {
+	err := w.Encode(rpcResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  result,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "plugin write error: %v\n", err)
+	}
+}
+
+func writeError(w *json.Encoder, id string, code int, msg string) {
+	if id == "" {
+		id = "null"
+	}
+	err := w.Encode(rpcResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error:   &rpcError{Code: code, Message: msg},
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "plugin write error: %v\n", err)
+	}
+}

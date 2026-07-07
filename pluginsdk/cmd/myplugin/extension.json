@@ -1,0 +1,18 @@
+{
+  "id": "myplugin",
+  "name": "My Custom Plugin",
+  "version": "1.0.0",
+  "type": "custom",
+  "description": "Example ASSCOR plugin built with pluginsdk",
+  "author": "Your Name",
+  "license": "Apache-2.0",
+  "source": {
+    "type": "local",
+    "path": "./myplugin"
+  },
+  "binary": "myplugin",
+  "custom_config": {
+    "name": "myplugin"
+  },
+  "dependencies": []
+}
