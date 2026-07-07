@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/asscor/asscor/internal/adapter"
 	"github.com/asscor/asscor/internal/cli"
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/deploy"
@@ -156,6 +157,7 @@ func main() {
 	// Register user-defined checks from config.ini (no Go code needed).
 	// Example: [user_check.mysql] id=CU-001 command="systemctl is-active mysqld"
 	config.RegisterUserChecks(cfg)
+	adapter.RegisterScriptAdapters(cfg.AdapterConfig)
 
 	log.Info("ASSCOR kernel starting",
 		"version", version.ASSCORVersion,
