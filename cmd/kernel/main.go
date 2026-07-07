@@ -153,6 +153,10 @@ func main() {
 	integrity.EnableAlgoVerify(ac["integrity.verify_algo"] != "false")
 	integrity.EnableAntiDebug(ac["integrity.anti_debug"] == "true")
 
+	// Register user-defined checks from config.ini (no Go code needed).
+	// Example: [user_check.mysql] id=CU-001 command="systemctl is-active mysqld"
+	config.RegisterUserChecks(cfg)
+
 	log.Info("ASSCOR kernel starting",
 		"version", version.ASSCORVersion,
 		"ssam", version.SSAMVersion,
