@@ -222,6 +222,13 @@ func Parse(content string) (*Config, error) {
 		}
 	}
 
+	// Global (pre-section) keys, e.g. a top-level `data_dir`.
+	if sec, ok := sections["global"]; ok {
+		if v, ok := sec["data_dir"]; ok && v != "" {
+			cfg.DataDir = v
+		}
+	}
+
 	if sec, ok := sections["edge_factors"]; ok {
 		for k, v := range sec {
 			f, err := strconv.ParseFloat(v, 64)
@@ -646,7 +653,8 @@ func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 
 func parseSections(content string) map[string]map[string]string {
 	sections := make(map[string]map[string]string)
-	var currentSection string
+	currentSection := "global"
+	sections[currentSection] = make(map[string]string)
 
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
@@ -659,9 +667,6 @@ func parseSections(content string) map[string]map[string]string {
 			if sections[currentSection] == nil {
 				sections[currentSection] = make(map[string]string)
 			}
-			continue
-		}
-		if currentSection == "" {
 			continue
 		}
 		parts := strings.SplitN(line, "=", 2)

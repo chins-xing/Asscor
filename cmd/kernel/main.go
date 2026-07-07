@@ -195,7 +195,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 	commander := &kernel.CommanderModule{}
 	logCollector := &kernel.LogCollectorModule{}
 	heartbeat := &kernel.HeartbeatModule{}
-	persistence := kernel.NewPersistenceModule("data")
+	persistence := kernel.NewPersistenceModule(cfg.DataDir)
 	concurrency := kernel.NewConcurrencyModule(10)
 	attck := kernel.NewATTACKModule()
 	configWatcher := kernel.NewConfigWatcherModule(resolvedConfigPath)
