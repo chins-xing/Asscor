@@ -226,6 +226,16 @@ type AssessmentResult struct {
 
 	// Integrity: HMAC-SHA256 over tamper-sensitive fields.
 	Signature string `json:"signature,omitempty"`
+
+	// UncertaintyNote reminds consumers that the score is a model output, not
+	// an objective security truth. It is included in every assessment result.
+	UncertaintyNote string `json:"uncertainty_note,omitempty"`
+
+	// ModelCoverageRatio is the ratio of scored check items to all registered
+	// checks (0.0-1.0). A low ratio means the model only captures a subset of
+	// the risk surface. This is an anti-gaming guard: a high score with low
+	// coverage is NOT a strong security signal.
+	ModelCoverageRatio float64 `json:"model_coverage_ratio,omitempty"`
 }
 
 type ATTACKCoverageInfo struct {

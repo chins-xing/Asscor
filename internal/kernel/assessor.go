@@ -374,11 +374,13 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_evaluate", hostID)
 
 	result := &model.AssessmentResult{
-		HostID:    hostID,
-		Hostname:  hostname,
-		Timestamp: time.Now(),
-		Threshold: threshold,
-		Checks:    checkResults,
+		HostID:         hostID,
+		Hostname:       hostname,
+		Timestamp:      time.Now(),
+		Threshold:      threshold,
+		Checks:         checkResults,
+		UncertaintyNote: "This score is a model output, not an objective security truth. Use as a decision reference, not a decision substitute. See also Goodhart's Law.",
+		ModelCoverageRatio: modelCoverage(checkResults),
 	}
 
 	if len(result.Checks) == 0 {
@@ -714,6 +716,20 @@ type AssessorInterface interface {
 	EvaluateFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
 	GetResult(hostID string) *model.AssessmentResult
 	ReloadConfig(cfg *config.Config)
+}
+
+func modelCoverage(results []model.CheckResult) float64 {
+	all := checks.GetAll()
+	if len(all) == 0 || len(results) == 0 {
+		return 0
+	}
+	scored := make(map[string]bool, len(results))
+	for _, r := range results {
+		if r.Delta != 0 {
+			scored[r.CheckID] = true
+		}
+	}
+	return float64(len(scored)) / float64(len(all))
 }
 
 func (m *AssessorModule) extractPackagesFromChecks(checks []model.CheckResult) []string {
