@@ -83,7 +83,6 @@ func RegisterUserChecks(cfg *Config) {
 			Name:        e.name,
 			Description: e.desc,
 			Delta:       e.delta,
-			Platform:    "linux",
 		}
 
 		if e.command != "" {
