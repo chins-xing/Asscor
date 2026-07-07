@@ -350,6 +350,16 @@ sudo systemctl start asscor-agent
 
 Agent 配置 `/etc/asscor/agent.ini` 支持心跳间隔、日志格式、mTLS 等。
 
+### 10.3 Docker 部署
+
+```bash
+docker compose -f deploy/docker/docker-compose.yml up -d
+curl http://localhost:8087/api/health
+```
+
+相关文件在 `deploy/docker/`：docker-compose.yml、config.docker.ini。
+常用命令：`make -f deploy/Makefile docker-up/down/logs/clean`。
+
 ## 11. 与 ASSCOR μKernel 的联动
 
 ASSCOR μKernel 是风险评估与指令分发中心，采用微内核 + Agent 架构，通过 **gRPC 原生协议 + JSONRPC 兼容层** 双协议栈通信，均支持 mTLS 加密。Agent 负责本地检查执行与状态上报，内核汇聚计算并自动下发修复指令，实现"评估→诊断→修复"闭环。

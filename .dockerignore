@@ -1,0 +1,11 @@
+.git/
+build/
+docs/
+certs/
+*.exe
+*.test
+*.log
+.vscode/
+.idea/
+.kilo/
+vendor/

@@ -1,0 +1,64 @@
+version: "3.9"
+services:
+  asscor-kernel:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        GO_VERSION: "1.26"
+    image: asscor/asscor-kernel:latest
+    container_name: asscor-kernel
+    ports:
+      - "8087:8087"
+      - "50051:50051"
+      - "50052:50052"
+    volumes:
+      - asscor-data:/var/lib/asscor
+      - asscor-logs:/var/log/asscor
+      - ./config.ini:/etc/asscor/config.ini:ro
+      - ./config:/etc/asscor/config:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8087/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    read_only: true
+
+  asscor-agent:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        GO_VERSION: "1.26"
+    image: asscor/asscor-agent:latest
+    container_name: asscor-agent
+    pid: "host"
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - ./agent.ini:/etc/asscor/agent.ini:ro
+      - asscor-agent-logs:/var/log/asscor
+      - /etc:/host/etc:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    depends_on:
+      asscor-kernel:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  asscor-data:
+  asscor-logs:
+  asscor-agent-logs:
