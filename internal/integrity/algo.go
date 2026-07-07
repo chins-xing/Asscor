@@ -1,4 +1,4 @@
-package kernel
+package integrity
 
 import (
 	"crypto/sha256"
@@ -32,15 +32,14 @@ func computeAlgoDigest() string {
 	return hex.EncodeToString(sum[:])
 }
 
-func VerifyAlgorithmIntegrity() bool {
+func VerifyAlgo() bool {
 	digest := computeAlgoDigest()
 	if expectedAlgoDigest == "" {
 		logger.WithComponent("integrity").Info("algorithm calibration digest", "digest", digest, "mode", "record")
 		return true
 	}
 	if digest != expectedAlgoDigest {
-		logger.WithComponent("integrity").Error("ALGORITHM INTEGRITY VIOLATION — SSAM/Prism constants altered",
-			"expected", expectedAlgoDigest, "actual", digest)
+		logger.WithComponent("integrity").Error("ALGORITHM INTEGRITY VIOLATION", "expected", expectedAlgoDigest, "actual", digest)
 		return false
 	}
 	logger.WithComponent("integrity").Info("algorithm integrity verified", "digest", digest)

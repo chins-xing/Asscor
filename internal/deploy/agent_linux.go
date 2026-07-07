@@ -1,6 +1,6 @@
 //go:build linux
 
-package main
+package deploy
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ const (
 	agentConfigPath  = "/etc/asscor/agent.ini"
 )
 
-func installAgent() error {
+func InstallAgent() error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("install requires root privileges (use sudo)")
 	}
@@ -73,7 +73,7 @@ WantedBy=multi-user.target
 	return nil
 }
 
-func uninstallAgent() error {
+func UninstallAgent() error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("uninstall requires root privileges (use sudo)")
 	}
@@ -84,7 +84,7 @@ func uninstallAgent() error {
 	return nil
 }
 
-func upgradeAgent() error {
+func UpgradeAgent() error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("upgrade requires root privileges (use sudo)")
 	}
@@ -93,7 +93,7 @@ func upgradeAgent() error {
 	backupPath := binPath + ".bak"
 
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
-		return fmt.Errorf("no existing agent installation â€” use --install first")
+		return fmt.Errorf("no existing agent installation â€?use --install first")
 	}
 
 	_ = exec.Command("systemctl", "stop", agentServiceName).Run()
@@ -122,7 +122,7 @@ func upgradeAgent() error {
 	return nil
 }
 
-func copyFile(src, dst string) error {
+func CopyFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return err

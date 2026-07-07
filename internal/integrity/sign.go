@@ -1,4 +1,4 @@
-package kernel
+package integrity
 
 import (
 	"crypto/hmac"
@@ -14,25 +14,25 @@ import (
 	"github.com/asscor/asscor/internal/model"
 )
 
-type resultSigner struct {
+type Signer struct {
 	mu  sync.RWMutex
 	key []byte
 }
 
 var (
-	globalResultSigner *resultSigner
-	resultSignerOnce   sync.Once
+	signer     *Signer
+	signerOnce sync.Once
 )
 
-func GetResultSigner() *resultSigner {
-	resultSignerOnce.Do(func() {
-		globalResultSigner = &resultSigner{}
-		globalResultSigner.loadOrCreateKey()
+func GetSigner() *Signer {
+	signerOnce.Do(func() {
+		signer = &Signer{}
+		signer.loadOrCreateKey()
 	})
-	return globalResultSigner
+	return signer
 }
 
-func (s *resultSigner) loadOrCreateKey() {
+func (s *Signer) loadOrCreateKey() {
 	keyPath := filepath.Join("certs", "ASSCOR-assessment-key")
 	if data, err := os.ReadFile(keyPath); err == nil && len(data) >= 32 {
 		s.mu.Lock()
@@ -64,7 +64,7 @@ func canonicalPayload(r *model.AssessmentResult) []byte {
 	))
 }
 
-func (s *resultSigner) Sign(r *model.AssessmentResult) {
+func (s *Signer) Sign(r *model.AssessmentResult) {
 	s.mu.RLock()
 	key := s.key
 	s.mu.RUnlock()
@@ -77,7 +77,7 @@ func (s *resultSigner) Sign(r *model.AssessmentResult) {
 	r.Signature = hex.EncodeToString(mac.Sum(nil))
 }
 
-func (s *resultSigner) Verify(r *model.AssessmentResult) bool {
+func (s *Signer) Verify(r *model.AssessmentResult) bool {
 	s.mu.RLock()
 	key := s.key
 	s.mu.RUnlock()

@@ -12,6 +12,7 @@ import (
 	"github.com/asscor/asscor/internal/checks"
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/engine"
+	"github.com/asscor/asscor/internal/integrity"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 	ascorprism "github.com/asscor/asscor/internal/prism"
@@ -340,6 +341,8 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 
 	m.applyPrismToResult(hostID, result, time.Now().Unix())
 
+	integrity.GetSigner().Sign(result)
+
 	m.mu.Lock()
 	m.results[hostID] = result
 	m.mu.Unlock()
@@ -398,6 +401,8 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	logger.WithComponent("assessor").Info("assessment score computed", "host_id", hostID, "score", result.FinalScore, "spc_score", result.SPCScore, "threat_coeff", result.ThreatCoeff)
 
 	m.applyPrismToResult(hostID, result, time.Now().Unix())
+
+	integrity.GetSigner().Sign(result)
 
 	m.mu.Lock()
 	m.results[hostID] = result

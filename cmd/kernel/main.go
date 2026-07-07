@@ -13,6 +13,8 @@ import (
 
 	"github.com/asscor/asscor/internal/cli"
 	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/deploy"
+	"github.com/asscor/asscor/internal/integrity"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/prism"
@@ -50,7 +52,7 @@ func main() {
 	}
 
 	if *install {
-		if err := installService(*installPath); err != nil {
+		if err := deploy.InstallKernel(*installPath); err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: install failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -59,7 +61,7 @@ func main() {
 		os.Exit(0)
 	}
 	if *uninstall {
-		if err := uninstallService(*installPath); err != nil {
+		if err := deploy.UninstallKernel(*installPath); err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: uninstall failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -67,7 +69,7 @@ func main() {
 		os.Exit(0)
 	}
 	if *checkInstall {
-		if err := checkInstallation(*installPath); err != nil {
+		if err := deploy.CheckKernelInstall(*installPath); err != nil {
 			fmt.Fprintf(os.Stderr, "FAIL: %v\n", err)
 			os.Exit(1)
 		}
@@ -75,7 +77,7 @@ func main() {
 		os.Exit(0)
 	}
 	if *upgrade {
-		if err := upgradeInstallation(*installPath); err != nil {
+		if err := deploy.UpgradeKernel(*installPath); err != nil {
 			fmt.Fprintf(os.Stderr, "UPGRADE FAILED: %v\n", err)
 			os.Exit(1)
 		}
@@ -220,12 +222,11 @@ k.SetConfig("config_path", resolvedConfigPath)
 	// Algorithm integrity guard: verify the SSAM/Prism calibration constants
 	// match the expected baseline (R2). Logs a warning on mismatch; enforcement
 	// mode is enabled by setting the expectedAlgoDigest constant in the build.
-	if ok := kernel.VerifyAlgorithmIntegrity(); !ok {
+	if ok := integrity.VerifyAlgo(); !ok {
 		log.Error("algorithm integrity verification FAILED — SSAM/Prism constants may be tampered")
 	}
 
-	// Anti-debug check (R5): log if a tracer/debugger is attached.
-	if isDebugged() {
+	if integrity.IsDebugged() {
 		log.Warn("debugger/tracer detected — runtime integrity compromised")
 	}
 

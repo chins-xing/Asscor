@@ -1,6 +1,6 @@
 //go:build linux
 
-package main
+package deploy
 
 import (
 	"fmt"
@@ -9,26 +9,26 @@ import (
 )
 
 const (
-	serviceName       = "asscor-kernel"
-	serviceFile       = "/etc/systemd/system/asscor-kernel.service"
-	defaultInstallDir = "/opt/asscor"
-	defaultConfigDir  = "/etc/asscor"
-	defaultDataDir    = "/var/lib/asscor"
-	defaultLogsDir    = "/var/log/asscor"
+	kernelkernelServiceName = "asscor-kernel"
+	kernelkernelServiceFile = "/etc/systemd/system/asscor-kernel.service"
+	DefaultInstallDir = "/opt/asscor"
+	DefaultConfigDir  = "/etc/asscor"
+	DefaultDataDir    = "/var/lib/asscor"
+	DefaultLogsDir    = "/var/log/asscor"
 )
 
-func installService(installPath string) error {
+func InstallKernel(installPath string) error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("install requires root privileges (use sudo)")
 	}
 
 	binPath := installPath + "/ASSCOR-kernel"
-	configPath := defaultConfigDir + "/config.ini"
-	configTemplates := defaultConfigDir + "/config"
-	dataDir := defaultDataDir
-	logsDir := defaultLogsDir
+	configPath := DefaultConfigDir + "/config.ini"
+	configTemplates := DefaultConfigDir + "/config"
+	dataDir := DefaultDataDir
+	logsDir := DefaultLogsDir
 
-	dirs := []string{installPath, defaultConfigDir, dataDir, logsDir, configTemplates}
+	dirs := []string{installPath, DefaultConfigDir, dataDir, logsDir, configTemplates}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			return fmt.Errorf("create directory %s: %w", d, err)
@@ -61,7 +61,7 @@ func installService(installPath string) error {
 	if err := createUser(); err != nil {
 		fmt.Fprintf(os.Stderr, "WARN: could not create asscor user: %v\n", err)
 	}
-	exec.Command("chown", "-R", "asscor:asscor", installPath, defaultConfigDir, dataDir, logsDir).Run()
+	exec.Command("chown", "-R", "asscor:asscor", installPath, DefaultConfigDir, dataDir, logsDir).Run()
 
 	svcContent := fmt.Sprintf(`[Unit]
 Description=ASSCOR Microkernel - Security Acceptability Assessment Engine
@@ -90,7 +90,7 @@ ReadWritePaths=%s %s %s /opt/asscor
 WantedBy=multi-user.target
 `, binPath, configPath, installPath, logsDir, installPath, dataDir, logsDir, installPath)
 
-	if err := os.WriteFile(serviceFile, []byte(svcContent), 0644); err != nil {
+	if err := os.WriteFile(kernelServiceFile, []byte(svcContent), 0644); err != nil {
 		return fmt.Errorf("write service file: %w", err)
 	}
 
@@ -114,7 +114,7 @@ WantedBy=multi-user.target
 
 	fmt.Fprintf(os.Stderr, "ASSCOR installed successfully\n")
 	fmt.Fprintf(os.Stderr, "  Binary:  %s\n", binPath)
-	fmt.Fprintf(os.Stderr, "  Command: asscor            (symlink â†’ %s)\n", binPath)
+	fmt.Fprintf(os.Stderr, "  Command: asscor            (symlink â†?%s)\n", binPath)
 	fmt.Fprintf(os.Stderr, "  Config:  %s\n", configPath)
 	fmt.Fprintf(os.Stderr, "  Data:    %s\n", dataDir)
 	fmt.Fprintf(os.Stderr, "  Logs:    %s\n", logsDir)
@@ -123,25 +123,25 @@ WantedBy=multi-user.target
 	return nil
 }
 
-func updateConfigDataDir(path string) {
+func UpdateConfigDataDir(path string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
 	content := string(data)
 	if containsStr(content, "data_dir") {
-		content = replaceLine(content, "data_dir", "data_dir = "+defaultDataDir)
+		content = replaceLine(content, "data_dir", "data_dir = "+DefaultDataDir)
 	} else {
-		content = "data_dir = " + defaultDataDir + "\n" + content
+		content = "data_dir = " + DefaultDataDir + "\n" + content
 	}
 	os.WriteFile(path, []byte(content), 0644)
 }
 
-func containsStr(s, substr string) bool {
+func ContainsStr(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && findInStr(s, substr)
 }
 
-func findInStr(s, substr string) bool {
+func FindInStr(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
 			return true
@@ -150,7 +150,7 @@ func findInStr(s, substr string) bool {
 	return false
 }
 
-func replaceLine(content, key, replacement string) string {
+func ReplaceLine(content, key, replacement string) string {
 	result := ""
 	i := 0
 	lines := splitLines(content)
@@ -166,7 +166,7 @@ func replaceLine(content, key, replacement string) string {
 	return result
 }
 
-func splitLines(s string) []string {
+func SplitLines(s string) []string {
 	var lines []string
 	start := 0
 	for i, c := range s {
@@ -181,14 +181,14 @@ func splitLines(s string) []string {
 	return lines
 }
 
-func uninstallService(installPath string) error {
+func UninstallKernel(installPath string) error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("uninstall requires root privileges (use sudo)")
 	}
 
-	_ = exec.Command("systemctl", "stop", serviceName).Run()
-	_ = exec.Command("systemctl", "disable", serviceName).Run()
-	os.Remove(serviceFile)
+	_ = exec.Command("systemctl", "stop", kernelServiceName).Run()
+	_ = exec.Command("systemctl", "disable", kernelServiceName).Run()
+	os.Remove(kernelServiceFile)
 	os.Remove("/usr/bin/asscor")
 	os.Remove("/usr/bin/asscor-cli")
 	os.Remove("/usr/local/bin/asscor")
@@ -197,8 +197,8 @@ func uninstallService(installPath string) error {
 	return nil
 }
 
-func checkInstallation(installPath string) error {
-	configPath := defaultConfigDir + "/config.ini"
+func CheckKernelInstall(installPath string) error {
+	configPath := DefaultConfigDir + "/config.ini"
 
 	if _, err := os.Stat(installPath + "/ASSCOR-kernel"); os.IsNotExist(err) {
 		return fmt.Errorf("binary not found at %s/ASSCOR-kernel", installPath)
@@ -206,23 +206,23 @@ func checkInstallation(installPath string) error {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return fmt.Errorf("config not found at %s", configPath)
 	}
-	if _, err := os.Stat(defaultDataDir); os.IsNotExist(err) {
-		return fmt.Errorf("data directory not found at %s", defaultDataDir)
+	if _, err := os.Stat(DefaultDataDir); os.IsNotExist(err) {
+		return fmt.Errorf("data directory not found at %s", DefaultDataDir)
 	}
-	if _, err := os.Stat(serviceFile); os.IsNotExist(err) {
-		return fmt.Errorf("systemd service not installed at %s", serviceFile)
+	if _, err := os.Stat(kernelServiceFile); os.IsNotExist(err) {
+		return fmt.Errorf("systemd service not installed at %s", kernelServiceFile)
 	}
 	return nil
 }
 
-func createUser() error {
+func CreateUser() error {
 	if err := exec.Command("id", "asscor").Run(); err == nil {
 		return nil
 	}
 	return exec.Command("useradd", "-r", "-s", "/sbin/nologin", "-d", "/opt/asscor", "-M", "asscor").Run()
 }
 
-func copyFile(src, dst string) error {
+func CopyFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return err
@@ -230,7 +230,7 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, data, 0644)
 }
 
-func upgradeInstallation(installPath string) error {
+func UpgradeKernel(installPath string) error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("upgrade requires root privileges (use sudo)")
 	}
@@ -239,13 +239,13 @@ func upgradeInstallation(installPath string) error {
 	backupPath := binPath + ".bak"
 
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
-		return fmt.Errorf("no existing installation at %s â€” use --install first", binPath)
+		return fmt.Errorf("no existing installation at %s â€?use --install first", binPath)
 	}
 
-	_ = exec.Command("systemctl", "stop", serviceName).Run()
+	_ = exec.Command("systemctl", "stop", kernelServiceName).Run()
 
 	if err := os.Rename(binPath, backupPath); err != nil {
-		_ = exec.Command("systemctl", "start", serviceName).Run()
+		_ = exec.Command("systemctl", "start", kernelServiceName).Run()
 		return fmt.Errorf("backup existing binary: %w", err)
 	}
 
@@ -255,7 +255,7 @@ func upgradeInstallation(installPath string) error {
 	}
 	if err := copyFile(exe, binPath); err != nil {
 		os.Rename(backupPath, binPath)
-		_ = exec.Command("systemctl", "start", serviceName).Run()
+		_ = exec.Command("systemctl", "start", kernelServiceName).Run()
 		return fmt.Errorf("copy new binary: %w (old binary restored)", err)
 	}
 	if err := os.Chmod(binPath, 0755); err != nil {
@@ -276,7 +276,7 @@ func upgradeInstallation(installPath string) error {
 	os.Remove("/usr/local/bin/asscor")
 	os.Remove("/usr/local/bin/asscor-cli")
 
-	if err := exec.Command("systemctl", "start", serviceName).Run(); err != nil {
+	if err := exec.Command("systemctl", "start", kernelServiceName).Run(); err != nil {
 		return fmt.Errorf("start service after upgrade: %w (old binary at %s)", err, backupPath)
 	}
 
@@ -284,7 +284,7 @@ func upgradeInstallation(installPath string) error {
 	return nil
 }
 
-func copyDir(src, dst string) error {
+func CopyDir(src, dst string) error {
 	entries, err := os.ReadDir(src)
 	if err != nil {
 		return err
