@@ -32,15 +32,6 @@ services:
     tmpfs:
       - /tmp:exec,size=64M
     read_only: true
-    # 资源限制（可根据实际调整）
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: "2"
-        reservations:
-          memory: 512M
-          cpus: "0.5"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8087/api/health"]
@@ -48,12 +39,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    read_only: true
 
   asscor-agent:
     build:

@@ -39,7 +39,9 @@ EXPOSE 50051 50052 8087
 USER asscor
 WORKDIR /opt/asscor
 
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+STOPSIGNAL SIGTERM
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s \
     CMD wget -qO- http://localhost:8087/api/health || exit 1
 
 ENTRYPOINT ["./ASSCOR-kernel", "--config=/etc/asscor/config.ini", "--listen=:50051", "--webui-port=8087", "--log-output=/var/log/asscor/kernel.log"]

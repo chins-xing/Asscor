@@ -2,10 +2,13 @@
 build/
 docs/
 certs/
+scripts/
 *.exe
 *.test
 *.log
+*.bak
 .vscode/
 .idea/
 .kilo/
 vendor/
+tmp/
