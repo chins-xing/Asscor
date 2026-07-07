@@ -97,14 +97,16 @@ WantedBy=multi-user.target
 	exec.Command("systemctl", "daemon-reload").Run()
 
 	// Create PATH-accessible symlink and a CLI convenience wrapper so `asscor`
-	// and `asscor-cli` work from any directory.
-	symlink := "/usr/local/bin/asscor"
+	// and `asscor-cli` work from any directory. Use /usr/bin because it is on
+	// both the normal user PATH and sudo's secure_path (/usr/local/bin is not
+	// in the default sudo secure_path on RHEL/CentOS/Alibaba Cloud Linux).
+	symlink := "/usr/bin/asscor"
 	os.Remove(symlink)
 	if err := os.Symlink(binPath, symlink); err != nil {
 		fmt.Fprintf(os.Stderr, "WARN: could not create %s symlink: %v\n", symlink, err)
 	}
 
-	cliWrapper := "/usr/local/bin/asscor-cli"
+	cliWrapper := "/usr/bin/asscor-cli"
 	wrapperContent := fmt.Sprintf("#!/bin/sh\nexec %s --cli %s/asscor-cli.sock \"$@\"\n", binPath, installPath)
 	if err := os.WriteFile(cliWrapper, []byte(wrapperContent), 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "WARN: could not create %s wrapper: %v\n", cliWrapper, err)
@@ -187,6 +189,8 @@ func uninstallService(installPath string) error {
 	_ = exec.Command("systemctl", "stop", serviceName).Run()
 	_ = exec.Command("systemctl", "disable", serviceName).Run()
 	os.Remove(serviceFile)
+	os.Remove("/usr/bin/asscor")
+	os.Remove("/usr/bin/asscor-cli")
 	os.Remove("/usr/local/bin/asscor")
 	os.Remove("/usr/local/bin/asscor-cli")
 	exec.Command("systemctl", "daemon-reload").Run()
@@ -261,16 +265,16 @@ func upgradeInstallation(installPath string) error {
 	exec.Command("chown", "asscor:asscor", binPath).Run()
 
 	// Ensure PATH symlink + CLI wrapper exist (may be absent if upgrading from
-	// a version installed before symlink support).
-	symlink := "/usr/local/bin/asscor"
-	if _, err := os.Lstat(symlink); os.IsNotExist(err) {
-		os.Symlink(binPath, symlink)
-	}
-	cliWrapper := "/usr/local/bin/asscor-cli"
-	if _, err := os.Stat(cliWrapper); os.IsNotExist(err) {
-		wrapper := fmt.Sprintf("#!/bin/sh\nexec %s --cli %s/asscor-cli.sock \"$@\"\n", binPath, installPath)
-		os.WriteFile(cliWrapper, []byte(wrapper), 0755)
-	}
+	// a version installed before symlink support). /usr/bin is on sudo secure_path.
+	symlink := "/usr/bin/asscor"
+	os.Remove(symlink)
+	os.Symlink(binPath, symlink)
+	cliWrapper := "/usr/bin/asscor-cli"
+	wrapper := fmt.Sprintf("#!/bin/sh\nexec %s --cli %s/asscor-cli.sock \"$@\"\n", binPath, installPath)
+	os.WriteFile(cliWrapper, []byte(wrapper), 0755)
+	// Clean up any old /usr/local/bin entries from prior installs.
+	os.Remove("/usr/local/bin/asscor")
+	os.Remove("/usr/local/bin/asscor-cli")
 
 	if err := exec.Command("systemctl", "start", serviceName).Run(); err != nil {
 		return fmt.Errorf("start service after upgrade: %w (old binary at %s)", err, backupPath)
