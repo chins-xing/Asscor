@@ -13,10 +13,23 @@ services:
       - "50051:50051"
       - "50052:50052"
     volumes:
+      # 持久化数据（CVE缓存/评估记录/扩展包）
       - asscor-data:/var/lib/asscor
+      # 日志
       - asscor-logs:/var/log/asscor
+      # 配置文件（只读）
       - ./config.ini:/etc/asscor/config.ini:ro
+      # 行业模板（只读）
       - ./config:/etc/asscor/config:ro
+      # 用户脚本适配器目录（需可执行）
+      - ./scripts:/opt/asscor/scripts:ro
+      # CLI socket 共享卷（供 asscor-cli 连接）
+      - asscor-cli:/opt/asscor/cli-socket
+    environment:
+      - ASSCOR_CLI_SOCKET=/opt/asscor/cli-socket/asscor-cli.sock
+    tmpfs:
+      - /tmp:exec,size=64M
+    read_only: true
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8087/api/health"]
@@ -62,3 +75,4 @@ volumes:
   asscor-data:
   asscor-logs:
   asscor-agent-logs:
+  asscor-cli:

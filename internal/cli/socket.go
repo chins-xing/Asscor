@@ -12,6 +12,13 @@ import (
 
 const defaultSocketPath = "/opt/asscor/asscor-cli.sock"
 
+func socketPath() string {
+	if p := os.Getenv("ASSCOR_CLI_SOCKET"); p != "" {
+		return p
+	}
+	return defaultSocketPath
+}
+
 type cliSession struct {
 	conn   net.Conn
 	engine *Engine
@@ -19,7 +26,7 @@ type cliSession struct {
 }
 
 func (m *CLIModule) serveCLI(ctx context.Context) {
-	sockPath := defaultSocketPath
+	sockPath := socketPath()
 	if m.socketPath != "" {
 		sockPath = m.socketPath
 	}
