@@ -445,10 +445,11 @@ func setupTLS(certDir string) *tls.Config {
 			log.Warn("cannot write CA key, starting without mTLS", "path", caKeyPath, "error", err)
 			return nil
 		}
-		os.Remove(serverCertPath)
-		os.Remove(serverKeyPath)
-		os.Remove(agentCertPath)
-		os.Remove(agentKeyPath)
+		for _, p := range []string{serverCertPath, serverKeyPath, agentCertPath, agentKeyPath} {
+			if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+				log.Warn("cannot remove old cert after CA regeneration", "path", p, "error", err)
+			}
+		}
 	}
 
 	serverPair, err := kernel.LoadCertPair(serverCertPath, serverKeyPath)

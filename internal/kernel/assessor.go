@@ -161,9 +161,10 @@ func (m *AssessorModule) setupConsoleReport() {
 	}
 	v := os.Getenv("ASSCOR_CONSOLE_REPORT")
 	if v == "" {
-		v = m.cfg.AdapterConfig["webui.console_report"]
+		// Try global key first (config.ini top-level entry), then section-prefixed fallback.
+		v = m.cfg.AdapterConfig["console_report"]
 		if v == "" {
-			v = m.cfg.AdapterConfig["console_report"]
+			v = m.cfg.AdapterConfig["webui.console_report"]
 		}
 	}
 	m.consoleReport = v == "true" || v == "yes" || v == "1"

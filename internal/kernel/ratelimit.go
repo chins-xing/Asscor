@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type clientBucket struct {
@@ -44,6 +46,11 @@ func NewRateLimiter(ratePerSec float64, burst int, onRejected func(service, meth
 func (r *RateLimiter) startAutoCleanup() {
 	r.cleanupTick = time.NewTicker(5 * time.Minute)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.WithComponent("ratelimit").Error("cleanup goroutine panicked", "panic", r)
+			}
+		}()
 		for {
 			select {
 			case <-r.cleanupTick.C:

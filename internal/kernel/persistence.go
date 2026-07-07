@@ -649,8 +649,11 @@ func (m *PersistenceModule) createHourlySnapshot() {
 		if err != nil {
 			continue
 		}
-		n, _ := io.Copy(snapshotFile, f)
+		n, err := io.Copy(snapshotFile, f)
 		f.Close()
+		if err != nil {
+			logger.WithComponent("persistence").Warn("snapshot copy error", "path", src, "error", err)
+		}
 		if n > 0 {
 			totalEntries++
 		}
@@ -729,7 +732,9 @@ func (m *PersistenceModule) createDailyArchive() {
 		if err != nil {
 			continue
 		}
-		io.Copy(tw, srcFile)
+		if _, err := io.Copy(tw, srcFile); err != nil {
+			logger.WithComponent("persistence").Warn("archive copy error", "path", src, "error", err)
+		}
 		srcFile.Close()
 		archived++
 	}

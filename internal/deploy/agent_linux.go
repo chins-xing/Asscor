@@ -121,11 +121,3 @@ func UpgradeAgent() error {
 	fmt.Fprintf(os.Stderr, "Agent upgrade complete. Old: %s\n", backupPath)
 	return nil
 }
-
-func CopyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, data, 0755)
-}

@@ -2,6 +2,7 @@ package srd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -417,7 +418,7 @@ func parseInt(s string) (int, error) {
 	var n int
 	for _, c := range s {
 		if c < '0' || c > '9' {
-			return 0, nil
+			return 0, fmt.Errorf("invalid digit in parseInt: %q in %q", c, s)
 		}
 		n = n*10 + int(c-'0')
 	}

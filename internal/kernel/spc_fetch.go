@@ -386,6 +386,11 @@ func (m *SPCModule) fetchNVDAPI(baseURL, apiKey string, since time.Time) ([]SPCC
 		go func(idx int, start, end time.Time) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			defer func() {
+				if r := recover(); r != nil {
+					logger.WithComponent("spc").Error("NVD fetch goroutine panicked", "window", idx, "panic", r)
+				}
+			}()
 
 			startIdx := 0
 			retryCount := 0

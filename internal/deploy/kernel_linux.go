@@ -227,7 +227,7 @@ func CopyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0644)
+	return os.WriteFile(dst, data, 0755)
 }
 
 func UpgradeKernel(installPath string) error {
