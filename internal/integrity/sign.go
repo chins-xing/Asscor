@@ -65,6 +65,9 @@ func canonicalPayload(r *model.AssessmentResult) []byte {
 }
 
 func (s *Signer) Sign(r *model.AssessmentResult) {
+	if !IsSigningEnabled() {
+		return
+	}
 	s.mu.RLock()
 	key := s.key
 	s.mu.RUnlock()

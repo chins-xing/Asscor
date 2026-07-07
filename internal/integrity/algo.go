@@ -33,6 +33,9 @@ func computeAlgoDigest() string {
 }
 
 func VerifyAlgo() bool {
+	if !IsAlgoVerifyEnabled() {
+		return true
+	}
 	digest := computeAlgoDigest()
 	if expectedAlgoDigest == "" {
 		logger.WithComponent("integrity").Info("algorithm calibration digest", "digest", digest, "mode", "record")

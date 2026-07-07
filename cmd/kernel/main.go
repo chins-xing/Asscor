@@ -145,10 +145,21 @@ func main() {
 		cfg = config.Default()
 	}
 
+	// Load integrity module configuration. Users can disable individual
+	// protection layers via [integrity] in config.ini to tune the balance
+	// between security and single-binary deployment simplicity.
+	ac := cfg.AdapterConfig
+	integrity.EnableSigning(ac["integrity.sign_assessment"] != "false")
+	integrity.EnableAlgoVerify(ac["integrity.verify_algo"] != "false")
+	integrity.EnableAntiDebug(ac["integrity.anti_debug"] == "true")
+
 	log.Info("ASSCOR kernel starting",
 		"version", version.ASSCORVersion,
 		"ssam", version.SSAMVersion,
 		"config", resolvedConfigPath,
+		"integrity_sign", integrity.IsSigningEnabled(),
+		"integrity_algo", integrity.IsAlgoVerifyEnabled(),
+		"integrity_anti_debug", integrity.IsAntiDebugEnabled(),
 	)
 
 	if cfgLogLevel := cfg.AdapterConfig["log.level"]; cfgLogLevel != "" && *logLevel == "info" {
@@ -220,13 +231,15 @@ k.SetConfig("config_path", resolvedConfigPath)
 	}
 
 	// Algorithm integrity guard: verify the SSAM/Prism calibration constants
-	// match the expected baseline (R2). Logs a warning on mismatch; enforcement
-	// mode is enabled by setting the expectedAlgoDigest constant in the build.
+	// match the expected baseline (R2). Controlled by config.ini [integrity] verify_algo.
+	// Disable via: [integrity] verify_algo = false
 	if ok := integrity.VerifyAlgo(); !ok {
 		log.Error("algorithm integrity verification FAILED — SSAM/Prism constants may be tampered")
 	}
 
-	if integrity.IsDebugged() {
+	// Anti-debug self-check (R5). Controlled by config.ini [integrity] anti_debug.
+	// Enable via: [integrity] anti_debug = true (default: false)
+	if integrity.IsAntiDebugEnabled() && integrity.IsDebugged() {
 		log.Warn("debugger/tracer detected — runtime integrity compromised")
 	}
 
