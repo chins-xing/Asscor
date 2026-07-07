@@ -159,6 +159,13 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		}
 
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.WithComponent("kernel").Error("assessment goroutine panicked",
+						"host_id", req.HostId, "panic", r)
+					logger.Metrics().IncAssessmentsErr()
+				}
+			}()
 			result := s.assessor.EvaluateFromResults(req.HostId, hostname, checkResults)
 			logger.WithComponent("kernel").Info("assessment result", "host_id", req.HostId, "score", result.FinalScore, "acceptable", result.Acceptable, "checks", len(result.Checks))
 		}()
