@@ -95,12 +95,28 @@ WantedBy=multi-user.target
 	}
 
 	exec.Command("systemctl", "daemon-reload").Run()
+
+	// Create PATH-accessible symlink and a CLI convenience wrapper so `asscor`
+	// and `asscor-cli` work from any directory.
+	symlink := "/usr/local/bin/asscor"
+	os.Remove(symlink)
+	if err := os.Symlink(binPath, symlink); err != nil {
+		fmt.Fprintf(os.Stderr, "WARN: could not create %s symlink: %v\n", symlink, err)
+	}
+
+	cliWrapper := "/usr/local/bin/asscor-cli"
+	wrapperContent := fmt.Sprintf("#!/bin/sh\nexec %s --cli %s/asscor-cli.sock \"$@\"\n", binPath, installPath)
+	if err := os.WriteFile(cliWrapper, []byte(wrapperContent), 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "WARN: could not create %s wrapper: %v\n", cliWrapper, err)
+	}
+
 	fmt.Fprintf(os.Stderr, "ASSCOR installed successfully\n")
 	fmt.Fprintf(os.Stderr, "  Binary:  %s\n", binPath)
+	fmt.Fprintf(os.Stderr, "  Command: asscor            (symlink → %s)\n", binPath)
 	fmt.Fprintf(os.Stderr, "  Config:  %s\n", configPath)
 	fmt.Fprintf(os.Stderr, "  Data:    %s\n", dataDir)
 	fmt.Fprintf(os.Stderr, "  Logs:    %s\n", logsDir)
-	fmt.Fprintf(os.Stderr, "  CLI:     %s --cli %s/asscor-cli.sock\n", binPath, installPath)
+	fmt.Fprintf(os.Stderr, "  CLI:     asscor-cli        (connects to %s/asscor-cli.sock)\n", installPath)
 	fmt.Fprintf(os.Stderr, "  Start:   sudo systemctl start asscor-kernel\n")
 	return nil
 }
@@ -171,6 +187,8 @@ func uninstallService(installPath string) error {
 	_ = exec.Command("systemctl", "stop", serviceName).Run()
 	_ = exec.Command("systemctl", "disable", serviceName).Run()
 	os.Remove(serviceFile)
+	os.Remove("/usr/local/bin/asscor")
+	os.Remove("/usr/local/bin/asscor-cli")
 	exec.Command("systemctl", "daemon-reload").Run()
 	return nil
 }
@@ -241,6 +259,18 @@ func upgradeInstallation(installPath string) error {
 	}
 
 	exec.Command("chown", "asscor:asscor", binPath).Run()
+
+	// Ensure PATH symlink + CLI wrapper exist (may be absent if upgrading from
+	// a version installed before symlink support).
+	symlink := "/usr/local/bin/asscor"
+	if _, err := os.Lstat(symlink); os.IsNotExist(err) {
+		os.Symlink(binPath, symlink)
+	}
+	cliWrapper := "/usr/local/bin/asscor-cli"
+	if _, err := os.Stat(cliWrapper); os.IsNotExist(err) {
+		wrapper := fmt.Sprintf("#!/bin/sh\nexec %s --cli %s/asscor-cli.sock \"$@\"\n", binPath, installPath)
+		os.WriteFile(cliWrapper, []byte(wrapper), 0755)
+	}
 
 	if err := exec.Command("systemctl", "start", serviceName).Run(); err != nil {
 		return fmt.Errorf("start service after upgrade: %w (old binary at %s)", err, backupPath)
