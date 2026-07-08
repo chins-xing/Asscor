@@ -91,11 +91,6 @@ func isWorldWritable(info os.FileInfo) bool {
 	return info.Mode().Perm()&0002 != 0
 }
 
-// isOwnedByRoot is a best-effort check. On non-Unix platforms it returns true.
-func isOwnedByRoot(info os.FileInfo) bool {
-	return true // platform-specific check handled in _unix.go
-}
-
 func (a *ScriptAdapter) Fetch(ctx context.Context, _ map[string]string) ([]byte, error) {
 	var result []byte
 	var fetchErr error
