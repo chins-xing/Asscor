@@ -1,4 +1,4 @@
-//go:build linux
+ï»¿//go:build linux
 
 package deploy
 
@@ -9,295 +9,111 @@ import (
 )
 
 const (
-	kernelkernelServiceName = "asscor-kernel"
-	kernelkernelServiceFile = "/etc/systemd/system/asscor-kernel.service"
-	DefaultInstallDir = "/opt/asscor"
-	DefaultConfigDir  = "/etc/asscor"
-	DefaultDataDir    = "/var/lib/asscor"
-	DefaultLogsDir    = "/var/log/asscor"
+	serviceName       = "asscor-kernel"
+	serviceFile       = "/etc/systemd/system/asscor-kernel.service"
+	defaultInstallDir = "/opt/asscor"
+	defaultConfigDir  = "/etc/asscor"
+	defaultDataDir    = "/var/lib/asscor"
+	defaultLogsDir    = "/var/log/asscor"
 )
 
 func InstallKernel(installPath string) error {
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("install requires root privileges (use sudo)")
+		return fmt.Errorf("install requires root privileges")
 	}
-
 	binPath := installPath + "/ASSCOR-kernel"
-	configPath := DefaultConfigDir + "/config.ini"
-	configTemplates := DefaultConfigDir + "/config"
-	dataDir := DefaultDataDir
-	logsDir := DefaultLogsDir
+	configPath := defaultConfigDir + "/config.ini"
+	configTemplates := defaultConfigDir + "/config"
+	dataDir := defaultDataDir
+	logsDir := defaultLogsDir
 
-	dirs := []string{installPath, DefaultConfigDir, dataDir, logsDir, configTemplates}
-	for _, d := range dirs {
-		if err := os.MkdirAll(d, 0755); err != nil {
-			return fmt.Errorf("create directory %s: %w", d, err)
-		}
+	for _, d := range []string{installPath, defaultConfigDir, dataDir, logsDir, configTemplates} {
+		os.MkdirAll(d, 0755)
 	}
 
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("get executable path: %w", err)
 	}
-	if err := copyFile(exe, binPath); err != nil {
-		return fmt.Errorf("copy binary: %w", err)
+	data, err := os.ReadFile(exe)
+	if err != nil {
+		return fmt.Errorf("read self: %w", err)
 	}
-	if err := os.Chmod(binPath, 0755); err != nil {
-		return fmt.Errorf("chmod binary: %w", err)
-	}
+	os.WriteFile(binPath, data, 0755)
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		if err := copyFile("config.ini", configPath); err != nil {
-			fmt.Fprintf(os.Stderr, "WARN: could not copy config.ini: %v\n", err)
-		}
-	}
-	if _, err := os.Stat(configTemplates); os.IsNotExist(err) {
-		copyDir("config", configTemplates)
+		os.WriteFile(configPath, []byte("data_dir = "+dataDir+"\n[weights]\nattack_surface = 35\nbusiness_continuity = 25\noperation_trust = 25\nresilience = 15\n"), 0644)
 	}
 
-	// fix config data_dir to use FHS path
-	updateConfigDataDir(configPath)
-
-	if err := createUser(); err != nil {
-		fmt.Fprintf(os.Stderr, "WARN: could not create asscor user: %v\n", err)
-	}
-	exec.Command("chown", "-R", "asscor:asscor", installPath, DefaultConfigDir, dataDir, logsDir).Run()
+	exec.Command("useradd", "-r", "-s", "/sbin/nologin", "-d", "/opt/asscor", "-M", "asscor").Run()
+	exec.Command("chown", "-R", "asscor:asscor", installPath, defaultConfigDir, dataDir, logsDir).Run()
 
 	svcContent := fmt.Sprintf(`[Unit]
-Description=ASSCOR Microkernel - Security Acceptability Assessment Engine
-Documentation=https://github.com/asscor/asscor
+Description=ASSCOR Microkernel
 After=network-online.target
-Wants=network-online.target
 
 [Service]
 Type=simple
 User=asscor
-Group=asscor
-ExecStart=%s --config=%s --listen=:50051 --webui-port=8087 --pid-file=%s/ASSCOR-kernel.pid --log-format=json --log-level=info --log-output=%s/kernel.log
+ExecStart=%s --config=%s --listen=:50051 --webui-port=8087 --log-output=%s/kernel.log
 ExecReload=/bin/kill -HUP $MAINPID
-ExecStop=/bin/kill -SIGTERM $MAINPID
 Restart=on-failure
 RestartSec=10
-PIDFile=%s/ASSCOR-kernel.pid
 KillMode=mixed
-KillSignal=SIGTERM
 TimeoutStopSec=30
 LimitNOFILE=65536
-LimitNPROC=4096
-ReadWritePaths=%s %s %s /opt/asscor
 
 [Install]
 WantedBy=multi-user.target
-`, binPath, configPath, installPath, logsDir, installPath, dataDir, logsDir, installPath)
+`, binPath, configPath, logsDir)
 
-	if err := os.WriteFile(kernelServiceFile, []byte(svcContent), 0644); err != nil {
-		return fmt.Errorf("write service file: %w", err)
-	}
+	os.WriteFile(serviceFile, []byte(svcContent), 0644)
 
-	exec.Command("systemctl", "daemon-reload").Run()
-
-	// Create PATH-accessible symlink and a CLI convenience wrapper so `asscor`
-	// and `asscor-cli` work from any directory. Use /usr/bin because it is on
-	// both the normal user PATH and sudo's secure_path (/usr/local/bin is not
-	// in the default sudo secure_path on RHEL/CentOS/Alibaba Cloud Linux).
-	symlink := "/usr/bin/asscor"
-	os.Remove(symlink)
-	if err := os.Symlink(binPath, symlink); err != nil {
-		fmt.Fprintf(os.Stderr, "WARN: could not create %s symlink: %v\n", symlink, err)
-	}
-
-	cliWrapper := "/usr/bin/asscor-cli"
-	wrapperContent := fmt.Sprintf("#!/bin/sh\nexec %s --cli %s/asscor-cli.sock \"$@\"\n", binPath, installPath)
-	if err := os.WriteFile(cliWrapper, []byte(wrapperContent), 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "WARN: could not create %s wrapper: %v\n", cliWrapper, err)
-	}
-
-	fmt.Fprintf(os.Stderr, "ASSCOR installed successfully\n")
-	fmt.Fprintf(os.Stderr, "  Binary:  %s\n", binPath)
-	fmt.Fprintf(os.Stderr, "  Command: asscor            (symlink â†?%s)\n", binPath)
-	fmt.Fprintf(os.Stderr, "  Config:  %s\n", configPath)
-	fmt.Fprintf(os.Stderr, "  Data:    %s\n", dataDir)
-	fmt.Fprintf(os.Stderr, "  Logs:    %s\n", logsDir)
-	fmt.Fprintf(os.Stderr, "  CLI:     asscor-cli        (connects to %s/asscor-cli.sock)\n", installPath)
-	fmt.Fprintf(os.Stderr, "  Start:   sudo systemctl start asscor-kernel\n")
-	return nil
-}
-
-func UpdateConfigDataDir(path string) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	content := string(data)
-	if containsStr(content, "data_dir") {
-		content = replaceLine(content, "data_dir", "data_dir = "+DefaultDataDir)
-	} else {
-		content = "data_dir = " + DefaultDataDir + "\n" + content
-	}
-	os.WriteFile(path, []byte(content), 0644)
-}
-
-func ContainsStr(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && findInStr(s, substr)
-}
-
-func FindInStr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
-func ReplaceLine(content, key, replacement string) string {
-	result := ""
-	i := 0
-	lines := splitLines(content)
-	for _, line := range lines {
-		if findInStr(line, key+" ") || findInStr(line, key+"=") {
-			result += replacement + "\n"
-		} else {
-			result += line + "\n"
-		}
-		i++
-	}
-	_ = i
-	return result
-}
-
-func SplitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i, c := range s {
-		if c == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
-}
-
-func UninstallKernel(installPath string) error {
-	if os.Geteuid() != 0 {
-		return fmt.Errorf("uninstall requires root privileges (use sudo)")
-	}
-
-	_ = exec.Command("systemctl", "stop", kernelServiceName).Run()
-	_ = exec.Command("systemctl", "disable", kernelServiceName).Run()
-	os.Remove(kernelServiceFile)
 	os.Remove("/usr/bin/asscor")
 	os.Remove("/usr/bin/asscor-cli")
-	os.Remove("/usr/local/bin/asscor")
-	os.Remove("/usr/local/bin/asscor-cli")
+	os.Symlink(binPath, "/usr/bin/asscor")
+	cliWrapper := fmt.Sprintf("#!/bin/sh\nexec %s --cli %s/asscor-cli.sock \"$@\"\n", binPath, installPath)
+	os.WriteFile("/usr/bin/asscor-cli", []byte(cliWrapper), 0755)
+
 	exec.Command("systemctl", "daemon-reload").Run()
 	return nil
 }
 
-func CheckKernelInstall(installPath string) error {
-	configPath := DefaultConfigDir + "/config.ini"
-
-	if _, err := os.Stat(installPath + "/ASSCOR-kernel"); os.IsNotExist(err) {
-		return fmt.Errorf("binary not found at %s/ASSCOR-kernel", installPath)
-	}
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return fmt.Errorf("config not found at %s", configPath)
-	}
-	if _, err := os.Stat(DefaultDataDir); os.IsNotExist(err) {
-		return fmt.Errorf("data directory not found at %s", DefaultDataDir)
-	}
-	if _, err := os.Stat(kernelServiceFile); os.IsNotExist(err) {
-		return fmt.Errorf("systemd service not installed at %s", kernelServiceFile)
-	}
-	return nil
-}
-
-func CreateUser() error {
-	if err := exec.Command("id", "asscor").Run(); err == nil {
-		return nil
-	}
-	return exec.Command("useradd", "-r", "-s", "/sbin/nologin", "-d", "/opt/asscor", "-M", "asscor").Run()
-}
-
-func CopyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, data, 0755)
-}
-
-func UpgradeKernel(installPath string) error {
+func UninstallKernel(_ string) error {
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("upgrade requires root privileges (use sudo)")
+		return fmt.Errorf("uninstall requires root privileges")
 	}
-
-	binPath := installPath + "/ASSCOR-kernel"
-	backupPath := binPath + ".bak"
-
-	if _, err := os.Stat(binPath); os.IsNotExist(err) {
-		return fmt.Errorf("no existing installation at %s â€?use --install first", binPath)
-	}
-
-	_ = exec.Command("systemctl", "stop", kernelServiceName).Run()
-
-	if err := os.Rename(binPath, backupPath); err != nil {
-		_ = exec.Command("systemctl", "start", kernelServiceName).Run()
-		return fmt.Errorf("backup existing binary: %w", err)
-	}
-
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("get executable path: %w", err)
-	}
-	if err := copyFile(exe, binPath); err != nil {
-		os.Rename(backupPath, binPath)
-		_ = exec.Command("systemctl", "start", kernelServiceName).Run()
-		return fmt.Errorf("copy new binary: %w (old binary restored)", err)
-	}
-	if err := os.Chmod(binPath, 0755); err != nil {
-		return fmt.Errorf("chmod new binary: %w", err)
-	}
-
-	exec.Command("chown", "asscor:asscor", binPath).Run()
-
-	// Ensure PATH symlink + CLI wrapper exist (may be absent if upgrading from
-	// a version installed before symlink support). /usr/bin is on sudo secure_path.
-	symlink := "/usr/bin/asscor"
-	os.Remove(symlink)
-	os.Symlink(binPath, symlink)
-	cliWrapper := "/usr/bin/asscor-cli"
-	wrapper := fmt.Sprintf("#!/bin/sh\nexec %s --cli %s/asscor-cli.sock \"$@\"\n", binPath, installPath)
-	os.WriteFile(cliWrapper, []byte(wrapper), 0755)
-	// Clean up any old /usr/local/bin entries from prior installs.
-	os.Remove("/usr/local/bin/asscor")
-	os.Remove("/usr/local/bin/asscor-cli")
-
-	if err := exec.Command("systemctl", "start", kernelServiceName).Run(); err != nil {
-		return fmt.Errorf("start service after upgrade: %w (old binary at %s)", err, backupPath)
-	}
-
-	fmt.Fprintf(os.Stderr, "Upgrade complete. Old binary: %s\n", backupPath)
+	exec.Command("systemctl", "stop", serviceName).Run()
+	exec.Command("systemctl", "disable", serviceName).Run()
+	os.Remove(serviceFile)
+	os.Remove("/usr/bin/asscor")
+	os.Remove("/usr/bin/asscor-cli")
+	exec.Command("systemctl", "daemon-reload").Run()
 	return nil
 }
 
-func CopyDir(src, dst string) error {
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
+func CheckKernelInstall(_ string) error {
+	if _, err := os.Stat(defaultInstallDir + "/ASSCOR-kernel"); os.IsNotExist(err) {
+		return fmt.Errorf("binary not found at %s/ASSCOR-kernel", defaultInstallDir)
 	}
-	for _, e := range entries {
-		srcPath := src + "/" + e.Name()
-		dstPath := dst + "/" + e.Name()
-		if e.IsDir() {
-			os.MkdirAll(dstPath, 0755)
-			copyDir(srcPath, dstPath)
-		} else {
-			copyFile(srcPath, dstPath)
-		}
+	if _, err := os.Stat(serviceFile); os.IsNotExist(err) {
+		return fmt.Errorf("service not installed")
 	}
+	return nil
+}
+
+func UpgradeKernel(_ string) error {
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("upgrade requires root privileges")
+	}
+	binPath := defaultInstallDir + "/ASSCOR-kernel"
+	backupPath := binPath + ".bak"
+	exec.Command("systemctl", "stop", serviceName).Run()
+	os.Rename(binPath, backupPath)
+	exe, _ := os.Executable()
+	data, _ := os.ReadFile(exe)
+	os.WriteFile(binPath, data, 0755)
+	exec.Command("chown", "asscor:asscor", binPath).Run()
+	exec.Command("systemctl", "start", serviceName).Run()
 	return nil
 }
