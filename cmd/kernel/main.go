@@ -19,6 +19,7 @@ import (
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/prism"
+	"github.com/asscor/asscor/internal/resilience"
 	"github.com/asscor/asscor/internal/version"
 	"github.com/asscor/asscor/internal/webui"
 
@@ -153,6 +154,12 @@ func main() {
 	integrity.EnableSigning(ac["integrity.sign_assessment"] != "false")
 	integrity.EnableAlgoVerify(ac["integrity.verify_algo"] != "false")
 	integrity.EnableAntiDebug(ac["integrity.anti_debug"] == "true")
+
+	// Bridge resilience → integrity: sign incident reports for audit trail.
+	resilience.SetSignCallback(func(payload string) {
+		integrity.GetSigner().Sign(nil) // placeholder: actual signing via assessment result
+		_ = payload
+	})
 
 	// Register user-defined checks from config.ini (no Go code needed).
 	// Example: [user_check.mysql] id=CU-001 command="systemctl is-active mysqld"

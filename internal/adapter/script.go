@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/asscor/asscor/internal/model"
+	"github.com/asscor/asscor/internal/resilience"
 )
 
 // ScriptAdapter runs user-defined external scripts (any language) and converts
@@ -96,30 +97,40 @@ func isOwnedByRoot(info os.FileInfo) bool {
 }
 
 func (a *ScriptAdapter) Fetch(ctx context.Context, _ map[string]string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+	var result []byte
+	var fetchErr error
 
-	cmd := exec.CommandContext(ctx, a.scriptPath)
-	cmd.Dir = filepath.Dir(a.scriptPath)
+	module := "adapter_script." + a.adapterID
+	err := resilience.Guard(module, "fetch", func() error {
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+		cmd := exec.CommandContext(ctx, a.scriptPath)
+		cmd.Dir = filepath.Dir(a.scriptPath)
 
-	err := cmd.Run()
-	if ctx.Err() == context.DeadlineExceeded {
-		return nil, fmt.Errorf("script %s timed out after 30s", a.scriptPath)
-	}
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+
+		fetchErr = cmd.Run()
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("script %s timed out after 30s", a.scriptPath)
+		}
+		if fetchErr != nil {
+			return fmt.Errorf("script %s failed: %w (stderr: %s)", a.scriptPath, fetchErr, stderr.String())
+		}
+
+		result = stdout.Bytes()
+		if len(result) > 1024*1024 {
+			return fmt.Errorf("script %s output exceeds 1MB limit", a.scriptPath)
+		}
+		return nil
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("script %s failed: %w (stderr: %s)", a.scriptPath, err, stderr.String())
+		return nil, err
 	}
-
-	output := stdout.Bytes()
-	if len(output) > 1024*1024 {
-		return nil, fmt.Errorf("script %s output exceeds 1MB limit", a.scriptPath)
-	}
-
-	return output, nil
+	return result, nil
 }
 
 type scriptFinding struct {

@@ -10,6 +10,7 @@ import (
 	apiv1 "github.com/asscor/asscor/api/v1"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
+	"github.com/asscor/asscor/internal/resilience"
 )
 
 var (
@@ -158,17 +159,10 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 			}
 		}
 
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					logger.WithComponent("kernel").Error("assessment goroutine panicked",
-						"host_id", req.HostId, "panic", r)
-					logger.Metrics().IncAssessmentsErr()
-				}
-			}()
+		resilience.GuardGo("kernel.heartbeat", "evaluate", func() {
 			result := s.assessor.EvaluateFromResults(req.HostId, hostname, checkResults)
 			logger.WithComponent("kernel").Info("assessment result", "host_id", req.HostId, "score", result.FinalScore, "acceptable", result.Acceptable, "checks", len(result.Checks))
-		}()
+		})
 	}
 
 	var pendingCmds []*apiv1.Command

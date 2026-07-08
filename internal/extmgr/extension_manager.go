@@ -49,6 +49,12 @@ type ExtensionManager struct {
 	executor  *ExtensionExecutor
 	assessor  *engine.Assessor
 	repos     []ExtensionRepository
+
+	// Callbacks for extension types that need external wiring.
+	// Set before enabling extensions; nil means the type is skipped.
+	OnCLICommand    func(spec ExtensionSpec)  // register CLI command
+	OnScoringPlugin func(spec ExtensionSpec)  // register scoring formula
+	OnWebPanelRoute func(spec ExtensionSpec)  // register web UI route
 }
 
 type ExtensionRepository struct {
@@ -331,13 +337,23 @@ func (m *ExtensionManager) onExtensionInstalled(spec ExtensionSpec) {
 			logger.WithComponent("extmgr").Info("registered hook from extension", "extension_id", spec.ID)
 		}
 	case ExtTypeCLICommand:
-		m.registerCLICommand(spec)
+		if m.OnCLICommand != nil {
+			m.OnCLICommand(spec)
+		} else {
+			logger.WithComponent("extmgr").Info("CLI command extension installed (no kernel bridge configured)", "extension_id", spec.ID)
+		}
 	case ExtTypeScoringPlugin:
-		logger.WithComponent("extmgr").Info("scoring plugin extension installed — register formula via Engine.RegisterFormula",
-			"extension_id", spec.ID, "formula_id", spec.CustomConfig["formula_id"])
+		if m.OnScoringPlugin != nil {
+			m.OnScoringPlugin(spec)
+		} else {
+			logger.WithComponent("extmgr").Info("scoring plugin installed (no engine bridge configured)", "extension_id", spec.ID)
+		}
 	case ExtTypeWebPanel:
-		logger.WithComponent("extmgr").Info("web panel extension installed — register routes via webui.route.register extension point",
-			"extension_id", spec.ID, "mount", spec.CustomConfig["mount"])
+		if m.OnWebPanelRoute != nil {
+			m.OnWebPanelRoute(spec)
+		} else {
+			logger.WithComponent("extmgr").Info("web panel installed (no webui bridge configured)", "extension_id", spec.ID)
+		}
 	case ExtTypeAdapter, ExtTypeCustom:
 		logger.WithComponent("extmgr").Info("extension installed (type handled by adapter registry)",
 			"extension_id", spec.ID, "type", string(spec.ExtType))
@@ -400,23 +416,6 @@ func (m *ExtensionManager) registerCheckModule(spec ExtensionSpec) {
 			logger.WithComponent("extmgr").Debug("found check source in extension", "extension_id", spec.ID, "dir", entry.Name(), "file", f.Name())
 		}
 	}
-}
-
-func (m *ExtensionManager) registerCLICommand(spec ExtensionSpec) {
-	cmdName := spec.ID
-	cmdDesc := spec.Description
-	if cmdDesc == "" {
-		cmdDesc = spec.Name
-	}
-
-	cmdConfig := spec.CustomConfig
-	cmdCategory := cmdConfig["category"]
-	if cmdCategory == "" {
-		cmdCategory = "custom"
-	}
-
-	logger.WithComponent("extmgr").Info("CLI command extension registered",
-		"extension_id", spec.ID, "command", cmdName, "category", cmdCategory)
 }
 
 func (m *ExtensionManager) executeHook(ctx context.Context, spec ExtensionSpec, result *model.AssessmentResult) error {
