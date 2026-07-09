@@ -1578,6 +1578,19 @@ func (m *ATTACKModule) UpsertAPTGroup(profile APTGroupProfile) {
 }
 
 type ATTACKInterface interface {
+	ATTCKCore
+	ATTCKDetection
+	ATTCKIntelligence
+	ATTCKEmulation
+	ATTCKAssessment
+	ATTCKAPTModules
+	ATTCKEnhanced
+	ATTCKAuxiliary
+}
+
+// ATTCKCore contains the methods that external callers（assessor, CLI）actually use.
+// These are the frequently-called entry points for the assessment pipeline.
+type ATTCKCore interface {
 	GetAllTactics() []ATTACKTactic
 	GetTechniquesByTactic(tacticID string) []ATTACKTechnique
 	CalculateCoverage(checkResults map[string]bool) []ATTACKCoverage
@@ -1587,11 +1600,11 @@ type ATTACKInterface interface {
 	ListAPTGroups() []string
 	PredictRisk(hostID string, detectedTechniques []string, maxDepth int) PredictiveRisk
 	AssessKillChain(hostID string, checkResults map[string]bool) KillChainAssessment
-	GetTransitionMatrix() TransitionMatrix
-	AddTechniqueToTactic(tacticID string, tech ATTACKTechnique)
-	UpdateCheckMapping(techID string, AsscorChecks []string)
-	UpsertAPTGroup(profile APTGroupProfile)
 	Version() string
+}
+
+// ATTCKDetection groups detection rule management and alert operations.
+type ATTCKDetection interface {
 	RegisterDetectionRule(rule DetectionRule) error
 	GetDetectionRule(ruleID string) *DetectionRule
 	ListDetectionRules(techniqueID string, enabledOnly bool) []DetectionRule
@@ -1603,6 +1616,10 @@ type ATTACKInterface interface {
 	GetAnomalies(hostID string, minScore float64, limit int) []AnomalyEvent
 	CorrelateAlerts(hostID string) []CorrelationResult
 	GetDetectionSummary() DetectionSummary
+}
+
+// ATTCKIntelligence groups IOC and threat actor operations.
+type ATTCKIntelligence interface {
 	AddIOC(entry IOCEntry) error
 	GetIOCs(iocType string, techniqueID string, limit int) []IOCEntry
 	SearchIOC(value string) []IOCEntry
@@ -1616,6 +1633,10 @@ type ATTACKInterface interface {
 	GetTTPTracks(actorID, techniqueID string) []TTPTrack
 	EnrichAlertWithTI(alertID string) (*DetectionAlert, map[string]interface{})
 	GetTISummary() map[string]interface{}
+}
+
+// ATTCKEmulation groups adversary emulation scenario operations.
+type ATTCKEmulation interface {
 	CreateScenario(scenario EmulationScenario) error
 	GetScenario(scenarioID string) *EmulationScenario
 	ListScenarios(actorProfile string) []EmulationScenario
@@ -1623,6 +1644,10 @@ type ATTACKInterface interface {
 	GenerateScenarioFromActor(actorID string) (*EmulationScenario, error)
 	RunEmulation(scenarioID, hostID string, safeMode bool) (*EmulationResult, error)
 	GetEmulationResults(scenarioID string, limit int) []EmulationResult
+}
+
+// ATTCKAssessment groups gap analysis and improvement tracking.
+type ATTCKAssessment interface {
 	PerformGapAnalysis(hostID string) (*AssessmentReport, error)
 	GetControlMapping(techniqueID string) *ControlMapping
 	GetAssessmentReports(hostID string, limit int) []AssessmentReport
@@ -1631,9 +1656,15 @@ type ATTACKInterface interface {
 	ListImprovementTracks() []ImprovementTrack
 	UpdateImprovementAction(trackID, actionID string, status string) error
 	CalculateImprovementProgress(trackID string) (float64, error)
+}
+
+// ATTCKAPTModules groups APT sub-systems（chain, behavioral, attribution, hunting）.
+type ATTCKAPTModules interface {
+	// Attack chain reconstruction
 	ReconstructAttackChain(hostIDs []string) (*AttackChain, error)
 	GetAttackChains(hostID string, limit int) []AttackChain
 	CorrelateMultiIndicator(hostIDs []string) []MultiIndicatorCorrelation
+	// Behavioral detection
 	RegisterBehavioralIndicator(indicator BehavioralIndicator) error
 	ListBehavioralIndicators(techniqueID string) []BehavioralIndicator
 	DeleteBehavioralIndicator(indicatorID string) bool
@@ -1643,8 +1674,10 @@ type ATTACKInterface interface {
 	GetBehavioralAlerts(hostID string, limit int) []BehavioralAlert
 	DetectBeaconing(hostID string, events []TimeSeriesPoint) []BeaconDetection
 	GetBeaconDetections(hostID string, limit int) []BeaconDetection
+	// Attribution
 	PerformAttribution(chainID string) (*AttributionResult, error)
 	GenerateAPTAnalysisReport(hostIDs []string) (*APTAnalysisReport, error)
+	// Threat hunting
 	CreateHuntHypothesis(hypothesis HuntHypothesis) error
 	GetHuntHypothesis(hypothesisID string) *HuntHypothesis
 	ListHuntHypotheses(techniqueID string, status string) []HuntHypothesis
@@ -1652,6 +1685,10 @@ type ATTACKInterface interface {
 	ExecuteHunt(hypothesisID string, hostID string) (*HuntResult, error)
 	GetHuntResults(hostID string, limit int) []HuntResult
 	AutoGenerateHypotheses(hostID string) ([]HuntHypothesis, error)
+}
+
+// ATTCKEnhanced groups advanced capabilities（Bayesian, YARA, Sigma, reputation, lateral movement）.
+type ATTCKEnhanced interface {
 	ComputeGroupBaseline(role string) *GroupBaseline
 	ApplyGroupBaseline(hostID string, role string) bool
 	BuildBayesianAttributionNetwork() *BayesianNetwork
@@ -1665,6 +1702,16 @@ type ATTACKInterface interface {
 	MatchSigmaRules(hostID string, logEntries []map[string]string) []RuleMatchResult
 	AnalyzeCrossHostConnections(connections []CrossHostConnection) []LateralMovementEvidence
 	ComputeCausalChain(techniqueIDs []string) *CausalChain
+}
+
+// ATTCKAuxiliary groups administrative and dead-code methods.
+// These are retained for DI compatibility but are not part of the primary
+// assessment pipeline. Consider deprecating GetTransitionMatrix（0 callers）.
+type ATTCKAuxiliary interface {
+	AddTechniqueToTactic(tacticID string, tech ATTACKTechnique)
+	UpdateCheckMapping(techID string, AsscorChecks []string)
+	UpsertAPTGroup(profile APTGroupProfile)
+	GetTransitionMatrix() TransitionMatrix
 	GetHostAnalysisHistory(hostID string, limit int) []HostAnalysisRecord
 	GetLastAnalysis(hostID string) map[string]interface{}
 }
