@@ -517,11 +517,11 @@ func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResu
 	if !ok {
 		return
 	}
-	attck, ok := impl.(ATTACKInterface)
+	attck, ok := impl.(ATTCKCore)
 	if !ok {
 		return
 	}
-	if checker, ok := impl.(interface{ IsEnabled() bool }); ok && !checker.IsEnabled() {
+	if checker, ok := attck.(interface{ IsEnabled() bool }); ok && !checker.IsEnabled() {
 		return
 	}
 
