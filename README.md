@@ -117,7 +117,7 @@ ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** �
 
 通过集成威胁情报（如 OTX、MISP），系统实时计算当前威胁系数 μ，范围 0.60–1.00。默认 1.00，当出现高危漏洞或活跃攻击时自动下调，立即影响所有受管主机的评估结果。
 
-## 3. 评估公式
+## 5. 评估公式
 
 SSAM 2.0 的最终评估值由核心域加权得分、边缘因子修正、威胁态势系数及安全态势计算修正共同决定。SPC 采用平方和开方（√∑Penalty²）替代线性求和，防止大量低危 CVE 过早触底。
 
@@ -138,13 +138,13 @@ $$
 
 可接受阈值 T 由管理员设定（默认 80）。当 $SSAM_{final} \geq T$ 时，系统安全状态判为可接受。
 
-## 4. 韧性指标增强：可接受沦陷指标（ACI）
+## 6. 韧性指标增强：可接受沦陷指标（ACI）
 
 传统的韧性评估关注系统抵御攻击的能力，但现实中"完全不被攻破"难以保证。SSAM 2.0 在韧性核心域中引入可接受沦陷指标（ACI），用于衡量：当系统的某一部分已被攻破时，能否将损害控制在可接受范围内，并维持核心业务的运行。
 
 ACI 与抗打击韧性指标互为补充：前者衡量"破防后"，后者衡量"破防前"。两者不重叠、不重复扣分。
 
-### 4.1 ACI 的设计目标
+### 6.1 ACI 的设计目标
 
 - **隔离能力**：受影响组件能否被快速隔离，阻止横向移动
 - **最小权限有效性**：攻击者获得的权限是否被限制在极小的范围内
@@ -152,11 +152,11 @@ ACI 与抗打击韧性指标互为补充：前者衡量"破防后"，后者衡�
 - **恢复能力**：从检测到沦陷到恢复正常服务的时间（MTTR）
 - **监控留存**：攻击者能否轻易清除入侵痕迹
 
-### 4.2 ACI 的评估假设
+### 6.2 ACI 的评估假设
 
 ACI 评估默认假设攻击者已获得目标组件的基础访问权限（如 Web 服务用户、低权账户），并以此为前提衡量损害扩散范围。该假设提供了可比较的工程化基线。
 
-### 4.3 ACI 评估项与计分
+### 6.3 ACI 评估项与计分
 
 ACI 各项的扣分值直接在韧性域百分制内加减，扣至 0 分为止。
 
@@ -172,19 +172,19 @@ ACI 各项的扣分值直接在韧性域百分制内加减，扣至 0 分为止�
 
 每项扣分值可由管理员自定义配置。
 
-## 5. 安全态势计算模块（SPC）
+## 7. 安全态势计算模块（SPC）
 
-### 5.1 设计目标
+### 7.1 设计目标
 
 SSAM 2.0 引入安全态势计算模块（Security Posture Calculator，SPC），解决"全局漏洞情报"与"单台主机实际风险"之间的鸿沟。SPC 通过持续追踪全球权威漏洞库，结合本地资产清单，为每台受管主机输出个体化的态势修正向量。
 
-### 5.2 数据源体系
+### 7.2 数据源体系
 
 - **一级数据源**：NVD、CNNVD、CNVD 等全球漏洞库
 - **二级数据源**：EPSS（漏洞利用预测）、CISA KEV（已知在野利用目录）
 - **三级数据源**：Agent 采集的本地软件清单、服务、端口、拓扑
 
-### 5.3 态势修正向量
+### 7.3 态势修正向量
 
 SPC 为每台主机输出修正向量 $\vec{P_h} = (P_{score}, P_{weight}, P_{action})$：
 
@@ -192,7 +192,7 @@ SPC 为每台主机输出修正向量 $\vec{P_h} = (P_{score}, P_{weight}, P_{ac
 - $P_{weight}$：核心域权重临时偏移（总和为 0）
 - $P_{action}$：建议响应动作（如 isolate_host、notify_admin）
 
-### 5.4 计算公式
+### 7.4 计算公式
 
 $P_{score}$ 计算：
 
@@ -228,11 +228,11 @@ $P_{score}$ 下限为 0.60，防止 SPC 单方面"杀死"主机评分。多 CVE 
 
 详细计算示例请参阅 [SPC 安全态势计算模块技术白皮书](docs/SPC安全态势计算模块技术白皮书.md)。
 
-## 6. 等级保护制度接入
+## 8. 等级保护制度接入
 
 SSAM 2.0 已与 GB/T 22239-2019《信息安全技术 网络安全等级保护基本要求》（等保 2.0）建立映射关系。四个核心域覆盖等保"安全通信网络"、"安全区域边界"、"安全计算环境"和"安全管理中心"中可自动化评估的部分，物理安全、人员管理等人工审查项不在此列。
 
-### 6.1 等保等级与 SSAM 阈值联动
+### 8.1 等保等级与 SSAM 阈值联动
 
 | 等保等级 | 推荐 SSAM 阈值 | 适用场景 |
 |----------|----------------|----------|
@@ -240,19 +240,19 @@ SSAM 2.0 已与 GB/T 22239-2019《信息安全技术 网络安全等级保护基
 | 三级 | 80（默认） | 重要系统 |
 | 四级及以上 | 90 | 关键基础设施 |
 
-### 6.2 等保控制点映射原则
+### 8.2 等保控制点映射原则
 
 以等保三级安全计算环境为例，从身份鉴别、访问控制、安全审计、入侵防范、恶意代码防范、数据保护、备份恢复、剩余信息保护等方面推导出 53 项 SSAM 检查项，每一项均可追溯到具体的等保标准条款。所有映射详情请见第二篇章：等保检查项映射手册。
 
-### 6.3 双向验证
+### 8.3 双向验证
 
 ASSCOR 项目评估结果可与等保测评报告交叉验证：若等保三级通过而 SSAM < 80，可能存在配置漂移或防护未持续生效；反之若 SSAM ≥ 80 而等保未通过，则说明部分人工审查项需重点整改。
 
-## 7. 动态扩展与社区驱动
+## 9. 动态扩展与社区驱动
 
 ASSCOR 内置攻击向量插件槽（AVD），每个 AVD 定义为 {ID, 域, 检测逻辑, 分值, 紧急标记}。管理员或社区可编写 AVD 注册到引擎，使模型随威胁演进持续扩展。
 
-## 8. 配置与管理员自定义
+## 10. 配置与管理员自定义
 
 所有参数通过 config.ini 配置，无硬编码。支持节点标签覆盖、等保模板等。
 
@@ -268,7 +268,7 @@ threshold = 80.0
 compliance_framework = GB/T 22239-2019 Level 3
 ```
 
-## 9. 项目结构
+## 11. 项目结构
 
 ```
 ASSCOR/
@@ -330,7 +330,7 @@ ASSCOR/
 └── agent.ini          # Agent 默认配置文件
 ```
 
-## 10. 部署与快速开始
+## 3. 部署与快速开始
 
 ### 10.1 生产部署（systemd, FHS 布局）
 
@@ -383,60 +383,25 @@ curl http://localhost:8087/api/health
 相关文件在 `deploy/docker/`：docker-compose.yml、config.docker.ini。
 常用命令：`make -f deploy/Makefile docker-up/down/logs/clean`。
 
-## 11. 与 ASSCOR μKernel 的联动
+## 4. Prism / SRD 风险动力学引擎
 
-ASSCOR μKernel 是风险评估与指令分发中心，采用微内核 + Agent 架构，通过 **gRPC 原生协议 + JSONRPC 兼容层** 双协议栈通信，均支持 mTLS 加密。Agent 负责本地检查执行与状态上报，内核汇聚计算并自动下发修复指令，实现"评估→诊断→修复"闭环。
+Prism 是 SRD（Systemic Risk Dynamics）的工程实现——一个零外部依赖的纯函数式风险动力学引擎，独立为 Go 模块 [github.com/chins-xing/prism](https://github.com/chins-xing/prism)（位于 `prism-lib/`）。ASSCOR 平台通过 `internal/prism/` 薄适配层委托调用。
 
-### 核心能力
+**Prism 三层架构**：
 
-| 模块 | 功能 |
-|------|------|
-| **SSAM 算法引擎 (ssam-lib + internal/ssam)** | ssam-lib（`github.com/chins-xing/ssam`）为独立纯函数式引擎，实现 SSAM V2.0 三层语义模型评分公式、域评分、边缘因子计算、钩子机制、SSAM IR、Formula DSL/AST；`internal/ssam` 为薄适配层，委托给 ssam-lib |
-| **Prism 风险动力学引擎 (prism-lib + internal/prism)** | prism-lib（`github.com/chins-xing/prism`）为独立纯函数式引擎，实现 SRD 三层架构——Core Layer（确定性求值）、Semantic Layer（四态模糊隶属度映射）、Inference Layer（马尔可夫链状态预测）；`internal/prism` 为线程安全适配层，`internal/srd` 为 SRD 数据流管线 |
-| **评估引擎 (Assessor)** | 加载检查项并发评估，通过 SSAM 模块计算四域得分 + 边缘因子 + SPC 修正 |
-| **依赖注入容器 (DI Container)** | 基于反射的 IoC 容器，支持接口绑定、命名绑定、结构体字段注入（`inject` tag）、确定性匹配 |
-| **消息总线 (Bus)** | 发布-订阅模式事件总线，支持同步/异步发布、goroutine 并发控制、信号量防泄漏 |
-| **熔断器 (Circuit Breaker)** | 基于滑动窗口的熔断器（Closed→Open→Half-Open），防止服务雪崩 |
-| **拦截器链 (Interceptor)** | 可组合的请求拦截器，内置速率限制、熔断器、审计日志拦截器 |
-| **适配器集成 (AdapterIntegration)** | 周期性执行 21 个外部工具适配器（Fetch→Parse→Map→Validate 四阶段流水线），结果注入评分流程 |
-| **安全态势计算器 (SPC)** | 从 NVD/EPSS/CISA KEV/CNNVD/CNVD 拉取漏洞情报，CVE 缓存磁盘持久化（启动加载/退出保存），CPE 精确版本匹配，输出个体化 P_score |
-| **配置监听器 (ConfigWatcher)** | 监控配置文件变化，支持权重热加载（`Assessor.ReloadWeights()`）和 SIGHUP 信号 |
-| **策略管理器 (Policy Manager)** | 根据分数区间生成自动化动作（notify_admin / isolate_host 等） |
-| **指令下发器 (Commander)** | HMAC-SHA256 签名命令下发，Agent 白名单执行 |
-| **ATT&CK V19 模块 (ATTACK)** | MITRE ATT&CK V19 框架集成，四大子模块（检测分析/威胁情报/对手仿真/评估工程）+ APT 增强层（攻击链重构/行为检测/归因引擎/威胁狩猎） |
+| 层 | 职责 | 关键输出 |
+|:---|:---|:---|
+| **Core Layer** | 确定性数值求值——外部风险、传播风险、安全债务、正交化动态评分 | `PrismScore`（0-100） |
+| **Semantic Layer** | 将 Core Layer 的 PrismScore 映射为四态隶属度向量 | `[μ_Stable, μ_Degraded, μ_Untrusted, μ_Collapse]` |
+| **Inference Layer** | 基于马尔可夫链+贝叶斯模型预测 N 步后的状态概率分布与趋势判断 | 未来状态分布、趋势（improving/stable/degrading/collapsing） |
 
-### 行业配置模板
+SRD 数据流管线（`internal/srd/`）提供风险状态管理、数据处理管线及外部工具数据适配（OpenSCAP/Lynis 等），将第三方评估报告转化为 Prism 节点状态，参与拓扑风险传播计算。
 
-`config/` 目录提供按行业定制的配置文件，覆盖权重、阈值、适配器开关：
-
-| 文件 | 适用场景 | 特点 |
-|------|----------|------|
-| `config.gov.ini` | 政府机构 | 高操作可信度权重(30)，等保三级+ |
-| `config.bank.ini` | 金融行业 | 高韧性权重(20)，等保四级阈值(90) |
-| `config.hospital.ini` | 医疗健康 | 业务连续性优先 |
-| `config.edu.ini` | 教育科研 | 开放端口容忍度高 |
-| `config.enterprise.ini` | 企业通用 | 均衡权重，等保三级默认 |
-| `config.datacenter.ini` | 数据中心 | 高可用+韧性优先 |
-
-### 双协议栈架构
-
-```
-Agent ──gRPC/mTLS──▶ Kernel gRPC Server (:50052)
-   │                    │
-   │                    ├─ KernelService (Register, Heartbeat, GetSnapshot)
-   │                    └─ AgentService (ExecuteCommand, StreamLogs)
-   │
-   └──JSONRPC/mTLS──▶ Kernel JSONRPC Server (:50051)
-                        │
-                        ├─ Register / Heartbeat / GetSnapshot
-                        └─ ExecuteCommand / StreamLogs
-```
-
-## 12. 总结
+## 14. 版本历史
 
 SSAM 2.0 提供了一套严谨且可进化的安全可接受性度量标准。四个核心域与边缘因子、威胁系数、SPC 态势修正共同形成完整的风险评估体系。引入等保映射后，ASSCOR 项目既是对抗高级威胁的战术工具，也是衡量合规持续有效性的战略仪表盘。它不仅回答"系统安全吗"，更回答"在当下威胁中，我们的安全程度是否可以被接受"。
 
-## 12.1 SSAM V2.0 项目拆分
+### 2.4 SSAM V2.0 项目拆分
 
 自 SSAM V2.0 起，核心评分算法已独立为纯函数式库 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam)（位于 `ssam-lib/`），ASSCOR 平台通过 `internal/ssam/` 薄适配层委托调用：
 
@@ -469,7 +434,7 @@ SSAM 2.0 提供了一套严谨且可进化的安全可接受性度量标准。�
 
 详细接口规范与接入指南请参阅 [docs/SSAM接口规范与接入指南.md](docs/SSAM接口规范与接入指南.md)。
 
-## 12.2 Prism (SRD) 项目拆分
+Prism 项目拆分已整合入 [§4 Prism/SRD](#4-prism--srd-风险动力学引擎)。
 
 Prism 是 SRD（Systemic Risk Dynamics）理论的工程实现——一个零外部依赖的纯函数式风险动力学引擎，独立为 Go 模块 [github.com/chins-xing/prism](https://github.com/chins-xing/prism)（位于 `prism-lib/`）。ASSCOR 平台通过 `internal/prism/` 薄适配层委托调用：
 
@@ -501,7 +466,7 @@ ASSCOR Platform
 | **Semantic Layer** | `semantic.go` | 将 Core Layer 的 `PrismScore` 映射为四态隶属度向量 | `[μ_Stable, μ_Degraded, μ_Untrusted, μ_Collapse]` |
 | **Inference Layer** | `inference.go` | 基于马尔可夫链预测 N 步后的状态概率分布与趋势判断 | 未来状态分布、趋势（improving/stable/degrading/collapsing） |
 
-## 13. ATT&CK V19 威胁分析模块
+## 12. ATT&CK V19 威胁分析模块
 
 ASSCOR v0.2.0 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链。该模块作为 μKernel 插件（`attck`，优先级 21，版本 1.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
 
@@ -581,7 +546,7 @@ ATTACKModule (Plugin v1.0.0)
     └── ThreatHunting — 假设驱动的威胁狩猎框架
 ```
 
-## 14. 已知局限与后续工作
+## 13. 已知局限与后续工作
 
 - ACI 基于假设攻击者已获基础权限，未覆盖所有攻陷场景
 - SPC 精度依赖本地资产清单完整性和情报源质量
