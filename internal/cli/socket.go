@@ -77,8 +77,6 @@ func (s *cliSession) handle() {
 	writeString(s.conn, "ASSCOR CLI — type 'help' for commands, 'exit' to disconnect\r\n")
 
 	for {
-		writeString(s.conn, "\r\nasscor> ")
-
 		var line string
 		dec := gob.NewDecoder(s.conn)
 		if err := dec.Decode(&line); err != nil {
@@ -100,10 +98,6 @@ func (s *cliSession) handle() {
 
 		result := s.engine.Execute(line)
 		writeString(s.conn, result.Output)
-		if result.Data != nil {
-			enc := gob.NewEncoder(s.conn)
-			enc.Encode(result.Data)
-		}
 	}
 }
 

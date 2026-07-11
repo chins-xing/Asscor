@@ -90,9 +90,14 @@ func runCLIClient(sockPath string) {
 	encoder := gob.NewEncoder(conn)
 	var line []byte
 	buf := make([]byte, 1)
+	showPrompt := true
 
 	for {
-		os.Stdout.WriteString("\r\nasscor> " + string(line))
+		if showPrompt {
+			os.Stdout.WriteString("\r\nasscor> ")
+			showPrompt = false
+		}
+
 		n, err := tty.Read(buf)
 		if err != nil || n == 0 {
 			return
@@ -101,9 +106,11 @@ func runCLIClient(sockPath string) {
 
 		switch {
 		case ch == 0x0d || ch == 0x0a:
-			os.Stdout.WriteString("\r\n")
 			cmd := strings.TrimSpace(string(line))
+			os.Stdout.WriteString("\r\n")
 			line = line[:0]
+			showPrompt = true
+
 			if cmd == "exit" || cmd == "quit" {
 				encoder.Encode("exit")
 				fmt.Fprintln(os.Stderr, "disconnected. Kernel continues running.")
@@ -119,11 +126,13 @@ func runCLIClient(sockPath string) {
 		case ch == 0x7f || ch == 0x08:
 			if len(line) > 0 {
 				line = line[:len(line)-1]
+				os.Stdout.WriteString("\b \b")
 			}
 		case ch == 0x09:
-			_ = ch // tab — beep
+			_ = ch
 		case ch >= 0x20 && ch < 0x7f:
 			line = append(line, ch)
+			os.Stdout.Write(buf)
 		}
 	}
 }
