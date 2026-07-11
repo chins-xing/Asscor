@@ -40,7 +40,7 @@ func (m *CLIModule) serveCLI(ctx context.Context) {
 	defer ln.Close()
 	defer os.Remove(sockPath)
 
-	if err := os.Chmod(sockPath, 0660); err != nil {
+	if err := os.Chmod(sockPath, 0666); err != nil {
 		logger.WithComponent("cli").Warn("cannot chmod socket", "error", err)
 	}
 
