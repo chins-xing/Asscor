@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/asscor/asscor/internal/kernel"
+	"github.com/asscor/asscor/internal/model"
 	"github.com/asscor/asscor/internal/version"
 )
 
@@ -623,18 +624,53 @@ func assessCmdHandler(ctx *CommandContext) *CommandResult {
 		return &CommandResult{ExitCode: ExitError, Err: err, Output: fmt.Sprintf("Assessment failed: %v\n", err)}
 	}
 
+	ar, ok := result.(*model.AssessmentResult)
+	if !ok || ar == nil {
+		return &CommandResult{ExitCode: ExitOK, Output: "Assessment completed (result format unavailable)\n", Data: result}
+	}
+
 	if ctx.JSON {
-		data, _ := json.MarshalIndent(result, "", "  ")
-		return &CommandResult{ExitCode: ExitOK, Output: string(data) + "\n", Data: result}
+		data, _ := json.MarshalIndent(ar, "", "  ")
+		return &CommandResult{ExitCode: ExitOK, Output: string(data) + "\n", Data: ar}
 	}
 
 	var b strings.Builder
 	b.WriteString("\n  Assessment Result\n")
 	b.WriteString("  ─────────────────────────────────────────\n")
-	b.WriteString(fmt.Sprintf("  Host:    %s\n", hostID))
-	b.WriteString(fmt.Sprintf("  Result:  %v\n", result))
+	b.WriteString(fmt.Sprintf("  Host:       %s\n", hostID))
+	b.WriteString(fmt.Sprintf("  Score:      %.2f / 100\n", ar.FinalScore))
+	b.WriteString(fmt.Sprintf("  Verdict:    %s\n", acceptVerdict(ar.Acceptable)))
+	b.WriteString(fmt.Sprintf("  Threshold:  %.0f\n", ar.Threshold))
+	b.WriteString(fmt.Sprintf("  SPC Pscore: %.3f\n", ar.SPCScore))
+	b.WriteString(fmt.Sprintf("  Threat mu:  %.2f\n", ar.ThreatCoeff))
+	b.WriteString("  ─────────────────────────────────────────\n")
+	b.WriteString(fmt.Sprintf("  AS: %5.0f  BC: %5.0f  OT: %5.0f  RS: %5.0f  KS: %5.0f\n",
+		ar.DomainScores.AttackSurface, ar.DomainScores.BusinessContinuity,
+		ar.DomainScores.OperationTrust, ar.DomainScores.Resilience,
+		ar.DomainScores.KernelSecurity))
+	if ar.PrismSemanticState != "" {
+		b.WriteString(fmt.Sprintf("  Prism:      %s (trend=%s, collapse=%.2f)\n",
+			ar.PrismSemanticState, ar.PrismInferenceTrend, ar.PrismInferenceCollapseRisk))
+	}
+	b.WriteString(fmt.Sprintf("  Checks:     %d total", len(ar.Checks)))
+	passes, fails, skipped := 0, 0, 0
+	for _, c := range ar.Checks {
+		if strings.Contains(c.Detail, "skipped") {
+			skipped++
+		} else if c.Passed {
+			passes++
+		} else {
+			fails++
+		}
+	}
+	b.WriteString(fmt.Sprintf(" (%d pass, %d fail, %d skipped)\n", passes, fails, skipped))
 	b.WriteString("\n")
-	return &CommandResult{ExitCode: ExitOK, Output: b.String(), Data: result}
+	return &CommandResult{ExitCode: ExitOK, Output: b.String(), Data: ar}
+}
+
+func acceptVerdict(ok bool) string {
+	if ok { return "ACCEPTABLE" }
+	return "NOT ACCEPTABLE"
 }
 
 var healthCmdInfo = CommandInfo{
