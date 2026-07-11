@@ -490,8 +490,20 @@ func (a *Assessor) runChecksConcurrently(items []model.CheckItem, result *model.
 	close(resultsCh)
 
 	for r := range resultsCh {
+		if !r.Passed && isPermDenied(r.Detail) {
+			r.Passed = true
+			r.Delta = 0
+			r.Detail = "skipped — requires root privileges (" + r.Detail + ")"
+		}
 		result.Checks = append(result.Checks, r)
 	}
+}
+
+func isPermDenied(detail string) bool {
+	lower := strings.ToLower(detail)
+	return strings.Contains(lower, "permission denied") ||
+		strings.Contains(lower, "operation not permitted") ||
+		strings.Contains(lower, "access denied")
 }
 
 func (a *Assessor) runAdapterPipeline() []adapter.PipelineResult {

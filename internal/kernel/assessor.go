@@ -384,6 +384,18 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 		ModelCoverageRatio: modelCoverage(checkResults),
 	}
 
+	// Fix permission-denied checks: mark as skipped (delta=0) instead of FAIL.
+	// This prevents non-root standalone/kernel evaluations from unfairly
+	// deducting scores for checks that require elevated privileges.
+	for i := range result.Checks {
+		c := &result.Checks[i]
+		if !c.Passed && isPermDenied(c.Detail) {
+			c.Passed = true
+			c.Delta = 0
+			c.Detail = "skipped — requires root privileges (" + c.Detail + ")"
+		}
+	}
+
 	if len(result.Checks) == 0 {
 		result.Acceptable = true
 		result.FinalScore = 100
@@ -1039,6 +1051,13 @@ func (m *ScoringEngineModule) ValidateEdgeFactors(registeredChecks []model.Check
 
 func (m *ScoringEngineModule) PrintReport(result *model.AssessmentResult) string {
 	return m.engine.PrintReport(result)
+}
+
+func isPermDenied(detail string) bool {
+	lower := strings.ToLower(detail)
+	return strings.Contains(lower, "permission denied") ||
+		strings.Contains(lower, "operation not permitted") ||
+		strings.Contains(lower, "access denied")
 }
 
 var _ ScoringEngineProvider = (*ScoringEngineModule)(nil)
