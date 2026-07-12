@@ -84,6 +84,7 @@ type AssessmentRecord struct {
 	OperationTrust float64   `json:"operation_trust"`
 	Resilience     float64   `json:"resilience"`
 	KernelSecurity float64   `json:"kernel_security,omitempty"`
+	ExtraScores    map[string]float64 `json:"extra_scores,omitempty"`
 	TwoFactorFail  float64   `json:"two_factor_failure"`
 	SYNCookieDis   float64   `json:"syn_cookie_disabled,omitempty"`
 	SELinuxDis     float64   `json:"selinux_disabled,omitempty"`
@@ -837,6 +838,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			OperationTrust: ar.DomainScores.OperationTrust,
 			Resilience:     ar.DomainScores.Resilience,
 			KernelSecurity: ar.DomainScores.KernelSecurity,
+			ExtraScores:    ar.DomainScores.Extra,
 			TwoFactorFail:  ar.EdgeFactors.TwoFactorFailure,
 			SYNCookieDis:   ar.EdgeFactors.SYNCookieDisabled,
 			SELinuxDis:     ar.EdgeFactors.SELinuxDisabled,
@@ -885,18 +887,15 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		}
 
 		passedCount := rec.CheckCount - rec.FailedCount
-		domainScores := map[string]float64{
-			"attack_surface":      ar.DomainScores.AttackSurface,
-			"business_continuity": ar.DomainScores.BusinessContinuity,
-			"operation_trust":     ar.DomainScores.OperationTrust,
-			"resilience":          ar.DomainScores.Resilience,
-			"kernel_security":     ar.DomainScores.KernelSecurity,
-		}
+		domainScores := ar.DomainScores.GetAllDomainScores()
 		domainWeights := map[string]float64{
 			"attack_surface":      m.cfg.Weights.AttackSurface,
 			"business_continuity": m.cfg.Weights.BusinessContinuity,
 			"operation_trust":     m.cfg.Weights.OperationTrust,
 			"resilience":          m.cfg.Weights.Resilience,
+		}
+		for k, v := range m.cfg.ExtensionWeights {
+			domainWeights[k] = v
 		}
 		edgeFactors := map[string]float64{
 			"two_factor_failure":  ar.EdgeFactors.TwoFactorFailure,

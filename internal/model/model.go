@@ -98,11 +98,12 @@ type CheckResult struct {
 }
 
 type DomainScores struct {
-	AttackSurface      float64 `json:"attack_surface"`
-	BusinessContinuity float64 `json:"business_continuity"`
-	OperationTrust     float64 `json:"operation_trust"`
-	Resilience         float64 `json:"resilience"`
-	KernelSecurity     float64 `json:"kernel_security,omitempty"`
+	AttackSurface      float64            `json:"attack_surface"`
+	BusinessContinuity float64            `json:"business_continuity"`
+	OperationTrust     float64            `json:"operation_trust"`
+	Resilience         float64            `json:"resilience"`
+	KernelSecurity     float64            `json:"kernel_security,omitempty"`
+	Extra              map[string]float64 `json:"extra_scores,omitempty"`
 }
 
 func (d DomainScores) Get(domain string) float64 {
@@ -118,6 +119,11 @@ func (d DomainScores) Get(domain string) float64 {
 	case DomainKernelSecurity:
 		return d.KernelSecurity
 	default:
+		if d.Extra != nil {
+			if v, ok := d.Extra[domain]; ok {
+				return v
+			}
+		}
 		return 0
 	}
 }
@@ -140,7 +146,29 @@ func (d *DomainScores) Set(domain string, score float64) {
 		d.Resilience = score
 	case DomainKernelSecurity:
 		d.KernelSecurity = score
+	default:
+		if d.Extra == nil {
+			d.Extra = make(map[string]float64)
+		}
+		d.Extra[domain] = score
 	}
+}
+
+// GetAllDomainScores returns ALL domain scores (named fields + extension domains) as a map.
+func (d DomainScores) GetAllDomainScores() map[string]float64 {
+	m := map[string]float64{
+		DomainAttackSurface:    d.AttackSurface,
+		DomainBusinessContinuity: d.BusinessContinuity,
+		DomainOperationTrust:   d.OperationTrust,
+		DomainResilience:       d.Resilience,
+	}
+	if d.KernelSecurity != 0 {
+		m[DomainKernelSecurity] = d.KernelSecurity
+	}
+	for k, v := range d.Extra {
+		m[k] = v
+	}
+	return m
 }
 
 type EdgeFactors struct {

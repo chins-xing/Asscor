@@ -103,18 +103,34 @@ func (d *DynamicDomainScores) FillFromLegacy(legacy DomainScores) {
 	if legacy.KernelSecurity != 0 {
 		d.scores[DomainKernelSecurity] = legacy.KernelSecurity
 	}
+	for k, v := range legacy.Extra {
+		d.scores[k] = v
+	}
 }
 
 func (d *DynamicDomainScores) ToLegacy() DomainScores {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	return DomainScores{
+	extra := make(map[string]float64)
+	for k, v := range d.scores {
+		switch k {
+		case DomainAttackSurface, DomainBusinessContinuity, DomainOperationTrust, DomainResilience, DomainKernelSecurity:
+			continue
+		default:
+			extra[k] = v
+		}
+	}
+	ds := DomainScores{
 		AttackSurface:      getOr(d.scores, DomainAttackSurface, 100),
 		BusinessContinuity: getOr(d.scores, DomainBusinessContinuity, 100),
 		OperationTrust:     getOr(d.scores, DomainOperationTrust, 100),
 		Resilience:         getOr(d.scores, DomainResilience, 100),
 		KernelSecurity:     getOr(d.scores, DomainKernelSecurity, 100),
 	}
+	if len(extra) > 0 {
+		ds.Extra = extra
+	}
+	return ds
 }
 
 func getOr(m map[string]float64, key string, defaultVal float64) float64 {

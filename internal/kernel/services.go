@@ -187,13 +187,7 @@ func convertAssessmentResult(r *model.AssessmentResult) *apiv1.AssessmentResult 
 		return nil
 	}
 
-	domainScores := map[string]float64{
-		"attack_surface":      r.DomainScores.AttackSurface,
-		"business_continuity": r.DomainScores.BusinessContinuity,
-		"operation_trust":     r.DomainScores.OperationTrust,
-		"resilience":          r.DomainScores.Resilience,
-		"kernel_security":     r.DomainScores.KernelSecurity,
-	}
+	domainScores := r.DomainScores.GetAllDomainScores()
 
 	edgeFactors := map[string]float64{
 		"two_factor_failure":  r.EdgeFactors.TwoFactorFailure,
@@ -360,13 +354,7 @@ func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotR
 			result = &apiv1.AssessmentResult{
 				FinalScore: ar.FinalScore,
 				Acceptable: ar.Acceptable,
-				DomainScores: map[string]float64{
-					"attack_surface":      ar.DomainScores.AttackSurface,
-					"business_continuity": ar.DomainScores.BusinessContinuity,
-					"operation_trust":     ar.DomainScores.OperationTrust,
-					"resilience":          ar.DomainScores.Resilience,
-					"kernel_security":     ar.DomainScores.KernelSecurity,
-				},
+				DomainScores: ar.DomainScores.GetAllDomainScores(),
 				EdgeFactors: map[string]float64{
 					"two_factor_failure":  ar.EdgeFactors.TwoFactorFailure,
 					"syn_cookie_disabled": ar.EdgeFactors.SYNCookieDisabled,
