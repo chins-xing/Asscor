@@ -135,22 +135,6 @@ func (m *SPCModule) Init(ctx context.Context, kc KernelContext) error {
 
 	kc.Container().Bind((*SPCInterface)(nil), m)
 
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "spc.pre_calculate",
-		Description: "Called before SPC calculation",
-		Version:     "1.0",
-	})
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "spc.post_calculate",
-		Description: "Called after SPC calculation completes",
-		Version:     "1.0",
-	})
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "spc.cve_updated",
-		Description: "Called when CVE cache is refreshed",
-		Version:     "1.0",
-	})
-
 	return nil
 }
 

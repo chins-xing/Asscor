@@ -348,22 +348,6 @@ func (m *PersistenceModule) Init(ctx context.Context, kc KernelContext) error {
 
 	kc.Container().Bind((*PersistenceInterface)(nil), m)
 
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "archive.pre_write",
-		Description: "Called before writing a record to the archive (assessments, audit, commands, cve_cache)",
-		Version:     "1.0",
-	})
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "archive.post_write",
-		Description: "Called after a record is successfully written to the archive",
-		Version:     "1.0",
-	})
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "archive.rotation",
-		Description: "Called when archive rotation executes (hourly snapshots or daily tar.gz archives)",
-		Version:     "1.0",
-	})
-
 	return nil
 }
 

@@ -122,32 +122,6 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 
 	kc.Container().Bind((*AssessorInterface)(nil), m)
 
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "assessor.pre_evaluate",
-		Description: "Called before each host assessment",
-		Version:     "1.0",
-	})
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "assessor.post_evaluate",
-		Description: "Called after each host assessment completes",
-		Version:     "1.0",
-	})
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "verify.pre_check",
-		Description: "Called before running a verification re-assessment on a host",
-		Version:     "1.0",
-	})
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "verify.post_check",
-		Description: "Called after verification re-assessment completes, with (prev_score, new_score, delta)",
-		Version:     "1.0",
-	})
-	kc.Extensions().RegisterPoint(ExtensionPoint{
-		Name:        "verify.status_changed",
-		Description: "Called when a host verification status transitions (pending_verify→verified_ok|verified_failed)",
-		Version:     "1.0",
-	})
-
 	return nil
 }
 
