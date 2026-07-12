@@ -155,6 +155,19 @@ func (cb *CircuitBreaker) Stop() {
 	cb.cleanupTicker.Stop()
 }
 
+func (cb *CircuitBreaker) Allow(service, method string) bool {
+	s := cb.state(key(service, method))
+	return s == StateClosed || s == StateHalfOpen
+}
+
+func (cb *CircuitBreaker) RecordSuccess(service, method string) {
+	cb.recordSuccess(key(service, method))
+}
+
+func (cb *CircuitBreaker) RecordFailure(service, method string) {
+	cb.recordFailure(key(service, method))
+}
+
 func key(service, method string) string {
 	return service + "/" + method
 }
