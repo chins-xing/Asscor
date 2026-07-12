@@ -126,10 +126,17 @@ type Assessor struct {
 func NewAssessor(cfg *config.Config) *Assessor {
 	engine := NewDynamicScoringEngine()
 
-	ssamEngine := ssam.NewEngine()
+	var ssamEngine ssam.ScoringProvider
+	useSSAM := cfg == nil || cfg.ScoringEngine != "legacy"
+	if useSSAM {
+		ssamEngine = ssam.NewEngine()
+		if cfg != nil {
+			ssamEngine.SetWeights(ssam.ConfigToWeights(cfg))
+			ssamEngine.SetEdgeFactors(ssam.ConfigToEdgeFactors(cfg))
+		}
+	}
+
 	if cfg != nil {
-		ssamEngine.SetWeights(ssam.ConfigToWeights(cfg))
-		ssamEngine.SetEdgeFactors(ssam.ConfigToEdgeFactors(cfg))
 		w := cfg.Weights
 		engine.SetWeight(model.DomainAttackSurface, w.AttackSurface)
 		engine.SetWeight(model.DomainBusinessContinuity, w.BusinessContinuity)
@@ -142,7 +149,9 @@ func NewAssessor(cfg *config.Config) *Assessor {
 	}
 
 	engine.InitializeDefaults()
-	ssamEngine.InitializeDefaults(nil, nil)
+	if useSSAM && ssamEngine != nil {
+		ssamEngine.InitializeDefaults(nil, nil)
+	}
 
 	return &Assessor{
 		cfg:           cfg,
@@ -227,32 +236,12 @@ func (a *Assessor) Assess(hostID string, hostname string) *model.AssessmentResul
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePostCheck, result)
 
-	spcScore := a.computeSPCScore(ctx, hostID, result)
-
-	ssamInput := &ssam.AssessmentInput{
-		HostID:      result.HostID,
-		Hostname:    result.Hostname,
-		Threshold:   result.Threshold,
-		Checks:      ssam.CheckResultsToInputs(result.Checks),
-		ThreatCoeff: a.cfg.ThreatCoeff,
-		SPCScore:    spcScore,
-	}
+	a.computeSPCScore(ctx, hostID, result)
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreScore, result)
 
-	ssamOutput, err := a.ssamEngine.ComputeScore(ctx, ssamInput)
-	if err != nil {
-		logger.WithComponent("assessor").Error("ssam compute failed, fallback to legacy", "error", err)
-		dynScores := a.computeDynamicDomainScores(result)
-		for domain, score := range dynScores.GetAll() {
-			result.DomainScores.Set(domain, score)
-		}
-		a.evaluateEdgeFactorChain(result)
-		a.ensureDefaults(result)
-		result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
-		result.Acceptable = result.FinalScore >= result.Threshold
-	} else {
-		ssam.OutputToModel(ssamOutput, result)
+	if !a.trySSAMScore(ctx, result) {
+		a.runLegacyScoring(result)
 	}
 
 	a.applyATTACK(hostID, result)
@@ -431,32 +420,12 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 		return a.buildEmptyResult(result)
 	}
 
-	spcScore := a.computeSPCScore(ctx, hostID, result)
-
-	ssamInput := &ssam.AssessmentInput{
-		HostID:      result.HostID,
-		Hostname:    result.Hostname,
-		Threshold:   result.Threshold,
-		Checks:      ssam.CheckResultsToInputs(result.Checks),
-		ThreatCoeff: a.cfg.ThreatCoeff,
-		SPCScore:    spcScore,
-	}
+	a.computeSPCScore(ctx, hostID, result)
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreScore, result)
 
-	ssamOutput, err := a.ssamEngine.ComputeScore(ctx, ssamInput)
-	if err != nil {
-		logger.WithComponent("assessor").Error("ssam compute failed, fallback to legacy", "error", err)
-		dynScores := a.computeDynamicDomainScores(result)
-		for domain, score := range dynScores.GetAll() {
-			result.DomainScores.Set(domain, score)
-		}
-		a.evaluateEdgeFactorChain(result)
-		a.ensureDefaults(result)
-		result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
-		result.Acceptable = result.FinalScore >= result.Threshold
-	} else {
-		ssam.OutputToModel(ssamOutput, result)
+	if !a.trySSAMScore(ctx, result) {
+		a.runLegacyScoring(result)
 	}
 
 	a.applyATTACK(hostID, result)
@@ -774,6 +743,38 @@ func (a *Assessor) applyATTACK(hostID string, result *model.AssessmentResult) {
 		"predicted_risk", result.ATTACKPredictedRisk != nil)
 }
 
+func (a *Assessor) trySSAMScore(ctx context.Context, result *model.AssessmentResult) bool {
+	if a.ssamEngine == nil {
+		return false
+	}
+	ssamInput := &ssam.AssessmentInput{
+		HostID:      result.HostID,
+		Hostname:    result.Hostname,
+		Threshold:   result.Threshold,
+		Checks:      ssam.CheckResultsToInputs(result.Checks),
+		ThreatCoeff: a.cfg.ThreatCoeff,
+		SPCScore:    result.SPCScore,
+	}
+	output, err := a.ssamEngine.ComputeScore(ctx, ssamInput)
+	if err != nil {
+		logger.WithComponent("assessor").Error("ssam compute failed, fallback to legacy", "error", err)
+		return false
+	}
+	ssam.OutputToModel(output, result)
+	return true
+}
+
+func (a *Assessor) runLegacyScoring(result *model.AssessmentResult) {
+	dynScores := a.computeDynamicDomainScores(result)
+	for domain, score := range dynScores.GetAll() {
+		result.DomainScores.Set(domain, score)
+	}
+	a.evaluateEdgeFactorChain(result)
+	a.ensureDefaults(result)
+	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
+	result.Acceptable = result.FinalScore >= result.Threshold
+}
+
 func (a *Assessor) computeDynamicFinalScore(scores *model.DynamicDomainScores, result *model.AssessmentResult) float64 {
 	weightedSum := a.scoringEngine.ComputeWeightedSum(scores)
 
@@ -1043,8 +1044,10 @@ func (a *Assessor) ReloadWeights(cfg *config.Config) {
 		a.scoringEngine.SetWeight(domain, val)
 	}
 
-	a.ssamEngine.SetWeights(ssam.ConfigToWeights(cfg))
-	a.ssamEngine.SetEdgeFactors(ssam.ConfigToEdgeFactors(cfg))
+	if a.ssamEngine != nil {
+		a.ssamEngine.SetWeights(ssam.ConfigToWeights(cfg))
+		a.ssamEngine.SetEdgeFactors(ssam.ConfigToEdgeFactors(cfg))
+	}
 
 	logger.WithComponent("assessor").Info("weights reloaded from config (engine + ssam)")
 }
@@ -1065,23 +1068,29 @@ func (a *Assessor) RecomputeFinalScore(result *model.AssessmentResult) float64 {
 		result.ThreatCoeff = 1.0
 	}
 
-	ssamInput := &ssam.AssessmentInput{
-		HostID:      result.HostID,
-		Hostname:    result.Hostname,
-		Threshold:   result.Threshold,
-		Checks:      ssam.CheckResultsToInputs(result.Checks),
-		ThreatCoeff: result.ThreatCoeff,
-		SPCScore:    result.SPCScore,
+	if a.ssamEngine != nil {
+		ssamInput := &ssam.AssessmentInput{
+			HostID:      result.HostID,
+			Hostname:    result.Hostname,
+			Threshold:   result.Threshold,
+			Checks:      ssam.CheckResultsToInputs(result.Checks),
+			ThreatCoeff: result.ThreatCoeff,
+			SPCScore:    result.SPCScore,
+		}
+		ssamOutput, err := a.ssamEngine.ComputeScore(context.Background(), ssamInput)
+		if err != nil {
+			logger.WithComponent("assessor").Error("ssam recompute failed, fallback to legacy", "error", err)
+		} else {
+			ssam.OutputToModel(ssamOutput, result)
+			return ssamOutput.FinalScore
+		}
 	}
 
-	ssamOutput, err := a.ssamEngine.ComputeScore(context.Background(), ssamInput)
-	if err != nil {
-		logger.WithComponent("assessor").Error("ssam recompute failed", "error", err)
-		return 0
-	}
-
-	ssam.OutputToModel(ssamOutput, result)
-	return ssamOutput.FinalScore
+	dynScores := model.NewDynamicDomainScores()
+	dynScores.FillFromLegacy(result.DomainScores)
+	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
+	result.Acceptable = result.FinalScore >= result.Threshold
+	return result.FinalScore
 }
 
 func hashCheckResults(results []model.CheckResult) string {

@@ -50,6 +50,8 @@ type Config struct {
 	HotloadIntervalS int
 
 	PrismDefaultTransmission float64
+
+	ScoringEngine string
 }
 
 type ExtMgrConfig struct {
@@ -188,6 +190,10 @@ func Parse(content string) (*Config, error) {
 
 	if sec, ok := sections["weights"]; ok {
 		for k, v := range sec {
+			if k == "scoring_engine" {
+				cfg.ScoringEngine = v
+				continue
+			}
 			f, err := strconv.ParseFloat(v, 64)
 			if err != nil {
 				continue
