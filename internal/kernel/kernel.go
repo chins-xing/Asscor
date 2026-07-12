@@ -92,7 +92,13 @@ func (k *Kernel) Bus() *Bus {
 	return k.bus
 }
 
-func (k *Kernel) Extensions() *ExtensionRegistry {
+func (k *Kernel) Extensions() ModuleExtensions {
+	return k.extPoints
+}
+
+// PlatformExtensionRegistry returns the full ExtensionRegistry for platform bootstrap.
+// Not exposed on KernelContext — modules receive only ModuleExtensions (no RegisterPoint).
+func (k *Kernel) PlatformExtensionRegistry() *ExtensionRegistry {
 	return k.extPoints
 }
 

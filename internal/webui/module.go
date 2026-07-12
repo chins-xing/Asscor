@@ -80,15 +80,6 @@ func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 	m.state = kernel.PluginInitialized
 	m.mu.Unlock()
 
-	// Extension point: plugins may register additional HTTP handlers (web ops
-	// panels, custom API endpoints) by handling this point and calling
-	// m.RegisterHandler on the *Module passed as data.
-	kc.Extensions().RegisterPoint(kernel.ExtensionPoint{
-		Name:        "webui.route.register",
-		Description: "Register additional HTTP routes/handlers on the web server",
-		Version:     "1.0",
-	})
-
 	logger.WithComponent("webui").Info("initialized", "port", m.listenPort)
 	return nil
 }

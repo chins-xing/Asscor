@@ -540,12 +540,6 @@ func (m *CLIModule) Init(ctx context.Context, kc kernel.KernelContext) error {
 
 	kc.Container().Bind((*CLIInterface)(nil), m)
 
-	kc.Extensions().RegisterPoint(kernel.ExtensionPoint{
-		Name:        "cli.command.register",
-		Description: "Register custom CLI commands from plugins",
-		Version:     "1.0",
-	})
-
 	logger.WithComponent("cli").Info("CLI module initialized")
 	return nil
 }

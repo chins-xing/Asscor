@@ -244,8 +244,8 @@ k.SetConfig("config_path", resolvedConfigPath)
 	}
 
 	// Register all extension points at the platform level.
-	// Modules fire events but the extension catalog is owned by ASSCOR, not by individual modules.
-	kernel.RegisterAllExtensionPoints(k)
+	// Point definitions are owned by ASSCOR; modules never call RegisterPoint.
+	kernel.RegisterAllExtensionPoints(k.PlatformExtensionRegistry())
 
 	// Algorithm integrity guard: verify the SSAM/Prism calibration constants
 	// match the expected baseline (R2). Controlled by config.ini [integrity] verify_algo.

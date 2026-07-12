@@ -9,6 +9,19 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
+// ModuleExtensions is the extension surface exposed to plugins.
+// Modules can subscribe handlers and fire events, but CANNOT define extension points.
+// Extension point definitions are owned by the ASSCOR platform via RegisterAllExtensionPoints.
+type ModuleExtensions interface {
+	RegisterExtension(pluginID string, pointName string, handler ExtensionHandler, priority int) error
+	UnregisterPlugin(pluginID string)
+	Execute(ctx context.Context, pointName string, data interface{}) []error
+	ExecuteUntilFirst(ctx context.Context, pointName string, data interface{}) (string, interface{}, error)
+	ListPoints() []ExtensionPoint
+	ListExtensions(pointName string) []string
+	GetPoint(name string) (ExtensionPoint, bool)
+}
+
 type ExtensionPoint struct {
 	Name        string
 	Description string

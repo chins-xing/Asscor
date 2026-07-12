@@ -752,7 +752,7 @@ type mockKernelContext struct{}
 
 func (m *mockKernelContext) Container() *Container                      { return NewContainer() }
 func (m *mockKernelContext) Bus() *Bus                                  { return NewBus(512) }
-func (m *mockKernelContext) Extensions() *ExtensionRegistry             { return NewExtensionRegistry() }
+func (m *mockKernelContext) Extensions() ModuleExtensions             { return NewExtensionRegistry() }
 func (m *mockKernelContext) Context() context.Context                   { return context.Background() }
 func (m *mockKernelContext) Config() map[string]string                  { return make(map[string]string) }
 func (m *mockKernelContext) SetConfig(key, value string)                {}

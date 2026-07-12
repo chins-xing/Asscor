@@ -55,7 +55,7 @@ type PluginDependency struct {
 type KernelContext interface {
 	Container() *Container
 	Bus() *Bus
-	Extensions() *ExtensionRegistry
+	Extensions() ModuleExtensions
 	Context() context.Context
 	Config() map[string]string
 	SetConfig(key, value string)
