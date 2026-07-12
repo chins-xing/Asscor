@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/asscor/asscor/internal/kernel"
+	"github.com/asscor/asscor/internal/model"
 )
 
 type mockKernel struct {
@@ -69,7 +70,13 @@ func (m *mockKernel) SetConfig(key, value string) {
 }
 
 func (m *mockKernel) Evaluate(hostID string) (interface{}, error) {
-	return map[string]interface{}{"host_id": hostID, "score": 85.5}, nil
+	return &model.AssessmentResult{
+		HostID:    hostID,
+		FinalScore: 85.5,
+		Acceptable: true,
+		DomainScores: model.DomainScores{AttackSurface: 90, BusinessContinuity: 85, OperationTrust: 80, Resilience: 75},
+		Checks:     []model.CheckResult{{CheckID: "AS-001", Passed: true}, {CheckID: "OT-001", Passed: false, Detail: "test"}},
+	}, nil
 }
 
 func (m *mockKernel) HealthCheck(ctx context.Context) []HealthStatus {
