@@ -348,6 +348,22 @@ func (m *PersistenceModule) Init(ctx context.Context, kc KernelContext) error {
 
 	kc.Container().Bind((*PersistenceInterface)(nil), m)
 
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "archive.pre_write",
+		Description: "Called before writing a record to the archive (assessments, audit, commands, cve_cache)",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "archive.post_write",
+		Description: "Called after a record is successfully written to the archive",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "archive.rotation",
+		Description: "Called when archive rotation executes (hourly snapshots or daily tar.gz archives)",
+		Version:     "1.0",
+	})
+
 	return nil
 }
 
@@ -452,7 +468,23 @@ func (m *PersistenceModule) WriteCommand(record CommandRecord) error {
 }
 
 func (m *PersistenceModule) WriteAssessment(record AssessmentRecord) error {
-	return m.Append("assessments", record)
+	if m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "archive.pre_write", map[string]interface{}{
+			"dataset":  "assessments",
+			"host_id":  record.HostID,
+			"score":    record.FinalScore,
+			"checks":   len(record.Checks),
+		})
+	}
+	err := m.Append("assessments", record)
+	if err == nil && m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "archive.post_write", map[string]interface{}{
+			"dataset": "assessments",
+			"host_id": record.HostID,
+			"score":   record.FinalScore,
+		})
+	}
+	return err
 }
 
 func (m *PersistenceModule) WriteDashboardReport(report *DashboardReport) error {
@@ -662,6 +694,12 @@ func (m *PersistenceModule) createHourlySnapshot() {
 	logger.WithComponent("persistence").Info("hourly snapshot created",
 		"path", snapshotPath, "entries", totalEntries)
 
+	m.kernel.Extensions().Execute(m.kernel.Context(), "archive.rotation", map[string]interface{}{
+		"type":    "snapshot",
+		"path":    snapshotPath,
+		"entries": totalEntries,
+	})
+
 	m.pruneSnapshots(snapshotDir, 24)
 }
 
@@ -741,6 +779,12 @@ func (m *PersistenceModule) createDailyArchive() {
 
 	logger.WithComponent("persistence").Info("daily archive created",
 		"path", archivePath, "files", archived)
+
+	m.kernel.Extensions().Execute(m.kernel.Context(), "archive.rotation", map[string]interface{}{
+		"type":   "daily_archive",
+		"path":   archivePath,
+		"files":  archived,
+	})
 
 	m.pruneArchives(archiveDir, 90)
 }

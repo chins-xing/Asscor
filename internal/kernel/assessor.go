@@ -132,6 +132,21 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 		Description: "Called after each host assessment completes",
 		Version:     "1.0",
 	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "verify.pre_check",
+		Description: "Called before running a verification re-assessment on a host",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "verify.post_check",
+		Description: "Called after verification re-assessment completes, with (prev_score, new_score, delta)",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "verify.status_changed",
+		Description: "Called when a host verification status transitions (pending_verify→verified_ok|verified_failed)",
+		Version:     "1.0",
+	})
 
 	return nil
 }
@@ -335,6 +350,19 @@ func (m *AssessorModule) HealthCheck(ctx context.Context) error {
 
 func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_evaluate", hostID)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.pre_check", map[string]interface{}{
+		"host_id":   hostID,
+		"trigger":   "explicit",
+	})
+
+	m.mu.RLock()
+	prevResult := m.results[hostID]
+	m.mu.RUnlock()
+
+	var prevScore float64
+	if prevResult != nil {
+		prevScore = prevResult.FinalScore
+	}
 
 	result := m.engine.Assess(hostID, hostID)
 
@@ -349,6 +377,15 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	m.mu.Unlock()
 
 		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
+
+	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.post_check", map[string]interface{}{
+		"host_id":    hostID,
+		"trigger":    "explicit",
+		"prev_score": prevScore,
+		"new_score":  result.FinalScore,
+		"delta":      result.FinalScore - prevScore,
+		"acceptable": result.Acceptable,
+	})
 
 	m.pushToSIEM(m.kernel.Context(), result)
 	m.printConsoleReport(result)
@@ -373,6 +410,20 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	m.mu.RUnlock()
 
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_evaluate", hostID)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.pre_check", map[string]interface{}{
+		"host_id":   hostID,
+		"trigger":   "heartbeat",
+		"checks":    len(checkResults),
+	})
+
+	m.mu.RLock()
+	prevResult := m.results[hostID]
+	m.mu.RUnlock()
+
+	var prevScore float64
+	if prevResult != nil {
+		prevScore = prevResult.FinalScore
+	}
 
 	result := &model.AssessmentResult{
 		HostID:         hostID,
@@ -424,6 +475,15 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	m.mu.Unlock()
 
 		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
+
+	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.post_check", map[string]interface{}{
+		"host_id":    hostID,
+		"trigger":    "heartbeat",
+		"prev_score": prevScore,
+		"new_score":  result.FinalScore,
+		"delta":      result.FinalScore - prevScore,
+		"acceptable": result.Acceptable,
+	})
 
 	m.pushToSIEM(m.kernel.Context(), result)
 	m.printConsoleReport(result)

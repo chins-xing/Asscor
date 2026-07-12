@@ -114,6 +114,22 @@ func (m *CommanderModule) Init(ctx context.Context, kc KernelContext) error {
 
 	kc.Container().Bind((*CommanderInterface)(nil), m)
 
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "remediation.pre_apply",
+		Description: "Called before a remediation command is enqueued for an agent",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "remediation.post_apply",
+		Description: "Called after a remediation command is acknowledged (success or failure) by the agent",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "remediation.action_resolved",
+		Description: "Called when a remediation action is resolved — bridges remediation completion into verification",
+		Version:     "1.0",
+	})
+
 	return nil
 }
 
@@ -271,6 +287,15 @@ func (m *CommanderModule) EnqueueCommand(hostID string, action string, params ma
 	}
 	m.pendingCmds[hostID][cmdID] = &pendingCommand{Cmd: cmd, EnqueuedAt: time.Now()}
 
+	if m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "remediation.pre_apply", map[string]interface{}{
+			"host_id":    hostID,
+			"command_id": cmdID,
+			"action":     action,
+			"params":     params,
+		})
+	}
+
 	return cmdID
 }
 
@@ -311,6 +336,22 @@ func (m *CommanderModule) AckCommand(hostID string, cmdID string, success bool, 
 	}
 
 	logger.WithComponent("commander").Info("command executed", "command_id", cmdID, "host_id", hostID, "success", success)
+
+	if m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "remediation.post_apply", map[string]interface{}{
+			"host_id":    hostID,
+			"command_id": cmdID,
+			"success":    success,
+			"output":     output,
+		})
+
+		m.kernel.Extensions().Execute(m.kernel.Context(), "remediation.action_resolved", map[string]interface{}{
+			"host_id":    hostID,
+			"command_id": cmdID,
+			"success":    success,
+			"output":     output,
+		})
+	}
 }
 
 func (m *CommanderModule) sign(cmdID, action string, params map[string]string) []byte {

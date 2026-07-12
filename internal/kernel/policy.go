@@ -84,6 +84,23 @@ func (m *PolicyModule) Init(ctx context.Context, kc KernelContext) error {
 	}
 
 	kc.Container().Bind((*PolicyInterface)(nil), m)
+
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "policy.action_decided",
+		Description: "Called when a policy action is decided (notify_admin, isolate_host, increase_assessment)",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "policy.notify",
+		Description: "Called to dispatch notifications (webhook, email, chat) for policy actions",
+		Version:     "1.0",
+	})
+	kc.Extensions().RegisterPoint(ExtensionPoint{
+		Name:        "policy.status_changed",
+		Description: "Called when a host's policy status changes (OK→Warning→Critical→Isolated)",
+		Version:     "1.0",
+	})
+
 	return nil
 }
 
@@ -145,10 +162,39 @@ func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, [
 	}
 
 	m.mu.Lock()
+	prevStatus := m.hostStatus[hostID]
 	m.hostStatus[hostID] = status
 	m.mu.Unlock()
 
+	if prevStatus != status && m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "policy.status_changed", map[string]interface{}{
+			"host_id":      hostID,
+			"score":        score,
+			"prev_status":  prevStatus.String(),
+			"new_status":   status.String(),
+			"actions":      actions,
+		})
+	}
+
 	for _, action := range actions {
+		if m.kernel != nil && m.kernel.Extensions() != nil {
+			m.kernel.Extensions().Execute(m.kernel.Context(), "policy.action_decided", map[string]interface{}{
+				"host_id": hostID,
+				"score":   score,
+				"status":  status.String(),
+				"action":  action,
+			})
+
+			if action.Action == "notify_admin" {
+				m.kernel.Extensions().Execute(m.kernel.Context(), "policy.notify", map[string]interface{}{
+					"host_id": hostID,
+					"score":   score,
+					"status":  status.String(),
+					"message": action.Message,
+				})
+			}
+		}
+
 		if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
 			Topic:   TopicPolicyAction,
 			Payload: action,
