@@ -15,7 +15,7 @@
 > **Prism 已独立为 [github.com/chins-xing/prism](https://github.com/chins-xing/prism)**
 > （位于 `prism-lib/`），同样为零外部依赖。ASSCOR 平台通过薄适配层委托给这两个独立库。
 
-**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.2.0  
+**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.2.1  
 **日期：** 2026-07-07  
 **状态：** 发布
 
@@ -336,7 +336,7 @@ ASSCOR/
 
 ```bash
 # 单二进制安装
-sudo ./ASSCOR-kernel-v0.2.0-linux-amd64 --install
+sudo ./ASSCOR-kernel-v0.2.1-linux-amd64 --install
 sudo systemctl start asscor-kernel
 sudo systemctl enable asscor-kernel  # 开机自启
 
@@ -367,7 +367,7 @@ sudo /opt/asscor/ASSCOR-kernel --uninstall
 ### 10.2 Agent 部署
 
 ```bash
-sudo ./ASSCOR-agent-v0.2.0-linux-amd64 --install
+sudo ./ASSCOR-agent-v0.2.1-linux-amd64 --install
 sudo systemctl start asscor-agent
 ```
 
@@ -468,7 +468,7 @@ ASSCOR Platform
 
 ## 12. ATT&CK V19 威胁分析模块
 
-ASSCOR v0.2.0 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链。该模块作为 μKernel 插件（`attck`，优先级 21，版本 1.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
+ASSCOR v0.2.1 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链。该模块作为 μKernel 插件（`attck`，优先级 21，版本 1.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
 
 ### 13.1 四大核心子模块
 
@@ -560,7 +560,7 @@ ATTACKModule (Plugin v1.0.0)
 - **SSAM 1.2** — 引入 ACI、SPC、等保映射、AVD 扩展机制、μKernel 联动
 - **SSAM 1.3** — 移除4项重叠边缘因子（SYN Cookie/供应链/自动封禁/资源紧张），SPC 引入平方和衰减，增加边缘因子合规等级覆盖，内置冲突检测
 
-### ASSCOR v0.2.0 — 2026-07-06 生产就绪发布
+### ASSCOR v0.2.1 — 2026-07-14 算法独立性发布
 
 **部署与运维：** systemd 服务管控 (systemctl start/stop/reload)、FHS 合规文件系统布局 (/etc/asscor, /var/lib/asscor, /var/log/asscor)、单二进制 --install/--uninstall/--upgrade/--version 命令、Unix socket 远程 CLI (--cli)、SIGHUP 配置热重载、systemd PIDFile 集成。
 
@@ -663,7 +663,7 @@ ATTACKModule (Plugin v1.0.0)
 - **格式化输出** — 统一支持文本表格和 JSON 两种输出格式，通过 `--json` 参数切换
 - **HMAC 密钥管理** — 密钥元数据（创建时间/过期时间/哈希）、自动轮换（90 天）、文件权限 `0600`
 
-> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.2.0。两者版本号独立演进。
+> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.2.1。两者版本号独立演进。
 
 #### 第三批修复（SSAM 解耦与二次审计 — 2026-05-22）
 
