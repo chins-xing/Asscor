@@ -15,8 +15,16 @@ import (
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
-	"github.com/asscor/asscor/internal/ssam"
 )
+
+// AssessorEngine is the unified scoring engine interface owned by ASSCOR.
+// Algorithm implementations (SSAM, SRD, custom) depend on ASSCOR and implement this contract.
+// ASSCOR itself has zero dependency on any specific algorithm package.
+type AssessorEngine interface {
+	ComputeScore(ctx context.Context, result *model.AssessmentResult) error
+	Name() string
+	ReloadWeights(cfg *config.Config)
+}
 
 type SPCProvider interface {
 	Enabled() bool
@@ -115,7 +123,7 @@ type SPCCorrection struct {
 type Assessor struct {
 	cfg             *config.Config
 	scoringEngine   *DynamicScoringEngine
-	ssamEngine      ssam.ScoringProvider
+	pluginEngine    AssessorEngine
 	spcProvider     SPCProvider
 	attackProvider  ATTACKProvider
 	maxWorkers      int
@@ -125,16 +133,6 @@ type Assessor struct {
 
 func NewAssessor(cfg *config.Config) *Assessor {
 	engine := NewDynamicScoringEngine()
-
-	var ssamEngine ssam.ScoringProvider
-	useSSAM := cfg == nil || cfg.ScoringEngine != "legacy"
-	if useSSAM {
-		ssamEngine = ssam.NewEngine()
-		if cfg != nil {
-			ssamEngine.SetWeights(ssam.ConfigToWeights(cfg))
-			ssamEngine.SetEdgeFactors(ssam.ConfigToEdgeFactors(cfg))
-		}
-	}
 
 	if cfg != nil {
 		w := cfg.Weights
@@ -149,15 +147,21 @@ func NewAssessor(cfg *config.Config) *Assessor {
 	}
 
 	engine.InitializeDefaults()
-	if useSSAM && ssamEngine != nil {
-		ssamEngine.InitializeDefaults(nil, nil)
-	}
 
 	return &Assessor{
 		cfg:           cfg,
 		scoringEngine: engine,
-		ssamEngine:    ssamEngine,
 		maxWorkers:    10,
+	}
+}
+
+// SetPluginEngine injects an external algorithm engine (e.g., SSAM).
+// Call this before the first assessment. If not set or nil, the built-in
+// DynamicScoringEngine handles all scoring.
+func (a *Assessor) SetPluginEngine(engine AssessorEngine) {
+	a.pluginEngine = engine
+	if engine != nil && a.cfg != nil {
+		engine.ReloadWeights(a.cfg)
 	}
 }
 
@@ -169,8 +173,8 @@ func (a *Assessor) SetATTACKProvider(provider ATTACKProvider) {
 	a.attackProvider = provider
 }
 
-func (a *Assessor) SSAMEngine() ssam.ScoringProvider {
-	return a.ssamEngine
+func (a *Assessor) PluginEngine() AssessorEngine {
+	return a.pluginEngine
 }
 
 func (a *Assessor) ScoringEngine() *DynamicScoringEngine {
@@ -240,7 +244,7 @@ func (a *Assessor) Assess(hostID string, hostname string) *model.AssessmentResul
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreScore, result)
 
-	if !a.trySSAMScore(ctx, result) {
+	if !a.tryPluginScore(ctx, result) {
 		a.runLegacyScoring(result)
 	}
 
@@ -424,7 +428,7 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreScore, result)
 
-	if !a.trySSAMScore(ctx, result) {
+	if !a.tryPluginScore(ctx, result) {
 		a.runLegacyScoring(result)
 	}
 
@@ -743,24 +747,15 @@ func (a *Assessor) applyATTACK(hostID string, result *model.AssessmentResult) {
 		"predicted_risk", result.ATTACKPredictedRisk != nil)
 }
 
-func (a *Assessor) trySSAMScore(ctx context.Context, result *model.AssessmentResult) bool {
-	if a.ssamEngine == nil {
+func (a *Assessor) tryPluginScore(ctx context.Context, result *model.AssessmentResult) bool {
+	if a.pluginEngine == nil {
 		return false
 	}
-	ssamInput := &ssam.AssessmentInput{
-		HostID:      result.HostID,
-		Hostname:    result.Hostname,
-		Threshold:   result.Threshold,
-		Checks:      ssam.CheckResultsToInputs(result.Checks),
-		ThreatCoeff: a.cfg.ThreatCoeff,
-		SPCScore:    result.SPCScore,
-	}
-	output, err := a.ssamEngine.ComputeScore(ctx, ssamInput)
-	if err != nil {
-		logger.WithComponent("assessor").Error("ssam compute failed, fallback to legacy", "error", err)
+	if err := a.pluginEngine.ComputeScore(ctx, result); err != nil {
+		logger.WithComponent("assessor").Error("plugin engine compute failed, fallback to legacy",
+			"engine", a.pluginEngine.Name(), "error", err)
 		return false
 	}
-	ssam.OutputToModel(output, result)
 	return true
 }
 
@@ -1044,12 +1039,11 @@ func (a *Assessor) ReloadWeights(cfg *config.Config) {
 		a.scoringEngine.SetWeight(domain, val)
 	}
 
-	if a.ssamEngine != nil {
-		a.ssamEngine.SetWeights(ssam.ConfigToWeights(cfg))
-		a.ssamEngine.SetEdgeFactors(ssam.ConfigToEdgeFactors(cfg))
+	if a.pluginEngine != nil {
+		a.pluginEngine.ReloadWeights(cfg)
 	}
 
-	logger.WithComponent("assessor").Info("weights reloaded from config (engine + ssam)")
+	logger.WithComponent("assessor").Info("weights reloaded from config")
 }
 
 func (a *Assessor) RegisterHook(id string, phase AssessmentPhase, hook AssessmentHook, priority int) {
@@ -1068,21 +1062,12 @@ func (a *Assessor) RecomputeFinalScore(result *model.AssessmentResult) float64 {
 		result.ThreatCoeff = 1.0
 	}
 
-	if a.ssamEngine != nil {
-		ssamInput := &ssam.AssessmentInput{
-			HostID:      result.HostID,
-			Hostname:    result.Hostname,
-			Threshold:   result.Threshold,
-			Checks:      ssam.CheckResultsToInputs(result.Checks),
-			ThreatCoeff: result.ThreatCoeff,
-			SPCScore:    result.SPCScore,
-		}
-		ssamOutput, err := a.ssamEngine.ComputeScore(context.Background(), ssamInput)
-		if err != nil {
-			logger.WithComponent("assessor").Error("ssam recompute failed, fallback to legacy", "error", err)
+	if a.pluginEngine != nil {
+		if err := a.pluginEngine.ComputeScore(context.Background(), result); err != nil {
+			logger.WithComponent("assessor").Error("plugin engine recompute failed, fallback to legacy",
+				"engine", a.pluginEngine.Name(), "error", err)
 		} else {
-			ssam.OutputToModel(ssamOutput, result)
-			return ssamOutput.FinalScore
+			return result.FinalScore
 		}
 	}
 

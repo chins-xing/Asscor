@@ -20,6 +20,7 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/prism"
 	"github.com/asscor/asscor/internal/resilience"
+	"github.com/asscor/asscor/internal/ssam"
 	"github.com/asscor/asscor/internal/version"
 	"github.com/asscor/asscor/internal/webui"
 
@@ -210,6 +211,17 @@ k.SetConfig("config_path", resolvedConfigPath)
 	k.Container().BindNamed("config", (*config.Config)(nil), cfg)
 
 	scoringEngine := kernel.NewScoringEngineModule(cfg)
+
+	// Wire SSAM as an ASSCOR plugin engine (if not in legacy mode).
+	// SSAM depends on the engine.AssessorEngine interface defined by ASSCOR.
+	if cfg.ScoringEngine != "legacy" {
+		ssamAdapter := ssam.NewEngineAdapter(cfg)
+		scoringEngine.SetPluginEngine(ssamAdapter)
+		log.Info("ssam engine adapter wired", "engine", ssamAdapter.Name())
+	} else {
+		log.Info("using built-in DynamicScoringEngine (legacy mode)")
+	}
+
 	k.Container().Bind((*kernel.ScoringEngineProvider)(nil), scoringEngine)
 
 	k.Container().Bind((*kernel.PrismEngineProvider)(nil), prism.NewEngine())

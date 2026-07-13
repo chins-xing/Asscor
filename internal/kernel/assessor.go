@@ -16,14 +16,13 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 	ascorprism "github.com/asscor/asscor/internal/prism"
-	"github.com/asscor/asscor/internal/ssam"
 	prismlib "github.com/chins-xing/prism"
 )
 
 type ScoringEngineProvider interface {
 	Assess(hostID string, hostname string) *model.AssessmentResult
 	AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
-	SSAMEngine() ssam.ScoringProvider
+	PluginEngine() engine.AssessorEngine
 	RecomputeFinalScore(result *model.AssessmentResult) float64
 	ReloadWeights(cfg *config.Config)
 	ValidateEdgeFactors(registeredChecks []model.CheckItem) []string
@@ -112,8 +111,6 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 	m.setupSIEMPusher()
 	m.setupConsoleReport()
 	m.setupPrismConfig()
-
-	kc.Container().Bind((*ssam.ScoringProvider)(nil), m.engine.SSAMEngine())
 
 	warnings := m.engine.ValidateEdgeFactors(checks.GetAll())
 	for _, w := range warnings {
@@ -1067,8 +1064,12 @@ func (m *ScoringEngineModule) AssessFromResults(hostID string, hostname string, 
 	return m.engine.AssessFromResults(hostID, hostname, checkResults)
 }
 
-func (m *ScoringEngineModule) SSAMEngine() ssam.ScoringProvider {
-	return m.engine.SSAMEngine()
+func (m *ScoringEngineModule) PluginEngine() engine.AssessorEngine {
+	return m.engine.PluginEngine()
+}
+
+func (m *ScoringEngineModule) SetPluginEngine(e engine.AssessorEngine) {
+	m.engine.SetPluginEngine(e)
 }
 
 func (m *ScoringEngineModule) RecomputeFinalScore(result *model.AssessmentResult) float64 {
