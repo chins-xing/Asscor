@@ -31,6 +31,8 @@ type ScoringEngineProvider interface {
 
 type PrismEngineProvider interface {
 	ComputeDynamicScore(node *prismlib.NodeState, incomingEdges []prismlib.EdgeState, allNodes map[string]*prismlib.NodeState, nowUnix int64) prismlib.AssetRiskResult
+	ComputeSemanticState(core *prismlib.AssetRiskResult) *prismlib.SemanticRiskReport
+	PredictFuture(semantic *prismlib.SemanticRiskReport, model prismlib.InferenceModel) *prismlib.FutureRiskReport
 	Config() prismlib.PrismConfig
 	UpdateConfig(cfg prismlib.PrismConfig)
 }
@@ -846,7 +848,7 @@ func (m *AssessorModule) applyPrismToResult(hostID string, result *model.Assessm
 	result.PrismRiskVelocity = prismResult.RiskVelocity
 
 	// Semantic Layer
-	semantic := prismlib.ComputeSemanticState(&prismResult, cfg)
+	semantic := m.prismEngine.ComputeSemanticState(&prismResult)
 	if semantic != nil {
 		result.PrismSemanticState = semantic.CurrentState
 		result.PrismStateVector = semantic.StateVector
@@ -857,7 +859,8 @@ func (m *AssessorModule) applyPrismToResult(hostID string, result *model.Assessm
 	}
 
 	// Inference Layer
-	future := prismlib.PredictFuture(semantic, nil, cfg)
+	// Inference Layer
+	future := m.prismEngine.PredictFuture(semantic, nil)
 	if future != nil {
 		result.PrismInferenceTrend = future.Trend
 		result.PrismInferenceConfidence = future.Confidence

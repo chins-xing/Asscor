@@ -248,7 +248,7 @@ func applyPrism(cfg *config.Config, result *model.AssessmentResult) {
 	result.PrismDebtRaw = prismResult.DebtRaw
 	result.PrismRiskVelocity = prismResult.RiskVelocity
 
-	semantic := prismlib.ComputeSemanticState(&prismResult, pcfg)
+	semantic := engine.ComputeSemanticState(&prismResult)
 	if semantic != nil {
 		result.PrismSemanticState = semantic.CurrentState
 		result.PrismStateVector = semantic.StateVector
@@ -258,7 +258,7 @@ func applyPrism(cfg *config.Config, result *model.AssessmentResult) {
 		result.PrismCollapseMem = semantic.CollapseMembership
 	}
 
-	future := prismlib.PredictFuture(semantic, nil, pcfg)
+	future := engine.PredictFuture(semantic, nil)
 	if future != nil {
 		result.PrismInferenceTrend = future.Trend
 		result.PrismInferenceCollapseRisk = future.CollapseRisk

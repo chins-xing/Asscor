@@ -11,22 +11,44 @@ import (
 	prismlib "github.com/chins-xing/prism"
 )
 
+// PrismScoringEngine is the Prism interface that SRD depends on.
+// Implementations (e.g., internal/prism.Engine) inject via SetPrismEngine.
+// SRD owns this interface; Prism adapters depend on SRD.
+type PrismScoringEngine interface {
+	ComputeDynamicScore(node *prismlib.NodeState, incomingEdges []prismlib.EdgeState, allNodes map[string]*prismlib.NodeState, nowUnix int64) prismlib.AssetRiskResult
+	ComputeSemanticState(core *prismlib.AssetRiskResult) *prismlib.SemanticRiskReport
+	PredictFuture(semantic *prismlib.SemanticRiskReport, model prismlib.InferenceModel) *prismlib.FutureRiskReport
+}
+
 // Pipeline processes ExternalAssessmentReport through the Prism engine.
 // It normalizes external tool output into Prism NodeState and computes SRD scores.
 type Pipeline struct {
 	cfg      Config
-	prism    *ascorprism.Engine
+	prism    PrismScoringEngine
 	mu       sync.RWMutex
 	snapshots map[string]*prismlib.NodeState
 }
 
-// NewPipeline creates a new SRD pipeline.
+// NewPipeline creates a new SRD pipeline with a built-in Prism engine.
+// Use SetPrismEngine to inject a custom implementation.
 func NewPipeline(cfg Config) *Pipeline {
+	return NewPipelineWithEngine(cfg, ascorprism.NewEngine())
+}
+
+// NewPipelineWithEngine creates a new SRD pipeline with the given Prism engine.
+func NewPipelineWithEngine(cfg Config, prism PrismScoringEngine) *Pipeline {
 	return &Pipeline{
 		cfg:       cfg,
-		prism:     ascorprism.NewEngine(),
+		prism:     prism,
 		snapshots: make(map[string]*prismlib.NodeState),
 	}
+}
+
+// SetPrismEngine replaces the Prism engine at runtime.
+func (p *Pipeline) SetPrismEngine(engine PrismScoringEngine) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.prism = engine
 }
 
 // Process converts an external assessment report into a Prism result and stores a topology snapshot.
