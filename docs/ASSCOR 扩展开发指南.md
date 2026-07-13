@@ -1,6 +1,6 @@
 # ASSCOR 扩展开发指南
 
-**版本**：v1.1 | **适用**：ASSCOR v0.2.0 / SSAM 2.0 | **日期**：2026-07-07
+**版本**：v1.2 | **适用**：ASSCOR v0.2.1 / SSAM 2.0 | **日期**：2026-07-14
 
 ---
 
@@ -507,9 +507,12 @@ func (p *MyPlugin) Info() kernel.PluginInfo {
 func (p *MyPlugin) Dependencies() []kernel.PluginDependency { return nil }
 
 func (p *MyPlugin) Init(ctx context.Context, kc kernel.KernelContext) error {
-    // 注册自定义扩展点
-    kc.Extensions().RegisterPoint(kernel.ExtensionPoint{
-        Name: "myplugin.event", Description: "自定义事件", Version: "1.0"})
+    // 订阅已有的扩展点（v0.2.1: 扩展点由平台层集中定义，插件不可注册新点）
+    kc.Extensions().RegisterExtension("myplugin", "assessor.post_evaluate",
+        func(ctx context.Context, data interface{}) error {
+            result := data.(*model.AssessmentResult)
+            return p.handleResult(ctx, result)
+        }, 10)
     // 订阅事件总线
     kc.Bus().Subscribe(kernel.TopicAssessorResult, "myplugin", p.onResult)
     // 从 DI 容器解析其他模块

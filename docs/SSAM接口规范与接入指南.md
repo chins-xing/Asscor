@@ -671,36 +671,47 @@ engine.RegisterHook(ssam.HookPostEdge, "enrich-metadata", func(
 }, 20)
 ```
 
-### 8.5 方式五：通过 ASSCOR DI 容器集成
+### 8.5 方式五：通过 ASSCOR DI 容器集成（v0.2.1 依赖倒置架构）
 
-在 ASSCOR 内核中，SSAM Engine 通过依赖注入容器注册和消费：
+ASSCOR v0.2.1 定义了统一的 `engine.AssessorEngine` 接口。SSAM 通过 `ssam.EngineAdapter` 实现该接口，以插件形式注入：
 
-**注册端（AssessorModule.Init）：**
-
-```go
-func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
-    m.engine = engine.NewAssessor(m.cfg)
-
-    kc.Container().Bind((*ssam.ScoringProvider)(nil), m.engine.SSAMEngine())
-
-    return nil
-}
-```
-
-**消费端（任意内核模块）：**
+**注册端（cmd/kernel/main.go 平台层）：**
 
 ```go
-type MyModule struct {
-    Scorer ssam.ScoringProvider `inject:"true"`
-}
+func main() {
+    cfg := config.Load(...)
+    scoringEngine := kernel.NewScoringEngineModule(cfg)
 
-func (m *MyModule) Init(ctx context.Context, kc KernelContext) error {
-    if err := kc.Container().Inject(m); err != nil {
-        return err
+    // SSAM 作为 ASSCOR 插件注入（依赖方向: SSAM → ASSCOR）
+    if cfg.ScoringEngine != "legacy" {
+        adapter := ssam.NewEngineAdapter(cfg)
+        scoringEngine.SetPluginEngine(adapter)
     }
-    return nil
+
+    k.Container().Bind((*kernel.ScoringEngineProvider)(nil), scoringEngine)
 }
 ```
+
+**消费端（AssessorModule 内部，对插件透明）：**
+
+```go
+type Assessor struct {
+    pluginEngine engine.AssessorEngine  // 统一接口，非 ssam 具体类型
+}
+
+func (a *Assessor) tryPluginScore(ctx context.Context, result *model.AssessmentResult) bool {
+    if a.pluginEngine == nil {
+        return false
+    }
+    return a.pluginEngine.ComputeScore(ctx, result) == nil
+}
+```
+
+**关键变化（v0.2.0 → v0.2.1）**:
+- 旧: `a.ssamEngine ssam.ScoringProvider` → 新: `a.pluginEngine engine.AssessorEngine`
+- 旧: `ssam.NewEngine()` 在 assessor 内硬编码 → 新: `ssam.NewEngineAdapter(cfg)` 在 main.go 注入
+- 旧: `ssam.ScoringProvider` 直接绑定到 DI → 新: `engine.AssessorEngine` 统一接口
+- 旧: ASSCOR 依赖 SSAM 包 → 新: SSAM 依赖 ASSCOR 接口
 
 ---
 
@@ -724,6 +735,8 @@ business_continuity = 25
 operation_trust = 25
 resilience = 15
 kernel_security = 0
+# scoring_engine: 留空=SSAM, legacy=内置引擎
+scoring_engine =
 
 [edge_factors]
 two_factor_failure = 0.85

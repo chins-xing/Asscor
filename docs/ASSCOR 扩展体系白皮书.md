@@ -147,7 +147,7 @@ DI 容器定义于 [di.go](file:///f:/Argus/internal/kernel/di.go)，提供类�
 
 | 序号 | 绑定接口 | 绑定实例 | 文件位置 |
 |:---:|------|------|------|
-| 1 | `(*ssam.ScoringProvider)(nil)` | `m.engine.SSAMEngine()` | [assessor.go:L92](file:///f:/Argus/internal/kernel/assessor.go#L92) |
+| 1 | `(*engine.AssessorEngine)(nil)` | `ssam.NewEngineAdapter(cfg)` | `main.go` (平台层注入) |
 | 2 | `(*AssessorInterface)(nil)` | AssessorModule | [assessor.go:L99](file:///f:/Argus/internal/kernel/assessor.go#L99) |
 | 3 | `(*PersistenceInterface)(nil)` | PersistenceModule | [persistence.go:L261](file:///f:/Argus/internal/kernel/persistence.go#L261) |
 | 4 | `(*ConcurrencyInterface)(nil)` | ConcurrencyModule | [workerpool.go:L209](file:///f:/Argus/internal/kernel/workerpool.go#L209) |
@@ -302,17 +302,21 @@ type ExtensionHandler func(ctx context.Context, data interface{}) error
 | `attck.behavioral.alert` | 行为告警触发 | 行为分析 |
 | `attck.behavioral.beacon` | C2 Beaconing 检测到 | 行为分析 |
 
-### 4.5 扩展点注册示例
+### 4.5 扩展点注册示例（v0.2.1 集中化架构）
+
+扩展点由平台层 `RegisterAllExtensionPoints()` 集中定义在 `kernel/platform_extensions.go`。模块不可注册新扩展点（`ModuleExtensions` 接口不含 `RegisterPoint`），只能订阅已有扩展点：
 
 ```go
-// 模块 Init 中注册扩展点
-kc.Extensions().RegisterPoint(ExtensionPoint{
-    Name: "spc.pre_calculate", Description: "Called before SPC calculation", Version: "1.0",
-})
+// 平台层: platform_extensions.go 集中注册
+func RegisterAllExtensionPoints(r *ExtensionRegistry) {
+    r.RegisterPoint(ExtensionPoint{
+        Name: "spc.pre_calculate", Description: "Called before SPC calculation", Version: "1.0",
+    })
+}
 
-// 其他模块注册处理器
-kc.Extensions().RegisterExtension("spc.pre_calculate", "my_plugin",
-    func(ctx context.Context, data interface{}) error { return nil },
+// 模块: 使用 RegisterExtension 订阅（不可 RegisterPoint）
+kc.Extensions().RegisterExtension("my_plugin", "spc.pre_calculate",
+    func(ctx context.Context, data interface{}) error { return nil }, 10,
 )
 ```
 
@@ -592,19 +596,23 @@ type CheckResult struct {
 2. 如需控制启动顺序，实现 `PriorityPlugin` 接口
 3. 如需健康检查，实现 `HealthCheckable` 接口
 4. 如需热加载配置，实现 `ConfigurablePlugin` 接口
-5. 在 `Init` 中：通过 `kc.Container().Resolve()` 获取依赖、通过 `kc.Container().Bind()` 注册自身接口、通过 `kc.Extensions().RegisterPoint()` 注册扩展点
+5. 在 `Init` 中：通过 `kc.Container().Resolve()` 获取依赖、通过 `kc.Container().Bind()` 注册自身接口、通过 `kc.Extensions().RegisterExtension()` 订阅扩展点
 6. 在 `Start` 中：通过 `kc.Bus().Subscribe()` 订阅事件、启动 goroutine
 7. 在 `Stop` 中：关闭 goroutine、清理资源
 8. 在 [main.go](file:///f:/Argus/cmd/kernel/main.go) 中实例化并注册
 
-### 9.2 新增扩展点
+### 9.2 新增扩展点（平台层操作）
+
+扩展点定义归属 ASSCOR 平台层（`kernel/platform_extensions.go`），不归属各模块。新增扩展点需在 `RegisterAllExtensionPoints()` 函数中添加：
 
 ```go
-// 注册扩展点
-kc.Extensions().RegisterPoint(ExtensionPoint{
-    Name: "module.phase", Description: "触发说明", Version: "1.0",
-})
-// 执行扩展
+// platform_extensions.go: 集中注册
+func RegisterAllExtensionPoints(r *ExtensionRegistry) {
+    r.RegisterPoint(ExtensionPoint{
+        Name: "module.phase", Description: "触发说明", Version: "1.0",
+    })
+}
+// 模块触发: 任意位置均可
 errs := kc.Extensions().Execute(ctx, "module.phase", data)
 ```
 
