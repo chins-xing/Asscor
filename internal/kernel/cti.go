@@ -135,6 +135,10 @@ func (m *CTIModule) updateLoop() {
 }
 
 func (m *CTIModule) updateFromFeeds() {
+	if m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "cti.pre_update", nil)
+	}
+
 	var totalWeight int
 
 	if m.otxAPIKey != "" {
@@ -152,6 +156,13 @@ func (m *CTIModule) updateFromFeeds() {
 		m.activeThreats += totalWeight
 	}
 	m.mu.Unlock()
+
+	if m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "cti.post_update", map[string]interface{}{
+			"weight":       totalWeight,
+			"active_ctx":   m.activeThreats,
+		})
+	}
 }
 
 func (m *CTIModule) fetchOTXPulses() int {
@@ -314,11 +325,22 @@ func (m *CTIModule) updateCoefficient() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	prevCoeff := m.coefficient
+
 	base := 1.0
 	threatPenalty := float64(m.activeThreats) * 0.02
 	m.coefficient = math.Max(0.60, base-threatPenalty)
 
 	m.lastUpdate = time.Now()
+
+	if m.coefficient != prevCoeff && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "cti.coefficient_changed", map[string]interface{}{
+			"prev_coeff": prevCoeff,
+			"new_coeff":  m.coefficient,
+			"threats":    m.activeThreats,
+		})
+	}
+
 	logger.WithComponent("cti").Info("coefficient updated", "coefficient", m.coefficient, "active_threats", m.activeThreats)
 }
 

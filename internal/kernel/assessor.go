@@ -138,6 +138,9 @@ func (m *AssessorModule) setupSIEMPusher() {
 }
 
 func (m *AssessorModule) pushToSIEM(ctx context.Context, result *model.AssessmentResult) {
+	m.kernel.Extensions().Execute(ctx, "siem.pre_push", map[string]interface{}{
+		"host_id": result.HostID,
+	})
 	if m.siemPusher != nil && m.siemPusher.Enabled() {
 		go m.siemPusher.PushAssessment(ctx, result)
 	}

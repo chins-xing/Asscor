@@ -426,13 +426,28 @@ func (m *PersistenceModule) Append(dataset string, record interface{}) error {
 		return nil
 	}
 
+	if m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "persistence.pre_append", map[string]interface{}{
+			"dataset": dataset,
+		})
+	}
+
 	data, err := json.Marshal(record)
 	if err != nil {
 		return fmt.Errorf("persistence marshal: %w", err)
 	}
 
 	writer := m.getOrCreateWriter(dataset)
-	return writer.write(data)
+	if err := writer.write(data); err != nil {
+		return err
+	}
+
+	if m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "persistence.post_append", map[string]interface{}{
+			"dataset": dataset,
+		})
+	}
+	return nil
 }
 
 func (m *PersistenceModule) AppendBatch(dataset string, records []interface{}) error {
@@ -486,6 +501,12 @@ func (m *PersistenceModule) WriteDashboardReport(report *DashboardReport) error 
 	if err := os.Rename(tmpPath, path); err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("dashboard rename: %w", err)
+	}
+	if m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "persistence.dashboard_written", map[string]interface{}{
+			"path":    path,
+			"host_id": report.HostID,
+		})
 	}
 	return nil
 }

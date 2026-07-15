@@ -114,4 +114,97 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 	r.RegisterPoint(ExtensionPoint{
 		Name: "webui.route.register", Description: "Register additional HTTP routes on the web server", Version: "1.0",
 	})
+
+	// ── 探测辅助: 心跳/Agent生命周期 ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "heartbeat.agent_timeout", Description: "Called when agent heartbeat times out", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "heartbeat.agent_reconnected", Description: "Called when agent reconnects after timeout", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "heartbeat.agent_pruned", Description: "Called when dead agent is pruned from registry", Version: "1.0",
+	})
+
+	// ── 探测辅助: 适配器管线 ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "adapter.pre_fetch", Description: "Called before external adapter pipeline executes", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "adapter.post_fetch", Description: "Called after external adapter pipeline completes", Version: "1.0",
+	})
+
+	// ── 探测辅助: CTI威胁情报 ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "cti.pre_update", Description: "Called before CTI feed update cycle", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "cti.post_update", Description: "Called after CTI feed update cycle completes", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "cti.coefficient_changed", Description: "Called when CTI threat coefficient changes", Version: "1.0",
+	})
+
+	// ── 响应辅助: 配置热加载 ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "config.pre_reload", Description: "Called before configuration is reloaded (SIGHUP/poll)", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "config.post_reload", Description: "Called after configuration reload completes", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "config.load_error", Description: "Called when configuration reload fails", Version: "1.0",
+	})
+
+	// ── 报告辅助: 日志收集 ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "log.entry_received", Description: "Called when agent log entry is received — plugins can forward to external systems", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "agent.log_uploaded", Description: "Called when agent uploads log batch to kernel", Version: "1.0",
+	})
+
+	// ── 报告辅助: SIEM推送 ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "siem.pre_push", Description: "Called before SIEM event push", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "siem.post_push", Description: "Called after SIEM push succeeds", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "siem.push_failure", Description: "Called when SIEM push fails", Version: "1.0",
+	})
+
+	// ── 修复辅助: 命令过期 ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "commander.command_expired", Description: "Called when a pending command TTL expires without ack", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "commander.key_rotated", Description: "Called when HMAC command signing key rotates", Version: "1.0",
+	})
+
+	// ── 修复辅助: Source管理器 ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "source.pre_deploy", Description: "Called before source deployment", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "source.post_deploy", Description: "Called after source deployment completes", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "source.pre_enable", Description: "Called before a source is enabled", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "source.pre_disable", Description: "Called before a source is disabled", Version: "1.0",
+	})
+
+	// ── 归档辅助: 通用持久化 ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "persistence.pre_append", Description: "Called before appending to any data file", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "persistence.post_append", Description: "Called after data append succeeds", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "persistence.dashboard_written", Description: "Called after dashboard report is atomically written", Version: "1.0",
+	})
 }

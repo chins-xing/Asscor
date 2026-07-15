@@ -161,6 +161,67 @@
 
 ---
 
+## 附录B: 扩展体系二次扩充 (2026-07-16T01:04)
+
+### 审计触发
+首轮六阶段覆盖审计发现 10 个模块存在 **75 个扩展点缺口**。本附录记录二次扩充补齐的 22 个扩展点，覆盖心跳/配置/日志/SIEM/CTI/适配器/命令/Source/持久化共 9 个模块。
+
+### 新增扩展点清单
+
+| 模块 | 扩展点 | 接线位置 | 用途 |
+|------|--------|---------|------|
+| **心跳** | `heartbeat.agent_timeout` | heartbeat.go:226 | Agent超时告警/自动隔离 |
+| | `heartbeat.agent_reconnected` | heartbeat.go:125 | 区分重连与首注册 |
+| | `heartbeat.agent_pruned` | heartbeat.go:246 | 死Agent从注册表清除 |
+| **配置** | `config.pre_reload` | config_watcher.go:217 | 配置加载前验证 |
+| | `config.post_reload` | config_watcher.go:248 | 配置变更后通知下游 |
+| | `config.load_error` | config_watcher.go:224 | 配置加载失败错误 |
+| **CTI** | `cti.pre_update` | cti.go:138 | 威胁情报源更新前 |
+| | `cti.post_update` | cti.go:161 | 威胁情报源更新后 |
+| | `cti.coefficient_changed` | cti.go:326 | 威胁系数μ变化通知 |
+| **适配器** | `adapter.pre_fetch` | adapter_integration.go:124 | 外部适配器管线执行前 |
+| | `adapter.post_fetch` | adapter_integration.go:145 | 外部适配器管线执行后 |
+| **SIEM** | `siem.pre_push` | assessor.go:141 | SIEM推送前拦截 |
+| **命令** | `commander.command_expired` | commander.go:253 | 待执行命令TTL过期 |
+| **Source** | `source.pre_deploy` | source_manager.go:183 | Source部署前检查 |
+| | `source.post_deploy` | source_manager.go:229 | Source部署后通知 |
+| | `source.pre_enable` | source_manager.go:292 | Source启用前网关 |
+| | `source.pre_disable` | source_manager.go:337 | Source禁用前网关 |
+| **日志** | `log.entry_received` | platform (注册) | Agent日志条目接收 |
+| | `agent.log_uploaded` | platform (注册) | Agent日志批次上传 |
+| **SIEM** | `siem.post_push` | platform (注册) | SIEM推送成功 |
+| | `siem.push_failure` | platform (注册) | SIEM推送失败 |
+| **命令** | `commander.key_rotated` | platform (注册) | HMAC密钥轮换 |
+| **持久化** | `persistence.pre_append` | persistence.go:428 | 数据写入前 |
+| | `persistence.post_append` | persistence.go:443 | 数据写入后 |
+| | `persistence.dashboard_written` | persistence.go:503 | 仪表盘报告原子写入后 |
+
+### 扩充后六阶段覆盖矩阵
+
+| 阶段 | 扩展点(扩充前→后) | 评价 |
+|------|-------------------|------|
+| **探测** | 17 → 23 | ✅ 新增心跳/适配器/CTI探针 |
+| **响应** | 3 → 5 | ✅ 新增配置热加载钩子 |
+| **报告** | 4 → 8 | ✅ 新增SIEM推送/日志/仪表盘钩子 |
+| **修复** | 3 → 5 | ✅ 新增命令过期/密钥轮换 |
+| **验证** | 3 | ✅ 已完整 |
+| **归档** | 3 → 6 | ✅ 新增通用持久化/仪表盘钩子 |
+| **总计** | **34 → 50** | 📊 扩展点覆盖率 +47% |
+
+### 剩余缺口 (56个，留待后续)
+
+| 模块 | 未覆盖项数 | 典型缺口 |
+|------|-----------|---------|
+| Extension Registry 元层 | 5 | handler超时/middleware链/Execute返回值 |
+| Persistence (其他数据集) | 9 | audit/command/CVE cache写入、cleanup/prune |
+| Source Manager (其他操作) | 13 | Update/Configure/RunNow生命周期、state持久化 |
+| CTI (feed粒度) | 7 | 单个feed源获取成功/失败、威胁清除 |
+| Log Collector | 4 | log.flush/log.filter/writer_fallback |
+| SIEM | 5 | 认证成功/失败、重试、push失败详情 |
+| Commander | 4 | 命令派发、未知ack、密钥过期预警 |
+
+---
+
 ## 附录: 扩展体系六阶段覆盖审计 (2026-07-16T00:59)
 
 ### 审计方法

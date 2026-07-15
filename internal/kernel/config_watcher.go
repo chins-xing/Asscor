@@ -214,9 +214,19 @@ func (m *ConfigWatcherModule) resolveConfigPath() {
 }
 
 func (m *ConfigWatcherModule) forceReload() {
+	if m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "config.pre_reload", map[string]interface{}{"path": m.configPath})
+	}
+
 	cfg, err := config.Load(m.configPath)
 	if err != nil {
 		logger.WithComponent("config_watcher").Error("failed to reload config", "path", m.configPath, "error", err)
+		if m.kernel.Extensions() != nil {
+			m.kernel.Extensions().Execute(m.kernel.Context(), "config.load_error", map[string]interface{}{
+				"path":  m.configPath,
+				"error": err.Error(),
+			})
+		}
 		return
 	}
 
@@ -235,6 +245,13 @@ func (m *ConfigWatcherModule) forceReload() {
 		Payload: map[string]interface{}{"path": m.configPath},
 		Source:  "config_watcher",
 	})
+
+	if m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "config.post_reload", map[string]interface{}{
+			"path":      m.configPath,
+			"threshold": cfg.Threshold,
+		})
+	}
 
 	logger.WithComponent("config_watcher").Info("config reloaded",
 		"path", m.configPath,

@@ -106,6 +106,7 @@ func (m *HeartbeatModule) RecordHeartbeat(hostID string) {
 	defer m.mu.Unlock()
 
 	agent, ok := m.agents[hostID]
+	wasInactive := ok && !agent.Active
 	if !ok {
 		agent = &AgentRecord{
 			HostID:     hostID,
@@ -118,6 +119,12 @@ func (m *HeartbeatModule) RecordHeartbeat(hostID string) {
 	agent.LastSeen = time.Now()
 	agent.Connections++
 	agent.Active = true
+	if wasInactive && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "heartbeat.agent_reconnected", map[string]interface{}{
+			"host_id":      hostID,
+			"connections":  agent.Connections,
+		})
+	}
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
 		Topic:   "agent.heartbeat",
@@ -221,6 +228,11 @@ func (m *HeartbeatModule) checkTimeouts() {
 			Payload: id,
 			Source:  "heartbeat",
 		})
+		if m.kernel.Extensions() != nil {
+			m.kernel.Extensions().Execute(m.kernel.Context(), "heartbeat.agent_timeout", map[string]interface{}{
+				"host_id": id,
+			})
+		}
 		logger.WithComponent("heartbeat").Warn("agent timed out", "host_id", id)
 
 		m.mu.Lock()
@@ -241,6 +253,12 @@ func (m *HeartbeatModule) pruneDeadAgents() {
 	for id, agent := range m.agents {
 		if !agent.Active && agent.LastSeen.Before(cutoff) {
 			delete(m.agents, id)
+			if m.kernel.Extensions() != nil {
+				m.kernel.Extensions().Execute(m.kernel.Context(), "heartbeat.agent_pruned", map[string]interface{}{
+					"host_id":   id,
+					"last_seen": agent.LastSeen.Format(time.RFC3339),
+				})
+			}
 			logger.WithComponent("heartbeat").Info("pruned dead agent", "host_id", id, "last_seen", agent.LastSeen.Format(time.RFC3339))
 		}
 	}

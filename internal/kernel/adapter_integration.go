@@ -120,6 +120,12 @@ func (m *AdapterIntegrationModule) RunAdapters(ctx context.Context) []adapter.Pi
 		return nil
 	}
 
+	if m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(ctx, "adapter.pre_fetch", map[string]interface{}{
+			"adapter_count": len(allAdapters),
+		})
+	}
+
 	cfg := m.getAdapterConfig()
 	pipeline := adapter.NewPipeline(cfg).WithAdapters(allAdapters...)
 	results := pipeline.RunAll(ctx)
@@ -131,6 +137,13 @@ func (m *AdapterIntegrationModule) RunAdapters(ctx context.Context) []adapter.Pi
 
 	if totalFindings > 0 {
 		m.publishAdapterFindings(results)
+	}
+
+	if m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(ctx, "adapter.post_fetch", map[string]interface{}{
+			"adapter_count": len(results),
+			"total_findings": totalFindings,
+		})
 	}
 
 	logger.WithComponent("adapter_integration").Info("adapter sync completed",

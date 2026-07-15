@@ -231,12 +231,14 @@ func (m *CommanderModule) cleanupExpiredCommands() {
 
 func (m *CommanderModule) expireStaleCommands() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	cutoff := time.Now().Add(-m.cmdTTL)
+	var expired []map[string]string
 	for hostID, cmds := range m.pendingCmds {
 		for cmdID, pc := range cmds {
 			if pc.EnqueuedAt.Before(cutoff) {
+				expired = append(expired, map[string]string{
+					"host_id": hostID, "cmd_id": cmdID,
+				})
 				delete(cmds, cmdID)
 				logger.WithComponent("commander").Info("expired stale command",
 					"host_id", hostID, "cmd_id", cmdID, "enqueued_at", pc.EnqueuedAt.Format(time.RFC3339))
@@ -244,6 +246,16 @@ func (m *CommanderModule) expireStaleCommands() {
 		}
 		if len(cmds) == 0 {
 			delete(m.pendingCmds, hostID)
+		}
+	}
+	m.mu.Unlock()
+
+	for _, e := range expired {
+		if m.kernel != nil && m.kernel.Extensions() != nil {
+			m.kernel.Extensions().Execute(m.kernel.Context(), "commander.command_expired", map[string]interface{}{
+				"host_id": e["host_id"],
+				"cmd_id":  e["cmd_id"],
+			})
 		}
 	}
 }
