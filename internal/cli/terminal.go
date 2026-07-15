@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -214,36 +213,35 @@ type Terminal struct {
 	completer *Completer
 	reader    *bufio.Reader
 	output    *Output
-	running   bool
-	cancel    context.CancelFunc
 }
 
 func NewTerminal(engine *Engine) *Terminal {
-	ctx, cancel := context.WithCancel(context.Background())
-	_ = ctx
-	t := &Terminal{
+	return &Terminal{
 		engine:    engine,
 		completer: NewCompleter(engine),
 		reader:    bufio.NewReader(os.Stdin),
 		output:    engine.Output(),
-		cancel:    cancel,
 	}
-	return t
 }
 
 func (t *Terminal) Run() error {
-	t.running = true
 	t.output.Info("ASSCOR \u00b5Kernel CLI — type 'help' for commands, 'exit' to quit")
 	fmt.Fprintln(t.output.stdout)
 
-	for t.running {
+	for {
+		select {
+		case <-t.engine.ctx.Done():
+			return nil
+		default:
+		}
+
 		fmt.Fprint(t.output.stdout, t.output.Prompt())
 
 		line, err := t.reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				fmt.Fprintln(t.output.stdout)
-				break
+				return nil
 			}
 			t.output.Error(fmt.Sprintf("read error: %v", err))
 			continue
@@ -256,7 +254,7 @@ func (t *Terminal) Run() error {
 
 		if line == "exit" || line == "quit" {
 			t.output.Info("Goodbye.")
-			break
+			return nil
 		}
 
 		result := t.engine.Execute(line)
@@ -269,14 +267,6 @@ func (t *Terminal) Run() error {
 			t.output.Error(result.Err.Error())
 		}
 	}
-
-	t.running = false
-	return nil
-}
-
-func (t *Terminal) Stop() {
-	t.running = false
-	t.cancel()
 }
 
 func (t *Terminal) isQuietResult(r *CommandResult) bool {

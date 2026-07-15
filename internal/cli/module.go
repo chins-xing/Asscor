@@ -491,6 +491,7 @@ type CLIModule struct {
 	enabled    bool
 	done       chan struct{}
 	socketPath string
+	logRedirected bool
 
 	mu    sync.RWMutex
 	state kernel.PluginState
@@ -557,6 +558,7 @@ func (m *CLIModule) Start(ctx context.Context) error {
 		if err := logger.RedirectToFile(logPath); err != nil {
 			logger.WithComponent("cli").Warn("failed to redirect logs to file, CLI output may be interleaved", "path", logPath, "error", err)
 		} else {
+			m.logRedirected = true
 			fmt.Fprintf(os.Stderr, "CLI active: logs redirected to %s\n", logPath)
 		}
 	}
@@ -566,6 +568,7 @@ func (m *CLIModule) Start(ctx context.Context) error {
 	}
 
 	go func() {
+		defer close(m.done)
 		term := NewTerminal(m.engine)
 		if err := term.Run(); err != nil {
 			logger.WithComponent("cli").Error("terminal error", "error", err)
@@ -589,7 +592,9 @@ func (m *CLIModule) Stop(ctx context.Context) error {
 		logger.WithComponent("cli").Warn("terminal goroutine did not exit in time")
 		close(m.done)
 	}
-	logger.RedirectToStderr()
+	if m.logRedirected {
+		logger.RedirectToStderr()
+	}
 	m.state = kernel.PluginStopped
 	logger.WithComponent("cli").Info("CLI module stopped")
 	return nil

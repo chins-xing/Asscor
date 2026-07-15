@@ -40,7 +40,7 @@ func (m *CLIModule) serveCLI(ctx context.Context) {
 	defer ln.Close()
 	defer os.Remove(sockPath)
 
-	if err := os.Chmod(sockPath, 0666); err != nil {
+	if err := os.Chmod(sockPath, 0660); err != nil {
 		logger.WithComponent("cli").Warn("cannot chmod socket", "error", err)
 	}
 
@@ -76,9 +76,10 @@ func (s *cliSession) handle() {
 
 	writeString(s.conn, "ASSCOR CLI — type 'help' for commands, 'exit' to disconnect\r\n")
 
+	dec := gob.NewDecoder(s.conn)
+
 	for {
 		var line string
-		dec := gob.NewDecoder(s.conn)
 		if err := dec.Decode(&line); err != nil {
 			if err == io.EOF {
 				writeString(s.conn, "\r\ndisconnected.\r\n")
