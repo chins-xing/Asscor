@@ -359,9 +359,21 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 		"delta":      result.FinalScore - prevScore,
 		"acceptable": result.Acceptable,
 	})
+	if result.Acceptable != (prevResult != nil && prevResult.Acceptable) || prevResult == nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "verify.status_changed", map[string]interface{}{
+			"host_id":        hostID,
+			"prev_acceptable": prevResult != nil && prevResult.Acceptable,
+			"new_acceptable": result.Acceptable,
+			"prev_score":     prevScore,
+			"new_score":      result.FinalScore,
+		})
+	}
 
 	m.pushToSIEM(m.kernel.Context(), result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.outbound", result)
+
 	m.printConsoleReport(result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.report_generated", result)
 
 	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
 		Topic:   TopicAssessorResult,
@@ -457,9 +469,21 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 		"delta":      result.FinalScore - prevScore,
 		"acceptable": result.Acceptable,
 	})
+	if result.Acceptable != (prevResult != nil && prevResult.Acceptable) || prevResult == nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "verify.status_changed", map[string]interface{}{
+			"host_id":        hostID,
+			"prev_acceptable": prevResult != nil && prevResult.Acceptable,
+			"new_acceptable": result.Acceptable,
+			"prev_score":     prevScore,
+			"new_score":      result.FinalScore,
+		})
+	}
 
 	m.pushToSIEM(m.kernel.Context(), result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.outbound", result)
+
 	m.printConsoleReport(result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.report_generated", result)
 
 	subCount := m.kernel.Bus().SubscriberCount(TopicAssessorResult)
 	logger.WithComponent("assessor").Debug("publishing assessor.result", "subscribers", subCount)

@@ -12,6 +12,12 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 		Name: "assessor.post_evaluate", Description: "Called after each host assessment completes", Version: "1.0",
 	})
 	r.RegisterPoint(ExtensionPoint{
+		Name: "assessor.report_generated", Description: "Called after console/dashboard report is generated", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "assessor.outbound", Description: "Called after assessment completes — plugins can push to SIEM/webhook/SOAR", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
 		Name: "spc.pre_calculate", Description: "Called before SPC calculation", Version: "1.0",
 	})
 	r.RegisterPoint(ExtensionPoint{

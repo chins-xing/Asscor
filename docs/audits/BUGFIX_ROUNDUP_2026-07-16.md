@@ -158,3 +158,30 @@
 | Windows daemonize 不退出父进程 | daemon_windows.go | 🔹 LOW | Unix 版 `os.Exit(0)`，Windows 版仅 return nil |
 | Dockerfile 暴露 50052 但 gRPC 默认禁用 | Dockerfile | 🔹 LOW | 端口暴露与 `config.docker.ini` 不一致 |
 | ATT&CK 无调用者接口方法 (12个) | attck*.go | 🔸 MEDIUM | 前期审计报告的遗留问题，未在本次处理 |
+
+---
+
+## 附录: 扩展体系六阶段覆盖审计 (2026-07-16T00:59)
+
+### 审计方法
+对照 "探测→响应→报告→修复→验证→归档" 全生命周期，逐一检查每个阶段是否有对应的 Extension Point 和 Event Bus Topic。扩展点定义来自 `platform_extensions.go` (41个)，总线 topic 来自 `plugin.go` (17个)。
+
+### 覆盖矩阵
+
+| 阶段 | 扩展点 | 总线Topic | 评价 | 缺失项 |
+|------|--------|-----------|------|--------|
+| **探测** | 17 (全覆盖) | 8 | ✅ 完整 | — |
+| **响应** | 3 | 2 | ⚠️ 部分 | `policy.notify` 仅覆盖 `notify_admin` 动作 |
+| **报告** | 4 | 0 | ⚠️ 部分 | 无通用报告生成扩展点，`attck.apt.report_generated` 仅覆盖 APT |
+| **修复** | 3 | 2 | ✅ 完整 | — |
+| **验证** | 1/3 有效 | 0 | ⚠️ 部分 | `verify.status_changed` 定义但零触发（死扩展点）|
+| **归档** | 3 | 0 | ✅ 完整 | — |
+
+### 发现的缺陷及修复 (提交 51b023c~HEAD)
+
+| # | 问题 | 文件 | 严重度 | 修复 |
+|---|------|------|--------|------|
+| V1 | `verify.status_changed` 定义但零触发 | `assessor.go` | 🔶 HIGH | 接入 `Evaluate()` + `EvaluateFromResults()`，在 `verify.post_check` 后触发 |
+| V2 | 无通用外发扩展点 | `platform_extensions.go` | 🔸 MEDIUM | 新增 `assessor.outbound` (SIEM/webhook/SOAR) |
+| V3 | 无通用报告生成扩展点 | `platform_extensions.go` | 🔸 MEDIUM | 新增 `assessor.report_generated` |
+| V4 | `policy.notify` 仅覆盖 `notify_admin` | `policy.go` | 🔸 MEDIUM | 移除条件限制，覆盖全部 action 类型(`isolate_host`/`increase_assessment`等) |

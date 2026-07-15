@@ -169,14 +169,13 @@ func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, [
 				"action":  action,
 			})
 
-			if action.Action == "notify_admin" {
-				m.kernel.Extensions().Execute(m.kernel.Context(), "policy.notify", map[string]interface{}{
-					"host_id": hostID,
-					"score":   score,
-					"status":  status.String(),
-					"message": action.Message,
-				})
-			}
+			m.kernel.Extensions().Execute(m.kernel.Context(), "policy.notify", map[string]interface{}{
+				"host_id": hostID,
+				"score":   score,
+				"status":  status.String(),
+				"action":  action.Action,
+				"message": action.Message,
+			})
 		}
 
 		if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
