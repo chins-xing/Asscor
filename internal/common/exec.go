@@ -169,10 +169,26 @@ func RunCmdTimeout(timeout time.Duration, name string, args ...string) (string, 
 
 func isPermissionError(s string) bool {
 	lower := strings.ToLower(s)
-	return strings.Contains(lower, "permission denied") ||
+	if strings.Contains(lower, "permission denied") ||
+		strings.Contains(lower, "permission_error") ||
 		strings.Contains(lower, "operation not permitted") ||
 		strings.Contains(lower, "access denied") ||
-		strings.Contains(lower, "authentication failure")
+		strings.Contains(lower, "access is denied") ||
+		strings.Contains(lower, "authentication failure") ||
+		strings.Contains(lower, "eacces") ||
+		strings.Contains(lower, "eperm") {
+		return true
+	}
+	if strings.Contains(s, "权限") ||
+		strings.Contains(s, "无权限") ||
+		strings.Contains(s, "拒绝访问") ||
+		strings.Contains(s, "許可") {
+		return true
+	}
+	if strings.Contains(lower, "open ") && strings.Contains(lower, "permission denied") {
+		return true
+	}
+	return false
 }
 
 type PermissionError struct {

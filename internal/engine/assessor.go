@@ -474,9 +474,29 @@ func (a *Assessor) runChecksConcurrently(items []model.CheckItem, result *model.
 
 func isPermDenied(detail string) bool {
 	lower := strings.ToLower(detail)
-	return strings.Contains(lower, "permission denied") ||
+	// Standard Go error messages from os.ReadFile / exec.Cmd / syscall
+	if strings.Contains(lower, "permission denied") ||
+		strings.Contains(lower, "permission_error") ||
 		strings.Contains(lower, "operation not permitted") ||
-		strings.Contains(lower, "access denied")
+		strings.Contains(lower, "access denied") ||
+		strings.Contains(lower, "access is denied") ||
+		strings.Contains(lower, "eacces") ||
+		strings.Contains(lower, "eperm") {
+		return true
+	}
+	// Chinese / localized error patterns
+	if strings.Contains(detail, "权限") ||
+		strings.Contains(detail, "无权限") ||
+		strings.Contains(detail, "拒绝访问") ||
+		strings.Contains(detail, "許可") {
+		return true
+	}
+	// PathError from Go stdlib: "open /etc/shadow: permission denied"
+	// regexp-free check: detail contains both "open " and "permission denied"
+	if strings.Contains(lower, "open ") && strings.Contains(lower, "permission denied") {
+		return true
+	}
+	return false
 }
 
 func (a *Assessor) runAdapterPipeline() []adapter.PipelineResult {
