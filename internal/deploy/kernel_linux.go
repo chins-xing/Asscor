@@ -18,8 +18,8 @@ const (
 )
 
 func InstallKernel(installPath string) error {
-	if os.Geteuid() != 0 {
-		return fmt.Errorf("install requires root privileges")
+	if err := requireRoot(); err != nil {
+		return err
 	}
 	binPath := installPath + "/ASSCOR-kernel"
 	configPath := defaultConfigDir + "/config.ini"
@@ -31,64 +31,64 @@ func InstallKernel(installPath string) error {
 		os.MkdirAll(d, 0755)
 	}
 
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("get executable path: %w", err)
+	if err := copySelfTo(binPath); err != nil {
+		return err
 	}
-	data, err := os.ReadFile(exe)
-	if err != nil {
-		return fmt.Errorf("read self: %w", err)
-	}
-	os.WriteFile(binPath, data, 0755)
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		os.WriteFile(configPath, []byte("data_dir = "+dataDir+"\n[weights]\nattack_surface = 35\nbusiness_continuity = 25\noperation_trust = 25\nresilience = 15\n"), 0644)
 	}
 
 	exec.Command("useradd", "-r", "-s", "/sbin/nologin", "-d", "/opt/asscor", "-M", "asscor").Run()
-	exec.Command("chown", "-R", "asscor:asscor", installPath, defaultConfigDir, dataDir, logsDir).Run()
+	chownAsscor(installPath, defaultConfigDir, dataDir, logsDir)
 
 	svcContent := fmt.Sprintf(`[Unit]
 Description=ASSCOR Microkernel
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=asscor
-ExecStart=%s --config=%s --listen=:50051 --webui-port=8087 --log-output=%s/kernel.log
+Group=asscor
+ExecStart=%s --config=%s --listen=:50051 --webui-port=8087 --pid-file=%s/ASSCOR-kernel.pid --log-format=json --log-output=%s/kernel.log
 ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/bin/kill -SIGTERM $MAINPID
 Restart=on-failure
 RestartSec=10
+PIDFile=%s/ASSCOR-kernel.pid
 KillMode=mixed
+KillSignal=SIGTERM
 TimeoutStopSec=30
 LimitNOFILE=65536
+LimitNPROC=4096
+ReadWritePaths=%s /var/lib/asscor /var/log/asscor
 
 [Install]
 WantedBy=multi-user.target
-`, binPath, configPath, logsDir)
+`, binPath, configPath, installPath, logsDir, installPath, installPath)
 
 	os.WriteFile(serviceFile, []byte(svcContent), 0644)
 
 	os.Remove("/usr/bin/asscor")
 	os.Remove("/usr/bin/asscor-cli")
 	os.Symlink(binPath, "/usr/bin/asscor")
-	cliWrapper := fmt.Sprintf("#!/bin/sh\nexec %s --cli %s/asscor-cli.sock \"$@\"\n", binPath, installPath)
+	cliWrapper := fmt.Sprintf("#!/bin/sh\nSOCK=\"${ASSCOR_CLI_SOCKET:-%s/asscor-cli.sock}\"\nexec %s --cli \"$SOCK\" \"$@\"\n", installPath, binPath)
 	os.WriteFile("/usr/bin/asscor-cli", []byte(cliWrapper), 0755)
 
-	exec.Command("systemctl", "daemon-reload").Run()
+	systemctlReload()
 	return nil
 }
 
 func UninstallKernel(_ string) error {
-	if os.Geteuid() != 0 {
-		return fmt.Errorf("uninstall requires root privileges")
+	if err := requireRoot(); err != nil {
+		return err
 	}
-	exec.Command("systemctl", "stop", serviceName).Run()
-	exec.Command("systemctl", "disable", serviceName).Run()
+	systemctlStopDisable(serviceName)
 	os.Remove(serviceFile)
 	os.Remove("/usr/bin/asscor")
 	os.Remove("/usr/bin/asscor-cli")
-	exec.Command("systemctl", "daemon-reload").Run()
+	systemctlReload()
 	return nil
 }
 
@@ -103,17 +103,17 @@ func CheckKernelInstall(_ string) error {
 }
 
 func UpgradeKernel(_ string) error {
-	if os.Geteuid() != 0 {
-		return fmt.Errorf("upgrade requires root privileges")
+	if err := requireRoot(); err != nil {
+		return err
 	}
 	binPath := defaultInstallDir + "/ASSCOR-kernel"
 	backupPath := binPath + ".bak"
 	exec.Command("systemctl", "stop", serviceName).Run()
 	os.Rename(binPath, backupPath)
-	exe, _ := os.Executable()
-	data, _ := os.ReadFile(exe)
-	os.WriteFile(binPath, data, 0755)
-	exec.Command("chown", "asscor:asscor", binPath).Run()
+	if err := copySelfTo(binPath); err != nil {
+		return err
+	}
+	chownAsscor(binPath)
 	exec.Command("systemctl", "start", serviceName).Run()
 	return nil
 }

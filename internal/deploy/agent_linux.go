@@ -16,29 +16,23 @@ const (
 )
 
 func InstallAgent() error {
-	if os.Geteuid() != 0 {
-		return fmt.Errorf("install requires root privileges")
+	if err := requireRoot(); err != nil {
+		return err
 	}
 	logsDir := "/var/log/asscor"
 	os.MkdirAll(agentBinDir, 0755)
 	os.MkdirAll("/etc/asscor", 0755)
 	os.MkdirAll(logsDir, 0755)
 
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("get executable path: %w", err)
+	if err := copySelfTo(agentBinDir + "/ASSCOR-agent"); err != nil {
+		return err
 	}
-	data, err := os.ReadFile(exe)
-	if err != nil {
-		return fmt.Errorf("read self: %w", err)
-	}
-	os.WriteFile(agentBinDir+"/ASSCOR-agent", data, 0755)
 
 	if _, err := os.Stat(agentConfigPath); os.IsNotExist(err) {
 		os.WriteFile(agentConfigPath, []byte("[agent]\nheartbeat_sec = 30\ncheck_interval_sec = 300\nlog_format = text\n"), 0644)
 	}
 
-	exec.Command("chown", "-R", "asscor:asscor", agentBinDir, "/etc/asscor").Run()
+	chownAsscor(agentBinDir, "/etc/asscor")
 
 	svcContent := fmt.Sprintf(`[Unit]
 Description=ASSCOR Agent
@@ -57,32 +51,31 @@ WantedBy=multi-user.target
 `, agentBinDir, agentConfigPath, logsDir)
 
 	os.WriteFile(agentServiceFile, []byte(svcContent), 0644)
-	exec.Command("systemctl", "daemon-reload").Run()
+	systemctlReload()
 	return nil
 }
 
 func UninstallAgent() error {
-	if os.Geteuid() != 0 {
-		return fmt.Errorf("uninstall requires root privileges")
+	if err := requireRoot(); err != nil {
+		return err
 	}
-	exec.Command("systemctl", "stop", agentServiceName).Run()
-	exec.Command("systemctl", "disable", agentServiceName).Run()
+	systemctlStopDisable(agentServiceName)
 	os.Remove(agentServiceFile)
-	exec.Command("systemctl", "daemon-reload").Run()
+	systemctlReload()
 	return nil
 }
 
 func UpgradeAgent() error {
-	if os.Geteuid() != 0 {
-		return fmt.Errorf("upgrade requires root privileges")
+	if err := requireRoot(); err != nil {
+		return err
 	}
 	binPath := agentBinDir + "/ASSCOR-agent"
 	backupPath := binPath + ".bak"
 	exec.Command("systemctl", "stop", agentServiceName).Run()
 	os.Rename(binPath, backupPath)
-	exe, _ := os.Executable()
-	data, _ := os.ReadFile(exe)
-	os.WriteFile(binPath, data, 0755)
+	if err := copySelfTo(binPath); err != nil {
+		return err
+	}
 	exec.Command("systemctl", "start", agentServiceName).Run()
 	return nil
 }
