@@ -278,9 +278,9 @@ type ExtensionHandler func(ctx context.Context, data interface{}) error
 | `kernel.pre_stop` | 关闭序列开始前 |
 | `kernel.post_stop` | 所有插件 Stop 之后 |
 
-### 4.4 业务模块扩展点（25 个）
+### 4.4 业务模块扩展点（44 个，v0.2.1+）
 
-**AssessorModule（2 个）**：`assessor.pre_evaluate`、`assessor.post_evaluate`
+**AssessorModule（4 个）**：`assessor.pre_evaluate`、`assessor.post_evaluate`、`assessor.report_generated`、`assessor.outbound`
 
 **SPCModule（3 个）**：`spc.pre_calculate`、`spc.post_calculate`、`spc.cve_updated`
 
@@ -301,6 +301,35 @@ type ExtensionHandler func(ctx context.Context, data interface{}) error
 | `attck.apt.report_generated` | APT 分析报告生成 | 报告 |
 | `attck.behavioral.alert` | 行为告警触发 | 行为分析 |
 | `attck.behavioral.beacon` | C2 Beaconing 检测到 | 行为分析 |
+
+**HeartbeatModule（3 个）**：`heartbeat.agent_timeout`、`heartbeat.agent_reconnected`、`heartbeat.agent_pruned`
+
+**ConfigWatcherModule（3 个）**：`config.pre_reload`、`config.post_reload`、`config.load_error`
+
+**CTIModule（3 个）**：`cti.pre_update`、`cti.post_update`、`cti.coefficient_changed`
+
+**AdapterIntegrationModule（2 个）**：`adapter.pre_fetch`、`adapter.post_fetch`
+
+**SIEM Pusher（3 个）**：`siem.pre_push`、`siem.post_push`、`siem.push_failure`
+
+**CommanderModule（2 个）**：`commander.command_expired`、`commander.key_rotated`
+
+**SourceManagerModule（4 个）**：`source.pre_deploy`、`source.post_deploy`、`source.pre_enable`、`source.pre_disable`
+
+**Log Collector（2 个）**：`log.entry_received`、`agent.log_uploaded`
+
+**PersistenceModule（3 个）**：`persistence.pre_append`、`persistence.post_append`、`persistence.dashboard_written`
+
+**生命周期阶段映射**：
+
+| 阶段 | 扩展点 | 覆盖模块 |
+|------|--------|---------|
+| **探测** | 23 | Assessor + SPC + ATT&CK + Heartbeat + Adapter + CTI |
+| **响应** | 5 | Policy + ConfigWatcher |
+| **报告** | 8 | Assessor + ATT&CK + SIEM + Log + Persistence |
+| **修复** | 5 | Remediation + Commander |
+| **验证** | 3 | Verify |
+| **归档** | 6 | Archive + Persistence |
 
 ### 4.5 扩展点注册示例（v0.2.1 集中化架构）
 
@@ -659,7 +688,7 @@ errs := kc.Extensions().Execute(ctx, "module.phase", data)
 | DI 容器绑定 | 15 |
 | 事件总线话题 | 13 |
 | 总线订阅关系 | 6 |
-| 扩展点总数 | 25（内核 6 + Assessor 2 + SPC 3 + ATTACK 13） |
+| 扩展点总数 | 50（内核 6 + 业务模块 44） |
 | 全部可替换 | ✅ |
 
 ---

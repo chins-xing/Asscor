@@ -1,6 +1,6 @@
 # ASSCOR 使用手册
 
-> 版本：v0.2.0 | SSAM 2.0 | 最后更新：2026-07-07
+> 版本：v0.2.1 | SSAM 2.0 | 最后更新：2026-07-16
 
 > ⚠️ ASSCOR 输出的分数是一个**数学模型的计算结果，不是绝对的安全真值。**
 > 请将评分作为决策参考而非决策替代。模型能捕获已知的可量化维度，但安全的
@@ -1100,6 +1100,7 @@ anti_debug = false        # Linux 反调试检测（需显式开启）
 
 | 版本 | 日期 | 主要变更 |
 |------|------|----------|
+| v0.2.1 | 2026-07-16 | 扩展体系50扩展点全生命周期覆盖(探测→响应→报告→修复→验证→归档)；isPermDenied权限检测增强(EACCES/EPERM/中文)；CLI终端-语境退出+done信号+goDecoder修复；CLI日志恢复条件化+socket权限收紧0660；部署模块重构(helpers抽取/死码清理/systemd同步)；verify.status_changed死扩展点激活；asscor-cli透传ASSCOR_CLI_SOCKET；10模块扩展点接线(心跳/配置/CTI/适配器/SIEM/命令/Source/日志/持久化) |
 | v0.2.0 | 2026-07-07 | 单二进制安装(--install/--uninstall/--upgrade/--version)；FHS布局(/etc/asscor,/var/lib/asscor,/var/log/asscor)；systemctl管控+SIGHUP热重载；远程CLI(Unix socket, asscor-cli)；PATH符号链接(/usr/bin/asscor)；单机模式支持适配器外派+SRD三层分析；SSAM V2加权平均评分；persistence路径修复；agent心跳频率优化；config定义检查项([user_check])；外部脚本适配器([adapter_script])；Plugin SDK(pluginsdk/)；算法防护配置([integrity])；CLI diag/policy运维命令 |
 | v0.2.0 | 2026-06-28 | CLI spc子命令(score/kev/fetch)实现；kernel控制台评估报告(config.ini console_report)；agent日志格式可配置(agent.ini log_format)；source deploy命令；ATT&CK版本/优先级修正；config热重载默认开启；管理适配器Parse升级；系统d service + Dockerfile |
 | v0.1.4-mvp | 2026-06-09 | SSAM V2.0三层语义模型；ATT&CK V19模块；SPC多数据源(CNNVD/CNVD/MISP)；扩展管理器；Prism SRD引擎 |
