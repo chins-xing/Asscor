@@ -72,9 +72,11 @@ func UpgradeAgent() error {
 	binPath := agentBinDir + "/ASSCOR-agent"
 	backupPath := binPath + ".bak"
 	exec.Command("systemctl", "stop", agentServiceName).Run()
+	os.Remove(backupPath)
 	os.Rename(binPath, backupPath)
 	if err := copySelfTo(binPath); err != nil {
-		return err
+		os.Rename(backupPath, binPath)
+		return fmt.Errorf("upgrade failed, rolled back: %w", err)
 	}
 	exec.Command("systemctl", "start", agentServiceName).Run()
 	return nil

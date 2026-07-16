@@ -80,7 +80,7 @@ WantedBy=multi-user.target
 	return nil
 }
 
-func UninstallKernel(_ string) error {
+func UninstallKernel(installPath string) error {
 	if err := requireRoot(); err != nil {
 		return err
 	}
@@ -92,9 +92,10 @@ func UninstallKernel(_ string) error {
 	return nil
 }
 
-func CheckKernelInstall(_ string) error {
-	if _, err := os.Stat(defaultInstallDir + "/ASSCOR-kernel"); os.IsNotExist(err) {
-		return fmt.Errorf("binary not found at %s/ASSCOR-kernel", defaultInstallDir)
+func CheckKernelInstall(installPath string) error {
+	binPath := installPath + "/ASSCOR-kernel"
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		return fmt.Errorf("binary not found at %s", binPath)
 	}
 	if _, err := os.Stat(serviceFile); os.IsNotExist(err) {
 		return fmt.Errorf("service not installed")
@@ -102,16 +103,18 @@ func CheckKernelInstall(_ string) error {
 	return nil
 }
 
-func UpgradeKernel(_ string) error {
+func UpgradeKernel(installPath string) error {
 	if err := requireRoot(); err != nil {
 		return err
 	}
-	binPath := defaultInstallDir + "/ASSCOR-kernel"
+	binPath := installPath + "/ASSCOR-kernel"
 	backupPath := binPath + ".bak"
 	exec.Command("systemctl", "stop", serviceName).Run()
+	os.Remove(backupPath)
 	os.Rename(binPath, backupPath)
 	if err := copySelfTo(binPath); err != nil {
-		return err
+		os.Rename(backupPath, binPath)
+		return fmt.Errorf("upgrade failed, rolled back: %w", err)
 	}
 	chownAsscor(binPath)
 	exec.Command("systemctl", "start", serviceName).Run()
