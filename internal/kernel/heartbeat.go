@@ -253,7 +253,7 @@ func (m *HeartbeatModule) pruneDeadAgents() {
 	for id, agent := range m.agents {
 		if !agent.Active && agent.LastSeen.Before(cutoff) {
 			delete(m.agents, id)
-			if m.kernel.Extensions() != nil {
+			if m.kernel != nil && m.kernel.Extensions() != nil {
 				m.kernel.Extensions().Execute(m.kernel.Context(), "heartbeat.agent_pruned", map[string]interface{}{
 					"host_id":   id,
 					"last_seen": agent.LastSeen.Format(time.RFC3339),

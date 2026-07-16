@@ -154,7 +154,9 @@
 
 | 问题 | 模块 | 严重度 | 说明 |
 |------|------|--------|------|
-| `UninstallKernel` 等忽略 installPath 参数 | deploy | 🔹 LOW | 收 `_` 但用 `defaultInstallDir`——语义不一致 |
+| `UninstallKernel` 等忽略 installPath 参数 | deploy | 🔹 LOW | 收 `_` 但用 `defaultInstallDir`——语义不一致 (已修复) |
+| `AssessFromResults()` 丢弃 `computeSPCScore()` 返回值 | engine | 🔶 HIGH | `result.SPCScore` 未赋值，SPC 修正不生效 (已修复) |
+| `pruneDeadAgents()` 扩展点缺少 `m.kernel != nil` 守卫 | heartbeat | 🔶 HIGH | 单元测试中 nil kernel 导致 panic (已修复) |
 | Windows daemonize 不退出父进程 | daemon_windows.go | 🔹 LOW | Unix 版 `os.Exit(0)`，Windows 版仅 return nil |
 | Dockerfile 暴露 50052 但 gRPC 默认禁用 | Dockerfile | 🔹 LOW | 端口暴露与 `config.docker.ini` 不一致 |
 | ATT&CK 无调用者接口方法 (12个) | attck*.go | 🔸 MEDIUM | 前期审计报告的遗留问题，未在本次处理 |
@@ -219,6 +221,63 @@
 | Log Collector | 4 | log.flush/log.filter/writer_fallback |
 | SIEM | 5 | 认证成功/失败、重试、push失败详情 |
 | Commander | 4 | 命令派发、未知ack、密钥过期预警 |
+
+---
+
+## 附录C: 单元测试与基准测试审计 (2026-07-17T01:18)
+
+### 审计方法
+全项目 `go test -list ".*" ./...` 扫描，统计每包的测试函数数、基准测试数，并运行全量测试收集通过/失败状态。
+
+### 测试覆盖概览
+
+| 包 | 测试文件 | 测试函数 | 基准 | 通过 |
+|----|---------|----------|------|------|
+| `internal/kernel` | 6 文件 | ~120 函数 | 0 | ✅ |
+| `internal/engine` | 1 文件 | 10 函数 | 0 | ✅ |
+| `internal/cli` | 1 文件 | 49 函数 | 0 | ✅ |
+| `internal/extmgr` | 1 文件 | 22 函数 | 0 | ✅ |
+| `internal/adapter/scanner` | 1 文件 | 24 函数 | 0 | ✅ |
+| `internal/adapter/management` | 1 文件 | 33 函数 | 0 | ✅ |
+| `internal/ssam` | 2 文件 | 20 函数 | 0 | ✅ |
+| `internal/adapter` | 1 文件 | 10 函数 | 0 | ✅ |
+| `internal/checks` | 1 文件 | 7 函数 | 0 | ✅ |
+| `internal/integrity` | 1 文件 | 6 函数 | 0 | ✅ |
+| `internal/srd` | 1 文件 | 9 函数 | 0 | ✅ |
+| `internal/config` | 1 文件 | 3 函数 | 0 | ✅ |
+| `internal/logger` | 1 文件 | 14 函数 | 0 | ✅ |
+| `ssam-lib/*` | 4 文件 | ~50 函数 | 0 | ✅ |
+| `prism-lib/*` | 3 文件 | ~40 函数 | 0 | ✅ |
+| **总计** | **31 文件** | **~420 函数** | **0** | **100%** |
+
+### 无测试覆盖的包 (14个)
+
+| 包 | 风险 |
+|----|------|
+| `cmd/kernel` | 🔸 MED | 启动逻辑无测试 |
+| `cmd/agent` | 🔸 MED | 连接/心跳逻辑无测试 |
+| `cmd/asscor` | 🔹 LOW | 独立评估工具 |
+| `internal/agent` | 🔶 HIGH | Agent 核心运行时无测试 |
+| `internal/adapterhub` | 🔸 MED | 适配器 Hub 管理员 |
+| `internal/common` | 🔶 HIGH | 命令执行白名单无测试 |
+| `internal/deploy` | 🔸 MED | systemd 安装/升级无测试 |
+| `internal/model` | 🔹 LOW | 纯数据结构 |
+| `internal/checks/linux` | 🔶 HIGH | 76 检查项无单元测试 |
+| `internal/prism` | 🔸 MED | Prism 适配层 |
+| `internal/resilience` | 🔶 HIGH | 熔断器/Guard 无测试 |
+| `internal/version` | 🔹 LOW | 版本字符串 |
+| `internal/webui` | 🔸 MED | Web 仪表盘 |
+| `api/v1` | 🔹 LOW | protobuf 生成代码 |
+
+### 本次修复的回归缺陷
+
+| 测试 | 缺陷 | 修复 |
+|------|------|------|
+| `TestSPCProvider_Integration` | `AssessFromResults()` 第427行 `a.computeSPCScore(...)` 返回值未赋给 `result.SPCScore`，SPC 修正永远不生效 | 改为 `result.SPCScore = a.computeSPCScore(...)` |
+| `TestHeartbeat_PruneDeadAgents` | `pruneDeadAgents()` 扩展点 `Execute()` 未检查 `m.kernel != nil`，单元测试中 nil kernel 导致 SIGSEGV | 添加 `m.kernel != nil` 守卫 |
+
+### 基准测试现状
+**全项目 0 个 Benchmark 函数。** 核心算法库 (ssam-lib/prism-lib) 和引擎层均无性能基准。建议为 `ComputeScore`、`runChecksConcurrently`、`runAdapterPipeline` 添加 Benchmark。
 
 ---
 

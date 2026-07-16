@@ -424,7 +424,7 @@ func (a *Assessor) AssessFromResults(hostID string, hostname string, checkResult
 		return a.buildEmptyResult(result)
 	}
 
-	a.computeSPCScore(ctx, hostID, result)
+	result.SPCScore = a.computeSPCScore(ctx, hostID, result)
 
 	a.scoringEngine.Hooks().Execute(ctx, PhasePreScore, result)
 
