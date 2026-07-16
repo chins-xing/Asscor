@@ -828,9 +828,9 @@ orch.Register(k.PlatformExtensionRegistry())
 
 ## 9. 参考
 
-- 检查项库：`internal/checks/linux/checks.go`（76 个内置检查项参考实现）
+- 检查项库：`internal/checks/linux/checks.go`（80 个内置检查项参考实现）
 - 适配器示例：`internal/adapter/scanner/`（11 个探测器）、`internal/adapter/management/`（10 个管理类）
-- 内核插件示例：`internal/kernel/`（15 个内置插件）
+- 内核插件示例：`internal/kernel/`（17 个内置插件）
 - 扩展管理器：`internal/extmgr/`
 - 外部扩展模块：`optional/algorithms/modules/multi-algo-orchestrator/`
 - 扩展包示例：`optional/algorithms/packages/example-pack/package.json`

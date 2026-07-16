@@ -342,6 +342,8 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 
 	result := m.engine.Assess(hostID, hostID)
 
+	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_score", result)
+
 	m.applyCTIOnly(result)
 
 	m.applyPrismToResult(hostID, result, time.Now().Unix())

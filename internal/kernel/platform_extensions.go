@@ -9,6 +9,9 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 		Name: "assessor.pre_evaluate", Description: "Called before each host assessment", Version: "1.0",
 	})
 	r.RegisterPoint(ExtensionPoint{
+		Name: "assessor.pre_score", Description: "Called before scoring engine runs — orchestrator plugins intercept here", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
 		Name: "assessor.post_evaluate", Description: "Called after each host assessment completes", Version: "1.0",
 	})
 	r.RegisterPoint(ExtensionPoint{

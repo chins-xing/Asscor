@@ -268,7 +268,7 @@ ASSCOR μKernel
 
   Listen:   :50051 (mTLS: true)
   Log:      json (info) -> stderr
-  Plugins:  14 loaded
+  Plugins:  17 loaded
     {heartbeat} v1.0.0 — Agent heartbeat tracking
     {spc} v1.0.0 — Security Posture Calculator
     {cti} v1.0.0 — Cyber Threat Intelligence
@@ -757,7 +757,7 @@ kill $(cat /var/run/ASSCOR-kernel.pid)
 
 单机模式的完整能力：
 
-- **核心检查**：76+ 项本地安全检查（含 KS 内核安全域）
+- **核心检查**：80 项本地安全检查（含 KS 内核安全域）
 - **SPC 态势计算**：如已配置数据源则自动拉取 NVD/EPSS/KEV 并计算
 - **ATT&CK 分析**：覆盖度、Kill Chain、APT 归因、风险预测
 - **外部适配器外派**：config.ini `[adapters]` 中启用的工具（Trivy/Lynis/Suricata/ClamAV/AIDE 等）自动执行并将发现外派到对应检查项
@@ -1100,7 +1100,7 @@ anti_debug = false        # Linux 反调试检测（需显式开启）
 
 | 版本 | 日期 | 主要变更 |
 |------|------|----------|
-| v0.2.1 | 2026-07-17 | 扩展体系50扩展点全生命周期覆盖(探测→响应→报告→修复→验证→归档)；isPermDenied权限检测增强(EACCES/EPERM/中文)；CLI终端-语境退出+done信号+goDecoder修复；CLI日志恢复条件化+socket权限收紧0660；部署模块重构(helpers抽取/死码清理/systemd同步+waitForServiceHealthy)；verify.status_changed死扩展点激活；asscor-cli透传ASSCOR_CLI_SOCKET；多算法编排可选模块(multi-algo-orchestrator, extension-point独立挂载)；扩展包管理器(pkgmgr, package.json依赖声明, git外部仓库引用)；optional/外部扩展目录(algorithms/adapters/checks/platform) |
+| v0.2.1 | 2026-07-17 | 扩展体系65扩展点全生命周期覆盖(探测→响应→报告→修复→验证→归档)；isPermDenied权限检测增强(EACCES/EPERM/中文)；CLI终端-语境退出+done信号+goDecoder修复；CLI日志恢复条件化+socket权限收紧0660；部署模块重构(helpers抽取/死码清理/systemd同步+waitForServiceHealthy)；verify.status_changed死扩展点激活；asscor-cli透传ASSCOR_CLI_SOCKET；多算法编排可选模块(multi-algo-orchestrator, extension-point独立挂载)；扩展包管理器(pkgmgr, package.json依赖声明, git外部仓库引用)；optional/外部扩展目录(algorithms/adapters/checks/platform) |
 | v0.2.0 | 2026-07-07 | 单二进制安装(--install/--uninstall/--upgrade/--version)；FHS布局(/etc/asscor,/var/lib/asscor,/var/log/asscor)；systemctl管控+SIGHUP热重载；远程CLI(Unix socket, asscor-cli)；PATH符号链接(/usr/bin/asscor)；单机模式支持适配器外派+SRD三层分析；SSAM V2加权平均评分；persistence路径修复；agent心跳频率优化；config定义检查项([user_check])；外部脚本适配器([adapter_script])；Plugin SDK(pluginsdk/)；算法防护配置([integrity])；CLI diag/policy运维命令 |
 | v0.2.0 | 2026-06-28 | CLI spc子命令(score/kev/fetch)实现；kernel控制台评估报告(config.ini console_report)；agent日志格式可配置(agent.ini log_format)；source deploy命令；ATT&CK版本/优先级修正；config热重载默认开启；管理适配器Parse升级；系统d service + Dockerfile |
 | v0.1.4-mvp | 2026-06-09 | SSAM V2.0三层语义模型；ATT&CK V19模块；SPC多数据源(CNNVD/CNVD/MISP)；扩展管理器；Prism SRD引擎 |

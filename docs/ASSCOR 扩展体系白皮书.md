@@ -278,9 +278,19 @@ type ExtensionHandler func(ctx context.Context, data interface{}) error
 | `kernel.pre_stop` | 关闭序列开始前 |
 | `kernel.post_stop` | 所有插件 Stop 之后 |
 
-### 4.4 业务模块扩展点（44 个，v0.2.1+）
+### 4.4 业务模块扩展点（59 个，v0.2.1+）
 
-**AssessorModule（4 个）**：`assessor.pre_evaluate`、`assessor.post_evaluate`、`assessor.report_generated`、`assessor.outbound`
+**AssessorModule（4 个）**：`assessor.pre_evaluate`、`assessor.pre_score`、`assessor.post_evaluate`、`assessor.report_generated`、`assessor.outbound`
+
+**PolicyModule（3 个）**：`policy.action_decided`、`policy.notify`、`policy.status_changed`
+
+**RemediationModule（3 个）**：`remediation.pre_apply`、`remediation.post_apply`、`remediation.action_resolved`
+
+**VerifyModule（3 个）**：`verify.pre_check`、`verify.post_check`、`verify.status_changed`
+
+**ArchiveModule（3 个）**：`archive.pre_write`、`archive.post_write`、`archive.rotation`
+
+**CLI/WebUI 平台扩展（2 个）**：`cli.command.register`、`webui.route.register`
 
 **SPCModule（3 个）**：`spc.pre_calculate`、`spc.post_calculate`、`spc.cve_updated`
 
@@ -688,7 +698,7 @@ errs := kc.Extensions().Execute(ctx, "module.phase", data)
 | DI 容器绑定 | 15 |
 | 事件总线话题 | 13 |
 | 总线订阅关系 | 6 |
-| 扩展点总数 | 50（内核 6 + 业务模块 44） |
+| 扩展点总数 | 65（内核 6 + 业务模块 59） |
 | 全部可替换 | ✅ |
 
 ---
