@@ -759,10 +759,79 @@ container_security = on
 
 ---
 
-## 8. 参考
+## 8. 外部扩展模块与扩展包（v0.2.1+）
+
+### 8.1 概述
+
+与内核集成式扩展 (ExtensionManager + extension.json) 互补，ASSCOR v0.2.1 引入**外部编译时扩展体系**。外部扩展位于 `optional/` 目录，不修改内核代码，通过 Go import + Extension Point 系统挂载。
+
+### 8.2 两种扩展形式
+
+| 形式 | 路径 | 接入 | 适用 |
+|------|------|------|------|
+| **单模块** | `optional/<category>/modules/<name>/` | direct `import` → `Register()` | 独立功能 |
+| **扩展包** | `optional/<category>/packages/<name>/` | `package.json` + `asscor-pkg install` | 多模块组合 / 含外部 git 依赖 |
+
+### 8.3 扩展包清单 (package.json)
+
+每个扩展包含一个 `package.json`，声明模块列表、外部 git 仓库引用、依赖和冲突：
+
+```json
+{
+  "name": "my-pack",
+  "version": "1.0.0",
+  "compatibility": { "asscor_version": ">=0.2.1" },
+  "modules": [{ "id": "my-module", "path": "../../modules/my-module" }],
+  "external_sources": [{ "repo": "https://github.com/user/repo", "ref": "main", "target": "modules/ext" }],
+  "dependencies": [{ "package": "base-pack", "version": ">=1.0.0" }]
+}
+```
+
+完整规范见 `optional/SCHEMA.md`。
+
+### 8.4 扩展包管理工具 (asscor-pkg)
+
+```bash
+cd optional/pkgmgr && go build -o asscor-pkg .
+./asscor-pkg resolve          # 解析依赖图
+./asscor-pkg install --force  # 克隆外部仓库
+./asscor-pkg list             # 列出所有扩展包
+./asscor-pkg info my-pack     # 查看扩展包详情
+```
+
+### 8.5 多算法编排器开发示例
+
+```go
+// 在 optional/algorithms/modules/my-algo/orchestrator.go
+import "github.com/asscor/asscor/internal/kernel"
+
+type MyOrchestrator struct { ... }
+
+func (o *MyOrchestrator) Register(ext kernel.ModuleExtensions) {
+    ext.RegisterExtension("my-algo", "assessor.pre_score", func(ctx context.Context, data interface{}) error {
+        result := data.(*model.AssessmentResult)
+        // 调用多个评分引擎，取最低分
+        scores := []float64{runSSAM(result), runLegacy(result), runCustom(result)}
+        result.FinalScore = min(scores...)
+        return nil
+    }, 45)
+}
+```
+
+```go
+// 在 cmd/kernel/main.go 中启用
+import myalgo "github.com/asscor/asscor-optional-my-algo"
+
+orch := myalgo.NewOrchestrator(cfg)
+orch.Register(k.PlatformExtensionRegistry())
+```
+
+## 9. 参考
 
 - 检查项库：`internal/checks/linux/checks.go`（76 个内置检查项参考实现）
 - 适配器示例：`internal/adapter/scanner/`（11 个探测器）、`internal/adapter/management/`（10 个管理类）
 - 内核插件示例：`internal/kernel/`（15 个内置插件）
 - 扩展管理器：`internal/extmgr/`
+- 外部扩展模块：`optional/algorithms/modules/multi-algo-orchestrator/`
+- 扩展包示例：`optional/algorithms/packages/example-pack/package.json`
 - SSAM 接口规范：`docs/SSAM接口规范与接入指南.md`

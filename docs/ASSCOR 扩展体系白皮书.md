@@ -1,7 +1,7 @@
 # ASSCOR 扩展体系白皮书
 
-**版本**：v1.0
-**日期**：2026-06-28
+**版本**：v1.1
+**日期**：2026-07-17
 **状态**：发布
 **配套文档**：SSAM 2.0 白皮书（第一篇章）、工程实现白皮书（第三篇章）
 
@@ -693,6 +693,160 @@ errs := kc.Extensions().Execute(ctx, "module.phase", data)
 
 ---
 
+## 11. 外部扩展模块与扩展包（v0.2.1+）
+
+ASSCOR v0.2.1 引入了**外部扩展体系**——与内核集成的 ExtensionManager (extmgr) 互补的、独立编译的模块化扩展系统。核心设计原则：**外部扩展不修改内核代码，通过 Go import 和 Extension Point 系统挂载**。
+
+### 11.1 目录结构
+
+```
+optional/                          # 外部扩展根目录（独立于内核）
+├── README.md                      #   使用指南
+├── SCHEMA.md                      #   package.json 格式规范
+├── pkgmgr/                        #   扩展包管理工具 (asscor-pkg CLI)
+│   ├── main.go                    #     6 条 CLI 命令
+│   ├── manifest.go                #     package.json 解析 + 依赖求解
+│   └── fetcher.go                 #     git 外部仓库克隆 + 兼容性校验
+├── algorithms/                    #   按用途: 算法扩展
+│   ├── modules/                   #     单模块扩展
+│   │   └── multi-algo-orchestrator/ #   多算法编排器 (独立 Go module)
+│   └── packages/                  #     多模块扩展包
+│       └── example-pack/          #       示例扩展包
+│           └── package.json       #         依赖声明 + 外部仓库引用
+├── adapters/                      #   按用途: 适配器扩展
+│   ├── modules/
+│   └── packages/
+├── checks/                        #   按用途: 检查项扩展
+│   ├── modules/
+│   └── packages/
+└── platform/                      #   按用途: 平台层扩展
+    ├── modules/
+    └── packages/
+```
+
+### 11.2 单模块 vs 扩展包
+
+ASSCOR 外部扩展提供两种形式：
+
+| 形式 | 目录路径 | 接入方式 | 适用场景 |
+|------|---------|---------|---------|
+| **单模块** | `<category>/modules/<name>/` | 在 `cmd/kernel/main.go` 中 `import`，通过 `Register()` 挂载到 Extension Point | 单个独立功能（如多算法编排） |
+| **扩展包** | `<category>/packages/<name>/` | 通过 `package.json` 声明模块集合、外部依赖和冲突；使用 `asscor-pkg install` 自动拉取外部仓库 | 多模块聚合、含第三方 git 仓库依赖的复杂扩展 |
+
+单模块是不打包的独立模块。扩展包通过 `package.json` 声明所含模块、外部 git 仓库引用、依赖及冲突，支持 `asscor-pkg` 自动解析。
+
+### 11.3 扩展包管理器 (asscor-pkg)
+
+`asscor-pkg` 是专门管理 `optional/` 下扩展包的命令行工具。不会进入内核二进制，需独立构建：
+
+```bash
+cd optional/pkgmgr && go build -o asscor-pkg .
+```
+
+| 命令 | 功能 |
+|------|------|
+| `asscor-pkg resolve` | 递归扫描 `package.json`，解析依赖图、检测环、报告未解决项 |
+| `asscor-pkg install` | 克隆 `external_sources` 中声明的外部 git 仓库 + 兼容性校验 |
+| `asscor-pkg list` | 列出所有已发现的扩展包 |
+| `asscor-pkg info <name>` | 查看扩展包详细信息（模块、依赖、外部源、兼容性） |
+| `asscor-pkg graph` | 输出 DOT 格式依赖图（可管道到 `dot -Tpng`） |
+| `asscor-pkg validate` | 校验所有 `package.json` 格式和字段合法性 |
+
+#### 11.3.1 依赖求解器
+
+- **版本约束**：支持 `>=` `<=` `>` `<` `^x.y.z` `~x.y.z` `1.0.0 - 2.0.0` `1.x` 精确匹配
+- **环形依赖检测**：DFS 回溯算法，识别并报告循环依赖
+- **冲突声明**：通过 `conflicts` 字段声明不兼容扩展包
+- **可选依赖**：标记 `optional: true` 的依赖缺失不视为错误
+- **兼容性校验**：检查 `asscor_version` / `go_version` / `ssam_version` / `platform` 约束
+
+### 11.4 package.json 清单格式
+
+每个扩展包根目录需包含 `package.json`。与内核 ExtensionManager 的 `extension.json` 互补——`extension.json` 面向运行时插件安装，`package.json` 面向编译时依赖管理。
+
+```json
+{
+  "name": "example-security-pack",
+  "version": "1.0.0",
+  "description": "示例扩展包",
+  "compatibility": { "asscor_version": ">=0.2.1", "go_version": ">=1.26", "platform": ["linux"] },
+  "modules": [
+    { "id": "multi-algo-orchestrator", "path": "../../modules/multi-algo-orchestrator" }
+  ],
+  "external_sources": [
+    { "repo": "https://github.com/user/repo", "ref": "v1.0.0", "path": "subdir/", "target": "modules/custom-checks" }
+  ],
+  "dependencies": [
+    { "package": "base-algorithms-pack", "version": ">=1.0.0" },
+    { "package": "experimental-plugin", "version": ">=0.1.0", "optional": true }
+  ],
+  "conflicts": [
+    { "package": "legacy-scoring-only", "versions": "<=0.5.0", "reason": "使用了弃用的评分引擎" }
+  ]
+}
+```
+
+完整规范见 `optional/SCHEMA.md`。
+
+### 11.5 多算法编排器 (multi-algo-orchestrator)
+
+位于 `optional/algorithms/modules/multi-algo-orchestrator/`，是外部扩展体系的首个单模块实现。解决单一评分算法的"木桶效应"——通过编排多个算法并行/串行/级联执行，取最低分消除单一算法偏差。
+
+#### 11.5.1 接入方式
+
+不修改内核代码，通过 Extension Point 系统挂载：
+
+```go
+import multialgo "github.com/asscor/asscor-optional-multi-algo"
+
+cfg := multialgo.OrchestrationConfig{
+    Mode:  multialgo.ModeCascade,
+    Merge: multialgo.MergeWorstOf,
+    Algorithms: []multialgo.AlgorithmProfile{
+        {ID: "ssam_v2", Name: "SSAM 2.0", Role: multialgo.RolePrimary, ...},
+        {ID: "baseline", Name: "基准算法", Role: multialgo.RoleSecondary, ...},
+    },
+}
+orch := multialgo.NewOrchestrator(cfg)
+orch.Register(k.PlatformExtensionRegistry())  // 订阅 assessor.pre_score 扩展点
+```
+
+#### 11.5.2 三种执行模式
+
+| 模式 | 行为 | 适用 |
+|------|------|------|
+| `sequential` | 按序串行执行 | 调试验证 |
+| `parallel` | goroutine 并发执行所有算法 | 高性能 |
+| `cascade` | 主算法及格 (≥阈值) 则跳过辅算法 | 生产节省资源 |
+
+#### 11.5.3 五种合并策略
+
+| 策略 | 行为 | 消除木桶效应 |
+|------|------|:---:|
+| `best_of` | 取最高分 | ❌ |
+| `worst_of` | **取最低分** | ✅ |
+| `weighted_average` | 按算法置信度加权平均 | ⚠️ |
+| `consensus` | 一致则平均，分歧取最低 | ✅ |
+| `primary_only` | 仅使用主算法 | ❌ |
+
+#### 11.5.4 检查项模式
+
+| 模式 | 行为 |
+|------|------|
+| `merge` | 合并所有算法检查项，按 CheckID 去重 |
+| `independent` | 各算法拥有独立检查项列表，互不干扰 |
+| `tagged` | 检查项标注来源算法，评分引擎可见来源标签 |
+
+#### 11.5.5 木桶效应度量
+
+编排器输出中提供完整的算法间差异度量：
+- `AlgoSpread`：最高分—最低分差异
+- `AlgoVariance`：统计算法间方差
+- `WorstAlgo` / `BestAlgo`：识别短板和长板算法
+- `EliminatedByCascade`：级联模式下跳过的算法列表
+
+---
+
 ## 结论
 
-ASSCOR 的扩展体系提供了**三种互补的替换机制**——检查器注册表、DI 容器、扩展点——覆盖了从底层检查逻辑到顶层评分引擎的全部可替换性需求。14 个核心模块接口全部通过 DI 容器注入，检查器通过注册表 API 管理，替换无需修改任何源码。这套体系为第三方开发者提供了完整的扩展和定制能力。
+ASSCOR 的扩展体系提供了**四种互补的扩展机制**——进程内插件 (Plugin 接口)、运行时钩子 (Extension Point)、内核安装式扩展 (ExtensionManager + extension.json)、外部编译时扩展 (optional/ + pkgmgr + package.json)——覆盖了从底层检查逻辑到顶层评分引擎、从内核内嵌到独立编译模块的全部可扩展性需求。14 个核心模块接口全部通过 DI 容器注入，检查器通过注册表 API 管理。外部扩展通过 Extension Point 系统实现零代码侵入式挂载，扩展包通过 `asscor-pkg` 工具链管理依赖和外部仓库引用。这套体系为第三方开发者提供了从轻量级检查项到完整算法编排的全维度扩展能力。
