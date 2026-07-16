@@ -358,9 +358,11 @@ k.SetConfig("config_path", resolvedConfigPath)
 		"grpc", grpcStarted)
 
 	var cliDone <-chan struct{}
-	if iface, ok := k.Container().Resolve((*cli.CLIInterface)(nil)); ok {
-		if cliMod, ok := iface.(cli.CLIInterface); ok {
-			cliDone = cliMod.Done()
+	if *cliConnect != "" {
+		if iface, ok := k.Container().Resolve((*cli.CLIInterface)(nil)); ok {
+			if cliMod, ok := iface.(cli.CLIInterface); ok {
+				cliDone = cliMod.Done()
+			}
 		}
 	}
 
