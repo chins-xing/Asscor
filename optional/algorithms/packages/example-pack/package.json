@@ -1,0 +1,57 @@
+{
+  "name": "example-security-pack",
+  "version": "1.0.0",
+  "description": "示例扩展包: 多算法编排 + 自定义检查项 + 外部仓库引用",
+  "author": "ASSCOR Community",
+  "license": "MIT",
+
+  "modules": [
+    {
+      "id": "multi-algo-orchestrator",
+      "path": "../../modules/multi-algo-orchestrator",
+      "type": "single"
+    }
+  ],
+
+  "external_sources": [
+    {
+      "repo": "https://github.com/example/asscor-extra-checks",
+      "ref": "v1.0.0",
+      "path": "linux-hardening/",
+      "target": "modules/linux-hardening-checks",
+      "strip_prefix": "checks/"
+    }
+  ],
+
+  "dependencies": [
+    {
+      "package": "base-algorithms-pack",
+      "version": ">=1.0.0"
+    },
+    {
+      "repo": "https://github.com/community/ssam-v3-plugin",
+      "ref": "main",
+      "optional": true
+    }
+  ],
+
+  "conflicts": [
+    {
+      "package": "legacy-scoring-only",
+      "versions": "<=0.5.0",
+      "reason": "使用已弃用的 old-scoring-engine，与本包的多算法编排不兼容"
+    }
+  ],
+
+  "compatibility": {
+    "asscor_version": ">=0.2.1",
+    "go_version": ">=1.26",
+    "ssam_version": ">=2.0",
+    "platform": ["linux"]
+  },
+
+  "hooks": {
+    "assessor.pre_score": "multi-algo-orchestrator",
+    "assessor.post_evaluate": "multi-algo-orchestrator"
+  }
+}
