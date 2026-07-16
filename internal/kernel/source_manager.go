@@ -180,7 +180,7 @@ func (m *SourceManagerModule) State() PluginState {
 }
 
 func (m *SourceManagerModule) DeploySource(ctx context.Context, spec SourceSpec, cfg SourceConfig) error {
-	if m.kernel.Extensions() != nil {
+	if m.kernel != nil && m.kernel.Extensions() != nil {
 		m.kernel.Extensions().Execute(ctx, "source.pre_deploy", map[string]interface{}{
 			"source_id": spec.ID,
 			"version":   spec.Version,
@@ -233,7 +233,7 @@ func (m *SourceManagerModule) DeploySource(ctx context.Context, spec SourceSpec,
 
 	m.publishEvent(ctx, "source_manager.deployed", map[string]interface{}{"source_id": spec.ID, "version": spec.Version})
 
-	if m.kernel.Extensions() != nil {
+	if m.kernel != nil && m.kernel.Extensions() != nil {
 		m.kernel.Extensions().Execute(ctx, "source.post_deploy", map[string]interface{}{
 			"source_id": spec.ID,
 			"version":   spec.Version,
@@ -289,7 +289,7 @@ func (m *SourceManagerModule) UninstallSource(ctx context.Context, id string, fo
 }
 
 func (m *SourceManagerModule) EnableSource(ctx context.Context, id string) error {
-	if m.kernel.Extensions() != nil {
+	if m.kernel != nil && m.kernel.Extensions() != nil {
 		m.kernel.Extensions().Execute(ctx, "source.pre_enable", map[string]interface{}{
 			"source_id": id,
 		})
@@ -334,7 +334,7 @@ func (m *SourceManagerModule) EnableSource(ctx context.Context, id string) error
 }
 
 func (m *SourceManagerModule) DisableSource(ctx context.Context, id string) error {
-	if m.kernel.Extensions() != nil {
+	if m.kernel != nil && m.kernel.Extensions() != nil {
 		m.kernel.Extensions().Execute(ctx, "source.pre_disable", map[string]interface{}{
 			"source_id": id,
 		})
