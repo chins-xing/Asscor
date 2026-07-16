@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 )
 
 const (
@@ -16,6 +17,63 @@ const (
 	defaultDataDir    = "/var/lib/asscor"
 	defaultLogsDir    = "/var/log/asscor"
 )
+
+func kernelUnitContent(binPath, configPath, installPath, logsDir string) string {
+	return fmt.Sprintf(`[Unit]
+Description=ASSCOR Microkernel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=asscor
+Group=asscor
+WorkingDirectory=%s
+ExecStart=%s --config=%s --listen=:50051 --webui-port=8087 --pid-file=%s/ASSCOR-kernel.pid --log-format=json --log-output=%s/kernel.log
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/bin/kill -SIGTERM $MAINPID
+Restart=on-failure
+RestartSec=10
+PIDFile=%s/ASSCOR-kernel.pid
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+LimitNOFILE=65536
+LimitNPROC=4096
+ReadWritePaths=%s /var/lib/asscor /var/log/asscor
+
+[Install]
+WantedBy=multi-user.target
+`, installPath, binPath, configPath, installPath, logsDir, installPath, installPath)
+}
+
+func writeSystemdUnit(installPath string) {
+	binPath := installPath + "/ASSCOR-kernel"
+	configPath := defaultConfigDir + "/config.ini"
+	logsDir := defaultLogsDir
+	os.WriteFile(serviceFile, []byte(kernelUnitContent(binPath, configPath, installPath, logsDir)), 0644)
+}
+
+func writeCLISymlinks(binPath, installPath string) {
+	os.Remove("/usr/bin/asscor")
+	os.Remove("/usr/bin/asscor-cli")
+	os.Symlink(binPath, "/usr/bin/asscor")
+	cliWrapper := fmt.Sprintf("#!/bin/sh\nSOCK=\"${ASSCOR_CLI_SOCKET:-%s/asscor-cli.sock}\"\nexec %s --cli \"$SOCK\" \"$@\"\n", installPath, binPath)
+	os.WriteFile("/usr/bin/asscor-cli", []byte(cliWrapper), 0755)
+}
+
+func waitForServiceHealthy(name string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		out, _ := exec.Command("systemctl", "is-active", name).Output()
+		status := string(out)
+		if status == "active\n" {
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("service %s did not become active within %v", name, timeout)
+}
 
 func InstallKernel(installPath string) error {
 	if err := requireRoot(); err != nil {
@@ -42,40 +100,8 @@ func InstallKernel(installPath string) error {
 	exec.Command("useradd", "-r", "-s", "/sbin/nologin", "-d", "/opt/asscor", "-M", "asscor").Run()
 	chownAsscor(installPath, defaultConfigDir, dataDir, logsDir)
 
-	svcContent := fmt.Sprintf(`[Unit]
-Description=ASSCOR Microkernel
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=asscor
-Group=asscor
-ExecStart=%s --config=%s --listen=:50051 --webui-port=8087 --pid-file=%s/ASSCOR-kernel.pid --log-format=json --log-output=%s/kernel.log
-ExecReload=/bin/kill -HUP $MAINPID
-ExecStop=/bin/kill -SIGTERM $MAINPID
-Restart=on-failure
-RestartSec=10
-PIDFile=%s/ASSCOR-kernel.pid
-KillMode=mixed
-KillSignal=SIGTERM
-TimeoutStopSec=30
-LimitNOFILE=65536
-LimitNPROC=4096
-ReadWritePaths=%s /var/lib/asscor /var/log/asscor
-
-[Install]
-WantedBy=multi-user.target
-`, binPath, configPath, installPath, logsDir, installPath, installPath)
-
-	os.WriteFile(serviceFile, []byte(svcContent), 0644)
-
-	os.Remove("/usr/bin/asscor")
-	os.Remove("/usr/bin/asscor-cli")
-	os.Symlink(binPath, "/usr/bin/asscor")
-	cliWrapper := fmt.Sprintf("#!/bin/sh\nSOCK=\"${ASSCOR_CLI_SOCKET:-%s/asscor-cli.sock}\"\nexec %s --cli \"$SOCK\" \"$@\"\n", installPath, binPath)
-	os.WriteFile("/usr/bin/asscor-cli", []byte(cliWrapper), 0755)
-
+	writeSystemdUnit(installPath)
+	writeCLISymlinks(binPath, installPath)
 	systemctlReload()
 	return nil
 }
@@ -109,14 +135,24 @@ func UpgradeKernel(installPath string) error {
 	}
 	binPath := installPath + "/ASSCOR-kernel"
 	backupPath := binPath + ".bak"
+
 	exec.Command("systemctl", "stop", serviceName).Run()
 	os.Remove(backupPath)
 	os.Rename(binPath, backupPath)
+
 	if err := copySelfTo(binPath); err != nil {
 		os.Rename(backupPath, binPath)
 		return fmt.Errorf("upgrade failed, rolled back: %w", err)
 	}
 	chownAsscor(binPath)
+
+	writeSystemdUnit(installPath)
+	writeCLISymlinks(binPath, installPath)
+	systemctlReload()
+
 	exec.Command("systemctl", "start", serviceName).Run()
+	if err := waitForServiceHealthy(serviceName, 10*time.Second); err != nil {
+		return fmt.Errorf("upgrade applied but service failed to start: %w", err)
+	}
 	return nil
 }

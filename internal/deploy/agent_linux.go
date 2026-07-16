@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 )
 
 const (
@@ -14,6 +15,30 @@ const (
 	agentBinDir      = "/opt/asscor/agent"
 	agentConfigPath  = "/etc/asscor/agent.ini"
 )
+
+func agentUnitContent(binDir, configPath, logsDir string) string {
+	return fmt.Sprintf(`[Unit]
+Description=ASSCOR Agent
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/asscor
+ExecStart=%s/ASSCOR-agent --config=%s --kernel=127.0.0.1:50051 --log-output=%s/agent.log
+Restart=always
+RestartSec=15
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+`, binDir, configPath, logsDir)
+}
+
+func writeAgentUnit() {
+	logsDir := "/var/log/asscor"
+	os.WriteFile(agentServiceFile, []byte(agentUnitContent(agentBinDir, agentConfigPath, logsDir)), 0644)
+}
 
 func InstallAgent() error {
 	if err := requireRoot(); err != nil {
@@ -34,23 +59,7 @@ func InstallAgent() error {
 
 	chownAsscor(agentBinDir, "/etc/asscor")
 
-	svcContent := fmt.Sprintf(`[Unit]
-Description=ASSCOR Agent
-After=network-online.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=%s/ASSCOR-agent --config=%s --kernel=127.0.0.1:50051 --log-output=%s/agent.log
-Restart=always
-RestartSec=15
-LimitNOFILE=65536
-
-[Install]
-WantedBy=multi-user.target
-`, agentBinDir, agentConfigPath, logsDir)
-
-	os.WriteFile(agentServiceFile, []byte(svcContent), 0644)
+	writeAgentUnit()
 	systemctlReload()
 	return nil
 }
@@ -71,13 +80,22 @@ func UpgradeAgent() error {
 	}
 	binPath := agentBinDir + "/ASSCOR-agent"
 	backupPath := binPath + ".bak"
+
 	exec.Command("systemctl", "stop", agentServiceName).Run()
 	os.Remove(backupPath)
 	os.Rename(binPath, backupPath)
+
 	if err := copySelfTo(binPath); err != nil {
 		os.Rename(backupPath, binPath)
 		return fmt.Errorf("upgrade failed, rolled back: %w", err)
 	}
+
+	writeAgentUnit()
+	systemctlReload()
+
 	exec.Command("systemctl", "start", agentServiceName).Run()
+	if err := waitForServiceHealthy(agentServiceName, 10*time.Second); err != nil {
+		return fmt.Errorf("upgrade applied but service failed to start: %w", err)
+	}
 	return nil
 }
