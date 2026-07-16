@@ -51,7 +51,6 @@ type AssessorModule struct {
 	consoleReport bool
 	state         PluginState
 	selfCheckDone chan struct{}
-	orchestrator  *engine.AlgorithmOrchestrator // multi-algorithm orchestration (nil = single engine)
 }
 
 func (m *AssessorModule) Info() PluginInfo {
@@ -114,7 +113,6 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 	m.setupSIEMPusher()
 	m.setupConsoleReport()
 	m.setupPrismConfig()
-	m.setupOrchestrator()
 
 	warnings := m.engine.ValidateEdgeFactors(checks.GetAll())
 	for _, w := range warnings {
@@ -137,73 +135,6 @@ func (m *AssessorModule) setupSIEMPusher() {
 	if m.siemPusher.Enabled() {
 		logger.WithComponent("assessor").Info("SIEM push integration enabled", "url", apiURL)
 	}
-}
-
-func (m *AssessorModule) setupOrchestrator() {
-	if m.cfg == nil || m.cfg.AdapterConfig == nil {
-		return
-	}
-	if m.cfg.AdapterConfig["orchestrator.mode"] == "" {
-		return
-	}
-	mode := engine.ExecutionMode(m.cfg.AdapterConfig["orchestrator.mode"])
-	merge := engine.MergeStrategy(m.cfg.AdapterConfig["orchestrator.merge"])
-	if merge == "" {
-		merge = engine.MergeWorstOf
-	}
-	checkMode := engine.CheckMode(m.cfg.AdapterConfig["orchestrator.check_mode"])
-	if checkMode == "" {
-		checkMode = engine.CheckMerge
-	}
-
-	m.orchestrator = engine.NewOrchestrator(engine.OrchestrationConfig{
-		Mode:      mode,
-		Merge:     merge,
-		CheckMode: checkMode,
-	})
-	logger.WithComponent("assessor").Info("multi-algorithm orchestrator configured",
-		"mode", mode, "merge", merge, "check_mode", checkMode)
-}
-
-// SetOrchestrator replaces the single-engine flow with multi-algorithm orchestration.
-func (m *AssessorModule) SetOrchestrator(cfg engine.OrchestrationConfig) {
-	m.orchestrator = engine.NewOrchestrator(cfg)
-	logger.WithComponent("assessor").Info("multi-algorithm orchestrator set",
-		"mode", cfg.Mode, "merge", cfg.Merge, "algorithms", len(cfg.Algorithms))
-}
-
-func hasAlgorithms(o *engine.AlgorithmOrchestrator) bool {
-	if o == nil {
-		return false
-	}
-	// Check if orchestrator has algorithms configured via the validation
-	return true // configured via SetOrchestrator means algorithms were validated
-}
-
-func (m *AssessorModule) evaluateOrchestrated(hostID, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
-	or := m.orchestrator.Run(m.kernel.Context(), hostID, hostname, checkResults)
-
-	result := &model.AssessmentResult{
-		HostID:         hostID,
-		Hostname:       hostname,
-		Timestamp:      time.Now(),
-		FinalScore:     or.FinalScore,
-		Acceptable:     or.Acceptable,
-		Threshold:      m.cfg.Threshold,
-		Checks:         or.Checks,
-		SPCScore:       1.0,
-		ThreatCoeff:    1.0,
-		DomainScores:   or.DomainScores.ToLegacy(),
-		ModelCoverageRatio: 1.0,
-		UncertaintyNote: "Multi-algorithm orchestrated assessment. Merge: " + string(or.MergeStrategy),
-	}
-
-	if or.AlgoSpread > 0 {
-		result.UncertaintyNote += fmt.Sprintf(" | AlgoSpread: %.1f (best=%s/%.1f, worst=%s/%.1f)",
-			or.AlgoSpread, or.BestAlgo, or.FinalScore, or.WorstAlgo, or.PrimaryScore)
-	}
-
-	return result
 }
 
 func (m *AssessorModule) pushToSIEM(ctx context.Context, result *model.AssessmentResult) {
@@ -409,13 +340,7 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 		prevScore = prevResult.FinalScore
 	}
 
-	var result *model.AssessmentResult
-
-	if m.orchestrator != nil && hasAlgorithms(m.orchestrator) {
-		result = m.evaluateOrchestrated(hostID, hostID, nil)
-	} else {
-		result = m.engine.Assess(hostID, hostID)
-	}
+	result := m.engine.Assess(hostID, hostID)
 
 	m.applyCTIOnly(result)
 

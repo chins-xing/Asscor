@@ -95,7 +95,6 @@ type CheckResult struct {
 	Delta     float64 `json:"delta"`
 	Detail    string  `json:"detail"`
 	ComplianceRef string `json:"compliance_ref,omitempty"`
-	Source    string  `json:"source,omitempty"` // algorithm or adapter that produced this result
 }
 
 type DomainScores struct {
