@@ -124,7 +124,7 @@ type Plugin interface {
 1. 复制 `pluginsdk/cmd/myplugin/` → 你的插件目录
 2. 实现 `HandleRequest()` 方法
 3. `go build -o yourplugin`
-4. 编写 `extension.json` manifest
+4. 编写 `extension.json` 或 `package.json` manifest
 5. `asscor> source deploy yourplugin`
 
 **架构**（低耦合）：插件作为独立进程运行，通过 stdin/stdout JSON-RPC 2.0 通信，零共享内存。安全上实现进程隔离、SHA-256 校验和、systemd scoping 资源限制。
