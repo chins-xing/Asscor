@@ -905,28 +905,45 @@ ASSCOR>
 
 ### 16.7 ATT&CK 命令
 
-**attck** — 操作 ATT&CK V19 模块，包括检测规则管理、IOC 管理、差距分析、攻击链重构、APT 归因和威胁狩猎。
+**attck** — 查询 MITRE ATT&CK V19 模块的分析结果：覆盖率、杀伤链、APT 匹配、检测规则、威胁情报。
 
 ```
-用法：attck <summary|rule|alert|anomaly|ioc|actor|gap|control|chain|attribute|hunt|emulate|improve> [options]
-选项：--host=HOST, --severity=critical|high|medium|low, --technique=T1234, --limit=N（默认20）, --format=json
+用法：attck <summary|coverage|killchain|apt|detect|ti>
+选项：--host=HOST, --limit=N（默认20）, --json
 ```
 
-核心子命令示例：
+核心子命令：
 
 ```
-ASSCOR> attck summary                                      # 模块概览
-ASSCOR> attck rule add --name "suspicious_powershell" --technique T1059 --severity high
-ASSCOR> attck ioc add --type=ip --value=10.0.0.1 --confidence=0.8 --technique=T1071
-ASSCOR> attck gap --host=web-server-01                     # 防御差距分析
-ASSCOR> attck chain --host=web-server-01                   # 攻击链重构
-ASSCOR> attck attribute --chain=CHAIN-20260525-001         # APT 归因
-ASSCOR> attck hunt generate --host=web-server-01           # 生成狩猎假设
-ASSCOR> attck emulate generate --actor=APT29               # 生成对手仿真
-ASSCOR> attck improve create --name="Harden credential policy"  # 持续改进追踪
+ASSCOR> attck summary                                      # 模块概览：覆盖率/告警/IOC 等关键指标
+ASSCOR> attck coverage --host=web01                         # 14 战术检测覆盖率
+ASSCOR> attck killchain --host=web01                        # 9 阶段杀伤链评分
+ASSCOR> attck apt --host=web01                              # APT 组织匹配结果
+ASSCOR> attck detect                                        # 检测规则和告警摘要
+ASSCOR> attck ti                                            # 威胁情报（IOC/行为体）摘要
 ```
 
-### 16.8 插件管理命令
+### 16.8 诊断命令
+
+**diag** — 显示内核运行时诊断信息（事件总线指标、Worker Pool 状态）。
+
+```
+用法：diag [--json]
+示例：
+  ASSCOR> diag              # 终端格式输出
+  ASSCOR> diag --json       # JSON 格式输出
+```
+
+### 16.9 策略命令
+
+**policy** — 查看当前策略配置和状态快照。
+
+```
+用法：policy
+说明：显示策略阈值、当前主机状态分布、最近策略动作记录
+```
+
+### 16.10 插件管理命令
 
 **plugin** — 列出、查看和管理 Kernel 插件。
 

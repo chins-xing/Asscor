@@ -259,11 +259,11 @@ type ExtensionHandler func(ctx context.Context, data interface{}) error
 
 | 方法 | 说明 |
 |------|------|
-| `RegisterPoint(point ExtensionPoint)` | 注册扩展点 |
-| `RegisterExtension(pointName string, id string, handler ExtensionHandler) error` | 注册扩展处理器 |
+| `RegisterPoint(point ExtensionPoint)` | 注册扩展点（仅平台层可用，插件不可调用） |
+| `RegisterExtension(pluginID, pointName string, handler ExtensionHandler, priority int) error` | 注册扩展处理器 |
 | `Execute(ctx, pointName string, data interface{}) []error` | 执行所有处理器 |
-| `ExecuteUntilFirst(ctx, pointName string, data interface{}) (interface{}, error)` | 执行到第一个非 nil 结果 |
-| `UnregisterPlugin(id string)` | 移除指定插件的所有扩展 |
+| `ExecuteUntilFirst(ctx, pointName string, data interface{}) (string, interface{}, error)` | 执行到第一个非 nil 结果，返回插件ID和返回值 |
+| `UnregisterPlugin(pluginID string)` | 移除指定插件的所有扩展 |
 | `ListPoints() []ExtensionPoint` | 列出所有已注册扩展点 |
 | `ListExtensions(pointName string) []string` | 列出指定扩展点的处理器 ID |
 
