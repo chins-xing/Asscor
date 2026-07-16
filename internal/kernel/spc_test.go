@@ -561,8 +561,8 @@ func TestSPCImportOSCALDuplicateHandling(t *testing.T) {
 	if len(cves) != 1 {
 		t.Fatalf("expected 1 CVE, got %d", len(cves))
 	}
-	if cves[0].CVSS != 7.5 {
-		t.Errorf("original CVE should not be overwritten, CVSS = %.1f", cves[0].CVSS)
+	if cves[0].CVSS != 9.0 {
+		t.Errorf("duplicate CVE should merge higher CVSS score, CVSS = %.1f", cves[0].CVSS)
 	}
 }
 
