@@ -1,3 +1,5 @@
+﻿//go:build attck_ext
+
 package kernel
 
 import (

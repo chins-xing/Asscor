@@ -27,6 +27,8 @@ import (
 	_ "github.com/asscor/asscor/internal/checks"
 )
 
+var registeredATTACKInit func(assessor *kernel.AssessorModule)
+
 func main() {
 	configPath := flag.String("config", "config.ini", "configuration file path")
 	listenAddr := flag.String("listen", ":50051", "microkernel listen address")
@@ -227,6 +229,9 @@ k.SetConfig("config_path", resolvedConfigPath)
 	k.Container().Bind((*kernel.PrismEngineProvider)(nil), prism.NewEngine())
 
 	assessor := &kernel.AssessorModule{}
+	if registeredATTACKInit != nil {
+		registeredATTACKInit(assessor)
+	}
 	policy := &kernel.PolicyModule{}
 	spc := kernel.NewSPCModule()
 	cti := &kernel.CTIModule{}
@@ -235,15 +240,12 @@ k.SetConfig("config_path", resolvedConfigPath)
 	heartbeat := &kernel.HeartbeatModule{}
 	persistence := kernel.NewPersistenceModule(cfg.DataDir)
 	concurrency := kernel.NewConcurrencyModule(10)
-	attck := kernel.NewATTACKModule()
-	assessor.SetATTACKProvider(attck.AsEngineProvider())
-
 	configWatcher := kernel.NewConfigWatcherModule(resolvedConfigPath)
 	adapterIntegration := kernel.NewAdapterIntegrationModule()
 	sourceManager := kernel.NewSourceManagerModule()
 	cliModule := cli.NewCLIModule()
 
-	plugins := []kernel.Plugin{heartbeat, spc, cti, scoringEngine, assessor, policy, commander, logCollector, persistence, concurrency, attck, configWatcher, adapterIntegration, sourceManager, cliModule, kernel.NewSRDPlugin()}
+	plugins := []kernel.Plugin{heartbeat, spc, cti, scoringEngine, assessor, policy, commander, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, kernel.NewSRDPlugin()}
 
 	if *webuiPort > 0 {
 		webuiModule := webui.New(*webuiPort)

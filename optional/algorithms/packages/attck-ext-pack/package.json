@@ -1,0 +1,32 @@
+{
+  "name": "attck-ext-pack",
+  "version": "1.0.0",
+  "description": "MITRE ATT&CK V19 threat analysis extension pack — detection, threat intelligence, adversary emulation, gap assessment, APT attribution, and threat hunting",
+  "author": "ASSCOR Core Team",
+  "license": "MIT",
+  "modules": [
+    { "id": "attck-core", "path": "../../../../internal/kernel", "type": "library" }
+  ],
+  "hooks": {
+    "attck.coverage.complete": "attck-core",
+    "attck.detection.alert": "attck-core",
+    "attck.detection.anomaly": "attck-core",
+    "attck.behavioral.alert": "attck-core",
+    "attck.behavioral.beacon": "attck-core",
+    "attck.emulation.complete": "attck-core",
+    "attck.apt.hunt_confirmed": "attck-core",
+    "attck.apt.chain_detected": "attck-core",
+    "attck.apt.matched": "attck-core",
+    "attck.apt.attribution": "attck-core",
+    "attck.risk.predicted": "attck-core",
+    "attck.assessment.complete": "attck-core",
+    "attck.apt.report_generated": "attck-core",
+    "assessor.pre_score": "assessor"
+  },
+  "compatibility": {
+    "asscor_version": ">=0.2.1",
+    "go_version": ">=1.26",
+    "ssam_version": ">=2.0",
+    "platform": ["linux"]
+  }
+}
