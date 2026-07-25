@@ -76,6 +76,8 @@ func (a *spcAdapter) Calculate(hostID string, assetPackages []string) engine.SPC
 	}
 }
 
+var registeredASSCOrATTACKInit func(assessor *engine.Assessor, cfg *config.Config)
+
 func main() {
 	configPath := flag.String("config", "config.ini", "配置文件路径")
 	jsonOutput := flag.Bool("json", false, "以JSON格式输出")
@@ -97,10 +99,8 @@ func main() {
 		logger.WithComponent("main").Info("SPC module initialized and attached to assessor")
 	}
 
-	if cfg.ATTACK.Enabled {
-		attackModule := kernel.NewATTACKModule()
-		attackModule.ConfigureFromConfig(cfg)
-		assessor.SetATTACKProvider(attackModule.AsEngineProvider())
+	if cfg.ATTACK.Enabled && registeredASSCOrATTACKInit != nil {
+		registeredASSCOrATTACKInit(assessor, cfg)
 		logger.WithComponent("main").Info("ATT&CK module initialized and attached to assessor")
 	}
 
