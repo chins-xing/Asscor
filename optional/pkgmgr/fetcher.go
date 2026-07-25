@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 )
 
@@ -145,8 +146,19 @@ func ValidateCompatibility(pkg *PackageManifest) []string {
 	return warnings
 }
 
-func getASSCORVersion() string { return "0.2.1" }
-func getGoVersion() string     { return "1.26" }
+func getASSCORVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		return info.Main.Version
+	}
+	return "unknown"
+}
+
+func getGoVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		return info.GoVersion
+	}
+	return "unknown"
+}
 func getCurrentPlatform() string {
 	if _, err := exec.LookPath("uname"); err == nil {
 		out, _ := exec.Command("uname", "-s").Output()
