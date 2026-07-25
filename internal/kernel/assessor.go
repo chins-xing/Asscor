@@ -38,11 +38,12 @@ type PrismEngineProvider interface {
 }
 
 type AssessorModule struct {
-	kernel      KernelContext
-	cfg         *config.Config
-	engine      ScoringEngineProvider
-	prismEngine PrismEngineProvider
-	failTracker map[string]map[string]int64
+	kernel         KernelContext
+	cfg            *config.Config
+	engine         ScoringEngineProvider
+	prismEngine    PrismEngineProvider
+	attackProvider engine.ATTACKProvider
+	failTracker    map[string]map[string]int64
 
 	mu      sync.RWMutex
 	results map[string]*model.AssessmentResult
@@ -122,6 +123,11 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 	kc.Container().Bind((*AssessorInterface)(nil), m)
 
 	return nil
+}
+
+// SetATTACKProvider injects the ATT&CK analysis provider (may be nil to disable).
+func (m *AssessorModule) SetATTACKProvider(provider engine.ATTACKProvider) {
+	m.attackProvider = provider
 }
 
 func (m *AssessorModule) setupSIEMPusher() {
@@ -587,15 +593,8 @@ func (m *AssessorModule) applyCTIOnly(result *model.AssessmentResult) {
 }
 
 func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResult) {
-	impl, ok := m.kernel.Container().Resolve((*ATTACKInterface)(nil))
-	if !ok {
-		return
-	}
-	attck, ok := impl.(ATTCKCore)
-	if !ok {
-		return
-	}
-	if checker, ok := attck.(interface{ IsEnabled() bool }); ok && !checker.IsEnabled() {
+	provider := m.attackProvider
+	if provider == nil || !provider.IsEnabled() {
 		return
 	}
 
@@ -604,7 +603,7 @@ func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResu
 		checkResults[c.CheckID] = c.Passed
 	}
 
-	coverages := attck.CalculateCoverage(checkResults)
+	coverages := provider.CalculateCoverage(checkResults)
 	if len(coverages) > 0 {
 		result.ATTACKCoverage = make([]model.ATTACKCoverageInfo, len(coverages))
 		for i, cov := range coverages {
@@ -621,7 +620,7 @@ func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResu
 		}
 	}
 
-	killChain := attck.AssessKillChain(hostID, checkResults)
+	killChain := provider.AssessKillChain(hostID, checkResults)
 	if killChain.OverallScore > 0 || len(killChain.Stages) > 0 {
 		kcInfo := &model.ATTACKKillChainInfo{
 			OverallScore: killChain.OverallScore,
@@ -650,7 +649,7 @@ func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResu
 	var failedTechIDs []string
 	for _, cov := range coverages {
 		if cov.CoverageDet < 100 {
-			for _, tactic := range attck.GetAllTactics() {
+			for _, tactic := range provider.GetAllTactics() {
 				if tactic.ID == cov.TacticID {
 					for _, tech := range tactic.Techniques {
 						if len(tech.AsscorChecks) > 0 {
@@ -672,7 +671,7 @@ func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResu
 	}
 
 	if len(weakTacticIDs) > 0 && len(failedTechIDs) > 0 {
-		aptMatches := attck.MatchAPTGroup(failedTechIDs)
+		aptMatches := provider.MatchAPTGroup(failedTechIDs)
 		if len(aptMatches) > 0 {
 			result.ATTACKAPTMatches = make([]model.ATTACKAPTMatchInfo, len(aptMatches))
 			for i, match := range aptMatches {
@@ -690,12 +689,12 @@ func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResu
 	if len(failedTechIDs) > 0 {
 		result.ATTACKFailedTechs = failedTechIDs
 
-		predictedRisk := attck.PredictRisk(hostID, failedTechIDs, 3)
+		predictedRisk := provider.PredictRisk(hostID, failedTechIDs, 3)
 		if predictedRisk.MaxRiskScore > 0 {
 			result.ATTACKPredictedRisk = &model.ATTACKPredictedRiskInfo{
 				MaxRiskScore:    predictedRisk.MaxRiskScore,
 				EnhancedThreat:  predictedRisk.EnhancedThreat,
-				PredictedPaths:  len(predictedRisk.PredictedPaths),
+				PredictedPaths:  predictedRisk.PredictedPaths,
 				Recommendations: predictedRisk.Recommendations,
 			}
 		}

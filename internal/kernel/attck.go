@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 )
@@ -1648,4 +1649,78 @@ type ATTCKAuxiliary interface {
 	GetTransitionMatrix() TransitionMatrix
 	GetHostAnalysisHistory(hostID string, limit int) []HostAnalysisRecord
 	GetLastAnalysis(hostID string) map[string]interface{}
+}
+
+type attackEngineAdapter struct {
+	m *ATTACKModule
+}
+
+func (a *attackEngineAdapter) IsEnabled() bool     { return a.m.IsEnabled() }
+func (a *attackEngineAdapter) Version() string     { return a.m.Version() }
+
+func (a *attackEngineAdapter) CalculateCoverage(checkResults map[string]bool) []engine.ATTACKCoverageResult {
+	coverages := a.m.CalculateCoverage(checkResults)
+	result := make([]engine.ATTACKCoverageResult, len(coverages))
+	for i, cov := range coverages {
+		result[i] = engine.ATTACKCoverageResult{
+			TacticID: cov.TacticID, TacticName: cov.TacticName,
+			TotalTechniques: cov.TotalTechniques, CoveredDet: cov.CoveredDet,
+			CoverageDet: cov.CoverageDet, CoveragePrev: cov.CoveragePrev,
+			CoverageComp: cov.CoverageComp, RiskLevel: cov.RiskLevel,
+		}
+	}
+	return result
+}
+
+func (a *attackEngineAdapter) AssessKillChain(hostID string, checkResults map[string]bool) engine.ATTACKKillChainResult {
+	kc := a.m.AssessKillChain(hostID, checkResults)
+	result := engine.ATTACKKillChainResult{OverallScore: kc.OverallScore, WeakestStage: kc.WeakestStage}
+	result.Stages = make([]engine.ATTACKKillChainStage, len(kc.Stages))
+	for i, s := range kc.Stages {
+		result.Stages[i] = engine.ATTACKKillChainStage{
+			Name: s.Name, Score: s.Score, Status: s.Status,
+			ChecksPassed: s.ChecksPassed, ChecksTotal: s.ChecksTotal,
+		}
+	}
+	return result
+}
+
+func (a *attackEngineAdapter) MatchAPTGroup(detectedTechniques []string) []engine.ATTACKAPTMatch {
+	matches := a.m.MatchAPTGroup(detectedTechniques)
+	result := make([]engine.ATTACKAPTMatch, len(matches))
+	for i, m := range matches {
+		result[i] = engine.ATTACKAPTMatch{
+			GroupID: m.GroupID, GroupName: m.GroupName,
+			Similarity: m.Similarity, Confidence: m.Confidence,
+			OverlapTech: m.OverlapTech,
+		}
+	}
+	return result
+}
+
+func (a *attackEngineAdapter) PredictRisk(hostID string, detectedTechniques []string, maxDepth int) engine.ATTACKPredictedRisk {
+	pr := a.m.PredictRisk(hostID, detectedTechniques, maxDepth)
+	return engine.ATTACKPredictedRisk{
+		MaxRiskScore: pr.MaxRiskScore, EnhancedThreat: pr.EnhancedThreat,
+		PredictedPaths: len(pr.PredictedPaths), Recommendations: pr.Recommendations,
+	}
+}
+
+func (a *attackEngineAdapter) GetAllTactics() []engine.ATTACKTacticInfo {
+	tactics := a.m.GetAllTactics()
+	result := make([]engine.ATTACKTacticInfo, len(tactics))
+	for i, t := range tactics {
+		ti := engine.ATTACKTacticInfo{ID: t.ID, Name: t.Name}
+		for _, tech := range t.Techniques {
+			ti.Techniques = append(ti.Techniques, engine.ATTACKTechniqueInfo{
+				ID: tech.ID, Name: tech.Name, AsscorChecks: tech.AsscorChecks,
+			})
+		}
+		result[i] = ti
+	}
+	return result
+}
+
+func (m *ATTACKModule) AsEngineProvider() engine.ATTACKProvider {
+	return &attackEngineAdapter{m: m}
 }

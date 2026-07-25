@@ -76,92 +76,6 @@ func (a *spcAdapter) Calculate(hostID string, assetPackages []string) engine.SPC
 	}
 }
 
-type attackAdapter struct {
-	module *kernel.ATTACKModule
-}
-
-func (a *attackAdapter) CalculateCoverage(checkResults map[string]bool) []engine.ATTACKCoverageResult {
-	coverages := a.module.CalculateCoverage(checkResults)
-	result := make([]engine.ATTACKCoverageResult, len(coverages))
-	for i, cov := range coverages {
-		result[i] = engine.ATTACKCoverageResult{
-			TacticID:        cov.TacticID,
-			TacticName:      cov.TacticName,
-			TotalTechniques: cov.TotalTechniques,
-			CoveredDet:      cov.CoveredDet,
-			CoverageDet:     cov.CoverageDet,
-			CoveragePrev:    cov.CoveragePrev,
-			CoverageComp:    cov.CoverageComp,
-			RiskLevel:       cov.RiskLevel,
-		}
-	}
-	return result
-}
-
-func (a *attackAdapter) AssessKillChain(hostID string, checkResults map[string]bool) engine.ATTACKKillChainResult {
-	kc := a.module.AssessKillChain(hostID, checkResults)
-	result := engine.ATTACKKillChainResult{
-		OverallScore: kc.OverallScore,
-		WeakestStage: kc.WeakestStage,
-		Stages:       make([]engine.ATTACKKillChainStage, len(kc.Stages)),
-	}
-	for i, stage := range kc.Stages {
-		result.Stages[i] = engine.ATTACKKillChainStage{
-			Name:         stage.Name,
-			Score:        stage.Score,
-			Status:       stage.Status,
-			ChecksPassed: stage.ChecksPassed,
-			ChecksTotal:  stage.ChecksTotal,
-		}
-	}
-	return result
-}
-
-func (a *attackAdapter) MatchAPTGroup(detectedTechniques []string) []engine.ATTACKAPTMatch {
-	matches := a.module.MatchAPTGroup(detectedTechniques)
-	result := make([]engine.ATTACKAPTMatch, len(matches))
-	for i, match := range matches {
-		result[i] = engine.ATTACKAPTMatch{
-			GroupID:     match.GroupID,
-			GroupName:   match.GroupName,
-			Similarity:  match.Similarity,
-			Confidence:  match.Confidence,
-			OverlapTech: match.OverlapTech,
-		}
-	}
-	return result
-}
-
-func (a *attackAdapter) PredictRisk(hostID string, detectedTechniques []string, maxDepth int) engine.ATTACKPredictedRisk {
-	pr := a.module.PredictRisk(hostID, detectedTechniques, maxDepth)
-	return engine.ATTACKPredictedRisk{
-		MaxRiskScore:    pr.MaxRiskScore,
-		EnhancedThreat:  pr.EnhancedThreat,
-		PredictedPaths:  len(pr.PredictedPaths),
-		Recommendations: pr.Recommendations,
-	}
-}
-
-func (a *attackAdapter) GetAllTactics() []engine.ATTACKTacticInfo {
-	tactics := a.module.GetAllTactics()
-	result := make([]engine.ATTACKTacticInfo, len(tactics))
-	for i, t := range tactics {
-		ti := engine.ATTACKTacticInfo{
-			ID:   t.ID,
-			Name: t.Name,
-		}
-		for _, tech := range t.Techniques {
-			ti.Techniques = append(ti.Techniques, engine.ATTACKTechniqueInfo{
-				ID:           tech.ID,
-				Name:         tech.Name,
-				AsscorChecks: tech.AsscorChecks,
-			})
-		}
-		result[i] = ti
-	}
-	return result
-}
-
 func main() {
 	configPath := flag.String("config", "config.ini", "配置文件路径")
 	jsonOutput := flag.Bool("json", false, "以JSON格式输出")
@@ -186,7 +100,7 @@ func main() {
 	if cfg.ATTACK.Enabled {
 		attackModule := kernel.NewATTACKModule()
 		attackModule.ConfigureFromConfig(cfg)
-		assessor.SetATTACKProvider(&attackAdapter{module: attackModule})
+		assessor.SetATTACKProvider(attackModule.AsEngineProvider())
 		logger.WithComponent("main").Info("ATT&CK module initialized and attached to assessor")
 	}
 

@@ -236,6 +236,8 @@ k.SetConfig("config_path", resolvedConfigPath)
 	persistence := kernel.NewPersistenceModule(cfg.DataDir)
 	concurrency := kernel.NewConcurrencyModule(10)
 	attck := kernel.NewATTACKModule()
+	assessor.SetATTACKProvider(attck.AsEngineProvider())
+
 	configWatcher := kernel.NewConfigWatcherModule(resolvedConfigPath)
 	adapterIntegration := kernel.NewAdapterIntegrationModule()
 	sourceManager := kernel.NewSourceManagerModule()

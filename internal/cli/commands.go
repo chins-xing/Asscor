@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/model"
 	"github.com/asscor/asscor/internal/version"
@@ -898,7 +899,7 @@ func attckCmdHandler(ctx *CommandContext) *CommandResult {
 
 	case "coverage":
 		type coverageProvider interface {
-			CalculateCoverage(checkResults map[string]bool) []kernel.ATTACKCoverage
+			CalculateCoverage(checkResults map[string]bool) []engine.ATTACKCoverageResult
 		}
 		cp, ok := attckPlugin.(coverageProvider)
 		if !ok {
@@ -925,7 +926,7 @@ func attckCmdHandler(ctx *CommandContext) *CommandResult {
 
 	case "killchain":
 		type killChainProvider interface {
-			AssessKillChain(hostID string, checkResults map[string]bool) kernel.KillChainAssessment
+			AssessKillChain(hostID string, checkResults map[string]bool) engine.ATTACKKillChainResult
 		}
 		kp, ok := attckPlugin.(killChainProvider)
 		if !ok {
@@ -953,7 +954,7 @@ func attckCmdHandler(ctx *CommandContext) *CommandResult {
 	case "apt":
 		type aptProvider interface {
 			ListAPTGroups() []string
-			GetAPTGroup(groupID string) *kernel.APTGroupProfile
+			GetAPTGroup(groupID string) map[string]interface{}
 		}
 		ap, ok := attckPlugin.(aptProvider)
 		if !ok {
@@ -961,7 +962,7 @@ func attckCmdHandler(ctx *CommandContext) *CommandResult {
 		}
 		groups := ap.ListAPTGroups()
 		if ctx.JSON {
-			var profiles []*kernel.APTGroupProfile
+			var profiles []map[string]interface{}
 			for _, gid := range groups {
 				if p := ap.GetAPTGroup(gid); p != nil {
 					profiles = append(profiles, p)
@@ -978,9 +979,10 @@ func attckCmdHandler(ctx *CommandContext) *CommandResult {
 		b.WriteString("  ──────────────────────────────────────────────────────────────────────────\n")
 		for _, gid := range groups {
 			if p := ap.GetAPTGroup(gid); p != nil {
-				targets := strings.Join(p.PrimaryTargets, ", ")
-				aliases := strings.Join(p.Aliases, ", ")
-				b.WriteString(fmt.Sprintf("  %-8s %-20s %-12s %s\n", p.GroupID, p.Name, targets, aliases))
+				targets := joinStrSlice(getMapStrSlice(p, "primary_targets"), ", ")
+				aliases := joinStrSlice(getMapStrSlice(p, "aliases"), ", ")
+				b.WriteString(fmt.Sprintf("  %-8s %-20s %-12s %s\n",
+					getMapStr(p, "group_id"), getMapStr(p, "name"), targets, aliases))
 			}
 		}
 		b.WriteString("\n")
@@ -988,7 +990,7 @@ func attckCmdHandler(ctx *CommandContext) *CommandResult {
 
 	case "detect":
 		type detectProvider interface {
-			GetDetectionSummary() kernel.DetectionSummary
+			GetDetectionSummary() map[string]interface{}
 		}
 		dp, ok := attckPlugin.(detectProvider)
 		if !ok {
@@ -1003,23 +1005,31 @@ func attckCmdHandler(ctx *CommandContext) *CommandResult {
 		var b strings.Builder
 		b.WriteString("\n  Detection Summary\n")
 		b.WriteString("  ─────────────────────────────────────────\n")
-		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Total Rules:", summary.TotalRules))
-		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Active Rules:", summary.ActiveRules))
-		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Total Alerts:", summary.TotalAlerts))
-		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Open Alerts:", summary.OpenAlerts))
-		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Anomalies:", summary.Anomalies))
-		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Correlations:", summary.Correlations))
-		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Coverage Gaps:", len(summary.CoverageGaps)))
-		if len(summary.CoverageGaps) > 0 {
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Total Rules:", getMapInt(summary, "total_rules")))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Active Rules:", getMapInt(summary, "active_rules")))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Total Alerts:", getMapInt(summary, "total_alerts")))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Open Alerts:", getMapInt(summary, "open_alerts")))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Anomalies:", getMapInt(summary, "anomalies")))
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Correlations:", getMapInt(summary, "correlations")))
+		var gaps []string
+		if v, ok := summary["coverage_gaps"]; ok {
+			if gs, ok2 := v.([]string); ok2 {
+				gaps = gs
+			}
+		}
+		b.WriteString(fmt.Sprintf("  %-20s %d\n", "Coverage Gaps:", len(gaps)))
+		if len(gaps) > 0 {
 			b.WriteString("\n  Coverage Gaps:\n")
-			for _, gap := range summary.CoverageGaps {
+			for _, gap := range gaps {
 				b.WriteString(fmt.Sprintf("    • %s\n", gap))
 			}
 		}
-		if len(summary.AlertsBySeverity) > 0 {
+		if alerts, ok := summary["alerts_by_severity"]; ok {
 			b.WriteString("\n  Alerts by Severity:\n")
-			for sev, count := range summary.AlertsBySeverity {
-				b.WriteString(fmt.Sprintf("    %-12s %d\n", sev+":", count))
+			if asm, ok2 := alerts.(map[string]interface{}); ok2 {
+				for sev, count := range asm {
+					b.WriteString(fmt.Sprintf("    %-12s %v\n", sev+":", count))
+				}
 			}
 		}
 		b.WriteString("\n")
@@ -1059,4 +1069,44 @@ func attckCmdHandler(ctx *CommandContext) *CommandResult {
 
 func attckCompletions(ctx *CommandContext, partial string) []string {
 	return []string{"summary", "coverage", "killchain", "apt", "detect", "ti"}
+}
+
+func getMapStr(m map[string]interface{}, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func getMapInt(m map[string]interface{}, key string) int {
+	if v, ok := m[key]; ok {
+		switch n := v.(type) {
+		case int: return n
+		case float64: return int(n)
+		}
+	}
+	return 0
+}
+
+func getMapStrSlice(m map[string]interface{}, key string) []string {
+	if v, ok := m[key]; ok {
+		if ss, ok := v.([]string); ok { return ss }
+		if si, ok := v.([]interface{}); ok {
+			var result []string
+			for _, e := range si {
+				if s, ok := e.(string); ok { result = append(result, s) }
+			}
+			return result
+		}
+	}
+	return nil
+}
+
+func joinStrSlice(ss []string, sep string) string {
+	if len(ss) == 0 { return "" }
+	r := ss[0]
+	for _, s := range ss[1:] { r += sep + s }
+	return r
 }

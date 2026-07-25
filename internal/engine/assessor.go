@@ -34,6 +34,8 @@ type SPCProvider interface {
 }
 
 type ATTACKProvider interface {
+	IsEnabled() bool
+	Version() string
 	CalculateCoverage(checkResults map[string]bool) []ATTACKCoverageResult
 	AssessKillChain(hostID string, checkResults map[string]bool) ATTACKKillChainResult
 	MatchAPTGroup(detectedTechniques []string) []ATTACKAPTMatch
