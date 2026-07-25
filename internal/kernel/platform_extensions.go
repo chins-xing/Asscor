@@ -210,4 +210,15 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 	r.RegisterPoint(ExtensionPoint{
 		Name: "persistence.dashboard_written", Description: "Called after dashboard report is atomically written", Version: "1.0",
 	})
+
+	// ── 扩展管理器生命周期 (extmgr) ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "extension.install_failed", Description: "Called when extension install fails", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "extension.enable_failed", Description: "Called when extension enable fails (dependency/validation)", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "extension.execution_error", Description: "Called when extension execution returns an error", Version: "1.0",
+	})
 }

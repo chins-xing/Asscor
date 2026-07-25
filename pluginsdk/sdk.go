@@ -86,7 +86,7 @@ func Serve(p Plugin) {
 		}
 
 		if err != nil {
-			writeError(encoder, req.ID, -32000, err.Error())
+			writeError(encoder, req.ID, -32603, err.Error())
 			continue
 		}
 
@@ -97,6 +97,13 @@ func Serve(p Plugin) {
 		fmt.Fprintf(os.Stderr, "plugin scanner error: %v\n", err)
 	}
 }
+
+const (
+	ErrParse     = -32700 // JSON-RPC standard: parse error
+	ErrInternal  = -32603 // JSON-RPC standard: internal error
+	ErrMethodNF  = -32601 // JSON-RPC standard: method not found
+	ErrApp       = -32000 // Implementation-defined: application error
+)
 
 type rpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`

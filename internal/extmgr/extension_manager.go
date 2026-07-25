@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -150,11 +153,13 @@ func (m *ExtensionManager) InstallFromSpec(spec ExtensionSpec) error {
 
 	installPath, err := m.installer.Install(spec)
 	if err != nil {
+		m.fireExtensionEvent("extension.install_failed", spec.ID, err.Error())
 		return fmt.Errorf("install %s: %w", spec.ID, err)
 	}
 
 	if err := m.lifecycle.Register(spec, installPath); err != nil {
 		os.RemoveAll(installPath)
+		m.fireExtensionEvent("extension.install_failed", spec.ID, err.Error())
 		return fmt.Errorf("register %s: %w", spec.ID, err)
 	}
 
@@ -186,6 +191,7 @@ func (m *ExtensionManager) InstallFromFile(specPath string) error {
 
 func (m *ExtensionManager) Enable(id string) error {
 	if err := m.lifecycle.Enable(id); err != nil {
+		m.fireExtensionEvent("extension.enable_failed", id, err.Error())
 		return err
 	}
 
@@ -418,7 +424,11 @@ func (m *ExtensionManager) onExtensionDisabled(spec ExtensionSpec) {
 	case ExtTypeDomain:
 		model.UnregisterDomain(spec.ID)
 	case ExtTypeEdgeFactor:
-		model.SetEdgeFactorValue(spec.ID, 1.0)
+		fv := 1.0
+		if v, ok := spec.CustomConfig["factor"]; ok {
+			fmt.Sscanf(v, "%f", &fv)
+		}
+		model.SetEdgeFactorValue(spec.ID, fv)
 	case ExtTypeCLICommand:
 		logger.WithComponent("extmgr").Info("CLI command extension disabled", "extension_id", spec.ID)
 	}
@@ -432,18 +442,119 @@ func (m *ExtensionManager) onExtensionDeleted(spec ExtensionSpec) {
 }
 
 func (m *ExtensionManager) registerCheckModule(spec ExtensionSpec) {
+	manifestPath := filepath.Join(spec.InstallPath, "checks.json")
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			logger.WithComponent("extmgr").Info("check module has no checks.json, scanning for Go sources",
+				"extension_id", spec.ID)
+			m.scanCheckSources(spec)
+		} else {
+			logger.WithComponent("extmgr").Error("failed to read checks.json",
+				"extension_id", spec.ID, "error", err)
+		}
+		return
+	}
+
+	var checkDefs []struct {
+		ID          string  `json:"id"`
+		Domain      string  `json:"domain"`
+		Name        string  `json:"name"`
+		Description string  `json:"description"`
+		Delta       float64 `json:"delta"`
+		Command     string  `json:"command"`
+		FilePath    string  `json:"file_path"`
+		FileRegex   string  `json:"file_regex"`
+		OutputMatch string  `json:"output_match"`
+	}
+	if err := json.Unmarshal(data, &checkDefs); err != nil {
+		logger.WithComponent("extmgr").Error("invalid checks.json", "extension_id", spec.ID, "error", err)
+		return
+	}
+
+	var items []model.CheckItem
+	for _, def := range checkDefs {
+		item := specCheckItem(def)
+		items = append(items, item)
+		logger.WithComponent("extmgr").Debug("registered check from extension",
+			"extension_id", spec.ID, "check_id", def.ID, "domain", def.Domain)
+	}
+	if len(items) > 0 {
+		checks.Register(items...)
+	}
+	logger.WithComponent("extmgr").Info("registered checks from extension",
+		"extension_id", spec.ID, "count", len(items))
+}
+
+func specCheckItem(def struct {
+	ID          string  `json:"id"`
+	Domain      string  `json:"domain"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Delta       float64 `json:"delta"`
+	Command     string  `json:"command"`
+	FilePath    string  `json:"file_path"`
+	FileRegex   string  `json:"file_regex"`
+	OutputMatch string  `json:"output_match"`
+}) model.CheckItem {
+	return model.CheckItem{
+		ID:          def.ID,
+		Domain:      def.Domain,
+		Name:        def.Name,
+		Description: def.Description,
+		Delta:       def.Delta,
+		Check:       buildExtCheckFunc(def.Command, def.FilePath, def.FileRegex, def.OutputMatch),
+	}
+}
+
+func buildExtCheckFunc(command, filePath, fileRegex, outputMatch string) model.CheckFunc {
+	if command != "" {
+		return func() (bool, string) {
+			cmd := exec.Command("sh", "-c", command)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return false, string(out)
+			}
+			if outputMatch != "" {
+				if strings.Contains(string(out), outputMatch) {
+					return true, string(out)
+				}
+				return false, string(out)
+			}
+			return true, string(out)
+		}
+	}
+	if filePath != "" {
+		return func() (bool, string) {
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return false, fmt.Sprintf("无法读取 %s: %v", filePath, err)
+			}
+			if fileRegex != "" {
+				re, err := regexp.Compile(fileRegex)
+				if err != nil {
+					return false, fmt.Sprintf("正则表达式错误: %v", err)
+				}
+				if re.Match(data) {
+					return true, string(data)
+				}
+				return false, fmt.Sprintf("%s 未匹配 %s", filePath, fileRegex)
+			}
+			return true, string(data)
+		}
+	}
+	return func() (bool, string) { return false, "check has no command or file_path" }
+}
+
+func (m *ExtensionManager) scanCheckSources(spec ExtensionSpec) {
 	checkDir := filepath.Join(spec.InstallPath, "checks")
 	if _, err := os.Stat(checkDir); os.IsNotExist(err) {
-		logger.WithComponent("extmgr").Debug("no checks directory in extension", "extension_id", spec.ID)
 		return
 	}
-
 	entries, err := os.ReadDir(checkDir)
 	if err != nil {
-		logger.WithComponent("extmgr").Error("failed to read checks dir", "extension_id", spec.ID, "error", err)
 		return
 	}
-
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -469,7 +580,19 @@ func (m *ExtensionManager) executeHook(ctx context.Context, spec ExtensionSpec, 
 
 func (m *ExtensionManager) executeExtension(ctx context.Context, spec ExtensionSpec, action string) error {
 	_, err := m.executor.Execute(ctx, spec, []string{"--action", action})
+	if err != nil {
+		m.fireExtensionEvent("extension.execution_error", spec.ID, err.Error())
+	}
 	return err
+}
+
+func (m *ExtensionManager) fireExtensionEvent(pointName, extID, errMsg string) {
+	if m.kernelExtensions != nil {
+		m.kernelExtensions.Execute(context.Background(), pointName, map[string]interface{}{
+			"extension_id": extID,
+			"error":        errMsg,
+		})
+	}
 }
 
 func (m *ExtensionManager) ExportState() ([]byte, error) {
