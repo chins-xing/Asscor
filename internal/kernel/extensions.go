@@ -127,13 +127,17 @@ func (r *ExtensionRegistry) ExecuteUntilFirst(ctx context.Context, pointName str
 	copy(exts, r.extensions[pointName])
 	r.mu.RUnlock()
 
+	if len(exts) == 0 {
+		return "", nil, fmt.Errorf("no extension registered for point %s", pointName)
+	}
+
 	for _, ext := range exts {
 		if err := ext.handler(ctx, data); err != nil {
 			continue
 		}
 		return ext.pluginID, nil, nil
 	}
-	return "", nil, fmt.Errorf("no extension registered for point %s", pointName)
+	return "", nil, fmt.Errorf("all handlers returned errors for point %s", pointName)
 }
 
 func (r *ExtensionRegistry) ListPoints() []ExtensionPoint {

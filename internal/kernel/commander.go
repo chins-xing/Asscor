@@ -175,6 +175,12 @@ func (m *CommanderModule) rotateKey(keyPath, metaPath string) {
 		logger.WithComponent("commander").Warn("failed to persist rotated key metadata", "error", err)
 	}
 	logger.WithComponent("commander").Info("HMAC key rotated", "expires_at", m.keyMeta.ExpiresAt)
+
+	if m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "commander.key_rotated", map[string]interface{}{
+			"expires_at": m.keyMeta.ExpiresAt.Format(time.RFC3339),
+		})
+	}
 }
 
 func (m *CommanderModule) KeyExpiry() time.Time {

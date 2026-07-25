@@ -15,6 +15,7 @@ import (
 	"github.com/asscor/asscor/internal/cli"
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/deploy"
+	"github.com/asscor/asscor/internal/extmgr"
 	"github.com/asscor/asscor/internal/integrity"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
@@ -262,6 +263,12 @@ k.SetConfig("config_path", resolvedConfigPath)
 	// Register all extension points at the platform level.
 	// Point definitions are owned by ASSCOR; modules never call RegisterPoint.
 	kernel.RegisterAllExtensionPoints(k.PlatformExtensionRegistry())
+
+	// Bridge ExtensionManager to kernel Extension Points so installed extensions
+	// can subscribe to the 65 extension points (assessor.*, spc.*, attck.*, etc.)
+	if mgr := extmgr.GetManager(); mgr != nil {
+		mgr.SetKernelExtensions(k.PlatformExtensionRegistry())
+	}
 
 	// Algorithm integrity guard: verify the SSAM/Prism calibration constants
 	// match the expected baseline (R2). Controlled by config.ini [integrity] verify_algo.

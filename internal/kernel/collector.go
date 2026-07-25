@@ -166,6 +166,15 @@ func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
 	}
 	data = append(data, '\n')
 	_, err = m.writer.Write(data)
+
+	if m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "log.entry_received", map[string]interface{}{
+			"host_id":   entry.HostId,
+			"level":     entry.Level,
+			"timestamp": entry.Timestamp,
+		})
+	}
+
 	return err
 }
 

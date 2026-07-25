@@ -11,6 +11,7 @@ import (
 
 	"github.com/asscor/asscor/internal/checks"
 	"github.com/asscor/asscor/internal/engine"
+	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 )
@@ -49,6 +50,8 @@ type ExtensionManager struct {
 	executor  *ExtensionExecutor
 	assessor  *engine.Assessor
 	repos     []ExtensionRepository
+
+	kernelExtensions kernel.ModuleExtensions // bridge to kernel Extension Points
 
 	// Callbacks for extension types that need external wiring.
 	// Set before enabling extensions; nil means the type is skipped.
@@ -120,6 +123,12 @@ func (m *ExtensionManager) SetAssessor(a *engine.Assessor) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.assessor = a
+}
+
+func (m *ExtensionManager) SetKernelExtensions(ext kernel.ModuleExtensions) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.kernelExtensions = ext
 }
 
 func (m *ExtensionManager) InstallFromSpec(spec ExtensionSpec) error {
@@ -307,6 +316,11 @@ func (m *ExtensionManager) onExtensionInstalled(spec ExtensionSpec) {
 	switch spec.ExtType {
 	case ExtTypeCheckModule:
 		m.registerCheckModule(spec)
+		if m.kernelExtensions != nil {
+			m.kernelExtensions.RegisterExtension(spec.ID, "assessor.pre_evaluate", func(ctx context.Context, data interface{}) error {
+				return m.executeExtension(ctx, spec, "pre_evaluate")
+			}, 50)
+		}
 	case ExtTypeDomain:
 		model.RegisterDomain(model.DomainMeta{
 			ID:            spec.ID,
@@ -330,26 +344,53 @@ func (m *ExtensionManager) onExtensionInstalled(spec ExtensionSpec) {
 		})
 		logger.WithComponent("extmgr").Info("registered edge factor from extension", "extension_id", spec.ID)
 	case ExtTypeHook:
-		if a != nil {
+		// Priority: kernel Extension Point > engine hook (backward compat)
+		extPointName := spec.CustomConfig["extension_point"]
+		if extPointName != "" && m.kernelExtensions != nil {
+			m.kernelExtensions.RegisterExtension(spec.ID, extPointName, func(ctx context.Context, data interface{}) error {
+				return m.executeHook(ctx, spec, nil)
+			}, 50)
+			logger.WithComponent("extmgr").Info("registered hook on kernel extension point",
+				"extension_id", spec.ID, "extension_point", extPointName)
+		} else if a != nil {
 			a.RegisterHook(spec.ID, engine.PhasePostScore, func(ctx context.Context, result *model.AssessmentResult) error {
 				return m.executeHook(ctx, spec, result)
 			}, 50)
-			logger.WithComponent("extmgr").Info("registered hook from extension", "extension_id", spec.ID)
+			logger.WithComponent("extmgr").Info("registered hook on engine PhasePostScore (legacy)",
+				"extension_id", spec.ID)
+		} else {
+			logger.WithComponent("extmgr").Warn("hook installed but no assessor or extension point configured",
+				"extension_id", spec.ID)
 		}
 	case ExtTypeCLICommand:
-		if m.OnCLICommand != nil {
+		if m.kernelExtensions != nil {
+			m.kernelExtensions.RegisterExtension(spec.ID, "cli.command.register", func(ctx context.Context, data interface{}) error {
+				return m.executeExtension(ctx, spec, "register")
+			}, 50)
+			logger.WithComponent("extmgr").Info("registered CLI command via extension point", "extension_id", spec.ID)
+		} else if m.OnCLICommand != nil {
 			m.OnCLICommand(spec)
 		} else {
 			logger.WithComponent("extmgr").Info("CLI command extension installed (no kernel bridge configured)", "extension_id", spec.ID)
 		}
 	case ExtTypeScoringPlugin:
-		if m.OnScoringPlugin != nil {
+		if m.kernelExtensions != nil {
+			m.kernelExtensions.RegisterExtension(spec.ID, "assessor.pre_score", func(ctx context.Context, data interface{}) error {
+				return m.executeExtension(ctx, spec, "compute_score")
+			}, 45)
+			logger.WithComponent("extmgr").Info("registered scoring plugin via extension point", "extension_id", spec.ID)
+		} else if m.OnScoringPlugin != nil {
 			m.OnScoringPlugin(spec)
 		} else {
 			logger.WithComponent("extmgr").Info("scoring plugin installed (no engine bridge configured)", "extension_id", spec.ID)
 		}
 	case ExtTypeWebPanel:
-		if m.OnWebPanelRoute != nil {
+		if m.kernelExtensions != nil {
+			m.kernelExtensions.RegisterExtension(spec.ID, "webui.route.register", func(ctx context.Context, data interface{}) error {
+				return m.executeExtension(ctx, spec, "register_route")
+			}, 50)
+			logger.WithComponent("extmgr").Info("registered web panel via extension point", "extension_id", spec.ID)
+		} else if m.OnWebPanelRoute != nil {
 			m.OnWebPanelRoute(spec)
 		} else {
 			logger.WithComponent("extmgr").Info("web panel installed (no webui bridge configured)", "extension_id", spec.ID)
@@ -380,6 +421,9 @@ func (m *ExtensionManager) onExtensionDisabled(spec ExtensionSpec) {
 		model.SetEdgeFactorValue(spec.ID, 1.0)
 	case ExtTypeCLICommand:
 		logger.WithComponent("extmgr").Info("CLI command extension disabled", "extension_id", spec.ID)
+	}
+	if m.kernelExtensions != nil {
+		m.kernelExtensions.UnregisterPlugin(spec.ID)
 	}
 }
 
@@ -420,6 +464,11 @@ func (m *ExtensionManager) registerCheckModule(spec ExtensionSpec) {
 
 func (m *ExtensionManager) executeHook(ctx context.Context, spec ExtensionSpec, result *model.AssessmentResult) error {
 	_, err := m.executor.Execute(ctx, spec, []string{"--hook", "post_score"})
+	return err
+}
+
+func (m *ExtensionManager) executeExtension(ctx context.Context, spec ExtensionSpec, action string) error {
+	_, err := m.executor.Execute(ctx, spec, []string{"--action", action})
 	return err
 }
 

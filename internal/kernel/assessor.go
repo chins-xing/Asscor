@@ -148,7 +148,12 @@ func (m *AssessorModule) pushToSIEM(ctx context.Context, result *model.Assessmen
 		"host_id": result.HostID,
 	})
 	if m.siemPusher != nil && m.siemPusher.Enabled() {
-		go m.siemPusher.PushAssessment(ctx, result)
+		go func() {
+			m.siemPusher.PushAssessment(ctx, result)
+			m.kernel.Extensions().Execute(ctx, "siem.post_push", map[string]interface{}{
+				"host_id": result.HostID,
+			})
+		}()
 	}
 }
 
