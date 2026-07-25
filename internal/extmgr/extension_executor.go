@@ -2,7 +2,10 @@ package extmgr
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -154,6 +157,10 @@ func (e *ExtensionExecutor) Execute(ctx context.Context, spec ExtensionSpec, arg
 
 	if !e.isCommandAllowed(binary) {
 		return nil, fmt.Errorf("command %s is not in the execution whitelist", binary)
+	}
+
+	if err := verifyBinaryChecksum(binary, spec.Source.Checksum); err != nil {
+		return nil, fmt.Errorf("binary integrity check failed: %w", err)
 	}
 
 	timeout := config.Timeout
@@ -331,4 +338,33 @@ func DefaultExecutionConfig() ExecutionConfig {
 		BinaryPaths: make(map[string]string),
 		Environment: make(map[string]string),
 	}
+}
+
+func verifyBinaryChecksum(binaryPath, expectedChecksum string) error {
+	if expectedChecksum == "" {
+		return nil // no checksum specified, skip verification
+	}
+
+	parts := strings.SplitN(expectedChecksum, ":", 2)
+	if len(parts) != 2 || parts[0] != "sha256" {
+		return fmt.Errorf("unsupported checksum format: %s", expectedChecksum)
+	}
+	expected := parts[1]
+
+	f, err := os.Open(binaryPath)
+	if err != nil {
+		return fmt.Errorf("open binary: %w", err)
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("read binary: %w", err)
+	}
+	actual := hex.EncodeToString(h.Sum(nil))
+
+	if strings.EqualFold(actual, expected) {
+		return nil
+	}
+	return fmt.Errorf("checksum mismatch: expected %s, got %s", expected, actual)
 }

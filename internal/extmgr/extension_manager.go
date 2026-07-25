@@ -39,8 +39,7 @@ func DefaultManagerConfig() ManagerConfig {
 		ExecutionPolicy:  ExecPolicyWhitelist,
 		ExecutionTimeout: 30 * time.Second,
 		WhiteListedCmds: []string{
-			"python3", "python", "node", "sh", "bash",
-			"powershell", "pwsh",
+			"python3", "node", "sh",
 		},
 	}
 }
@@ -139,17 +138,22 @@ func (m *ExtensionManager) InstallFromSpec(spec ExtensionSpec) error {
 		return fmt.Errorf("invalid spec: %w", err)
 	}
 
-	if existing, exists := m.lifecycle.Get(spec.ID); exists {
+	m.mu.Lock()
+	existing, exists := m.lifecycle.Get(spec.ID)
+	if exists {
 		existingVer, _ := ParseSemVer(existing.Version)
 		newVer, _ := ParseSemVer(spec.Version)
 		if newVer.Less(existingVer) || newVer.Equal(existingVer) {
+			m.mu.Unlock()
 			return fmt.Errorf("extension %s v%s already installed (v%s)", spec.ID, spec.Version, existing.Version)
 		}
 	}
 
 	if err := m.lifecycle.ValidateDependencies(spec); err != nil {
+		m.mu.Unlock()
 		return fmt.Errorf("dependency check failed: %w", err)
 	}
+	m.mu.Unlock()
 
 	installPath, err := m.installer.Install(spec)
 	if err != nil {
@@ -157,13 +161,18 @@ func (m *ExtensionManager) InstallFromSpec(spec ExtensionSpec) error {
 		return fmt.Errorf("install %s: %w", spec.ID, err)
 	}
 
+	m.mu.Lock()
 	if err := m.lifecycle.Register(spec, installPath); err != nil {
+		m.mu.Unlock()
 		os.RemoveAll(installPath)
 		m.fireExtensionEvent("extension.install_failed", spec.ID, err.Error())
 		return fmt.Errorf("register %s: %w", spec.ID, err)
 	}
 
-	if m.config.AutoEnable {
+	autoEnable := m.config.AutoEnable
+	m.mu.Unlock()
+
+	if autoEnable {
 		if err := m.lifecycle.Enable(spec.ID); err != nil {
 			logger.WithComponent("extmgr").Warn("auto-enable failed", "extension_id", spec.ID, "error", err)
 		}

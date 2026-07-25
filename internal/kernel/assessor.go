@@ -130,6 +130,27 @@ func (m *AssessorModule) SetATTACKProvider(provider engine.ATTACKProvider) {
 	m.attackProvider = provider
 }
 
+func filterAssessmentResult(result *model.AssessmentResult) map[string]interface{} {
+	if result == nil {
+		return nil
+	}
+	scores := result.DomainScores
+	return map[string]interface{}{
+		"host_id":     result.HostID,
+		"hostname":    result.Hostname,
+		"final_score": result.FinalScore,
+		"acceptable":  result.Acceptable,
+		"threshold":   result.Threshold,
+		"check_count": len(result.Checks),
+		"domains": map[string]interface{}{
+			"attack_surface":     scores.AttackSurface,
+			"business_continuity": scores.BusinessContinuity,
+			"operation_trust":    scores.OperationTrust,
+			"resilience":         scores.Resilience,
+		},
+	}
+}
+
 func (m *AssessorModule) setupSIEMPusher() {
 	if m.cfg == nil {
 		return
@@ -365,7 +386,7 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	m.results[hostID] = result
 	m.mu.Unlock()
 
-		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
+		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", filterAssessmentResult(result))
 
 	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.post_check", map[string]interface{}{
 		"host_id":    hostID,
@@ -386,7 +407,7 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	}
 
 	m.pushToSIEM(m.kernel.Context(), result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.outbound", result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.outbound", filterAssessmentResult(result))
 
 	m.printConsoleReport(result)
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.report_generated", result)
@@ -475,7 +496,7 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	m.results[hostID] = result
 	m.mu.Unlock()
 
-		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", result)
+		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", filterAssessmentResult(result))
 
 	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.post_check", map[string]interface{}{
 		"host_id":    hostID,
@@ -496,7 +517,7 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	}
 
 	m.pushToSIEM(m.kernel.Context(), result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.outbound", result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.outbound", filterAssessmentResult(result))
 
 	m.printConsoleReport(result)
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.report_generated", result)
