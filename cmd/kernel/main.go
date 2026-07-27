@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -435,6 +436,14 @@ func writePIDFile(pidFilePath string) {
 	}
 }
 
+func writeCertFile(path string, data []byte, label string, log *slog.Logger) bool {
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		log.Warn("cannot write "+label+", starting without mTLS", "path", path, "error", err)
+		return false
+	}
+	return true
+}
+
 func setupTLS(certDir string) *tls.Config {
 	log := logger.WithComponent("tls")
 
@@ -458,12 +467,8 @@ func setupTLS(certDir string) *tls.Config {
 			log.Warn("cannot generate CA, starting without mTLS", "error", err)
 			return nil
 		}
-		if err := os.WriteFile(caPath, caPair.CertPEM, 0600); err != nil {
-			log.Warn("cannot write CA cert, starting without mTLS", "path", caPath, "error", err)
-			return nil
-		}
-		if err := os.WriteFile(caKeyPath, caPair.KeyPEM, 0600); err != nil {
-			log.Warn("cannot write CA key, starting without mTLS", "path", caKeyPath, "error", err)
+		if !writeCertFile(caPath, caPair.CertPEM, "CA cert", log) ||
+			!writeCertFile(caKeyPath, caPair.KeyPEM, "CA key", log) {
 			return nil
 		}
 	} else if err := kernel.ValidateCertPair(caPair); err != nil {
@@ -473,12 +478,8 @@ func setupTLS(certDir string) *tls.Config {
 			log.Warn("cannot generate CA, starting without mTLS", "error", err)
 			return nil
 		}
-		if err := os.WriteFile(caPath, caPair.CertPEM, 0600); err != nil {
-			log.Warn("cannot write CA cert, starting without mTLS", "path", caPath, "error", err)
-			return nil
-		}
-		if err := os.WriteFile(caKeyPath, caPair.KeyPEM, 0600); err != nil {
-			log.Warn("cannot write CA key, starting without mTLS", "path", caKeyPath, "error", err)
+		if !writeCertFile(caPath, caPair.CertPEM, "CA cert", log) ||
+			!writeCertFile(caKeyPath, caPair.KeyPEM, "CA key", log) {
 			return nil
 		}
 		for _, p := range []string{serverCertPath, serverKeyPath, agentCertPath, agentKeyPath} {
@@ -496,12 +497,8 @@ func setupTLS(certDir string) *tls.Config {
 			log.Warn("cannot issue server cert, starting without mTLS", "error", err)
 			return nil
 		}
-		if err := os.WriteFile(serverCertPath, serverPair.CertPEM, 0600); err != nil {
-			log.Warn("cannot write server cert, starting without mTLS", "path", serverCertPath, "error", err)
-			return nil
-		}
-		if err := os.WriteFile(serverKeyPath, serverPair.KeyPEM, 0600); err != nil {
-			log.Warn("cannot write server key, starting without mTLS", "path", serverKeyPath, "error", err)
+		if !writeCertFile(serverCertPath, serverPair.CertPEM, "server cert", log) ||
+			!writeCertFile(serverKeyPath, serverPair.KeyPEM, "server key", log) {
 			return nil
 		}
 	} else if !kernel.VerifyCertChain(serverPair, caPair) {
@@ -511,12 +508,8 @@ func setupTLS(certDir string) *tls.Config {
 			log.Warn("cannot re-issue server cert, starting without mTLS", "error", err)
 			return nil
 		}
-		if err := os.WriteFile(serverCertPath, serverPair.CertPEM, 0600); err != nil {
-			log.Warn("cannot write server cert, starting without mTLS", "path", serverCertPath, "error", err)
-			return nil
-		}
-		if err := os.WriteFile(serverKeyPath, serverPair.KeyPEM, 0600); err != nil {
-			log.Warn("cannot write server key, starting without mTLS", "path", serverKeyPath, "error", err)
+		if !writeCertFile(serverCertPath, serverPair.CertPEM, "server cert", log) ||
+			!writeCertFile(serverKeyPath, serverPair.KeyPEM, "server key", log) {
 			return nil
 		}
 	}
@@ -527,12 +520,8 @@ func setupTLS(certDir string) *tls.Config {
 		if err != nil {
 			log.Warn("cannot issue agent cert", "error", err)
 		} else {
-			if err := os.WriteFile(agentCertPath, agentPair.CertPEM, 0600); err != nil {
-				log.Warn("cannot write agent cert", "path", agentCertPath, "error", err)
-			}
-			if err := os.WriteFile(agentKeyPath, agentPair.KeyPEM, 0600); err != nil {
-				log.Warn("cannot write agent key", "path", agentKeyPath, "error", err)
-			}
+			writeCertFile(agentCertPath, agentPair.CertPEM, "agent cert", log)
+			writeCertFile(agentKeyPath, agentPair.KeyPEM, "agent key", log)
 			log.Info("agent certificate generated", "cert", agentCertPath, "key", agentKeyPath)
 		}
 	} else {
@@ -543,12 +532,8 @@ func setupTLS(certDir string) *tls.Config {
 			if err != nil {
 				log.Warn("cannot re-issue agent cert", "error", err)
 			} else {
-				if err := os.WriteFile(agentCertPath, agentPair.CertPEM, 0600); err != nil {
-					log.Warn("cannot write agent cert", "path", agentCertPath, "error", err)
-				}
-				if err := os.WriteFile(agentKeyPath, agentPair.KeyPEM, 0600); err != nil {
-					log.Warn("cannot write agent key", "path", agentKeyPath, "error", err)
-				}
+				writeCertFile(agentCertPath, agentPair.CertPEM, "agent cert", log)
+				writeCertFile(agentKeyPath, agentPair.KeyPEM, "agent key", log)
 				log.Info("agent certificate re-issued", "cert", agentCertPath, "key", agentKeyPath)
 			}
 		}
