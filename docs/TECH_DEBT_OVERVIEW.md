@@ -9,9 +9,10 @@
 | 等级 | 数量 |
 |:---:|:---:|
 | P0 | 19 |
-| P1 | 40 |
+| P1 | 37 |
 | P2 | 28 |
-| **合计** | **87** |
+| **合计** | **84** |
+| **已修复** | **9** |
 
 ---
 
@@ -195,4 +196,6 @@
 | M03 | adapter vs adapterhub 命名含混 | `internal/adapter/_README_ARCHITECTURE.md` 分层说明文档 |
 | T20 | `io.Copy` 返回值静默丢弃 | `persistence.go:690` 改为显式 error 检查 |
 | T21 | `os.Remove` 错误静默丢弃 | `persistence.go:723` 添加 Warn 级别错误日志 |
-| M04 | deploy/systemd 系统d单元重复 | 通过 `kernelUnitContent()` Go 代码生成，参见 `internal/deploy/` |
+| T04-T06 | ATT&CK 6 个零调用者方法 | `attck.go` 接口注释标记 `0 callers — reserved` |
+| E25 | 优先级排序语义未文档化 | `extensions.go` ModuleExtensions 接口注释说明升序+默认50 |
+| T29 | 6 套行业模板缺失 console_report | 全部 6 模板补充 `[webui] console_report = false` |
