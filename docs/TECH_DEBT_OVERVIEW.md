@@ -12,7 +12,7 @@
 | P1 | 37 |
 | P2 | 28 |
 | **合计** | **84** |
-| **已修复** | **9** |
+| **已修复** | **16** |
 
 ---
 
@@ -203,3 +203,4 @@
 | T25 | NVD fetch goroutine 无 panic 恢复 | `spc_fetch_nvd.go:268` 已有 `defer recover()` |
 | T26 | Cleanup goroutine 无 panic 恢复 | `ratelimit.go:50` 已有 `defer recover()` |
 | T27 | Bus drain goroutine 无 panic 恢复 | 仅调用 `wg.Wait()`，panic 不可能 |
+| M02 | engine 适配器文档 | `engine/_README_ARCHITECTURE.md` 说明接口定义+子包实现+依赖方向 |
