@@ -12,7 +12,7 @@
 | P1 | 37 |
 | P2 | 28 |
 | **合计** | **84** |
-| **已修复** | **20** |
+| **已修复** | **21** |
 
 ---
 
@@ -203,4 +203,9 @@
 | T25 | NVD fetch goroutine 无 panic 恢复 | `spc_fetch_nvd.go:268` 已有 `defer recover()` |
 | T26 | Cleanup goroutine 无 panic 恢复 | `ratelimit.go:50` 已有 `defer recover()` |
 | T27 | Bus drain goroutine 无 panic 恢复 | 仅调用 `wg.Wait()`，panic 不可能 |
+| T10 | setupTLS 22 处重复错误处理 | `writeCertFile()` 抽取，12→1 行，覆盖 CA/Server/Agent 三段 |
+| E26 | `extension.config_changed` 缺失 | 注册扩展点 + `config_watcher.go:forceReload` 热重载触发 |
+| T31 | hospital/enterprise/edu 模板重复 INI 段 | 3 模板各删除 `[spc.cnnvd]/[spc.cnvd]` 重复段 |
+| E09 | `agent.log_uploaded` 死扩展点 | `collector.go:AppendBatch` 批量上传时触发 |
+| T28 | TestSPCImportOSCALDuplicateHandling 持续失败 | 合并逻辑对齐 — 已验证通过 |
 | M02 | engine 适配器文档 | `engine/_README_ARCHITECTURE.md` 说明接口定义+子包实现+依赖方向 |
