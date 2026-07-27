@@ -499,7 +499,9 @@ func (m *PersistenceModule) WriteDashboardReport(report *DashboardReport) error 
 		return fmt.Errorf("dashboard write tmp: %w", err)
 	}
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
+		if rmErr := os.Remove(tmpPath); rmErr != nil {
+			logger.WithComponent("persistence").Warn("dashboard tmp cleanup failed", "path", tmpPath, "error", rmErr)
+		}
 		return fmt.Errorf("dashboard rename: %w", err)
 	}
 	if m.kernel != nil && m.kernel.Extensions() != nil {
