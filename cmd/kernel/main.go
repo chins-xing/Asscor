@@ -19,9 +19,9 @@ import (
 	"github.com/asscor/asscor/internal/integrity"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/prism"
+	"github.com/asscor/asscor/internal/engine/prism"
 	"github.com/asscor/asscor/internal/resilience"
-	"github.com/asscor/asscor/internal/ssam"
+	"github.com/asscor/asscor/internal/engine/ssam"
 	"github.com/asscor/asscor/internal/version"
 	"github.com/asscor/asscor/internal/webui"
 

@@ -3,7 +3,7 @@ package kernel
 import (
 	"context"
 
-	"github.com/asscor/asscor/internal/srd"
+	"github.com/asscor/asscor/internal/engine/srd"
 )
 
 // SRDPlugin wraps srd.Manager to implement kernel.Plugin.

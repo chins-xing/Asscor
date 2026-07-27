@@ -12,7 +12,7 @@ import (
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
-	ascorprism "github.com/asscor/asscor/internal/prism"
+	ascorprism "github.com/asscor/asscor/internal/engine/prism"
 	prismlib "github.com/chins-xing/prism"
 
 	_ "github.com/asscor/asscor/internal/adapter/management"

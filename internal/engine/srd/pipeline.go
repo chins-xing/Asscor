@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/asscor/asscor/internal/logger"
-	ascorprism "github.com/asscor/asscor/internal/prism"
+	ascorprism "github.com/asscor/asscor/internal/engine/prism"
 	prismlib "github.com/chins-xing/prism"
 )
 
