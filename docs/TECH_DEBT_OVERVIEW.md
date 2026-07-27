@@ -199,3 +199,7 @@
 | T04-T06 | ATT&CK 6 个零调用者方法 | `attck.go` 接口注释标记 `0 callers — reserved` |
 | E25 | 优先级排序语义未文档化 | `extensions.go` ModuleExtensions 接口注释说明升序+默认50 |
 | T29 | 6 套行业模板缺失 console_report | 全部 6 模板补充 `[webui] console_report = false` |
+| T24 | Heartbeat goroutine 无 panic 恢复 | `services.go:162` 已有 `resilience.GuardGo` |
+| T25 | NVD fetch goroutine 无 panic 恢复 | `spc_fetch_nvd.go:268` 已有 `defer recover()` |
+| T26 | Cleanup goroutine 无 panic 恢复 | `ratelimit.go:50` 已有 `defer recover()` |
+| T27 | Bus drain goroutine 无 panic 恢复 | 仅调用 `wg.Wait()`，panic 不可能 |
