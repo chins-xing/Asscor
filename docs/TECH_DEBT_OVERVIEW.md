@@ -184,3 +184,15 @@
 | 配置 | 0 | 2 | 2 | 行业模板缺失段落 |
 | 安全 | 2 | 2 | 1 | 无二进制签名，漏洞数据暴露 |
 | ATT&CK | 0 | 1 | 3 | 上帝接口 85 方法，死代码 |
+
+---
+
+## 八、已修复项 (2026-07-27)
+
+| 原编号 | 问题 | 修复 |
+|--------|------|------|
+| M02 | srd/prism/ssam 引擎适配器误放顶层 | 移至 `internal/engine/srd/` `engine/prism/` `engine/ssam/` |
+| M03 | adapter vs adapterhub 命名含混 | `internal/adapter/_README_ARCHITECTURE.md` 分层说明文档 |
+| T20 | `io.Copy` 返回值静默丢弃 | `persistence.go:690` 改为显式 error 检查 |
+| T21 | `os.Remove` 错误静默丢弃 | `persistence.go:723` 添加 Warn 级别错误日志 |
+| M04 | deploy/systemd 系统d单元重复 | 通过 `kernelUnitContent()` Go 代码生成，参见 `internal/deploy/` |
