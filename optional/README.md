@@ -6,6 +6,20 @@
 
 ```
 optional/
+├── algorithms/                  ← 算法扩展
+│   ├── modules/                 ←   单模块
+│   │   └── multi-algo-orchestrator/
+│   └── packages/                ←   多模块扩展包
+│       └── attck-ext-pack/
+│           └── package.json
+├── pkgmgr/                      ← 扩展包管理器 CLI
+│   ├── main.go
+│   ├── manifest.go
+│   └── fetcher.go
+├── README.md
+└── SCHEMA.md
+```
+optional/
 ├── pkgmgr/                      ← 扩展包管理器 (asscor-pkg CLI)
 │   ├── main.go                  ←   CLI 入口
 │   ├── manifest.go              ←   package.json 解析 + 依赖求解 + 版本约束

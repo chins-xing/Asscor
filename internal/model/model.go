@@ -12,13 +12,22 @@ const (
 	DomainBusinessContinuity = "business_continuity"
 	DomainOperationTrust     = "operation_trust"
 	DomainResilience         = "resilience"
-
-	DomainKernelSecurity = "kernel_security"
+	DomainKernelSecurity     = "kernel_security"
 )
+
+var AllDomains = []string{
+	DomainAttackSurface,
+	DomainBusinessContinuity,
+	DomainOperationTrust,
+	DomainResilience,
+}
+
+var ExtensionDomains = []string{
+	DomainKernelSecurity,
+}
 
 type CheckFunc func() (passed bool, detail string)
 
-// PrivilegeLevel indicates what system privilege a check needs.
 type PrivilegeLevel int
 
 const (
@@ -76,25 +85,14 @@ func (c CheckItem) MatchesPlatform() bool {
 	return c.Platform == "" || c.Platform == runtime.GOOS
 }
 
-var AllDomains = []string{
-	DomainAttackSurface,
-	DomainBusinessContinuity,
-	DomainOperationTrust,
-	DomainResilience,
-}
-
-var ExtensionDomains = []string{
-	DomainKernelSecurity,
-}
-
 type CheckResult struct {
-	CheckID   string  `json:"check_id"`
-	Domain    string  `json:"domain"`
-	Name      string  `json:"name"`
-	Passed    bool    `json:"passed"`
-	Delta     float64 `json:"delta"`
-	Detail    string  `json:"detail"`
-	ComplianceRef string `json:"compliance_ref,omitempty"`
+	CheckID       string  `json:"check_id"`
+	Domain        string  `json:"domain"`
+	Name          string  `json:"name"`
+	Passed        bool    `json:"passed"`
+	Delta         float64 `json:"delta"`
+	Detail        string  `json:"detail"`
+	ComplianceRef string  `json:"compliance_ref,omitempty"`
 }
 
 type DomainScores struct {
@@ -154,13 +152,12 @@ func (d *DomainScores) Set(domain string, score float64) {
 	}
 }
 
-// GetAllDomainScores returns ALL domain scores (named fields + extension domains) as a map.
 func (d DomainScores) GetAllDomainScores() map[string]float64 {
 	m := map[string]float64{
-		DomainAttackSurface:    d.AttackSurface,
+		DomainAttackSurface:      d.AttackSurface,
 		DomainBusinessContinuity: d.BusinessContinuity,
-		DomainOperationTrust:   d.OperationTrust,
-		DomainResilience:       d.Resilience,
+		DomainOperationTrust:     d.OperationTrust,
+		DomainResilience:         d.Resilience,
 	}
 	if d.KernelSecurity != 0 {
 		m[DomainKernelSecurity] = d.KernelSecurity
@@ -172,12 +169,12 @@ func (d DomainScores) GetAllDomainScores() map[string]float64 {
 }
 
 type EdgeFactors struct {
-	TwoFactorFailure float64 `json:"two_factor_failure"`
+	TwoFactorFailure  float64 `json:"two_factor_failure"`
 	SYNCookieDisabled float64 `json:"syn_cookie_disabled"`
-	SELinuxDisabled  float64 `json:"selinux_disabled"`
-	AppArmorDisabled float64 `json:"apparmor_disabled"`
-	NoSIEM           float64 `json:"no_siem"`
-	NoIDS            float64 `json:"no_ids"`
+	SELinuxDisabled   float64 `json:"selinux_disabled"`
+	AppArmorDisabled  float64 `json:"apparmor_disabled"`
+	NoSIEM            float64 `json:"no_siem"`
+	NoIDS             float64 `json:"no_ids"`
 }
 
 func (e EdgeFactors) ActiveFactors() []float64 {
@@ -204,116 +201,48 @@ func (e EdgeFactors) ActiveFactors() []float64 {
 }
 
 type AssessmentResult struct {
-	HostID             string            `json:"host_id"`
-	Hostname           string            `json:"hostname"`
-	Timestamp          time.Time         `json:"timestamp"`
-	FinalScore         float64           `json:"final_score"`
-	Acceptable         bool              `json:"acceptable"`
-	Threshold          float64           `json:"threshold"`
-	DomainScores       DomainScores      `json:"domain_scores"`
-	DomainWeightShift  map[string]float64 `json:"domain_weight_shift,omitempty"`
-	EdgeFactors        EdgeFactors       `json:"edge_factors"`
-	ThreatCoeff        float64           `json:"threat_coefficient"`
-	SPCScore           float64           `json:"spc_score,omitempty"`
-	SPCCVEs            []SPCCVEInfo      `json:"spc_cves,omitempty"`
-	ATTACKCoverage     []ATTACKCoverageInfo `json:"attck_coverage,omitempty"`
-	ATTACKKillChain    *ATTACKKillChainInfo `json:"attck_kill_chain,omitempty"`
-	ATTACKAPTMatches   []ATTACKAPTMatchInfo `json:"attck_apt_matches,omitempty"`
-	ATTACKPredictedRisk *ATTACKPredictedRiskInfo `json:"attck_predicted_risk,omitempty"`
-	ATTACKFailedTechs  []string             `json:"attck_failed_techniques,omitempty"`
-	// Prism Core Layer
-	PrismScore           float64 `json:"prism_score,omitempty"`
-	PrismExternalRisk    float64 `json:"prism_external_risk,omitempty"`
-	PrismPropRisk        float64 `json:"prism_prop_risk,omitempty"`
-	PrismPropPenalty     float64 `json:"prism_prop_penalty,omitempty"`
-	PrismDebtRaw         float64 `json:"prism_debt_raw,omitempty"`
-	PrismDebtPenalty     float64 `json:"prism_debt_penalty,omitempty"`
-	PrismCollapseModifier float64 `json:"prism_collapse_modifier,omitempty"`
-	PrismRiskVelocity    float64 `json:"prism_risk_velocity,omitempty"`
-
-	// Prism Semantic Layer
-	PrismSemanticState    string     `json:"prism_semantic_state,omitempty"`
-	PrismStateVector      [4]float64 `json:"prism_state_vector,omitempty"`
-	PrismStableMem        float64    `json:"prism_stable_membership,omitempty"`
-	PrismDegradedMem      float64    `json:"prism_degraded_membership,omitempty"`
-	PrismUntrustedMem     float64    `json:"prism_untrusted_membership,omitempty"`
-	PrismCollapseMem      float64    `json:"prism_collapse_membership,omitempty"`
-
-	// Prism Inference Layer
+	HostID        string  `json:"host_id"`
+	Hostname      string  `json:"hostname"`
+	Timestamp     time.Time `json:"timestamp"`
+	FinalScore    float64 `json:"final_score"`
+	Acceptable    bool    `json:"acceptable"`
+	Threshold     float64 `json:"threshold"`
+	DomainScores  DomainScores `json:"domain_scores"`
+	DomainWeightShift map[string]float64 `json:"domain_weight_shift,omitempty"`
+	EdgeFactors   EdgeFactors `json:"edge_factors"`
+	ThreatCoeff   float64 `json:"threat_coefficient"`
+	SPCScore      float64 `json:"spc_score,omitempty"`
+	SPCCVEs       []SPCCVEInfo `json:"spc_cves,omitempty"`
+	ATTACKCoverage      []ATTACKCoverageInfo       `json:"attck_coverage,omitempty"`
+	ATTACKKillChain     *ATTACKKillChainInfo       `json:"attck_kill_chain,omitempty"`
+	ATTACKAPTMatches    []ATTACKAPTMatchInfo       `json:"attck_apt_matches,omitempty"`
+	ATTACKPredictedRisk *ATTACKPredictedRiskInfo   `json:"attck_predicted_risk,omitempty"`
+	ATTACKFailedTechs   []string                   `json:"attck_failed_techniques,omitempty"`
+	PrismScore              float64 `json:"prism_score,omitempty"`
+	PrismExternalRisk       float64 `json:"prism_external_risk,omitempty"`
+	PrismPropRisk           float64 `json:"prism_prop_risk,omitempty"`
+	PrismPropPenalty        float64 `json:"prism_prop_penalty,omitempty"`
+	PrismDebtRaw            float64 `json:"prism_debt_raw,omitempty"`
+	PrismDebtPenalty        float64 `json:"prism_debt_penalty,omitempty"`
+	PrismCollapseModifier   float64 `json:"prism_collapse_modifier,omitempty"`
+	PrismRiskVelocity       float64 `json:"prism_risk_velocity,omitempty"`
+	PrismSemanticState      string     `json:"prism_semantic_state,omitempty"`
+	PrismStateVector        [4]float64 `json:"prism_state_vector,omitempty"`
+	PrismStableMem          float64    `json:"prism_stable_membership,omitempty"`
+	PrismDegradedMem        float64    `json:"prism_degraded_membership,omitempty"`
+	PrismUntrustedMem       float64    `json:"prism_untrusted_membership,omitempty"`
+	PrismCollapseMem        float64    `json:"prism_collapse_membership,omitempty"`
 	PrismInferenceTrend        string     `json:"prism_inference_trend,omitempty"`
 	PrismInferenceConfidence   float64    `json:"prism_inference_confidence,omitempty"`
 	PrismInferenceCollapseRisk float64    `json:"prism_inference_collapse_risk,omitempty"`
 	PrismInferenceFutureVector [4]float64 `json:"prism_inference_future_vector,omitempty"`
 	PrismInferenceModel        string     `json:"prism_inference_model,omitempty"`
 	PrismInferenceHorizonDays  int        `json:"prism_inference_horizon_days,omitempty"`
-
-	// Prism IR (full intermediate representation)
-	PrismIR json.RawMessage `json:"prism_ir,omitempty"`
-
-	Checks []CheckResult `json:"checks"`
-
-	// Integrity: HMAC-SHA256 over tamper-sensitive fields.
-	Signature string `json:"signature,omitempty"`
-
-	// UncertaintyNote reminds consumers that the score is a model output, not
-	// an objective security truth. It is included in every assessment result.
-	UncertaintyNote string `json:"uncertainty_note,omitempty"`
-
-	// ModelCoverageRatio is the ratio of scored check items to all registered
-	// checks (0.0-1.0). A low ratio means the model only captures a subset of
-	// the risk surface. This is an anti-gaming guard: a high score with low
-	// coverage is NOT a strong security signal.
+	PrismIR            json.RawMessage `json:"prism_ir,omitempty"`
+	Checks             []CheckResult `json:"checks"`
+	Signature          string `json:"signature,omitempty"`
+	UncertaintyNote    string `json:"uncertainty_note,omitempty"`
 	ModelCoverageRatio float64 `json:"model_coverage_ratio,omitempty"`
-}
-
-type ATTACKCoverageInfo struct {
-	TacticID        string  `json:"tactic_id"`
-	TacticName      string  `json:"tactic_name"`
-	TotalTechniques int     `json:"total_techniques"`
-	CoveredDet      int     `json:"covered_detection"`
-	CoverageDet     float64 `json:"coverage_detection"`
-	CoveragePrev    float64 `json:"coverage_prevention"`
-	CoverageComp    float64 `json:"coverage_composite"`
-	RiskLevel       string  `json:"risk_level"`
-}
-
-type ATTACKKillChainInfo struct {
-	Stages       []ATTACKKillChainStage `json:"stages"`
-	OverallScore float64                `json:"overall_score"`
-	WeakestStage string                 `json:"weakest_stage"`
-}
-
-type ATTACKKillChainStage struct {
-	Name         string  `json:"name"`
-	Score        float64 `json:"score"`
-	Status       string  `json:"status"`
-	ChecksPassed int     `json:"checks_passed"`
-	ChecksTotal  int     `json:"checks_total"`
-}
-
-type ATTACKAPTMatchInfo struct {
-	GroupID     string   `json:"group_id"`
-	GroupName   string   `json:"group_name"`
-	Similarity  float64  `json:"similarity"`
-	Confidence  string   `json:"confidence"`
-	OverlapTech []string `json:"overlap_techniques"`
-}
-
-type ATTACKPredictedRiskInfo struct {
-	MaxRiskScore    float64  `json:"max_risk_score"`
-	EnhancedThreat  float64  `json:"enhanced_threat_coeff"`
-	PredictedPaths  int      `json:"predicted_paths"`
-	Recommendations []string `json:"recommendations,omitempty"`
-}
-
-type SPCCVEInfo struct {
-	CVEID   string  `json:"cve_id"`
-	CVSS    float64 `json:"cvss"`
-	EPSS    float64 `json:"epss"`
-	InKEV   bool    `json:"in_kev"`
-	HasPoC  bool    `json:"has_poc"`
-	Penalty float64 `json:"penalty"`
-	Product string  `json:"product,omitempty"`
 }
 
 type Weights struct {
@@ -348,77 +277,4 @@ func (w Weights) Get(domain string) float64 {
 	default:
 		return 0
 	}
-}
-
-type SPCConfig struct {
-	Enabled            bool
-	MinPScore          float64
-	CacheRetentionDays int
-	FetchIntervalH     int
-	MaxCacheSize       int
-
-	NVD     NVConfig
-	EPSS    EPSSConfig
-	CISAKEV CISAKEVConfig
-	MISP    MISPConfig
-	OSCAL   OSCALConfig
-	CNNVD   CNNVDConfig
-	CNVD    CNVDConfig
-}
-
-type NVConfig struct {
-	BaseURL        string
-	APIKey         string
-	SyncIntervalH  int
-	UseLastMod     bool
-	NoRejected     bool
-}
-
-type EPSSConfig struct {
-	Enabled       bool
-	DataURL       string
-	SyncIntervalH int
-}
-
-type CISAKEVConfig struct {
-	Enabled       bool
-	CatalogURL    string
-	SyncIntervalH int
-}
-
-type MISPConfig struct {
-	BaseURL        string
-	APIKey         string
-	VerifyTLS      bool
-	SyncIntervalH  int
-	TLPFilter      string
-}
-
-type OSCALConfig struct {
-	Enabled      bool
-	InputFormat  string
-	ResultsPath  string
-	PlanPath     string
-}
-
-type CNNVDConfig struct {
-	Enabled       bool
-	BaseURL       string
-	APIKey        string
-	SyncIntervalH int
-}
-
-type CNVDConfig struct {
-	Enabled       bool
-	BaseURL       string
-	SyncIntervalH int
-}
-
-type ATTACKConfig struct {
-	Enabled              bool
-	Version              string
-	AutoHunt             bool
-	BeaconThreshold      float64
-	AttributionThreshold float64
-	SafeEmulation        bool
 }
