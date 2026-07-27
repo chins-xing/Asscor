@@ -687,12 +687,11 @@ func (m *PersistenceModule) createHourlySnapshot() {
 		if err != nil {
 			continue
 		}
-		n, err := io.Copy(snapshotFile, f)
+		_, err = io.Copy(snapshotFile, f)
 		f.Close()
 		if err != nil {
 			logger.WithComponent("persistence").Warn("snapshot copy error", "path", src, "error", err)
-		}
-		if n > 0 {
+		} else {
 			totalEntries++
 		}
 	}
@@ -720,7 +719,9 @@ func (m *PersistenceModule) pruneSnapshots(dir string, maxKeep int) {
 
 	for i := 0; i < len(entries)-maxKeep; i++ {
 		path := filepath.Join(dir, entries[i].Name())
-		os.Remove(path)
+		if err := os.Remove(path); err != nil {
+			logger.WithComponent("persistence").Warn("failed to rotate old snapshot", "path", path, "error", err)
+		}
 	}
 }
 
