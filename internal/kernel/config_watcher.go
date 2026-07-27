@@ -251,6 +251,10 @@ func (m *ConfigWatcherModule) forceReload() {
 			"path":      m.configPath,
 			"threshold": cfg.Threshold,
 		})
+		m.kernel.Extensions().Execute(m.kernel.Context(), "extension.config_changed", map[string]interface{}{
+			"path":      m.configPath,
+			"threshold": cfg.Threshold,
+		})
 	}
 
 	logger.WithComponent("config_watcher").Info("config reloaded",

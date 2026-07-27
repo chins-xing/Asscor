@@ -221,4 +221,7 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 	r.RegisterPoint(ExtensionPoint{
 		Name: "extension.execution_error", Description: "Called when extension execution returns an error", Version: "1.0",
 	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "extension.config_changed", Description: "Called when kernel configuration is reloaded — plugins should refresh", Version: "1.0",
+	})
 }
