@@ -205,6 +205,13 @@ func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
 	}
 
 	_, err := m.writer.Write(buf)
+
+	if m.kernel != nil && m.kernel.Extensions() != nil {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "agent.log_uploaded", map[string]interface{}{
+			"entry_count": len(entries),
+		})
+	}
+
 	return err
 }
 
