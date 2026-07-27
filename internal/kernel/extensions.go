@@ -12,6 +12,9 @@ import (
 // ModuleExtensions is the extension surface exposed to plugins.
 // Modules can subscribe handlers and fire events, but CANNOT define extension points.
 // Extension point definitions are owned by the ASSCOR platform via RegisterAllExtensionPoints.
+//
+// Priority semantics: handlers are executed in ascending priority order (lower numbers first).
+// Default priority is 50. No "run-last" sentinel exists — use a large value like 999.
 type ModuleExtensions interface {
 	RegisterExtension(pluginID string, pointName string, handler ExtensionHandler, priority int) error
 	UnregisterPlugin(pluginID string)

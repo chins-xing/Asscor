@@ -1459,6 +1459,8 @@ func (m *ATTACKModule) AssessKillChain(hostID string, checkResults map[string]bo
 	return result
 }
 
+// GetTransitionMatrix returns the 4×4 Markov transition matrix.
+// Deprecated: reserved for future use, 0 callers.
 func (m *ATTACKModule) GetTransitionMatrix() TransitionMatrix {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1629,16 +1631,16 @@ type ATTCKEnhanced interface {
 	ComputeGroupBaseline(role string) *GroupBaseline
 	ApplyGroupBaseline(hostID string, role string) bool
 	BuildBayesianAttributionNetwork() *BayesianNetwork
-	PerformBayesianAttribution(chainID string) (*BayesianInferenceResult, error)
+	PerformBayesianAttribution(chainID string) (*BayesianInferenceResult, error) // 0 callers — reserved
 	FilterBeaconWithReputation(detections []BeaconDetection) []BeaconDetection
 	AddReputationEntry(entry ReputationEntry)
 	GetReputationEntries(category string) []ReputationEntry
-	LoadYARARules(rules []YARARule) int
-	LoadSigmaRules(rules []SigmaRule) int
+	LoadYARARules(rules []YARARule) int         // 0 callers — reserved
+	LoadSigmaRules(rules []SigmaRule) int         // 0 callers — reserved
 	MatchYARARules(hostID string, filePaths []string, fileContents map[string]string) []RuleMatchResult
 	MatchSigmaRules(hostID string, logEntries []map[string]string) []RuleMatchResult
-	AnalyzeCrossHostConnections(connections []CrossHostConnection) []LateralMovementEvidence
-	ComputeCausalChain(techniqueIDs []string) *CausalChain
+	AnalyzeCrossHostConnections(connections []CrossHostConnection) []LateralMovementEvidence // 0 callers
+	ComputeCausalChain(techniqueIDs []string) *CausalChain                                   // 0 callers
 }
 
 // ATTCKAuxiliary groups administrative and dead-code methods.
