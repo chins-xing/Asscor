@@ -80,6 +80,9 @@ func (b *srdBusAdapter) Publish(ctx context.Context, topic string, payload inter
 		Payload: payload,
 		Source:  "srd_adapters",
 	})
+	if b.kc.Extensions() != nil {
+		b.kc.Extensions().Execute(ctx, "srd.result_processed", payload)
+	}
 }
 
 type srdConfigAdapter struct {

@@ -232,4 +232,10 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 	r.RegisterPoint(ExtensionPoint{
 		Name: "workerpool.task_timed_out", Description: "Called when a worker pool task exceeds its timeout", Version: "1.0",
 	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "ratelimit.limit_exceeded", Description: "Called when a rate limit threshold is exceeded", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "srd.result_processed", Description: "Called after SRD pipeline processes an external tool result", Version: "1.0",
+	})
 }
