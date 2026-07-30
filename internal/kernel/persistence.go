@@ -986,6 +986,11 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		finalScore, _ := v["FinalScore"].(float64)
 		acceptable, _ := v["Acceptable"].(bool)
 
+		if hostID == "" && finalScore == 0 {
+			logger.WithComponent("persistence").Warn("dashboard record missing host/score, skipping")
+			continue
+		}
+
 		rec := AssessmentRecord{
 			Timestamp:  time.Now(),
 			HostID:     hostID,
