@@ -379,6 +379,8 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 
 	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_check", result)
 	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_score", result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_edge", result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_edge", result)
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_score", result)
 
 	m.applyCTIOnly(result)
@@ -414,8 +416,11 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	m.pushToSIEM(m.kernel.Context(), result)
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.outbound", filterAssessmentResult(result))
 
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_report", result)
+
 	m.printConsoleReport(result)
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.report_generated", result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_report", result)
 
 	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
 		Topic:   TopicAssessorResult,
@@ -529,8 +534,11 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	m.pushToSIEM(m.kernel.Context(), result)
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.outbound", filterAssessmentResult(result))
 
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_report", result)
+
 	m.printConsoleReport(result)
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.report_generated", result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_report", result)
 
 	subCount := m.kernel.Bus().SubscriberCount(TopicAssessorResult)
 	logger.WithComponent("assessor").Debug("publishing assessor.result", "subscribers", subCount)
