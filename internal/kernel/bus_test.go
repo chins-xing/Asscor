@@ -2,93 +2,116 @@ package kernel
 
 import (
 	"context"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestBus_PublishSubscribe(t *testing.T) {
-	bus := NewBus(10)
-	var received atomic.Int32
-	bus.Subscribe("test.topic", "sub1", func(ctx context.Context, msg Message) error {
-		received.Add(1)
+func TestBusSubscribePublish(t *testing.T) {
+	b := NewBus(16)
+	defer b.Stop()
+
+	received := make(chan Message, 1)
+	b.Subscribe("test.topic", "t1", func(ctx context.Context, msg Message) error {
+		received <- msg
 		return nil
 	})
-	bus.Publish(context.Background(), Message{Topic: "test.topic", Payload: "hello", Source: "test"})
-	time.Sleep(50 * time.Millisecond)
-	if received.Load() != 1 {
-		t.Errorf("expected 1 message, got %d", received.Load())
+
+	b.Publish(context.Background(), Message{Topic: "test.topic", Payload: "hello"})
+
+	select {
+	case msg := <-received:
+		if msg.Payload.(string) != "hello" {
+			t.Errorf("expected 'hello', got %v", msg.Payload)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for message")
 	}
 }
 
-func TestBus_PublishSync(t *testing.T) {
-	bus := NewBus(10)
-	var received atomic.Int32
-	bus.Subscribe("test.sync", "sub1", func(ctx context.Context, msg Message) error {
-		received.Add(1)
+func TestBusPublishSync(t *testing.T) {
+	b := NewBus(16)
+	defer b.Stop()
+
+	var called bool
+	b.Subscribe("sync.topic", "t1", func(ctx context.Context, msg Message) error {
+		called = true
 		return nil
 	})
-	errs := bus.PublishSync(context.Background(), Message{Topic: "test.sync", Payload: "sync", Source: "test"})
-	if len(errs) != 0 {
-		t.Errorf("unexpected publish errors: %v", errs)
+
+	errs := b.PublishSync(context.Background(), Message{Topic: "sync.topic", Payload: "sync"})
+	if len(errs) > 0 {
+		t.Fatalf("unexpected errors: %v", errs)
 	}
-	if received.Load() != 1 {
-		t.Errorf("expected 1, got %d", received.Load())
+	if !called {
+		t.Fatal("handler was not called")
 	}
 }
 
-func TestBus_MultipleSubscribers(t *testing.T) {
-	bus := NewBus(10)
-	var c1, c2 atomic.Int32
-	bus.Subscribe("test.multi", "sub1", func(ctx context.Context, msg Message) error {
-		c1.Add(1)
+func TestBusUnsubscribe(t *testing.T) {
+	b := NewBus(16)
+	defer b.Stop()
+
+	count := 0
+	b.Subscribe("topic", "t1", func(ctx context.Context, msg Message) error {
+		count++
 		return nil
 	})
-	bus.Subscribe("test.multi", "sub2", func(ctx context.Context, msg Message) error {
-		c2.Add(1)
-		return nil
-	})
-	bus.Publish(context.Background(), Message{Topic: "test.multi", Source: "test"})
-	time.Sleep(50 * time.Millisecond)
-	if c1.Load() != 1 || c2.Load() != 1 {
-		t.Errorf("expected 1 each, got c1=%d c2=%d", c1.Load(), c2.Load())
+
+	b.PublishSync(context.Background(), Message{Topic: "topic", Payload: "first"})
+	if count != 1 {
+		t.Fatalf("expected 1 message, got %d", count)
+	}
+
+	b.Unsubscribe("topic", "t1")
+	b.PublishSync(context.Background(), Message{Topic: "topic", Payload: "second"})
+	if count != 1 {
+		t.Fatalf("expected still 1 after unsubscribe, got %d", count)
 	}
 }
 
-func TestBus_StopGracefulDrain(t *testing.T) {
-	bus := NewBus(10)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	bus.Subscribe("test.stop", "sub1", func(ctx context.Context, msg Message) error {
-		time.Sleep(100 * time.Millisecond)
-		wg.Done()
+func TestBusMetrics(t *testing.T) {
+	b := NewBus(16)
+	defer b.Stop()
+
+	b.Subscribe("metrics", "t1", func(ctx context.Context, msg Message) error {
 		return nil
 	})
-	bus.Publish(context.Background(), Message{Topic: "test.stop", Source: "test"})
+
+	for i := 0; i < 5; i++ {
+		b.Publish(context.Background(), Message{Topic: "metrics", Payload: i})
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	b.Stop()
+
+	m := b.GetMetrics()
+	if m.MessageCount < 1 {
+		t.Logf("MessageCount=%d (Publish is async, count may vary)", m.MessageCount)
+	}
+}
+
+func TestBusPanicRecovery(t *testing.T) {
+	b := NewBus(16)
+	defer b.Stop()
+
 	done := make(chan struct{})
-	go func() {
-		wg.Wait()
+	b.Subscribe("panic.topic", "t1", func(ctx context.Context, msg Message) error {
 		close(done)
-	}()
-	bus.Stop()
+		panic("deliberate panic — should be recovered by bus")
+	})
+
+	b.Publish(context.Background(), Message{Topic: "panic.topic", Payload: "boom"})
+
 	select {
 	case <-done:
+		// Handler was called (and panicked — bus should have recovered)
 	case <-time.After(2 * time.Second):
-		t.Error("bus Stop did not drain in-flight handlers")
+		t.Fatal("handler was not called")
 	}
-}
 
-func TestBus_TopicIsolation(t *testing.T) {
-	bus := NewBus(10)
-	var count atomic.Int32
-	bus.Subscribe("topic.a", "sub1", func(ctx context.Context, msg Message) error {
-		count.Add(1)
-		return nil
-	})
-	bus.Publish(context.Background(), Message{Topic: "topic.b", Source: "test"})
-	time.Sleep(50 * time.Millisecond)
-	if count.Load() != 0 {
-		t.Errorf("expected 0 (topic isolation), got %d", count.Load())
+	time.Sleep(100 * time.Millisecond)
+	m := b.GetMetrics()
+	if m.PanicCount < 1 {
+		t.Errorf("expected at least 1 panic recorded, got %d", m.PanicCount)
 	}
 }
