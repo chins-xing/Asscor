@@ -1516,6 +1516,21 @@ func (m *ATTACKModule) UpsertAPTGroup(profile APTGroupProfile) {
 	m.aptGroups[profile.GroupID] = &profile
 }
 
+// ATTACKInterface is the composite DI interface for the ATT&CK module.
+// It aggregates 8 sub-interfaces organized by concern (85 total methods):
+//
+//   ATTCKCore            ~18 methods — tactics, techniques, coverage, kill chain, APT matching, risk prediction
+//   ATTCKDetection        ~8 methods — rules, alerts, anomaly detection, behavioral analysis, beacon detection
+//   ATTCKIntelligence     ~12 methods — IOC management, threat actors, TTPs, alert enrichment, summarization
+//   ATTCKEmulation        ~12 methods — scenario management, APT→scenario generation, emulation execution (test-only)
+//   ATTCKAssessment?       ~9 methods — gap analysis, control mapping, mitigation, improvement tracking (test-only)
+//   ATTCKAPTModules      ~18 methods — chain reconstruction, behavioral/beacon detection, Bayesian attribution, hunting
+//   ATTCKEnhanced         ~10 methods — YARA rules, Sigma rules, reputation, cross-host analysis (5 methods at 0 callers)
+//   ATTCKAuxiliary        ~3 methods — transition matrix (0 callers), admin utilities
+//
+// Sub-interfaces marked "test-only" have methods called only from test files behind the //go:build attck_ext tag.
+// Sub-interfaces marked "0 callers" have methods defined but never invoked in production or test code.
+// These are reserved for future ATT&CK enhancements and retained for DI compatibility.
 type ATTACKInterface interface {
 	ATTCKCore
 	ATTCKDetection
