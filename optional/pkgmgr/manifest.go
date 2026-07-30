@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/asscor/asscor/internal/semver"
 )
 
 // PackageManifest represents a package.json file.
@@ -325,95 +327,26 @@ func detectCycles(g *DependencyGraph) [][]string {
 	return cycles
 }
 
-var semVerRe = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$`)
+func isSemVer(v string) bool {
+	_, err := semver.Parse(v)
+	return err == nil
+}
+
 var pkgNameRe = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
-func isSemVer(v string) bool    { return semVerRe.MatchString(v) }
 func isValidPackageName(n string) bool { return pkgNameRe.MatchString(n) }
 
 func versionSatisfies(actual, constraint string) bool {
 	if constraint == "" || actual == constraint {
 		return true
 	}
-
-	// Parse constraint operators
-	constraint = strings.TrimSpace(constraint)
-
-	// Range: "1.0.0 - 2.0.0"
-	if strings.Contains(constraint, " - ") {
-		parts := strings.SplitN(constraint, " - ", 2)
-		return compareSemVer(actual, parts[0]) >= 0 && compareSemVer(actual, parts[1]) <= 0
+	av, err := semver.Parse(actual)
+	if err != nil {
+		return false
 	}
-
-	// ^1.2.3 → >=1.2.3 <2.0.0
-	if strings.HasPrefix(constraint, "^") {
-		minV := constraint[1:]
-		major := strings.SplitN(minV, ".", 2)[0]
-		maxV := incMajor(major) + ".0.0"
-		return compareSemVer(actual, minV) >= 0 && compareSemVer(actual, maxV) < 0
+	vc, err := semver.ParseConstraint(constraint)
+	if err != nil {
+		return actual == constraint
 	}
-
-	// ~1.2.3 → >=1.2.3 <1.3.0
-	if strings.HasPrefix(constraint, "~") {
-		minV := constraint[1:]
-		parts := strings.SplitN(minV, ".", 3)
-		if len(parts) >= 2 {
-			nextMinor := atoi(parts[1]) + 1
-			maxV := fmt.Sprintf("%s.%d.0", parts[0], nextMinor)
-			return compareSemVer(actual, minV) >= 0 && compareSemVer(actual, maxV) < 0
-		}
-		return compareSemVer(actual, minV) >= 0
-	}
-
-	// >=1.0.0
-	if strings.HasPrefix(constraint, ">=") {
-		return compareSemVer(actual, constraint[2:]) >= 0
-	}
-	if strings.HasPrefix(constraint, ">") {
-		return compareSemVer(actual, constraint[1:]) > 0
-	}
-	if strings.HasPrefix(constraint, "<=") {
-		return compareSemVer(actual, constraint[2:]) <= 0
-	}
-	if strings.HasPrefix(constraint, "<") {
-		return compareSemVer(actual, constraint[1:]) < 0
-	}
-
-	// 1.x → ~1.0.0
-	if strings.Contains(constraint, "x") || strings.Contains(constraint, "X") || strings.Contains(constraint, "*") {
-		lo := strings.NewReplacer("x", "0", "X", "0", "*", "0").Replace(constraint)
-		hiParts := strings.SplitN(lo, ".", 3)
-		if len(hiParts) > 0 {
-			hiParts[0] = fmt.Sprintf("%d", atoi(hiParts[0])+1)
-		}
-		hi := strings.Join(hiParts, ".")
-		return compareSemVer(actual, lo) >= 0 && compareSemVer(actual, hi) < 0
-	}
-
-	// Exact match (already handled above by == check, but belt-and-suspenders)
-	return actual == constraint
-}
-
-func compareSemVer(a, b string) int {
-	aParts := strings.SplitN(strings.SplitN(a, "-", 2)[0], ".", 3)
-	bParts := strings.SplitN(strings.SplitN(b, "-", 2)[0], ".", 3)
-	for i := 0; i < 3; i++ {
-		av, bv := 0, 0
-		if i < len(aParts) { av = atoi(aParts[i]) }
-		if i < len(bParts) { bv = atoi(bParts[i]) }
-		if av < bv { return -1 }
-		if av > bv { return 1 }
-	}
-	return 0
-}
-
-func incMajor(major string) string {
-	m := atoi(major)
-	return fmt.Sprintf("%d", m+1)
-}
-
-func atoi(s string) int {
-	var n int
-	fmt.Sscanf(s, "%d", &n)
-	return n
+	return vc.SatisfiedBy(av)
 }
