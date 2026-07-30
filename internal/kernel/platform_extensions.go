@@ -224,4 +224,12 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 	r.RegisterPoint(ExtensionPoint{
 		Name: "extension.config_changed", Description: "Called when kernel configuration is reloaded — plugins should refresh", Version: "1.0",
 	})
+
+	// ── 基础设施扩展点 (breaker, workerpool) ──
+	r.RegisterPoint(ExtensionPoint{
+		Name: "breaker.state_changed", Description: "Called when circuit breaker changes state (closed→open→half_open)", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "workerpool.task_timed_out", Description: "Called when a worker pool task exceeds its timeout", Version: "1.0",
+	})
 }
