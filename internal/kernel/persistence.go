@@ -988,7 +988,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 
 		if hostID == "" && finalScore == 0 {
 			logger.WithComponent("persistence").Warn("dashboard record missing host/score, skipping")
-			continue
+			return nil
 		}
 
 		rec := AssessmentRecord{
