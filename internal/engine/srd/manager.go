@@ -2,12 +2,12 @@ package srd
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/asscor/asscor/internal/common"
 	"github.com/asscor/asscor/internal/logger"
 )
 
@@ -414,13 +414,4 @@ type SRDManagerInterface interface {
 
 // --- config helper ---
 
-func parseInt(s string) (int, error) {
-	var n int
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, fmt.Errorf("invalid digit in parseInt: %q in %q", c, s)
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n, nil
-}
+func parseInt(s string) (int, error) { return common.ParseInt(s) }

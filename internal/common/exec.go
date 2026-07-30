@@ -219,3 +219,14 @@ func RunCmdQuiet(name string, args ...string) (string, bool) {
 	}
 	return out, true
 }
+
+func ParseInt(s string) (int, error) {
+	var n int
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("invalid digit in ParseInt: %q in %q", c, s)
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n, nil
+}

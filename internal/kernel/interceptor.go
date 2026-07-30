@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/asscor/asscor/internal/common"
 	"github.com/asscor/asscor/internal/logger"
 )
 
@@ -229,10 +230,4 @@ func parseFloat64(s string) (float64, error) {
 	return f, nil
 }
 
-func parseInt(s string) (int, error) {
-	i, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, err
-	}
-	return i, nil
-}
+func parseInt(s string) (int, error) { return common.ParseInt(s) }
