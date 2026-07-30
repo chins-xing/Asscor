@@ -437,6 +437,7 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	m.mu.RUnlock()
 
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_evaluate", hostID)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_check", map[string]interface{}{"host_id": hostID, "checks_count": len(checkResults)})
 	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.pre_check", map[string]interface{}{
 		"host_id":   hostID,
 		"trigger":   "heartbeat",
@@ -474,6 +475,8 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 		}
 	}
 
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_check", result)
+
 	if len(result.Checks) == 0 {
 		result.Acceptable = true
 		result.FinalScore = 100
@@ -486,9 +489,11 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 		result.ThreatCoeff = threatCoeff
 		result.SPCScore = 1.0
 	} else {
+		m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_score", result)
 		m.applySPCAndCTI(hostID, result)
 		m.applyATTACK(hostID, result)
 		result.FinalScore = m.engine.RecomputeFinalScore(result)
+		m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_score", result)
 	}
 
 	logger.WithComponent("assessor").Info("assessment score computed", "host_id", hostID, "score", result.FinalScore, "spc_score", result.SPCScore, "threat_coeff", result.ThreatCoeff)
