@@ -372,8 +372,13 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 		prevScore = prevResult.FinalScore
 	}
 
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_check", map[string]interface{}{"host_id": hostID})
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_score", map[string]interface{}{"host_id": hostID})
+
 	result := m.engine.Assess(hostID, hostID)
 
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_check", result)
+	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_score", result)
 	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_score", result)
 
 	m.applyCTIOnly(result)

@@ -20,6 +20,16 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 	r.RegisterPoint(ExtensionPoint{
 		Name: "assessor.outbound", Description: "Called after assessment completes — plugins can push to SIEM/webhook/SOAR", Version: "1.0",
 	})
+
+	// Engine phase bridge — connects engine.HookRegistry (8 phases) to kernel Extension Points.
+	// Plugins can subscribe to these to hook into engine pipeline phases:
+	//   pre_check, post_check, pre_score, post_score, pre_edge, post_edge, pre_report, post_report
+	for _, phase := range []string{"pre_check", "post_check", "pre_score", "post_score", "pre_edge", "post_edge", "pre_report", "post_report"} {
+		r.RegisterPoint(ExtensionPoint{
+			Name: "engine." + phase, Description: "Engine assessment pipeline phase — bridges engine.HookRegistry to kernel extension points", Version: "1.0",
+		})
+	}
+
 	r.RegisterPoint(ExtensionPoint{
 		Name: "spc.pre_calculate", Description: "Called before SPC calculation", Version: "1.0",
 	})
