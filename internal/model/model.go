@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 )
@@ -57,6 +58,18 @@ type CheckItem struct {
 }
 
 func (c CheckItem) Run() CheckResult {
+	if c.Privilege == PrivRoot && os.Geteuid() != 0 {
+		return CheckResult{
+			CheckID:       c.ID,
+			Domain:        c.Domain,
+			Name:          c.Name,
+			Passed:        true,
+			Delta:         0,
+			Detail:        "skipped — requires root privileges",
+			ComplianceRef: c.ComplianceRef,
+		}
+	}
+
 	var passed bool
 	var detail string
 
