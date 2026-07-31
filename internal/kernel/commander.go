@@ -417,9 +417,3 @@ func generateCmdID(hostID, action string) string {
 	h := sha256.Sum256([]byte(hostID + ":" + action + ":" + rnd))
 	return hex.EncodeToString(h[:8])
 }
-
-type CommanderInterface interface {
-	EnqueueCommand(hostID string, action string, params map[string]string) string
-	DequeueCommands(hostID string) []*apiv1.Command
-	AckCommand(hostID string, cmdID string, success bool, output string)
-}

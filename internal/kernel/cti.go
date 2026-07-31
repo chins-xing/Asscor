@@ -397,9 +397,3 @@ func (m *CTIModule) HealthCheck(ctx context.Context) error {
 	}
 	return nil
 }
-
-type CTIInterface interface {
-	GetCoefficient() float64
-	ReportThreat(severity string)
-	ClearThreat()
-}
