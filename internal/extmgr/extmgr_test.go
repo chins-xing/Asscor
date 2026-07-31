@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/asscor/asscor/internal/kernel"
 )
 
 func TestParseSemVer(t *testing.T) {
@@ -757,5 +759,61 @@ func TestSemVerString(t *testing.T) {
 				t.Errorf("String() = %q, want %q", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestExtensionBridgeToKernelExtensionPoints(t *testing.T) {
+	extReg := kernel.NewExtensionRegistry()
+	extReg.RegisterPoint(kernel.ExtensionPoint{Name: "assessor.pre_evaluate"})
+
+	mgr := NewExtensionManager(DefaultManagerConfig())
+	mgr.SetKernelExtensions(extReg)
+
+	spec := ExtensionSpec{
+		ID:           "test-bridge-plugin",
+		Name:         "Test Bridge Plugin",
+		Version:      "1.0.0",
+		ExtType:      ExtTypeHook,
+		InstallPath:  t.TempDir(),
+		CustomConfig: map[string]string{"extension_point": "assessor.pre_evaluate"},
+		State:        ExtStateEnabled,
+	}
+
+	mgr.onExtensionInstalled(spec)
+
+	exts := extReg.ListExtensions("assessor.pre_evaluate")
+	if len(exts) != 1 {
+		t.Fatalf("expected 1 extension on assessor.pre_evaluate, got %d: %v", len(exts), exts)
+	}
+	if exts[0] != "test-bridge-plugin" {
+		t.Errorf("expected 'test-bridge-plugin', got %s", exts[0])
+	}
+}
+
+func TestExtensionBridgeDisableUnregisters(t *testing.T) {
+	extReg := kernel.NewExtensionRegistry()
+	extReg.RegisterPoint(kernel.ExtensionPoint{Name: "assessor.pre_evaluate"})
+
+	mgr := NewExtensionManager(DefaultManagerConfig())
+	mgr.SetKernelExtensions(extReg)
+
+	spec := ExtensionSpec{
+		ID:           "test-disable-plugin",
+		Name:         "Test Disable",
+		Version:      "1.0.0",
+		ExtType:      ExtTypeHook,
+		InstallPath:  t.TempDir(),
+		CustomConfig: map[string]string{"extension_point": "assessor.pre_evaluate"},
+		State:        ExtStateEnabled,
+	}
+
+	mgr.onExtensionInstalled(spec)
+	if exts := extReg.ListExtensions("assessor.pre_evaluate"); len(exts) != 1 {
+		t.Fatalf("expected 1 after install, got %d", len(exts))
+	}
+
+	mgr.onExtensionDisabled(spec)
+	if exts := extReg.ListExtensions("assessor.pre_evaluate"); len(exts) != 0 {
+		t.Fatalf("expected 0 after disable, got %d", len(exts))
 	}
 }
