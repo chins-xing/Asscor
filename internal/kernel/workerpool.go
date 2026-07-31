@@ -11,11 +11,12 @@ import (
 )
 
 type WorkerPool struct {
-	semaphore chan struct{}
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	metrics   *WorkerPoolMetrics
+	semaphore     chan struct{}
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	metrics       *WorkerPoolMetrics
+	onTaskTimeout func() // called when a task times out (optional)
 }
 
 type WorkerPoolMetrics struct {
@@ -98,6 +99,9 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 				p.metrics.totalTimeout++
 				p.metrics.mu.Unlock()
 				logger.WithComponent("workerpool").Warn("task timed out, cancelling", "timeout", timeout)
+				if p.onTaskTimeout != nil {
+					p.onTaskTimeout()
+				}
 				taskCancel()
 				drainTimer := time.NewTimer(5 * time.Second)
 				select {
@@ -221,6 +225,13 @@ func (m *ConcurrencyModule) Start(ctx context.Context) error {
 	m.stateMu.Lock()
 	m.state = PluginStarted
 	m.stateMu.Unlock()
+
+	if m.kernel != nil && m.kernel.Extensions() != nil {
+		m.workerPool.SetOnTaskTimeout(func() {
+			m.kernel.Extensions().Execute(m.kernel.Context(), "workerpool.task_timed_out", nil)
+		})
+	}
+
 	logger.WithComponent("concurrency").Info("started", "max_workers", m.workerPool.MaxConcurrency())
 	return nil
 }
@@ -322,5 +333,8 @@ type WorkerPoolInterface interface {
 	ActiveWorkers() int
 	AvailableSlots() int
 	MaxConcurrency() int
-	Metrics() WorkerPoolMetrics
+}
+
+func (p *WorkerPool) SetOnTaskTimeout(cb func()) {
+	p.onTaskTimeout = cb
 }
