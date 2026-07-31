@@ -14,29 +14,6 @@ import (
 	"time"
 )
 
-func DefaultCAConfig() CertConfig {
-	return CertConfig{
-		Organization: "ASSCOR Security CA",
-		CommonName:   "ASSCOR Root CA",
-		ValidDays:    3650,
-	}
-}
-
-func DefaultServerCertConfig() CertConfig {
-	return CertConfig{
-		Organization: "ASSCOR Security",
-		CommonName:   "ASSCOR Kernel Server",
-		ValidDays:    365,
-	}
-}
-
-func DefaultAgentConfig(hostID string) CertConfig {
-	return CertConfig{
-		Organization: "ASSCOR Security",
-		CommonName:   fmt.Sprintf("ASSCOR Agent %s", hostID),
-		ValidDays:    365,
-	}
-}
 
 func GenerateCA(config CertConfig) (*CertPair, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 4096)
