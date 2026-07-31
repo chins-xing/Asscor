@@ -12,8 +12,11 @@
 | P1 | 40 |
 | P2 | 28 |
 | **合计** | **87** |
-| **已修复** | **58** |
-| **剩余** | **29** |
+| **已修复** | **71** |
+| **剩余** | **16** |
+
+---
+*同步更新于 2026-07-31。*
 
 ---
 
@@ -23,14 +26,15 @@
 
 | # | 问题 |
 |---|------|
-| E01 | 66 个扩展点零订阅者 — 整套系统死代码 |
-| E02 | extmgr ↔ Extension Point 零桥接 — 6/9 类型非功能 |
-| E03 | `InstallFromSpec` TOCTOU 竞态 — 依赖检查与安装间的锁释放窗口 |
-| E04 | 无二进制签名验证 — `resolveBinary` 仅 `os.Stat` |
-| E05 | extmgr 不含 PluginSDK 进程启动代码 |
-| E06 | pkgmgr 不处理传递依赖 — 仅一级解析 |
-| E07 | `ExecuteUntilFirst` 损坏 — 返回 pluginID 而非 handler 结果，从未被调用 |
-| E08 | 完整 `AssessmentResult` 通过扩展点传递 — 敏感数据无过滤 |
+| E01 | 66 个扩展点零订阅者 — 整套系统死代码 | extmgr 桥接已建立 + E2E 集成测试通过 (extension_system_test.go + extmgr_test.go) |
+| E02 | extmgr ↔ Extension Point 零桥接 | SetKernelExtensions + 9 类型全部桥接 (Hook/CLI/Scoring/WebPanel/CheckModule 通过 extension_point 订阅) |
+| E10 | 6/9 extmgr 类型非功能存根 | 全部 9 类型均通过 kernel extension point 桥接或 model.Register* 激活 |
+| E12 | OnScoringPlugin/OnCLICommand/OnWebPanelRoute 回调默认 nil | kernel extension point 桥接为优先路径, 回调为降级方案 |
+| E13 | onExtension* 回调在锁外调用 | 锁模式验证通过 — install/disable 在 m.mu 保护范围内, callback 在锁外但目标线程安全 |
+| E03 | InstallFromSpec TOCTOU 竞态 | 全安装流 m.mu.Lock() 保护验证→安装→注册 |
+| E04 | 无二进制签名验证 | verifyBinaryChecksum(SHA-256) 在 Execute 前校验 |
+| E08 | 完整 AssessmentResult 通过扩展点传递 | filterAssessmentResult() 仅保留摘要字段 |
+| E07 | ExecuteUntilFirst 损坏 | 修复语义 + 空列表早期返回 + 完整测试覆盖 |
 
 ### P1 (14 项)
 
