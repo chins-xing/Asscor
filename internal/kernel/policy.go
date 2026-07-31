@@ -178,12 +178,14 @@ func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, [
 			})
 		}
 
-		if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
-			Topic:   TopicPolicyAction,
-			Payload: action,
-			Source:  "policy",
-		}); len(errs) > 0 {
-			logger.WithComponent("policy").Warn("sync publish errors", "count", len(errs))
+		if m.kernel != nil {
+			if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
+				Topic:   TopicPolicyAction,
+				Payload: action,
+				Source:  "policy",
+			}); len(errs) > 0 {
+				logger.WithComponent("policy").Warn("sync publish errors", "count", len(errs))
+			}
 		}
 	}
 
