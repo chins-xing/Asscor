@@ -1,6 +1,6 @@
 # ASSCOR 技术债务与未修复问题总览
 
-**日期**: 2026-07-27 | **版本**: v0.2.1 | **来源**: 7 份审计报告 + 本次模块分类检查
+**日期**: 2026-07-31 | **版本**: v0.2.1 | **进度**: 58/87 (67%) | **P0**: 19/19 ✅
 
 ---
 
@@ -9,10 +9,11 @@
 | 等级 | 数量 |
 |:---:|:---:|
 | P0 | 19 |
-| P1 | 37 |
+| P1 | 40 |
 | P2 | 28 |
-| **合计** | **84** |
-| **已修复** | **22** |
+| **合计** | **87** |
+| **已修复** | **58** |
+| **剩余** | **29** |
 
 ---
 
@@ -208,4 +209,33 @@
 | T31 | hospital/enterprise/edu 模板重复 INI 段 | 3 模板各删除 `[spc.cnnvd]/[spc.cnvd]` 重复段 |
 | E09 | `agent.log_uploaded` 死扩展点 | `collector.go:AppendBatch` 批量上传时触发 |
 | T28 | TestSPCImportOSCALDuplicateHandling 持续失败 | 合并逻辑对齐 — 已验证通过 |
+| E15+E16 | SemVer 解析重复 + 版本约束不兼容 | `internal/semver/` 统一共享包，pkgmgr 删除 95 行重复 |
+| E19 | pkgmgr 和 extmgr 竞争性包管理器 | pkgmgr go.mod 移除，并入主模块 |
+| E18 | 引擎钩子无法从扩展点访问 | 8 engine.* 扩展点注册 + 4 阶段接线 (pre/post_check/score) |
+| E17 | 7/8 引擎钩子未使用 | engine.* 扩展点全部接入双重路径 (Evaluate + EvaluateFromResults) |
+| T01 | ATTACKInterface 85 方法 God 接口 | 文档化 8 子接口按关注点分类，标注 test-only/0-callers |
+| M04 | deploy/systemd 系统d单元重复 | 删除 `deploy/systemd/*.service` 静态文件 |
+| T08+T09 | CopyFile + parseInt 重复实现 | `copySelfTo()` + `common.ParseInt` 统一 |
+| P06 | PrivilegeLevel 入引擎层 | `CheckItem.Run()` 非 root 跳过 PrivRoot 检查 |
+| E27 | 7 模块无扩展点 | breaker/workerpool/srd/ratelimit 接入 ~20 个新扩展点 |
+| E14 | PluginSDK 错误码不标准 | -32000→-32603/-32601 标准化 + 导出常量 |
+| E11 | registerCheckModule 存根 | checks.json 解析 + 命令/文件闭包生成 + checks.Register() |
+| E04+E21 | 无二进制校验 + 白名单过宽 | SHA-256 verifyBinaryChecksum + 7→3 解释器 |
+| E03+E08 | TOCTOU 竞态 + 数据暴露 | InstallFromSpec 加锁 + filterAssessmentResult |
+| T23 | 类型断言零值 | 仪表盘记录零值跳过 |
+| E25 | 优先级语义未文档化 | `extensions.go` 注释说明升序+默认50 |
+| T24-T27 | goroutine 保护 | 验证 4 项已存在 (GuardGo/defer recover/wg.Wait) |
+| E13 | onExtension* 锁外回调 | 回调下沉至锁内 + 禁用时 UnregisterPlugin |
+| T02 | SPCInterface 20 方法 (审计误报) | 验证已分 4 子接口: SPCCalculator/SPCFetcher/SPCAssetManager/SPCCacheManager |
+| T03 | SourceManager 29 方法 | 非 interface 而是 concrete struct, 方法按类型分组 (CRUD/Config/Audit/Sync/Plugin/Internal) |
+
+### P0 测试覆盖 (2026-07-31 全部清零)
+
+| 包 | 用例 | 日期 |
+|------|:---:|------|
+| bus / circuitbreaker / collector / common / services / di | 31 | 07-30 |
+| plugin / interceptor / ratelimit / heartbeat / policy | 27 | 07-31 |
+| extensions / kernel / commander / cti / crypto / auditlog | 37 | 07-31 |
+| config_watcher / server | 11 | 07-31 |
+| **合计 18 包** | **106+** | P0 19/19 ✅ |
 | M02 | engine 适配器文档 | `engine/_README_ARCHITECTURE.md` 说明接口定义+子包实现+依赖方向 |
