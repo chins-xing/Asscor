@@ -199,8 +199,3 @@ func (m *PolicyModule) onAssessmentResult(ctx context.Context, msg Message) erro
 
 	return nil
 }
-
-type PolicyInterface interface {
-	EvaluateHost(hostID string, score float64) (HostStatus, []PolicyAction)
-	GetHostStatus(hostID string) HostStatus
-}

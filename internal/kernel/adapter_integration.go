@@ -221,8 +221,3 @@ func (m *AdapterIntegrationModule) getAdapterConfig() map[string]string {
 	}
 	return cfg
 }
-
-type AdapterIntegrationInterface interface {
-	RunAdapters(ctx context.Context) []adapter.PipelineResult
-	CollectFindings() []model.CheckResult
-}

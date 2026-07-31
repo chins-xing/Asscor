@@ -29,3 +29,8 @@ type PolicyAction struct {
 	Params  map[string]string
 	Message string
 }
+
+type PolicyInterface interface {
+	EvaluateHost(hostID string, score float64) (HostStatus, []PolicyAction)
+	GetHostStatus(hostID string) HostStatus
+}
