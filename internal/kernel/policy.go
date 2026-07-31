@@ -10,36 +10,6 @@ import (
 	"github.com/asscor/asscor/internal/model"
 )
 
-type HostStatus int
-
-const (
-	HostOK HostStatus = iota
-	HostWarning
-	HostCritical
-	HostIsolated
-)
-
-func (s HostStatus) String() string {
-	switch s {
-	case HostOK:
-		return "OK"
-	case HostWarning:
-		return "Warning"
-	case HostCritical:
-		return "Critical"
-	case HostIsolated:
-		return "Isolated"
-	default:
-		return "Unknown"
-	}
-}
-
-type PolicyAction struct {
-	Action  string
-	Params  map[string]string
-	Message string
-}
-
 type PolicyModule struct {
 	kernel KernelContext
 	cfg    *config.Config
@@ -55,7 +25,7 @@ func (m *PolicyModule) Info() PluginInfo {
 	return PluginInfo{
 		Name:        "policy",
 		Version:     "1.2.0",
-		Description: "Policy manager — evaluates scores against thresholds and triggers automated actions",
+		Description: "Policy manager 鈥?evaluates scores against thresholds and triggers automated actions",
 		Author:      "ASSCOR Core Team",
 	}
 }
