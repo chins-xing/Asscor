@@ -9,16 +9,6 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-type AgentRecord struct {
-	HostID      string
-	Hostname    string
-	Version     string
-	LastSeen    time.Time
-	Registered  time.Time
-	Connections int64
-	Active      bool
-}
-
 type HeartbeatModule struct {
 	kernel KernelContext
 
@@ -264,12 +254,4 @@ func (m *HeartbeatModule) pruneDeadAgents() {
 			logger.WithComponent("heartbeat").Info("pruned dead agent", "host_id", id, "last_seen", agent.LastSeen.Format(time.RFC3339))
 		}
 	}
-}
-
-type HeartbeatInterface interface {
-	RecordHeartbeat(hostID string)
-	RegisterAgent(hostID, hostname, version string)
-	GetAgent(hostID string) *AgentRecord
-	ListAgents() []*AgentRecord
-	IsAlive(hostID string) bool
 }
