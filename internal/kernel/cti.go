@@ -333,7 +333,7 @@ func (m *CTIModule) updateCoefficient() {
 
 	m.lastUpdate = time.Now()
 
-	if m.coefficient != prevCoeff && m.kernel.Extensions() != nil {
+	if m.coefficient != prevCoeff && m.kernel != nil && m.kernel.Extensions() != nil {
 		m.kernel.Extensions().Execute(m.kernel.Context(), "cti.coefficient_changed", map[string]interface{}{
 			"prev_coeff": prevCoeff,
 			"new_coeff":  m.coefficient,
@@ -372,11 +372,13 @@ func (m *CTIModule) ReportThreat(severity string) {
 	defer m.mu.Unlock()
 	m.activeThreats += weight
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
-		Topic:   "cti.threat_detected",
-		Payload: map[string]interface{}{"severity": severity, "weight": weight, "active_count": m.activeThreats},
-		Source:  "cti",
-	})
+	if m.kernel != nil {
+		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+			Topic:   "cti.threat_detected",
+			Payload: map[string]interface{}{"severity": severity, "weight": weight, "active_count": m.activeThreats},
+			Source:  "cti",
+		})
+	}
 }
 
 func (m *CTIModule) ClearThreat() {
