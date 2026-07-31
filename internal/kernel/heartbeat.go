@@ -119,18 +119,20 @@ func (m *HeartbeatModule) RecordHeartbeat(hostID string) {
 	agent.LastSeen = time.Now()
 	agent.Connections++
 	agent.Active = true
-	if wasInactive && m.kernel.Extensions() != nil {
+	if wasInactive && m.kernel != nil && m.kernel.Extensions() != nil {
 		m.kernel.Extensions().Execute(m.kernel.Context(), "heartbeat.agent_reconnected", map[string]interface{}{
 			"host_id":      hostID,
 			"connections":  agent.Connections,
 		})
 	}
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
-		Topic:   "agent.heartbeat",
-		Payload: hostID,
-		Source:  "heartbeat",
-	})
+	if m.kernel != nil {
+		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+			Topic:   "agent.heartbeat",
+			Payload: hostID,
+			Source:  "heartbeat",
+		})
+	}
 }
 
 func (m *HeartbeatModule) RegisterAgent(hostID, hostname, version string) {
