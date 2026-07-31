@@ -829,13 +829,6 @@ func (m *AssessorModule) ReloadConfig(cfg *config.Config) {
 		"threat_coeff", cfg.ThreatCoeff)
 }
 
-type AssessorInterface interface {
-	Evaluate(hostID string) *model.AssessmentResult
-	EvaluateFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
-	GetResult(hostID string) *model.AssessmentResult
-	ReloadConfig(cfg *config.Config)
-}
-
 func modelCoverage(results []model.CheckResult) float64 {
 	all := checks.GetAll()
 	if len(all) == 0 || len(results) == 0 {
