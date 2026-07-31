@@ -483,6 +483,12 @@ func (m *PersistenceModule) WriteAssessment(record AssessmentRecord) error {
 			"host_id": record.HostID,
 			"score":   record.FinalScore,
 		})
+		m.kernel.Extensions().Execute(m.kernel.Context(), "persistence.record_written", map[string]interface{}{
+			"dataset":  "assessments",
+			"host_id":  record.HostID,
+			"score":    record.FinalScore,
+			"checks":   len(record.Checks),
+		})
 	}
 	return err
 }

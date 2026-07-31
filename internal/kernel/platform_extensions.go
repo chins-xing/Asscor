@@ -220,6 +220,9 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 	r.RegisterPoint(ExtensionPoint{
 		Name: "persistence.dashboard_written", Description: "Called after dashboard report is atomically written", Version: "1.0",
 	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "persistence.record_written", Description: "Called after each assessment record is appended to JSONL", Version: "1.0",
+	})
 
 	// ── 扩展管理器生命周期 (extmgr) ──
 	r.RegisterPoint(ExtensionPoint{
