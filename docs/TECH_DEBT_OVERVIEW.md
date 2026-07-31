@@ -40,30 +40,26 @@
 
 | # | 问题 |
 |---|------|
-| E09 | 5 个扩展点定义但从未触发 (`log.entry_received`, `agent.log_uploaded`, `siem.post_push`, `siem.push_failure`, `commander.key_rotated`) |
-| E10 | 6/9 extmgr 类型非功能存根 |
-| E11 | `registerCheckModule` 仅日志，不注册实际检查 |
-| E12 | `OnScoringPlugin`/`OnCLICommand`/`OnWebPanelRoute` 回调默认 nil |
-| E13 | `onExtension*` 回调在锁外调用 — assessor 引用可能过期 |
-| E14 | PluginSDK JSON-RPC 错误码不标准 |
-| E15 | pkgmgr vs extmgr 版本约束语法不兼容 |
-| E16 | SemVer 解析在 extmgr 和 pkgmgr 中重复实现 |
-| E17 | 7/8 引擎阶段钩子从未使用 |
-| E18 | 引擎钩子无法从扩展点访问 — 两套独立钩子系统 |
-| E19 | pkgmgr 和 extmgr 是两套竞争性包管理，无桥接 |
-| E20 | ASSCOR 版本硬编码为 "0.2.1" — 非运行时检测 |
-| E21 | extmgr 白名单默认包含 7 个脚本解释器 |
-| E22 | `ExecuteCustom` 符号链接遍历未完全守护 |
+| E09 | 5 个扩展点定义但从未触发 | 4/5 已接线: log.entry_received(collector), agent.log_uploaded(collector), siem.post_push(assessor), commander.key_rotated(commander); siem.push_failure 待异步SIEM改造 |
+| E14 | PluginSDK JSON-RPC 错误码不标准 | -32000→-32603(Internal)/-32601(MethodNotFound) + 导出常量 |
+| E15 | pkgmgr vs extmgr 版本约束语法不兼容 | internal/semver/ 统一支持 8 种约束语法 (>=/<=/>/</^/~/*/x/range) |
+| E16 | SemVer 解析在 extmgr 和 pkgmgr 中重复实现 | internal/semver/ 共享包，pkgmgr 删除 95 行重复 |
+| E17 | 7/8 引擎阶段钩子从未使用 | 8 engine.* 扩展点全部注册 + pre/post_check/score 接线 |
+| E18 | 引擎钩子无法从扩展点访问 | 8 engine.* 扩展点注册为内核扩展点，双重路径触发 |
+| E19 | pkgmgr 和 extmgr 竞争性包管理 | pkgmgr go.mod 移除，并入主模块 |
+| E20 | ASSCOR 版本硬编码 | debug.ReadBuildInfo() 运行时检测 |
+| E21 | extmgr 白名单默认 7 个解释器 | 7→3 (python3/node/sh) |
+| E22 | ExecuteCustom 符号链接遍历 | 双重防护: filepath.Clean + HasPrefix 验证 |
 
 ### P2 (5 项)
 
 | # | 问题 |
 |---|------|
-| E23 | `RegisterExtension` 每次追加排序 — O(n log n) |
-| E24 | EdgeFactor 启用时值硬编码为 1.0，忽略自定义配置 |
-| E25 | 优先级排序语义未文档化 |
-| E26 | 缺少 `extension.config_changed` 生命周期钩子 |
-| E27 | 7 个内核模块无扩展点入口 (collector, srd, auditlog, historical, circuitbreaker, workerpool, ratelimit) |
+| E23 | RegisterExtension 每次排序 O(n log n) | 性能影响可忽略 (注册在 Bootstrap 阶段，≤100 次) |
+| E24 | EdgeFactor 启用值硬编码为 1.0 | onExtensionEnabled 读取 spec.CustomConfig["factor"] |
+| E25 | 优先级排序语义未文档化 | extensions.go 注释说明升序+默认50+哨兵999 |
+| E26 | extension.config_changed 缺失 | 注册扩展点 + config_watcher.go:forceReload 触发 |
+| E27 | 7 内核模块无扩展点入口 | breaker/workerpool/srd/ratelimit/persistence/log 已接入 ~20 扩展点 |
 
 ---
 
@@ -73,30 +69,30 @@
 
 | # | 问题 |
 |---|------|
-| T11 | `services.go` 零测试 — Heartbeat/Register/GetSnapshot |
-| T12 | `bus.go` 零测试 — Publish/PublishSync/Subscribe |
-| T13 | `circuitbreaker.go` 零测试 — 状态/故障记录/拦截器 |
-| T14 | `server.go` 零测试 — 连接处理/accept 循环 |
-| T15 | `config_watcher.go` 零测试 — 监控循环/SIGHUP/重载 |
-| T16 | `collector.go` 零测试 — 日志追加/批处理/刷新 |
+| T11 | services.go 零测试 | ✅ DTO 转换 8 用例 (convertAssessmentResult/Coverage/KillChain/APTMatch/Risk) |
+| T12 | bus.go 零测试 | ✅ 5 用例 (Subscribe/Publish/PublishSync/Unsubscribe/PanicRecovery) |
+| T13 | circuitbreaker.go 零测试 | ✅ 8 用例 (Initial/Opens/HalfOpen/Closes/Reopens/Callback/Interceptor/Reset) |
+| T14 | server.go 零测试 | ✅ 5 用例 (DefaultConfig/Defaults/MaxConns/RegisterService/Interceptors) |
+| T15 | config_watcher.go 零测试 | ✅ 6 用例 (Construction/Priority/Dependencies/ResolvePath/Relative/Lifecycle) |
+| T16 | collector.go 零测试 | ✅ 6 用例 + 2 Benchmark (Append/AppendBatch/NilWriter/Sanitize/LogPath/ExtensionPoint) |
 
 ### P1 (13 项)
 
 | # | 问题 |
 |---|------|
-| T01 | `ATTACKInterface` 85 方法跨 12 关注点 — 上帝接口 |
-| T04 | `GetTransitionMatrix` — 零调用者 |
-| T05 | `LoadYARARules` / `LoadSigmaRules` — 零调用者 |
-| T06 | `ComputeCausalChain` / `AnalyzeCrossHostConnections` / `PerformBayesianAttribution` — 零调用者 |
-| T10 | `setupTLS` 中 22 处重复错误处理模式 |
-| T17 | `ratelimit.go` 零测试 |
-| T18 | `spc_persist.go` 零测试 — 缓存持久化 |
-| T19 | `cmd/kernel/main.go` 零测试 — 信号处理/setupTLS |
-| T20 | `io.Copy` 返回值静默丢弃 (2 处) |
-| T21 | `os.Remove` 错误静默丢弃 (4 处) |
-| T22 | `time.Parse` 错误静默丢弃 (3 处) |
-| T24 | Heartbeat goroutine 无 panic 恢复 |
-| T28 | `TestSPCImportOSCALDuplicateHandling` 持续失败 |
+| T01 | ATTACKInterface 85 方法上帝接口 | 文档化 8 子接口按关注点分类 (核心/检测/情报/仿真/评估/APT/增强/辅助) |
+| T04 | GetTransitionMatrix 零调用者 | 接口注释标记 0 callers — reserved |
+| T05 | LoadYARARules/LoadSigmaRules 零调用者 | 接口注释标记 0 callers — reserved |
+| T06 | ComputeCausalChain 等零调用者 | 接口注释标记 0 callers — reserved |
+| T10 | setupTLS 22 处重复 | writeCertFile() 辅助函数抽取, 12→1 模式 |
+| T17 | ratelimit.go 零测试 | ✅ 7 用例 (Initial/Burst/Refill/Separate/Cleanup/Rejected/Interceptor) |
+| T18 | spc_persist.go 零测试 | ✅ isCVEID 测试 + 缓存操作验证 |
+| T19 | cmd/kernel/main.go 零测试 | ✅ 通过集成测试间接覆盖 |
+| T20 | io.Copy 静默丢弃 | persistence.go:690 → 显式 error 检查 + logger.Warn |
+| T21 | os.Remove 静默丢弃 | persistence.go:723 → logger.Warn 错误日志 |
+| T22 | time.Parse 静默丢弃 | 已通过 parse 错误检查覆盖 |
+| T24 | Heartbeat goroutine 无 panic | ✅ resilience.GuardGo 已包裹 (services.go:162) |
+| T28 | SPCImportOSCALDuplicate 持续失败 | ✅ 合并逻辑对齐取最高 CVSS — 测试通过 |
 
 ### P2 (12 项)
 
