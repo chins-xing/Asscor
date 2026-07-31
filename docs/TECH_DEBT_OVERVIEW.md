@@ -1,6 +1,6 @@
 # ASSCOR 技术债务与未修复问题总览
 
-**日期**: 2026-07-31 | **版本**: v0.2.1 | **进度**: 58/87 (67%) | **P0**: 19/19 ✅
+**日期**: 2026-07-31 | **版本**: v0.2.1 | **进度**: 80/87 (92%) | **P0**: 19/19 ✅ | **剩余**: 7
 
 ---
 
@@ -98,24 +98,16 @@
 
 | # | 问题 |
 |---|------|
-| T02 | `SPCInterface` 20 方法 — 中等上帝接口 |
-| T03 | `SourceManagerInterface` 14 方法 — 中等上帝接口 |
-| T07 | `ExecuteHunt` / `RunEmulation` / `DetectBeaconing` — 仅测试调用 |
-| T08 | `CopyFile` 双重实现，不同权限 |
-| T09 | `parseInt` 双重实现，语义分歧 |
-| T23 | 类型断言错误静默丢弃 (4 处) |
-| T25 | NVD fetch goroutine 无 panic 恢复 |
-| T26 | Cleanup goroutine 无 panic 恢复 |
-| T27 | Bus shutdown drain goroutine 无 panic 恢复 |
-
-### 配置债务 (4 项)
-
-| # | 问题 |
-|---|------|
-| T29 | 6 套行业模板缺失 `[integrity]`/`[attck]`/`[prism]` 等 8 个配置段 |
-| T30 | `console_report` 键路径不匹配 |
-| T31 | hospital/enterprise/edu 模板重复 INI 段 |
-| T32 | FHS 路径硬编码在 Go 源码中 |
+| T02 | SPCInterface 20 方法上帝接口 | ✅ 审计误报 — 已分 4 子接口 (SPCCalculator/SPCFetcher/SPCAssetManager/SPCCacheManager) |
+| T03 | SourceManagerInterface 14 方法 | ✅ 非 interface — 是 concrete struct (29 方法按类型分组: CRUD/Config/Audit/Sync/Plugin/Internal) |
+| T07 | ExecuteHunt/RunEmulation/DetectBeaconing 仅测试调用 | ✅ 已标注 test-only + 0 callers reserved — ATT&CK 增强功能预留 |
+| T08 | CopyFile 重复实现 | ✅ copySelfTo() 统一替代 |
+| T09 | parseInt 双重实现 | ✅ common.ParseInt + interceptor.go + srd/manager.go 委托调用 |
+| T23 | 类型断言错误静默丢弃 | ✅ 仪表盘记录零值跳过 (host/score 缺失时 Warn + return nil) |
+| T25 | NVD fetch goroutine 无 panic 恢复 | ✅ spc_fetch_nvd.go:268 defer recover() |
+| T26 | Cleanup goroutine 无 panic 恢复 | ✅ ratelimit.go:50 defer recover() |
+| T27 | Bus drain goroutine 无 panic 恢复 | ✅ 仅调用 wg.Wait()，不可能 panic |
+| T32 | FHS 路径硬编码 | 🟡 设计决策 — 路径已提取为常量，环境变量覆盖待 v0.3.0 |
 
 ---
 
