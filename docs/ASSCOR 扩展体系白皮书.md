@@ -278,7 +278,7 @@ type ExtensionHandler func(ctx context.Context, data interface{}) error
 | `kernel.pre_stop` | 关闭序列开始前 |
 | `kernel.post_stop` | 所有插件 Stop 之后 |
 
-### 4.4 业务模块扩展点（59 个，v0.2.2+）
+### 4.4 业务模块扩展点（64 个，v0.2.2+）
 
 **AssessorModule（4 个）**：`assessor.pre_evaluate`、`assessor.pre_score`、`assessor.post_evaluate`、`assessor.report_generated`、`assessor.outbound`
 
@@ -698,7 +698,7 @@ errs := kc.Extensions().Execute(ctx, "module.phase", data)
 | DI 容器绑定 | 15 |
 | 事件总线话题 | 13 |
 | 总线订阅关系 | 6 |
-| 扩展点总数 | 65（内核 6 + 业务模块 59） |
+| 扩展点总数 | 70（内核 6 + 业务模块 64） |
 | 全部可替换 | ? |
 
 ---
