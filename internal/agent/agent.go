@@ -787,7 +787,21 @@ func (a *Agent) verifyCommandSignature(cmd *apiv1.Command) bool {
 	}
 	expected := mac.Sum(nil)
 
-	return hmac.Equal(cmd.Signature, expected)
+	if !hmac.Equal(cmd.Signature, expected) {
+		return false
+	}
+
+	if ts, ok := cmd.Params["_timestamp"]; ok {
+		t, err := time.Parse(time.RFC3339, ts)
+		if err != nil || time.Since(t) > 5*time.Minute {
+			logger.WithComponent("agent").Warn("command rejected: expired or invalid timestamp", "command_id", cmd.CommandId, "age", time.Since(t))
+			return false
+		}
+	} else if len(cmd.Signature) > 0 {
+		return false
+	}
+
+	return true
 }
 
 func sortedParamKeys(m map[string]string) []string {
@@ -1186,14 +1200,20 @@ func (a *Agent) runChecks() []model.CheckResult {
 			defer func() { <-sem }()
 
 			done := make(chan model.CheckResult, 1)
+			checkCtx, checkCancel := context.WithTimeout(context.Background(), 60*time.Second)
 			go func() {
-				done <- c.Run()
+				defer checkCancel()
+				r := c.Run()
+				select {
+				case done <- r:
+				case <-checkCtx.Done():
+				}
 			}()
 
 			select {
 			case r := <-done:
 				results[idx] = r
-			case <-time.After(60 * time.Second):
+			case <-checkCtx.Done():
 				results[idx] = model.CheckResult{
 					CheckID: c.ID,
 					Passed:  false,

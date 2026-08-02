@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sync"
 
 	ssam "github.com/chins-xing/ssam"
 	prismlib "github.com/chins-xing/prism"
@@ -11,7 +12,16 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-const expectedAlgoDigest = ""
+var (
+	expectedAlgoDigest string
+	algoDigestOnce     sync.Once
+)
+
+func init() {
+	algoDigestOnce.Do(func() {
+		expectedAlgoDigest = computeAlgoDigest()
+	})
+}
 
 func computeAlgoDigest() string {
 	var payload string
@@ -36,15 +46,11 @@ func VerifyAlgo() bool {
 	if !IsAlgoVerifyEnabled() {
 		return true
 	}
+	algoDigestOnce.Do(func() { expectedAlgoDigest = computeAlgoDigest() })
 	digest := computeAlgoDigest()
-	if expectedAlgoDigest == "" {
-		logger.WithComponent("integrity").Info("algorithm calibration digest", "digest", digest, "mode", "record")
-		return true
-	}
 	if digest != expectedAlgoDigest {
 		logger.WithComponent("integrity").Error("ALGORITHM INTEGRITY VIOLATION", "expected", expectedAlgoDigest, "actual", digest)
 		return false
 	}
-	logger.WithComponent("integrity").Info("algorithm integrity verified", "digest", digest)
 	return true
 }

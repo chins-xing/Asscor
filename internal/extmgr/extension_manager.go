@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/asscor/asscor/internal/checks"
+	"github.com/asscor/asscor/internal/common"
 	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
@@ -518,6 +519,12 @@ func specCheckItem(def struct {
 
 func buildExtCheckFunc(command, filePath, fileRegex, outputMatch string) model.CheckFunc {
 	if command != "" {
+		if !common.IsShellCommandAllowed(command) {
+			logger.WithComponent("extmgr").Warn("extension check command rejected by global whitelist", "command", command)
+			return func() (bool, string) {
+				return false, "command rejected by global whitelist"
+			}
+		}
 		return func() (bool, string) {
 			cmd := exec.Command("sh", "-c", command)
 			out, err := cmd.CombinedOutput()

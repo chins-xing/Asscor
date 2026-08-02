@@ -177,6 +177,14 @@ func (c *Config) GetPrismDefaultTransmission() float64 {
 }
 
 func Load(path string) (*Config, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat config: %w", err)
+	}
+	const maxConfigSize = 10 << 20 // 10MB
+	if info.Size() > maxConfigSize {
+		return nil, fmt.Errorf("config file too large: %d bytes (max %d)", info.Size(), maxConfigSize)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
