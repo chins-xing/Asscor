@@ -9,7 +9,10 @@ import (
 var (
 	registry   []model.CheckItem
 	registryMu sync.RWMutex
+	idIndex    map[string]int
 )
+
+func init() { idIndex = make(map[string]int) }
 
 func Register(items ...model.CheckItem) {
 	registryMu.Lock()
@@ -18,7 +21,11 @@ func Register(items ...model.CheckItem) {
 		if !item.MatchesPlatform() {
 			continue
 		}
+		idx := len(registry)
 		registry = append(registry, item)
+		if item.ID != "" {
+			idIndex[item.ID] = idx
+		}
 	}
 }
 
@@ -39,16 +46,19 @@ func Unregister(checkIDs ...string) int {
 		filtered = append(filtered, item)
 	}
 	registry = filtered
+	for i, item := range registry {
+		if item.ID != "" {
+			idIndex[item.ID] = i
+		}
+	}
 	return removed
 }
 
 func GetByID(id string) (model.CheckItem, bool) {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
-	for _, item := range registry {
-		if item.ID == id {
-			return item, true
-		}
+	if idx, ok := idIndex[id]; ok && idx < len(registry) {
+		return registry[idx], true
 	}
 	return model.CheckItem{}, false
 }

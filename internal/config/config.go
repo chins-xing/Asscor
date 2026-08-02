@@ -197,120 +197,69 @@ func Parse(content string) (*Config, error) {
 	sections := parseSections(content)
 
 	if sec, ok := sections["weights"]; ok {
-		for k, v := range sec {
+		for k := range sec {
 			if k == "scoring_engine" {
-				cfg.ScoringEngine = v
+				cfg.ScoringEngine = getString(sec, k)
 				continue
 			}
-			f, err := strconv.ParseFloat(v, 64)
-			if err != nil {
-				continue
-			}
-			switch k {
-			case "attack_surface":
-				cfg.Weights.AttackSurface = f
-			case "business_continuity":
-				cfg.Weights.BusinessContinuity = f
-			case "operation_trust":
-				cfg.Weights.OperationTrust = f
-			case "resilience":
-				cfg.Weights.Resilience = f
-			case "kernel_security":
-				cfg.Weights.KernelSecurity = f
+			if f, ok := getFloat(sec, k); ok {
+				switch k {
+				case "attack_surface":     cfg.Weights.AttackSurface = f
+				case "business_continuity": cfg.Weights.BusinessContinuity = f
+				case "operation_trust":    cfg.Weights.OperationTrust = f
+				case "resilience":         cfg.Weights.Resilience = f
+				case "kernel_security":    cfg.Weights.KernelSecurity = f
+				}
 			}
 		}
 	}
 
 	if sec, ok := sections["acceptability"]; ok {
-		for k, v := range sec {
-			switch k {
-			case "threshold":
-				if f, err := strconv.ParseFloat(v, 64); err == nil {
-					cfg.Threshold = f
-				}
-			case "compliance_framework":
-				cfg.ComplianceFramework = v
-			case "data_dir":
-				cfg.DataDir = v
-			}
-		}
+		if f, ok := getFloat(sec, "threshold"); ok { cfg.Threshold = f }
+		if v, ok := sec["compliance_framework"]; ok { cfg.ComplianceFramework = v }
+		if v, ok := sec["data_dir"]; ok { cfg.DataDir = v }
 	}
 
-	// Global (pre-section) keys, e.g. a top-level `data_dir`.
 	if sec, ok := sections["global"]; ok {
-		if v, ok := sec["data_dir"]; ok && v != "" {
-			cfg.DataDir = v
-		}
+		if v, ok := sec["data_dir"]; ok && v != "" { cfg.DataDir = v }
 	}
 
 	if sec, ok := sections["edge_factors"]; ok {
-		for k, v := range sec {
-			f, err := strconv.ParseFloat(v, 64)
-			if err != nil {
-				continue
-			}
-			switch k {
-			case "two_factor_failure":
-				cfg.EdgeFactors.TwoFactorFailure = f
-			case "syn_cookie_disabled":
-				cfg.EdgeFactors.SYNCookieDisabled = f
-			case "selinux_disabled":
-				cfg.EdgeFactors.SELinuxDisabled = f
-			case "apparmor_disabled":
-				cfg.EdgeFactors.AppArmorDisabled = f
-			case "no_siem":
-				cfg.EdgeFactors.NoSIEM = f
-			case "no_ids":
-				cfg.EdgeFactors.NoIDS = f
+		for k := range sec {
+			if f, ok := getFloat(sec, k); ok {
+				switch k {
+				case "two_factor_failure":   cfg.EdgeFactors.TwoFactorFailure = f
+				case "syn_cookie_disabled":   cfg.EdgeFactors.SYNCookieDisabled = f
+				case "selinux_disabled":      cfg.EdgeFactors.SELinuxDisabled = f
+				case "apparmor_disabled":     cfg.EdgeFactors.AppArmorDisabled = f
+				case "no_siem":               cfg.EdgeFactors.NoSIEM = f
+				case "no_ids":                cfg.EdgeFactors.NoIDS = f
+				}
 			}
 		}
 	}
 
 	if sec, ok := sections["edge_factors.level4_override"]; ok {
-		for k, v := range sec {
-			f, err := strconv.ParseFloat(v, 64)
-			if err != nil {
-				continue
-			}
-			switch k {
-			case "two_factor_failure":
-				cfg.EdgeFactors.TwoFactorFailure = f
-			}
-		}
+		if f, ok := getFloat(sec, "two_factor_failure"); ok { cfg.EdgeFactors.TwoFactorFailure = f }
 	}
 
 	if sec, ok := sections["threat"]; ok {
-		if v, ok := sec["coefficient"]; ok {
-			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				cfg.ThreatCoeff = f
-			}
-		}
-		if v, ok := sec["spc_enabled"]; ok {
-			cfg.SPCEnabled = strings.EqualFold(v, "true") || v == "1"
-		}
+		if f, ok := getFloat(sec, "coefficient"); ok { cfg.ThreatCoeff = f }
+		cfg.SPCEnabled = getBool(sec, "spc_enabled")
 	}
 
 	if sec, ok := sections["resilience"]; ok {
-		for k, v := range sec {
-			f, err := strconv.ParseFloat(v, 64)
-			if err != nil {
-				continue
-			}
-			switch k {
-			case "aci_network_segmentation":
-				cfg.ACINetworkSegmentation = f
-			case "aci_laps_enabled":
-				cfg.ACILAPSEnabled = f
-			case "aci_offline_backup":
-				cfg.ACIOfflineBackup = f
-			case "aci_edr_running":
-				cfg.ACIEDRRunning = f
-			case "aci_remote_logging":
-				cfg.ACIRemoteLogging = f
-			case "aci_app_whitelist":
-				cfg.ACIAppWhitelist = f
-			case "aci_dlp_measures":
-				cfg.ACIDLPMeasures = f
+		for k := range sec {
+			if f, ok := getFloat(sec, k); ok {
+				switch k {
+				case "aci_network_segmentation": cfg.ACINetworkSegmentation = f
+				case "aci_laps_enabled":         cfg.ACILAPSEnabled = f
+				case "aci_offline_backup":       cfg.ACIOfflineBackup = f
+				case "aci_edr_running":          cfg.ACIEDRRunning = f
+				case "aci_remote_logging":       cfg.ACIRemoteLogging = f
+				case "aci_app_whitelist":        cfg.ACIAppWhitelist = f
+				case "aci_dlp_measures":         cfg.ACIDLPMeasures = f
+				}
 			}
 		}
 	}
@@ -694,4 +643,28 @@ func parseSections(content string) map[string]map[string]string {
 		sections[currentSection][key] = val
 	}
 	return sections
+}
+
+func getFloat(sec map[string]string, key string) (float64, bool) {
+	v, ok := sec[key]
+	if !ok {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return 0, false
+	}
+	return f, true
+}
+
+func getBool(sec map[string]string, key string) bool {
+	v, ok := sec[key]
+	if !ok {
+		return false
+	}
+	return strings.EqualFold(v, "true") || strings.EqualFold(v, "on") || v == "1"
+}
+
+func getString(sec map[string]string, key string) string {
+	return strings.TrimSpace(sec[key])
 }

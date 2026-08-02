@@ -19,7 +19,7 @@ import (
 var (
 	idPattern    = regexp.MustCompile(`[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]`)
 	phonePattern = regexp.MustCompile(`1[3-9]\d{9}`)
-	fileCache    = &fileReadCache{data: make(map[string]cachedFile)}
+	fileCache    = &fileReadCache{data: make(map[string]cachedFile), maxSize: 1000}
 )
 
 type cachedFile struct {
@@ -28,8 +28,9 @@ type cachedFile struct {
 }
 
 type fileReadCache struct {
-	mu   sync.RWMutex
-	data map[string]cachedFile
+	mu      sync.RWMutex
+	data    map[string]cachedFile
+	maxSize int
 }
 
 func (c *fileReadCache) read(path string) ([]byte, error) {
@@ -46,6 +47,17 @@ func (c *fileReadCache) read(path string) ([]byte, error) {
 	}
 
 	c.mu.Lock()
+	if c.maxSize > 0 && len(c.data) >= c.maxSize {
+		var oldestKey string
+		var oldestTime time.Time
+		for k, v := range c.data {
+			if oldestKey == "" || v.deadline.Before(oldestTime) {
+				oldestKey = k
+				oldestTime = v.deadline
+			}
+		}
+		delete(c.data, oldestKey)
+	}
 	c.data[path] = cachedFile{content: data, deadline: time.Now().Add(30 * time.Second)}
 	c.mu.Unlock()
 	return data, nil
