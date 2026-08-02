@@ -1,58 +1,58 @@
-# ASSCOR æ‰©å±•å¼€å‘æŒ‡å—
+# ASSCOR À©Õ¹¿ª·¢Ö¸ÄÏ
 
-**ç‰ˆæœ¬**ï¼šv1.2 | **é€‚ç”¨**ï¼šASSCOR v0.2.1 / SSAM 2.0 | **æ—¥æœŸ**ï¼š2026-07-14
-
----
-
-## æ‘˜è¦
-
-ASSCOR é‡‡ç”¨å¾®å†…æ ¸ + æ’ä»¶æ¶æ„ï¼Œæä¾› **10 ç§æ‰©å±•æ–¹å¼**ï¼Œè¦†ç›–ä»é›¶é—¨æ§›é…ç½®åˆ°ä¸“ä¸š Go å¼€å‘çš„å®Œæ•´æ‰©å±•é¢ã€‚æœ¬æŒ‡å—é¢å‘å¸Œæœ›ä¸º ASSCOR ç¼–å†™è‡ªå®šä¹‰æ‰©å±•çš„å¼€å‘è€…ã€‚
+**°æ±¾**£ºv1.2 | **ÊÊÓÃ**£ºASSCOR v0.2.2 / SSAM 2.0 | **ÈÕÆÚ**£º2026-07-14
 
 ---
 
-## 1. æ‰©å±•ä½“ç³»æ€»è§ˆ
+## ÕªÒª
 
-### 1.1 åç§æ‰©å±•æ–¹å¼
+ASSCOR ²ÉÓÃÎ¢ÄÚºË + ²å¼ş¼Ü¹¹£¬Ìá¹© **10 ÖÖÀ©Õ¹·½Ê½**£¬¸²¸Ç´ÓÁãÃÅ¼÷ÅäÖÃµ½×¨Òµ Go ¿ª·¢µÄÍêÕûÀ©Õ¹Ãæ¡£±¾Ö¸ÄÏÃæÏòÏ£ÍûÎª ASSCOR ±àĞ´×Ô¶¨ÒåÀ©Õ¹µÄ¿ª·¢Õß¡£
 
-| æ–¹å¼ | é—¨æ§› | æ³¨å†Œå…¥å£ | æ¥å…¥æ–¹å¼ |
+---
+
+## 1. À©Õ¹ÌåÏµ×ÜÀÀ
+
+### 1.1 Ê®ÖÖÀ©Õ¹·½Ê½
+
+| ·½Ê½ | ÃÅ¼÷ | ×¢²áÈë¿Ú | ½ÓÈë·½Ê½ |
 |------|------|----------|----------|
-| `user_check` | ğŸŸ¢ é›¶ | `config.ini [user_check.*]` | ç¼–è¾‘é…ç½®æ–‡ä»¶ |
-| `adapter_script` | ğŸŸ¢ æä½ | `config.ini [adapter_script.*]` | è„šæœ¬ + é…ç½® |
-| `check_module` | ğŸŸ¡ ä½ | `checks.Register()` | ç¼–è¯‘æœŸ init() / æ‰©å±•åŒ… |
-| `scoring_plugin` | ğŸŸ¡ ä½ | `Engine.RegisterFormula()` | è¿è¡Œæ—¶ |
-| `adapter` | ğŸŸ¡ ä½ | `adapter.Register()` | ç¼–è¯‘æœŸ init() |
-| `hook` | ğŸŸ¡ ä½ | `Assessor.RegisterHook()` | è¿è¡Œæ—¶ |
-| `domain` | ğŸŸ¡ ä½ | `model.RegisterDomain()` | è¿è¡Œæ—¶ / é…ç½® |
-| `edge_factor` | ğŸŸ¡ ä½ | `model.RegisterEdgeFactor()` | ç¼–è¯‘æœŸ init() / é…ç½® |
-| `cli_command` | ğŸŸ¡ ä½ | `CLIModule.RegisterCommand()` | æ‰©å±•ç‚¹ |
-| `custom` | ğŸ”´ ä¸­ | `kernel.Plugin` æ¥å£ | æ’ä»¶æ³¨å†Œ |
-| `web_panel` | ğŸ”´ ä¸­ | `webui.route.register` æ‰©å±•ç‚¹ | è¿è¡Œæ—¶ |
+| `user_check` | ?? Áã | `config.ini [user_check.*]` | ±à¼­ÅäÖÃÎÄ¼ş |
+| `adapter_script` | ?? ¼«µÍ | `config.ini [adapter_script.*]` | ½Å±¾ + ÅäÖÃ |
+| `check_module` | ?? µÍ | `checks.Register()` | ±àÒëÆÚ init() / À©Õ¹°ü |
+| `scoring_plugin` | ?? µÍ | `Engine.RegisterFormula()` | ÔËĞĞÊ± |
+| `adapter` | ?? µÍ | `adapter.Register()` | ±àÒëÆÚ init() |
+| `hook` | ?? µÍ | `Assessor.RegisterHook()` | ÔËĞĞÊ± |
+| `domain` | ?? µÍ | `model.RegisterDomain()` | ÔËĞĞÊ± / ÅäÖÃ |
+| `edge_factor` | ?? µÍ | `model.RegisterEdgeFactor()` | ±àÒëÆÚ init() / ÅäÖÃ |
+| `cli_command` | ?? µÍ | `CLIModule.RegisterCommand()` | À©Õ¹µã |
+| `custom` | ?? ÖĞ | `kernel.Plugin` ½Ó¿Ú | ²å¼ş×¢²á |
+| `web_panel` | ?? ÖĞ | `webui.route.register` À©Õ¹µã | ÔËĞĞÊ± |
 
-### 1.2 é€‰æ‹©æŒ‡å—
+### 1.2 Ñ¡ÔñÖ¸ÄÏ
 
-| éœ€æ±‚ | æ¨èæ–¹å¼ | éœ€è¦å†™ä»£ç  |
+| ĞèÇó | ÍÆ¼ö·½Ê½ | ĞèÒªĞ´´úÂë |
 |------|----------|-----------|
-| æ·»åŠ ä¸€ä¸ªå‘½ä»¤æ£€æŸ¥ | `user_check` | âŒ ä¸éœ€è¦ |
-| è¿è¡Œè‡ªå®šä¹‰è„šæœ¬ | `adapter_script` | âœ… Bash/Python |
-| å¯¹æ¥æ–°æ‰«æå·¥å…· | `adapter` | âœ… Go |
-| è‡ªå®šä¹‰è¯„åˆ†ç®—æ³• | `scoring_plugin` | âœ… Go |
-| å®Œæ•´å­ç³»ç»Ÿ | `Plugin SDK` | âœ… Goï¼ˆç‹¬ç«‹æ¨¡å—ï¼‰ |
+| Ìí¼ÓÒ»¸öÃüÁî¼ì²é | `user_check` | ? ²»ĞèÒª |
+| ÔËĞĞ×Ô¶¨Òå½Å±¾ | `adapter_script` | ? Bash/Python |
+| ¶Ô½ÓĞÂÉ¨Ãè¹¤¾ß | `adapter` | ? Go |
+| ×Ô¶¨ÒåÆÀ·ÖËã·¨ | `scoring_plugin` | ? Go |
+| ÍêÕû×ÓÏµÍ³ | `Plugin SDK` | ? Go£¨¶ÀÁ¢Ä£¿é£© |
 
-æ‰©å±•ä»£ç ä½œä¸º Go åŒ…ç¼–å…¥äºŒè¿›åˆ¶ï¼Œé€šè¿‡ `init()` å‡½æ•°åœ¨å¯åŠ¨æ—¶è‡ªåŠ¨æ³¨å†Œã€‚é›¶è¿è¡Œæ—¶ä¾èµ–ï¼Œä¿æŒå•äºŒè¿›åˆ¶éƒ¨ç½²ä¼˜åŠ¿ã€‚
+À©Õ¹´úÂë×÷Îª Go °ü±àÈë¶ş½øÖÆ£¬Í¨¹ı `init()` º¯ÊıÔÚÆô¶¯Ê±×Ô¶¯×¢²á¡£ÁãÔËĞĞÊ±ÒÀÀµ£¬±£³Öµ¥¶ş½øÖÆ²¿ÊğÓÅÊÆ¡£
 
-**æ¨¡å¼ B â€” è¿è¡Œæ—¶æ‰©å±•åŒ…ï¼ˆExtensionManagerï¼‰**
+**Ä£Ê½ B ¡ª ÔËĞĞÊ±À©Õ¹°ü£¨ExtensionManager£©**
 
-æ‰©å±•ä»¥å¤–éƒ¨åŒ…å½¢å¼ï¼ˆgit/http/æœ¬åœ°ï¼‰åˆ†å‘ï¼Œç”± `ExtensionManager` ä¸‹è½½ã€æ ¡éªŒã€è§£å‹ã€æ³¨å†Œï¼Œæ”¯æŒ `Install â†’ Enable â†’ Disable â†’ Delete` ç”Ÿå‘½å‘¨æœŸã€‚é€‚ç”¨äºç¬¬ä¸‰æ–¹åˆ†å‘çš„å¯æ’æ‹”æ‰©å±•ã€‚
+À©Õ¹ÒÔÍâ²¿°üĞÎÊ½£¨git/http/±¾µØ£©·Ö·¢£¬ÓÉ `ExtensionManager` ÏÂÔØ¡¢Ğ£Ñé¡¢½âÑ¹¡¢×¢²á£¬Ö§³Ö `Install ¡ú Enable ¡ú Disable ¡ú Delete` ÉúÃüÖÜÆÚ¡£ÊÊÓÃÓÚµÚÈı·½·Ö·¢µÄ¿É²å°ÎÀ©Õ¹¡£
 
 ---
 
-## 2. æ‰©å±•ç±»å‹è¯¦è§£
+## 2. À©Õ¹ÀàĞÍÏê½â
 
-### 2.1 user_check â€” é…ç½®æ–‡ä»¶å®šä¹‰æ£€æŸ¥é¡¹ï¼ˆé›¶é—¨æ§›ï¼‰
+### 2.1 user_check ¡ª ÅäÖÃÎÄ¼ş¶¨Òå¼ì²éÏî£¨ÁãÃÅ¼÷£©
 
-**ä¸éœ€è¦ç¼–å†™ä»»ä½•ä»£ç ã€‚** åœ¨ `config.ini` ä¸­æ·»åŠ  `[user_check.<åç§°>]` èŠ‚å³å¯åˆ›å»ºæ£€æŸ¥é¡¹ã€‚
+**²»ĞèÒª±àĞ´ÈÎºÎ´úÂë¡£** ÔÚ `config.ini` ÖĞÌí¼Ó `[user_check.<Ãû³Æ>]` ½Ú¼´¿É´´½¨¼ì²éÏî¡£
 
-**ç¼–å†™ç¤ºä¾‹**ï¼š
+**±àĞ´Ê¾Àı**£º
 
 ```ini
 [user_check.nginx]
@@ -64,39 +64,39 @@ delta = -8
 output_match = active
 ```
 
-**å·¥ä½œåŸç†**ï¼šå†…æ ¸å¯åŠ¨æ—¶è§£æ `user_check.*` é”®ï¼Œä¸ºæ¯ä¸ªæœ‰æ•ˆçš„èŠ‚åˆ›å»º `model.CheckItem` å¹¶æ³¨å†Œåˆ°æ£€æŸ¥é¡¹æ³¨å†Œè¡¨ã€‚æ”¯æŒ `command`ï¼ˆå‘½ä»¤æ£€æŸ¥ï¼‰å’Œ `file_path + file_regex`ï¼ˆæ–‡ä»¶å†…å®¹æ£€æŸ¥ï¼‰ä¸¤ç§æ¨¡å¼ã€‚
+**¹¤×÷Ô­Àí**£ºÄÚºËÆô¶¯Ê±½âÎö `user_check.*` ¼ü£¬ÎªÃ¿¸öÓĞĞ§µÄ½Ú´´½¨ `model.CheckItem` ²¢×¢²áµ½¼ì²éÏî×¢²á±í¡£Ö§³Ö `command`£¨ÃüÁî¼ì²é£©ºÍ `file_path + file_regex`£¨ÎÄ¼şÄÚÈİ¼ì²é£©Á½ÖÖÄ£Ê½¡£
 
-**è¦ç‚¹**ï¼š
-- ä¿®æ”¹åæ‰§è¡Œ `systemctl reload asscor-kernel`ï¼ˆSIGHUPï¼‰å³å¯ç”Ÿæ•ˆï¼Œæ— éœ€é‡å¯
-- `command` æ¨¡å¼é€šè¿‡ shell æ‰§è¡Œï¼Œexit 0 æˆ–è¾“å‡ºä¸­å« `output_match` åˆ™ä¸ºé€šè¿‡
-- `file_path` æ¨¡å¼æ£€æŸ¥æ–‡ä»¶å­˜åœ¨æ€§ï¼ˆæ— æ­£åˆ™ï¼‰æˆ–å†…å®¹æ­£åˆ™åŒ¹é…
+**Òªµã**£º
+- ĞŞ¸ÄºóÖ´ĞĞ `systemctl reload asscor-kernel`£¨SIGHUP£©¼´¿ÉÉúĞ§£¬ÎŞĞèÖØÆô
+- `command` Ä£Ê½Í¨¹ı shell Ö´ĞĞ£¬exit 0 »òÊä³öÖĞº¬ `output_match` ÔòÎªÍ¨¹ı
+- `file_path` Ä£Ê½¼ì²éÎÄ¼ş´æÔÚĞÔ£¨ÎŞÕıÔò£©»òÄÚÈİÕıÔòÆ¥Åä
 
-### 2.2 adapter_script â€” å¤–éƒ¨è„šæœ¬é€‚é…å™¨ï¼ˆæä½é—¨æ§›ï¼‰
+### 2.2 adapter_script ¡ª Íâ²¿½Å±¾ÊÊÅäÆ÷£¨¼«µÍÃÅ¼÷£©
 
-**ç¼–å†™ä»»æ„è¯­è¨€çš„è„šæœ¬**ï¼Œå…¶ stdout è¾“å‡º JSON æ•°ç»„å³è‡ªåŠ¨æˆä¸ºé€‚é…å™¨å‘ç°ã€‚é…ç½®ä¸€è¡Œå³å¯å¼•å…¥ã€‚
+**±àĞ´ÈÎÒâÓïÑÔµÄ½Å±¾**£¬Æä stdout Êä³ö JSON Êı×é¼´×Ô¶¯³ÉÎªÊÊÅäÆ÷·¢ÏÖ¡£ÅäÖÃÒ»ĞĞ¼´¿ÉÒıÈë¡£
 
-**ç¼–å†™ç¤ºä¾‹**ï¼ˆBash è„šæœ¬ `/opt/asscor/scripts/my-monitor.sh`ï¼‰ï¼š
+**±àĞ´Ê¾Àı**£¨Bash ½Å±¾ `/opt/asscor/scripts/my-monitor.sh`£©£º
 
 ```bash
 #!/bin/bash
 echo '[{"id":"MON-001","title":"Disk usage","severity":"high","detail":"95% full"}]'
 ```
 
-**é…ç½®**ï¼ˆ`config.ini`ï¼‰ï¼š
+**ÅäÖÃ**£¨`config.ini`£©£º
 
 ```ini
 [adapter_script.my-monitor]
 path = /opt/asscor/scripts/my-monitor.sh
 ```
 
-**å®‰å…¨é™åˆ¶**ï¼šè·¯å¾„å¿…é¡»åœ¨ç™½åå•ç›®å½•ä¸‹ï¼ˆ`/opt/asscor/scripts/` ç­‰ï¼‰ï¼Œè„šæœ¬å¿…é¡» root:root ä¸”é world-writableï¼Œæ‹’ç»ç¬¦å·é“¾æ¥ï¼Œ30 ç§’è¶…æ—¶ï¼Œ1MB è¾“å‡ºä¸Šé™ã€‚
+**°²È«ÏŞÖÆ**£ºÂ·¾¶±ØĞëÔÚ°×Ãûµ¥Ä¿Â¼ÏÂ£¨`/opt/asscor/scripts/` µÈ£©£¬½Å±¾±ØĞë root:root ÇÒ·Ç world-writable£¬¾Ü¾ø·ûºÅÁ´½Ó£¬30 Ãë³¬Ê±£¬1MB Êä³öÉÏÏŞ¡£
 
-**JSON å­—æ®µ** (`scriptFinding`):
+**JSON ×Ö¶Î** (`scriptFinding`):
 
 ```go
 type scriptFinding struct {
     ID          string `json:"id"`
-    Title       string `json:"title"`       // å¿…é¡»
+    Title       string `json:"title"`       // ±ØĞë
     Severity    string `json:"severity"`    // critical/high/medium/low/info
     Detail      string `json:"detail"`
     Domain      string `json:"domain"`
@@ -105,11 +105,11 @@ type scriptFinding struct {
 }
 ```
 
-### 2.3 Plugin SDK â€” ç‹¬ç«‹æ¨¡å—å¼€å‘ï¼ˆGo ä¸“ä¸šå¼€å‘ï¼‰
+### 2.3 Plugin SDK ¡ª ¶ÀÁ¢Ä£¿é¿ª·¢£¨Go ×¨Òµ¿ª·¢£©
 
-ä½äº `pluginsdk/` çš„ç‹¬ç«‹ Go æ¨¡å—ã€‚æ’ä»¶é€šè¿‡ **JSON-RPC 2.0 åè®®** ç» stdin/stdout ä¸å†…æ ¸é€šä¿¡ï¼Œ**é›¶ ASSCOR æºç ä¾èµ–**ã€‚
+Î»ÓÚ `pluginsdk/` µÄ¶ÀÁ¢ Go Ä£¿é¡£²å¼şÍ¨¹ı **JSON-RPC 2.0 Ğ­Òé** ¾­ stdin/stdout ÓëÄÚºËÍ¨ĞÅ£¬**Áã ASSCOR Ô´ÂëÒÀÀµ**¡£
 
-**æ ¸å¿ƒæ¥å£**ï¼š
+**ºËĞÄ½Ó¿Ú**£º
 
 ```go
 type Plugin interface {
@@ -119,45 +119,45 @@ type Plugin interface {
 }
 ```
 
-**å¼€å‘æµç¨‹**ï¼š
+**¿ª·¢Á÷³Ì**£º
 
-1. å¤åˆ¶ `pluginsdk/cmd/myplugin/` â†’ ä½ çš„æ’ä»¶ç›®å½•
-2. å®ç° `HandleRequest()` æ–¹æ³•
+1. ¸´ÖÆ `pluginsdk/cmd/myplugin/` ¡ú ÄãµÄ²å¼şÄ¿Â¼
+2. ÊµÏÖ `HandleRequest()` ·½·¨
 3. `go build -o yourplugin`
-4. ç¼–å†™ `extension.json` æˆ– `package.json` manifest
+4. ±àĞ´ `extension.json` »ò `package.json` manifest
 5. `asscor> source deploy yourplugin`
 
-**æ¶æ„**ï¼ˆä½è€¦åˆï¼‰ï¼šæ’ä»¶ä½œä¸ºç‹¬ç«‹è¿›ç¨‹è¿è¡Œï¼Œé€šè¿‡ stdin/stdout JSON-RPC 2.0 é€šä¿¡ï¼Œé›¶å…±äº«å†…å­˜ã€‚å®‰å…¨ä¸Šå®ç°è¿›ç¨‹éš”ç¦»ã€SHA-256 æ ¡éªŒå’Œã€systemd scoping èµ„æºé™åˆ¶ã€‚
+**¼Ü¹¹**£¨µÍñîºÏ£©£º²å¼ş×÷Îª¶ÀÁ¢½ø³ÌÔËĞĞ£¬Í¨¹ı stdin/stdout JSON-RPC 2.0 Í¨ĞÅ£¬Áã¹²ÏíÄÚ´æ¡£°²È«ÉÏÊµÏÖ½ø³Ì¸ôÀë¡¢SHA-256 Ğ£ÑéºÍ¡¢systemd scoping ×ÊÔ´ÏŞÖÆ¡£
 
-### 2.4 check_module â€” å®‰å…¨æ£€æŸ¥é¡¹
+### 2.4 check_module ¡ª °²È«¼ì²éÏî
 
-æ£€æŸ¥é¡¹æ˜¯ ASSCOR æœ€å¸¸è§çš„æ‰©å±•ã€‚æ¯ä¸ªæ£€æŸ¥é¡¹å½’å±ä¸€ä¸ªè¯„ä¼°åŸŸï¼Œè¾“å‡ºé€šè¿‡/å¤±è´¥ä¸æ‰£åˆ†ã€‚
+¼ì²éÏîÊÇ ASSCOR ×î³£¼ûµÄÀ©Õ¹¡£Ã¿¸ö¼ì²éÏî¹éÊôÒ»¸öÆÀ¹ÀÓò£¬Êä³öÍ¨¹ı/Ê§°ÜÓë¿Û·Ö¡£
 
-**æ ¸å¿ƒç»“æ„** (`internal/model/model.go`)ï¼š
+**ºËĞÄ½á¹¹** (`internal/model/model.go`)£º
 
 ```go
 type CheckFunc func() (passed bool, detail string)
 
 type PrivilegeLevel int
 const (
-    PrivNormal PrivilegeLevel = iota  // æ™®é€šæƒé™
-    PrivRoot                          // éœ€è¦ root
+    PrivNormal PrivilegeLevel = iota  // ÆÕÍ¨È¨ÏŞ
+    PrivRoot                          // ĞèÒª root
 )
 
 type CheckItem struct {
-    ID            string          // å”¯ä¸€æ ‡è¯†ï¼Œå¦‚ "KS-001"
-    Domain        string          // å½’å±åŸŸï¼Œå¦‚ model.DomainKernelSecurity
+    ID            string          // Î¨Ò»±êÊ¶£¬Èç "KS-001"
+    Domain        string          // ¹éÊôÓò£¬Èç model.DomainKernelSecurity
     Name          string
     Description   string
-    Delta         float64         // å¤±è´¥æ—¶æ‰£åˆ†ï¼ˆè´Ÿå€¼ï¼‰
-    ComplianceRef string          // åˆè§„å¼•ç”¨ï¼Œå¦‚ "GB/T 22239-2019"
-    Platform      string          // "" = å…¨å¹³å°, "linux", "windows"
+    Delta         float64         // Ê§°ÜÊ±¿Û·Ö£¨¸ºÖµ£©
+    ComplianceRef string          // ºÏ¹æÒıÓÃ£¬Èç "GB/T 22239-2019"
+    Platform      string          // "" = È«Æ½Ì¨, "linux", "windows"
     Check         CheckFunc
-    Privilege     PrivilegeLevel  // é root è¿è¡Œæ—¶ PrivRoot æ£€æŸ¥è‡ªåŠ¨è·³è¿‡
+    Privilege     PrivilegeLevel  // ·Ç root ÔËĞĞÊ± PrivRoot ¼ì²é×Ô¶¯Ìø¹ı
 }
 ```
 
-**ç¼–å†™ç¤ºä¾‹**ï¼š
+**±àĞ´Ê¾Àı**£º
 
 ```go
 package mychecks
@@ -172,8 +172,8 @@ func init() {
     checks.Register(model.CheckItem{
         ID:            "CU-001",
         Domain:        model.DomainOperationTrust,
-        Name:          "è‡ªå®šä¹‰é…ç½®æ£€æŸ¥",
-        Description:   "æ£€æŸ¥ /etc/myapp/secure.conf æ˜¯å¦å­˜åœ¨ä¸”æƒé™æ­£ç¡®",
+        Name:          "×Ô¶¨ÒåÅäÖÃ¼ì²é",
+        Description:   "¼ì²é /etc/myapp/secure.conf ÊÇ·ñ´æÔÚÇÒÈ¨ÏŞÕıÈ·",
         Delta:         -8,
         ComplianceRef: "GB/T 22239-2019 8.1.3",
         Platform:      "linux",
@@ -181,39 +181,39 @@ func init() {
         Check: func() (bool, string) {
             info, err := os.Stat("/etc/myapp/secure.conf")
             if err != nil {
-                return false, "é…ç½®æ–‡ä»¶ä¸å­˜åœ¨"
+                return false, "ÅäÖÃÎÄ¼ş²»´æÔÚ"
             }
             if info.Mode().Perm() != 0600 {
-                return false, "é…ç½®æ–‡ä»¶æƒé™è¿‡å®½ï¼ˆåº”ä¸º 0600ï¼‰"
+                return false, "ÅäÖÃÎÄ¼şÈ¨ÏŞ¹ı¿í£¨Ó¦Îª 0600£©"
             }
-            return true, "é…ç½®æ–‡ä»¶æƒé™æ­£ç¡®"
+            return true, "ÅäÖÃÎÄ¼şÈ¨ÏŞÕıÈ·"
         },
     })
 }
 ```
 
-**è¦ç‚¹**ï¼š
-- `Check` å‡½æ•°ç”±å†…æ ¸åœ¨ç‹¬ç«‹ goroutine ä¸­è°ƒç”¨ï¼Œå†…ç½® panic æ¢å¤
-- éœ€è¦ root çš„æ£€æŸ¥è®¾ `Privilege: model.PrivRoot`ï¼ŒAgent é root è¿è¡Œæ—¶è‡ªåŠ¨è·³è¿‡å¹¶æ ‡è®°
-- å‘½ä»¤æ‰§è¡Œè¯·ä½¿ç”¨ `common.RunCmd`ï¼ˆå†…ç½® shell å…ƒå­—ç¬¦é˜²æŠ¤ï¼‰
+**Òªµã**£º
+- `Check` º¯ÊıÓÉÄÚºËÔÚ¶ÀÁ¢ goroutine ÖĞµ÷ÓÃ£¬ÄÚÖÃ panic »Ö¸´
+- ĞèÒª root µÄ¼ì²éÉè `Privilege: model.PrivRoot`£¬Agent ·Ç root ÔËĞĞÊ±×Ô¶¯Ìø¹ı²¢±ê¼Ç
+- ÃüÁîÖ´ĞĞÇëÊ¹ÓÃ `common.RunCmd`£¨ÄÚÖÃ shell Ôª×Ö·û·À»¤£©
 
-### 2.2 scoring_plugin â€” è‡ªå®šä¹‰è¯„åˆ†å…¬å¼
+### 2.2 scoring_plugin ¡ª ×Ô¶¨ÒåÆÀ·Ö¹«Ê½
 
-è¯„åˆ†å…¬å¼å°†åŸŸå¾—åˆ†ã€å¨èƒç³»æ•°ã€SPC åˆ†æ•°ã€è¾¹ç¼˜å› å­èšåˆä¸ºæœ€ç»ˆåˆ†æ•°ã€‚
+ÆÀ·Ö¹«Ê½½«ÓòµÃ·Ö¡¢ÍşĞ²ÏµÊı¡¢SPC ·ÖÊı¡¢±ßÔµÒò×Ó¾ÛºÏÎª×îÖÕ·ÖÊı¡£
 
-**å‡½æ•°ç±»å‹** (`ssam-lib/types.go`)ï¼š
+**º¯ÊıÀàĞÍ** (`ssam-lib/types.go`)£º
 
 ```go
 type ScoringFormula func(
-    domainScores []DomainScore,      // å„åŸŸå¾—åˆ†
-    weights      []WeightConfig,     // å„åŸŸæƒé‡
-    threatCoeff  float64,            // å¨èƒç³»æ•° Î¼ (0.60-1.0)
-    spcScore     float64,            // SPC æ€åŠ¿åˆ†æ•° (0.60-1.0)
-    edgeFactors  []EdgeFactorResult, // è¾¹ç¼˜å› å­
+    domainScores []DomainScore,      // ¸÷ÓòµÃ·Ö
+    weights      []WeightConfig,     // ¸÷ÓòÈ¨ÖØ
+    threatCoeff  float64,            // ÍşĞ²ÏµÊı ¦Ì (0.60-1.0)
+    spcScore     float64,            // SPC Ì¬ÊÆ·ÖÊı (0.60-1.0)
+    edgeFactors  []EdgeFactorResult, // ±ßÔµÒò×Ó
 ) float64
 ```
 
-**ç¼–å†™ç¤ºä¾‹**ï¼š
+**±àĞ´Ê¾Àı**£º
 
 ```go
 engine.RegisterFormula("my-strict-v1", func(
@@ -232,24 +232,24 @@ engine.RegisterFormula("my-strict-v1", func(
     base := sum / wsum
     for _, f := range ef {
         if f.Active {
-            base *= f.Factor  // è¾¹ç¼˜å› å­ä¹˜æ³•ä¿®æ­£
+            base *= f.Factor  // ±ßÔµÒò×Ó³Ë·¨ĞŞÕı
         }
     }
-    // ä¸¥æ ¼æ¨¡å¼ï¼šå¨èƒä¸æ€åŠ¿ç›´æ¥ç›¸ä¹˜
+    // ÑÏ¸ñÄ£Ê½£ºÍşĞ²ÓëÌ¬ÊÆÖ±½ÓÏà³Ë
     return base * threat * spc
 })
 ```
 
-**è¦ç‚¹**ï¼š
-- é€šè¿‡ `RegisterFormula(id, fn)` æ³¨å†Œåï¼Œè¯¥ ID è‡ªåŠ¨æˆä¸ºæ´»è·ƒå…¬å¼
-- è‡ªå®šä¹‰å…¬å¼**ä¼˜å…ˆäº**å†…ç½® SSAM V2.0 ä¸‰å±‚åŠ æƒå¹³å‡å…¬å¼
-- å†…ç½®é»˜è®¤å…¬å¼ä¸º `ssam_v2.0`ï¼ˆä¸‰å±‚åŠ æƒå¹³å‡ï¼šIntrinsic 50% / Exposure 30% / Threat 20%ï¼‰
+**Òªµã**£º
+- Í¨¹ı `RegisterFormula(id, fn)` ×¢²áºó£¬¸Ã ID ×Ô¶¯³ÉÎª»îÔ¾¹«Ê½
+- ×Ô¶¨Òå¹«Ê½**ÓÅÏÈÓÚ**ÄÚÖÃ SSAM V2.0 Èı²ã¼ÓÈ¨Æ½¾ù¹«Ê½
+- ÄÚÖÃÄ¬ÈÏ¹«Ê½Îª `ssam_v2.0`£¨Èı²ã¼ÓÈ¨Æ½¾ù£ºIntrinsic 50% / Exposure 30% / Threat 20%£©
 
-### 2.3 adapter â€” å¤–éƒ¨å·¥å…·é€‚é…å™¨
+### 2.3 adapter ¡ª Íâ²¿¹¤¾ßÊÊÅäÆ÷
 
-é€‚é…å™¨å°†å¤–éƒ¨å®‰å…¨å·¥å…·ï¼ˆæ‰«æå™¨ã€èµ„äº§ç®¡ç†ç³»ç»Ÿï¼‰çš„è¾“å‡ºè§„èŒƒåŒ–ä¸º ASSCOR æ£€æŸ¥ç»“æœã€‚
+ÊÊÅäÆ÷½«Íâ²¿°²È«¹¤¾ß£¨É¨ÃèÆ÷¡¢×Ê²ú¹ÜÀíÏµÍ³£©µÄÊä³ö¹æ·¶»¯Îª ASSCOR ¼ì²é½á¹û¡£
 
-**æ¥å£** (`internal/adapter/adapter.go`)ï¼š
+**½Ó¿Ú** (`internal/adapter/adapter.go`)£º
 
 ```go
 type Adapter interface {
@@ -266,9 +266,9 @@ type Adapter interface {
 }
 ```
 
-**å››é˜¶æ®µæµæ°´çº¿**ï¼š`Fetch`ï¼ˆé‡‡é›†ï¼‰â†’ `Parse`ï¼ˆè§£æï¼‰â†’ `Map`ï¼ˆå¯ŒåŒ–/æ˜ å°„ï¼‰â†’ `Validate`ï¼ˆæ ¡éªŒï¼‰ã€‚`ExecuteAdapter` åœ¨ Parse åè‡ªåŠ¨è°ƒç”¨ `ApplyDelegation` è·¯ç”±åˆ°æ£€æŸ¥ IDã€‚
+**ËÄ½×¶ÎÁ÷Ë®Ïß**£º`Fetch`£¨²É¼¯£©¡ú `Parse`£¨½âÎö£©¡ú `Map`£¨¸»»¯/Ó³Éä£©¡ú `Validate`£¨Ğ£Ñé£©¡£`ExecuteAdapter` ÔÚ Parse ºó×Ô¶¯µ÷ÓÃ `ApplyDelegation` Â·ÓÉµ½¼ì²é ID¡£
 
-**ç¼–å†™ç¤ºä¾‹ï¼ˆåµŒå…¥ BaseAdapter çœå»æ ·æ¿ï¼‰**ï¼š
+**±àĞ´Ê¾Àı£¨Ç¶Èë BaseAdapter Ê¡È¥Ñù°å£©**£º
 
 ```go
 package myadapters
@@ -332,15 +332,15 @@ func init() {
 }
 ```
 
-**Severity â†’ Delta æ˜ å°„**ï¼šcritical(-20) / high(-15) / medium(-10) / low(-5) / info(-2) / none(0)ã€‚
+**Severity ¡ú Delta Ó³Éä**£ºcritical(-20) / high(-15) / medium(-10) / low(-5) / info(-2) / none(0)¡£
 
-**å§”æ‰˜è·¯ç”±**ï¼šåœ¨ `internal/adapter/delegation.go` ä¸­ä¸ºé€‚é…å™¨æ·»åŠ  `DelegationRule`ï¼Œå°†å‘ç°æ˜ å°„åˆ°å®é™…æ£€æŸ¥ ID å’ŒåŸŸã€‚
+**Î¯ÍĞÂ·ÓÉ**£ºÔÚ `internal/adapter/delegation.go` ÖĞÎªÊÊÅäÆ÷Ìí¼Ó `DelegationRule`£¬½«·¢ÏÖÓ³Éäµ½Êµ¼Ê¼ì²é ID ºÍÓò¡£
 
-### 2.4 hook â€” è¯„ä¼°æµç¨‹é’©å­
+### 2.4 hook ¡ª ÆÀ¹ÀÁ÷³Ì¹³×Ó
 
-é’©å­åœ¨è¯„ä¼°æµç¨‹çš„ 8 ä¸ªé˜¶æ®µæ’å…¥è‡ªå®šä¹‰é€»è¾‘ã€‚
+¹³×ÓÔÚÆÀ¹ÀÁ÷³ÌµÄ 8 ¸ö½×¶Î²åÈë×Ô¶¨ÒåÂß¼­¡£
 
-**é˜¶æ®µä¸ç±»å‹** (`internal/engine/extensibility.go`)ï¼š
+**½×¶ÎÓëÀàĞÍ** (`internal/engine/extensibility.go`)£º
 
 ```go
 type AssessmentPhase string
@@ -358,24 +358,24 @@ const (
 type AssessmentHook func(ctx context.Context, result *model.AssessmentResult) error
 ```
 
-**ç¼–å†™ç¤ºä¾‹**ï¼š
+**±àĞ´Ê¾Àı**£º
 
 ```go
 assessor.RegisterHook("enrich-metadata", engine.PhasePostScore,
     func(ctx context.Context, result *model.AssessmentResult) error {
-        // è¯„åˆ†åä¸ºé«˜é£é™©ä¸»æœºé™„åŠ å…ƒæ•°æ®
+        // ÆÀ·ÖºóÎª¸ß·çÏÕÖ÷»ú¸½¼ÓÔªÊı¾İ
         if result.FinalScore < 60 {
             result.Metadata["alert_level"] = "high"
         }
         return nil
-    }, 50)  // priorityï¼šæ•°å­—è¶Šå°è¶Šå…ˆæ‰§è¡Œ
+    }, 50)  // priority£ºÊı×ÖÔ½Ğ¡Ô½ÏÈÖ´ĞĞ
 ```
 
-### 2.5 domain â€” æ–°å¢è¯„ä¼°åŸŸ
+### 2.5 domain ¡ª ĞÂÔöÆÀ¹ÀÓò
 
-è¯„ä¼°åŸŸæ˜¯æ£€æŸ¥é¡¹çš„é€»è¾‘åˆ†ç»„ï¼Œæ‹¥æœ‰ç‹¬ç«‹æƒé‡ã€‚
+ÆÀ¹ÀÓòÊÇ¼ì²éÏîµÄÂß¼­·Ö×é£¬ÓµÓĞ¶ÀÁ¢È¨ÖØ¡£
 
-**ç»“æ„** (`internal/model/domain_registry.go`)ï¼š
+**½á¹¹** (`internal/model/domain_registry.go`)£º
 
 ```go
 type DomainMeta struct {
@@ -387,45 +387,45 @@ type DomainMeta struct {
 }
 ```
 
-**ç¼–å†™ç¤ºä¾‹**ï¼š
+**±àĞ´Ê¾Àı**£º
 
 ```go
 model.RegisterDomain(model.DomainMeta{
     ID:            "container_security",
-    Label:         "å®¹å™¨å®‰å…¨",
-    Description:   "Docker/K8s åŠ å›ºæ€åŠ¿",
+    Label:         "ÈİÆ÷°²È«",
+    Description:   "Docker/K8s ¼Ó¹ÌÌ¬ÊÆ",
     Category:      model.CategoryExtension,
     DefaultWeight: 10,
 })
 ```
 
-æ³¨å†Œåå³å¯åœ¨ check_module ä¸­å°†æ£€æŸ¥é¡¹çš„ `Domain` è®¾ä¸º `"container_security"`ã€‚æƒé‡å¯åœ¨ `config.ini` çš„ `[weights]` èŠ‚è¦†ç›–ã€‚
+×¢²áºó¼´¿ÉÔÚ check_module ÖĞ½«¼ì²éÏîµÄ `Domain` ÉèÎª `"container_security"`¡£È¨ÖØ¿ÉÔÚ `config.ini` µÄ `[weights]` ½Ú¸²¸Ç¡£
 
-### 2.6 edge_factor â€” è¾¹ç¼˜ä¿®æ­£å› å­
+### 2.6 edge_factor ¡ª ±ßÔµĞŞÕıÒò×Ó
 
-è¾¹ç¼˜å› å­æ˜¯è·¨åŸŸçš„å…¨å±€ä¹˜æ³•ä¿®æ­£é¡¹ï¼Œç¼ºå¤±å…³é”®é˜²æŠ¤æ—¶é™ä½æ€»åˆ†ã€‚
+±ßÔµÒò×ÓÊÇ¿çÓòµÄÈ«¾Ö³Ë·¨ĞŞÕıÏî£¬È±Ê§¹Ø¼ü·À»¤Ê±½µµÍ×Ü·Ö¡£
 
-**ç»“æ„** (`internal/model/edge_factor_chain.go`)ï¼š
+**½á¹¹** (`internal/model/edge_factor_chain.go`)£º
 
 ```go
 type EdgeFactor struct {
     ID          string
     Name        string
     Description string
-    Factor      float64  // < 1.0 = æƒ©ç½šä¹˜æ•°
+    Factor      float64  // < 1.0 = ³Í·£³ËÊı
     Active      bool
-    Priority    int      // è¶Šå°è¶Šå…ˆåº”ç”¨
+    Priority    int      // Ô½Ğ¡Ô½ÏÈÓ¦ÓÃ
 }
 ```
 
-**ç¼–å†™ç¤ºä¾‹**ï¼š
+**±àĞ´Ê¾Àı**£º
 
 ```go
 func init() {
     model.RegisterEdgeFactor(model.EdgeFactor{
         ID:          "EF-NO-MFA",
-        Name:        "MFA ç¼ºå¤±",
-        Description: "æœªå¼ºåˆ¶å¤šå› ç´ è®¤è¯",
+        Name:        "MFA È±Ê§",
+        Description: "Î´Ç¿ÖÆ¶àÒòËØÈÏÖ¤",
         Factor:      0.85,
         Active:      false,
         Priority:    10,
@@ -433,30 +433,30 @@ func init() {
 }
 ```
 
-æ¿€æ´»å€¼å¯åœ¨ `config.ini` çš„ `[edge_factors.custom]` / `[edge_factors.custom_triggers]` èŠ‚é…ç½®ã€‚
+¼¤»îÖµ¿ÉÔÚ `config.ini` µÄ `[edge_factors.custom]` / `[edge_factors.custom_triggers]` ½ÚÅäÖÃ¡£
 
-### 2.7 cli_command â€” CLI å‘½ä»¤
+### 2.7 cli_command ¡ª CLI ÃüÁî
 
-ä¸ºäº¤äº’å¼ CLI æ·»åŠ è‡ªå®šä¹‰å‘½ä»¤ã€‚
+Îª½»»¥Ê½ CLI Ìí¼Ó×Ô¶¨ÒåÃüÁî¡£
 
-**ç¼–å†™ç¤ºä¾‹ï¼ˆBaseCommandï¼‰**ï¼š
+**±àĞ´Ê¾Àı£¨BaseCommand£©**£º
 
 ```go
 cmd := cli.NewBaseCommand(
     cli.CommandInfo{
         Name:        "myscan",
-        Description: "è¿è¡Œè‡ªå®šä¹‰æ‰«æ",
+        Description: "ÔËĞĞ×Ô¶¨ÒåÉ¨Ãè",
         Category:    "custom",
         Usage:       "myscan [--target host]",
         Options: []cli.CommandOption{
-            {Name: "target", Description: "ç›®æ ‡ä¸»æœº"},
+            {Name: "target", Description: "Ä¿±êÖ÷»ú"},
         },
     },
     func(ctx *cli.CommandContext) *cli.CommandResult {
         target := ctx.Options["target"]
         return &cli.CommandResult{
             ExitCode: cli.ExitOK,
-            Output:   "æ‰«æå®Œæˆ: " + target + "\n",
+            Output:   "É¨ÃèÍê³É: " + target + "\n",
         }
     },
 )
@@ -464,7 +464,7 @@ cmd := cli.NewBaseCommand(
 cliModule.RegisterCommand(cmd)
 ```
 
-**é€šè¿‡æ‰©å±•ç‚¹æ³¨å†Œ**ï¼ˆæ’ä»¶æ–¹å¼ï¼‰ï¼š
+**Í¨¹ıÀ©Õ¹µã×¢²á**£¨²å¼ş·½Ê½£©£º
 
 ```go
 kc.Extensions().RegisterExtension("myplugin", "cli.command.register",
@@ -474,11 +474,11 @@ kc.Extensions().RegisterExtension("myplugin", "cli.command.register",
     }, 50)
 ```
 
-### 2.8 custom â€” å®Œæ•´å†…æ ¸æ’ä»¶
+### 2.8 custom ¡ª ÍêÕûÄÚºË²å¼ş
 
-æœ€çµæ´»çš„æ‰©å±•å½¢å¼ï¼Œå®ç°å®Œæ•´çš„ `kernel.Plugin` æ¥å£ï¼Œæ‹¥æœ‰ç”Ÿå‘½å‘¨æœŸã€DI å®¹å™¨è®¿é—®ã€äº‹ä»¶æ€»çº¿ã€æ‰©å±•ç‚¹æ³¨å†Œèƒ½åŠ›ã€‚
+×îÁé»îµÄÀ©Õ¹ĞÎÊ½£¬ÊµÏÖÍêÕûµÄ `kernel.Plugin` ½Ó¿Ú£¬ÓµÓĞÉúÃüÖÜÆÚ¡¢DI ÈİÆ÷·ÃÎÊ¡¢ÊÂ¼ş×ÜÏß¡¢À©Õ¹µã×¢²áÄÜÁ¦¡£
 
-**æ¥å£** (`internal/kernel/plugin.go`)ï¼š
+**½Ó¿Ú** (`internal/kernel/plugin.go`)£º
 
 ```go
 type Plugin interface {
@@ -491,7 +491,7 @@ type Plugin interface {
 }
 ```
 
-**ç¼–å†™ç¤ºä¾‹**ï¼š
+**±àĞ´Ê¾Àı**£º
 
 ```go
 type MyPlugin struct {
@@ -501,21 +501,21 @@ type MyPlugin struct {
 func (p *MyPlugin) Info() kernel.PluginInfo {
     return kernel.PluginInfo{
         Name: "myplugin", Version: "1.0.0",
-        Description: "è‡ªå®šä¹‰æ‰©å±•", Author: "Me",
+        Description: "×Ô¶¨ÒåÀ©Õ¹", Author: "Me",
     }
 }
 func (p *MyPlugin) Dependencies() []kernel.PluginDependency { return nil }
 
 func (p *MyPlugin) Init(ctx context.Context, kc kernel.KernelContext) error {
-    // è®¢é˜…å·²æœ‰çš„æ‰©å±•ç‚¹ï¼ˆv0.2.1: æ‰©å±•ç‚¹ç”±å¹³å°å±‚é›†ä¸­å®šä¹‰ï¼Œæ’ä»¶ä¸å¯æ³¨å†Œæ–°ç‚¹ï¼‰
+    // ¶©ÔÄÒÑÓĞµÄÀ©Õ¹µã£¨v0.2.2: À©Õ¹µãÓÉÆ½Ì¨²ã¼¯ÖĞ¶¨Òå£¬²å¼ş²»¿É×¢²áĞÂµã£©
     kc.Extensions().RegisterExtension("myplugin", "assessor.post_evaluate",
         func(ctx context.Context, data interface{}) error {
             result := data.(*model.AssessmentResult)
             return p.handleResult(ctx, result)
         }, 10)
-    // è®¢é˜…äº‹ä»¶æ€»çº¿
+    // ¶©ÔÄÊÂ¼ş×ÜÏß
     kc.Bus().Subscribe(kernel.TopicAssessorResult, "myplugin", p.onResult)
-    // ä» DI å®¹å™¨è§£æå…¶ä»–æ¨¡å—
+    // ´Ó DI ÈİÆ÷½âÎöÆäËûÄ£¿é
     if impl, ok := kc.Container().Resolve((*kernel.SPCInterface)(nil)); ok {
         _ = impl.(kernel.SPCInterface)
     }
@@ -534,22 +534,22 @@ func (p *MyPlugin) Stop(ctx context.Context) error {
 func (p *MyPlugin) State() kernel.PluginState { return p.state }
 
 func (p *MyPlugin) onResult(ctx context.Context, msg kernel.Message) error {
-    // å¤„ç†è¯„ä¼°ç»“æœäº‹ä»¶
+    // ´¦ÀíÆÀ¹À½á¹ûÊÂ¼ş
     return nil
 }
 ```
 
-å†…æ ¸æ’ä»¶é€šè¿‡ `PriorityPlugin` æ¥å£å¯æŒ‡å®šä¼˜å…ˆçº§ï¼ˆå†³å®š Init/Start é¡ºåºï¼‰ï¼Œé€šè¿‡ `HealthCheckable` æ¥å£å¯æä¾›å¥åº·æ£€æŸ¥ã€‚
+ÄÚºË²å¼şÍ¨¹ı `PriorityPlugin` ½Ó¿Ú¿ÉÖ¸¶¨ÓÅÏÈ¼¶£¨¾ö¶¨ Init/Start Ë³Ğò£©£¬Í¨¹ı `HealthCheckable` ½Ó¿Ú¿ÉÌá¹©½¡¿µ¼ì²é¡£
 
 ---
 
-## 3. è¿è¡Œæ—¶æ‰©å±•åŒ…ï¼ˆExtensionManagerï¼‰
+## 3. ÔËĞĞÊ±À©Õ¹°ü£¨ExtensionManager£©
 
-å¯¹äºç¬¬ä¸‰æ–¹åˆ†å‘çš„æ‰©å±•ï¼Œä½¿ç”¨ `ExtensionManager` è¿›è¡Œç”Ÿå‘½å‘¨æœŸç®¡ç†ã€‚
+¶ÔÓÚµÚÈı·½·Ö·¢µÄÀ©Õ¹£¬Ê¹ÓÃ `ExtensionManager` ½øĞĞÉúÃüÖÜÆÚ¹ÜÀí¡£
 
-### 3.1 æ‰©å±•æ¸…å•ï¼ˆmanifestï¼‰
+### 3.1 À©Õ¹Çåµ¥£¨manifest£©
 
-ç¼–å†™ `extension.json`ï¼š
+±àĞ´ `extension.json`£º
 
 ```json
 {
@@ -557,7 +557,7 @@ func (p *MyPlugin) onResult(ctx context.Context, msg kernel.Message) error {
   "name": "Container Security Domain",
   "version": "1.2.0",
   "type": "check_module",
-  "description": "Docker/K8s åŠ å›ºæ£€æŸ¥é¡¹é›†åˆ",
+  "description": "Docker/K8s ¼Ó¹Ì¼ì²éÏî¼¯ºÏ",
   "author": "Security Team",
   "license": "Apache-2.0",
   "homepage": "https://github.com/example/container-security",
@@ -576,17 +576,17 @@ func (p *MyPlugin) onResult(ctx context.Context, msg kernel.Message) error {
 }
 ```
 
-### 3.2 å®‰è£…ä¸ç®¡ç†
+### 3.2 °²×°Óë¹ÜÀí
 
 ```bash
-# CLI å‘½ä»¤
+# CLI ÃüÁî
 asscor> source deploy container-security-pack --version 1.2.0
 asscor> source enable container-security-pack
 asscor> source disable container-security-pack
 asscor> source uninstall container-security-pack
 ```
 
-æˆ–é€šè¿‡é…ç½®æ–‡ä»¶ `config.ini`ï¼š
+»òÍ¨¹ıÅäÖÃÎÄ¼ş `config.ini`£º
 
 ```ini
 [extension_manager]
@@ -606,44 +606,44 @@ cmd_1 = python3
 cmd_2 = bash
 ```
 
-### 3.3 ç”Ÿå‘½å‘¨æœŸ
+### 3.3 ÉúÃüÖÜÆÚ
 
 ```
-Install â†’ Validate(SemVer+æ ¡éªŒå’Œ+ä¾èµ–) â†’ Download(git/http/local)
-        â†’ Extract(tar.gz/zip, Zip-Slip é˜²æŠ¤) â†’ Register
-        â†’ [AutoEnable] â†’ onExtensionInstalled(ç±»å‹åˆ†å‘)
-Enable  â†’ æ¿€æ´»æ‰©å±•ï¼ˆå¦‚è¾¹ç¼˜å› å­ç”Ÿæ•ˆï¼‰
-Disable â†’ æ³¨é”€æ£€æŸ¥é¡¹/åŸŸ/è¾¹ç¼˜å› å­æ¢å¤
-Delete  â†’ Disable + åˆ é™¤æ–‡ä»¶
+Install ¡ú Validate(SemVer+Ğ£ÑéºÍ+ÒÀÀµ) ¡ú Download(git/http/local)
+        ¡ú Extract(tar.gz/zip, Zip-Slip ·À»¤) ¡ú Register
+        ¡ú [AutoEnable] ¡ú onExtensionInstalled(ÀàĞÍ·Ö·¢)
+Enable  ¡ú ¼¤»îÀ©Õ¹£¨Èç±ßÔµÒò×ÓÉúĞ§£©
+Disable ¡ú ×¢Ïú¼ì²éÏî/Óò/±ßÔµÒò×Ó»Ö¸´
+Delete  ¡ú Disable + É¾³ıÎÄ¼ş
 ```
 
 ---
 
-## 4. å®‰å…¨æ§åˆ¶
+## 4. °²È«¿ØÖÆ
 
-ASSCOR æ‰©å±•ç³»ç»Ÿå†…ç½®å¤šå±‚å®‰å…¨é˜²æŠ¤ï¼š
+ASSCOR À©Õ¹ÏµÍ³ÄÚÖÃ¶à²ã°²È«·À»¤£º
 
-| æ§åˆ¶ | æœºåˆ¶ |
+| ¿ØÖÆ | »úÖÆ |
 |------|------|
-| **ç‰ˆæœ¬é—¨æ§** | SemVer æ¯”å¯¹ï¼Œæ‹’ç»å®‰è£…åŒç‰ˆæœ¬æˆ–æ—§ç‰ˆæœ¬ |
-| **å®Œæ•´æ€§æ ¡éªŒ** | SHA-256 æ ¡éªŒå’ŒéªŒè¯ï¼ˆ`sha256:<hex>`ï¼‰ |
-| **Zip-Slip é˜²æŠ¤** | è§£å‹æ—¶æ ¡éªŒç›®æ ‡è·¯å¾„ä¸é€ƒé€¸å®‰è£…ç›®å½• |
-| **å‘½ä»¤ç™½åå•** | ä»…å…è®¸ç™½åå•å‘½ä»¤æ‰§è¡Œï¼Œå« symlink è§£æé˜²ç»•è¿‡ |
-| **ç¯å¢ƒå˜é‡å‡€åŒ–** | æ‹’ç»å« `=`/æ¢è¡Œçš„é”®åã€å«æ¢è¡Œçš„å€¼ |
-| **è„šæœ¬è·¯å¾„é˜²æŠ¤** | è„šæœ¬æ‰§è¡Œè·¯å¾„å¿…é¡»ä½äºå®‰è£…ç›®å½•å†… |
-| **æ‰§è¡Œç­–ç•¥** | allowed / whitelistï¼ˆé»˜è®¤ï¼‰ / sandboxed / disabled å››çº§ |
-| **æ‰§è¡Œè¶…æ—¶** | é»˜è®¤ 30 ç§’ç¡¬è¶…æ—¶ |
+| **°æ±¾ÃÅ¿Ø** | SemVer ±È¶Ô£¬¾Ü¾ø°²×°Í¬°æ±¾»ò¾É°æ±¾ |
+| **ÍêÕûĞÔĞ£Ñé** | SHA-256 Ğ£ÑéºÍÑéÖ¤£¨`sha256:<hex>`£© |
+| **Zip-Slip ·À»¤** | ½âÑ¹Ê±Ğ£ÑéÄ¿±êÂ·¾¶²»ÌÓÒİ°²×°Ä¿Â¼ |
+| **ÃüÁî°×Ãûµ¥** | ½öÔÊĞí°×Ãûµ¥ÃüÁîÖ´ĞĞ£¬º¬ symlink ½âÎö·ÀÈÆ¹ı |
+| **»·¾³±äÁ¿¾»»¯** | ¾Ü¾øº¬ `=`/»»ĞĞµÄ¼üÃû¡¢º¬»»ĞĞµÄÖµ |
+| **½Å±¾Â·¾¶·À»¤** | ½Å±¾Ö´ĞĞÂ·¾¶±ØĞëÎ»ÓÚ°²×°Ä¿Â¼ÄÚ |
+| **Ö´ĞĞ²ßÂÔ** | allowed / whitelist£¨Ä¬ÈÏ£© / sandboxed / disabled ËÄ¼¶ |
+| **Ö´ĞĞ³¬Ê±** | Ä¬ÈÏ 30 ÃëÓ²³¬Ê± |
 
 ---
 
-## 5. æ‰“åŒ…ä¸åˆ†å‘
+## 5. ´ò°üÓë·Ö·¢
 
-### 5.1 ç¼–è¯‘æœŸæ‰©å±•ï¼ˆå•äºŒè¿›åˆ¶ï¼‰
+### 5.1 ±àÒëÆÚÀ©Õ¹£¨µ¥¶ş½øÖÆ£©
 
-å°†æ‰©å±•åŒ…åŠ å…¥ importï¼Œé€šè¿‡ `init()` è‡ªæ³¨å†Œï¼Œé‡æ–°ç¼–è¯‘å†…æ ¸ï¼š
+½«À©Õ¹°ü¼ÓÈë import£¬Í¨¹ı `init()` ×Ô×¢²á£¬ÖØĞÂ±àÒëÄÚºË£º
 
 ```go
-// cmd/kernel/main.go æˆ–ä¸“ç”¨ imports æ–‡ä»¶
+// cmd/kernel/main.go »ò×¨ÓÃ imports ÎÄ¼ş
 import (
     _ "github.com/yourorg/asscor-ext/mychecks"    // check_module
     _ "github.com/yourorg/asscor-ext/myadapters"  // adapter
@@ -654,35 +654,35 @@ import (
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ASSCOR-kernel ./cmd/kernel/
 ```
 
-**ä¼˜åŠ¿**ï¼šé›¶è¿è¡Œæ—¶ä¾èµ–ï¼Œä¿æŒå•äºŒè¿›åˆ¶éƒ¨ç½²ï¼Œç±»å‹å®‰å…¨ï¼Œç¼–è¯‘æœŸæ£€æŸ¥ã€‚
+**ÓÅÊÆ**£ºÁãÔËĞĞÊ±ÒÀÀµ£¬±£³Öµ¥¶ş½øÖÆ²¿Êğ£¬ÀàĞÍ°²È«£¬±àÒëÆÚ¼ì²é¡£
 
-### 5.2 è¿è¡Œæ—¶æ‰©å±•åŒ…
+### 5.2 ÔËĞĞÊ±À©Õ¹°ü
 
-æ‰“åŒ…ä¸º tar.gz/zipï¼ŒåŒ…å« `extension.json` + å¯æ‰§è¡Œè„šæœ¬ + èµ„æºï¼Œé€šè¿‡ git/http ä»“åº“æˆ–æœ¬åœ°è·¯å¾„åˆ†å‘ï¼Œç”± ExtensionManager ç®¡ç†ã€‚
+´ò°üÎª tar.gz/zip£¬°üº¬ `extension.json` + ¿ÉÖ´ĞĞ½Å±¾ + ×ÊÔ´£¬Í¨¹ı git/http ²Ö¿â»ò±¾µØÂ·¾¶·Ö·¢£¬ÓÉ ExtensionManager ¹ÜÀí¡£
 
-**ä¼˜åŠ¿**ï¼šæ— éœ€é‡æ–°ç¼–è¯‘å†…æ ¸ï¼Œæ”¯æŒçƒ­æ’æ‹”ï¼Œç‹¬ç«‹ç‰ˆæœ¬æ¼”è¿›ã€‚
+**ÓÅÊÆ**£ºÎŞĞèÖØĞÂ±àÒëÄÚºË£¬Ö§³ÖÈÈ²å°Î£¬¶ÀÁ¢°æ±¾Ñİ½ø¡£
 
 ---
 
-## 6. æ‰©å±•ç±»å‹é€‰æ‹©æŒ‡å—
+## 6. À©Õ¹ÀàĞÍÑ¡ÔñÖ¸ÄÏ
 
-| éœ€æ±‚ | æ¨èç±»å‹ | æ¨¡å¼ |
+| ĞèÇó | ÍÆ¼öÀàĞÍ | Ä£Ê½ |
 |------|----------|------|
-| æ–°å¢ä¸€ä¸ªå®‰å…¨æ£€æŸ¥ | `check_module` | ç¼–è¯‘æœŸ |
-| å¯¹æ¥ä¸€ä¸ªæ–°æ‰«æå·¥å…· | `adapter` | ç¼–è¯‘æœŸ |
-| è‡ªå®šä¹‰è¯„åˆ†ç®—æ³• | `scoring_plugin` | è¿è¡Œæ—¶ |
-| æ–°å¢ä¸€ä¸ªè¯„ä¼°ç»´åº¦ | `domain` + `check_module` | ç¼–è¯‘æœŸ/é…ç½® |
-| å…¨å±€é˜²æŠ¤ç¼ºå¤±æƒ©ç½š | `edge_factor` | ç¼–è¯‘æœŸ/é…ç½® |
-| è¯„ä¼°æµç¨‹æ³¨å…¥é€»è¾‘ | `hook` | è¿è¡Œæ—¶ |
-| æ–°å¢è¿ç»´å‘½ä»¤ | `cli_command` | æ‰©å±•ç‚¹ |
-| å¤æ‚æœ‰çŠ¶æ€å­ç³»ç»Ÿ | `custom`ï¼ˆPluginï¼‰ | æ’ä»¶æ³¨å†Œ |
-| ç¬¬ä¸‰æ–¹å¯æ’æ‹”åˆ†å‘ | ä»»æ„ç±»å‹ + ExtensionManager | è¿è¡Œæ—¶åŒ… |
+| ĞÂÔöÒ»¸ö°²È«¼ì²é | `check_module` | ±àÒëÆÚ |
+| ¶Ô½ÓÒ»¸öĞÂÉ¨Ãè¹¤¾ß | `adapter` | ±àÒëÆÚ |
+| ×Ô¶¨ÒåÆÀ·ÖËã·¨ | `scoring_plugin` | ÔËĞĞÊ± |
+| ĞÂÔöÒ»¸öÆÀ¹ÀÎ¬¶È | `domain` + `check_module` | ±àÒëÆÚ/ÅäÖÃ |
+| È«¾Ö·À»¤È±Ê§³Í·£ | `edge_factor` | ±àÒëÆÚ/ÅäÖÃ |
+| ÆÀ¹ÀÁ÷³Ì×¢ÈëÂß¼­ | `hook` | ÔËĞĞÊ± |
+| ĞÂÔöÔËÎ¬ÃüÁî | `cli_command` | À©Õ¹µã |
+| ¸´ÔÓÓĞ×´Ì¬×ÓÏµÍ³ | `custom`£¨Plugin£© | ²å¼ş×¢²á |
+| µÚÈı·½¿É²å°Î·Ö·¢ | ÈÎÒâÀàĞÍ + ExtensionManager | ÔËĞĞÊ±°ü |
 
 ---
 
-## 7. å®Œæ•´ç¤ºä¾‹ï¼šå®¹å™¨å®‰å…¨æ‰©å±•
+## 7. ÍêÕûÊ¾Àı£ºÈİÆ÷°²È«À©Õ¹
 
-ä»¥ä¸‹å±•ç¤ºä¸€ä¸ªå®Œæ•´çš„å®¹å™¨å®‰å…¨æ‰©å±•ï¼Œç»„åˆ domain + check_module + edge_factorï¼š
+ÒÔÏÂÕ¹Ê¾Ò»¸öÍêÕûµÄÈİÆ÷°²È«À©Õ¹£¬×éºÏ domain + check_module + edge_factor£º
 
 ```go
 package containersec
@@ -694,28 +694,28 @@ import (
 )
 
 func init() {
-    // 1. æ³¨å†Œæ–°åŸŸ
+    // 1. ×¢²áĞÂÓò
     model.RegisterDomain(model.DomainMeta{
         ID:            "container_security",
-        Label:         "å®¹å™¨å®‰å…¨",
+        Label:         "ÈİÆ÷°²È«",
         Category:      model.CategoryExtension,
         DefaultWeight: 10,
     })
 
-    // 2. æ³¨å†Œè¾¹ç¼˜å› å­
+    // 2. ×¢²á±ßÔµÒò×Ó
     model.RegisterEdgeFactor(model.EdgeFactor{
         ID:       "EF-NO-SECCOMP",
-        Name:     "Seccomp ç¼ºå¤±",
+        Name:     "Seccomp È±Ê§",
         Factor:   0.90,
         Priority: 20,
     })
 
-    // 3. æ³¨å†Œæ£€æŸ¥é¡¹
+    // 3. ×¢²á¼ì²éÏî
     checks.Register(
         model.CheckItem{
             ID:       "CS-001",
             Domain:   "container_security",
-            Name:     "Docker daemon å®‰å…¨é…ç½®",
+            Name:     "Docker daemon °²È«ÅäÖÃ",
             Delta:    -10,
             Platform: "linux",
             Check:    checkDockerDaemon,
@@ -723,7 +723,7 @@ func init() {
         model.CheckItem{
             ID:       "CS-002",
             Domain:   "container_security",
-            Name:     "å®¹å™¨é•œåƒç­¾åéªŒè¯",
+            Name:     "ÈİÆ÷¾µÏñÇ©ÃûÑéÖ¤",
             Delta:    -8,
             Platform: "linux",
             Check:    checkImageSigning,
@@ -734,20 +734,20 @@ func init() {
 func checkDockerDaemon() (bool, string) {
     data, err := os.ReadFile("/etc/docker/daemon.json")
     if err != nil {
-        return true, "æœªæ£€æµ‹åˆ° Docker"
+        return true, "Î´¼ì²âµ½ Docker"
     }
-    // ...è§£æå¹¶æ£€æŸ¥å®‰å…¨é€‰é¡¹...
+    // ...½âÎö²¢¼ì²é°²È«Ñ¡Ïî...
     _ = data
-    return true, "Docker å®‰å…¨é…ç½®åˆè§„"
+    return true, "Docker °²È«ÅäÖÃºÏ¹æ"
 }
 
 func checkImageSigning() (bool, string) {
-    // ...æ£€æŸ¥ cosign/notary é…ç½®...
-    return false, "æœªå¯ç”¨é•œåƒç­¾åéªŒè¯"
+    // ...¼ì²é cosign/notary ÅäÖÃ...
+    return false, "Î´ÆôÓÃ¾µÏñÇ©ÃûÑéÖ¤"
 }
 ```
 
-åœ¨ `config.ini` ä¸­å¯ç”¨ï¼š
+ÔÚ `config.ini` ÖĞÆôÓÃ£º
 
 ```ini
 [weights]
@@ -759,22 +759,22 @@ container_security = on
 
 ---
 
-## 8. å¤–éƒ¨æ‰©å±•æ¨¡å—ä¸æ‰©å±•åŒ…ï¼ˆv0.2.1+ï¼‰
+## 8. Íâ²¿À©Õ¹Ä£¿éÓëÀ©Õ¹°ü£¨v0.2.2+£©
 
-### 8.1 æ¦‚è¿°
+### 8.1 ¸ÅÊö
 
-ä¸å†…æ ¸é›†æˆå¼æ‰©å±• (ExtensionManager + extension.json) äº’è¡¥ï¼ŒASSCOR v0.2.1 å¼•å…¥**å¤–éƒ¨ç¼–è¯‘æ—¶æ‰©å±•ä½“ç³»**ã€‚å¤–éƒ¨æ‰©å±•ä½äº `optional/` ç›®å½•ï¼Œä¸ä¿®æ”¹å†…æ ¸ä»£ç ï¼Œé€šè¿‡ Go import + Extension Point ç³»ç»ŸæŒ‚è½½ã€‚
+ÓëÄÚºË¼¯³ÉÊ½À©Õ¹ (ExtensionManager + extension.json) »¥²¹£¬ASSCOR v0.2.2 ÒıÈë**Íâ²¿±àÒëÊ±À©Õ¹ÌåÏµ**¡£Íâ²¿À©Õ¹Î»ÓÚ `optional/` Ä¿Â¼£¬²»ĞŞ¸ÄÄÚºË´úÂë£¬Í¨¹ı Go import + Extension Point ÏµÍ³¹ÒÔØ¡£
 
-### 8.2 ä¸¤ç§æ‰©å±•å½¢å¼
+### 8.2 Á½ÖÖÀ©Õ¹ĞÎÊ½
 
-| å½¢å¼ | è·¯å¾„ | æ¥å…¥ | é€‚ç”¨ |
+| ĞÎÊ½ | Â·¾¶ | ½ÓÈë | ÊÊÓÃ |
 |------|------|------|------|
-| **å•æ¨¡å—** | `optional/<category>/modules/<name>/` | direct `import` â†’ `Register()` | ç‹¬ç«‹åŠŸèƒ½ |
-| **æ‰©å±•åŒ…** | `optional/<category>/packages/<name>/` | `package.json` + `asscor-pkg install` | å¤šæ¨¡å—ç»„åˆ / å«å¤–éƒ¨ git ä¾èµ– |
+| **µ¥Ä£¿é** | `optional/<category>/modules/<name>/` | direct `import` ¡ú `Register()` | ¶ÀÁ¢¹¦ÄÜ |
+| **À©Õ¹°ü** | `optional/<category>/packages/<name>/` | `package.json` + `asscor-pkg install` | ¶àÄ£¿é×éºÏ / º¬Íâ²¿ git ÒÀÀµ |
 
-### 8.3 æ‰©å±•åŒ…æ¸…å• (package.json)
+### 8.3 À©Õ¹°üÇåµ¥ (package.json)
 
-æ¯ä¸ªæ‰©å±•åŒ…å«ä¸€ä¸ª `package.json`ï¼Œå£°æ˜æ¨¡å—åˆ—è¡¨ã€å¤–éƒ¨ git ä»“åº“å¼•ç”¨ã€ä¾èµ–å’Œå†²çªï¼š
+Ã¿¸öÀ©Õ¹°üº¬Ò»¸ö `package.json`£¬ÉùÃ÷Ä£¿éÁĞ±í¡¢Íâ²¿ git ²Ö¿âÒıÓÃ¡¢ÒÀÀµºÍ³åÍ»£º
 
 ```json
 {
@@ -787,22 +787,22 @@ container_security = on
 }
 ```
 
-å®Œæ•´è§„èŒƒè§ `optional/SCHEMA.md`ã€‚
+ÍêÕû¹æ·¶¼û `optional/SCHEMA.md`¡£
 
-### 8.4 æ‰©å±•åŒ…ç®¡ç†å·¥å…· (asscor-pkg)
+### 8.4 À©Õ¹°ü¹ÜÀí¹¤¾ß (asscor-pkg)
 
 ```bash
 cd optional/pkgmgr && go build -o asscor-pkg .
-./asscor-pkg resolve          # è§£æä¾èµ–å›¾
-./asscor-pkg install --force  # å…‹éš†å¤–éƒ¨ä»“åº“
-./asscor-pkg list             # åˆ—å‡ºæ‰€æœ‰æ‰©å±•åŒ…
-./asscor-pkg info my-pack     # æŸ¥çœ‹æ‰©å±•åŒ…è¯¦æƒ…
+./asscor-pkg resolve          # ½âÎöÒÀÀµÍ¼
+./asscor-pkg install --force  # ¿ËÂ¡Íâ²¿²Ö¿â
+./asscor-pkg list             # ÁĞ³öËùÓĞÀ©Õ¹°ü
+./asscor-pkg info my-pack     # ²é¿´À©Õ¹°üÏêÇé
 ```
 
-### 8.5 å¤šç®—æ³•ç¼–æ’å™¨å¼€å‘ç¤ºä¾‹
+### 8.5 ¶àËã·¨±àÅÅÆ÷¿ª·¢Ê¾Àı
 
 ```go
-// åœ¨ optional/algorithms/modules/my-algo/orchestrator.go
+// ÔÚ optional/algorithms/modules/my-algo/orchestrator.go
 import "github.com/asscor/asscor/internal/kernel"
 
 type MyOrchestrator struct { ... }
@@ -810,7 +810,7 @@ type MyOrchestrator struct { ... }
 func (o *MyOrchestrator) Register(ext kernel.ModuleExtensions) {
     ext.RegisterExtension("my-algo", "assessor.pre_score", func(ctx context.Context, data interface{}) error {
         result := data.(*model.AssessmentResult)
-        // è°ƒç”¨å¤šä¸ªè¯„åˆ†å¼•æ“ï¼Œå–æœ€ä½åˆ†
+        // µ÷ÓÃ¶à¸öÆÀ·ÖÒıÇæ£¬È¡×îµÍ·Ö
         scores := []float64{runSSAM(result), runLegacy(result), runCustom(result)}
         result.FinalScore = min(scores...)
         return nil
@@ -819,19 +819,19 @@ func (o *MyOrchestrator) Register(ext kernel.ModuleExtensions) {
 ```
 
 ```go
-// åœ¨ cmd/kernel/main.go ä¸­å¯ç”¨
+// ÔÚ cmd/kernel/main.go ÖĞÆôÓÃ
 import myalgo "github.com/asscor/asscor-optional-my-algo"
 
 orch := myalgo.NewOrchestrator(cfg)
 orch.Register(k.PlatformExtensionRegistry())
 ```
 
-## 9. å‚è€ƒ
+## 9. ²Î¿¼
 
-- æ£€æŸ¥é¡¹åº“ï¼š`internal/checks/linux/checks.go`ï¼ˆ80 ä¸ªå†…ç½®æ£€æŸ¥é¡¹å‚è€ƒå®ç°ï¼‰
-- é€‚é…å™¨ç¤ºä¾‹ï¼š`internal/adapter/scanner/`ï¼ˆ11 ä¸ªæ¢æµ‹å™¨ï¼‰ã€`internal/adapter/management/`ï¼ˆ10 ä¸ªç®¡ç†ç±»ï¼‰
-- å†…æ ¸æ’ä»¶ç¤ºä¾‹ï¼š`internal/kernel/`ï¼ˆ17 ä¸ªå†…ç½®æ’ä»¶ï¼‰
-- æ‰©å±•ç®¡ç†å™¨ï¼š`internal/extmgr/`
-- å¤–éƒ¨æ‰©å±•æ¨¡å—ï¼š`optional/algorithms/modules/multi-algo-orchestrator/`
-- æ‰©å±•åŒ…ç¤ºä¾‹ï¼š`optional/algorithms/packages/example-pack/package.json`
-- SSAM æ¥å£è§„èŒƒï¼š`docs/SSAMæ¥å£è§„èŒƒä¸æ¥å…¥æŒ‡å—.md`
+- ¼ì²éÏî¿â£º`internal/checks/linux/checks.go`£¨80 ¸öÄÚÖÃ¼ì²éÏî²Î¿¼ÊµÏÖ£©
+- ÊÊÅäÆ÷Ê¾Àı£º`internal/adapter/scanner/`£¨11 ¸öÌ½²âÆ÷£©¡¢`internal/adapter/management/`£¨10 ¸ö¹ÜÀíÀà£©
+- ÄÚºË²å¼şÊ¾Àı£º`internal/kernel/`£¨17 ¸öÄÚÖÃ²å¼ş£©
+- À©Õ¹¹ÜÀíÆ÷£º`internal/extmgr/`
+- Íâ²¿À©Õ¹Ä£¿é£º`optional/algorithms/modules/multi-algo-orchestrator/`
+- À©Õ¹°üÊ¾Àı£º`optional/algorithms/packages/example-pack/package.json`
+- SSAM ½Ó¿Ú¹æ·¶£º`docs/SSAM½Ó¿Ú¹æ·¶Óë½ÓÈëÖ¸ÄÏ.md`

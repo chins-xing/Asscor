@@ -1,43 +1,43 @@
-# SSAM æ¥å£è§„èŒƒä¸æ¥å…¥æŒ‡å—
+# SSAM ½Ó¿Ú¹æ·¶Óë½ÓÈëÖ¸ÄÏ
 
-> **ç‰ˆæœ¬**ï¼šSSAM 2.0 | **æ¨¡å—è·¯å¾„**ï¼š`github.com/chins-xing/ssam`  
-> **ASSCOR é€‚é…å±‚**ï¼š`f:\Argus\internal\ssam\` (è–„é€‚é…å±‚ï¼Œå§”æ‰˜ç»™ ssam-lib)  
-> **æ—¥æœŸ**ï¼š2026-06-28 | **çŠ¶æ€**ï¼šå‘å¸ƒ
+> **°æ±¾**£ºSSAM 2.0 | **Ä£¿éÂ·¾¶**£º`github.com/chins-xing/ssam`  
+> **ASSCOR ÊÊÅä²ã**£º`f:\Argus\internal\ssam\` (±¡ÊÊÅä²ã£¬Î¯ÍĞ¸ø ssam-lib)  
+> **ÈÕÆÚ**£º2026-06-28 | **×´Ì¬**£º·¢²¼
 
-æœ¬æ–‡æ¡£è¯¦ç»†è¯´æ˜ SSAM ç‹¬ç«‹ç®—æ³•æ¨¡å—çš„æ¥å£è§„èŒƒã€æ•°æ®ç»“æ„å®šä¹‰ã€é…ç½®é€‚é…æœºåˆ¶åŠæ¥å…¥æ–¹å¼ã€‚SSAM V2.0 å·²ç‹¬ç«‹ä¸ºçº¯å‡½æ•°å¼ Go æ¨¡å— `github.com/chins-xing/ssam`ï¼ˆä½äº `ssam-lib/`ï¼‰ï¼Œå¯è„±ç¦» ASSCOR æ¡†æ¶ç‹¬ç«‹ä½¿ç”¨ã€‚ASSCOR å¹³å°é€šè¿‡ `internal/ssam/` è–„é€‚é…å±‚å§”æ‰˜è°ƒç”¨ ssam-libã€‚
-
----
-
-## 1. æ¨¡å—æ¦‚è§ˆ
-
-`github.com/chins-xing/ssam`ï¼ˆ`ssam-lib/`ï¼‰æ˜¯ SSAM V2.0 çš„çº¯å‡½æ•°å¼å¼•æ“ï¼Œé›¶å¤–éƒ¨ä¾èµ–ã€‚åŒ…å«ä»¥ä¸‹æ–‡ä»¶ï¼š
-
-| æ–‡ä»¶ | èŒè´£ |
-|------|------|
-| `ssam.go` | Engine æ ¸å¿ƒå®ç°ï¼š`Provider` æ¥å£ã€è¾“å…¥éªŒè¯ã€é’©å­æœºåˆ¶ã€å…¬å¼è°ƒåº¦ |
-| `types.go` | V1.x æ•°æ®ç±»å‹å®šä¹‰ï¼ˆ`AssessmentInput`, `AssessmentOutput` ç­‰ï¼‰ï¼Œä¿æŒå‘åå…¼å®¹ |
-| `types_v2.go` | V2.0 æ•°æ®ç±»å‹ï¼š`RiskContext`, `RiskLayerDetail`, `RiskLayers`, `FinalScore`, `AssessmentInputV2`, `AssessmentOutputV2`, `ScoringFormulaV2` |
-| `formulas.go` | V1.x å…¬å¼å®ç°ï¼ˆ`ssam_v1.2`, `simple_weighted`ï¼‰ï¼Œä¿æŒå‘åå…¼å®¹ |
-| `formulas_v2.go` | V2.0 å…¬å¼ `SSAMV20Formula`ï¼šä¸‰å±‚è¯­ä¹‰æ¨¡å‹ï¼ˆæœ¬å¾/æš´éœ²/å¨èƒï¼‰ç‹¬ç«‹é£é™©å±‚è¯„ä¼° |
-| `ir.go` | SSAM IR JSON ä¸­é—´è¡¨ç¤ºï¼š`AssessmentOutputV2.ToIR()` è¾“å‡ºæœºå™¨å¯è¯»çš„ç»“æ„åŒ–è¯„ä¼°ç»“æœ |
-| `ast.go` | Formula DSL/ASTï¼š`ParseFormula(expression)` è§£æå…¬å¼å­—ç¬¦ä¸²ä¸º ASTï¼›`EvaluateFormula(ast, ctx)` æ±‚å€¼ |
-| `formulas_ast.go` | AST é©±åŠ¨çš„å…¬å¼å®ç°ï¼Œæ”¯æŒè¿è¡Œæ—¶åŠ¨æ€æ„é€ è¯„åˆ†å…¬å¼ |
-| `engine_test.go` | å®Œæ•´æµ‹è¯•è¦†ç›–ï¼ˆV1.x å›å½’ + V2.0 ä¸‰å±‚æ¨¡å‹ + IR å¯¼å‡º + AST è§£æï¼‰ |
-
-ASSCOR é€‚é…å±‚ï¼ˆ`internal/ssam/`ï¼‰ç²¾ç®€ä¸ºä¸¤ä¸ªæ–‡ä»¶ï¼š
-
-| æ–‡ä»¶ | èŒè´£ |
-|------|------|
-| `adapter.go` | ASSCOR é…ç½®/æ¨¡å‹ä¸ SSAM æ ¼å¼çš„åŒå‘è½¬æ¢ï¼ˆå§”æ‰˜ç»™ ssam-lib Engineï¼‰ |
-| `defaults.go` | é»˜è®¤æƒé‡ã€è¾¹ç¼˜å› å­åŠå·¥å‚å‡½æ•° |
+±¾ÎÄµµÏêÏ¸ËµÃ÷ SSAM ¶ÀÁ¢Ëã·¨Ä£¿éµÄ½Ó¿Ú¹æ·¶¡¢Êı¾İ½á¹¹¶¨Òå¡¢ÅäÖÃÊÊÅä»úÖÆ¼°½ÓÈë·½Ê½¡£SSAM V2.0 ÒÑ¶ÀÁ¢Îª´¿º¯ÊıÊ½ Go Ä£¿é `github.com/chins-xing/ssam`£¨Î»ÓÚ `ssam-lib/`£©£¬¿ÉÍÑÀë ASSCOR ¿ò¼Ü¶ÀÁ¢Ê¹ÓÃ¡£ASSCOR Æ½Ì¨Í¨¹ı `internal/ssam/` ±¡ÊÊÅä²ãÎ¯ÍĞµ÷ÓÃ ssam-lib¡£
 
 ---
 
-## 2. æ ¸å¿ƒæ¥å£
+## 1. Ä£¿é¸ÅÀÀ
 
-### 2.1 Provider èšåˆæ¥å£
+`github.com/chins-xing/ssam`£¨`ssam-lib/`£©ÊÇ SSAM V2.0 µÄ´¿º¯ÊıÊ½ÒıÇæ£¬ÁãÍâ²¿ÒÀÀµ¡£°üº¬ÒÔÏÂÎÄ¼ş£º
 
-`Provider` æ˜¯ SSAM æ¨¡å—å¯¹å¤–æš´éœ²çš„é¡¶å±‚æ¥å£ï¼Œèšåˆäº†å››ä¸ªå­æ¥å£ï¼š
+| ÎÄ¼ş | Ö°Ôğ |
+|------|------|
+| `ssam.go` | Engine ºËĞÄÊµÏÖ£º`Provider` ½Ó¿Ú¡¢ÊäÈëÑéÖ¤¡¢¹³×Ó»úÖÆ¡¢¹«Ê½µ÷¶È |
+| `types.go` | V1.x Êı¾İÀàĞÍ¶¨Òå£¨`AssessmentInput`, `AssessmentOutput` µÈ£©£¬±£³ÖÏòºó¼æÈİ |
+| `types_v2.go` | V2.0 Êı¾İÀàĞÍ£º`RiskContext`, `RiskLayerDetail`, `RiskLayers`, `FinalScore`, `AssessmentInputV2`, `AssessmentOutputV2`, `ScoringFormulaV2` |
+| `formulas.go` | V1.x ¹«Ê½ÊµÏÖ£¨`ssam_v1.2`, `simple_weighted`£©£¬±£³ÖÏòºó¼æÈİ |
+| `formulas_v2.go` | V2.0 ¹«Ê½ `SSAMV20Formula`£ºÈı²ãÓïÒåÄ£ĞÍ£¨±¾Õ÷/±©Â¶/ÍşĞ²£©¶ÀÁ¢·çÏÕ²ãÆÀ¹À |
+| `ir.go` | SSAM IR JSON ÖĞ¼ä±íÊ¾£º`AssessmentOutputV2.ToIR()` Êä³ö»úÆ÷¿É¶ÁµÄ½á¹¹»¯ÆÀ¹À½á¹û |
+| `ast.go` | Formula DSL/AST£º`ParseFormula(expression)` ½âÎö¹«Ê½×Ö·û´®Îª AST£»`EvaluateFormula(ast, ctx)` ÇóÖµ |
+| `formulas_ast.go` | AST Çı¶¯µÄ¹«Ê½ÊµÏÖ£¬Ö§³ÖÔËĞĞÊ±¶¯Ì¬¹¹ÔìÆÀ·Ö¹«Ê½ |
+| `engine_test.go` | ÍêÕû²âÊÔ¸²¸Ç£¨V1.x »Ø¹é + V2.0 Èı²ãÄ£ĞÍ + IR µ¼³ö + AST ½âÎö£© |
+
+ASSCOR ÊÊÅä²ã£¨`internal/ssam/`£©¾«¼òÎªÁ½¸öÎÄ¼ş£º
+
+| ÎÄ¼ş | Ö°Ôğ |
+|------|------|
+| `adapter.go` | ASSCOR ÅäÖÃ/Ä£ĞÍÓë SSAM ¸ñÊ½µÄË«Ïò×ª»»£¨Î¯ÍĞ¸ø ssam-lib Engine£© |
+| `defaults.go` | Ä¬ÈÏÈ¨ÖØ¡¢±ßÔµÒò×Ó¼°¹¤³§º¯Êı |
+
+---
+
+## 2. ºËĞÄ½Ó¿Ú
+
+### 2.1 Provider ¾ÛºÏ½Ó¿Ú
+
+`Provider` ÊÇ SSAM Ä£¿é¶ÔÍâ±©Â¶µÄ¶¥²ã½Ó¿Ú£¬¾ÛºÏÁËËÄ¸ö×Ó½Ó¿Ú£º
 
 ```go
 type Provider interface {
@@ -48,13 +48,13 @@ type Provider interface {
 }
 ```
 
-`Engine` ç»“æ„ä½“å®ç°äº† `Provider` æ¥å£ï¼Œå¹¶é€šè¿‡ç¼–è¯‘æ—¶æ–­è¨€ä¿è¯ï¼š
+`Engine` ½á¹¹ÌåÊµÏÖÁË `Provider` ½Ó¿Ú£¬²¢Í¨¹ı±àÒëÊ±¶ÏÑÔ±£Ö¤£º
 
 ```go
 var _ Provider = (*Engine)(nil)
 ```
 
-### 2.2 ScoringProvider â€” è¯„åˆ†æ¥å£
+### 2.2 ScoringProvider ¡ª ÆÀ·Ö½Ó¿Ú
 
 ```go
 type ScoringProvider interface {
@@ -69,17 +69,17 @@ type ScoringProvider interface {
 }
 ```
 
-| æ–¹æ³• | è¯´æ˜ |
+| ·½·¨ | ËµÃ÷ |
 |------|------|
-| `ComputeScore` | å®Œæ•´è¯„åˆ†æµç¨‹ï¼šè¾“å…¥éªŒè¯ â†’ åŸŸè¯„åˆ† â†’ è¾¹ç¼˜å› å­ â†’ å…¬å¼è®¡ç®— â†’ è¾“å‡º |
-| `ComputeDomainScores` | æŒ‰åŸŸèšåˆæ£€æŸ¥é¡¹ï¼Œè®¡ç®—å„åŸŸç™¾åˆ†åˆ¶å¾—åˆ† |
-| `ComputeWeightedSum` | è®¡ç®—åŸŸå¾—åˆ†çš„åŠ æƒå’Œ |
-| `ApplyEdgeFactors` | å¯¹åŸºç¡€åˆ†åº”ç”¨æ´»è·ƒè¾¹ç¼˜å› å­çš„ä¹˜æ³•ä¿®æ­£ |
-| `SetWeights` / `GetWeights` | åŠ¨æ€è®¾ç½®/è·å–æ ¸å¿ƒåŸŸæƒé‡ |
-| `SetFormula` / `GetFormula` | åˆ‡æ¢/è·å–è¯„åˆ†å…¬å¼ï¼ˆå†…ç½® `ssam_v1.2` å’Œ `simple_weighted`ï¼‰ |
-| `SetFormulaV2` / `GetFormulaV2` | åˆ‡æ¢/è·å– V2.0 è¯„åˆ†å…¬å¼ï¼ˆå†…ç½® `ssam_v2.0`ï¼Œä½¿ç”¨ä¸‰å±‚è¯­ä¹‰æ¨¡å‹ï¼‰ |
+| `ComputeScore` | ÍêÕûÆÀ·ÖÁ÷³Ì£ºÊäÈëÑéÖ¤ ¡ú ÓòÆÀ·Ö ¡ú ±ßÔµÒò×Ó ¡ú ¹«Ê½¼ÆËã ¡ú Êä³ö |
+| `ComputeDomainScores` | °´Óò¾ÛºÏ¼ì²éÏî£¬¼ÆËã¸÷Óò°Ù·ÖÖÆµÃ·Ö |
+| `ComputeWeightedSum` | ¼ÆËãÓòµÃ·ÖµÄ¼ÓÈ¨ºÍ |
+| `ApplyEdgeFactors` | ¶Ô»ù´¡·ÖÓ¦ÓÃ»îÔ¾±ßÔµÒò×ÓµÄ³Ë·¨ĞŞÕı |
+| `SetWeights` / `GetWeights` | ¶¯Ì¬ÉèÖÃ/»ñÈ¡ºËĞÄÓòÈ¨ÖØ |
+| `SetFormula` / `GetFormula` | ÇĞ»»/»ñÈ¡ÆÀ·Ö¹«Ê½£¨ÄÚÖÃ `ssam_v1.2` ºÍ `simple_weighted`£© |
+| `SetFormulaV2` / `GetFormulaV2` | ÇĞ»»/»ñÈ¡ V2.0 ÆÀ·Ö¹«Ê½£¨ÄÚÖÃ `ssam_v2.0`£¬Ê¹ÓÃÈı²ãÓïÒåÄ£ĞÍ£© |
 
-### 2.3 DomainProvider â€” åŸŸä¿¡æ¯æ¥å£
+### 2.3 DomainProvider ¡ª ÓòĞÅÏ¢½Ó¿Ú
 
 ```go
 type DomainProvider interface {
@@ -89,13 +89,13 @@ type DomainProvider interface {
 }
 ```
 
-| æ–¹æ³• | è¯´æ˜ |
+| ·½·¨ | ËµÃ÷ |
 |------|------|
-| `ListDomains` | è¿”å›å·²é…ç½®æƒé‡çš„æ‰€æœ‰åŸŸ IDï¼ˆæ’åºåï¼‰ |
-| `GetDomainLabel` | è¿”å›åŸŸçš„å¯è¯»æ ‡ç­¾ï¼ˆé»˜è®¤è¿”å›åŸŸ ID æœ¬èº«ï¼‰ |
-| `GetDefaultWeight` | è¿”å›æŒ‡å®šåŸŸçš„æƒé‡å€¼ï¼Œæœªé…ç½®åˆ™è¿”å› 0 |
+| `ListDomains` | ·µ»ØÒÑÅäÖÃÈ¨ÖØµÄËùÓĞÓò ID£¨ÅÅĞòºó£© |
+| `GetDomainLabel` | ·µ»ØÓòµÄ¿É¶Á±êÇ©£¨Ä¬ÈÏ·µ»ØÓò ID ±¾Éí£© |
+| `GetDefaultWeight` | ·µ»ØÖ¸¶¨ÓòµÄÈ¨ÖØÖµ£¬Î´ÅäÖÃÔò·µ»Ø 0 |
 
-### 2.4 EdgeFactorProvider â€” è¾¹ç¼˜å› å­æ¥å£
+### 2.4 EdgeFactorProvider ¡ª ±ßÔµÒò×Ó½Ó¿Ú
 
 ```go
 type EdgeFactorProvider interface {
@@ -104,12 +104,12 @@ type EdgeFactorProvider interface {
 }
 ```
 
-| æ–¹æ³• | è¯´æ˜ |
+| ·½·¨ | ËµÃ÷ |
 |------|------|
-| `ListEdgeFactors` | è¿”å›æ‰€æœ‰å·²æ³¨å†Œçš„è¾¹ç¼˜å› å­é…ç½®ï¼ˆActive=falseï¼‰ |
-| `EvaluateEdgeFactors` | æ ¹æ®æ£€æŸ¥ç»“æœè¯„ä¼°è¾¹ç¼˜å› å­è§¦å‘çŠ¶æ€ï¼Œè¿”å›å« Active æ ‡è®°çš„ç»“æœ |
+| `ListEdgeFactors` | ·µ»ØËùÓĞÒÑ×¢²áµÄ±ßÔµÒò×ÓÅäÖÃ£¨Active=false£© |
+| `EvaluateEdgeFactors` | ¸ù¾İ¼ì²é½á¹ûÆÀ¹À±ßÔµÒò×Ó´¥·¢×´Ì¬£¬·µ»Øº¬ Active ±ê¼ÇµÄ½á¹û |
 
-### 2.5 HookProvider â€” é’©å­æ¥å£
+### 2.5 HookProvider ¡ª ¹³×Ó½Ó¿Ú
 
 ```go
 type HookProvider interface {
@@ -119,26 +119,26 @@ type HookProvider interface {
 }
 ```
 
-| æ–¹æ³• | è¯´æ˜ |
+| ·½·¨ | ËµÃ÷ |
 |------|------|
-| `RegisterHook` | åœ¨æŒ‡å®šé˜¶æ®µæ³¨å†Œé’©å­å‡½æ•°ï¼Œpriority è¶Šå°è¶Šå…ˆæ‰§è¡Œ |
-| `UnregisterHook` | æŒ‰ ID ç§»é™¤é’©å­ |
-| `ExecuteHooks` | æ‰§è¡ŒæŒ‡å®šé˜¶æ®µçš„æ‰€æœ‰é’©å­ï¼ˆæŒ‰ priority æ’åºï¼‰ï¼Œè¿”å›é”™è¯¯åˆ—è¡¨ |
+| `RegisterHook` | ÔÚÖ¸¶¨½×¶Î×¢²á¹³×Óº¯Êı£¬priority Ô½Ğ¡Ô½ÏÈÖ´ĞĞ |
+| `UnregisterHook` | °´ ID ÒÆ³ı¹³×Ó |
+| `ExecuteHooks` | Ö´ĞĞÖ¸¶¨½×¶ÎµÄËùÓĞ¹³×Ó£¨°´ priority ÅÅĞò£©£¬·µ»Ø´íÎóÁĞ±í |
 
-é’©å­é˜¶æ®µå®šä¹‰ï¼š
+¹³×Ó½×¶Î¶¨Òå£º
 
 ```go
 type HookPhase string
 
 const (
-    HookPreScore  HookPhase = "pre_score"   // åŸŸè¯„åˆ†å‰
-    HookPostScore HookPhase = "post_score"  // åŸŸè¯„åˆ†å
-    HookPreEdge   HookPhase = "pre_edge"    // è¾¹ç¼˜å› å­è¯„ä¼°å‰
-    HookPostEdge  HookPhase = "post_edge"   // è¾¹ç¼˜å› å­è¯„ä¼°å
+    HookPreScore  HookPhase = "pre_score"   // ÓòÆÀ·ÖÇ°
+    HookPostScore HookPhase = "post_score"  // ÓòÆÀ·Öºó
+    HookPreEdge   HookPhase = "pre_edge"    // ±ßÔµÒò×ÓÆÀ¹ÀÇ°
+    HookPostEdge  HookPhase = "post_edge"   // ±ßÔµÒò×ÓÆÀ¹Àºó
 )
 ```
 
-é’©å­å‡½æ•°ç­¾åï¼š
+¹³×Óº¯ÊıÇ©Ãû£º
 
 ```go
 type AssessmentHook func(ctx context.Context, input *AssessmentInput, output *AssessmentOutput) error
@@ -146,9 +146,9 @@ type AssessmentHook func(ctx context.Context, input *AssessmentInput, output *As
 
 ---
 
-## 3. æ•°æ®ç»“æ„
+## 3. Êı¾İ½á¹¹
 
-### 3.1 AssessmentInput â€” è¯„ä¼°è¾“å…¥
+### 3.1 AssessmentInput ¡ª ÆÀ¹ÀÊäÈë
 
 ```go
 type AssessmentInput struct {
@@ -163,20 +163,20 @@ type AssessmentInput struct {
 }
 ```
 
-| å­—æ®µ | ç±»å‹ | è¯´æ˜ |
+| ×Ö¶Î | ÀàĞÍ | ËµÃ÷ |
 |------|------|------|
-| `HostID` | string | ä¸»æœºå”¯ä¸€æ ‡è¯† |
-| `Hostname` | string | ä¸»æœºå |
-| `Timestamp` | time.Time | è¯„ä¼°æ—¶é—´æˆ³ |
-| `Threshold` | float64 | å¯æ¥å—é˜ˆå€¼ï¼ˆ0â€“100ï¼‰ï¼Œé»˜è®¤ 80 |
-| `Checks` | []CheckInput | æ£€æŸ¥é¡¹ç»“æœåˆ—è¡¨ |
-| `ThreatCoeff` | float64 | å¨èƒæ€åŠ¿ç³»æ•°ï¼ˆ0.60â€“1.00ï¼‰ï¼Œ0 æ—¶è‡ªåŠ¨è®¾ä¸º 1.0 |
-| `SPCScore` | float64 | SPC æ€åŠ¿ä¿®æ­£å› å­ï¼ˆ0.60â€“1.00ï¼‰ï¼Œ0 æ—¶è‡ªåŠ¨è®¾ä¸º 1.0 |
+| `HostID` | string | Ö÷»úÎ¨Ò»±êÊ¶ |
+| `Hostname` | string | Ö÷»úÃû |
+| `Timestamp` | time.Time | ÆÀ¹ÀÊ±¼ä´Á |
+| `Threshold` | float64 | ¿É½ÓÊÜãĞÖµ£¨0¨C100£©£¬Ä¬ÈÏ 80 |
+| `Checks` | []CheckInput | ¼ì²éÏî½á¹ûÁĞ±í |
+| `ThreatCoeff` | float64 | ÍşĞ²Ì¬ÊÆÏµÊı£¨0.60¨C1.00£©£¬0 Ê±×Ô¶¯ÉèÎª 1.0 |
+| `SPCScore` | float64 | SPC Ì¬ÊÆĞŞÕıÒò×Ó£¨0.60¨C1.00£©£¬0 Ê±×Ô¶¯ÉèÎª 1.0 |
 
-> âš ï¸ **SPC è¯„ä¼°æ–¹æ³•å£°æ˜**ï¼š`SPCScore` ç”± SPC æ¨¡å—åŸºäº CPE å­—ç¬¦ä¸²åŒ¹é…ï¼ˆè½¯ä»¶åŒ…åç§°/ç‰ˆæœ¬ â†” CVE æ•°æ®åº“å—å½±å“äº§å“ç‰ˆæœ¬ï¼‰è®¡ç®—å¾—å‡ºï¼Œä¸æ¶‰åŠæ¼æ´åˆ©ç”¨éªŒè¯ã€è¿è¡Œæ—¶å¯è¾¾æ€§åˆ†ææˆ–äºŒè¿›åˆ¶åˆ†æã€‚è¯¦è§ [SPC å®‰å…¨æ€åŠ¿è®¡ç®—æ¨¡å—æŠ€æœ¯ç™½çš®ä¹¦](SPCå®‰å…¨æ€åŠ¿è®¡ç®—æ¨¡å—æŠ€æœ¯ç™½çš®ä¹¦.md)ã€‚
-| `WeightShifts` | map | SPC è¾“å‡ºçš„åŸŸæƒé‡ä¸´æ—¶åç§»ï¼ˆå¯é€‰ï¼‰ |
+> ?? **SPC ÆÀ¹À·½·¨ÉùÃ÷**£º`SPCScore` ÓÉ SPC Ä£¿é»ùÓÚ CPE ×Ö·û´®Æ¥Åä£¨Èí¼ş°üÃû³Æ/°æ±¾ ? CVE Êı¾İ¿âÊÜÓ°Ïì²úÆ·°æ±¾£©¼ÆËãµÃ³ö£¬²»Éæ¼°Â©¶´ÀûÓÃÑéÖ¤¡¢ÔËĞĞÊ±¿É´ïĞÔ·ÖÎö»ò¶ş½øÖÆ·ÖÎö¡£Ïê¼û [SPC °²È«Ì¬ÊÆ¼ÆËãÄ£¿é¼¼Êõ°×Æ¤Êé](SPC°²È«Ì¬ÊÆ¼ÆËãÄ£¿é¼¼Êõ°×Æ¤Êé.md)¡£
+| `WeightShifts` | map | SPC Êä³öµÄÓòÈ¨ÖØÁÙÊ±Æ«ÒÆ£¨¿ÉÑ¡£© |
 
-### 3.2 CheckInput â€” æ£€æŸ¥é¡¹è¾“å…¥
+### 3.2 CheckInput ¡ª ¼ì²éÏîÊäÈë
 
 ```go
 type CheckInput struct {
@@ -189,16 +189,16 @@ type CheckInput struct {
 }
 ```
 
-| å­—æ®µ | è¯´æ˜ |
+| ×Ö¶Î | ËµÃ÷ |
 |------|------|
-| `CheckID` | æ£€æŸ¥é¡¹å”¯ä¸€æ ‡è¯†ï¼ˆå¦‚ `AS-001`ã€`BC-003`ï¼‰ |
-| `Domain` | æ‰€å±æ ¸å¿ƒåŸŸï¼ˆ`attack_surface`/`business_continuity`/`operation_trust`/`resilience`ï¼‰ |
-| `Name` | æ£€æŸ¥é¡¹åç§° |
-| `Passed` | æ˜¯å¦é€šè¿‡ |
-| `Delta` | æœªé€šè¿‡æ—¶çš„æ‰£åˆ†å€¼ï¼ˆè´Ÿæ•°ï¼Œå¦‚ -15ï¼‰ |
-| `Detail` | æ£€æŸ¥è¯¦æƒ…è¯´æ˜ |
+| `CheckID` | ¼ì²éÏîÎ¨Ò»±êÊ¶£¨Èç `AS-001`¡¢`BC-003`£© |
+| `Domain` | ËùÊôºËĞÄÓò£¨`attack_surface`/`business_continuity`/`operation_trust`/`resilience`£© |
+| `Name` | ¼ì²éÏîÃû³Æ |
+| `Passed` | ÊÇ·ñÍ¨¹ı |
+| `Delta` | Î´Í¨¹ıÊ±µÄ¿Û·ÖÖµ£¨¸ºÊı£¬Èç -15£© |
+| `Detail` | ¼ì²éÏêÇéËµÃ÷ |
 
-### 3.3 AssessmentOutput â€” è¯„ä¼°è¾“å‡º
+### 3.3 AssessmentOutput ¡ª ÆÀ¹ÀÊä³ö
 
 ```go
 type AssessmentOutput struct {
@@ -216,16 +216,16 @@ type AssessmentOutput struct {
 }
 ```
 
-| å­—æ®µ | è¯´æ˜ |
+| ×Ö¶Î | ËµÃ÷ |
 |------|------|
-| `FinalScore` | æœ€ç»ˆè¯„ä¼°åˆ†æ•°ï¼ˆ0â€“100ï¼Œä¿ç•™ä¸¤ä½å°æ•°ï¼‰ |
-| `Acceptable` | æ˜¯å¦å¯æ¥å—ï¼ˆ`FinalScore >= Threshold`ï¼‰ |
-| `DomainScores` | å„æ ¸å¿ƒåŸŸå¾—åˆ† |
-| `EdgeFactors` | è¾¹ç¼˜å› å­è¯„ä¼°ç»“æœï¼ˆå« Active æ ‡è®°ï¼‰ |
-| `FormulaID` | ä½¿ç”¨çš„è¯„åˆ†å…¬å¼æ ‡è¯† |
-| `Metadata` | è‡ªå®šä¹‰å…ƒæ•°æ®ï¼ˆé’©å­å¯å†™å…¥ï¼‰ |
+| `FinalScore` | ×îÖÕÆÀ¹À·ÖÊı£¨0¨C100£¬±£ÁôÁ½Î»Ğ¡Êı£© |
+| `Acceptable` | ÊÇ·ñ¿É½ÓÊÜ£¨`FinalScore >= Threshold`£© |
+| `DomainScores` | ¸÷ºËĞÄÓòµÃ·Ö |
+| `EdgeFactors` | ±ßÔµÒò×ÓÆÀ¹À½á¹û£¨º¬ Active ±ê¼Ç£© |
+| `FormulaID` | Ê¹ÓÃµÄÆÀ·Ö¹«Ê½±êÊ¶ |
+| `Metadata` | ×Ô¶¨ÒåÔªÊı¾İ£¨¹³×Ó¿ÉĞ´Èë£© |
 
-### 3.4 EdgeFactorConfig â€” è¾¹ç¼˜å› å­é…ç½®
+### 3.4 EdgeFactorConfig ¡ª ±ßÔµÒò×ÓÅäÖÃ
 
 ```go
 type EdgeFactorConfig struct {
@@ -239,17 +239,17 @@ type EdgeFactorConfig struct {
 }
 ```
 
-| å­—æ®µ | è¯´æ˜ |
+| ×Ö¶Î | ËµÃ÷ |
 |------|------|
-| `ID` | è¾¹ç¼˜å› å­å”¯ä¸€æ ‡è¯†ï¼ˆå¦‚ `EF-002FA`ï¼‰ |
-| `Name` | å¯è¯»åç§° |
-| `Factor` | ä¹˜æ³•ä¿®æ­£å› å­ï¼ˆ0.0â€“1.0ï¼Œå¦‚ 0.85 è¡¨ç¤º Ã—0.85ï¼‰ |
-| `TriggerCheck` | è§¦å‘è¯¥å› å­çš„æ£€æŸ¥é¡¹ ID |
-| `CascadeTo` | çº§è”ç›®æ ‡å› å­ IDï¼ˆå¯é€‰ï¼‰ |
-| `CascadeValue` | çº§è”æ—¶è¦†ç›–ç›®æ ‡å› å­çš„å€¼ï¼ˆå¯é€‰ï¼‰ |
-| `CascadeOnly` | ä¸º true æ—¶ï¼Œè¯¥å› å­è‡ªèº«ä¸ç›´æ¥å‚ä¸ä¹˜æ³•ä¿®æ­£ï¼Œä»…é€šè¿‡çº§è”å½±å“ç›®æ ‡å› å­ |
+| `ID` | ±ßÔµÒò×ÓÎ¨Ò»±êÊ¶£¨Èç `EF-002FA`£© |
+| `Name` | ¿É¶ÁÃû³Æ |
+| `Factor` | ³Ë·¨ĞŞÕıÒò×Ó£¨0.0¨C1.0£¬Èç 0.85 ±íÊ¾ ¡Á0.85£© |
+| `TriggerCheck` | ´¥·¢¸ÃÒò×ÓµÄ¼ì²éÏî ID |
+| `CascadeTo` | ¼¶ÁªÄ¿±êÒò×Ó ID£¨¿ÉÑ¡£© |
+| `CascadeValue` | ¼¶ÁªÊ±¸²¸ÇÄ¿±êÒò×ÓµÄÖµ£¨¿ÉÑ¡£© |
+| `CascadeOnly` | Îª true Ê±£¬¸ÃÒò×Ó×ÔÉí²»Ö±½Ó²ÎÓë³Ë·¨ĞŞÕı£¬½öÍ¨¹ı¼¶ÁªÓ°ÏìÄ¿±êÒò×Ó |
 
-**çº§è”ç¤ºä¾‹**ï¼š3FA æœªæ»¡è¶³ï¼ˆ`EF-3FA`ï¼‰æ—¶ï¼Œçº§è”å°† 2FA å› å­ï¼ˆ`EF-002FA`ï¼‰çš„å€¼ä» 0.85 è¦†ç›–ä¸º 0.82ï¼š
+**¼¶ÁªÊ¾Àı**£º3FA Î´Âú×ã£¨`EF-3FA`£©Ê±£¬¼¶Áª½« 2FA Òò×Ó£¨`EF-002FA`£©µÄÖµ´Ó 0.85 ¸²¸ÇÎª 0.82£º
 
 ```go
 EdgeFactorConfig{
@@ -261,9 +261,9 @@ EdgeFactorConfig{
 
 ---
 
-## 3.5 SSAM V2.0 æ•°æ®ç±»å‹ï¼ˆtypes_v2.goï¼‰
+## 3.5 SSAM V2.0 Êı¾İÀàĞÍ£¨types_v2.go£©
 
-### 3.5.1 RiskContext â€” é£é™©ä¸Šä¸‹æ–‡
+### 3.5.1 RiskContext ¡ª ·çÏÕÉÏÏÂÎÄ
 
 ```go
 type RiskContext struct {
@@ -277,7 +277,7 @@ type RiskContext struct {
 }
 ```
 
-### 3.5.2 RiskLayerDetail / RiskLayers â€” ä¸‰å±‚é£é™©å±‚
+### 3.5.2 RiskLayerDetail / RiskLayers ¡ª Èı²ã·çÏÕ²ã
 
 ```go
 type RiskLayerDetail struct {
@@ -295,13 +295,13 @@ type RiskLayers struct {
 }
 ```
 
-| é£é™©å±‚ | å«ä¹‰ | å…¸å‹è¾“å…¥ |
+| ·çÏÕ²ã | º¬Òå | µäĞÍÊäÈë |
 |--------|------|----------|
-| **Intrinsicï¼ˆæœ¬å¾é£é™©ï¼‰** | ç³»ç»Ÿè‡ªèº«çš„é…ç½®å®‰å…¨åŸºçº¿ï¼Œä¸å¤–éƒ¨ç¯å¢ƒæ— å…³ | æ ¸å¿ƒåŸŸå¾—åˆ†ã€è¾¹ç¼˜å› å­ |
-| **Exposureï¼ˆæš´éœ²é£é™©ï¼‰** | ç³»ç»Ÿå¯¹å¤–æš´éœ²çš„è„†å¼±æ€§é¢ | SPC P_scoreã€ç«¯å£æš´éœ²ã€CVE åŒ¹é… |
-| **Threatï¼ˆå¨èƒé£é™©ï¼‰** | å½“å‰å¨èƒç¯å¢ƒçš„å½±å“ | CTI Î¼ ç³»æ•°ã€å¨èƒç»„ç»‡æ´»è·ƒåº¦ã€KEV åœ¨é‡åˆ©ç”¨ |
+| **Intrinsic£¨±¾Õ÷·çÏÕ£©** | ÏµÍ³×ÔÉíµÄÅäÖÃ°²È«»ùÏß£¬ÓëÍâ²¿»·¾³ÎŞ¹Ø | ºËĞÄÓòµÃ·Ö¡¢±ßÔµÒò×Ó |
+| **Exposure£¨±©Â¶·çÏÕ£©** | ÏµÍ³¶ÔÍâ±©Â¶µÄ´àÈõĞÔÃæ | SPC P_score¡¢¶Ë¿Ú±©Â¶¡¢CVE Æ¥Åä |
+| **Threat£¨ÍşĞ²·çÏÕ£©** | µ±Ç°ÍşĞ²»·¾³µÄÓ°Ïì | CTI ¦Ì ÏµÊı¡¢ÍşĞ²×éÖ¯»îÔ¾¶È¡¢KEV ÔÚÒ°ÀûÓÃ |
 
-### 3.5.3 FinalScore â€” V2.0 æœ€ç»ˆè¯„åˆ†
+### 3.5.3 FinalScore ¡ª V2.0 ×îÖÕÆÀ·Ö
 
 ```go
 type FinalScore struct {
@@ -314,7 +314,7 @@ type FinalScore struct {
 }
 ```
 
-### 3.5.4 AssessmentInputV2 â€” V2.0 è¯„ä¼°è¾“å…¥
+### 3.5.4 AssessmentInputV2 ¡ª V2.0 ÆÀ¹ÀÊäÈë
 
 ```go
 type AssessmentInputV2 struct {
@@ -326,7 +326,7 @@ type AssessmentInputV2 struct {
 }
 ```
 
-### 3.5.5 AssessmentOutputV2 â€” V2.0 è¯„ä¼°è¾“å‡º
+### 3.5.5 AssessmentOutputV2 ¡ª V2.0 ÆÀ¹ÀÊä³ö
 
 ```go
 type AssessmentOutputV2 struct {
@@ -338,9 +338,9 @@ type AssessmentOutputV2 struct {
 }
 ```
 
-`AssessmentOutputV2` æä¾› `.ToIR()` æ–¹æ³•ï¼Œå¯¼å‡ºå£°æ˜çš„ SSAM IR JSON ç»“æ„ï¼ˆè§ Â§13ï¼‰ã€‚
+`AssessmentOutputV2` Ìá¹© `.ToIR()` ·½·¨£¬µ¼³öÉùÃ÷µÄ SSAM IR JSON ½á¹¹£¨¼û ¡ì13£©¡£
 
-### 3.5.6 ScoringFormulaV2 â€” V2.0 å…¬å¼æ¥å£
+### 3.5.6 ScoringFormulaV2 ¡ª V2.0 ¹«Ê½½Ó¿Ú
 
 ```go
 type ScoringFormulaV2 interface {
@@ -350,54 +350,54 @@ type ScoringFormulaV2 interface {
 }
 ```
 
-å†…ç½®å®ç°ï¼š
-- `SSAMV20Formula`ï¼ˆ`formulas_v2.go`ï¼‰ï¼šä¸‰å±‚ç‹¬ç«‹é£é™©å±‚è¯„ä¼°ï¼Œæ¶ˆé™¤æ—§ç‰ˆ ThreatCoeff/SPCScore çš„åŒé‡ç½šåˆ†é—®é¢˜
-- `ASTFormula`ï¼ˆ`formulas_ast.go`ï¼‰ï¼šé€šè¿‡ Formula DSL åŠ¨æ€æ„é€ çš„å…¬å¼
+ÄÚÖÃÊµÏÖ£º
+- `SSAMV20Formula`£¨`formulas_v2.go`£©£ºÈı²ã¶ÀÁ¢·çÏÕ²ãÆÀ¹À£¬Ïû³ı¾É°æ ThreatCoeff/SPCScore µÄË«ÖØ·£·ÖÎÊÌâ
+- `ASTFormula`£¨`formulas_ast.go`£©£ºÍ¨¹ı Formula DSL ¶¯Ì¬¹¹ÔìµÄ¹«Ê½
 
 ---
 
-## 4. SSAM V2.0 ä¸‰å±‚è¯­ä¹‰æ¨¡å‹
+## 4. SSAM V2.0 Èı²ãÓïÒåÄ£ĞÍ
 
-SSAM V2.0 çš„æ ¸å¿ƒåˆ›æ–°æ˜¯ç”¨ä¸‰ä¸ªç‹¬ç«‹çš„é£é™©å±‚å–ä»£ V1.x ä¸­ ThreatCoeff å’Œ SPCScore çš„å•ä¸€ä¹˜æ³•å åŠ ã€‚æ¯ä¸ªå±‚æœ‰ç‹¬ç«‹çš„è¯­ä¹‰ã€æƒé‡å’Œè¾“å…¥ï¼š
+SSAM V2.0 µÄºËĞÄ´´ĞÂÊÇÓÃÈı¸ö¶ÀÁ¢µÄ·çÏÕ²ãÈ¡´ú V1.x ÖĞ ThreatCoeff ºÍ SPCScore µÄµ¥Ò»³Ë·¨µş¼Ó¡£Ã¿¸ö²ãÓĞ¶ÀÁ¢µÄÓïÒå¡¢È¨ÖØºÍÊäÈë£º
 
 ```
 AssessmentInputV2
-    â”‚
-    â”œâ”€â”€ æœ¬å¾é£é™©å±‚ (Intrinsic)
-    â”‚   â”œâ”€â”€ æ ¸å¿ƒåŸŸåŠ æƒå¾—åˆ† (SSAM v1.2 æ ¸å¿ƒå…¬å¼)
-    â”‚   â”œâ”€â”€ è¾¹ç¼˜å› å­ä¹˜æ³•ä¿®æ­£
-    â”‚   â””â”€â”€ è¾“å‡ºï¼šIntrinsic Score âˆˆ [0, 100]
-    â”‚
-    â”œâ”€â”€ æš´éœ²é£é™©å±‚ (Exposure)
-    â”‚   â”œâ”€â”€ SPC P_score è½¬æ¢
-    â”‚   â”œâ”€â”€ CVE æ•°é‡ / ä¸¥é‡åº¦
-    â”‚   â”œâ”€â”€ ç«¯å£æš´éœ²é¢
-    â”‚   â””â”€â”€ è¾“å‡ºï¼šExposure Score âˆˆ [0, 100]
-    â”‚
-    â”œâ”€â”€ å¨èƒé£é™©å±‚ (Threat)
-    â”‚   â”œâ”€â”€ CTI Î¼ ç³»æ•°è½¬æ¢
-    â”‚   â”œâ”€â”€ KEV åœ¨é‡åˆ©ç”¨çŠ¶æ€
-    â”‚   â”œâ”€â”€ å¨èƒç»„ç»‡æ´»è·ƒåº¦
-    â”‚   â””â”€â”€ è¾“å‡ºï¼šThreat Score âˆˆ [0, 100]
-    â”‚
-    â–¼
-FinalScore = Î£(LayerScore_i Ã— LayerWeight_i) / Î£LayerWeight_i
+    ©¦
+    ©À©¤©¤ ±¾Õ÷·çÏÕ²ã (Intrinsic)
+    ©¦   ©À©¤©¤ ºËĞÄÓò¼ÓÈ¨µÃ·Ö (SSAM v1.2 ºËĞÄ¹«Ê½)
+    ©¦   ©À©¤©¤ ±ßÔµÒò×Ó³Ë·¨ĞŞÕı
+    ©¦   ©¸©¤©¤ Êä³ö£ºIntrinsic Score ¡Ê [0, 100]
+    ©¦
+    ©À©¤©¤ ±©Â¶·çÏÕ²ã (Exposure)
+    ©¦   ©À©¤©¤ SPC P_score ×ª»»
+    ©¦   ©À©¤©¤ CVE ÊıÁ¿ / ÑÏÖØ¶È
+    ©¦   ©À©¤©¤ ¶Ë¿Ú±©Â¶Ãæ
+    ©¦   ©¸©¤©¤ Êä³ö£ºExposure Score ¡Ê [0, 100]
+    ©¦
+    ©À©¤©¤ ÍşĞ²·çÏÕ²ã (Threat)
+    ©¦   ©À©¤©¤ CTI ¦Ì ÏµÊı×ª»»
+    ©¦   ©À©¤©¤ KEV ÔÚÒ°ÀûÓÃ×´Ì¬
+    ©¦   ©À©¤©¤ ÍşĞ²×éÖ¯»îÔ¾¶È
+    ©¦   ©¸©¤©¤ Êä³ö£ºThreat Score ¡Ê [0, 100]
+    ©¦
+    ¨‹
+FinalScore = ¦²(LayerScore_i ¡Á LayerWeight_i) / ¦²LayerWeight_i
 ```
 
-**ä¸ V1.x çš„å…³é”®å·®å¼‚ï¼š**
+**Óë V1.x µÄ¹Ø¼ü²îÒì£º**
 
-| ç‰¹æ€§ | V1.x (ssam_v1.2) | V2.0 (ssam_v2.0) |
+| ÌØĞÔ | V1.x (ssam_v1.2) | V2.0 (ssam_v2.0) |
 |------|------------------|-------------------|
-| å¤–éƒ¨å› ç´ å¤„ç† | ThreatCoeff Ã— SPCScore åŒä¹˜æ•°å åŠ  | ä¸‰å±‚ç‹¬ç«‹è¯„åˆ† + åŠ æƒå¹³å‡ |
-| åŒé‡ç½šåˆ† | ä¸€ä¸ªä½ SPC åˆ†æ•°åŒæ—¶è¢«ä¹˜ä»¥ Î¼ï¼Œå¯¼è‡´è¿‡åº¦æƒ©ç½š | å„å±‚ç‹¬ç«‹è®¡ç®—ï¼Œæƒé‡å¯è°ƒ |
-| å¯è§£é‡Šæ€§ | æœ€ç»ˆåˆ†æ•°éš¾ä»¥åˆ†è§£ä¸º"å“ªéƒ¨åˆ†å¯¼è‡´" | RiskLayers æä¾›é€å±‚åˆ†è§£ |
-| çµæ´»æ€§ | å…¬å¼å›ºå®š | é€šè¿‡ AST/DSL åŠ¨æ€é…ç½®å±‚æƒé‡å’Œç»„åˆæ–¹å¼ |
+| Íâ²¿ÒòËØ´¦Àí | ThreatCoeff ¡Á SPCScore Ë«³ËÊıµş¼Ó | Èı²ã¶ÀÁ¢ÆÀ·Ö + ¼ÓÈ¨Æ½¾ù |
+| Ë«ÖØ·£·Ö | Ò»¸öµÍ SPC ·ÖÊıÍ¬Ê±±»³ËÒÔ ¦Ì£¬µ¼ÖÂ¹ı¶È³Í·£ | ¸÷²ã¶ÀÁ¢¼ÆËã£¬È¨ÖØ¿Éµ÷ |
+| ¿É½âÊÍĞÔ | ×îÖÕ·ÖÊıÄÑÒÔ·Ö½âÎª"ÄÄ²¿·Öµ¼ÖÂ" | RiskLayers Ìá¹©Öğ²ã·Ö½â |
+| Áé»îĞÔ | ¹«Ê½¹Ì¶¨ | Í¨¹ı AST/DSL ¶¯Ì¬ÅäÖÃ²ãÈ¨ÖØºÍ×éºÏ·½Ê½ |
 
 ---
 
-## 5. SSAM IRï¼ˆä¸­é—´è¡¨ç¤ºï¼‰
+## 5. SSAM IR£¨ÖĞ¼ä±íÊ¾£©
 
-SSAM V2.0 å¼•å…¥ SSAMIRâ€”â€”è¯„ä¼°ç»“æœçš„å£°æ˜å¼ JSON ä¸­é—´è¡¨ç¤ºã€‚é€šè¿‡ `AssessmentOutputV2.ToIR()` å¯¼å‡ºï¼š
+SSAM V2.0 ÒıÈë SSAMIR¡ª¡ªÆÀ¹À½á¹ûµÄÉùÃ÷Ê½ JSON ÖĞ¼ä±íÊ¾¡£Í¨¹ı `AssessmentOutputV2.ToIR()` µ¼³ö£º
 
 ```json
 {
@@ -425,16 +425,16 @@ SSAM V2.0 å¼•å…¥ SSAMIRâ€”â€”è¯„ä¼°ç»“æœçš„å£°æ˜å¼ JSON ä¸­é—´è¡¨ç¤ºã€‚é€šè¿‡
 }
 ```
 
-SSAM IR çš„è®¾è®¡ç›®æ ‡ï¼š
-- **ä¸‹æ¸¸å·¥å…·é“¾æ¶ˆè´¹**ï¼šSIEMã€SOC Dashboardã€åˆè§„å®¡è®¡ç³»ç»Ÿå¯ç›´æ¥è§£æ
-- **è·¨è¯­è¨€äº’æ“ä½œ**ï¼šçº¯ JSONï¼Œä»»ä½•è¯­è¨€å¯è§£æ
-- **ç‰ˆæœ¬åŒ–å…¼å®¹**ï¼š`ssamir_version` å­—æ®µä¿è¯å‰å‘/åå‘å…¼å®¹
+SSAM IR µÄÉè¼ÆÄ¿±ê£º
+- **ÏÂÓÎ¹¤¾ßÁ´Ïû·Ñ**£ºSIEM¡¢SOC Dashboard¡¢ºÏ¹æÉó¼ÆÏµÍ³¿ÉÖ±½Ó½âÎö
+- **¿çÓïÑÔ»¥²Ù×÷**£º´¿ JSON£¬ÈÎºÎÓïÑÔ¿É½âÎö
+- **°æ±¾»¯¼æÈİ**£º`ssamir_version` ×Ö¶Î±£Ö¤Ç°Ïò/ºóÏò¼æÈİ
 
 ---
 
 ## 6. Formula DSL / AST
 
-SSAM V2.0 æä¾›å…¬å¼ DSLï¼Œå…è®¸åœ¨è¿è¡Œæ—¶é€šè¿‡å­—ç¬¦ä¸²è¡¨è¾¾å¼æ„é€ è¯„åˆ†å…¬å¼ï¼Œæ— éœ€ä¿®æ”¹ä»£ç ï¼š
+SSAM V2.0 Ìá¹©¹«Ê½ DSL£¬ÔÊĞíÔÚÔËĞĞÊ±Í¨¹ı×Ö·û´®±í´ïÊ½¹¹ÔìÆÀ·Ö¹«Ê½£¬ÎŞĞèĞŞ¸Ä´úÂë£º
 
 ```go
 import "github.com/chins-xing/ssam"
@@ -450,87 +450,87 @@ engine.SetFormulaAST(ast)
 output, err := engine.ComputeScoreV2(ctx, inputV2)
 ```
 
-æ”¯æŒçš„ DSL è¯­æ³•ï¼š
-- å˜é‡ï¼š`intrinsic`, `exposure`, `threat`ï¼ˆä¸‰å±‚é£é™©å±‚å¾—åˆ†ï¼‰
-- è¿ç®—ç¬¦ï¼š`+`, `-`, `*`, `/`, `(`, `)`
-- å­—é¢é‡ï¼šæ•´æ•°å’Œæµ®ç‚¹æ•°
-- å‡½æ•°ï¼š`min(a,b)`, `max(a,b)`, `round(x)`, `sqrt(x)`
+Ö§³ÖµÄ DSL Óï·¨£º
+- ±äÁ¿£º`intrinsic`, `exposure`, `threat`£¨Èı²ã·çÏÕ²ãµÃ·Ö£©
+- ÔËËã·û£º`+`, `-`, `*`, `/`, `(`, `)`
+- ×ÖÃæÁ¿£ºÕûÊıºÍ¸¡µãÊı
+- º¯Êı£º`min(a,b)`, `max(a,b)`, `round(x)`, `sqrt(x)`
 
-DSL è¡¨è¾¾å¼ä¼šè¢« `ParseFormula()` ç¼–è¯‘ä¸º ASTï¼Œç”± `EvaluateFormula()` é«˜æ•ˆæ±‚å€¼ï¼Œæ— éœ€è¿è¡Œæ—¶å­—ç¬¦ä¸²è§£æã€‚
-
----
-
-## 7. è¯„åˆ†æµç¨‹
-
-`ComputeScore` çš„å®Œæ•´æ‰§è¡Œæµç¨‹ï¼š
-
-```
-è¾“å…¥éªŒè¯ (ValidateInput)
-    â”‚
-    â–¼
-ctx å–æ¶ˆæ£€æŸ¥
-    â”‚
-    â–¼
-HookPreScore é’©å­
-    â”‚
-    â–¼
-åŸŸè¯„åˆ† (ComputeDomainScores)
-    â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-    â”‚  â”‚ å„åŸŸåˆå§‹ 100 åˆ†                      â”‚
-    â”‚  â”‚ éå†æœªé€šè¿‡æ£€æŸ¥é¡¹ï¼Œç´¯åŠ  Deltaï¼ˆè´Ÿæ•°ï¼‰  â”‚
-    â”‚  â”‚ åŸŸå¾—åˆ†ä¸‹é™ 0                         â”‚
-    â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-    â”‚
-    â–¼
-ctx å–æ¶ˆæ£€æŸ¥
-    â”‚
-    â–¼
-HookPostScore é’©å­
-    â”‚
-    â–¼
-HookPreEdge é’©å­
-    â”‚
-    â–¼
-è¾¹ç¼˜å› å­è¯„ä¼° (ApplyEdgeFactorsToChecks)
-    â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-    â”‚  â”‚ 1. æ£€æŸ¥é¡¹è§¦å‘ï¼šæœªé€šè¿‡çš„æ£€æŸ¥é¡¹åŒ¹é…    â”‚
-    â”‚  â”‚    TriggerCheck â†’ æ ‡è®°å› å­ä¸ºæ´»è·ƒ      â”‚
-    â”‚  â”‚ 2. çº§è”å¤„ç†ï¼šæ´»è·ƒå› å­è‹¥æœ‰ CascadeToï¼Œ â”‚
-    â”‚  â”‚    å°† CascadeValue è¦†ç›–ç›®æ ‡å› å­       â”‚
-    â”‚  â”‚ 3. CascadeOnly å› å­è‡ªèº«ä¸å‚ä¸ä¹˜æ³•ä¿®æ­£ â”‚
-    â”‚  â”‚ 4. è‡ªå®šä¹‰å› å­å€¼è¦†ç›–ï¼ˆcustomFactorsï¼‰  â”‚
-    â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-    â”‚
-    â–¼
-ctx å–æ¶ˆæ£€æŸ¥
-    â”‚
-    â–¼
-HookPostEdge é’©å­
-    â”‚
-    â–¼
-å…¬å¼è®¡ç®— (applyFormula)
-    â”‚  SSAM v1.2 å…¬å¼ï¼š
-    â”‚  baseScore = Î£(Si Ã— Wi) / Î£Wi
-    â”‚  baseScore *= threatCoeff
-    â”‚  baseScore *= spcScore
-    â”‚  for each active edgeFactor:
-    â”‚      baseScore *= factor
-    â”‚  finalScore = round(baseScore, 2)
-    â”‚
-    â–¼
-åˆ¤å®šå¯æ¥å—æ€§ (finalScore >= threshold)
-    â”‚
-    â–¼
-è¿”å› AssessmentOutput
-```
+DSL ±í´ïÊ½»á±» `ParseFormula()` ±àÒëÎª AST£¬ÓÉ `EvaluateFormula()` ¸ßĞ§ÇóÖµ£¬ÎŞĞèÔËĞĞÊ±×Ö·û´®½âÎö¡£
 
 ---
 
-## 8. æ¥å…¥æ–¹å¼
+## 7. ÆÀ·ÖÁ÷³Ì
 
-### 8.1 æ–¹å¼ä¸€ï¼šç‹¬ç«‹ä½¿ç”¨ï¼ˆæ¨èç”¨äºç¬¬ä¸‰æ–¹é›†æˆï¼‰
+`ComputeScore` µÄÍêÕûÖ´ĞĞÁ÷³Ì£º
 
-SSAM æ¨¡å—å¯å®Œå…¨è„±ç¦» ASSCOR æ¡†æ¶ç‹¬ç«‹ä½¿ç”¨ï¼š
+```
+ÊäÈëÑéÖ¤ (ValidateInput)
+    ©¦
+    ¨‹
+ctx È¡Ïû¼ì²é
+    ©¦
+    ¨‹
+HookPreScore ¹³×Ó
+    ©¦
+    ¨‹
+ÓòÆÀ·Ö (ComputeDomainScores)
+    ©¦  ©°©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©´
+    ©¦  ©¦ ¸÷Óò³õÊ¼ 100 ·Ö                      ©¦
+    ©¦  ©¦ ±éÀúÎ´Í¨¹ı¼ì²éÏî£¬ÀÛ¼Ó Delta£¨¸ºÊı£©  ©¦
+    ©¦  ©¦ ÓòµÃ·ÖÏÂÏŞ 0                         ©¦
+    ©¦  ©¸©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¼
+    ©¦
+    ¨‹
+ctx È¡Ïû¼ì²é
+    ©¦
+    ¨‹
+HookPostScore ¹³×Ó
+    ©¦
+    ¨‹
+HookPreEdge ¹³×Ó
+    ©¦
+    ¨‹
+±ßÔµÒò×ÓÆÀ¹À (ApplyEdgeFactorsToChecks)
+    ©¦  ©°©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©´
+    ©¦  ©¦ 1. ¼ì²éÏî´¥·¢£ºÎ´Í¨¹ıµÄ¼ì²éÏîÆ¥Åä    ©¦
+    ©¦  ©¦    TriggerCheck ¡ú ±ê¼ÇÒò×ÓÎª»îÔ¾      ©¦
+    ©¦  ©¦ 2. ¼¶Áª´¦Àí£º»îÔ¾Òò×ÓÈôÓĞ CascadeTo£¬ ©¦
+    ©¦  ©¦    ½« CascadeValue ¸²¸ÇÄ¿±êÒò×Ó       ©¦
+    ©¦  ©¦ 3. CascadeOnly Òò×Ó×ÔÉí²»²ÎÓë³Ë·¨ĞŞÕı ©¦
+    ©¦  ©¦ 4. ×Ô¶¨ÒåÒò×ÓÖµ¸²¸Ç£¨customFactors£©  ©¦
+    ©¦  ©¸©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¼
+    ©¦
+    ¨‹
+ctx È¡Ïû¼ì²é
+    ©¦
+    ¨‹
+HookPostEdge ¹³×Ó
+    ©¦
+    ¨‹
+¹«Ê½¼ÆËã (applyFormula)
+    ©¦  SSAM v1.2 ¹«Ê½£º
+    ©¦  baseScore = ¦²(Si ¡Á Wi) / ¦²Wi
+    ©¦  baseScore *= threatCoeff
+    ©¦  baseScore *= spcScore
+    ©¦  for each active edgeFactor:
+    ©¦      baseScore *= factor
+    ©¦  finalScore = round(baseScore, 2)
+    ©¦
+    ¨‹
+ÅĞ¶¨¿É½ÓÊÜĞÔ (finalScore >= threshold)
+    ©¦
+    ¨‹
+·µ»Ø AssessmentOutput
+```
+
+---
+
+## 8. ½ÓÈë·½Ê½
+
+### 8.1 ·½Ê½Ò»£º¶ÀÁ¢Ê¹ÓÃ£¨ÍÆ¼öÓÃÓÚµÚÈı·½¼¯³É£©
+
+SSAM Ä£¿é¿ÉÍêÈ«ÍÑÀë ASSCOR ¿ò¼Ü¶ÀÁ¢Ê¹ÓÃ£º
 
 ```go
 package main
@@ -575,13 +575,13 @@ func main() {
     }
     for _, ef := range output.EdgeFactors {
         if ef.Active {
-            fmt.Printf("  EdgeFactor %-12s: Ã—%.2f (ACTIVE)\n", ef.ID, ef.Factor)
+            fmt.Printf("  EdgeFactor %-12s: ¡Á%.2f (ACTIVE)\n", ef.ID, ef.Factor)
         }
     }
 }
 ```
 
-### 8.2 æ–¹å¼äºŒï¼šè‡ªå®šä¹‰é…ç½®
+### 8.2 ·½Ê½¶ş£º×Ô¶¨ÒåÅäÖÃ
 
 ```go
 engine := ssam.NewEngine()
@@ -602,7 +602,7 @@ engine.SetEdgeFactors([]ssam.EdgeFactorConfig{
 engine.SetFormula("ssam_v1.2")
 ```
 
-### 8.3 æ–¹å¼ä¸‰ï¼šæ³¨å†Œè‡ªå®šä¹‰å…¬å¼
+### 8.3 ·½Ê½Èı£º×¢²á×Ô¶¨Òå¹«Ê½
 
 ```go
 engine := ssam.NewDefaultEngine()
@@ -646,7 +646,7 @@ engine.RegisterFormula("custom_v1", func(
 engine.SetFormula("custom_v1")
 ```
 
-### 8.4 æ–¹å¼å››ï¼šä½¿ç”¨é’©å­æ‰©å±•è¯„åˆ†æµç¨‹
+### 8.4 ·½Ê½ËÄ£ºÊ¹ÓÃ¹³×ÓÀ©Õ¹ÆÀ·ÖÁ÷³Ì
 
 ```go
 engine := ssam.NewDefaultEngine()
@@ -671,18 +671,18 @@ engine.RegisterHook(ssam.HookPostEdge, "enrich-metadata", func(
 }, 20)
 ```
 
-### 8.5 æ–¹å¼äº”ï¼šé€šè¿‡ ASSCOR DI å®¹å™¨é›†æˆï¼ˆv0.2.1 ä¾èµ–å€’ç½®æ¶æ„ï¼‰
+### 8.5 ·½Ê½Îå£ºÍ¨¹ı ASSCOR DI ÈİÆ÷¼¯³É£¨v0.2.2 ÒÀÀµµ¹ÖÃ¼Ü¹¹£©
 
-ASSCOR v0.2.1 å®šä¹‰äº†ç»Ÿä¸€çš„ `engine.AssessorEngine` æ¥å£ã€‚SSAM é€šè¿‡ `ssam.EngineAdapter` å®ç°è¯¥æ¥å£ï¼Œä»¥æ’ä»¶å½¢å¼æ³¨å…¥ï¼š
+ASSCOR v0.2.2 ¶¨ÒåÁËÍ³Ò»µÄ `engine.AssessorEngine` ½Ó¿Ú¡£SSAM Í¨¹ı `ssam.EngineAdapter` ÊµÏÖ¸Ã½Ó¿Ú£¬ÒÔ²å¼şĞÎÊ½×¢Èë£º
 
-**æ³¨å†Œç«¯ï¼ˆcmd/kernel/main.go å¹³å°å±‚ï¼‰ï¼š**
+**×¢²á¶Ë£¨cmd/kernel/main.go Æ½Ì¨²ã£©£º**
 
 ```go
 func main() {
     cfg := config.Load(...)
     scoringEngine := kernel.NewScoringEngineModule(cfg)
 
-    // SSAM ä½œä¸º ASSCOR æ’ä»¶æ³¨å…¥ï¼ˆä¾èµ–æ–¹å‘: SSAM â†’ ASSCORï¼‰
+    // SSAM ×÷Îª ASSCOR ²å¼ş×¢Èë£¨ÒÀÀµ·½Ïò: SSAM ¡ú ASSCOR£©
     if cfg.ScoringEngine != "legacy" {
         adapter := ssam.NewEngineAdapter(cfg)
         scoringEngine.SetPluginEngine(adapter)
@@ -692,11 +692,11 @@ func main() {
 }
 ```
 
-**æ¶ˆè´¹ç«¯ï¼ˆAssessorModule å†…éƒ¨ï¼Œå¯¹æ’ä»¶é€æ˜ï¼‰ï¼š**
+**Ïû·Ñ¶Ë£¨AssessorModule ÄÚ²¿£¬¶Ô²å¼şÍ¸Ã÷£©£º**
 
 ```go
 type Assessor struct {
-    pluginEngine engine.AssessorEngine  // ç»Ÿä¸€æ¥å£ï¼Œé ssam å…·ä½“ç±»å‹
+    pluginEngine engine.AssessorEngine  // Í³Ò»½Ó¿Ú£¬·Ç ssam ¾ßÌåÀàĞÍ
 }
 
 func (a *Assessor) tryPluginScore(ctx context.Context, result *model.AssessmentResult) bool {
@@ -707,26 +707,26 @@ func (a *Assessor) tryPluginScore(ctx context.Context, result *model.AssessmentR
 }
 ```
 
-**å…³é”®å˜åŒ–ï¼ˆv0.2.0 â†’ v0.2.1ï¼‰**:
-- æ—§: `a.ssamEngine ssam.ScoringProvider` â†’ æ–°: `a.pluginEngine engine.AssessorEngine`
-- æ—§: `ssam.NewEngine()` åœ¨ assessor å†…ç¡¬ç¼–ç  â†’ æ–°: `ssam.NewEngineAdapter(cfg)` åœ¨ main.go æ³¨å…¥
-- æ—§: `ssam.ScoringProvider` ç›´æ¥ç»‘å®šåˆ° DI â†’ æ–°: `engine.AssessorEngine` ç»Ÿä¸€æ¥å£
-- æ—§: ASSCOR ä¾èµ– SSAM åŒ… â†’ æ–°: SSAM ä¾èµ– ASSCOR æ¥å£
+**¹Ø¼ü±ä»¯£¨v0.2.0 ¡ú v0.2.2£©**:
+- ¾É: `a.ssamEngine ssam.ScoringProvider` ¡ú ĞÂ: `a.pluginEngine engine.AssessorEngine`
+- ¾É: `ssam.NewEngine()` ÔÚ assessor ÄÚÓ²±àÂë ¡ú ĞÂ: `ssam.NewEngineAdapter(cfg)` ÔÚ main.go ×¢Èë
+- ¾É: `ssam.ScoringProvider` Ö±½Ó°ó¶¨µ½ DI ¡ú ĞÂ: `engine.AssessorEngine` Í³Ò»½Ó¿Ú
+- ¾É: ASSCOR ÒÀÀµ SSAM °ü ¡ú ĞÂ: SSAM ÒÀÀµ ASSCOR ½Ó¿Ú
 
 ---
 
-## 9. é…ç½®é€‚é…
+## 9. ÅäÖÃÊÊÅä
 
-`adapter.go` æä¾› ASSCOR é…ç½®/æ¨¡å‹ä¸ SSAM æ ¼å¼ä¹‹é—´çš„åŒå‘è½¬æ¢å‡½æ•°ï¼š
+`adapter.go` Ìá¹© ASSCOR ÅäÖÃ/Ä£ĞÍÓë SSAM ¸ñÊ½Ö®¼äµÄË«Ïò×ª»»º¯Êı£º
 
-### 9.1 é…ç½®è½¬æ¢
+### 9.1 ÅäÖÃ×ª»»
 
-| å‡½æ•° | æ–¹å‘ | è¯´æ˜ |
+| º¯Êı | ·½Ïò | ËµÃ÷ |
 |------|------|------|
-| `ConfigToWeights(cfg)` | Config â†’ SSAM | å°† ASSCOR é…ç½®çš„æƒé‡è½¬ä¸º `[]WeightConfig` |
-| `ConfigToEdgeFactors(cfg)` | Config â†’ SSAM | å°† ASSCOR é…ç½®çš„è¾¹ç¼˜å› å­è½¬ä¸º `[]EdgeFactorConfig` |
+| `ConfigToWeights(cfg)` | Config ¡ú SSAM | ½« ASSCOR ÅäÖÃµÄÈ¨ÖØ×ªÎª `[]WeightConfig` |
+| `ConfigToEdgeFactors(cfg)` | Config ¡ú SSAM | ½« ASSCOR ÅäÖÃµÄ±ßÔµÒò×Ó×ªÎª `[]EdgeFactorConfig` |
 
-**config.ini å¯¹åº”é…ç½®æ®µï¼š**
+**config.ini ¶ÔÓ¦ÅäÖÃ¶Î£º**
 
 ```ini
 [weights]
@@ -735,7 +735,7 @@ business_continuity = 25
 operation_trust = 25
 resilience = 15
 kernel_security = 0
-# scoring_engine: ç•™ç©º=SSAM, legacy=å†…ç½®å¼•æ“
+# scoring_engine: Áô¿Õ=SSAM, legacy=ÄÚÖÃÒıÇæ
 scoring_engine =
 
 [edge_factors]
@@ -747,19 +747,19 @@ no_siem = 0.90
 no_ids = 0.88
 ```
 
-### 9.2 æ¨¡å‹è½¬æ¢
+### 9.2 Ä£ĞÍ×ª»»
 
-| å‡½æ•° | æ–¹å‘ | è¯´æ˜ |
+| º¯Êı | ·½Ïò | ËµÃ÷ |
 |------|------|------|
-| `CheckResultsToInputs(checks)` | model â†’ SSAM | `[]model.CheckResult` â†’ `[]CheckInput` |
-| `DomainScoresToOutput(scores)` | SSAM â†’ model | `[]DomainScore` â†’ `model.DomainScores` |
-| `EdgeFactorsToModel(factors)` | SSAM â†’ model | `[]EdgeFactorResult` â†’ `model.EdgeFactors` |
-| `ModelToInput(result)` | model â†’ SSAM | `*model.AssessmentResult` â†’ `*AssessmentInput` |
-| `OutputToModel(output, result)` | SSAM â†’ model | å°† `AssessmentOutput` å†™å…¥ `*model.AssessmentResult` |
+| `CheckResultsToInputs(checks)` | model ¡ú SSAM | `[]model.CheckResult` ¡ú `[]CheckInput` |
+| `DomainScoresToOutput(scores)` | SSAM ¡ú model | `[]DomainScore` ¡ú `model.DomainScores` |
+| `EdgeFactorsToModel(factors)` | SSAM ¡ú model | `[]EdgeFactorResult` ¡ú `model.EdgeFactors` |
+| `ModelToInput(result)` | model ¡ú SSAM | `*model.AssessmentResult` ¡ú `*AssessmentInput` |
+| `OutputToModel(output, result)` | SSAM ¡ú model | ½« `AssessmentOutput` Ğ´Èë `*model.AssessmentResult` |
 
-### 9.3 è¾¹ç¼˜å› å­ ID æ˜ å°„
+### 9.3 ±ßÔµÒò×Ó ID Ó³Éä
 
-| SSAM ID | model å­—æ®µ | config.ini é”® |
+| SSAM ID | model ×Ö¶Î | config.ini ¼ü |
 |---------|-----------|---------------|
 | `EF-002FA` | `EdgeFactors.TwoFactorFailure` | `two_factor_failure` |
 | `EF-SYNCOOKIE` | `EdgeFactors.SYNCookieDisabled` | `syn_cookie_disabled` |
@@ -767,22 +767,22 @@ no_ids = 0.88
 | `EF-APPARMOR` | `EdgeFactors.AppArmorDisabled` | `apparmor_disabled` |
 | `EF-NO-SIEM` | `EdgeFactors.NoSIEM` | `no_siem` |
 | `EF-NO-IDS` | `EdgeFactors.NoIDS` | `no_ids` |
-| `EF-3FA` | çº§è”è‡³ `EF-002FA` | â€” |
+| `EF-3FA` | ¼¶ÁªÖÁ `EF-002FA` | ¡ª |
 
 ---
 
-## 10. è¾“å…¥éªŒè¯
+## 10. ÊäÈëÑéÖ¤
 
-`ValidateInput` åœ¨ `ComputeScore` å…¥å£è‡ªåŠ¨è°ƒç”¨ï¼ŒéªŒè¯è§„åˆ™å¦‚ä¸‹ï¼š
+`ValidateInput` ÔÚ `ComputeScore` Èë¿Ú×Ô¶¯µ÷ÓÃ£¬ÑéÖ¤¹æÔòÈçÏÂ£º
 
-| å­—æ®µ | è§„åˆ™ | é”™è¯¯ç±»å‹ |
+| ×Ö¶Î | ¹æÔò | ´íÎóÀàĞÍ |
 |------|------|----------|
-| `input` | ä¸å¾—ä¸º nil | `ErrNilInput` |
-| `HostID` | ä¸å¾—ä¸ºç©º | `ValidationError{Field: "host_id"}` |
-| `Threshold` | å¿…é¡»åœ¨ (0, 100] èŒƒå›´å†… | `ValidationError{Field: "threshold"}` |
-| `Checks[i].Domain` | ä¸å¾—ä¸ºç©º | `ValidationError{Field: "checks[i].domain"}` |
+| `input` | ²»µÃÎª nil | `ErrNilInput` |
+| `HostID` | ²»µÃÎª¿Õ | `ValidationError{Field: "host_id"}` |
+| `Threshold` | ±ØĞëÔÚ (0, 100] ·¶Î§ÄÚ | `ValidationError{Field: "threshold"}` |
+| `Checks[i].Domain` | ²»µÃÎª¿Õ | `ValidationError{Field: "checks[i].domain"}` |
 
-è‡ªå®šä¹‰éªŒè¯ç¤ºä¾‹ï¼š
+×Ô¶¨ÒåÑéÖ¤Ê¾Àı£º
 
 ```go
 if err := ssam.ValidateInput(input); err != nil {
@@ -796,22 +796,22 @@ if err := ssam.ValidateInput(input); err != nil {
 
 ---
 
-## 11. é»˜è®¤å€¼
+## 11. Ä¬ÈÏÖµ
 
-`defaults.go` æä¾›çš„é»˜è®¤é…ç½®ï¼š
+`defaults.go` Ìá¹©µÄÄ¬ÈÏÅäÖÃ£º
 
-**é»˜è®¤æƒé‡ï¼š**
+**Ä¬ÈÏÈ¨ÖØ£º**
 
-| åŸŸ | æƒé‡ |
+| Óò | È¨ÖØ |
 |----|------|
 | attack_surface | 35 |
 | business_continuity | 25 |
 | operation_trust | 25 |
 | resilience | 15 |
 
-**é»˜è®¤è¾¹ç¼˜å› å­ï¼š**
+**Ä¬ÈÏ±ßÔµÒò×Ó£º**
 
-| ID | åç§° | å› å­ | è§¦å‘æ£€æŸ¥ |
+| ID | Ãû³Æ | Òò×Ó | ´¥·¢¼ì²é |
 |----|------|------|----------|
 | EF-002FA | 2FA Missing | 0.85 | EF-001 |
 | EF-SYNCOOKIE | SYN Cookie Disabled | 0.75 | EF-SYNCOOKIE |
@@ -819,9 +819,9 @@ if err := ssam.ValidateInput(input); err != nil {
 | EF-APPARMOR | AppArmor Disabled | 0.82 | EF-APPARMOR |
 | EF-NO-SIEM | SIEM Integration Missing | 0.90 | EF-NO-SIEM |
 | EF-NO-IDS | IDS/IPS Missing | 0.88 | EF-NO-IDS |
-| EF-3FA | 3FA Not Met | 0.82 | EF-002ï¼ˆçº§è”è‡³ EF-002FAï¼‰ |
+| EF-3FA | 3FA Not Met | 0.82 | EF-002£¨¼¶ÁªÖÁ EF-002FA£© |
 
-ä½¿ç”¨é»˜è®¤é…ç½®åˆ›å»ºå¼•æ“ï¼š
+Ê¹ÓÃÄ¬ÈÏÅäÖÃ´´½¨ÒıÇæ£º
 
 ```go
 engine := ssam.NewDefaultEngine()
@@ -829,38 +829,38 @@ engine := ssam.NewDefaultEngine()
 
 ---
 
-## 12. å¹¶å‘å®‰å…¨
+## 12. ²¢·¢°²È«
 
-ssam-libï¼ˆ`github.com/chins-xing/ssam`ï¼‰æ˜¯çº¯å‡½æ•°å¼åº“ï¼Œé›¶ goroutineã€é›¶é”ã€é›¶å…±äº«çŠ¶æ€ã€‚è¯„ä¼°å‡½æ•°æ˜¯æ— å‰¯ä½œç”¨çš„çº¯å‡½æ•°ï¼šç›¸åŒçš„è¾“å…¥äº§ç”Ÿç›¸åŒçš„è¾“å‡ºï¼Œå¤©ç„¶çº¿ç¨‹å®‰å…¨ã€‚å¹¶å‘è°ƒç”¨ç”±è°ƒç”¨æ–¹ç®¡ç†ã€‚
+ssam-lib£¨`github.com/chins-xing/ssam`£©ÊÇ´¿º¯ÊıÊ½¿â£¬Áã goroutine¡¢ÁãËø¡¢Áã¹²Ïí×´Ì¬¡£ÆÀ¹Àº¯ÊıÊÇÎŞ¸±×÷ÓÃµÄ´¿º¯Êı£ºÏàÍ¬µÄÊäÈë²úÉúÏàÍ¬µÄÊä³ö£¬ÌìÈ»Ïß³Ì°²È«¡£²¢·¢µ÷ÓÃÓÉµ÷ÓÃ·½¹ÜÀí¡£
 
-ASSCOR é€‚é…å±‚ï¼ˆ`internal/ssam/`ï¼‰çš„ `Engine` åŒ…è£…å™¨åœ¨è¯»å†™æƒé‡ã€è¾¹ç¼˜å› å­ã€é’©å­é…ç½®æ—¶ä½¿ç”¨ `sync.RWMutex` ä¿æŠ¤ï¼Œä½†æ ¸å¿ƒè®¡ç®—è·¯å¾„ä¸ºæ— é”çº¯å‡½æ•°è°ƒç”¨ ssam-libã€‚
+ASSCOR ÊÊÅä²ã£¨`internal/ssam/`£©µÄ `Engine` °ü×°Æ÷ÔÚ¶ÁĞ´È¨ÖØ¡¢±ßÔµÒò×Ó¡¢¹³×ÓÅäÖÃÊ±Ê¹ÓÃ `sync.RWMutex` ±£»¤£¬µ«ºËĞÄ¼ÆËãÂ·¾¶ÎªÎŞËø´¿º¯Êıµ÷ÓÃ ssam-lib¡£
 
 ---
 
-## 13. é”™è¯¯å¤„ç†
+## 13. ´íÎó´¦Àí
 
-| é”™è¯¯å˜é‡ | å«ä¹‰ |
+| ´íÎó±äÁ¿ | º¬Òå |
 |----------|------|
-| `ErrNilInput` | è¾“å…¥ä¸º nil |
-| `ErrUnknownFormula` | æŒ‡å®šçš„å…¬å¼ ID ä¸å­˜åœ¨ |
-| `ErrEmptyWeights` | æœªé…ç½®ä»»ä½•æƒé‡ |
-| `ErrInvalidScore` | è¾“å‡ºåˆ†æ•°è¶…å‡º [0, 100] èŒƒå›´ |
-| `ValidationError` | è¾“å…¥å­—æ®µéªŒè¯å¤±è´¥ï¼Œå« `Field` å’Œ `Message` å­—æ®µ |
+| `ErrNilInput` | ÊäÈëÎª nil |
+| `ErrUnknownFormula` | Ö¸¶¨µÄ¹«Ê½ ID ²»´æÔÚ |
+| `ErrEmptyWeights` | Î´ÅäÖÃÈÎºÎÈ¨ÖØ |
+| `ErrInvalidScore` | Êä³ö·ÖÊı³¬³ö [0, 100] ·¶Î§ |
+| `ValidationError` | ÊäÈë×Ö¶ÎÑéÖ¤Ê§°Ü£¬º¬ `Field` ºÍ `Message` ×Ö¶Î |
 
-`ComputeScore` çš„é”™è¯¯è¿”å›ç­–ç•¥ï¼š
+`ComputeScore` µÄ´íÎó·µ»Ø²ßÂÔ£º
 
-- è¾“å…¥ä¸º nil â†’ è¿”å› `ErrNilInput`
-- è¾“å…¥éªŒè¯å¤±è´¥ â†’ è¿”å› `ValidationError`
-- ä¸Šä¸‹æ–‡å–æ¶ˆ â†’ è¿”å› `ctx.Err()`
-- æ­£å¸¸å®Œæˆ â†’ è¿”å› `(output, nil)`
+- ÊäÈëÎª nil ¡ú ·µ»Ø `ErrNilInput`
+- ÊäÈëÑéÖ¤Ê§°Ü ¡ú ·µ»Ø `ValidationError`
+- ÉÏÏÂÎÄÈ¡Ïû ¡ú ·µ»Ø `ctx.Err()`
+- Õı³£Íê³É ¡ú ·µ»Ø `(output, nil)`
 
 ---
 
-## 14. ASSCOR å†…æ ¸åŸºç¡€è®¾æ–½æ¥å£
+## 14. ASSCOR ÄÚºË»ù´¡ÉèÊ©½Ó¿Ú
 
-ä»¥ä¸‹æ¥å£å±äº ASSCOR å†…æ ¸ï¼ˆ`internal/kernel`ï¼‰ï¼Œä¸ SSAM æ¨¡å—é…åˆä½¿ç”¨ã€‚
+ÒÔÏÂ½Ó¿ÚÊôÓÚ ASSCOR ÄÚºË£¨`internal/kernel`£©£¬Óë SSAM Ä£¿éÅäºÏÊ¹ÓÃ¡£
 
-### 14.1 DI å®¹å™¨
+### 14.1 DI ÈİÆ÷
 
 ```go
 container := kernel.NewContainer()
@@ -875,7 +875,7 @@ container.Inject(targetStruct)
 container.Remove((*ssam.ScoringProvider)(nil))
 ```
 
-**ç»“æ„ä½“å­—æ®µæ³¨å…¥ï¼š**
+**½á¹¹Ìå×Ö¶Î×¢Èë£º**
 
 ```go
 type MyModule struct {
@@ -884,7 +884,7 @@ type MyModule struct {
 }
 ```
 
-### 14.2 æ¶ˆæ¯æ€»çº¿
+### 14.2 ÏûÏ¢×ÜÏß
 
 ```go
 bus := kernel.NewBus(1000)
@@ -902,7 +902,7 @@ bus.PublishSync(ctx, msg)
 bus.Unsubscribe("assessor.result", "my-handler")
 ```
 
-### 14.3 ç†”æ–­å™¨
+### 14.3 ÈÛ¶ÏÆ÷
 
 ```go
 cb := kernel.NewCircuitBreaker(kernel.CircuitBreakerConfig{
@@ -920,9 +920,9 @@ _, failures, successes := cb.Stats("spc", "fetch")
 cb.Reset("spc", "fetch")
 ```
 
-ç†”æ–­å™¨é€šè¿‡æ‹¦æˆªå™¨æ¨¡å¼é›†æˆåˆ°è¯·æ±‚é“¾è·¯ä¸­ï¼ˆè§ 14.4 æ‹¦æˆªå™¨é“¾ï¼‰ã€‚
+ÈÛ¶ÏÆ÷Í¨¹ıÀ¹½ØÆ÷Ä£Ê½¼¯³Éµ½ÇëÇóÁ´Â·ÖĞ£¨¼û 14.4 À¹½ØÆ÷Á´£©¡£
 
-### 14.4 æ‹¦æˆªå™¨é“¾
+### 14.4 À¹½ØÆ÷Á´
 
 ```go
 chain := kernel.NewInterceptorChain()
@@ -948,9 +948,9 @@ handler := chain.Then(func(ctx context.Context, svc, method string, payload []by
 
 ---
 
-## 15. å®Œæ•´é›†æˆç¤ºä¾‹
+## 15. ÍêÕû¼¯³ÉÊ¾Àı
 
-ä»¥ä¸‹ç¤ºä¾‹å±•ç¤ºå¦‚ä½•å°† SSAM æ¨¡å—é›†æˆåˆ°è‡ªå®šä¹‰å®‰å…¨è¯„ä¼°ç³»ç»Ÿä¸­ï¼š
+ÒÔÏÂÊ¾ÀıÕ¹Ê¾ÈçºÎ½« SSAM Ä£¿é¼¯³Éµ½×Ô¶¨Òå°²È«ÆÀ¹ÀÏµÍ³ÖĞ£º
 
 ```go
 package main
@@ -1016,7 +1016,7 @@ func main() {
 
     fmt.Printf("\nDomain Scores:\n")
     for _, ds := range output.DomainScores {
-        bar := strings.Repeat("â–ˆ", int(ds.Score/5))
+        bar := strings.Repeat("¨€", int(ds.Score/5))
         fmt.Printf("  %-20s [%-20s] %5.0f\n", ds.Domain, bar, ds.Score)
     }
 
@@ -1024,7 +1024,7 @@ func main() {
     for _, ef := range output.EdgeFactors {
         status := "inactive"
         if ef.Active {
-            status = fmt.Sprintf("ACTIVE (Ã—%.2f)", ef.Factor)
+            status = fmt.Sprintf("ACTIVE (¡Á%.2f)", ef.Factor)
         }
         fmt.Printf("  %-12s %-25s %s\n", ef.ID, ef.Name, status)
     }
@@ -1033,31 +1033,31 @@ func main() {
 
 ---
 
-## 13. æµ‹è¯•
+## 13. ²âÊÔ
 
-SSAM æ¨¡å—åŒ…å«å®Œæ•´çš„å•å…ƒæµ‹è¯•å’Œé›†æˆæµ‹è¯•ï¼š
+SSAM Ä£¿é°üº¬ÍêÕûµÄµ¥Ôª²âÊÔºÍ¼¯³É²âÊÔ£º
 
 ```bash
-# è¿è¡Œ SSAM æ¨¡å—æµ‹è¯•
+# ÔËĞĞ SSAM Ä£¿é²âÊÔ
 go test ./internal/ssam/... -v
 
-# è¿è¡Œé€‚é…å™¨é›†æˆæµ‹è¯•
+# ÔËĞĞÊÊÅäÆ÷¼¯³É²âÊÔ
 go test ./internal/ssam/... -v -run TestConfigTo
 
-# è¿è¡Œå®Œæ•´è¯„åˆ†æµç¨‹æµ‹è¯•
+# ÔËĞĞÍêÕûÆÀ·ÖÁ÷³Ì²âÊÔ
 go test ./internal/ssam/... -v -run TestComputeScore
 
-# è¿è¡Œé’©å­æµ‹è¯•
+# ÔËĞĞ¹³×Ó²âÊÔ
 go test ./internal/ssam/... -v -run TestHooks
 ```
 
-æµ‹è¯•è¦†ç›–çš„å…³é”®åœºæ™¯ï¼š
+²âÊÔ¸²¸ÇµÄ¹Ø¼ü³¡¾°£º
 
-- å…¨é€šè¿‡/å…¨å¤±è´¥/éƒ¨åˆ†é€šè¿‡çš„è¯„åˆ†è®¡ç®—
-- è¾¹ç¼˜å› å­è§¦å‘ä¸çº§è”
-- è‡ªå®šä¹‰å…¬å¼æ³¨å†Œä¸åˆ‡æ¢
-- é’©å­æ³¨å†Œ/æ³¨é”€/æ‰§è¡Œ
-- è¾“å…¥éªŒè¯ï¼ˆnilã€ç©ºå­—æ®µã€è¶Šç•Œå€¼ï¼‰
-- ä¸Šä¸‹æ–‡å–æ¶ˆ
-- å¹¶å‘å®‰å…¨
-- ASSCOR é…ç½®é€‚é…åŒå‘è½¬æ¢
+- È«Í¨¹ı/È«Ê§°Ü/²¿·ÖÍ¨¹ıµÄÆÀ·Ö¼ÆËã
+- ±ßÔµÒò×Ó´¥·¢Óë¼¶Áª
+- ×Ô¶¨Òå¹«Ê½×¢²áÓëÇĞ»»
+- ¹³×Ó×¢²á/×¢Ïú/Ö´ĞĞ
+- ÊäÈëÑéÖ¤£¨nil¡¢¿Õ×Ö¶Î¡¢Ô½½çÖµ£©
+- ÉÏÏÂÎÄÈ¡Ïû
+- ²¢·¢°²È«
+- ASSCOR ÅäÖÃÊÊÅäË«Ïò×ª»»

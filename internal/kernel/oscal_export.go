@@ -351,7 +351,7 @@ func buildOSCAL(result *model.AssessmentResult) *OSCALAssessmentResults {
 			Props: []OSCALProp{
 				{Name: "assessment-tool", Value: "ASSCOR"},
 				{Name: "ssam-version", Value: "2.0"},
-				{Name: "asscor-version", Value: "v0.2.1"},
+				{Name: "asscor-version", Value: "v0.2.2"},
 			},
 			Findings:     findings,
 			Observations: observations,
