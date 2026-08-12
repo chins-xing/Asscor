@@ -1,69 +1,68 @@
 # MITRE Engage 轻量主动防御扩展包
 
-MITRE Engage 主动防御的轻量化实现：蜜罐、蜜标、蜜凭证。**零外部依赖，纯 Go 标准库。**
+MITRE Engage 主动防御的轻量化实现。**重心不在蜜罐，而在捕获后的信息收集——用捕获质量平衡捕获次数。**
 
 ## 设计原则
 
 | 原则 | 说明 |
 |------|------|
-| 轻量 | 核心 ~200 行 Go，无 T-Pot 级重型蜜罐集群 |
-| 零依赖 | 纯标准库（`net` + `os`） |
+| 蜜罐仅辅助 | 轻量蜜罐不够真，攻击者易识破，仅作触发器 + 辅助阻断 |
+| **重心在信息收集** | 捕获后的攻击者行为（IP/凭据/文件/技术）才是核心价值 |
+| **质量 > 数量** | 过滤自动化端口扫描（低质量），聚焦真实攻击者（高质量） |
+| 零依赖 | 纯 Go 标准库 |
 | 内核零膨胀 | 扩展包默认不编译，通过 `block.*` 扩展点接入 |
-| 白盒可审计 | 欺骗策略是确定性规则 |
+
+## 捕获质量分级
+
+| 捕获类型 | 质量分 | 价值 |
+|------|:---:|------|
+| 端口扫描命中 | 0.15 | 低（自动化扫描器，无攻击意图） |
+| 蜜标文件访问 | 0.55 | 中（攻击者已进入文件系统） |
+| 蜜凭证使用 | 0.85 | 高（攻击者尝试横向移动/提权） |
+
+**用捕获质量平衡捕获次数**：`Collector` 按质量阈值过滤，默认丢弃纯端口扫描噪声，只保留真实攻击者行为。
 
 ## 目录结构
 
 ```
 mitre-engage/
 ├── package.json       # 扩展包清单
-├── engage.go          # Blocker 接口实现 + 欺骗策略
-├── honeypot.go        # 轻量 TCP 蜜罐（端口诱饵）
-├── honeytoken.go      # 蜜标/诱饵文件部署
+├── collector.go       # 捕获信息收集器（重心）+ 质量过滤
+├── engage.go          # Blocker 辅助实现 + 情报收集编排
+├── honeypot.go        # 轻量 TCP 蜜罐（辅助触发器）
+├── honeytoken.go      # 蜜标/诱饵文件（高质量触发器）
 └── README.md
 ```
-
-## 能力映射（MITRE Engage 8 方法覆盖 4 种）
-
-| MITRE Engage 方法 | 实现 |
-|------|------|
-| Expose（暴露） | 蜜罐端口监听，记录连接来源 |
-| Elicit（诱导） | 蜜标文件/蜜凭证，触碰即告警 |
-| Deny（拒绝） | 由内核 `isolate_host` 兜底 |
-| Collect（收集） | 蜜罐命中记录 |
 
 ## 使用方式
 
 ```go
-import mitreengage "github.com/asscor/asscor/optional/adversary/packages/mitre-engage"
-
-// 创建 Blocker 增强型实现
 blocker := mitreengage.NewEngageBlocker("/var/lib/asscor/decoy")
 
-// 设置命中回调（发布到内核扩展点）
-blocker.SetHitHooks(
-    func(hit honeypotHit) {
-        // 蜜罐命中 → locate.threat_active → 反哺定位
-    },
-    func(hit honeytokenHit) {
-        // 蜜标触碰 → 告警
-    },
-)
+// 设置捕获回调（发布到内核 locate.threat_active → 反哺归因）
+blocker.SetCaptureHook(func(cap CaptureInfo) {
+    // cap.Quality 已按质量过滤，只保留高价值捕获
+    kernel.Extensions().Execute(ctx, "locate.threat_active", cap)
+})
 
-// 注入 LifecycleEngine
 engine.SetBlocker(blocker)
+
+// 查询高价值情报
+highValue := blocker.HighValue(mitreengage.QualityCredentialUse)
 ```
 
-## 轻量化对比
+## 能力映射
 
-| 维度 | T-Pot（重型） | 本扩展包（轻量） |
-|------|:---:|:---:|
-| 蜜罐类型 | 20+ 容器 | 单 TCP listener |
-| 体积 | 数 GB | ~几 KB |
-| 依赖 | Docker + 多镜像 | Go 标准库 |
-| 覆盖 | 全协议仿真 | 端口扫描检测 + 蜜标 |
+| MITRE Engage 方法 | 实现 | 定位 |
+|------|------|------|
+| Expose（暴露） | 蜜罐端口监听 | 辅助（低质量） |
+| Elicit（诱导） | 蜜标/蜜凭证 | 重心（高质量） |
+| Collect（收集） | **Collector 情报收集** | **核心** |
+| Deny（拒绝） | 内核 `isolate_host` | 兜底 |
 
 ## 安全注意
 
-- 蜜罐端口应部署在**独立 VLAN 隔离**的诱饵主机上，防止被攻击者利用作跳板
-- 蜜标/蜜凭证应仅针对已确认的攻击者部署
-- 主动防御需遵守**法律合规边界**（授权范围）
+- 蜜罐端口部署在独立 VLAN 隔离的诱饵主机，防跳板
+- 蜜标/蜜凭证仅针对已确认攻击者
+- 主动防御遵守法律合规边界（授权范围）
+
