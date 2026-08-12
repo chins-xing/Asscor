@@ -42,6 +42,7 @@ func (s *SRDPlugin) Init(ctx context.Context, kc KernelContext) error {
 }
 
 func (s *SRDPlugin) Start(ctx context.Context) error {
+	s.syncTopology()
 	return s.manager.Start(ctx)
 }
 
@@ -51,6 +52,18 @@ func (s *SRDPlugin) Stop(ctx context.Context) error {
 
 func (s *SRDPlugin) State() PluginState {
 	return PluginState(s.manager.State())
+}
+
+// SetTopology records a host's network position for SRD real-edge construction.
+func (s *SRDPlugin) SetTopology(hostID string, subnets []string, zone string) {
+	s.manager.SetTopology(hostID, subnets, zone)
+}
+
+// syncTopology pulls the kernel's shared topology registry into the SRD pipeline.
+func (s *SRDPlugin) syncTopology() {
+	for hostID, subnets := range getTopology() {
+		s.manager.SetTopology(hostID, subnets, "")
+	}
 }
 
 // srdKernelAdapter bridges kernel.KernelContext to srd.KernelContext.

@@ -174,6 +174,12 @@ func (m *Manager) ProcessReport(ctx context.Context, toolID string, data []byte)
 	return result, nil
 }
 
+// SetTopology records a host's network position (subnets/zone) for real-edge
+// construction in the SRD pipeline.
+func (m *Manager) SetTopology(hostID string, subnets []string, zone string) {
+	m.pipeline.SetTopology(hostID, subnets, zone)
+}
+
 func (m *Manager) ProcessFile(ctx context.Context, path string) (*SRDResult, error) {
 	result, err := m.pipeline.ProcessFromFile(ctx, path)
 	if err != nil {

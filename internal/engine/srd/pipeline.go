@@ -2,6 +2,7 @@ package srd
 
 import (
 	"context"
+	"net"
 	"os"
 	"sync"
 	"time"
@@ -23,10 +24,17 @@ type PrismScoringEngine interface {
 // Pipeline processes ExternalAssessmentReport through the Prism engine.
 // It normalizes external tool output into Prism NodeState and computes SRD scores.
 type Pipeline struct {
-	cfg      Config
-	prism    PrismScoringEngine
-	mu       sync.RWMutex
+	cfg       Config
+	prism     PrismScoringEngine
+	mu        sync.RWMutex
 	snapshots map[string]*prismlib.NodeState
+	topology  map[string]*TopologyInfo
+}
+
+// TopologyInfo carries a host's network position for real-edge construction.
+type TopologyInfo struct {
+	Subnets []string
+	Zone    string
 }
 
 // NewPipeline creates a new SRD pipeline with a built-in Prism engine.
@@ -41,7 +49,15 @@ func NewPipelineWithEngine(cfg Config, prism PrismScoringEngine) *Pipeline {
 		cfg:       cfg,
 		prism:     prism,
 		snapshots: make(map[string]*prismlib.NodeState),
+		topology:  make(map[string]*TopologyInfo),
 	}
+}
+
+// SetTopology records a host's network position for real-edge construction.
+func (p *Pipeline) SetTopology(hostID string, subnets []string, zone string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.topology[hostID] = &TopologyInfo{Subnets: subnets, Zone: zone}
 }
 
 // SetPrismEngine replaces the Prism engine at runtime.
@@ -189,14 +205,48 @@ func (p *Pipeline) buildIncomingEdges(hostID string, allNodes map[string]*prisml
 	edges := make([]prismlib.EdgeState, 0, len(allNodes))
 	for id := range allNodes {
 		if id != hostID {
-			edges = append(edges, prismlib.EdgeState{
-				Source:           id,
-				Target:           hostID,
-				RiskTransmission: transmission,
-			})
+			// Real-edge construction: only create an edge if both hosts share a subnet.
+			// Falls back to complete-graph when topology data is unavailable.
+			if p.areConnected(hostID, id) {
+				edges = append(edges, prismlib.EdgeState{
+					Source:           id,
+					Target:           hostID,
+					RiskTransmission: transmission,
+				})
+			}
 		}
 	}
 	return edges
+}
+
+// areConnected checks whether two hosts share a subnet. Returns true when
+// topology data is incomplete (conservative fallback to complete graph).
+func (p *Pipeline) areConnected(hostA, hostB string) bool {
+	p.mu.RLock()
+	a, aOK := p.topology[hostA]
+	b, bOK := p.topology[hostB]
+	p.mu.RUnlock()
+	if !aOK || !bOK {
+		return true // no topology data → assume connected (backward compatible)
+	}
+	for _, sa := range a.Subnets {
+		for _, sb := range b.Subnets {
+			if subnetOverlap(sa, sb) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// subnetOverlap reports whether two CIDR strings overlap.
+func subnetOverlap(a, b string) bool {
+	_, na, err1 := net.ParseCIDR(a)
+	_, nb, err2 := net.ParseCIDR(b)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return na.Contains(nb.IP) || nb.Contains(na.IP)
 }
 
 // SRDResult holds the processed external report and its full Prism-computed analysis.

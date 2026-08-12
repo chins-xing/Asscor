@@ -147,6 +147,9 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 				s.spc.UpsertAsset(*asset)
 			}
 		}
+		if len(req.NetworkInfo.Subnets) > 0 {
+			recordTopology(req.HostId, req.NetworkInfo.Subnets)
+		}
 		logger.WithComponent("kernel").Debug("network info received", "host_id", req.HostId,
 			"zone", req.NetworkInfo.NetworkZone, "ips", len(req.NetworkInfo.LocalIPs), "subnets", len(req.NetworkInfo.Subnets))
 	}
