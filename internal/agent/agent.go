@@ -441,6 +441,7 @@ func (a *Agent) heartbeatCycle() error {
 		SessionId: a.sessionID,
 		Result:    snapshot,
 	}
+	heartbeatReq.NetworkInfo = a.collectNetworkInfo()
 	if pkgs := a.collectPackages(); pkgs != nil {
 		h := sha256.Sum256([]byte(strings.Join(pkgs, ",")))
 		if !a.pkgSent || h != a.pkgHash {
@@ -969,6 +970,71 @@ func (a *Agent) collectCPEs() []string {
 	cpes := generateCPEsFromPackages(a.cachedPackages)
 	logger.WithComponent("agent").Info("generated CPEs from packages", "cpes", len(cpes), "packages", len(a.cachedPackages))
 	return cpes
+}
+
+// collectNetworkInfo gathers the agent's network topology data using the
+// standard library (no external commands). This enables real-edge risk
+// diffusion in SRD instead of a synthetic complete graph.
+func (a *Agent) collectNetworkInfo() *apiv1.NetworkInfo {
+	info := &apiv1.NetworkInfo{}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return info
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			var ipNet *net.IPNet
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+				ipNet = v
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.To4() == nil {
+				continue
+			}
+			info.LocalIPs = append(info.LocalIPs, ip.String())
+			if ipNet != nil {
+				info.Subnets = append(info.Subnets, ipNet.String())
+			}
+		}
+	}
+	info.NetworkZone = a.inferZone(info.LocalIPs)
+	return info
+}
+
+// inferZone classifies the agent's network zone based on IP address ranges.
+func (a *Agent) inferZone(ips []string) string {
+	hasPrivate := false
+	hasPublic := false
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			continue
+		}
+		if ip.IsPrivate() || ip.IsLoopback() {
+			hasPrivate = true
+		} else {
+			hasPublic = true
+		}
+	}
+	switch {
+	case hasPublic && hasPrivate:
+		return "dmz"
+	case hasPublic:
+		return "public"
+	default:
+		return "internal"
+	}
 }
 
 func generateCPEsFromPackages(packages []string) []string {

@@ -28,6 +28,16 @@ type HeartbeatRequest struct {
 	Result        *AssessmentResult `json:"result,omitempty"`
 	Packages      []string          `json:"packages,omitempty"`
 	InstalledCPEs []string          `json:"installed_cpes,omitempty"`
+	NetworkInfo   *NetworkInfo      `json:"network_info,omitempty"`
+}
+
+// NetworkInfo carries the agent's network topology data for real-edge risk diffusion.
+type NetworkInfo struct {
+	LocalIPs     []string `json:"local_ips,omitempty"`      // 本机所有 IP 地址
+	Subnets      []string `json:"subnets,omitempty"`        // 可达子网 (CIDR 格式, 如 "10.0.0.0/24")
+	Gateways     []string `json:"gateways,omitempty"`       // 默认网关 IP
+	Neighbors    []string `json:"neighbors,omitempty"`      // ARP 邻居表 (同子网主机 IP)
+	NetworkZone  string   `json:"network_zone,omitempty"`   // 区域: internal/dmz/public/wan/cloud
 }
 
 type HeartbeatResponse struct {

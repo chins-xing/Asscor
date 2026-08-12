@@ -136,6 +136,21 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		logger.WithComponent("kernel").Debug("SPC asset updated from heartbeat", "host_id", req.HostId, "packages", len(req.Packages), "cpes", len(asset.InstalledCPEs))
 	}
 
+	if req.NetworkInfo != nil {
+		if s.spc != nil && s.spc.Enabled() {
+			asset := s.spc.GetAsset(req.HostId)
+			if asset == nil {
+				asset = &LocalAsset{HostID: req.HostId}
+			}
+			if req.NetworkInfo.NetworkZone != "" && asset.NetworkZone == "" {
+				asset.NetworkZone = req.NetworkInfo.NetworkZone
+				s.spc.UpsertAsset(*asset)
+			}
+		}
+		logger.WithComponent("kernel").Debug("network info received", "host_id", req.HostId,
+			"zone", req.NetworkInfo.NetworkZone, "ips", len(req.NetworkInfo.LocalIPs), "subnets", len(req.NetworkInfo.Subnets))
+	}
+
 	if req.Result != nil && s.assessor != nil {
 		logger.WithComponent("kernel").Info("processing check results", "count", len(req.Result.Checks), "host_id", req.HostId)
 
