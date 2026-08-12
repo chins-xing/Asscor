@@ -185,6 +185,12 @@ func (m *PolicyModule) onAssessmentResult(ctx context.Context, msg Message) erro
 	status, _ := m.EvaluateHost(result.HostID, result.FinalScore)
 
 	if result.PrismInferenceTrend == "collapsing" && result.PrismInferenceCollapseRisk > 0.7 {
+		// Update host status so IsBlocked/HasActiveThreat reflect the preemptive
+		// isolation (fixes the feedback loop where isolation wasn't recorded).
+		m.mu.Lock()
+		m.hostStatus[result.HostID] = HostIsolated
+		m.mu.Unlock()
+
 		preemptive := []PolicyAction{
 			{
 				HostID:  result.HostID,

@@ -195,6 +195,11 @@ func (e *LifecycleEngine) Stop(ctx context.Context) error {
 	if e.cancel != nil {
 		e.cancel()
 	}
+	// Unsubscribe before waiting so late assessment results don't trigger new
+	// goroutines after shutdown begins (matches policy.go / commander.go).
+	if e.kernel != nil && e.kernel.Bus() != nil {
+		e.kernel.Bus().UnsubscribeAll("lifecycle_engine")
+	}
 	e.wg.Wait()
 	e.mu.Lock()
 	e.state = PluginStopped

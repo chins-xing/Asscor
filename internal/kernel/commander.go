@@ -274,11 +274,20 @@ func (m *CommanderModule) State() PluginState {
 
 func (m *CommanderModule) EnqueueCommand(hostID string, action string, params map[string]string) string {
 	cmdID := generateCmdID(hostID, action)
+
+	// Copy params and inject an anti-replay timestamp (required by the agent's
+	// verifyCommandSignature). The timestamp is part of the HMAC signature.
+	full := make(map[string]string, len(params)+1)
+	for k, v := range params {
+		full[k] = v
+	}
+	full["_timestamp"] = time.Now().UTC().Format(time.RFC3339)
+
 	cmd := &apiv1.Command{
 		CommandId: cmdID,
 		Command:   action,
-		Params:    params,
-		Signature: m.sign(cmdID, action, params),
+		Params:    full,
+		Signature: m.sign(cmdID, action, full),
 	}
 
 	m.mu.Lock()

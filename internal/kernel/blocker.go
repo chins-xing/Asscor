@@ -20,9 +20,17 @@ func NewKernelBlocker(kc KernelContext) *KernelBlocker {
 }
 
 // Block enqueues an isolate_host command for the attacker's foothold host.
+// It is idempotent: if the host is already isolated (policy status Isolated),
+// it returns Blocked:true without enqueueing a duplicate command.
 func (b *KernelBlocker) Block(ctx context.Context, loc *AttackerLocation) (*BlockResult, error) {
 	if loc == nil || loc.FootholdHost == "" {
 		return &BlockResult{Blocked: false, Err: "no foothold host to block"}, nil
+	}
+
+	if b.IsBlocked(ctx, loc.FootholdHost) {
+		logger.WithComponent("blocker").Debug("host already isolated, skipping duplicate",
+			"host_id", loc.FootholdHost)
+		return &BlockResult{Blocked: true, RuleID: "kernel-isolate"}, nil
 	}
 
 	if c, ok := b.commander(); ok {
