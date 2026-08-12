@@ -9,10 +9,8 @@ import (
 var (
 	registry   []model.CheckItem
 	registryMu sync.RWMutex
-	idIndex    map[string]int
+	idIndex    = make(map[string]int)
 )
-
-func init() { idIndex = make(map[string]int) }
 
 func Register(items ...model.CheckItem) {
 	registryMu.Lock()
