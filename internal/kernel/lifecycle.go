@@ -162,6 +162,9 @@ func (e *LifecycleEngine) Init(ctx context.Context, kc KernelContext) error {
 	if e.locator == nil {
 		e.locator = NewKernelLocator(kc)
 	}
+	if e.blocker == nil {
+		e.blocker = NewKernelBlocker(kc)
+	}
 	e.mu.Lock()
 	e.state = PluginInitialized
 	e.mu.Unlock()
