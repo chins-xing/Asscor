@@ -170,6 +170,14 @@ func (m *AssessorModule) pushToSIEM(ctx context.Context, result *model.Assessmen
 	})
 	if m.siemPusher != nil && m.siemPusher.Enabled() {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					m.kernel.Extensions().Execute(ctx, "siem.push_failure", map[string]interface{}{
+						"host_id": result.HostID,
+						"error":   fmt.Sprintf("panic: %v", r),
+					})
+				}
+			}()
 			m.siemPusher.PushAssessment(ctx, result)
 			m.kernel.Extensions().Execute(ctx, "siem.post_push", map[string]interface{}{
 				"host_id": result.HostID,

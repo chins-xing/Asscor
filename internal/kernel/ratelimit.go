@@ -20,6 +20,7 @@ type RateLimiter struct {
 	mu          sync.Mutex
 	buckets     map[string]*clientBucket
 	onRejected  func(service, method, reason string)
+	Extensions  ModuleExtensions
 	cleanupTick *time.Ticker
 	stopCleanup chan struct{}
 	stopped     bool
@@ -124,6 +125,11 @@ func (r *RateLimiter) Interceptor() Interceptor {
 		if !r.allow(clientAddr) {
 			if r.onRejected != nil {
 				r.onRejected(service, method, "rate_limit_exceeded")
+			}
+			if r.Extensions != nil {
+				r.Extensions.Execute(ctx, "ratelimit.limit_exceeded", map[string]interface{}{
+					"service": service, "method": method, "client": clientAddr,
+				})
 			}
 			return nil, fmt.Errorf("rate limit exceeded: %s/%s (client: %s)", service, method, clientAddr)
 		}

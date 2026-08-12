@@ -3,6 +3,7 @@ package kernel
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,6 +38,7 @@ type CircuitBreakerConfig struct {
 	Timeout       time.Duration
 	WindowSize    time.Duration
 	OnStateChange func(service, method string)
+	Extensions    ModuleExtensions
 }
 
 type windowEntry struct {
@@ -49,6 +51,20 @@ type circuitRecord struct {
 	lastStateChange time.Time
 	mu              sync.Mutex
 	window          []windowEntry
+}
+
+func (cb *CircuitBreaker) fireBreakerExtension(k, state string) {
+	if cb.cfg.Extensions == nil {
+		return
+	}
+	parts := strings.IndexByte(k, '/')
+	svc, method := k, ""
+	if parts >= 0 {
+		svc, method = k[:parts], k[parts+1:]
+	}
+	cb.cfg.Extensions.Execute(context.Background(), "breaker.state_changed", map[string]interface{}{
+		"service": svc, "method": method, "state": state,
+	})
 }
 
 func (r *circuitRecord) addEntry(success bool) {
@@ -199,9 +215,10 @@ func (cb *CircuitBreaker) state(k string) CircuitState {
 		if time.Since(lastChange) > cb.cfg.Timeout {
 			if atomic.CompareAndSwapInt32(&rec.state, int32(StateOpen), int32(StateHalfOpen)) {
 				rec.lastStateChange = time.Now()
-				if cb.cfg.OnStateChange != nil {
-					cb.cfg.OnStateChange(k, "state_change_to_half_open")
-				}
+			if cb.cfg.OnStateChange != nil {
+				cb.cfg.OnStateChange(k, "state_change_to_half_open")
+			}
+			cb.fireBreakerExtension(k, "half_open")
 			}
 			return StateHalfOpen
 		}
@@ -230,6 +247,7 @@ func (cb *CircuitBreaker) recordFailure(k string) {
 					if cb.cfg.OnStateChange != nil {
 						cb.cfg.OnStateChange(k, "opened")
 					}
+					cb.fireBreakerExtension(k, "open")
 				}
 			}
 		}
@@ -241,6 +259,7 @@ func (cb *CircuitBreaker) recordFailure(k string) {
 			if cb.cfg.OnStateChange != nil {
 				cb.cfg.OnStateChange(k, "reopened")
 			}
+			cb.fireBreakerExtension(k, "open")
 		}
 	}
 }
@@ -262,6 +281,7 @@ func (cb *CircuitBreaker) recordSuccess(k string) {
 			if cb.cfg.OnStateChange != nil {
 				cb.cfg.OnStateChange(k, "closed")
 			}
+			cb.fireBreakerExtension(k, "closed")
 		}
 	}
 }
