@@ -121,8 +121,9 @@ func normalizeSeverity(s string) string {
 
 // Config holds SRD adapter module configuration.
 type Config struct {
-	SyncIntervalSec  int
-	Profiles         map[string]SeverityProfile
+	SyncIntervalSec     int
+	DefaultTransmission float64
+	Profiles            map[string]SeverityProfile
 	ProfilesDefault  string
 	ScanPaths        map[string]string
 	DefaultProfile   string

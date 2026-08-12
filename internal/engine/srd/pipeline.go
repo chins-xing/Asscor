@@ -182,13 +182,17 @@ func (p *Pipeline) reportToNodeState(report *ExternalAssessmentReport) *prismlib
 }
 
 func (p *Pipeline) buildIncomingEdges(hostID string, allNodes map[string]*prismlib.NodeState) []prismlib.EdgeState {
+	transmission := p.cfg.DefaultTransmission
+	if transmission <= 0 {
+		transmission = 0.1
+	}
 	edges := make([]prismlib.EdgeState, 0, len(allNodes))
 	for id := range allNodes {
 		if id != hostID {
 			edges = append(edges, prismlib.EdgeState{
 				Source:           id,
 				Target:           hostID,
-				RiskTransmission: 0.1, // default transmission weight
+				RiskTransmission: transmission,
 			})
 		}
 	}

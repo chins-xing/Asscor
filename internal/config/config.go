@@ -53,6 +53,7 @@ type Config struct {
 	PrismDefaultTransmission float64
 
 	ScoringEngine string
+	Zones          map[string]string // hostID → network zone mapping
 }
 
 type ExtMgrConfig struct {
@@ -262,6 +263,13 @@ func Parse(content string) (*Config, error) {
 				case "aci_dlp_measures":         cfg.ACIDLPMeasures = f
 				}
 			}
+		}
+	}
+
+	if sec, ok := sections["zones"]; ok {
+		cfg.Zones = make(map[string]string)
+		for k, v := range sec {
+			cfg.Zones[k] = v
 		}
 	}
 

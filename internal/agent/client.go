@@ -39,7 +39,7 @@ func (c *Client) Connect() error {
 		c.br = nil
 	}
 
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	dialer := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 5 * time.Minute}
 
 	var err error
 	if c.tlsConfig != nil {

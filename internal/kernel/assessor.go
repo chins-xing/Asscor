@@ -790,6 +790,13 @@ func (m *AssessorModule) syncACIToAsset(spc SPCInterface, hostID string, result 
 
 	changed := false
 
+	if m.cfg != nil && m.cfg.Zones != nil {
+		if zone, ok := m.cfg.Zones[hostID]; ok && asset.NetworkZone == "" {
+			asset.NetworkZone = zone
+			changed = true
+		}
+	}
+
 	if p := aciChecks["AC-001"]; p != nil && *p {
 		if asset.NetworkZone != "internal" && asset.NetworkZone != "lan" {
 			asset.NetworkZone = "internal"
