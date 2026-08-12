@@ -24,9 +24,10 @@
     "assessor.pre_score": "assessor"
   },
   "compatibility": {
-    "asscor_version": ">=0.2.1",
+    "asscor_version": ">=0.2.2",
     "go_version": ">=1.26",
     "ssam_version": ">=2.0",
     "platform": ["linux"]
-  }
+  },
+  "enabled_by": "build_tag"
 }
