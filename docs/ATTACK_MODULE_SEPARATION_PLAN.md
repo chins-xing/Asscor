@@ -1,37 +1,37 @@
-# ATT&CK Ä£¿é·ÖÀëÎªÀ©Õ¹°ü ¡ª ÊµÊ©¼Æ»®
+# ATT&CK æ¨¡å—åˆ†ç¦»ä¸ºæ‰©å±•åŒ… â€” å®æ–½è®¡åˆ’
 
-**ÈÕÆÚ**: 2026-08-02 | **°æ±¾**: v0.2.2 | **»ùÓÚ**: `docs/audits/ATTACK_MODULE_EXTRACTION_AUDIT_2026-08-02.md`
-
----
-
-## Ä¿±ê
-
-½« ATT&CK Ä£¿é£¨7,115 LOC£¬13 ÎÄ¼ş£©´Ó `internal/kernel/` ÒÆÖÁ `optional/algorithms/packages/attck-ext-pack/`£¬×÷Îª¿ÉÑ¡±àÒëÀ©Õ¹°ü¡£ºËĞÄ¿ò¼ÜÔÚÄ£¿éÈ±Ê§Ê±±£³ÖÕı³£½µ¼¶ÔËĞĞ¡£
+**æ—¥æœŸ**: 2026-08-02 | **ç‰ˆæœ¬**: v0.2.2 | **åŸºäº**: `docs/audits/ATTACK_MODULE_EXTRACTION_AUDIT_2026-08-02.md`
 
 ---
 
-## ²ßÂÔ
+## ç›®æ ‡
 
-²ÉÓÃ**Í¬Ä£¿é + build tag** ²ßÂÔ£º
-- ATT&CK ÎÄ¼ş±£ÁôÔÚ `github.com/asscor/asscor` Ä£¿éÏÂ£¨ÎŞ¶ÀÁ¢ go.mod£©
-- Í¨¹ı `//go:build attck_ext` ±àÒë±êÇ©¿ØÖÆÊÇ·ñ°üº¬
-- `package.json` ÉùÃ÷À©Õ¹°üÔªĞÅÏ¢
-- ºËĞÄ¿ò¼ÜÍ¨¹ı `engine.ATTACKProvider` ½Ó¿Ú×¢Èë£¨ÒÑ´æÔÚ£¬Ğè²¹Æë£©
+å°† ATT&CK æ¨¡å—ï¼ˆ7,115 LOCï¼Œ13 æ–‡ä»¶ï¼‰ä» `internal/kernel/` ç§»è‡³ `optional/algorithms/packages/attck-ext-pack/`ï¼Œä½œä¸ºå¯é€‰ç¼–è¯‘æ‰©å±•åŒ…ã€‚æ ¸å¿ƒæ¡†æ¶åœ¨æ¨¡å—ç¼ºå¤±æ—¶ä¿æŒæ­£å¸¸é™çº§è¿è¡Œã€‚
 
 ---
 
-## Phase 0: ºÏÔ¼Ó²»¯£¨1 Ìì£©
+## ç­–ç•¥
 
-±¾½×¶Î²»ÒÆ¶¯ÈÎºÎÎÄ¼ş£¬Ö»ĞŞ¸ÄºËĞÄ¿ò¼ÜÊ¹Æä×¼±¸ºÃ½ÓÊÜ ATT&CK ×÷Îª¿É×¢Èë×é¼ş¡£
+é‡‡ç”¨**åŒæ¨¡å— + build tag** ç­–ç•¥ï¼š
+- ATT&CK æ–‡ä»¶ä¿ç•™åœ¨ `github.com/asscor/asscor` æ¨¡å—ä¸‹ï¼ˆæ— ç‹¬ç«‹ go.modï¼‰
+- é€šè¿‡ `//go:build attck_ext` ç¼–è¯‘æ ‡ç­¾æ§åˆ¶æ˜¯å¦åŒ…å«
+- `package.json` å£°æ˜æ‰©å±•åŒ…å…ƒä¿¡æ¯
+- æ ¸å¿ƒæ¡†æ¶é€šè¿‡ `engine.ATTACKProvider` æ¥å£æ³¨å…¥ï¼ˆå·²å­˜åœ¨ï¼Œéœ€è¡¥é½ï¼‰
 
-### ÈÎÎñ 0.1: ²¹Æë `engine.ATTACKProvider` ½Ó¿Ú
+---
 
-**ÎÄ¼ş**: `internal/engine/assessor.go`
+## Phase 0: åˆçº¦ç¡¬åŒ–ï¼ˆ1 å¤©ï¼‰
 
-µ±Ç° `ATTACKProvider` ½öÓĞ 5 ¸ö·½·¨£¬È±ÉÙ `IsEnabled()` ºÍÄÜÁ¦²éÑ¯£º
+æœ¬é˜¶æ®µä¸ç§»åŠ¨ä»»ä½•æ–‡ä»¶ï¼Œåªä¿®æ”¹æ ¸å¿ƒæ¡†æ¶ä½¿å…¶å‡†å¤‡å¥½æ¥å— ATT&CK ä½œä¸ºå¯æ³¨å…¥ç»„ä»¶ã€‚
+
+### ä»»åŠ¡ 0.1: è¡¥é½ `engine.ATTACKProvider` æ¥å£
+
+**æ–‡ä»¶**: `internal/engine/assessor.go`
+
+å½“å‰ `ATTACKProvider` ä»…æœ‰ 5 ä¸ªæ–¹æ³•ï¼Œç¼ºå°‘ `IsEnabled()` å’Œèƒ½åŠ›æŸ¥è¯¢ï¼š
 
 ```go
-// ÔÚ line 42 ºó×·¼Ó:
+// åœ¨ line 42 åè¿½åŠ :
 type ATTACKProvider interface {
     // existing:
     CalculateCoverage(checkResults map[string]bool) []ATTACKCoverageResult
@@ -45,103 +45,103 @@ type ATTACKProvider interface {
 }
 ```
 
-**Ó°Ïì**: µÍ ¡ª ĞÂÔö 2 ¸ö·½·¨Ç©Ãû£¬ËùÓĞÏÖÓĞ ATT&CK Ä£¿éÊµÏÖ¶¼ÒÑÓĞ `IsEnabled()` ºÍ `Version()`¡£
+**å½±å“**: ä½ â€” æ–°å¢ 2 ä¸ªæ–¹æ³•ç­¾åï¼Œæ‰€æœ‰ç°æœ‰ ATT&CK æ¨¡å—å®ç°éƒ½å·²æœ‰ `IsEnabled()` å’Œ `Version()`ã€‚
 
-### ÈÎÎñ 0.2: ÖØĞ´ `kernel/assessor.go` µÄ `applyATTACK`
+### ä»»åŠ¡ 0.2: é‡å†™ `kernel/assessor.go` çš„ `applyATTACK`
 
-**ÎÄ¼ş**: `internal/kernel/assessor.go` (lines 589-711)
+**æ–‡ä»¶**: `internal/kernel/assessor.go` (lines 589-711)
 
-µ±Ç°Í¨¹ı DI ÈİÆ÷½âÎö `ATTACKInterface` ¡ú cast `ATTCKCore`¡£Ğè¸ÄÎªÍ¨¹ı `engine.ATTACKProvider` ½Ó¿Ú×¢Èë£º
+å½“å‰é€šè¿‡ DI å®¹å™¨è§£æ `ATTACKInterface` â†’ cast `ATTCKCore`ã€‚éœ€æ”¹ä¸ºé€šè¿‡ `engine.ATTACKProvider` æ¥å£æ³¨å…¥ï¼š
 
 ```go
-// Ìæ»» line 590-598:
+// æ›¿æ¢ line 590-598:
 // OLD: impl, ok := m.kernel.Container().Resolve((*ATTACKInterface)(nil))
 //      attck, ok2 := impl.(ATTCKCore)
 // NEW:
-attck := m.attackProvider  // ¡û ĞÂÔö×Ö¶Î£¬Í¨¹ı SetATTACKProvider() ×¢Èë
+attck := m.attackProvider  // â† æ–°å¢å­—æ®µï¼Œé€šè¿‡ SetATTACKProvider() æ³¨å…¥
 if attck == nil || !attck.IsEnabled() {
     return
 }
 ```
 
-½« lines 607/624/653/675/693 µÄ ATT&CK ·½·¨µ÷ÓÃ´Ó£º
-- `attck.CalculateCoverage(...)` ¡ú ·µ»Ø `[]ATTACKCoverage` (kernel °üÀàĞÍ)
-- `attck.AssessKillChain(...)` ¡ú ·µ»Ø `KillChainAssessment` (kernel °üÀàĞÍ)
+å°† lines 607/624/653/675/693 çš„ ATT&CK æ–¹æ³•è°ƒç”¨ä»ï¼š
+- `attck.CalculateCoverage(...)` â†’ è¿”å› `[]ATTACKCoverage` (kernel åŒ…ç±»å‹)
+- `attck.AssessKillChain(...)` â†’ è¿”å› `KillChainAssessment` (kernel åŒ…ç±»å‹)
 
-¸ÄÎª·µ»Ø engine °üµÄÖĞĞÔ DTO£º
-- `attck.CalculateCoverage(...)` ¡ú ·µ»Ø `[]engine.ATTACKCoverageResult`
-- `attck.AssessKillChain(...)` ¡ú ·µ»Ø `engine.ATTACKKillChainResult`
+æ”¹ä¸ºè¿”å› engine åŒ…çš„ä¸­æ€§ DTOï¼š
+- `attck.CalculateCoverage(...)` â†’ è¿”å› `[]engine.ATTACKCoverageResult`
+- `attck.AssessKillChain(...)` â†’ è¿”å› `engine.ATTACKKillChainResult`
 
-**Ó°Ïì**: ÖĞ ¡ª ÒÆ³ı DI cast£¬¸ÄÓÃÈ«×¢Èë½Ó¿Ú¡£120 ĞĞÊÊÅä¡£`assessor.go` ²»ÔÙ import ATT&CK ¾ßÌåÀàĞÍ¡£
+**å½±å“**: ä¸­ â€” ç§»é™¤ DI castï¼Œæ”¹ç”¨å…¨æ³¨å…¥æ¥å£ã€‚120 è¡Œé€‚é…ã€‚`assessor.go` ä¸å† import ATT&CK å…·ä½“ç±»å‹ã€‚
 
-### ÈÎÎñ 0.3: ½âñî CLI Ö¸Áî´¦ÀíÆ÷
+### ä»»åŠ¡ 0.3: è§£è€¦ CLI æŒ‡ä»¤å¤„ç†å™¨
 
-**ÎÄ¼ş**: `internal/cli/commands.go` (lines 834-1058)
+**æ–‡ä»¶**: `internal/cli/commands.go` (lines 834-1058)
 
-µ±Ç°Í¨¹ı `GetPlugin("attck")` »ñÈ¡²å¼şºóÓÃ duck-type ½Ó¿Ú¶ÏÑÔ£¬½Ó¿ÚÇ©ÃûÒıÓÃ `kernel.*` ÀàĞÍ¡£Ğè½« 4 ¸ö kernel ÀàĞÍÒıÓÃÌæ»»Îª engine DTO£º
+å½“å‰é€šè¿‡ `GetPlugin("attck")` è·å–æ’ä»¶åç”¨ duck-type æ¥å£æ–­è¨€ï¼Œæ¥å£ç­¾åå¼•ç”¨ `kernel.*` ç±»å‹ã€‚éœ€å°† 4 ä¸ª kernel ç±»å‹å¼•ç”¨æ›¿æ¢ä¸º engine DTOï¼š
 
-| ĞĞ | µ±Ç°ÀàĞÍ | Ìæ»»Îª |
+| è¡Œ | å½“å‰ç±»å‹ | æ›¿æ¢ä¸º |
 |----|---------|--------|
 | 901 | `[]kernel.ATTACKCoverage` | `[]engine.ATTACKCoverageResult` |
 | 928 | `kernel.KillChainAssessment` | `engine.ATTACKKillChainResult` |
-| 956 | `*kernel.APTGroupProfile` | `engine.ATTACKAPTMatch` (¾ÛºÏ) |
-| 991 | `kernel.DetectionSummary` | ±£Áô `map[string]interface{}` ·µ»Ø |
+| 956 | `*kernel.APTGroupProfile` | `engine.ATTACKAPTMatch` (èšåˆ) |
+| 991 | `kernel.DetectionSummary` | ä¿ç•™ `map[string]interface{}` è¿”å› |
 
-**Ó°Ïì**: µÍ ¡ª ¾Ö²¿½Ó¿ÚÇ©Ãû±ä¸ü£¬60 ĞĞÊÊÅä¡£CLI ²»ÔÙ import ATT&CK ¾ßÌå kernel ÀàĞÍ¡£
+**å½±å“**: ä½ â€” å±€éƒ¨æ¥å£ç­¾åå˜æ›´ï¼Œ60 è¡Œé€‚é…ã€‚CLI ä¸å† import ATT&CK å…·ä½“ kernel ç±»å‹ã€‚
 
-### ÈÎÎñ 0.4: È·±£½µ¼¶Â·¾¶ÍêÕû
+### ä»»åŠ¡ 0.4: ç¡®ä¿é™çº§è·¯å¾„å®Œæ•´
 
-ÑéÖ¤:
-1. `assessor.go:591-592` µÄ `return` ½µ¼¶ ¡ª µ± ATT&CK Î´×¢Èë»ò `IsEnabled()==false` Ê±Õı³£Ìø¹ı
-2. `commands.go:845-847` µÄ CLI ½µ¼¶ ¡ª µ± `GetPlugin("attck")` ·µ»Ø nil Ê±ÌáÊ¾ "ATT&CK module is not loaded"
-3. `cmd/asscor/main.go:186` µÄ `cfg.ATTACK.Enabled` Ìõ¼ş ¡ª standalone ÆÀ¹ÀÊ±¿ÉÑ¡ÆôÓÃ
+éªŒè¯:
+1. `assessor.go:591-592` çš„ `return` é™çº§ â€” å½“ ATT&CK æœªæ³¨å…¥æˆ– `IsEnabled()==false` æ—¶æ­£å¸¸è·³è¿‡
+2. `commands.go:845-847` çš„ CLI é™çº§ â€” å½“ `GetPlugin("attck")` è¿”å› nil æ—¶æç¤º "ATT&CK module is not loaded"
+3. `cmd/asscor/main.go:186` çš„ `cfg.ATTACK.Enabled` æ¡ä»¶ â€” standalone è¯„ä¼°æ—¶å¯é€‰å¯ç”¨
 
 ---
 
-## Phase 1: ÎïÀíÒÆ¶¯£¨1 Ìì£©
+## Phase 1: ç‰©ç†ç§»åŠ¨ï¼ˆ1 å¤©ï¼‰
 
-### ÈÎÎñ 1.1: ´´½¨À©Õ¹°üÄ¿Â¼½á¹¹
+### ä»»åŠ¡ 1.1: åˆ›å»ºæ‰©å±•åŒ…ç›®å½•ç»“æ„
 
 ```
 optional/algorithms/packages/attck-ext-pack/
-©À©¤©¤ package.json              # À©Õ¹°üÇåµ¥
-©À©¤©¤ README.md                 # Ê¹ÓÃÎÄµµ
-©À©¤©¤ attck.go                  # ºËĞÄÄ£¿é (1651 ¡ú 1349 ĞĞ£¬Ä¬ÈÏÊı¾İÒÑÌáÈ¡)
-©À©¤©¤ attck_model.go            # 36 ¸öÊı¾İÄ£ĞÍÀàĞÍ
-©À©¤©¤ attck_defaults.go         # Ä¬ÈÏ¾ØÕó + APT ÅäÖÃ (300 ĞĞ)
-©À©¤©¤ attck_detection.go        # ¼ì²â×ÓÄ£¿é
-©À©¤©¤ attck_ti.go               # ÍşĞ²Çé±¨×ÓÄ£¿é
-©À©¤©¤ attck_emulation.go        # ¶ÔÊÖ·ÂÕæ×ÓÄ£¿é
-©À©¤©¤ attck_assessment.go       # ÆÀ¹À×ÓÄ£¿é
-©À©¤©¤ attck_apt_chain.go        # APT ¹¥»÷Á´ÖØ¹¹
-©À©¤©¤ attck_apt_detect.go       # APT ĞĞÎª¼ì²â
-©À©¤©¤ attck_apt_attribution.go  # APT ¹éÒòÒıÇæ
-©À©¤©¤ attck_apt_hunt.go         # APT ÍşĞ²á÷ÁÔ
-©À©¤©¤ attck_apt_enhanced.go     # APT ÔöÇ¿·ÖÎö
-©À©¤©¤ attck_apt_causal.go       # APT Òò¹ûÍÆ¶Ï
-©À©¤©¤ attck_test.go             # 1004 ĞĞ²âÊÔ (Ç¨ÒÆ)
-©¸©¤©¤ adapters/
-    ©¸©¤©¤ attack_adapter.go     # attackAdapter (´Ó cmd/asscor/main.go ÒÆÈë)
+â”œâ”€â”€ package.json              # æ‰©å±•åŒ…æ¸…å•
+â”œâ”€â”€ README.md                 # ä½¿ç”¨æ–‡æ¡£
+â”œâ”€â”€ attck.go                  # æ ¸å¿ƒæ¨¡å— (1651 â†’ 1349 è¡Œï¼Œé»˜è®¤æ•°æ®å·²æå–)
+â”œâ”€â”€ attck_model.go            # 36 ä¸ªæ•°æ®æ¨¡å‹ç±»å‹
+â”œâ”€â”€ attck_defaults.go         # é»˜è®¤çŸ©é˜µ + APT é…ç½® (300 è¡Œ)
+â”œâ”€â”€ attck_detection.go        # æ£€æµ‹å­æ¨¡å—
+â”œâ”€â”€ attck_ti.go               # å¨èƒæƒ…æŠ¥å­æ¨¡å—
+â”œâ”€â”€ attck_emulation.go        # å¯¹æ‰‹ä»¿çœŸå­æ¨¡å—
+â”œâ”€â”€ attck_assessment.go       # è¯„ä¼°å­æ¨¡å—
+â”œâ”€â”€ attck_apt_chain.go        # APT æ”»å‡»é“¾é‡æ„
+â”œâ”€â”€ attck_apt_detect.go       # APT è¡Œä¸ºæ£€æµ‹
+â”œâ”€â”€ attck_apt_attribution.go  # APT å½’å› å¼•æ“
+â”œâ”€â”€ attck_apt_hunt.go         # APT å¨èƒç‹©çŒ
+â”œâ”€â”€ attck_apt_enhanced.go     # APT å¢å¼ºåˆ†æ
+â”œâ”€â”€ attck_apt_causal.go       # APT å› æœæ¨æ–­
+â”œâ”€â”€ attck_test.go             # 1004 è¡Œæµ‹è¯• (è¿ç§»)
+â””â”€â”€ adapters/
+    â””â”€â”€ attack_adapter.go     # attackAdapter (ä» cmd/asscor/main.go ç§»å…¥)
 ```
 
-### ÈÎÎñ 1.2: ĞŞ¸Ä°üÃû
+### ä»»åŠ¡ 1.2: ä¿®æ”¹åŒ…å
 
-½« 12 ¸öÔ´ÎÄ¼ş£¨²»º¬²âÊÔ£©µÄ `package kernel` ¸ÄÎª `package attckext`¡£ĞèÒªÔÚÃ¿¸öÎÄ¼şÍ·²¿Ìæ»»¡£
+å°† 12 ä¸ªæºæ–‡ä»¶ï¼ˆä¸å«æµ‹è¯•ï¼‰çš„ `package kernel` æ”¹ä¸º `package attckext`ã€‚éœ€è¦åœ¨æ¯ä¸ªæ–‡ä»¶å¤´éƒ¨æ›¿æ¢ã€‚
 
-### ÈÎÎñ 1.3: µ÷Õû imports
+### ä»»åŠ¡ 1.3: è°ƒæ•´ imports
 
-ÒÆÈë `internal/kernel` ÖĞĞèÒªµÄÀàĞÍ:
+ç§»å…¥ `internal/kernel` ä¸­éœ€è¦çš„ç±»å‹:
 - `Plugin` interface
 - `PluginInfo`, `PluginDependency`, `PluginState`
 - `KernelContext`
-- `Message`, `TopicAssessorResult` µÈ×ÜÏß³£Á¿
-- À©Õ¹µã×¢²á
+- `Message`, `TopicAssessorResult` ç­‰æ€»çº¿å¸¸é‡
+- æ‰©å±•ç‚¹æ³¨å†Œ
 
-ÒÆ³ı²»ÔÙĞèÒªµÄ import: `internal/config` ¡ú Í¨¹ı `KernelContext.GetConfigObj()` ÒÑ¿É»ñÈ¡
+ç§»é™¤ä¸å†éœ€è¦çš„ import: `internal/config` â†’ é€šè¿‡ `KernelContext.GetConfigObj()` å·²å¯è·å–
 
-### ÈÎÎñ 1.4: ×¢²áÓëÆôÓÃ¿ØÖÆ
+### ä»»åŠ¡ 1.4: æ³¨å†Œä¸å¯ç”¨æ§åˆ¶
 
-**·½Ê½ A: build tag (ÍÆ¼ö)**
+**æ–¹å¼ A: build tag (æ¨è)**
 
 ```go
 //go:build attck_ext
@@ -149,7 +149,7 @@ optional/algorithms/packages/attck-ext-pack/
 package attckext
 ```
 
-ÔÚ `cmd/kernel/main.go` ÖĞ:
+åœ¨ `cmd/kernel/main.go` ä¸­:
 ```go
 //go:build attck_ext
 import "github.com/asscor/asscor/optional/algorithms/packages/attck-ext-pack"
@@ -161,25 +161,25 @@ func registerATTACK(plugins []kernel.Plugin) []kernel.Plugin {
 }
 ```
 
-±àÒëÊ±Ìí¼Ó: `go build -tags attck_ext -o ASSCOR-kernel-linux ./cmd/kernel/`
+ç¼–è¯‘æ—¶æ·»åŠ : `go build -tags attck_ext -o ASSCOR-kernel-linux ./cmd/kernel/`
 
-**·½Ê½ B: ÅäÖÃÇı¶¯**
+**æ–¹å¼ B: é…ç½®é©±åŠ¨**
 
-ÔÚ `config.ini` ÖĞ:
+åœ¨ `config.ini` ä¸­:
 ```ini
 [optional.attck_ext]
 enabled = true
 ```
 
-ÔÚ `cmd/kernel/main.go` ÖĞÔËĞĞÊ±ÅĞ¶Ï `cfg.OptionalModules["attck_ext"]`¡£
+åœ¨ `cmd/kernel/main.go` ä¸­è¿è¡Œæ—¶åˆ¤æ–­ `cfg.OptionalModules["attck_ext"]`ã€‚
 
-### ÈÎÎñ 1.5: ´´½¨ package.json
+### ä»»åŠ¡ 1.5: åˆ›å»º package.json
 
 ```json
 {
   "name": "attck-ext-pack",
   "version": "1.0.0",
-  "description": "ATT&CK V19 ÍşĞ²·ÖÎöÀ©Õ¹°ü - ¼ì²â·ÖÎö/ÍşĞ²Çé±¨/¶ÔÊÖ·ÂÕæ/ÆÀ¹À¹¤³Ì/APT¹éÒò/ÍşĞ²á÷ÁÔ",
+  "description": "ATT&CK V19 å¨èƒåˆ†ææ‰©å±•åŒ… - æ£€æµ‹åˆ†æ/å¨èƒæƒ…æŠ¥/å¯¹æ‰‹ä»¿çœŸ/è¯„ä¼°å·¥ç¨‹/APTå½’å› /å¨èƒç‹©çŒ",
   "author": "ASSCOR Core Team",
   "compatibility": { "asscor_version": ">=0.2.1", "go_version": ">=1.26", "platform": ["linux"] },
   "modules": [
@@ -195,76 +195,76 @@ enabled = true
 }
 ```
 
-### ÈÎÎñ 1.6: ÇåÀíºËĞÄ¿ò¼Ü
+### ä»»åŠ¡ 1.6: æ¸…ç†æ ¸å¿ƒæ¡†æ¶
 
-´Ó `internal/kernel/` ÖĞÉ¾³ı 13 ¸ö attck*.go ÎÄ¼ş£¬´Ó `cmd/kernel/main.go` ÖĞÒÆ³ı `kernel.NewATTACKModule()` ¾²Ì¬×¢²á¡£
+ä» `internal/kernel/` ä¸­åˆ é™¤ 13 ä¸ª attck*.go æ–‡ä»¶ï¼Œä» `cmd/kernel/main.go` ä¸­ç§»é™¤ `kernel.NewATTACKModule()` é™æ€æ³¨å†Œã€‚
 
-**±£ÁôÔÚ kernel ÖĞµÄÄÚÈİ**:
-- 13 ¸öÀ©Õ¹µãÃû³Æ×¢²á (`platform_extensions.go:33-80`) ¡ª ×Ö·û´®ºÏÍ¬
-- 11 ¸ö×ÜÏß»°Ìâ³£Á¿ (`plugin.go`) ¡ª ×Ö·û´®ºÏÍ¬
-- `TopicAssessorResult` ¶©ÔÄºÏÔ¼ ¡ª ×Ö·û´®ºÏÍ¬
-- `[attack]` ÅäÖÃ¶Î½âÎö (`config.go:502-516`) ¡ª ÅäÖÃÇı¶¯À©Õ¹°üÆôÓÃ
-- `model.ATTACK*Info` DTO (5 ÀàĞÍ) ¡ª ³Ö¾Ã»¯Êä³ö¸ñÊ½
+**ä¿ç•™åœ¨ kernel ä¸­çš„å†…å®¹**:
+- 13 ä¸ªæ‰©å±•ç‚¹åç§°æ³¨å†Œ (`platform_extensions.go:33-80`) â€” å­—ç¬¦ä¸²åˆåŒ
+- 11 ä¸ªæ€»çº¿è¯é¢˜å¸¸é‡ (`plugin.go`) â€” å­—ç¬¦ä¸²åˆåŒ
+- `TopicAssessorResult` è®¢é˜…åˆçº¦ â€” å­—ç¬¦ä¸²åˆåŒ
+- `[attack]` é…ç½®æ®µè§£æ (`config.go:502-516`) â€” é…ç½®é©±åŠ¨æ‰©å±•åŒ…å¯ç”¨
+- `model.ATTACK*Info` DTO (5 ç±»å‹) â€” æŒä¹…åŒ–è¾“å‡ºæ ¼å¼
 
-### ÈÎÎñ 1.7: Ç¨ÒÆ²âÊÔ
+### ä»»åŠ¡ 1.7: è¿ç§»æµ‹è¯•
 
-½« `attck_test.go` (1004 ĞĞ) ÒÆÈëÀ©Õ¹°ü£¬µ÷Õû°üÃûºÍ import¡£ÑéÖ¤:
-- `go test ./optional/algorithms/packages/attck-ext-pack/` Í¨¹ı
-- `go test ./internal/kernel/ -run "TestHeartbeat|TestAssessor"` Í¨¹ı (ºËĞÄÆÀ¹À¹ÜÏß)
+å°† `attck_test.go` (1004 è¡Œ) ç§»å…¥æ‰©å±•åŒ…ï¼Œè°ƒæ•´åŒ…åå’Œ importã€‚éªŒè¯:
+- `go test ./optional/algorithms/packages/attck-ext-pack/` é€šè¿‡
+- `go test ./internal/kernel/ -run "TestHeartbeat|TestAssessor"` é€šè¿‡ (æ ¸å¿ƒè¯„ä¼°ç®¡çº¿)
 
-### ÈÎÎñ 1.8: »Ø¹éÑéÖ¤
+### ä»»åŠ¡ 1.8: å›å½’éªŒè¯
 
 ```bash
-# ÆÕÍ¨±àÒë (²»°üº¬ ATT&CK)
+# æ™®é€šç¼–è¯‘ (ä¸åŒ…å« ATT&CK)
 go build -o ASSCOR-kernel-linux ./cmd/kernel/
-# ¡ú Ó¦³É¹¦±àÒë£¬ÆÀ¹À¹ÜÏß½µ¼¶
+# â†’ åº”æˆåŠŸç¼–è¯‘ï¼Œè¯„ä¼°ç®¡çº¿é™çº§
 
-# ´ø ATT&CK ±àÒë
+# å¸¦ ATT&CK ç¼–è¯‘
 go build -tags attck_ext -o ASSCOR-kernel-linux ./cmd/kernel/
-# ¡ú Ó¦³É¹¦±àÒë£¬ÆÀ¹À¹ÜÏßÊ¹ÓÃ ATT&CK ·ÖÎö
+# â†’ åº”æˆåŠŸç¼–è¯‘ï¼Œè¯„ä¼°ç®¡çº¿ä½¿ç”¨ ATT&CK åˆ†æ
 
-# È«Á¿²âÊÔ
+# å…¨é‡æµ‹è¯•
 go test ./internal/kernel/ ./internal/engine/ ./internal/cli/ ./optional/.../
-# ¡ú È«²¿Í¨¹ı
+# â†’ å…¨éƒ¨é€šè¿‡
 ```
 
 ---
 
-## Phase 2: ÔËĞĞÑéÖ¤ (Ô¤Áô, 0.5 Ìì)
+## Phase 2: è¿è¡ŒéªŒè¯ (é¢„ç•™, 0.5 å¤©)
 
-1. ÔÚ¿ª·¢»·¾³Æô¶¯ÎŞ ATT&CK µÄÄÚºË£¬ÑéÖ¤ CLI `attck` ÃüÁîÌáÊ¾ "module not loaded"
-2. ·¢ÆğÒ»´Î Agent ĞÄÌøÆÀ¹À£¬ÑéÖ¤ÆÀ·Ö²»ÊÜÓ°Ïì (ATT&CK ¸²¸ÇÂÊ/É±ÉËÁ´×Ö¶ÎÎª¿Õ)
-3. ÒÔ build tag ÖØĞÂ±àÒëºóÆô¶¯£¬ÑéÖ¤ ATT&CK ·ÖÎöÕı³£
-4. ÑéÖ¤ WebUI ÒÇ±íÅÌÕı³£Õ¹Ê¾
+1. åœ¨å¼€å‘ç¯å¢ƒå¯åŠ¨æ—  ATT&CK çš„å†…æ ¸ï¼ŒéªŒè¯ CLI `attck` å‘½ä»¤æç¤º "module not loaded"
+2. å‘èµ·ä¸€æ¬¡ Agent å¿ƒè·³è¯„ä¼°ï¼ŒéªŒè¯è¯„åˆ†ä¸å—å½±å“ (ATT&CK è¦†ç›–ç‡/æ€ä¼¤é“¾å­—æ®µä¸ºç©º)
+3. ä»¥ build tag é‡æ–°ç¼–è¯‘åå¯åŠ¨ï¼ŒéªŒè¯ ATT&CK åˆ†ææ­£å¸¸
+4. éªŒè¯ WebUI ä»ªè¡¨ç›˜æ­£å¸¸å±•ç¤º
 
 ---
 
-## ¹¤×÷Á¿¹ÀËã
+## å·¥ä½œé‡ä¼°ç®—
 
-| ½×¶Î | ÈÎÎñ | ÎÄ¼ş | ¹ÀÊ± |
+| é˜¶æ®µ | ä»»åŠ¡ | æ–‡ä»¶ | ä¼°æ—¶ |
 |------|------|:---:|:---:|
-| Phase 0.1 | ²¹Æë `ATTACKProvider.IsEnabled/Version` | 1 ĞŞ¸Ä | 0.3h |
-| Phase 0.2 | ÖØĞ´ kernel `applyATTACK` | 1 ĞŞ¸Ä (~120ĞĞ) | 2h |
-| Phase 0.3 | ½âñî CLI | 1 ĞŞ¸Ä (~60ĞĞ) | 1.5h |
-| Phase 1.1 | ´´½¨Ä¿Â¼ + package.json + README | 3 ĞÂ½¨ | 0.5h |
-| Phase 1.2 | ĞŞ¸Ä°üÃû (12 ÎÄ¼ş) | 12 ĞŞ¸Ä | 0.3h |
-| Phase 1.3 | µ÷Õû imports | 12 ĞŞ¸Ä | 1h |
-| Phase 1.4 | build tag ×¢²á | 2 ĞŞ¸Ä | 0.5h |
-| Phase 1.5 | package.json ´´½¨ | 1 ĞÂ½¨ | 0.1h |
-| Phase 1.6 | ÇåÀíºËĞÄ¿ò¼Ü | 13 É¾³ı + 1 ĞŞ¸Ä | 0.3h |
-| Phase 1.7 | Ç¨ÒÆ²âÊÔ + »Ø¹é | 1 ÒÆ¶¯ + 2 ²âÊÔ | 1.5h |
-| Phase 2 | ÔËĞĞÑéÖ¤ | ¡ª | 0.5h |
-| **ºÏ¼Æ** | | **~35 ÎÄ¼ş** | **~8.5h (1.5 Ìì)** |
+| Phase 0.1 | è¡¥é½ `ATTACKProvider.IsEnabled/Version` | 1 ä¿®æ”¹ | 0.3h |
+| Phase 0.2 | é‡å†™ kernel `applyATTACK` | 1 ä¿®æ”¹ (~120è¡Œ) | 2h |
+| Phase 0.3 | è§£è€¦ CLI | 1 ä¿®æ”¹ (~60è¡Œ) | 1.5h |
+| Phase 1.1 | åˆ›å»ºç›®å½• + package.json + README | 3 æ–°å»º | 0.5h |
+| Phase 1.2 | ä¿®æ”¹åŒ…å (12 æ–‡ä»¶) | 12 ä¿®æ”¹ | 0.3h |
+| Phase 1.3 | è°ƒæ•´ imports | 12 ä¿®æ”¹ | 1h |
+| Phase 1.4 | build tag æ³¨å†Œ | 2 ä¿®æ”¹ | 0.5h |
+| Phase 1.5 | package.json åˆ›å»º | 1 æ–°å»º | 0.1h |
+| Phase 1.6 | æ¸…ç†æ ¸å¿ƒæ¡†æ¶ | 13 åˆ é™¤ + 1 ä¿®æ”¹ | 0.3h |
+| Phase 1.7 | è¿ç§»æµ‹è¯• + å›å½’ | 1 ç§»åŠ¨ + 2 æµ‹è¯• | 1.5h |
+| Phase 2 | è¿è¡ŒéªŒè¯ | â€” | 0.5h |
+| **åˆè®¡** | | **~35 æ–‡ä»¶** | **~8.5h (1.5 å¤©)** |
 
 ---
 
-## ·çÏÕÓë»Ø¹ö
+## é£é™©ä¸å›æ»š
 
-| ·çÏÕ | ¸ÅÂÊ | »º½â´ëÊ© |
+| é£é™© | æ¦‚ç‡ | ç¼“è§£æªæ–½ |
 |------|:---:|---------|
-| `assessor.go` DI ½âñîÒıÈë bug | µÍ | Phase 0 ÔÚÇ°£¬²»ÒÆ¶¯ÎÄ¼ş¼´¿É¶ÀÁ¢²âÊÔ |
-| CLI duck-type ½Ó¿ÚÒÅÂ© | ÖĞ | Phase 0.3 ÔÚÒÆ¶¯Ç°Íê³É£¬Í¨¹ı±àÒë¼ì²éÈ·±£²»ÒÅÂ© |
-| build tag ÅäÖÃ´íÎó | µÍ | CI ²âÊÔ¾ØÕó£º`go test -tags attck_ext` + `go test` Ë«Ïß |
-| À©Õ¹µãÃû³ÆÆ´´í | µÍ | ×Ö·û´®ÅúÁ¿Ìæ»»£¬²»¸ÄÃû³Æ |
-| ²âÊÔ»Ø¹éÊ§°Ü | µÍ-ÖĞ | Phase 1.8 ÔËĞĞÈ«Á¿²âÊÔ |
-| ½ô¼±»Ø¹ö | ¡ª | `git revert` Ò»¼ü»Ö¸´ |
+| `assessor.go` DI è§£è€¦å¼•å…¥ bug | ä½ | Phase 0 åœ¨å‰ï¼Œä¸ç§»åŠ¨æ–‡ä»¶å³å¯ç‹¬ç«‹æµ‹è¯• |
+| CLI duck-type æ¥å£é—æ¼ | ä¸­ | Phase 0.3 åœ¨ç§»åŠ¨å‰å®Œæˆï¼Œé€šè¿‡ç¼–è¯‘æ£€æŸ¥ç¡®ä¿ä¸é—æ¼ |
+| build tag é…ç½®é”™è¯¯ | ä½ | CI æµ‹è¯•çŸ©é˜µï¼š`go test -tags attck_ext` + `go test` åŒçº¿ |
+| æ‰©å±•ç‚¹åç§°æ‹¼é”™ | ä½ | å­—ç¬¦ä¸²æ‰¹é‡æ›¿æ¢ï¼Œä¸æ”¹åç§° |
+| æµ‹è¯•å›å½’å¤±è´¥ | ä½-ä¸­ | Phase 1.8 è¿è¡Œå…¨é‡æµ‹è¯• |
+| ç´§æ€¥å›æ»š | â€” | `git revert` ä¸€é”®æ¢å¤ |

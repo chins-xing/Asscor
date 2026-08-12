@@ -1,40 +1,40 @@
-# ASSCOR À©Õ¹ÌåÏµ°×Æ¤Êé
+# ASSCOR æ‰©å±•ä½“ç³»ç™½çš®ä¹¦
 
-**°æ±¾**£ºv1.1
-**ÈÕÆÚ**£º2026-08-12
-**×´Ì¬**£º·¢²¼
-**ÅäÌ×ÎÄµµ**£ºSSAM 2.0 °×Æ¤Êé£¨µÚÒ»ÆªÕÂ£©¡¢¹¤³ÌÊµÏÖ°×Æ¤Êé£¨µÚÈıÆªÕÂ£©
+**ç‰ˆæœ¬**ï¼šv1.1
+**æ—¥æœŸ**ï¼š2026-08-12
+**çŠ¶æ€**ï¼šå‘å¸ƒ
+**é…å¥—æ–‡æ¡£**ï¼šSSAM 2.0 ç™½çš®ä¹¦ï¼ˆç¬¬ä¸€ç¯‡ç« ï¼‰ã€å·¥ç¨‹å®ç°ç™½çš®ä¹¦ï¼ˆç¬¬ä¸‰ç¯‡ç« ï¼‰
 
-> ±¾ÎÄÕûºÏÁË¡¶ASSCOR À©Õ¹½Ó¿Ú±¨¸æ¡·Óë¡¶ASSCOR ¿ÉÌæ»»ĞÔÆÀ¹À±¨¸æ¡·£¬ÏµÍ³²ûÊö ASSCOR µÄÀ©Õ¹¼Ü¹¹¡ª¡ª°üÀ¨²å¼şÉúÃüÖÜÆÚ¡¢DI ÈİÆ÷¡¢ÊÂ¼ş×ÜÏß¡¢À©Õ¹µãÏµÍ³¡¢ÒµÎñÄ£¿é½Ó¿Ú¡¢¼ì²éÆ÷×¢²á±í£¬ÒÔ¼°È«²¿ºËĞÄÄ£¿éºÍ¼ì²éÆ÷µÄ¿ÉÌæ»»ĞÔÉè¼Æ¡£
-
----
-
-## ÕªÒª
-
-ASSCOR ²ÉÓÃ"Î¢ÄÚºË + ²å¼ş"¼Ü¹¹£¬Í¨¹ı±ê×¼»¯½Ó¿Ú¡¢ÒÀÀµ×¢ÈëÈİÆ÷¡¢ÊÂ¼ş×ÜÏßºÍÀ©Õ¹µãÏµÍ³£¬ÊµÏÖÁË´Óµ×²ã¼ì²éÆ÷µ½¶¥²ãÆÀ·ÖÒıÇæµÄ**È«Õ»¿ÉÌæ»»ĞÔ**¡£±¾ÎÄµµÏµÍ³¼ÇÂ¼ ASSCOR µÄÀ©Õ¹½Ó¿ÚÌåÏµ¡¢¿ÉÌæ»»ĞÔ»úÖÆ¡¢ÒÔ¼°À©Õ¹¿ª·¢¹æ·¶£¬ÎªµÚÈı·½¿ª·¢ÕßºÍÉçÇø¹±Ï×ÕßÌá¹©ÍêÕûµÄ½ÓÈëÖ¸ÄÏ¡£
+> æœ¬æ–‡æ•´åˆäº†ã€ŠASSCOR æ‰©å±•æ¥å£æŠ¥å‘Šã€‹ä¸ã€ŠASSCOR å¯æ›¿æ¢æ€§è¯„ä¼°æŠ¥å‘Šã€‹ï¼Œç³»ç»Ÿé˜è¿° ASSCOR çš„æ‰©å±•æ¶æ„â€”â€”åŒ…æ‹¬æ’ä»¶ç”Ÿå‘½å‘¨æœŸã€DI å®¹å™¨ã€äº‹ä»¶æ€»çº¿ã€æ‰©å±•ç‚¹ç³»ç»Ÿã€ä¸šåŠ¡æ¨¡å—æ¥å£ã€æ£€æŸ¥å™¨æ³¨å†Œè¡¨ï¼Œä»¥åŠå…¨éƒ¨æ ¸å¿ƒæ¨¡å—å’Œæ£€æŸ¥å™¨çš„å¯æ›¿æ¢æ€§è®¾è®¡ã€‚
 
 ---
 
-## Ä¿Â¼
+## æ‘˜è¦
 
-1. [²å¼şÉúÃüÖÜÆÚ½Ó¿Ú](#Ò»²å¼şÉúÃüÖÜÆÚ½Ó¿Ú)
-2. [DI ÈİÆ÷ÓëÒÀÀµ×¢Èë](#¶şdi-ÈİÆ÷ÓëÒÀÀµ×¢Èë)
-3. [ÊÂ¼ş×ÜÏß](#ÈıÊÂ¼ş×ÜÏß)
-4. [À©Õ¹µãÏµÍ³](#ËÄÀ©Õ¹µãÏµÍ³)
-5. [ÒµÎñÄ£¿é½Ó¿Ú](#ÎåÒµÎñÄ£¿é½Ó¿Ú)
-6. [¼ì²éÆ÷×¢²á±íÓë¿ÉÌæ»»ĞÔ](#Áù¼ì²éÆ÷×¢²á±íÓë¿ÉÌæ»»ĞÔ)
-7. [ºËĞÄÄ£¿é¿ÉÌæ»»ĞÔ](#ÆßºËĞÄÄ£¿é¿ÉÌæ»»ĞÔ)
-8. [Íâ²¿ÊÊÅäÆ÷Óë¼ì²éÎ¯ÅÉ](#°ËÍâ²¿ÊÊÅäÆ÷Óë¼ì²éÎ¯ÅÉ)
-9. [À©Õ¹¿ª·¢¿ìËÙÖ¸ÄÏ](#¾ÅÀ©Õ¹¿ª·¢¿ìËÙÖ¸ÄÏ)
-10. [Ìæ»»¸´ÔÓ¶ÈÓëÈ±¿Ú·ÖÎö](#Ê®Ìæ»»¸´ÔÓ¶ÈÓëÈ±¿Ú·ÖÎö)
+ASSCOR é‡‡ç”¨"å¾®å†…æ ¸ + æ’ä»¶"æ¶æ„ï¼Œé€šè¿‡æ ‡å‡†åŒ–æ¥å£ã€ä¾èµ–æ³¨å…¥å®¹å™¨ã€äº‹ä»¶æ€»çº¿å’Œæ‰©å±•ç‚¹ç³»ç»Ÿï¼Œå®ç°äº†ä»åº•å±‚æ£€æŸ¥å™¨åˆ°é¡¶å±‚è¯„åˆ†å¼•æ“çš„**å…¨æ ˆå¯æ›¿æ¢æ€§**ã€‚æœ¬æ–‡æ¡£ç³»ç»Ÿè®°å½• ASSCOR çš„æ‰©å±•æ¥å£ä½“ç³»ã€å¯æ›¿æ¢æ€§æœºåˆ¶ã€ä»¥åŠæ‰©å±•å¼€å‘è§„èŒƒï¼Œä¸ºç¬¬ä¸‰æ–¹å¼€å‘è€…å’Œç¤¾åŒºè´¡çŒ®è€…æä¾›å®Œæ•´çš„æ¥å…¥æŒ‡å—ã€‚
 
 ---
 
-## Ò»¡¢²å¼şÉúÃüÖÜÆÚ½Ó¿Ú
+## ç›®å½•
 
-### 1.1 Plugin£¨ºËĞÄ½Ó¿Ú£©
+1. [æ’ä»¶ç”Ÿå‘½å‘¨æœŸæ¥å£](#ä¸€æ’ä»¶ç”Ÿå‘½å‘¨æœŸæ¥å£)
+2. [DI å®¹å™¨ä¸ä¾èµ–æ³¨å…¥](#äºŒdi-å®¹å™¨ä¸ä¾èµ–æ³¨å…¥)
+3. [äº‹ä»¶æ€»çº¿](#ä¸‰äº‹ä»¶æ€»çº¿)
+4. [æ‰©å±•ç‚¹ç³»ç»Ÿ](#å››æ‰©å±•ç‚¹ç³»ç»Ÿ)
+5. [ä¸šåŠ¡æ¨¡å—æ¥å£](#äº”ä¸šåŠ¡æ¨¡å—æ¥å£)
+6. [æ£€æŸ¥å™¨æ³¨å†Œè¡¨ä¸å¯æ›¿æ¢æ€§](#å…­æ£€æŸ¥å™¨æ³¨å†Œè¡¨ä¸å¯æ›¿æ¢æ€§)
+7. [æ ¸å¿ƒæ¨¡å—å¯æ›¿æ¢æ€§](#ä¸ƒæ ¸å¿ƒæ¨¡å—å¯æ›¿æ¢æ€§)
+8. [å¤–éƒ¨é€‚é…å™¨ä¸æ£€æŸ¥å§”æ´¾](#å…«å¤–éƒ¨é€‚é…å™¨ä¸æ£€æŸ¥å§”æ´¾)
+9. [æ‰©å±•å¼€å‘å¿«é€ŸæŒ‡å—](#ä¹æ‰©å±•å¼€å‘å¿«é€ŸæŒ‡å—)
+10. [æ›¿æ¢å¤æ‚åº¦ä¸ç¼ºå£åˆ†æ](#åæ›¿æ¢å¤æ‚åº¦ä¸ç¼ºå£åˆ†æ)
 
-ËùÓĞ ASSCOR Ä£¿é±ØĞëÊµÏÖ `Plugin` ½Ó¿Ú£¬ºËĞÄ¶¨ÒåÎ»ÓÚ [plugin.go](file:///f:/Argus/internal/kernel/plugin.go#L102-L114)¡£
+---
+
+## ä¸€ã€æ’ä»¶ç”Ÿå‘½å‘¨æœŸæ¥å£
+
+### 1.1 Pluginï¼ˆæ ¸å¿ƒæ¥å£ï¼‰
+
+æ‰€æœ‰ ASSCOR æ¨¡å—å¿…é¡»å®ç° `Plugin` æ¥å£ï¼Œæ ¸å¿ƒå®šä¹‰ä½äº [plugin.go](file:///f:/Argus/internal/kernel/plugin.go#L102-L114)ã€‚
 
 ```go
 type Plugin interface {
@@ -47,21 +47,21 @@ type Plugin interface {
 }
 ```
 
-**ÉúÃüÖÜÆÚ×´Ì¬»ú**£º
+**ç”Ÿå‘½å‘¨æœŸçŠ¶æ€æœº**ï¼š
 
 ```
-Unregistered ¡ú Registered ¡ú Initialized ¡ú Started ¡ú Stopping ¡ú Stopped
-                                                    ¨K Failed
+Unregistered â†’ Registered â†’ Initialized â†’ Started â†’ Stopping â†’ Stopped
+                                                    â†˜ Failed
 ```
 
-| ½×¶Î | ·½·¨ | Ô¼¶¨ |
+| é˜¶æ®µ | æ–¹æ³• | çº¦å®š |
 |------|------|------|
-| Registered | `RegisterPlugin()` | ²å¼ş×¢²áµ½ Kernel |
-| Initialized | `Init()` | ½ö×ö³õÊ¼»¯£¨¼ÓÔØÅäÖÃ¡¢×¢²áÀ©Õ¹µã¡¢°ó¶¨ DI£©£¬²»Æô¶¯³¤ÔËĞĞÈÎÎñ |
-| Started | `Start()` | Æô¶¯ goroutine¡¢¶©ÔÄ Bus¡¢Æô¶¯¶¨Ê±Æ÷ |
-| Stopping | `Stop()` | ÇåÀí goroutine¡¢¹Ø±Õ channel¡¢È¡Ïû context |
+| Registered | `RegisterPlugin()` | æ’ä»¶æ³¨å†Œåˆ° Kernel |
+| Initialized | `Init()` | ä»…åšåˆå§‹åŒ–ï¼ˆåŠ è½½é…ç½®ã€æ³¨å†Œæ‰©å±•ç‚¹ã€ç»‘å®š DIï¼‰ï¼Œä¸å¯åŠ¨é•¿è¿è¡Œä»»åŠ¡ |
+| Started | `Start()` | å¯åŠ¨ goroutineã€è®¢é˜… Busã€å¯åŠ¨å®šæ—¶å™¨ |
+| Stopping | `Stop()` | æ¸…ç† goroutineã€å…³é—­ channelã€å–æ¶ˆ context |
 
-### 1.2 PriorityPlugin£¨ÓÅÏÈ¼¶²å¼ş£©
+### 1.2 PriorityPluginï¼ˆä¼˜å…ˆçº§æ’ä»¶ï¼‰
 
 ```go
 type PriorityPlugin interface {
@@ -70,28 +70,28 @@ type PriorityPlugin interface {
 }
 ```
 
-ÊµÏÖ´Ë½Ó¿ÚµÄ²å¼ş°´ `Priority()` ÉıĞòÆô¶¯£¬½µĞòÍ£Ö¹¡£
+å®ç°æ­¤æ¥å£çš„æ’ä»¶æŒ‰ `Priority()` å‡åºå¯åŠ¨ï¼Œé™åºåœæ­¢ã€‚
 
-**¸÷Ä£¿éÓÅÏÈ¼¶·ÖÅä**£º
+**å„æ¨¡å—ä¼˜å…ˆçº§åˆ†é…**ï¼š
 
-| ÓÅÏÈ¼¶ | ²å¼ş | ËµÃ÷ |
+| ä¼˜å…ˆçº§ | æ’ä»¶ | è¯´æ˜ |
 |:------:|------|------|
-| 1 | ConfigWatcherModule | ÅäÖÃÎÄ¼ş¼àÌı£¬×î¸ßÓÅÏÈ¼¶ |
-| 2 | ConcurrencyModule | ²¢·¢¿ØÖÆ»ù´¡ÉèÊ© |
-| 3 | PersistenceModule | ³Ö¾Ã»¯²ã |
-| 5 | HeartbeatModule | Agent ĞÄÌø¹ÜÀí |
-| 10 | CTIModule | ÍøÂçÍşĞ²Çé±¨ |
-| 20 | SPCModule | °²È«Ì¬ÊÆ¼ÆËã |
-| 21 | ATTACKModule | ATT&CK ÖªÊ¶¿âÓëĞĞÎª·ÖÎö |
-| 35 | ScoringEngineModule | SSAM ÆÀ·ÖÒıÇæ |
-| 40 | AssessorModule | ÆÀ¹Àµ÷¶ÈÆ÷ |
-| 45 | AdapterIntegrationModule | Íâ²¿ÊÊÅäÆ÷¼¯³É |
-| 50 | PolicyModule | ²ßÂÔÒıÇæ |
-| 55 | SourceManagerModule | Íâ²¿Ô´¹ÜÀí |
-| 60 | CommanderModule | ÃüÁîÏÂ·¢ |
-| 70 | LogCollectorModule | ÈÕÖ¾ÊÕ¼¯ |
+| 1 | ConfigWatcherModule | é…ç½®æ–‡ä»¶ç›‘å¬ï¼Œæœ€é«˜ä¼˜å…ˆçº§ |
+| 2 | ConcurrencyModule | å¹¶å‘æ§åˆ¶åŸºç¡€è®¾æ–½ |
+| 3 | PersistenceModule | æŒä¹…åŒ–å±‚ |
+| 5 | HeartbeatModule | Agent å¿ƒè·³ç®¡ç† |
+| 10 | CTIModule | ç½‘ç»œå¨èƒæƒ…æŠ¥ |
+| 20 | SPCModule | å®‰å…¨æ€åŠ¿è®¡ç®— |
+| 21 | ATTACKModule | ATT&CK çŸ¥è¯†åº“ä¸è¡Œä¸ºåˆ†æ |
+| 35 | ScoringEngineModule | SSAM è¯„åˆ†å¼•æ“ |
+| 40 | AssessorModule | è¯„ä¼°è°ƒåº¦å™¨ |
+| 45 | AdapterIntegrationModule | å¤–éƒ¨é€‚é…å™¨é›†æˆ |
+| 50 | PolicyModule | ç­–ç•¥å¼•æ“ |
+| 55 | SourceManagerModule | å¤–éƒ¨æºç®¡ç† |
+| 60 | CommanderModule | å‘½ä»¤ä¸‹å‘ |
+| 70 | LogCollectorModule | æ—¥å¿—æ”¶é›† |
 
-### 1.3 HealthCheckable£¨½¡¿µ¼ì²é£©
+### 1.3 HealthCheckableï¼ˆå¥åº·æ£€æŸ¥ï¼‰
 
 ```go
 type HealthCheckable interface {
@@ -99,9 +99,9 @@ type HealthCheckable interface {
 }
 ```
 
-ÊµÏÖÕß£ºSPCModule¡¢ConcurrencyModule µÈ¡£Kernel µÄ `HealthCheck()` ±éÀúËùÓĞÊµÏÖ´Ë½Ó¿ÚµÄ²å¼ş²¢ÊÕ¼¯×´Ì¬¡£
+å®ç°è€…ï¼šSPCModuleã€ConcurrencyModule ç­‰ã€‚Kernel çš„ `HealthCheck()` éå†æ‰€æœ‰å®ç°æ­¤æ¥å£çš„æ’ä»¶å¹¶æ”¶é›†çŠ¶æ€ã€‚
 
-### 1.4 ConfigurablePlugin£¨ÈÈ¼ÓÔØÅäÖÃ£©
+### 1.4 ConfigurablePluginï¼ˆçƒ­åŠ è½½é…ç½®ï¼‰
 
 ```go
 type ConfigurablePlugin interface {
@@ -110,9 +110,9 @@ type ConfigurablePlugin interface {
 }
 ```
 
-ÈÈ¼ÓÔØÊ± Kernel µ÷ÓÃ `Configure(k.config)` ×¢ÈëĞÂÅäÖÃ¡£
+çƒ­åŠ è½½æ—¶ Kernel è°ƒç”¨ `Configure(k.config)` æ³¨å…¥æ–°é…ç½®ã€‚
 
-### 1.5 ¸¨ÖúÀàĞÍ
+### 1.5 è¾…åŠ©ç±»å‹
 
 ```go
 type PluginInfo struct {
@@ -127,27 +127,27 @@ type PluginDependency struct {
 
 ---
 
-## ¶ş¡¢DI ÈİÆ÷ÓëÒÀÀµ×¢Èë
+## äºŒã€DI å®¹å™¨ä¸ä¾èµ–æ³¨å…¥
 
-DI ÈİÆ÷¶¨ÒåÓÚ [di.go](file:///f:/Argus/internal/kernel/di.go)£¬Ìá¹©ÀàĞÍ°²È«µÄÒÀÀµ×¢Èë¡£
+DI å®¹å™¨å®šä¹‰äº [di.go](file:///f:/Argus/internal/kernel/di.go)ï¼Œæä¾›ç±»å‹å®‰å…¨çš„ä¾èµ–æ³¨å…¥ã€‚
 
-### 2.1 ÈİÆ÷½Ó¿Ú
+### 2.1 å®¹å™¨æ¥å£
 
-| ·½·¨ | Ç©Ãû | ËµÃ÷ |
+| æ–¹æ³• | ç­¾å | è¯´æ˜ |
 |------|------|------|
-| `Bind` | `(iface interface{}, impl interface{})` | ÒÔ½Ó¿ÚµÄ reflect.Type Îª key ×¢²áÊµÏÖ£¬**ÖØ¸´µ÷ÓÃÖ±½Ó¸²¸Ç** |
-| `BindNamed` | `(name string, iface interface{}, impl interface{})` | ÃüÃû°ó¶¨ |
-| `Resolve` | `(iface interface{}) (interface{}, bool)` | °´ÀàĞÍ²éÕÒÊµÏÖ |
-| `ResolveNamed` | `(name string) (interface{}, bool)` | °´Ãû³Æ²éÕÒÊµÏÖ |
-| `Inject` | `(target interface{}) error` | Í¨¹ı `inject:"true"` »ò `inject:"Ãû³Æ"` ±êÇ©×Ô¶¯×¢Èë |
-| `Remove` | `(iface interface{})` | ÒÆ³ı°ó¶¨ |
-| `Count` | `() int` | ·µ»ØÒÑ°ó¶¨ÊıÁ¿ |
+| `Bind` | `(iface interface{}, impl interface{})` | ä»¥æ¥å£çš„ reflect.Type ä¸º key æ³¨å†Œå®ç°ï¼Œ**é‡å¤è°ƒç”¨ç›´æ¥è¦†ç›–** |
+| `BindNamed` | `(name string, iface interface{}, impl interface{})` | å‘½åç»‘å®š |
+| `Resolve` | `(iface interface{}) (interface{}, bool)` | æŒ‰ç±»å‹æŸ¥æ‰¾å®ç° |
+| `ResolveNamed` | `(name string) (interface{}, bool)` | æŒ‰åç§°æŸ¥æ‰¾å®ç° |
+| `Inject` | `(target interface{}) error` | é€šè¿‡ `inject:"true"` æˆ– `inject:"åç§°"` æ ‡ç­¾è‡ªåŠ¨æ³¨å…¥ |
+| `Remove` | `(iface interface{})` | ç§»é™¤ç»‘å®š |
+| `Count` | `() int` | è¿”å›å·²ç»‘å®šæ•°é‡ |
 
-### 2.2 ÍêÕû DI °ó¶¨±í
+### 2.2 å®Œæ•´ DI ç»‘å®šè¡¨
 
-| ĞòºÅ | °ó¶¨½Ó¿Ú | °ó¶¨ÊµÀı | ÎÄ¼şÎ»ÖÃ |
+| åºå· | ç»‘å®šæ¥å£ | ç»‘å®šå®ä¾‹ | æ–‡ä»¶ä½ç½® |
 |:---:|------|------|------|
-| 1 | `(*engine.AssessorEngine)(nil)` | `ssam.NewEngineAdapter(cfg)` | `main.go` (Æ½Ì¨²ã×¢Èë) |
+| 1 | `(*engine.AssessorEngine)(nil)` | `ssam.NewEngineAdapter(cfg)` | `main.go` (å¹³å°å±‚æ³¨å…¥) |
 | 2 | `(*AssessorInterface)(nil)` | AssessorModule | [assessor.go:L99](file:///f:/Argus/internal/kernel/assessor.go#L99) |
 | 3 | `(*PersistenceInterface)(nil)` | PersistenceModule | [persistence.go:L261](file:///f:/Argus/internal/kernel/persistence.go#L261) |
 | 4 | `(*ConcurrencyInterface)(nil)` | ConcurrencyModule | [workerpool.go:L209](file:///f:/Argus/internal/kernel/workerpool.go#L209) |
@@ -163,21 +163,21 @@ DI ÈİÆ÷¶¨ÒåÓÚ [di.go](file:///f:/Argus/internal/kernel/di.go)£¬Ìá¹©ÀàĞÍ°²È«µÄÒÀÀ
 | 14 | `(*LogCollectorInterface)(nil)` | LogCollectorModule | [collector.go:L74](file:///f:/Argus/internal/kernel/collector.go#L74) |
 | 15 | `(*ScoringEngineProvider)(nil)` | ScoringEngineModule | [main.go:L131](file:///f:/Argus/cmd/kernel/main.go#L131) |
 
-### 2.3 ÒÀÀµ½âÎöÊ±»ú
+### 2.3 ä¾èµ–è§£ææ—¶æœº
 
-ºËĞÄÄ£¿éµÄÒÀÀµ½âÎö·¢ÉúÔÚ**ÔËĞĞÊ±**£¨·Ç Init Ê±¹Ì»¯£©£¬ÕâÊ¹µÃÈÈÌæ»»³ÉÎª¿ÉÄÜ£º
+æ ¸å¿ƒæ¨¡å—çš„ä¾èµ–è§£æå‘ç”Ÿåœ¨**è¿è¡Œæ—¶**ï¼ˆé Init æ—¶å›ºåŒ–ï¼‰ï¼Œè¿™ä½¿å¾—çƒ­æ›¿æ¢æˆä¸ºå¯èƒ½ï¼š
 
-| Ïû·ÑÄ£¿é | ÒÀÀµ½Ó¿Ú | ½âÎöÊ±»ú |
+| æ¶ˆè´¹æ¨¡å— | ä¾èµ–æ¥å£ | è§£ææ—¶æœº |
 |------|------|------|
-| Assessor | `SPCInterface` | Ã¿´ÎÆÀ¹ÀÊ± |
-| Assessor | `CTIInterface` | Ã¿´ÎÆÀ¹ÀÊ± |
-| Assessor | `ATTACKInterface` | Ã¿´ÎÆÀ¹ÀÊ± |
-| Assessor | `ScoringEngineProvider` | Init Ê± |
+| Assessor | `SPCInterface` | æ¯æ¬¡è¯„ä¼°æ—¶ |
+| Assessor | `CTIInterface` | æ¯æ¬¡è¯„ä¼°æ—¶ |
+| Assessor | `ATTACKInterface` | æ¯æ¬¡è¯„ä¼°æ—¶ |
+| Assessor | `ScoringEngineProvider` | Init æ—¶ |
 
-### 2.4 µäĞÍ×¢ÈëÄ£Ê½
+### 2.4 å…¸å‹æ³¨å…¥æ¨¡å¼
 
 ```go
-// ÔÚÄ£¿é Init ÖĞÍ¨¹ı KernelContext »ñÈ¡ÒÀÀµ
+// åœ¨æ¨¡å— Init ä¸­é€šè¿‡ KernelContext è·å–ä¾èµ–
 var spc SPCInterface
 if impl, ok := kc.Container().Resolve((*SPCInterface)(nil)); ok {
     spc = impl.(SPCInterface)
@@ -186,32 +186,32 @@ if impl, ok := kc.Container().Resolve((*SPCInterface)(nil)); ok {
 
 ---
 
-## Èı¡¢ÊÂ¼ş×ÜÏß
+## ä¸‰ã€äº‹ä»¶æ€»çº¿
 
-### 3.1 »°Ìâ³£Á¿
+### 3.1 è¯é¢˜å¸¸é‡
 
-¶¨ÒåÓÚ [plugin.go](file:///f:/Argus/internal/kernel/plugin.go#L83-L100)£º
+å®šä¹‰äº [plugin.go](file:///f:/Argus/internal/kernel/plugin.go#L83-L100)ï¼š
 
-| ³£Á¿ | Öµ | ËµÃ÷ |
+| å¸¸é‡ | å€¼ | è¯´æ˜ |
 |------|-----|------|
-| `TopicAssessorResult` | `"assessor.result"` | ÆÀ¹ÀÍê³Éºó·¢²¼ |
-| `TopicPolicyAction` | `"policy.action"` | ²ßÂÔÒıÇæ´¥·¢¶¯×÷Ê±·¢²¼ |
-| `TopicAgentRegistered` | `"agent.registered"` | Agent ×¢²áÊ±·¢²¼ |
-| `TopicAgentTimeout` | `"agent.timeout"` | Agent ³¬Ê±Ê±·¢²¼ |
-| `TopicConfigChanged` | `"config.changed"` | ÅäÖÃ±ä¸üÊ±·¢²¼ |
-| `TopicSPCUpdated` | `"spc.updated"` | SPC Êı¾İ¸üĞÂÊ±·¢²¼ |
-| `TopicCTIUpdated` | `"cti.updated"` | CTI Çé±¨¸üĞÂÊ±·¢²¼ |
-| `TopicCommandEnqueued` | `"command.enqueued"` | ÃüÁîÈë¶ÓÊ±·¢²¼ |
-| `TopicCommandResult` | `"command.result"` | ÃüÁîÖ´ĞĞ½á¹û·µ»ØÊ±·¢²¼ |
-| `TopicAgentHeartbeat` | `"agent.heartbeat"` | Agent ĞÄÌøÊ±·¢²¼ |
-| `TopicConfigReloaded` | `"config.reloaded"` | ÅäÖÃÖØÔØÍê³ÉÊ±·¢²¼ |
-| `TopicCTIThreatDetected` | `"cti.threat_detected"` | CTI ÍşĞ²¼ì²âµ½Ê±·¢²¼ |
-| `TopicAdapterFindings` | `"adapter.findings"` | Adapter ·¢ÏÖ½á¹ûÊ±·¢²¼ |
-| `TopicSourceManagerDeployed` | `"source_manager.deployed"` | Íâ²¿Ô´²¿ÊğÍê³ÉÊ±·¢²¼ |
+| `TopicAssessorResult` | `"assessor.result"` | è¯„ä¼°å®Œæˆåå‘å¸ƒ |
+| `TopicPolicyAction` | `"policy.action"` | ç­–ç•¥å¼•æ“è§¦å‘åŠ¨ä½œæ—¶å‘å¸ƒ |
+| `TopicAgentRegistered` | `"agent.registered"` | Agent æ³¨å†Œæ—¶å‘å¸ƒ |
+| `TopicAgentTimeout` | `"agent.timeout"` | Agent è¶…æ—¶æ—¶å‘å¸ƒ |
+| `TopicConfigChanged` | `"config.changed"` | é…ç½®å˜æ›´æ—¶å‘å¸ƒ |
+| `TopicSPCUpdated` | `"spc.updated"` | SPC æ•°æ®æ›´æ–°æ—¶å‘å¸ƒ |
+| `TopicCTIUpdated` | `"cti.updated"` | CTI æƒ…æŠ¥æ›´æ–°æ—¶å‘å¸ƒ |
+| `TopicCommandEnqueued` | `"command.enqueued"` | å‘½ä»¤å…¥é˜Ÿæ—¶å‘å¸ƒ |
+| `TopicCommandResult` | `"command.result"` | å‘½ä»¤æ‰§è¡Œç»“æœè¿”å›æ—¶å‘å¸ƒ |
+| `TopicAgentHeartbeat` | `"agent.heartbeat"` | Agent å¿ƒè·³æ—¶å‘å¸ƒ |
+| `TopicConfigReloaded` | `"config.reloaded"` | é…ç½®é‡è½½å®Œæˆæ—¶å‘å¸ƒ |
+| `TopicCTIThreatDetected` | `"cti.threat_detected"` | CTI å¨èƒæ£€æµ‹åˆ°æ—¶å‘å¸ƒ |
+| `TopicAdapterFindings` | `"adapter.findings"` | Adapter å‘ç°ç»“æœæ—¶å‘å¸ƒ |
+| `TopicSourceManagerDeployed` | `"source_manager.deployed"` | å¤–éƒ¨æºéƒ¨ç½²å®Œæˆæ—¶å‘å¸ƒ |
 
-### 3.2 ¶©ÔÄ¹ØÏµ±í
+### 3.2 è®¢é˜…å…³ç³»è¡¨
 
-| ¶©ÔÄÕß | Ö÷Ìâ | Handler |
+| è®¢é˜…è€… | ä¸»é¢˜ | Handler |
 |--------|------|---------|
 | **PersistenceModule** | `TopicAssessorResult` | `m.onAssessmentResult` |
 | **PersistenceModule** | `TopicAgentRegistered` | `m.onAgentRegistered` |
@@ -220,30 +220,30 @@ if impl, ok := kc.Container().Resolve((*SPCInterface)(nil)); ok {
 | **CommanderModule** | `TopicPolicyAction` | `m.onPolicyAction` |
 | **PolicyModule** | `TopicAssessorResult` | `m.onAssessmentResult` |
 
-### 3.3 ÊÂ¼şÁ÷Í¼
+### 3.3 äº‹ä»¶æµå›¾
 
 ```
-Agent ÉÏ±¨ ¡ú HeartbeatModule
-    ©À©¤ TopicAgentRegistered ©¤©¤¡ú PersistenceModule (³Ö¾Ã»¯×¢²á¼ÇÂ¼)
-    ©¸©¤ TopicAgentHeartbeat   ©¤©¤¡ú (ÏµÍ³ÄÚ²¿)
+Agent ä¸ŠæŠ¥ â†’ HeartbeatModule
+    â”œâ”€ TopicAgentRegistered â”€â”€â†’ PersistenceModule (æŒä¹…åŒ–æ³¨å†Œè®°å½•)
+    â””â”€ TopicAgentHeartbeat   â”€â”€â†’ (ç³»ç»Ÿå†…éƒ¨)
 
-ÆÀ¹À´¥·¢ ¡ú AssessorModule
-    ©¸©¤ TopicAssessorResult
-        ©À©¤¡ú PersistenceModule (Ğ´ÈëÆÀ¹ÀÀúÊ·)
-        ©À©¤¡ú ATTACKModule     (ATT&CK ¸²¸ÇÂÊ·ÖÎö / APT ¹éÒò)
-        ©¸©¤¡ú PolicyModule     (²ßÂÔÅĞ¶¨ ¡ú ¿ÉÄÜ´¥·¢¶¯×÷)
+è¯„ä¼°è§¦å‘ â†’ AssessorModule
+    â””â”€ TopicAssessorResult
+        â”œâ”€â†’ PersistenceModule (å†™å…¥è¯„ä¼°å†å²)
+        â”œâ”€â†’ ATTACKModule     (ATT&CK è¦†ç›–ç‡åˆ†æ / APT å½’å› )
+        â””â”€â†’ PolicyModule     (ç­–ç•¥åˆ¤å®š â†’ å¯èƒ½è§¦å‘åŠ¨ä½œ)
 
-²ßÂÔÅĞ¶¨ ¡ú PolicyModule
-    ©¸©¤ TopicPolicyAction ©¤©¤¡ú CommanderModule (ÏÂ·¢ÃüÁîµ½ Agent)
+ç­–ç•¥åˆ¤å®š â†’ PolicyModule
+    â””â”€ TopicPolicyAction â”€â”€â†’ CommanderModule (ä¸‹å‘å‘½ä»¤åˆ° Agent)
 ```
 
 ---
 
-## ËÄ¡¢À©Õ¹µãÏµÍ³
+## å››ã€æ‰©å±•ç‚¹ç³»ç»Ÿ
 
-À©Õ¹µã¶¨ÒåÓÚ [extensions.go](file:///f:/Argus/internal/kernel/extensions.go)¡£
+æ‰©å±•ç‚¹å®šä¹‰äº [extensions.go](file:///f:/Argus/internal/kernel/extensions.go)ã€‚
 
-### 4.1 ºËĞÄÀàĞÍ
+### 4.1 æ ¸å¿ƒç±»å‹
 
 ```go
 type ExtensionPoint struct {
@@ -255,105 +255,105 @@ type ExtensionPoint struct {
 type ExtensionHandler func(ctx context.Context, data interface{}) error
 ```
 
-### 4.2 ExtensionRegistry ·½·¨
+### 4.2 ExtensionRegistry æ–¹æ³•
 
-| ·½·¨ | ËµÃ÷ |
+| æ–¹æ³• | è¯´æ˜ |
 |------|------|
-| `RegisterPoint(point ExtensionPoint)` | ×¢²áÀ©Õ¹µã£¨½öÆ½Ì¨²ã¿ÉÓÃ£¬²å¼ş²»¿Éµ÷ÓÃ£© |
-| `RegisterExtension(pluginID, pointName string, handler ExtensionHandler, priority int) error` | ×¢²áÀ©Õ¹´¦ÀíÆ÷ |
-| `Execute(ctx, pointName string, data interface{}) []error` | Ö´ĞĞËùÓĞ´¦ÀíÆ÷ |
-| `ExecuteUntilFirst(ctx, pointName string, data interface{}) (string, interface{}, error)` | Ö´ĞĞµ½µÚÒ»¸ö·Ç nil ½á¹û£¬·µ»Ø²å¼şIDºÍ·µ»ØÖµ |
-| `UnregisterPlugin(pluginID string)` | ÒÆ³ıÖ¸¶¨²å¼şµÄËùÓĞÀ©Õ¹ |
-| `ListPoints() []ExtensionPoint` | ÁĞ³öËùÓĞÒÑ×¢²áÀ©Õ¹µã |
-| `ListExtensions(pointName string) []string` | ÁĞ³öÖ¸¶¨À©Õ¹µãµÄ´¦ÀíÆ÷ ID |
+| `RegisterPoint(point ExtensionPoint)` | æ³¨å†Œæ‰©å±•ç‚¹ï¼ˆä»…å¹³å°å±‚å¯ç”¨ï¼Œæ’ä»¶ä¸å¯è°ƒç”¨ï¼‰ |
+| `RegisterExtension(pluginID, pointName string, handler ExtensionHandler, priority int) error` | æ³¨å†Œæ‰©å±•å¤„ç†å™¨ |
+| `Execute(ctx, pointName string, data interface{}) []error` | æ‰§è¡Œæ‰€æœ‰å¤„ç†å™¨ |
+| `ExecuteUntilFirst(ctx, pointName string, data interface{}) (string, interface{}, error)` | æ‰§è¡Œåˆ°ç¬¬ä¸€ä¸ªé nil ç»“æœï¼Œè¿”å›æ’ä»¶IDå’Œè¿”å›å€¼ |
+| `UnregisterPlugin(pluginID string)` | ç§»é™¤æŒ‡å®šæ’ä»¶çš„æ‰€æœ‰æ‰©å±• |
+| `ListPoints() []ExtensionPoint` | åˆ—å‡ºæ‰€æœ‰å·²æ³¨å†Œæ‰©å±•ç‚¹ |
+| `ListExtensions(pointName string) []string` | åˆ—å‡ºæŒ‡å®šæ‰©å±•ç‚¹çš„å¤„ç†å™¨ ID |
 
-### 4.3 ÄÚºË¼¶À©Õ¹µã£¨6 ¸ö£©
+### 4.3 å†…æ ¸çº§æ‰©å±•ç‚¹ï¼ˆ6 ä¸ªï¼‰
 
-| À©Õ¹µãÃû³Æ | ´¥·¢Ê±»ú |
+| æ‰©å±•ç‚¹åç§° | è§¦å‘æ—¶æœº |
 |-----------|---------|
-| `kernel.pre_init` | ËùÓĞ²å¼ş Init Ö®Ç° |
-| `kernel.post_init` | ËùÓĞ²å¼ş Init Ö®ºó |
-| `kernel.pre_start` | ËùÓĞ²å¼ş Start Ö®Ç° |
-| `kernel.post_start` | ËùÓĞ²å¼ş Start Ö®ºó |
-| `kernel.pre_stop` | ¹Ø±ÕĞòÁĞ¿ªÊ¼Ç° |
-| `kernel.post_stop` | ËùÓĞ²å¼ş Stop Ö®ºó |
+| `kernel.pre_init` | æ‰€æœ‰æ’ä»¶ Init ä¹‹å‰ |
+| `kernel.post_init` | æ‰€æœ‰æ’ä»¶ Init ä¹‹å |
+| `kernel.pre_start` | æ‰€æœ‰æ’ä»¶ Start ä¹‹å‰ |
+| `kernel.post_start` | æ‰€æœ‰æ’ä»¶ Start ä¹‹å |
+| `kernel.pre_stop` | å…³é—­åºåˆ—å¼€å§‹å‰ |
+| `kernel.post_stop` | æ‰€æœ‰æ’ä»¶ Stop ä¹‹å |
 
-### 4.4 ÒµÎñÄ£¿éÀ©Õ¹µã£¨70 ¸ö£¬v0.2.3+£©
+### 4.4 ä¸šåŠ¡æ¨¡å—æ‰©å±•ç‚¹ï¼ˆ70 ä¸ªï¼Œv0.2.3+ï¼‰
 
-**AssessorModule£¨4 ¸ö£©**£º`assessor.pre_evaluate`¡¢`assessor.pre_score`¡¢`assessor.post_evaluate`¡¢`assessor.report_generated`¡¢`assessor.outbound`
+**AssessorModuleï¼ˆ4 ä¸ªï¼‰**ï¼š`assessor.pre_evaluate`ã€`assessor.pre_score`ã€`assessor.post_evaluate`ã€`assessor.report_generated`ã€`assessor.outbound`
 
-**PolicyModule£¨3 ¸ö£©**£º`policy.action_decided`¡¢`policy.notify`¡¢`policy.status_changed`
+**PolicyModuleï¼ˆ3 ä¸ªï¼‰**ï¼š`policy.action_decided`ã€`policy.notify`ã€`policy.status_changed`
 
-**RemediationModule£¨3 ¸ö£©**£º`remediation.pre_apply`¡¢`remediation.post_apply`¡¢`remediation.action_resolved`
+**RemediationModuleï¼ˆ3 ä¸ªï¼‰**ï¼š`remediation.pre_apply`ã€`remediation.post_apply`ã€`remediation.action_resolved`
 
-**VerifyModule£¨3 ¸ö£©**£º`verify.pre_check`¡¢`verify.post_check`¡¢`verify.status_changed`
+**VerifyModuleï¼ˆ3 ä¸ªï¼‰**ï¼š`verify.pre_check`ã€`verify.post_check`ã€`verify.status_changed`
 
-**ArchiveModule£¨3 ¸ö£©**£º`archive.pre_write`¡¢`archive.post_write`¡¢`archive.rotation`
+**ArchiveModuleï¼ˆ3 ä¸ªï¼‰**ï¼š`archive.pre_write`ã€`archive.post_write`ã€`archive.rotation`
 
-**CLI/WebUI Æ½Ì¨À©Õ¹£¨2 ¸ö£©**£º`cli.command.register`¡¢`webui.route.register`
+**CLI/WebUI å¹³å°æ‰©å±•ï¼ˆ2 ä¸ªï¼‰**ï¼š`cli.command.register`ã€`webui.route.register`
 
-**SPCModule£¨3 ¸ö£©**£º`spc.pre_calculate`¡¢`spc.post_calculate`¡¢`spc.cve_updated`
+**SPCModuleï¼ˆ3 ä¸ªï¼‰**ï¼š`spc.pre_calculate`ã€`spc.post_calculate`ã€`spc.cve_updated`
 
-**ATTACKModule£¨13 ¸ö£©**£º
+**ATTACKModuleï¼ˆ13 ä¸ªï¼‰**ï¼š
 
-| À©Õ¹µã | ´¥·¢Ê±»ú | ·ÖÀà |
+| æ‰©å±•ç‚¹ | è§¦å‘æ—¶æœº | åˆ†ç±» |
 |------|------|------|
-| `attck.coverage.complete` | ¸²¸ÇÂÊ·ÖÎöÍê³É | ¸²¸ÇÂÊ |
-| `attck.apt.matched` | APT ×éÖ¯Æ¥Åä¼ì²â | APT ¹éÒò |
-| `attck.risk.predicted` | Ô¤²âĞÔ·çÏÕÆÀ¹ÀÍê³É | ·çÏÕÆÀ¹À |
-| `attck.detection.alert` | ¼ì²â¸æ¾¯´¥·¢ | ¼ì²â¸æ¾¯ |
-| `attck.detection.anomaly` | ¸ß·ÖÒì³£¼ì²âµ½ | ¼ì²â¸æ¾¯ |
-| `attck.emulation.complete` | ¶ÔÊÖ·ÂÕæÍê³É | ·ÂÕæ |
-| `attck.assessment.complete` | ²î¾à·ÖÎöÆÀ¹ÀÍê³É | ÆÀ¹À |
-| `attck.apt.chain_detected` | APT ¹¥»÷Á´ÖØ¹¹Íê³É | APT ¹éÒò |
-| `attck.apt.attribution` | APT ¹éÒòÖ´ĞĞ | APT ¹éÒò |
-| `attck.apt.hunt_confirmed` | ÍşĞ²á÷ÁÔ¼ÙÉèÈ·ÈÏ | ÍşĞ²á÷ÁÔ |
-| `attck.apt.report_generated` | APT ·ÖÎö±¨¸æÉú³É | ±¨¸æ |
-| `attck.behavioral.alert` | ĞĞÎª¸æ¾¯´¥·¢ | ĞĞÎª·ÖÎö |
-| `attck.behavioral.beacon` | C2 Beaconing ¼ì²âµ½ | ĞĞÎª·ÖÎö |
+| `attck.coverage.complete` | è¦†ç›–ç‡åˆ†æå®Œæˆ | è¦†ç›–ç‡ |
+| `attck.apt.matched` | APT ç»„ç»‡åŒ¹é…æ£€æµ‹ | APT å½’å›  |
+| `attck.risk.predicted` | é¢„æµ‹æ€§é£é™©è¯„ä¼°å®Œæˆ | é£é™©è¯„ä¼° |
+| `attck.detection.alert` | æ£€æµ‹å‘Šè­¦è§¦å‘ | æ£€æµ‹å‘Šè­¦ |
+| `attck.detection.anomaly` | é«˜åˆ†å¼‚å¸¸æ£€æµ‹åˆ° | æ£€æµ‹å‘Šè­¦ |
+| `attck.emulation.complete` | å¯¹æ‰‹ä»¿çœŸå®Œæˆ | ä»¿çœŸ |
+| `attck.assessment.complete` | å·®è·åˆ†æè¯„ä¼°å®Œæˆ | è¯„ä¼° |
+| `attck.apt.chain_detected` | APT æ”»å‡»é“¾é‡æ„å®Œæˆ | APT å½’å›  |
+| `attck.apt.attribution` | APT å½’å› æ‰§è¡Œ | APT å½’å›  |
+| `attck.apt.hunt_confirmed` | å¨èƒç‹©çŒå‡è®¾ç¡®è®¤ | å¨èƒç‹©çŒ |
+| `attck.apt.report_generated` | APT åˆ†ææŠ¥å‘Šç”Ÿæˆ | æŠ¥å‘Š |
+| `attck.behavioral.alert` | è¡Œä¸ºå‘Šè­¦è§¦å‘ | è¡Œä¸ºåˆ†æ |
+| `attck.behavioral.beacon` | C2 Beaconing æ£€æµ‹åˆ° | è¡Œä¸ºåˆ†æ |
 
-**HeartbeatModule£¨3 ¸ö£©**£º`heartbeat.agent_timeout`¡¢`heartbeat.agent_reconnected`¡¢`heartbeat.agent_pruned`
+**HeartbeatModuleï¼ˆ3 ä¸ªï¼‰**ï¼š`heartbeat.agent_timeout`ã€`heartbeat.agent_reconnected`ã€`heartbeat.agent_pruned`
 
-**ConfigWatcherModule£¨3 ¸ö£©**£º`config.pre_reload`¡¢`config.post_reload`¡¢`config.load_error`
+**ConfigWatcherModuleï¼ˆ3 ä¸ªï¼‰**ï¼š`config.pre_reload`ã€`config.post_reload`ã€`config.load_error`
 
-**CTIModule£¨3 ¸ö£©**£º`cti.pre_update`¡¢`cti.post_update`¡¢`cti.coefficient_changed`
+**CTIModuleï¼ˆ3 ä¸ªï¼‰**ï¼š`cti.pre_update`ã€`cti.post_update`ã€`cti.coefficient_changed`
 
-**AdapterIntegrationModule£¨2 ¸ö£©**£º`adapter.pre_fetch`¡¢`adapter.post_fetch`
+**AdapterIntegrationModuleï¼ˆ2 ä¸ªï¼‰**ï¼š`adapter.pre_fetch`ã€`adapter.post_fetch`
 
-**SIEM Pusher£¨3 ¸ö£©**£º`siem.pre_push`¡¢`siem.post_push`¡¢`siem.push_failure`
+**SIEM Pusherï¼ˆ3 ä¸ªï¼‰**ï¼š`siem.pre_push`ã€`siem.post_push`ã€`siem.push_failure`
 
-**CommanderModule£¨2 ¸ö£©**£º`commander.command_expired`¡¢`commander.key_rotated`
+**CommanderModuleï¼ˆ2 ä¸ªï¼‰**ï¼š`commander.command_expired`ã€`commander.key_rotated`
 
-**SourceManagerModule£¨4 ¸ö£©**£º`source.pre_deploy`¡¢`source.post_deploy`¡¢`source.pre_enable`¡¢`source.pre_disable`
+**SourceManagerModuleï¼ˆ4 ä¸ªï¼‰**ï¼š`source.pre_deploy`ã€`source.post_deploy`ã€`source.pre_enable`ã€`source.pre_disable`
 
-**Log Collector£¨2 ¸ö£©**£º`log.entry_received`¡¢`agent.log_uploaded`
+**Log Collectorï¼ˆ2 ä¸ªï¼‰**ï¼š`log.entry_received`ã€`agent.log_uploaded`
 
-**PersistenceModule£¨3 ¸ö£©**£º`persistence.pre_append`¡¢`persistence.post_append`¡¢`persistence.dashboard_written`
+**PersistenceModuleï¼ˆ3 ä¸ªï¼‰**ï¼š`persistence.pre_append`ã€`persistence.post_append`ã€`persistence.dashboard_written`
 
-**ÉúÃüÖÜÆÚ½×¶ÎÓ³Éä**£º
+**ç”Ÿå‘½å‘¨æœŸé˜¶æ®µæ˜ å°„**ï¼š
 
-| ½×¶Î | À©Õ¹µã | ¸²¸ÇÄ£¿é |
+| é˜¶æ®µ | æ‰©å±•ç‚¹ | è¦†ç›–æ¨¡å— |
 |------|--------|---------|
-| **Ì½²â** | 23 | Assessor + SPC + ATT&CK + Heartbeat + Adapter + CTI |
-| **ÏìÓ¦** | 5 | Policy + ConfigWatcher |
-| **±¨¸æ** | 8 | Assessor + ATT&CK + SIEM + Log + Persistence |
-| **ĞŞ¸´** | 5 | Remediation + Commander |
-| **ÑéÖ¤** | 3 | Verify |
-| **¹éµµ** | 6 | Archive + Persistence |
+| **æ¢æµ‹** | 23 | Assessor + SPC + ATT&CK + Heartbeat + Adapter + CTI |
+| **å“åº”** | 5 | Policy + ConfigWatcher |
+| **æŠ¥å‘Š** | 8 | Assessor + ATT&CK + SIEM + Log + Persistence |
+| **ä¿®å¤** | 5 | Remediation + Commander |
+| **éªŒè¯** | 3 | Verify |
+| **å½’æ¡£** | 6 | Archive + Persistence |
 
-### 4.5 À©Õ¹µã×¢²áÊ¾Àı£¨v0.2.3 ¼¯ÖĞ»¯¼Ü¹¹£©
+### 4.5 æ‰©å±•ç‚¹æ³¨å†Œç¤ºä¾‹ï¼ˆv0.2.3 é›†ä¸­åŒ–æ¶æ„ï¼‰
 
-À©Õ¹µãÓÉÆ½Ì¨²ã `RegisterAllExtensionPoints()` ¼¯ÖĞ¶¨ÒåÔÚ `kernel/platform_extensions.go`¡£Ä£¿é²»¿É×¢²áĞÂÀ©Õ¹µã£¨`ModuleExtensions` ½Ó¿Ú²»º¬ `RegisterPoint`£©£¬Ö»ÄÜ¶©ÔÄÒÑÓĞÀ©Õ¹µã£º
+æ‰©å±•ç‚¹ç”±å¹³å°å±‚ `RegisterAllExtensionPoints()` é›†ä¸­å®šä¹‰åœ¨ `kernel/platform_extensions.go`ã€‚æ¨¡å—ä¸å¯æ³¨å†Œæ–°æ‰©å±•ç‚¹ï¼ˆ`ModuleExtensions` æ¥å£ä¸å« `RegisterPoint`ï¼‰ï¼Œåªèƒ½è®¢é˜…å·²æœ‰æ‰©å±•ç‚¹ï¼š
 
 ```go
-// Æ½Ì¨²ã: platform_extensions.go ¼¯ÖĞ×¢²á
+// å¹³å°å±‚: platform_extensions.go é›†ä¸­æ³¨å†Œ
 func RegisterAllExtensionPoints(r *ExtensionRegistry) {
     r.RegisterPoint(ExtensionPoint{
         Name: "spc.pre_calculate", Description: "Called before SPC calculation", Version: "1.0",
     })
 }
 
-// Ä£¿é: Ê¹ÓÃ RegisterExtension ¶©ÔÄ£¨²»¿É RegisterPoint£©
+// æ¨¡å—: ä½¿ç”¨ RegisterExtension è®¢é˜…ï¼ˆä¸å¯ RegisterPointï¼‰
 kc.Extensions().RegisterExtension("my_plugin", "spc.pre_calculate",
     func(ctx context.Context, data interface{}) error { return nil }, 10,
 )
@@ -361,11 +361,11 @@ kc.Extensions().RegisterExtension("my_plugin", "spc.pre_calculate",
 
 ---
 
-## Îå¡¢ÒµÎñÄ£¿é½Ó¿Ú
+## äº”ã€ä¸šåŠ¡æ¨¡å—æ¥å£
 
 ### 5.1 ScoringEngineProvider
 
-[assessor.go:L20-L27](file:///f:/Argus/internal/kernel/assessor.go#L20-L27) ¡ª SSAM ÆÀ·ÖÒıÇæÌá¹©Õß
+[assessor.go:L20-L27](file:///f:/Argus/internal/kernel/assessor.go#L20-L27) â€” SSAM è¯„åˆ†å¼•æ“æä¾›è€…
 
 ```go
 type ScoringEngineProvider interface {
@@ -380,7 +380,7 @@ type ScoringEngineProvider interface {
 
 ### 5.2 AssessorInterface
 
-[assessor.go:L515-L520](file:///f:/Argus/internal/kernel/assessor.go#L515-L520) ¡ª ÆÀ¹Àµ÷¶ÈÆ÷
+[assessor.go:L515-L520](file:///f:/Argus/internal/kernel/assessor.go#L515-L520) â€” è¯„ä¼°è°ƒåº¦å™¨
 
 ```go
 type AssessorInterface interface {
@@ -393,7 +393,7 @@ type AssessorInterface interface {
 
 ### 5.3 PolicyInterface
 
-[policy.go:L182-L185](file:///f:/Argus/internal/kernel/policy.go#L182-L185) ¡ª ²ßÂÔÒıÇæ
+[policy.go:L182-L185](file:///f:/Argus/internal/kernel/policy.go#L182-L185) â€” ç­–ç•¥å¼•æ“
 
 ```go
 type PolicyInterface interface {
@@ -404,7 +404,7 @@ type PolicyInterface interface {
 
 ### 5.4 SPCInterface
 
-[spc.go:L1194-L1213](file:///f:/Argus/internal/kernel/spc.go#L1194-L1213) ¡ª °²È«Ì¬ÊÆ¼ÆËã
+[spc.go:L1194-L1213](file:///f:/Argus/internal/kernel/spc.go#L1194-L1213) â€” å®‰å…¨æ€åŠ¿è®¡ç®—
 
 ```go
 type SPCInterface interface {
@@ -431,7 +431,7 @@ type SPCInterface interface {
 
 ### 5.5 CTIInterface
 
-[cti.go:L166-L170](file:///f:/Argus/internal/kernel/cti.go#L166-L170) ¡ª ÍøÂçÍşĞ²Çé±¨
+[cti.go:L166-L170](file:///f:/Argus/internal/kernel/cti.go#L166-L170) â€” ç½‘ç»œå¨èƒæƒ…æŠ¥
 
 ```go
 type CTIInterface interface {
@@ -441,9 +441,9 @@ type CTIInterface interface {
 }
 ```
 
-### 5.6 ÆäÓàÄ£¿é½Ó¿Ú
+### 5.6 å…¶ä½™æ¨¡å—æ¥å£
 
-| ½Ó¿Ú | ÎÄ¼şÎ»ÖÃ | ·½·¨Êı |
+| æ¥å£ | æ–‡ä»¶ä½ç½® | æ–¹æ³•æ•° |
 |------|------|:---:|
 | `HeartbeatInterface` | [heartbeat.go:L223-L229](file:///f:/Argus/internal/kernel/heartbeat.go#L223-L229) | 5 |
 | `CommanderInterface` | [commander.go:L324-L328](file:///f:/Argus/internal/kernel/commander.go#L324-L328) | 3 |
@@ -457,11 +457,11 @@ type CTIInterface interface {
 
 ---
 
-## Áù¡¢¼ì²éÆ÷×¢²á±íÓë¿ÉÌæ»»ĞÔ
+## å…­ã€æ£€æŸ¥å™¨æ³¨å†Œè¡¨ä¸å¯æ›¿æ¢æ€§
 
-### 6.1 ×¢²á±í»úÖÆ
+### 6.1 æ³¨å†Œè¡¨æœºåˆ¶
 
-¼ì²éÆ÷Í¨¹ı [registry.go](file:///f:/Argus/internal/checks/registry.go) ÖĞÈ«¾Ö×¢²á±í¹ÜÀí£º
+æ£€æŸ¥å™¨é€šè¿‡ [registry.go](file:///f:/Argus/internal/checks/registry.go) ä¸­å…¨å±€æ³¨å†Œè¡¨ç®¡ç†ï¼š
 
 ```go
 var (
@@ -469,14 +469,14 @@ var (
     registry []model.CheckItem
 )
 
-func Register(items ...model.CheckItem)     // ×¢²áĞÂ¼ì²éÏî
-func Unregister(checkIDs ...string)          // °´ ID ÒÆ³ı¼ì²éÏî
-func GetAll() []model.CheckItem             // »ñÈ¡È«²¿×¢²áÏî
-func GetByID(checkID string) (model.CheckItem, bool)  // °´ ID ²éÕÒ
-func GetByDomain(domain model.ScoreDomain) []model.CheckItem  // °´ÓòÉ¸Ñ¡
+func Register(items ...model.CheckItem)     // æ³¨å†Œæ–°æ£€æŸ¥é¡¹
+func Unregister(checkIDs ...string)          // æŒ‰ ID ç§»é™¤æ£€æŸ¥é¡¹
+func GetAll() []model.CheckItem             // è·å–å…¨éƒ¨æ³¨å†Œé¡¹
+func GetByID(checkID string) (model.CheckItem, bool)  // æŒ‰ ID æŸ¥æ‰¾
+func GetByDomain(domain model.ScoreDomain) []model.CheckItem  // æŒ‰åŸŸç­›é€‰
 ```
 
-Ä¬ÈÏ¼ì²éÏîÔÚ [init.go](file:///f:/Argus/internal/checks/init.go) ÖĞÍ¨¹ı `init()` ×Ô¶¯×¢²á£º
+é»˜è®¤æ£€æŸ¥é¡¹åœ¨ [init.go](file:///f:/Argus/internal/checks/init.go) ä¸­é€šè¿‡ `init()` è‡ªåŠ¨æ³¨å†Œï¼š
 
 ```go
 func init() {
@@ -484,9 +484,9 @@ func init() {
 }
 ```
 
-### 6.2 Ìæ»»¼ì²éÆ÷
+### 6.2 æ›¿æ¢æ£€æŸ¥å™¨
 
-**·½°¸ A£ºÌæ»»µ¥¸ö¼ì²éÏî**
+**æ–¹æ¡ˆ Aï¼šæ›¿æ¢å•ä¸ªæ£€æŸ¥é¡¹**
 
 ```go
 checks.Unregister("AS-001")
@@ -495,290 +495,290 @@ checks.Register(model.CheckItem{
 })
 ```
 
-**·½°¸ B£ºÌæ»»È«²¿¼ì²éÏî**
+**æ–¹æ¡ˆ Bï¼šæ›¿æ¢å…¨éƒ¨æ£€æŸ¥é¡¹**
 
 ```go
-checks.Unregister(/* »ñÈ¡ËùÓĞÏÖÓĞ ID */...)
+checks.Unregister(/* è·å–æ‰€æœ‰ç°æœ‰ ID */...)
 checks.Register(myCustomCheckSet...)
 ```
 
-**·½°¸ C£º°´ºÏ¹æÒªÇó²Ã¼ô**
+**æ–¹æ¡ˆ Cï¼šæŒ‰åˆè§„è¦æ±‚è£å‰ª**
 
 ```go
-ids := checks.GetByComplianceLevel("µÈ±£Èı¼¶")
-// ¹ıÂËºóÖØĞÂ×¢²á
+ids := checks.GetByComplianceLevel("ç­‰ä¿ä¸‰çº§")
+// è¿‡æ»¤åé‡æ–°æ³¨å†Œ
 checks.Unregister(getIDs(all)...)
 checks.Register(keep...)
 ```
 
-### 6.3 Ìæ»»×¢ÒâÊÂÏî
+### 6.3 æ›¿æ¢æ³¨æ„äº‹é¡¹
 
-| ×¢Òâµã | ËµÃ÷ |
+| æ³¨æ„ç‚¹ | è¯´æ˜ |
 |------|------|
-| ?? **±ßÔµÒò×Ó TriggerCheck ÒÀÀµ** | Ìæ»»¼ì²éÏîĞèÍ¬²½¸üĞÂ `TriggerCheck` Ó³Éä |
-| ?? **ATT&CK ¼¼ÊõÓ³Éä** | ĞèÔÚ ATTACKModule ÖĞÍ¬²½¸üĞÂ |
-| ?? **µÈ±£Ìõ¿î±ê×¢** | Ìæ»»ºóĞè±ê×¢ÕıÈ·µÄµÈ±£Ìõ¿î±àºÅ |
-| ? **ÔËĞĞÊ±°²È«** | `sync.RWMutex` ±£»¤£¬Ö§³Ö²¢·¢¶ÁĞ´ |
+| ?? **è¾¹ç¼˜å› å­ TriggerCheck ä¾èµ–** | æ›¿æ¢æ£€æŸ¥é¡¹éœ€åŒæ­¥æ›´æ–° `TriggerCheck` æ˜ å°„ |
+| ?? **ATT&CK æŠ€æœ¯æ˜ å°„** | éœ€åœ¨ ATTACKModule ä¸­åŒæ­¥æ›´æ–° |
+| ?? **ç­‰ä¿æ¡æ¬¾æ ‡æ³¨** | æ›¿æ¢åéœ€æ ‡æ³¨æ­£ç¡®çš„ç­‰ä¿æ¡æ¬¾ç¼–å· |
+| ? **è¿è¡Œæ—¶å®‰å…¨** | `sync.RWMutex` ä¿æŠ¤ï¼Œæ”¯æŒå¹¶å‘è¯»å†™ |
 
 ---
 
-## Æß¡¢ºËĞÄÄ£¿é¿ÉÌæ»»ĞÔ
+## ä¸ƒã€æ ¸å¿ƒæ¨¡å—å¯æ›¿æ¢æ€§
 
-### 7.1 DI ÈİÆ÷Ìæ»»Ô­Àí
+### 7.1 DI å®¹å™¨æ›¿æ¢åŸç†
 
-DI ÈİÆ÷£¨[di.go](file:///f:/Argus/internal/kernel/di.go#L23-L32)£©µÄ `Bind` ²ÉÓÃ**¸²¸Ç²ßÂÔ**¡ª¡ªÖØ¸´°ó¶¨Í¬Ò»½Ó¿Ú»á¾²Ä¬¸²¸ÇÖ®Ç°µÄÊµÏÖ£º
+DI å®¹å™¨ï¼ˆ[di.go](file:///f:/Argus/internal/kernel/di.go#L23-L32)ï¼‰çš„ `Bind` é‡‡ç”¨**è¦†ç›–ç­–ç•¥**â€”â€”é‡å¤ç»‘å®šåŒä¸€æ¥å£ä¼šé™é»˜è¦†ç›–ä¹‹å‰çš„å®ç°ï¼š
 
 ```go
 func (c *Container) Bind(iface interface{}, impl interface{}) {
     t := reflect.TypeOf(iface).Elem()
-    c.bindings[t] = impl  // Ö±½Ó¸²¸Ç£¬ÎŞ¼ì²é
+    c.bindings[t] = impl  // ç›´æ¥è¦†ç›–ï¼Œæ— æ£€æŸ¥
 }
 ```
 
-### 7.2 ¿ÉÌæ»»ĞÔ×ÜÀÀ
+### 7.2 å¯æ›¿æ¢æ€§æ€»è§ˆ
 
-| ×é¼ş | ¿ÉÌæ»»ĞÔ | Ìæ»»»úÖÆ | ÈÈÌæ»» |
+| ç»„ä»¶ | å¯æ›¿æ¢æ€§ | æ›¿æ¢æœºåˆ¶ | çƒ­æ›¿æ¢ |
 |------|:---:|------|:---:|
-| Ô­Éú¼ì²éÆ÷ | ? | ×¢²á±í API£¨Register/Unregister£© | ? |
-| SPC °²È«Ì¬ÊÆ¼ÆËã | ? | DI ÈİÆ÷ Bind ¸²¸Ç SPCInterface | ? |
-| CTI ÍøÂçÍşĞ²Çé±¨ | ? | DI ÈİÆ÷ Bind ¸²¸Ç CTIInterface | ? |
-| SSAM ÆÀ·ÖÒıÇæ | ? | DI ÈİÆ÷ Bind ¸²¸Ç ScoringEngineProvider | ? |
-| ATT&CK ÖªÊ¶¿â | ? | DI ÈİÆ÷ Bind ¸²¸Ç ATTACKInterface | ? |
-| Assessor ÆÀ¹Àµ÷¶È | ? | DI ÈİÆ÷ Bind ¸²¸Ç AssessorInterface | ? |
-| Policy ²ßÂÔÒıÇæ | ? | DI ÈİÆ÷ Bind ¸²¸Ç PolicyInterface | ? |
-| Commander ÃüÁîÏÂ·¢ | ? | DI ÈİÆ÷ Bind ¸²¸Ç CommanderInterface | ? |
-| Persistence ³Ö¾Ã»¯ | ? | DI ÈİÆ÷ Bind ¸²¸Ç PersistenceInterface | ? |
-| ÆäÓà 6 ¸öºËĞÄÄ£¿é | ? | DI ÈİÆ÷ Bind ¸²¸Ç¶ÔÓ¦½Ó¿Ú | ? |
+| åŸç”Ÿæ£€æŸ¥å™¨ | ? | æ³¨å†Œè¡¨ APIï¼ˆRegister/Unregisterï¼‰ | ? |
+| SPC å®‰å…¨æ€åŠ¿è®¡ç®— | ? | DI å®¹å™¨ Bind è¦†ç›– SPCInterface | ? |
+| CTI ç½‘ç»œå¨èƒæƒ…æŠ¥ | ? | DI å®¹å™¨ Bind è¦†ç›– CTIInterface | ? |
+| SSAM è¯„åˆ†å¼•æ“ | ? | DI å®¹å™¨ Bind è¦†ç›– ScoringEngineProvider | ? |
+| ATT&CK çŸ¥è¯†åº“ | ? | DI å®¹å™¨ Bind è¦†ç›– ATTACKInterface | ? |
+| Assessor è¯„ä¼°è°ƒåº¦ | ? | DI å®¹å™¨ Bind è¦†ç›– AssessorInterface | ? |
+| Policy ç­–ç•¥å¼•æ“ | ? | DI å®¹å™¨ Bind è¦†ç›– PolicyInterface | ? |
+| Commander å‘½ä»¤ä¸‹å‘ | ? | DI å®¹å™¨ Bind è¦†ç›– CommanderInterface | ? |
+| Persistence æŒä¹…åŒ– | ? | DI å®¹å™¨ Bind è¦†ç›– PersistenceInterface | ? |
+| å…¶ä½™ 6 ä¸ªæ ¸å¿ƒæ¨¡å— | ? | DI å®¹å™¨ Bind è¦†ç›–å¯¹åº”æ¥å£ | ? |
 
-### 7.3 Ìæ»»ÒÀÀµÁ´
+### 7.3 æ›¿æ¢ä¾èµ–é“¾
 
-| Ìæ»»Ä£¿é | Ó°ÏìµÄÏÂÓÎ |
+| æ›¿æ¢æ¨¡å— | å½±å“çš„ä¸‹æ¸¸ |
 |------|------|
-| `SPCInterface` | Assessor ¡ú SSAM ¹«Ê½£¨P_score Òò×Ó£© |
-| `CTIInterface` | Assessor ¡ú SSAM ¹«Ê½£¨¦Ì ÍşĞ²ÏµÊı£© |
-| `ScoringEngineProvider` | Assessor ¡ú Õû¸öÆÀ·Ö¹ÜµÀ |
-| `ATTACKInterface` | Assessor ¡ú ¸²¸ÇÂÊ/APT ¹éÒò |
-| `PolicyInterface` | ²ßÂÔÅĞ¶¨ ¡ú Commander ÃüÁîÏÂ·¢ |
-| `ConcurrencyInterface` | ËùÓĞÊ¹ÓÃ WorkerPool µÄÄ£¿é |
+| `SPCInterface` | Assessor â†’ SSAM å…¬å¼ï¼ˆP_score å› å­ï¼‰ |
+| `CTIInterface` | Assessor â†’ SSAM å…¬å¼ï¼ˆÎ¼ å¨èƒç³»æ•°ï¼‰ |
+| `ScoringEngineProvider` | Assessor â†’ æ•´ä¸ªè¯„åˆ†ç®¡é“ |
+| `ATTACKInterface` | Assessor â†’ è¦†ç›–ç‡/APT å½’å›  |
+| `PolicyInterface` | ç­–ç•¥åˆ¤å®š â†’ Commander å‘½ä»¤ä¸‹å‘ |
+| `ConcurrencyInterface` | æ‰€æœ‰ä½¿ç”¨ WorkerPool çš„æ¨¡å— |
 
-### 7.4 Ìæ»»Ê¾Àı
+### 7.4 æ›¿æ¢ç¤ºä¾‹
 
 ```go
-// Ìæ»» SPC Îª×Ô¶¨ÒåÊµÏÖ
+// æ›¿æ¢ SPC ä¸ºè‡ªå®šä¹‰å®ç°
 type MySPC struct{}
 func (m *MySPC) Calculate(hostID string, assetPackages []string) SPCCorrection {
     return SPCCorrection{Score: 1.0, Weight: 1.0}
 }
-// ÊµÏÖ SPCInterface µÄËùÓĞ·½·¨...
+// å®ç° SPCInterface çš„æ‰€æœ‰æ–¹æ³•...
 
-// ÔÚ main.go ÖĞÌæ»»
+// åœ¨ main.go ä¸­æ›¿æ¢
 k.Container().Bind((*kernel.SPCInterface)(nil), &MySPC{})
 ```
 
 ---
 
-## °Ë¡¢Íâ²¿ÊÊÅäÆ÷Óë¼ì²éÎ¯ÅÉ
+## å…«ã€å¤–éƒ¨é€‚é…å™¨ä¸æ£€æŸ¥å§”æ´¾
 
-### 8.1 Íâ²¿ÊÊÅäÆ÷»úÖÆ
+### 8.1 å¤–éƒ¨é€‚é…å™¨æœºåˆ¶
 
-[AdapterIntegrationModule](file:///f:/Argus/internal/kernel/adapter_integration.go) Ìá¹©Íâ²¿°²È«¹¤¾ßµÄ¼¯³É£º
+[AdapterIntegrationModule](file:///f:/Argus/internal/kernel/adapter_integration.go) æä¾›å¤–éƒ¨å®‰å…¨å·¥å…·çš„é›†æˆï¼š
 
 ```
-Íâ²¿°²È«¹¤¾ß            AdapterIntegration          Assessor
-©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤            ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤          ©¤©¤©¤©¤©¤©¤©¤©¤
+å¤–éƒ¨å®‰å…¨å·¥å…·            AdapterIntegration          Assessor
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€            â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€          â”€â”€â”€â”€â”€â”€â”€â”€
 Wazuh / OpenSCAP / Lynis / Falco
-    ©¸©¤¡ú   RunAdapters() ¡ú CollectFindings() ¡ú EvaluateFromResults()
-                                                  ©¦
+    â””â”€â†’   RunAdapters() â†’ CollectFindings() â†’ EvaluateFromResults()
+                                                  â”‚
                                          []model.CheckResult
 ```
 
-### 8.2 Íâ²¿½á¹û×¢Èëµã
+### 8.2 å¤–éƒ¨ç»“æœæ³¨å…¥ç‚¹
 
-Assessor Ìá¹©Á½¸öÆÀ¹ÀÈë¿Ú£º
+Assessor æä¾›ä¸¤ä¸ªè¯„ä¼°å…¥å£ï¼š
 
-| Èë¿Ú | Ç©Ãû | ¼ì²éÀ´Ô´ |
+| å…¥å£ | ç­¾å | æ£€æŸ¥æ¥æº |
 |------|------|------|
-| `Evaluate` | `(hostID string)` | Ô­Éú¼ì²éÆ÷×¢²á±í |
-| `EvaluateFromResults` | `(hostID, hostname string, checkResults []model.CheckResult)` | Íâ²¿´«ÈëµÄ CheckResult ÇĞÆ¬ |
+| `Evaluate` | `(hostID string)` | åŸç”Ÿæ£€æŸ¥å™¨æ³¨å†Œè¡¨ |
+| `EvaluateFromResults` | `(hostID, hostname string, checkResults []model.CheckResult)` | å¤–éƒ¨ä¼ å…¥çš„ CheckResult åˆ‡ç‰‡ |
 
-**ÍêÈ«Ìæ´úÔ­Éú¼ì²éÆ÷**£º
+**å®Œå…¨æ›¿ä»£åŸç”Ÿæ£€æŸ¥å™¨**ï¼š
 
 ```go
-checks.Unregister(getAllIDs()...)           // Çå¿ÕÔ­Éú¼ì²éÆ÷
-adapterResults := adapter.CollectFindings()  // ÊÕ¼¯Íâ²¿¼ì²é½á¹û
+checks.Unregister(getAllIDs()...)           // æ¸…ç©ºåŸç”Ÿæ£€æŸ¥å™¨
+adapterResults := adapter.CollectFindings()  // æ”¶é›†å¤–éƒ¨æ£€æŸ¥ç»“æœ
 result := assessor.EvaluateFromResults(hostID, hostname, adapterResults)
 ```
 
-### 8.3 ÊÊÅäÆ÷¼ì²éÏîµÄÄ£ĞÍ½á¹¹
+### 8.3 é€‚é…å™¨æ£€æŸ¥é¡¹çš„æ¨¡å‹ç»“æ„
 
 ```go
 type CheckResult struct {
-    CheckID           string       // ¼ì²éÏî ID
-    Domain            ScoreDomain  // ¹éÊôÓò£¨AS/BC/OT/RS£©
-    Passed            bool         // ÊÇ·ñÍ¨¹ı
-    Score             float64      // µÃ·Ö
-    Detail            string       // ÏêÇé
-    Description       string       // ÃèÊö
-    ComplianceRef     string       // ºÏ¹æÒıÓÃ
-    ATTACKTechniqueID string       // ATT&CK ¼¼Êõ ID
-    EdgeFactors       []string     // ´¥·¢µÄ±ßÔµÒò×Ó ID
+    CheckID           string       // æ£€æŸ¥é¡¹ ID
+    Domain            ScoreDomain  // å½’å±åŸŸï¼ˆAS/BC/OT/RSï¼‰
+    Passed            bool         // æ˜¯å¦é€šè¿‡
+    Score             float64      // å¾—åˆ†
+    Detail            string       // è¯¦æƒ…
+    Description       string       // æè¿°
+    ComplianceRef     string       // åˆè§„å¼•ç”¨
+    ATTACKTechniqueID string       // ATT&CK æŠ€æœ¯ ID
+    EdgeFactors       []string     // è§¦å‘çš„è¾¹ç¼˜å› å­ ID
 }
 ```
 
 ---
 
-## ¾Å¡¢À©Õ¹¿ª·¢¿ìËÙÖ¸ÄÏ
+## ä¹ã€æ‰©å±•å¼€å‘å¿«é€ŸæŒ‡å—
 
-### 9.1 ĞÂÔö²å¼şÇåµ¥
+### 9.1 æ–°å¢æ’ä»¶æ¸…å•
 
-1. ÊµÏÖ `Plugin` ½Ó¿Ú£¨`Info/Dependencies/Init/Start/Stop/State`£©
-2. ÈçĞè¿ØÖÆÆô¶¯Ë³Ğò£¬ÊµÏÖ `PriorityPlugin` ½Ó¿Ú
-3. ÈçĞè½¡¿µ¼ì²é£¬ÊµÏÖ `HealthCheckable` ½Ó¿Ú
-4. ÈçĞèÈÈ¼ÓÔØÅäÖÃ£¬ÊµÏÖ `ConfigurablePlugin` ½Ó¿Ú
-5. ÔÚ `Init` ÖĞ£ºÍ¨¹ı `kc.Container().Resolve()` »ñÈ¡ÒÀÀµ¡¢Í¨¹ı `kc.Container().Bind()` ×¢²á×ÔÉí½Ó¿Ú¡¢Í¨¹ı `kc.Extensions().RegisterExtension()` ¶©ÔÄÀ©Õ¹µã
-6. ÔÚ `Start` ÖĞ£ºÍ¨¹ı `kc.Bus().Subscribe()` ¶©ÔÄÊÂ¼ş¡¢Æô¶¯ goroutine
-7. ÔÚ `Stop` ÖĞ£º¹Ø±Õ goroutine¡¢ÇåÀí×ÊÔ´
-8. ÔÚ [main.go](file:///f:/Argus/cmd/kernel/main.go) ÖĞÊµÀı»¯²¢×¢²á
+1. å®ç° `Plugin` æ¥å£ï¼ˆ`Info/Dependencies/Init/Start/Stop/State`ï¼‰
+2. å¦‚éœ€æ§åˆ¶å¯åŠ¨é¡ºåºï¼Œå®ç° `PriorityPlugin` æ¥å£
+3. å¦‚éœ€å¥åº·æ£€æŸ¥ï¼Œå®ç° `HealthCheckable` æ¥å£
+4. å¦‚éœ€çƒ­åŠ è½½é…ç½®ï¼Œå®ç° `ConfigurablePlugin` æ¥å£
+5. åœ¨ `Init` ä¸­ï¼šé€šè¿‡ `kc.Container().Resolve()` è·å–ä¾èµ–ã€é€šè¿‡ `kc.Container().Bind()` æ³¨å†Œè‡ªèº«æ¥å£ã€é€šè¿‡ `kc.Extensions().RegisterExtension()` è®¢é˜…æ‰©å±•ç‚¹
+6. åœ¨ `Start` ä¸­ï¼šé€šè¿‡ `kc.Bus().Subscribe()` è®¢é˜…äº‹ä»¶ã€å¯åŠ¨ goroutine
+7. åœ¨ `Stop` ä¸­ï¼šå…³é—­ goroutineã€æ¸…ç†èµ„æº
+8. åœ¨ [main.go](file:///f:/Argus/cmd/kernel/main.go) ä¸­å®ä¾‹åŒ–å¹¶æ³¨å†Œ
 
-### 9.2 ĞÂÔöÀ©Õ¹µã£¨Æ½Ì¨²ã²Ù×÷£©
+### 9.2 æ–°å¢æ‰©å±•ç‚¹ï¼ˆå¹³å°å±‚æ“ä½œï¼‰
 
-À©Õ¹µã¶¨Òå¹éÊô ASSCOR Æ½Ì¨²ã£¨`kernel/platform_extensions.go`£©£¬²»¹éÊô¸÷Ä£¿é¡£ĞÂÔöÀ©Õ¹µãĞèÔÚ `RegisterAllExtensionPoints()` º¯ÊıÖĞÌí¼Ó£º
+æ‰©å±•ç‚¹å®šä¹‰å½’å± ASSCOR å¹³å°å±‚ï¼ˆ`kernel/platform_extensions.go`ï¼‰ï¼Œä¸å½’å±å„æ¨¡å—ã€‚æ–°å¢æ‰©å±•ç‚¹éœ€åœ¨ `RegisterAllExtensionPoints()` å‡½æ•°ä¸­æ·»åŠ ï¼š
 
 ```go
-// platform_extensions.go: ¼¯ÖĞ×¢²á
+// platform_extensions.go: é›†ä¸­æ³¨å†Œ
 func RegisterAllExtensionPoints(r *ExtensionRegistry) {
     r.RegisterPoint(ExtensionPoint{
-        Name: "module.phase", Description: "´¥·¢ËµÃ÷", Version: "1.0",
+        Name: "module.phase", Description: "è§¦å‘è¯´æ˜", Version: "1.0",
     })
 }
-// Ä£¿é´¥·¢: ÈÎÒâÎ»ÖÃ¾ù¿É
+// æ¨¡å—è§¦å‘: ä»»æ„ä½ç½®å‡å¯
 errs := kc.Extensions().Execute(ctx, "module.phase", data)
 ```
 
-### 9.3 ĞÂÔöÊÂ¼şÖ÷Ìâ
+### 9.3 æ–°å¢äº‹ä»¶ä¸»é¢˜
 
-1. ÔÚ [plugin.go](file:///f:/Argus/internal/kernel/plugin.go) ÖĞÌí¼Ó `Topic*` ³£Á¿
-2. ·¢²¼·½µ÷ÓÃ `kc.Bus().Publish(ctx, TopicXxx, payload)`
-3. ¶©ÔÄ·½µ÷ÓÃ `kc.Bus().Subscribe(TopicXxx, "my_id", handler)`
-4. Handler Ç©Ãû£º`func(ctx context.Context, msg Message) error`
+1. åœ¨ [plugin.go](file:///f:/Argus/internal/kernel/plugin.go) ä¸­æ·»åŠ  `Topic*` å¸¸é‡
+2. å‘å¸ƒæ–¹è°ƒç”¨ `kc.Bus().Publish(ctx, TopicXxx, payload)`
+3. è®¢é˜…æ–¹è°ƒç”¨ `kc.Bus().Subscribe(TopicXxx, "my_id", handler)`
+4. Handler ç­¾åï¼š`func(ctx context.Context, msg Message) error`
 
-### 9.4 ÃüÃûÔ¼¶¨
+### 9.4 å‘½åçº¦å®š
 
-- À©Õ¹µãÃû³Æ£º`Ä£¿éÃû.½×¶Î`£¨Èç `spc.pre_calculate`£©
-- ÊÂ¼şÖ÷Ìâ£º`Ä£¿éÃû.ÊÂ¼şÃû`£¨Èç `assessor.result`£©
-- DI °ó¶¨ key£º`(*InterfaceName)(nil)` µÄ reflect.Type
+- æ‰©å±•ç‚¹åç§°ï¼š`æ¨¡å—å.é˜¶æ®µ`ï¼ˆå¦‚ `spc.pre_calculate`ï¼‰
+- äº‹ä»¶ä¸»é¢˜ï¼š`æ¨¡å—å.äº‹ä»¶å`ï¼ˆå¦‚ `assessor.result`ï¼‰
+- DI ç»‘å®š keyï¼š`(*InterfaceName)(nil)` çš„ reflect.Type
 
 ---
 
-## Ê®¡¢Ìæ»»¸´ÔÓ¶ÈÓëÈ±¿Ú·ÖÎö
+## åã€æ›¿æ¢å¤æ‚åº¦ä¸ç¼ºå£åˆ†æ
 
-### 10.1 Ìæ»»ÄÑ¶È
+### 10.1 æ›¿æ¢éš¾åº¦
 
-| ÄÑ¶È | ×é¼ş |
+| éš¾åº¦ | ç»„ä»¶ |
 |:---:|------|
-| ? **µÍ**£¨¼¸ĞĞ´úÂë£© | ¼ì²éÆ÷¡¢CTI¡¢Policy¡¢Commander¡¢LogCollector¡¢Heartbeat |
-| ?? **ÖĞ**£¨< 50 ĞĞ£© | SPC¡¢Persistence¡¢AdapterIntegration¡¢SourceManager¡¢Concurrency |
-| ??? **¸ß**£¨ĞèÑéÖ¤£© | SSAM ÒıÇæ¡¢ATTACK¡¢Assessor |
+| ? **ä½**ï¼ˆå‡ è¡Œä»£ç ï¼‰ | æ£€æŸ¥å™¨ã€CTIã€Policyã€Commanderã€LogCollectorã€Heartbeat |
+| ?? **ä¸­**ï¼ˆ< 50 è¡Œï¼‰ | SPCã€Persistenceã€AdapterIntegrationã€SourceManagerã€Concurrency |
+| ??? **é«˜**ï¼ˆéœ€éªŒè¯ï¼‰ | SSAM å¼•æ“ã€ATTACKã€Assessor |
 
-### 10.2 ÒÑÖªÈ±¿Ú
+### 10.2 å·²çŸ¥ç¼ºå£
 
-| È±¿Ú | ËµÃ÷ | Ó°Ïì |
+| ç¼ºå£ | è¯´æ˜ | å½±å“ |
 |------|------|:---:|
-| ¼ì²éÆ÷Óë DI ÈİÆ÷²»Í³Ò» | ¼ì²éÆ÷ÓÃÈ«¾Ö×¢²á±í£¬ºËĞÄÄ£¿éÓÃ DI ÈİÆ÷ | Á½Ì× API |
-| `Evaluate` Èë¿Ú²»Í¸Ã÷ | ÄÚ²¿µ÷ÓÃ `checks.GetAll()`£¬ÎŞ·¨¸²¸Ç¼ì²éÆ÷À´Ô´ | ÊÊÅäÆ÷ĞèÊÖ¶¯µ÷ÓÃ `EvaluateFromResults` |
-| ÊÊÅäÆ÷ÓëÔ­Éú¼ì²éÆ÷ºÏ²¢È±Ê§ | ÊÊÅäÆ÷½á¹ûĞèÊÖ¶¯´«Èë `EvaluateFromResults`£¬ÎŞ×Ô¶¯ºÏ²¢Í¨µÀ | Ğè¶îÍâ´úÂë |
+| æ£€æŸ¥å™¨ä¸ DI å®¹å™¨ä¸ç»Ÿä¸€ | æ£€æŸ¥å™¨ç”¨å…¨å±€æ³¨å†Œè¡¨ï¼Œæ ¸å¿ƒæ¨¡å—ç”¨ DI å®¹å™¨ | ä¸¤å¥— API |
+| `Evaluate` å…¥å£ä¸é€æ˜ | å†…éƒ¨è°ƒç”¨ `checks.GetAll()`ï¼Œæ— æ³•è¦†ç›–æ£€æŸ¥å™¨æ¥æº | é€‚é…å™¨éœ€æ‰‹åŠ¨è°ƒç”¨ `EvaluateFromResults` |
+| é€‚é…å™¨ä¸åŸç”Ÿæ£€æŸ¥å™¨åˆå¹¶ç¼ºå¤± | é€‚é…å™¨ç»“æœéœ€æ‰‹åŠ¨ä¼ å…¥ `EvaluateFromResults`ï¼Œæ— è‡ªåŠ¨åˆå¹¶é€šé“ | éœ€é¢å¤–ä»£ç  |
 
-### 10.3 Í³¼Æ»ã×Ü
+### 10.3 ç»Ÿè®¡æ±‡æ€»
 
-| Àà±ğ | ÊıÁ¿ |
+| ç±»åˆ« | æ•°é‡ |
 |------|:---:|
-| ºËĞÄ²å¼ş½Ó¿Ú | 4£¨Plugin / PriorityPlugin / HealthCheckable / ConfigurablePlugin£© |
-| ÒÑ×¢²á²å¼ş | 15 |
-| ÒµÎñÄ£¿é½Ó¿Ú | 13 |
-| DI ÈİÆ÷°ó¶¨ | 15 |
-| ÊÂ¼ş×ÜÏß»°Ìâ | 13 |
-| ×ÜÏß¶©ÔÄ¹ØÏµ | 6 |
-| À©Õ¹µã×ÜÊı | 76£¨ÄÚºË 6 + ÒµÎñÄ£¿é 70£© |
-| È«²¿¿ÉÌæ»» | ? |
+| æ ¸å¿ƒæ’ä»¶æ¥å£ | 4ï¼ˆPlugin / PriorityPlugin / HealthCheckable / ConfigurablePluginï¼‰ |
+| å·²æ³¨å†Œæ’ä»¶ | 15 |
+| ä¸šåŠ¡æ¨¡å—æ¥å£ | 13 |
+| DI å®¹å™¨ç»‘å®š | 15 |
+| äº‹ä»¶æ€»çº¿è¯é¢˜ | 13 |
+| æ€»çº¿è®¢é˜…å…³ç³» | 6 |
+| æ‰©å±•ç‚¹æ€»æ•° | 76ï¼ˆå†…æ ¸ 6 + ä¸šåŠ¡æ¨¡å— 70ï¼‰ |
+| å…¨éƒ¨å¯æ›¿æ¢ | ? |
 
 ---
 
-## 11. Íâ²¿À©Õ¹Ä£¿éÓëÀ©Õ¹°ü£¨v0.2.3+£©
+## 11. å¤–éƒ¨æ‰©å±•æ¨¡å—ä¸æ‰©å±•åŒ…ï¼ˆv0.2.3+ï¼‰
 
-ASSCOR v0.2.3 ÒıÈëÁË**Íâ²¿À©Õ¹ÌåÏµ**¡ª¡ªÓëÄÚºË¼¯³ÉµÄ ExtensionManager (extmgr) »¥²¹µÄ¡¢¶ÀÁ¢±àÒëµÄÄ£¿é»¯À©Õ¹ÏµÍ³¡£ºËĞÄÉè¼ÆÔ­Ôò£º**Íâ²¿À©Õ¹²»ĞŞ¸ÄÄÚºË´úÂë£¬Í¨¹ı Go import ºÍ Extension Point ÏµÍ³¹ÒÔØ**¡£
+ASSCOR v0.2.3 å¼•å…¥äº†**å¤–éƒ¨æ‰©å±•ä½“ç³»**â€”â€”ä¸å†…æ ¸é›†æˆçš„ ExtensionManager (extmgr) äº’è¡¥çš„ã€ç‹¬ç«‹ç¼–è¯‘çš„æ¨¡å—åŒ–æ‰©å±•ç³»ç»Ÿã€‚æ ¸å¿ƒè®¾è®¡åŸåˆ™ï¼š**å¤–éƒ¨æ‰©å±•ä¸ä¿®æ”¹å†…æ ¸ä»£ç ï¼Œé€šè¿‡ Go import å’Œ Extension Point ç³»ç»ŸæŒ‚è½½**ã€‚
 
-### 11.1 Ä¿Â¼½á¹¹
+### 11.1 ç›®å½•ç»“æ„
 
 ```
-optional/                          # Íâ²¿À©Õ¹¸ùÄ¿Â¼£¨¶ÀÁ¢ÓÚÄÚºË£©
-©À©¤©¤ README.md                      #   Ê¹ÓÃÖ¸ÄÏ
-©À©¤©¤ SCHEMA.md                      #   package.json ¸ñÊ½¹æ·¶
-©À©¤©¤ pkgmgr/                        #   À©Õ¹°ü¹ÜÀí¹¤¾ß (asscor-pkg CLI)
-©¦   ©À©¤©¤ main.go                    #     6 Ìõ CLI ÃüÁî
-©¦   ©À©¤©¤ manifest.go                #     package.json ½âÎö + ÒÀÀµÇó½â
-©¦   ©¸©¤©¤ fetcher.go                 #     git Íâ²¿²Ö¿â¿ËÂ¡ + ¼æÈİĞÔĞ£Ñé
-©À©¤©¤ algorithms/                    #   °´ÓÃÍ¾: Ëã·¨À©Õ¹
-©¦   ©À©¤©¤ modules/                   #     µ¥Ä£¿éÀ©Õ¹
-©¦   ©¦   ©¸©¤©¤ multi-algo-orchestrator/ #   ¶àËã·¨±àÅÅÆ÷ (¶ÀÁ¢ Go module)
-©¦   ©¸©¤©¤ packages/                  #     ¶àÄ£¿éÀ©Õ¹°ü
-©¦       ©¸©¤©¤ example-pack/          #       Ê¾ÀıÀ©Õ¹°ü
-©¦           ©¸©¤©¤ package.json       #         ÒÀÀµÉùÃ÷ + Íâ²¿²Ö¿âÒıÓÃ
-©À©¤©¤ adapters/                      #   °´ÓÃÍ¾: ÊÊÅäÆ÷À©Õ¹
-©¦   ©À©¤©¤ modules/
-©¦   ©¸©¤©¤ packages/
-©À©¤©¤ checks/                        #   °´ÓÃÍ¾: ¼ì²éÏîÀ©Õ¹
-©¦   ©À©¤©¤ modules/
-©¦   ©¸©¤©¤ packages/
-©¸©¤©¤ platform/                      #   °´ÓÃÍ¾: Æ½Ì¨²ãÀ©Õ¹
-    ©À©¤©¤ modules/
-    ©¸©¤©¤ packages/
+optional/                          # å¤–éƒ¨æ‰©å±•æ ¹ç›®å½•ï¼ˆç‹¬ç«‹äºå†…æ ¸ï¼‰
+â”œâ”€â”€ README.md                      #   ä½¿ç”¨æŒ‡å—
+â”œâ”€â”€ SCHEMA.md                      #   package.json æ ¼å¼è§„èŒƒ
+â”œâ”€â”€ pkgmgr/                        #   æ‰©å±•åŒ…ç®¡ç†å·¥å…· (asscor-pkg CLI)
+â”‚   â”œâ”€â”€ main.go                    #     6 æ¡ CLI å‘½ä»¤
+â”‚   â”œâ”€â”€ manifest.go                #     package.json è§£æ + ä¾èµ–æ±‚è§£
+â”‚   â””â”€â”€ fetcher.go                 #     git å¤–éƒ¨ä»“åº“å…‹éš† + å…¼å®¹æ€§æ ¡éªŒ
+â”œâ”€â”€ algorithms/                    #   æŒ‰ç”¨é€”: ç®—æ³•æ‰©å±•
+â”‚   â”œâ”€â”€ modules/                   #     å•æ¨¡å—æ‰©å±•
+â”‚   â”‚   â””â”€â”€ multi-algo-orchestrator/ #   å¤šç®—æ³•ç¼–æ’å™¨ (ç‹¬ç«‹ Go module)
+â”‚   â””â”€â”€ packages/                  #     å¤šæ¨¡å—æ‰©å±•åŒ…
+â”‚       â””â”€â”€ example-pack/          #       ç¤ºä¾‹æ‰©å±•åŒ…
+â”‚           â””â”€â”€ package.json       #         ä¾èµ–å£°æ˜ + å¤–éƒ¨ä»“åº“å¼•ç”¨
+â”œâ”€â”€ adapters/                      #   æŒ‰ç”¨é€”: é€‚é…å™¨æ‰©å±•
+â”‚   â”œâ”€â”€ modules/
+â”‚   â””â”€â”€ packages/
+â”œâ”€â”€ checks/                        #   æŒ‰ç”¨é€”: æ£€æŸ¥é¡¹æ‰©å±•
+â”‚   â”œâ”€â”€ modules/
+â”‚   â””â”€â”€ packages/
+â””â”€â”€ platform/                      #   æŒ‰ç”¨é€”: å¹³å°å±‚æ‰©å±•
+    â”œâ”€â”€ modules/
+    â””â”€â”€ packages/
 ```
 
-### 11.2 µ¥Ä£¿é vs À©Õ¹°ü
+### 11.2 å•æ¨¡å— vs æ‰©å±•åŒ…
 
-ASSCOR Íâ²¿À©Õ¹Ìá¹©Á½ÖÖĞÎÊ½£º
+ASSCOR å¤–éƒ¨æ‰©å±•æä¾›ä¸¤ç§å½¢å¼ï¼š
 
-| ĞÎÊ½ | Ä¿Â¼Â·¾¶ | ½ÓÈë·½Ê½ | ÊÊÓÃ³¡¾° |
+| å½¢å¼ | ç›®å½•è·¯å¾„ | æ¥å…¥æ–¹å¼ | é€‚ç”¨åœºæ™¯ |
 |------|---------|---------|---------|
-| **µ¥Ä£¿é** | `<category>/modules/<name>/` | ÔÚ `cmd/kernel/main.go` ÖĞ `import`£¬Í¨¹ı `Register()` ¹ÒÔØµ½ Extension Point | µ¥¸ö¶ÀÁ¢¹¦ÄÜ£¨Èç¶àËã·¨±àÅÅ£© |
-| **À©Õ¹°ü** | `<category>/packages/<name>/` | Í¨¹ı `package.json` ÉùÃ÷Ä£¿é¼¯ºÏ¡¢Íâ²¿ÒÀÀµºÍ³åÍ»£»Ê¹ÓÃ `asscor-pkg install` ×Ô¶¯À­È¡Íâ²¿²Ö¿â | ¶àÄ£¿é¾ÛºÏ¡¢º¬µÚÈı·½ git ²Ö¿âÒÀÀµµÄ¸´ÔÓÀ©Õ¹ |
+| **å•æ¨¡å—** | `<category>/modules/<name>/` | åœ¨ `cmd/kernel/main.go` ä¸­ `import`ï¼Œé€šè¿‡ `Register()` æŒ‚è½½åˆ° Extension Point | å•ä¸ªç‹¬ç«‹åŠŸèƒ½ï¼ˆå¦‚å¤šç®—æ³•ç¼–æ’ï¼‰ |
+| **æ‰©å±•åŒ…** | `<category>/packages/<name>/` | é€šè¿‡ `package.json` å£°æ˜æ¨¡å—é›†åˆã€å¤–éƒ¨ä¾èµ–å’Œå†²çªï¼›ä½¿ç”¨ `asscor-pkg install` è‡ªåŠ¨æ‹‰å–å¤–éƒ¨ä»“åº“ | å¤šæ¨¡å—èšåˆã€å«ç¬¬ä¸‰æ–¹ git ä»“åº“ä¾èµ–çš„å¤æ‚æ‰©å±• |
 
-µ¥Ä£¿éÊÇ²»´ò°üµÄ¶ÀÁ¢Ä£¿é¡£À©Õ¹°üÍ¨¹ı `package.json` ÉùÃ÷Ëùº¬Ä£¿é¡¢Íâ²¿ git ²Ö¿âÒıÓÃ¡¢ÒÀÀµ¼°³åÍ»£¬Ö§³Ö `asscor-pkg` ×Ô¶¯½âÎö¡£
+å•æ¨¡å—æ˜¯ä¸æ‰“åŒ…çš„ç‹¬ç«‹æ¨¡å—ã€‚æ‰©å±•åŒ…é€šè¿‡ `package.json` å£°æ˜æ‰€å«æ¨¡å—ã€å¤–éƒ¨ git ä»“åº“å¼•ç”¨ã€ä¾èµ–åŠå†²çªï¼Œæ”¯æŒ `asscor-pkg` è‡ªåŠ¨è§£æã€‚
 
-### 11.3 À©Õ¹°ü¹ÜÀíÆ÷ (asscor-pkg)
+### 11.3 æ‰©å±•åŒ…ç®¡ç†å™¨ (asscor-pkg)
 
-`asscor-pkg` ÊÇ×¨ÃÅ¹ÜÀí `optional/` ÏÂÀ©Õ¹°üµÄÃüÁîĞĞ¹¤¾ß¡£²»»á½øÈëÄÚºË¶ş½øÖÆ£¬Ğè¶ÀÁ¢¹¹½¨£º
+`asscor-pkg` æ˜¯ä¸“é—¨ç®¡ç† `optional/` ä¸‹æ‰©å±•åŒ…çš„å‘½ä»¤è¡Œå·¥å…·ã€‚ä¸ä¼šè¿›å…¥å†…æ ¸äºŒè¿›åˆ¶ï¼Œéœ€ç‹¬ç«‹æ„å»ºï¼š
 
 ```bash
 cd optional/pkgmgr && go build -o asscor-pkg .
 ```
 
-| ÃüÁî | ¹¦ÄÜ |
+| å‘½ä»¤ | åŠŸèƒ½ |
 |------|------|
-| `asscor-pkg resolve` | µİ¹éÉ¨Ãè `package.json`£¬½âÎöÒÀÀµÍ¼¡¢¼ì²â»·¡¢±¨¸æÎ´½â¾öÏî |
-| `asscor-pkg install` | ¿ËÂ¡ `external_sources` ÖĞÉùÃ÷µÄÍâ²¿ git ²Ö¿â + ¼æÈİĞÔĞ£Ñé |
-| `asscor-pkg list` | ÁĞ³öËùÓĞÒÑ·¢ÏÖµÄÀ©Õ¹°ü |
-| `asscor-pkg info <name>` | ²é¿´À©Õ¹°üÏêÏ¸ĞÅÏ¢£¨Ä£¿é¡¢ÒÀÀµ¡¢Íâ²¿Ô´¡¢¼æÈİĞÔ£© |
-| `asscor-pkg graph` | Êä³ö DOT ¸ñÊ½ÒÀÀµÍ¼£¨¿É¹ÜµÀµ½ `dot -Tpng`£© |
-| `asscor-pkg validate` | Ğ£ÑéËùÓĞ `package.json` ¸ñÊ½ºÍ×Ö¶ÎºÏ·¨ĞÔ |
+| `asscor-pkg resolve` | é€’å½’æ‰«æ `package.json`ï¼Œè§£æä¾èµ–å›¾ã€æ£€æµ‹ç¯ã€æŠ¥å‘Šæœªè§£å†³é¡¹ |
+| `asscor-pkg install` | å…‹éš† `external_sources` ä¸­å£°æ˜çš„å¤–éƒ¨ git ä»“åº“ + å…¼å®¹æ€§æ ¡éªŒ |
+| `asscor-pkg list` | åˆ—å‡ºæ‰€æœ‰å·²å‘ç°çš„æ‰©å±•åŒ… |
+| `asscor-pkg info <name>` | æŸ¥çœ‹æ‰©å±•åŒ…è¯¦ç»†ä¿¡æ¯ï¼ˆæ¨¡å—ã€ä¾èµ–ã€å¤–éƒ¨æºã€å…¼å®¹æ€§ï¼‰ |
+| `asscor-pkg graph` | è¾“å‡º DOT æ ¼å¼ä¾èµ–å›¾ï¼ˆå¯ç®¡é“åˆ° `dot -Tpng`ï¼‰ |
+| `asscor-pkg validate` | æ ¡éªŒæ‰€æœ‰ `package.json` æ ¼å¼å’Œå­—æ®µåˆæ³•æ€§ |
 
-#### 11.3.1 ÒÀÀµÇó½âÆ÷
+#### 11.3.1 ä¾èµ–æ±‚è§£å™¨
 
-- **°æ±¾Ô¼Êø**£ºÖ§³Ö `>=` `<=` `>` `<` `^x.y.z` `~x.y.z` `1.0.0 - 2.0.0` `1.x` ¾«È·Æ¥Åä
-- **»·ĞÎÒÀÀµ¼ì²â**£ºDFS »ØËİËã·¨£¬Ê¶±ğ²¢±¨¸æÑ­»·ÒÀÀµ
-- **³åÍ»ÉùÃ÷**£ºÍ¨¹ı `conflicts` ×Ö¶ÎÉùÃ÷²»¼æÈİÀ©Õ¹°ü
-- **¿ÉÑ¡ÒÀÀµ**£º±ê¼Ç `optional: true` µÄÒÀÀµÈ±Ê§²»ÊÓÎª´íÎó
-- **¼æÈİĞÔĞ£Ñé**£º¼ì²é `asscor_version` / `go_version` / `ssam_version` / `platform` Ô¼Êø
+- **ç‰ˆæœ¬çº¦æŸ**ï¼šæ”¯æŒ `>=` `<=` `>` `<` `^x.y.z` `~x.y.z` `1.0.0 - 2.0.0` `1.x` ç²¾ç¡®åŒ¹é…
+- **ç¯å½¢ä¾èµ–æ£€æµ‹**ï¼šDFS å›æº¯ç®—æ³•ï¼Œè¯†åˆ«å¹¶æŠ¥å‘Šå¾ªç¯ä¾èµ–
+- **å†²çªå£°æ˜**ï¼šé€šè¿‡ `conflicts` å­—æ®µå£°æ˜ä¸å…¼å®¹æ‰©å±•åŒ…
+- **å¯é€‰ä¾èµ–**ï¼šæ ‡è®° `optional: true` çš„ä¾èµ–ç¼ºå¤±ä¸è§†ä¸ºé”™è¯¯
+- **å…¼å®¹æ€§æ ¡éªŒ**ï¼šæ£€æŸ¥ `asscor_version` / `go_version` / `ssam_version` / `platform` çº¦æŸ
 
-### 11.4 package.json Çåµ¥¸ñÊ½
+### 11.4 package.json æ¸…å•æ ¼å¼
 
-Ã¿¸öÀ©Õ¹°ü¸ùÄ¿Â¼Ğè°üº¬ `package.json`¡£ÓëÄÚºË ExtensionManager µÄ `extension.json` »¥²¹¡ª¡ª`extension.json` ÃæÏòÔËĞĞÊ±²å¼ş°²×°£¬`package.json` ÃæÏò±àÒëÊ±ÒÀÀµ¹ÜÀí¡£
+æ¯ä¸ªæ‰©å±•åŒ…æ ¹ç›®å½•éœ€åŒ…å« `package.json`ã€‚ä¸å†…æ ¸ ExtensionManager çš„ `extension.json` äº’è¡¥â€”â€”`extension.json` é¢å‘è¿è¡Œæ—¶æ’ä»¶å®‰è£…ï¼Œ`package.json` é¢å‘ç¼–è¯‘æ—¶ä¾èµ–ç®¡ç†ã€‚
 
 ```json
 {
   "name": "example-security-pack",
   "version": "1.0.0",
-  "description": "Ê¾ÀıÀ©Õ¹°ü",
+  "description": "ç¤ºä¾‹æ‰©å±•åŒ…",
   "compatibility": { "asscor_version": ">=0.2.1", "go_version": ">=1.26", "platform": ["linux"] },
   "modules": [
     { "id": "multi-algo-orchestrator", "path": "../../modules/multi-algo-orchestrator" }
@@ -791,20 +791,20 @@ cd optional/pkgmgr && go build -o asscor-pkg .
     { "package": "experimental-plugin", "version": ">=0.1.0", "optional": true }
   ],
   "conflicts": [
-    { "package": "legacy-scoring-only", "versions": "<=0.5.0", "reason": "Ê¹ÓÃÁËÆúÓÃµÄÆÀ·ÖÒıÇæ" }
+    { "package": "legacy-scoring-only", "versions": "<=0.5.0", "reason": "ä½¿ç”¨äº†å¼ƒç”¨çš„è¯„åˆ†å¼•æ“" }
   ]
 }
 ```
 
-ÍêÕû¹æ·¶¼û `optional/SCHEMA.md`¡£
+å®Œæ•´è§„èŒƒè§ `optional/SCHEMA.md`ã€‚
 
-### 11.5 ¶àËã·¨±àÅÅÆ÷ (multi-algo-orchestrator)
+### 11.5 å¤šç®—æ³•ç¼–æ’å™¨ (multi-algo-orchestrator)
 
-Î»ÓÚ `optional/algorithms/modules/multi-algo-orchestrator/`£¬ÊÇÍâ²¿À©Õ¹ÌåÏµµÄÊ×¸öµ¥Ä£¿éÊµÏÖ¡£½â¾öµ¥Ò»ÆÀ·ÖËã·¨µÄ"Ä¾Í°Ğ§Ó¦"¡ª¡ªÍ¨¹ı±àÅÅ¶à¸öËã·¨²¢ĞĞ/´®ĞĞ/¼¶ÁªÖ´ĞĞ£¬È¡×îµÍ·ÖÏû³ıµ¥Ò»Ëã·¨Æ«²î¡£
+ä½äº `optional/algorithms/modules/multi-algo-orchestrator/`ï¼Œæ˜¯å¤–éƒ¨æ‰©å±•ä½“ç³»çš„é¦–ä¸ªå•æ¨¡å—å®ç°ã€‚è§£å†³å•ä¸€è¯„åˆ†ç®—æ³•çš„"æœ¨æ¡¶æ•ˆåº”"â€”â€”é€šè¿‡ç¼–æ’å¤šä¸ªç®—æ³•å¹¶è¡Œ/ä¸²è¡Œ/çº§è”æ‰§è¡Œï¼Œå–æœ€ä½åˆ†æ¶ˆé™¤å•ä¸€ç®—æ³•åå·®ã€‚
 
-#### 11.5.1 ½ÓÈë·½Ê½
+#### 11.5.1 æ¥å…¥æ–¹å¼
 
-²»ĞŞ¸ÄÄÚºË´úÂë£¬Í¨¹ı Extension Point ÏµÍ³¹ÒÔØ£º
+ä¸ä¿®æ”¹å†…æ ¸ä»£ç ï¼Œé€šè¿‡ Extension Point ç³»ç»ŸæŒ‚è½½ï¼š
 
 ```go
 import multialgo "github.com/asscor/asscor-optional-multi-algo"
@@ -814,49 +814,49 @@ cfg := multialgo.OrchestrationConfig{
     Merge: multialgo.MergeWorstOf,
     Algorithms: []multialgo.AlgorithmProfile{
         {ID: "ssam_v2", Name: "SSAM 2.0", Role: multialgo.RolePrimary, ...},
-        {ID: "baseline", Name: "»ù×¼Ëã·¨", Role: multialgo.RoleSecondary, ...},
+        {ID: "baseline", Name: "åŸºå‡†ç®—æ³•", Role: multialgo.RoleSecondary, ...},
     },
 }
 orch := multialgo.NewOrchestrator(cfg)
-orch.Register(k.PlatformExtensionRegistry())  // ¶©ÔÄ assessor.pre_score À©Õ¹µã
+orch.Register(k.PlatformExtensionRegistry())  // è®¢é˜… assessor.pre_score æ‰©å±•ç‚¹
 ```
 
-#### 11.5.2 ÈıÖÖÖ´ĞĞÄ£Ê½
+#### 11.5.2 ä¸‰ç§æ‰§è¡Œæ¨¡å¼
 
-| Ä£Ê½ | ĞĞÎª | ÊÊÓÃ |
+| æ¨¡å¼ | è¡Œä¸º | é€‚ç”¨ |
 |------|------|------|
-| `sequential` | °´Ğò´®ĞĞÖ´ĞĞ | µ÷ÊÔÑéÖ¤ |
-| `parallel` | goroutine ²¢·¢Ö´ĞĞËùÓĞËã·¨ | ¸ßĞÔÄÜ |
-| `cascade` | Ö÷Ëã·¨¼°¸ñ (¡İãĞÖµ) ÔòÌø¹ı¸¨Ëã·¨ | Éú²ú½ÚÊ¡×ÊÔ´ |
+| `sequential` | æŒ‰åºä¸²è¡Œæ‰§è¡Œ | è°ƒè¯•éªŒè¯ |
+| `parallel` | goroutine å¹¶å‘æ‰§è¡Œæ‰€æœ‰ç®—æ³• | é«˜æ€§èƒ½ |
+| `cascade` | ä¸»ç®—æ³•åŠæ ¼ (â‰¥é˜ˆå€¼) åˆ™è·³è¿‡è¾…ç®—æ³• | ç”Ÿäº§èŠ‚çœèµ„æº |
 
-#### 11.5.3 ÎåÖÖºÏ²¢²ßÂÔ
+#### 11.5.3 äº”ç§åˆå¹¶ç­–ç•¥
 
-| ²ßÂÔ | ĞĞÎª | Ïû³ıÄ¾Í°Ğ§Ó¦ |
+| ç­–ç•¥ | è¡Œä¸º | æ¶ˆé™¤æœ¨æ¡¶æ•ˆåº” |
 |------|------|:---:|
-| `best_of` | È¡×î¸ß·Ö | ? |
-| `worst_of` | **È¡×îµÍ·Ö** | ? |
-| `weighted_average` | °´Ëã·¨ÖÃĞÅ¶È¼ÓÈ¨Æ½¾ù | ?? |
-| `consensus` | Ò»ÖÂÔòÆ½¾ù£¬·ÖÆçÈ¡×îµÍ | ? |
-| `primary_only` | ½öÊ¹ÓÃÖ÷Ëã·¨ | ? |
+| `best_of` | å–æœ€é«˜åˆ† | ? |
+| `worst_of` | **å–æœ€ä½åˆ†** | ? |
+| `weighted_average` | æŒ‰ç®—æ³•ç½®ä¿¡åº¦åŠ æƒå¹³å‡ | ?? |
+| `consensus` | ä¸€è‡´åˆ™å¹³å‡ï¼Œåˆ†æ­§å–æœ€ä½ | ? |
+| `primary_only` | ä»…ä½¿ç”¨ä¸»ç®—æ³• | ? |
 
-#### 11.5.4 ¼ì²éÏîÄ£Ê½
+#### 11.5.4 æ£€æŸ¥é¡¹æ¨¡å¼
 
-| Ä£Ê½ | ĞĞÎª |
+| æ¨¡å¼ | è¡Œä¸º |
 |------|------|
-| `merge` | ºÏ²¢ËùÓĞËã·¨¼ì²éÏî£¬°´ CheckID È¥ÖØ |
-| `independent` | ¸÷Ëã·¨ÓµÓĞ¶ÀÁ¢¼ì²éÏîÁĞ±í£¬»¥²»¸ÉÈÅ |
-| `tagged` | ¼ì²éÏî±ê×¢À´Ô´Ëã·¨£¬ÆÀ·ÖÒıÇæ¿É¼ûÀ´Ô´±êÇ© |
+| `merge` | åˆå¹¶æ‰€æœ‰ç®—æ³•æ£€æŸ¥é¡¹ï¼ŒæŒ‰ CheckID å»é‡ |
+| `independent` | å„ç®—æ³•æ‹¥æœ‰ç‹¬ç«‹æ£€æŸ¥é¡¹åˆ—è¡¨ï¼Œäº’ä¸å¹²æ‰° |
+| `tagged` | æ£€æŸ¥é¡¹æ ‡æ³¨æ¥æºç®—æ³•ï¼Œè¯„åˆ†å¼•æ“å¯è§æ¥æºæ ‡ç­¾ |
 
-#### 11.5.5 Ä¾Í°Ğ§Ó¦¶ÈÁ¿
+#### 11.5.5 æœ¨æ¡¶æ•ˆåº”åº¦é‡
 
-±àÅÅÆ÷Êä³öÖĞÌá¹©ÍêÕûµÄËã·¨¼ä²îÒì¶ÈÁ¿£º
-- `AlgoSpread`£º×î¸ß·Ö¡ª×îµÍ·Ö²îÒì
-- `AlgoVariance`£ºÍ³¼ÆËã·¨¼ä·½²î
-- `WorstAlgo` / `BestAlgo`£ºÊ¶±ğ¶Ì°åºÍ³¤°åËã·¨
-- `EliminatedByCascade`£º¼¶ÁªÄ£Ê½ÏÂÌø¹ıµÄËã·¨ÁĞ±í
+ç¼–æ’å™¨è¾“å‡ºä¸­æä¾›å®Œæ•´çš„ç®—æ³•é—´å·®å¼‚åº¦é‡ï¼š
+- `AlgoSpread`ï¼šæœ€é«˜åˆ†â€”æœ€ä½åˆ†å·®å¼‚
+- `AlgoVariance`ï¼šç»Ÿè®¡ç®—æ³•é—´æ–¹å·®
+- `WorstAlgo` / `BestAlgo`ï¼šè¯†åˆ«çŸ­æ¿å’Œé•¿æ¿ç®—æ³•
+- `EliminatedByCascade`ï¼šçº§è”æ¨¡å¼ä¸‹è·³è¿‡çš„ç®—æ³•åˆ—è¡¨
 
 ---
 
-## ½áÂÛ
+## ç»“è®º
 
-ASSCOR µÄÀ©Õ¹ÌåÏµÌá¹©ÁË**ËÄÖÖ»¥²¹µÄÀ©Õ¹»úÖÆ**¡ª¡ª½ø³ÌÄÚ²å¼ş (Plugin ½Ó¿Ú)¡¢ÔËĞĞÊ±¹³×Ó (Extension Point)¡¢ÄÚºË°²×°Ê½À©Õ¹ (ExtensionManager + extension.json)¡¢Íâ²¿±àÒëÊ±À©Õ¹ (optional/ + pkgmgr + package.json)¡ª¡ª¸²¸ÇÁË´Óµ×²ã¼ì²éÂß¼­µ½¶¥²ãÆÀ·ÖÒıÇæ¡¢´ÓÄÚºËÄÚÇ¶µ½¶ÀÁ¢±àÒëÄ£¿éµÄÈ«²¿¿ÉÀ©Õ¹ĞÔĞèÇó¡£14 ¸öºËĞÄÄ£¿é½Ó¿ÚÈ«²¿Í¨¹ı DI ÈİÆ÷×¢Èë£¬¼ì²éÆ÷Í¨¹ı×¢²á±í API ¹ÜÀí¡£Íâ²¿À©Õ¹Í¨¹ı Extension Point ÏµÍ³ÊµÏÖÁã´úÂëÇÖÈëÊ½¹ÒÔØ£¬À©Õ¹°üÍ¨¹ı `asscor-pkg` ¹¤¾ßÁ´¹ÜÀíÒÀÀµºÍÍâ²¿²Ö¿âÒıÓÃ¡£ÕâÌ×ÌåÏµÎªµÚÈı·½¿ª·¢ÕßÌá¹©ÁË´ÓÇáÁ¿¼¶¼ì²éÏîµ½ÍêÕûËã·¨±àÅÅµÄÈ«Î¬¶ÈÀ©Õ¹ÄÜÁ¦¡£
+ASSCOR çš„æ‰©å±•ä½“ç³»æä¾›äº†**å››ç§äº’è¡¥çš„æ‰©å±•æœºåˆ¶**â€”â€”è¿›ç¨‹å†…æ’ä»¶ (Plugin æ¥å£)ã€è¿è¡Œæ—¶é’©å­ (Extension Point)ã€å†…æ ¸å®‰è£…å¼æ‰©å±• (ExtensionManager + extension.json)ã€å¤–éƒ¨ç¼–è¯‘æ—¶æ‰©å±• (optional/ + pkgmgr + package.json)â€”â€”è¦†ç›–äº†ä»åº•å±‚æ£€æŸ¥é€»è¾‘åˆ°é¡¶å±‚è¯„åˆ†å¼•æ“ã€ä»å†…æ ¸å†…åµŒåˆ°ç‹¬ç«‹ç¼–è¯‘æ¨¡å—çš„å…¨éƒ¨å¯æ‰©å±•æ€§éœ€æ±‚ã€‚14 ä¸ªæ ¸å¿ƒæ¨¡å—æ¥å£å…¨éƒ¨é€šè¿‡ DI å®¹å™¨æ³¨å…¥ï¼Œæ£€æŸ¥å™¨é€šè¿‡æ³¨å†Œè¡¨ API ç®¡ç†ã€‚å¤–éƒ¨æ‰©å±•é€šè¿‡ Extension Point ç³»ç»Ÿå®ç°é›¶ä»£ç ä¾µå…¥å¼æŒ‚è½½ï¼Œæ‰©å±•åŒ…é€šè¿‡ `asscor-pkg` å·¥å…·é“¾ç®¡ç†ä¾èµ–å’Œå¤–éƒ¨ä»“åº“å¼•ç”¨ã€‚è¿™å¥—ä½“ç³»ä¸ºç¬¬ä¸‰æ–¹å¼€å‘è€…æä¾›äº†ä»è½»é‡çº§æ£€æŸ¥é¡¹åˆ°å®Œæ•´ç®—æ³•ç¼–æ’çš„å…¨ç»´åº¦æ‰©å±•èƒ½åŠ›ã€‚
