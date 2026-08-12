@@ -12,8 +12,11 @@ func externalRisk(ssamScore float64) float64 {
 	return (100.0 - ssamScore) / 100.0
 }
 
-func computeSpillover(upstreamERisk float64, transmission float64) float64 {
-	return upstreamERisk * transmission
+func computeSpillover(upstreamERisk float64, transmission float64, criticality float64) float64 {
+	if criticality <= 0 {
+		criticality = 0.5
+	}
+	return upstreamERisk * transmission * (0.5 + criticality)
 }
 
 // computePropagatedRisk calculates aggregated upstream propagation risk.
@@ -27,7 +30,7 @@ func computePropagatedRisk(incomingEdges []EdgeState, allNodes map[string]*NodeS
 			if !ok {
 				continue
 			}
-			spill := computeSpillover(externalRisk(upstream.SSAMScore), e.RiskTransmission)
+			spill := computeSpillover(externalRisk(upstream.SSAMScore), e.RiskTransmission, upstream.Criticality)
 			if spill > maxSpill {
 				maxSpill = spill
 			}
@@ -40,7 +43,7 @@ func computePropagatedRisk(incomingEdges []EdgeState, allNodes map[string]*NodeS
 			if !ok {
 				continue
 			}
-			sum += computeSpillover(externalRisk(upstream.SSAMScore), e.RiskTransmission)
+			sum += computeSpillover(externalRisk(upstream.SSAMScore), e.RiskTransmission, upstream.Criticality)
 		}
 		return math.Min(1.0, sum)
 	default: // "rss"
@@ -56,7 +59,7 @@ func computePropagatedRiskRSS(incomingEdges []EdgeState, allNodes map[string]*No
 			continue
 		}
 		erisk := externalRisk(upstream.SSAMScore)
-		spill := computeSpillover(erisk, e.RiskTransmission)
+		spill := computeSpillover(erisk, e.RiskTransmission, upstream.Criticality)
 		sumSquares += spill * spill
 	}
 	return math.Min(1.0, math.Sqrt(sumSquares))

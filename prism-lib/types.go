@@ -8,6 +8,7 @@ type NodeState struct {
 	HostID       string
 	SSAMScore    float64
 	FailedChecks []CheckFailure
+	Criticality  float64 // 0.0–1.0, 节点重要性权重 (默认 0.5); 被攻陷的关键节点传播更高风险
 }
 
 type CheckFailure struct {

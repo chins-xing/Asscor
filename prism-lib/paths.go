@@ -57,7 +57,7 @@ func FindPropagationPaths(
 			}
 
 			erisk := externalRisk(upstream.SSAMScore)
-			spill := computeSpillover(erisk, e.RiskTransmission)
+			spill := computeSpillover(erisk, e.RiskTransmission, upstream.Criticality)
 			decayedSpill := spill * decay
 
 			visited[e.Target] = true

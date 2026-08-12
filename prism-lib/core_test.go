@@ -25,9 +25,9 @@ func TestExternalRisk(t *testing.T) {
 }
 
 func TestComputeSpillover(t *testing.T) {
-	got := computeSpillover(0.5, 0.5)
+	got := computeSpillover(0.5, 0.5, 0.5)
 	if math.Abs(got-0.25) > 1e-9 {
-		t.Errorf("computeSpillover(0.5, 0.5) = %f, want 0.25", got)
+		t.Errorf("computeSpillover(0.5, 0.5, 0.5) = %f, want 0.25", got)
 	}
 }
 
