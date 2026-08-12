@@ -1,0 +1,20 @@
+{
+  "name": "mitre-engage",
+  "version": "0.1.0",
+  "description": "MITRE Engage 轻量主动防御扩展包 — 蜜罐/蜜标/蜜凭证, 零外部依赖, 纯 Go 标准库",
+  "author": "ASSCOR Core Team",
+  "license": "MIT",
+  "modules": [
+    { "id": "mitre-engage", "path": ".", "type": "single" }
+  ],
+  "hooks": {
+    "block.pre_apply": "mitre-engage",
+    "block.confirmed": "mitre-engage",
+    "locate.threat_active": "mitre-engage"
+  },
+  "compatibility": {
+    "asscor_version": ">=0.2.3",
+    "go_version": ">=1.26",
+    "platform": ["linux"]
+  }
+}
