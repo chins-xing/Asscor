@@ -1318,6 +1318,18 @@ func (a *Agent) runChecks() []model.CheckResult {
 }
 
 func (a *Agent) runCommand(cmd *apiv1.Command) {
+	// Logical actions first: isolate_host / deisolate_host map to real OS
+	// firewall rules (not generic shell commands). These are the last-resort
+	// blocking mechanism — direct network isolation of a compromised host.
+	switch cmd.Command {
+	case "isolate_host":
+		a.executeIsolation(cmd)
+		return
+	case "deisolate_host":
+		a.executeDeisolation(cmd)
+		return
+	}
+
 	timeout := 30 * time.Second
 
 	if !common.IsShellCommandAllowed(cmd.Command) {
@@ -1346,6 +1358,44 @@ func (a *Agent) runCommand(cmd *apiv1.Command) {
 	} else if output != "" {
 		logger.WithComponent("agent").Info("command output", "command_id", cmd.CommandId, "output", output)
 	}
+}
+
+// executeIsolation is the last-resort blocking action: drop all NEW inbound
+// traffic on this host while keeping established connections (so the agent's
+// link back to the kernel stays alive). Requires root (iptables).
+func (a *Agent) executeIsolation(cmd *apiv1.Command) {
+	if os.Geteuid() != 0 {
+		logger.WithComponent("agent").Error("isolate_host requires root privileges",
+			"command_id", cmd.CommandId)
+		return
+	}
+
+	// Accept already-established/related connections first, then drop the rest.
+	out1, err1 := common.RunCmdTimeout(30*time.Second, "iptables", "-A", "INPUT", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT")
+	out2, err2 := common.RunCmdTimeout(30*time.Second, "iptables", "-P", "INPUT", "DROP")
+
+	if err1 != nil || err2 != nil {
+		logger.WithComponent("agent").Error("isolate_host firewall rule failed",
+			"command_id", cmd.CommandId, "out1", out1, "err1", err1, "out2", out2, "err2", err2)
+		return
+	}
+	logger.WithComponent("agent").Warn("host isolated — dropping new inbound traffic",
+		"command_id", cmd.CommandId)
+}
+
+// executeDeisolation restores the default ACCEPT policy and removes the
+// ESTABLISHED,RELATED accept rule added during isolation.
+func (a *Agent) executeDeisolation(cmd *apiv1.Command) {
+	if os.Geteuid() != 0 {
+		logger.WithComponent("agent").Error("deisolate_host requires root privileges",
+			"command_id", cmd.CommandId)
+		return
+	}
+
+	common.RunCmdTimeout(30*time.Second, "iptables", "-P", "INPUT", "ACCEPT")
+	common.RunCmdTimeout(30*time.Second, "iptables", "-D", "INPUT", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT")
+	logger.WithComponent("agent").Info("host de-isolated — inbound traffic restored",
+		"command_id", cmd.CommandId)
 }
 
 func (a *Agent) Stop() {

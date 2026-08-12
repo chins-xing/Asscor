@@ -16,6 +16,7 @@ var allowedCommands = map[string]bool{
 	"ss":          true,
 	"sysctl":      true,
 	"iptables":    true,
+	"nft":         true,
 	"firewall-cmd": true,
 	"uname":       true,
 	"dmesg":       true,
