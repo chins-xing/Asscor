@@ -10,7 +10,9 @@ import (
 )
 
 // LifecyclePhase enumerates the automated security lifecycle phases.
-// 探测→定位→响应→报告→阻断→修复→验证→定位→归档→重复(循环)
+// 探测→定位→响应→报告→引导→阻断→修复→验证→定位→归档→重复(循环)
+// Guide (引导) precedes Block (阻断): the core is guided deception; direct
+// blocking is the last resort.
 type LifecyclePhase int
 
 const (
@@ -18,6 +20,7 @@ const (
 	PhaseLocate
 	PhaseRespond
 	PhaseReport
+	PhaseGuide
 	PhaseBlock
 	PhaseRemediate
 	PhaseVerify
@@ -35,6 +38,8 @@ func (p LifecyclePhase) String() string {
 		return "respond"
 	case PhaseReport:
 		return "report"
+	case PhaseGuide:
+		return "guide"
 	case PhaseBlock:
 		return "block"
 	case PhaseRemediate:
@@ -88,6 +93,14 @@ type Blocker interface {
 	IsBlocked(ctx context.Context, hostID string) bool
 }
 
+// Guider executes guided deception (white-box, auditable). It deploys decoys
+// and returns the number of attacker captures collected — the intelligence
+// that feeds the next guidance round. Direct blocking (Blocker) is only used
+// when guidance proves insufficient.
+type Guider interface {
+	Guide(ctx context.Context, loc *AttackerLocation) (captures int, err error)
+}
+
 // ThreatActivityStore tracks attacker-activity state to drive the loop condition.
 type ThreatActivityStore interface {
 	MarkActive(hostID string)
@@ -126,10 +139,11 @@ func (s *inMemActivityStore) Clear(hostID string) {
 
 // LifecycleEngine drives the automated security lifecycle state machine.
 // It is a kernel Plugin that subscribes to assessment results and runs the
-// lifecycle (探测→定位→响应→报告→阻断→修复→验证→定位→归档→重复) per host.
+// lifecycle (探测→定位→响应→报告→引导→阻断→修复→验证→定位→归档→重复) per host.
 type LifecycleEngine struct {
 	kernel   KernelContext
 	locator  Locator
+	guider   Guider
 	blocker  Blocker
 	activity ThreatActivityStore
 
@@ -165,6 +179,9 @@ func (e *LifecycleEngine) Init(ctx context.Context, kc KernelContext) error {
 	if e.blocker == nil {
 		e.blocker = NewKernelBlocker(kc)
 	}
+	// No default Guider: guided deception (decoy deployment) lives in the
+	// optional MITRE Engage extension. Without a Guider the engine falls back
+	// to the default Blocker (isolate_host) — the pre-guide behavior.
 	e.mu.Lock()
 	e.state = PluginInitialized
 	e.mu.Unlock()
@@ -216,6 +233,7 @@ func (e *LifecycleEngine) State() PluginState {
 // ── Configuration ──
 
 func (e *LifecycleEngine) SetLocator(l Locator)            { e.locator = l }
+func (e *LifecycleEngine) SetGuider(g Guider)              { e.guider = g }
 func (e *LifecycleEngine) SetBlocker(b Blocker)            { e.blocker = b }
 func (e *LifecycleEngine) SetActivityStore(s ThreatActivityStore) { e.activity = s }
 
@@ -270,8 +288,34 @@ func (e *LifecycleEngine) Run(ctx context.Context, hostID string) {
 		e.enterPhase(PhaseReport)
 		e.exitPhase(PhaseReport)
 
-		// 5. 阻断
-		if e.blocker != nil && loc != nil {
+		// 5. 引导 — guide-first: deploy decoys, collect intelligence. Guidance
+		// is the primary response; direct blocking is only the fallback.
+		e.enterPhase(PhaseGuide)
+		guided := false
+		if e.guider != nil && loc != nil {
+			if captures, err := e.guider.Guide(ctx, loc); err == nil {
+				guided = true
+				if e.kernel != nil && e.kernel.Extensions() != nil {
+					e.kernel.Extensions().Execute(ctx, "guide.completed", map[string]interface{}{
+						"host_id":  loc.FootholdHost,
+						"captures": captures,
+					})
+					if captures > 0 {
+						e.kernel.Extensions().Execute(ctx, "guide.confirmed", map[string]interface{}{
+							"host_id":  loc.FootholdHost,
+							"captures": captures,
+						})
+					}
+				}
+			} else {
+				logger.WithComponent("lifecycle").Warn("guidance failed, falling back to block",
+					"host_id", hostID, "err", err.Error())
+			}
+		}
+		e.exitPhase(PhaseGuide)
+
+		// 6. 阻断 — last resort: guidance unavailable (no guider) or failed.
+		if !guided && e.blocker != nil && loc != nil {
 			e.enterPhase(PhaseBlock)
 			if e.kernel != nil && e.kernel.Extensions() != nil {
 				e.kernel.Extensions().Execute(ctx, "block.pre_apply", loc)
@@ -287,15 +331,15 @@ func (e *LifecycleEngine) Run(ctx context.Context, hostID string) {
 			e.exitPhase(PhaseBlock)
 		}
 
-		// 6. 修复
+		// 7. 修复
 		e.enterPhase(PhaseRemediate)
 		e.exitPhase(PhaseRemediate)
 
-		// 7. 验证
+		// 8. 验证
 		e.enterPhase(PhaseVerify)
 		e.exitPhase(PhaseVerify)
 
-		// 8. 定位(再次) — re-locate to check if attacker activity persists
+		// 9. 定位(再次) — re-locate to check if attacker activity persists
 		e.enterPhase(PhaseRelocate)
 		stillActive := false
 		if e.locator != nil {
@@ -311,11 +355,11 @@ func (e *LifecycleEngine) Run(ctx context.Context, hostID string) {
 		}
 		e.exitPhase(PhaseRelocate)
 
-		// 9. 归档
+		// 10. 归档
 		e.enterPhase(PhaseArchive)
 		e.exitPhase(PhaseArchive)
 
-		// 10. 循环判断: 定位中仍存在攻击者活动 → 重复
+		// 11. 循环判断: 定位中仍存在攻击者活动 → 重复
 		if stillActive && e.activity != nil && e.activity.IsActive(hostID) {
 			if e.kernel != nil && e.kernel.Extensions() != nil {
 				e.kernel.Extensions().Execute(ctx, "lifecycle.repeat", map[string]interface{}{"host_id": hostID})

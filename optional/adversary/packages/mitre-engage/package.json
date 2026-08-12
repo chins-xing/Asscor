@@ -8,6 +8,8 @@
     { "id": "mitre-engage", "path": ".", "type": "single" }
   ],
   "hooks": {
+    "guide.completed": "mitre-engage",
+    "guide.confirmed": "mitre-engage",
     "block.pre_apply": "mitre-engage",
     "block.confirmed": "mitre-engage",
     "locate.threat_active": "mitre-engage"

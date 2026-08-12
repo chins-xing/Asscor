@@ -14,6 +14,11 @@ import (
 // the COLLECTED INTELLIGENCE after a decoy triggers. We balance capture
 // quantity with quality: filter out automated port scans, surface high-value
 // attacker behavior (credential use, decoy access).
+//
+// v0.3: it is primarily a Guider (kernel.Guider) — intent-driven decoy
+// deployment that feeds intelligence back into the next guidance round. The
+// legacy Blocker methods (Block/Unblock/IsBlocked) are retained for backward
+// compatibility with the block.* extension hooks.
 type EngageBlocker struct {
 	mu        sync.Mutex
 	honey     *honeypot
@@ -22,10 +27,15 @@ type EngageBlocker struct {
 	blocked   map[string]bool
 	ports     []int
 	onCapture func(CaptureInfo)
+
+	// intentGuider drives the intent-driven guidance path (kernel.Guider). It
+	// is a separate capture stream from the legacy Block path; in the
+	// guide-first model only one is active at a time.
+	intentGuider *IntentGuider
 }
 
-// NewEngageBlocker creates an active-defense blocker centered on intelligence
-// collection. decoyRoot is where high-fidelity decoy files live.
+// NewEngageBlocker creates an active-defense blocker/guider centered on
+// intelligence collection. decoyRoot is where high-fidelity decoy files live.
 func NewEngageBlocker(decoyRoot string) *EngageBlocker {
 	b := &EngageBlocker{
 		blocked:   make(map[string]bool),
@@ -34,6 +44,7 @@ func NewEngageBlocker(decoyRoot string) *EngageBlocker {
 	}
 	b.honey = NewHoneypot(nil)
 	b.tokens = NewHoneytokenDeployer(decoyRoot, nil)
+	b.intentGuider = NewIntentGuider(decoyRoot)
 	return b
 }
 
@@ -140,5 +151,35 @@ func (b *EngageBlocker) HighValue(threshold CaptureQuality) []CaptureInfo {
 	return b.collector.HighValue(threshold)
 }
 
-// Compile-time assertion that EngageBlocker satisfies kernel.Blocker.
-var _ kernel.Blocker = (*EngageBlocker)(nil)
+// Guide implements kernel.Guider: infer the attacker's intent from the
+// location and deploy the matching intent-driven deception plan ("good enough"
+// principle). It returns the number of quality-filtered captures collected so
+// far — the intelligence that feeds the next guidance round.
+func (b *EngageBlocker) Guide(ctx context.Context, loc *kernel.AttackerLocation) (int, error) {
+	if loc == nil {
+		return 0, nil
+	}
+	intent := inferIntent(loc)
+	if _, err := b.intentGuider.Guide(ctx, intent); err != nil {
+		return 0, err
+	}
+	return len(b.intentGuider.Captures()), nil
+}
+
+// inferIntent deterministically maps an attacker location to a deception
+// intent (white-box heuristic). The location model exposes movement signals
+// but not ATT&CK technique IDs yet; refine the mapping when AttackerLocation
+// carries technique data.
+func inferIntent(loc *kernel.AttackerLocation) Intent {
+	if len(loc.LateralPath) > 0 {
+		return IntentLateralMovement
+	}
+	return IntentDiscovery
+}
+
+// Compile-time assertions: EngageBlocker satisfies both the legacy Blocker and
+// the guidance-first Guider interfaces.
+var (
+	_ kernel.Blocker = (*EngageBlocker)(nil)
+	_ kernel.Guider  = (*EngageBlocker)(nil)
+)

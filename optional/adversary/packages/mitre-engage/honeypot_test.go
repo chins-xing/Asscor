@@ -3,6 +3,8 @@ package mitreengage
 import (
 	"context"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -79,5 +81,43 @@ func TestEngageBlockerBlockUnblock(t *testing.T) {
 	}
 	if b.IsBlocked(context.Background(), "host-01") {
 		t.Fatal("expected unblocked")
+	}
+}
+
+func TestEngageBlockerGuideDeploysLateralDecoy(t *testing.T) {
+	root := t.TempDir()
+	b := NewEngageBlocker(root)
+	// Neutralize the honeypot to avoid binding real attack ports in tests.
+	b.intentGuider.honey.Stop()
+	b.intentGuider.honey = NewHoneypot(nil)
+	defer b.intentGuider.RemoveAll()
+
+	loc := &kernel.AttackerLocation{FootholdHost: "host-01", LateralPath: []string{"host-02"}}
+	n, err := b.Guide(context.Background(), loc)
+	if err != nil {
+		t.Fatalf("Guide error: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected 0 captures initially, got %d", n)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".ssh", "id_rsa.bak")); err != nil {
+		t.Errorf("lateral-movement decoy not deployed: %v", err)
+	}
+}
+
+func TestEngageBlockerGuideNilLocation(t *testing.T) {
+	b := NewEngageBlocker(t.TempDir())
+	n, err := b.Guide(context.Background(), nil)
+	if err != nil || n != 0 {
+		t.Fatalf("expected 0, nil for nil location, got %d, %v", n, err)
+	}
+}
+
+func TestInferIntent(t *testing.T) {
+	if got := inferIntent(&kernel.AttackerLocation{LateralPath: []string{"host-02"}}); got != IntentLateralMovement {
+		t.Errorf("expected lateral_movement for lateral path, got %s", got)
+	}
+	if got := inferIntent(&kernel.AttackerLocation{}); got != IntentDiscovery {
+		t.Errorf("expected discovery fallback, got %s", got)
 	}
 }

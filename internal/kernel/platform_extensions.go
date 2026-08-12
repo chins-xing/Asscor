@@ -265,7 +265,7 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 		Name: "recaller.dropped", Description: "Called when all black-box models unanimously drop a signal (audit trail)", Version: "1.0",
 	})
 
-	// ── 自动化全链路生命周期 (探测→定位→响应→报告→阻断→修复→验证→定位→归档→重复) ──
+	// ── 自动化全链路生命周期 (探测→定位→响应→报告→引导→阻断→修复→验证→定位→归档→重复) ──
 	// 定位 (Locate): 攻击者定位聚合
 	r.RegisterPoint(ExtensionPoint{
 		Name: "locate.completed", Description: "Called when attacker location aggregation completes", Version: "1.0",
@@ -274,7 +274,15 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 		Name: "locate.threat_active", Description: "Called when attacker activity is detected (loop continuation condition)", Version: "1.0",
 	})
 
-	// 阻断 (Block): 主动阻断执行
+	// 引导 (Guide): 引导式主动防御 — 部署诱饵、收集情报 (引导为主, 阻断为兜底)
+	r.RegisterPoint(ExtensionPoint{
+		Name: "guide.completed", Description: "Called after guidance deploys decoys (reports captures)", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "guide.confirmed", Description: "Called when guidance yields attacker captures (decoy engaged)", Version: "1.0",
+	})
+
+	// 阻断 (Block): 主动阻断执行 (引导无效/确认高危时的兜底)
 	r.RegisterPoint(ExtensionPoint{
 		Name: "block.pre_apply", Description: "Called before a blocking action is executed", Version: "1.0",
 	})

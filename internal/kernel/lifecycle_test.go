@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 )
@@ -31,6 +32,79 @@ func (m *mockLocator) setActive(active bool) {
 	m.mu.Lock()
 	m.active = active
 	m.mu.Unlock()
+}
+
+// mockGuider is a controllable Guider for lifecycle guide-first tests.
+type mockGuider struct {
+	calls    int
+	captures int
+	err      error
+}
+
+func (m *mockGuider) Guide(ctx context.Context, loc *AttackerLocation) (int, error) {
+	m.calls++
+	return m.captures, m.err
+}
+
+// mockBlocker counts Block invocations for fallback tests.
+type mockBlocker struct {
+	calls int
+}
+
+func (m *mockBlocker) Block(ctx context.Context, loc *AttackerLocation) (*BlockResult, error) {
+	m.calls++
+	return &BlockResult{Blocked: true, RuleID: "mock"}, nil
+}
+func (m *mockBlocker) Unblock(ctx context.Context, loc *AttackerLocation) error { return nil }
+func (m *mockBlocker) IsBlocked(ctx context.Context, hostID string) bool       { return false }
+
+func TestLifecycleEngineGuideSkipsBlock(t *testing.T) {
+	e := NewLifecycleEngine(nil)
+	e.SetLocator(&mockLocator{loc: &AttackerLocation{FootholdHost: "h"}})
+	e.SetActivityStore(newInMemActivityStore())
+	g := &mockGuider{captures: 1}
+	b := &mockBlocker{}
+	e.SetGuider(g)
+	e.SetBlocker(b)
+
+	e.Run(context.Background(), "h")
+
+	if g.calls == 0 {
+		t.Fatal("expected Guide to be called")
+	}
+	if b.calls != 0 {
+		t.Errorf("expected Block to be skipped when guidance succeeds, got %d block calls", b.calls)
+	}
+}
+
+func TestLifecycleEngineFallsBackToBlockOnGuideError(t *testing.T) {
+	e := NewLifecycleEngine(nil)
+	e.SetLocator(&mockLocator{loc: &AttackerLocation{FootholdHost: "h"}})
+	e.SetActivityStore(newInMemActivityStore())
+	g := &mockGuider{err: errors.New("deploy failed")}
+	b := &mockBlocker{}
+	e.SetGuider(g)
+	e.SetBlocker(b)
+
+	e.Run(context.Background(), "h")
+
+	if b.calls == 0 {
+		t.Fatal("expected Block to be called when guidance fails")
+	}
+}
+
+func TestLifecycleEngineBlocksWithoutGuider(t *testing.T) {
+	e := NewLifecycleEngine(nil)
+	e.SetLocator(&mockLocator{loc: &AttackerLocation{FootholdHost: "h"}})
+	e.SetActivityStore(newInMemActivityStore())
+	b := &mockBlocker{}
+	e.SetBlocker(b)
+
+	e.Run(context.Background(), "h")
+
+	if b.calls == 0 {
+		t.Fatal("expected Block to be called when no guider is set")
+	}
 }
 
 func TestLifecycleEngineRunOnce(t *testing.T) {
