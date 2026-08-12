@@ -15,8 +15,8 @@
 > **Prism 已独立为 [github.com/chins-xing/prism](https://github.com/chins-xing/prism)**
 > （位于 `prism-lib/`），同样为零外部依赖。ASSCOR 平台通过薄适配层委托给这两个独立库。
 
-**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.2.1  
-**日期：** 2026-07-07  
+**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.2.2  
+**日期：** 2026-08-02  
 **状态：** 发布
 
 > ⚠️ **基本前提——也是最基本的限制**
@@ -70,12 +70,12 @@ ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** �
 |------|------|
 | **内核 (Kernel)** | 微内核运行时：DI 容器、事件总线、熔断器、拦截器链、插件生命周期 |
 | **评估引擎** | SSAM V2.0 三层加权平均评分 + SPC 安全态势修正 + ATT&CK V19 威胁分析 |
-| **Agent** | 76+ 检查项并发执行，CPE 自动生成，HMAC 签名命令执行 |
+| **Agent** | 80 检查项并发执行，CPE 自动生成，HMAC 签名命令执行 |
 | **21 个适配器** | Trivy/Nuclei/Lynis/Suricata 等 Fetch→Parse→Map→Validate 管线 |
 | **Prism/SRD** | 三层风险引擎：Core(动态评分)→Semantic(四态模糊)→Inference(马尔可夫预测) |
-| **扩展体系** | 9 种 extmgr 类型 + 3 种零门槛扩展 (user_check/adapter_script/Plugin SDK) |
-| **容灾模块** | 熔断器 + panic 恢复 + 健康聚合 + 错误限速 |
-| **安全防护** | HMAC 评估签名 + 算法常量校验 + 反调试 + mTLS |
+| **扩展体系** | 76 个内核扩展点 + 9 种 extmgr 类型 + 可选扩展包体系 (pkgmgr + package.json) |
+| **内核解耦** | 17 个接口/类型文件拆分 + SPC 模块提取 (internal/spc/) |
+| **安全防护** | HMAC 评估签名 + 算法自校准完整性校验 + SHA-256 二进制校验 + mTLS |
 | **Web 仪表盘** | 主机详情 + 历史趋势 + 边缘因子可视化 |
 | **CLI** | 交互式终端 + Unix socket 远程连接 + 15 运维命令 |
 | **部署** | 单二进制安装/升级/卸载 + systemd + Docker + FHS 布局 |
@@ -303,14 +303,18 @@ ASSCOR/
 │   │                   #  attck_emulation, attck_assessment,
 │   │                   #  attck_apt_chain, attck_apt_detect,
 │   │                   #  attck_apt_attribution, attck_apt_hunt 等）
-│   ├── ssam/          # SSAM 薄适配层（委托给 ssam-lib）
+│   ├── ssam/          # SSAM 薄适配层（委托给 ssam-lib）— 已移至 internal/engine/ssam/
 │   │                   #  adapter.go — ASSCOR config/model ↔ ssam 格式转换
 │   │                   #  defaults.go — 默认权重、边缘因子
-│   ├── prism/         # Prism 薄适配层（委托给 prism-lib）
+│   ├── prism/         # Prism 薄适配层（委托给 prism-lib）— 已移至 internal/engine/prism/
 │   │                   #  engine.go — 线程安全包装，集成到 ASSCOR 内核
-│   ├── srd/           # SRD 数据流管线
+│   ├── srd/           # SRD 数据流管线 — 已移至 internal/engine/srd/
 │   │                   #  manager.go — 风险状态管理器
 │   │                   #  pipeline.go — 数据处理管线
+│   ├── spc/           # SPC 模块独立包（v0.2.2 提取，16 文件/4,660 行）
+│   ├── engine/        # 评估引擎核心 + 引擎适配器 (ssam/prism/srd)
+│   ├── semver/        # SemVer 版本约束共享包
+│   ├── extmgr/        # 扩展管理器（安装/卸载/生命周期/安全执行）
 │   │                   #  adapter.go — 外部工具数据适配
 │   ├── agent/         # Agent 核心模块（collector, executor）
 │   ├── engine/        # ASSCOR 评估引擎（含适配器流水线集成，内部调用 ssam 包）
@@ -321,6 +325,11 @@ ASSCOR/
 │   ├── model/         # 数据模型定义
 │   ├── config/        # 配置解析器（INI 格式，支持行业模板覆盖）
 │   └── version/       # 版本信息
+├── optional/           # 可选扩展模块与扩展包 (v0.2.2)
+│   ├── algorithms/     #   算法扩展: modules/ (单模块) + packages/ (扩展包)
+│   ├── pkgmgr/         #   扩展包管理器 CLI (asscor-pkg)
+│   └── SCHEMA.md       #   package.json 格式规范
+├── pluginsdk/          # Plugin SDK — JSON-RPC 独立进程插件运行时 (RPCPlugin 接口)
 ├── api/v1/            # gRPC 服务接口定义与消息类型
 ├── config/            # 行业专用配置文件（政府、金融、医疗、教育等）
 ├── certs/             # TLS/mTLS 证书目录（已排除于版本控制）
@@ -336,7 +345,7 @@ ASSCOR/
 
 ```bash
 # 单二进制安装
-sudo ./ASSCOR-kernel-v0.2.1-linux-amd64 --install
+sudo ./ASSCOR-kernel-v0.2.2-linux-amd64 --install
 sudo systemctl start asscor-kernel
 sudo systemctl enable asscor-kernel  # 开机自启
 
@@ -347,7 +356,7 @@ sudo systemctl enable asscor-kernel  # 开机自启
 /opt/asscor/ASSCOR-kernel --cli /opt/asscor/asscor-cli.sock
 
 # 原地升级（无需手动停止）
-sudo ./ASSCOR-kernel-v0.2.1-linux-amd64 --upgrade
+sudo ./ASSCOR-kernel-v0.2.2-linux-amd64 --upgrade
 
 # 卸载
 sudo /opt/asscor/ASSCOR-kernel --uninstall
@@ -367,7 +376,7 @@ sudo /opt/asscor/ASSCOR-kernel --uninstall
 ### 10.2 Agent 部署
 
 ```bash
-sudo ./ASSCOR-agent-v0.2.1-linux-amd64 --install
+sudo ./ASSCOR-agent-v0.2.2-linux-amd64 --install
 sudo systemctl start asscor-agent
 ```
 
@@ -468,7 +477,7 @@ ASSCOR Platform
 
 ## 12. ATT&CK V19 威胁分析模块
 
-ASSCOR v0.2.1 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链。该模块作为 μKernel 插件（`attck`，优先级 21，版本 1.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
+ASSCOR v0.2.2 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链。该模块作为 μKernel 插件（`attck`，优先级 21，版本 1.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
 
 ### 13.1 四大核心子模块
 
@@ -559,6 +568,18 @@ ATTACKModule (Plugin v1.0.0)
 - **SSAM 1.1** — 四核心域 + 独立属性，消除维度重叠
 - **SSAM 1.2** — 引入 ACI、SPC、等保映射、AVD 扩展机制、μKernel 联动
 - **SSAM 1.3** — 移除4项重叠边缘因子（SYN Cookie/供应链/自动封禁/资源紧张），SPC 引入平方和衰减，增加边缘因子合规等级覆盖，内置冲突检测
+
+### ASSCOR v0.2.2 — 2026-08-02 技术债务清偿与架构加固发布
+
+**技术债务清偿 (87→5, 94%)**：P0 全部清零 (19/19)、内核 17 接口/类型文件拆分、25 测试文件/222 用例/5 Benchmark 覆盖全核心基础设施、10+ nil-guard 修复。
+
+**架构变更**：引擎钩子↔内核扩展点桥接 (8 engine.* 阶段全接线)、SemVer 统一共享包 (internal/semver/)、引擎适配器归位 (srd/prism/ssam → internal/engine/)、SPC 模块独立包提取 (internal/spc/，16 文件/4,660 行)。
+
+**安全加固**：算法自校准完整性校验 (sync.Once + init 自动计算 digest)、扩展检查命令白名单校验 (common.IsShellCommandAllowed)、Agent Goroutine 泄漏修复 (context.WithTimeout)、Agent 防重放 (5 分钟过期检查)、配置文件大小限制 (10MB)、SHA-256 二进制校验、9 处 nil-guard 缺陷修复。
+
+**扩展体系**：extmgr↔扩展点桥接 (9 种类型)、5 死扩展点救活、扩展包体系 (pkgmgr + package.json + SCHEMA.md)、ATT&CK build-tag 分离、多算法编排可选化。
+
+**配置与部署**：行业模板完善、deploy 消重、白名单精简单、Root 目录整理、插件 SDK 命名冲突修复 (Plugin→RPCPlugin)、适配器布局文档化。
 
 ### ASSCOR v0.2.1 — 2026-07-14 算法独立性发布
 
@@ -663,7 +684,7 @@ ATTACKModule (Plugin v1.0.0)
 - **格式化输出** — 统一支持文本表格和 JSON 两种输出格式，通过 `--json` 参数切换
 - **HMAC 密钥管理** — 密钥元数据（创建时间/过期时间/哈希）、自动轮换（90 天）、文件权限 `0600`
 
-> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.2.1。两者版本号独立演进。
+> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.2.2。两者版本号独立演进。
 
 #### 第三批修复（SSAM 解耦与二次审计 — 2026-05-22）
 
