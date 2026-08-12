@@ -42,11 +42,18 @@ func (s *SRDPlugin) Init(ctx context.Context, kc KernelContext) error {
 }
 
 func (s *SRDPlugin) Start(ctx context.Context) error {
+	// Real-time topology sync: register a listener so every heartbeat-driven
+	// recordTopology immediately updates the SRD pipeline (no one-shot snapshot).
+	setTopologyListener(func(hostID string, subnets []string) {
+		s.manager.SetTopology(hostID, subnets, "")
+	})
+	// Seed with any topology already recorded before Start.
 	s.syncTopology()
 	return s.manager.Start(ctx)
 }
 
 func (s *SRDPlugin) Stop(ctx context.Context) error {
+	setTopologyListener(nil)
 	return s.manager.Stop(ctx)
 }
 

@@ -89,6 +89,7 @@ type Agent struct {
 	pkgHash          [32]byte
 	cpeHash          [32]byte
 	pkgSent          bool // true after first full packages send
+	cpeSent          bool // true after first full CPE send
 }
 
 func NewAgent(cfg AgentConfig) *Agent {
@@ -134,6 +135,13 @@ func (a *Agent) Run() error {
 			}
 			logger.WithComponent("agent").Error("session error", "error", err)
 			a.sessionID = ""
+			// Reset incremental-send state so a reconnection (e.g. after kernel
+			// restart cleared in-memory SPC assets) re-sends the full package/CPE
+			// list rather than incorrectly skipping it as "unchanged".
+			a.pkgSent = false
+			a.cpeSent = false
+			a.pkgHash = [32]byte{}
+			a.cpeHash = [32]byte{}
 			if a.client != nil {
 				a.client.Close()
 				a.client = nil
@@ -452,9 +460,10 @@ func (a *Agent) heartbeatCycle() error {
 	}
 	if cpes := a.collectCPEs(); cpes != nil {
 		h2 := sha256.Sum256([]byte(strings.Join(cpes, ",")))
-		if !a.pkgSent || h2 != a.cpeHash {
+		if !a.cpeSent || h2 != a.cpeHash {
 			heartbeatReq.InstalledCPEs = cpes
 			a.cpeHash = h2
+			a.cpeSent = true
 		}
 	}
 

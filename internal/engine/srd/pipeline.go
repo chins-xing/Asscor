@@ -82,8 +82,11 @@ func (p *Pipeline) Process(ctx context.Context, report *ExternalAssessmentReport
 	for id, n := range p.snapshots {
 		allNodes[id] = n
 	}
-	incomingEdges := p.buildIncomingEdges(report.HostID, allNodes)
 	p.mu.Unlock()
+
+	// buildIncomingEdges acquires its own RLock (via areConnected) — must be
+	// called OUTSIDE the write lock to avoid a non-reentrant RWMutex deadlock.
+	incomingEdges := p.buildIncomingEdges(report.HostID, allNodes)
 
 	prismResult := p.prism.ComputeDynamicScore(node, incomingEdges, allNodes, nowUnix)
 

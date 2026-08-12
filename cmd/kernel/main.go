@@ -267,7 +267,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 	kernel.RegisterAllExtensionPoints(k.PlatformExtensionRegistry())
 
 	// Bridge ExtensionManager to kernel Extension Points so installed extensions
-	// can subscribe to the 76 extension points (assessor.*, spc.*, attck.*, etc.)
+	// can subscribe to the 89 extension points (assessor.*, spc.*, attck.*, etc.)
 	if mgr := extmgr.GetManager(); mgr != nil {
 		mgr.SetKernelExtensions(k.PlatformExtensionRegistry())
 	}

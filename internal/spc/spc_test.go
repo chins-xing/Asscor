@@ -1,6 +1,5 @@
 package spc
 
-package kernel
 
 import (
 	"encoding/xml"

@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/asscor/asscor/internal/logger"
@@ -95,6 +96,7 @@ type ThreatActivityStore interface {
 
 // inMemActivityStore is the default in-memory implementation of ThreatActivityStore.
 type inMemActivityStore struct {
+	mu   sync.Mutex
 	data map[string]ActivityState
 }
 
@@ -103,16 +105,22 @@ func newInMemActivityStore() *inMemActivityStore {
 }
 
 func (s *inMemActivityStore) MarkActive(hostID string) {
+	s.mu.Lock()
 	s.data[hostID] = ActivityState{HostID: hostID, Active: true, LastSeen: time.Now()}
+	s.mu.Unlock()
 }
 
 func (s *inMemActivityStore) IsActive(hostID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	st, ok := s.data[hostID]
 	return ok && st.Active
 }
 
 func (s *inMemActivityStore) Clear(hostID string) {
+	s.mu.Lock()
 	delete(s.data, hostID)
+	s.mu.Unlock()
 }
 
 // LifecycleEngine drives the automated security lifecycle state machine.
@@ -154,8 +162,17 @@ func (e *LifecycleEngine) exitPhase(p LifecyclePhase) {
 }
 
 // Run executes one full lifecycle pass for a host, looping on persistent threat.
+// maxIterations bounds the loop to prevent a busy-loop if the locator keeps
+// reporting active threats; ctx cancellation also aborts the loop.
 func (e *LifecycleEngine) Run(ctx context.Context, hostID string) {
-	for {
+	const maxIterations = 100
+	for iter := 0; iter < maxIterations; iter++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		// 1. 探测 — assessment is driven externally; this phase signals readiness
 		e.enterPhase(PhaseDetect)
 		e.exitPhase(PhaseDetect)
@@ -234,6 +251,12 @@ func (e *LifecycleEngine) Run(ctx context.Context, hostID string) {
 				e.kernel.Extensions().Execute(ctx, "lifecycle.repeat", map[string]interface{}{"host_id": hostID})
 			}
 			logger.WithComponent("lifecycle").Warn("attacker activity persists, repeating lifecycle", "host_id", hostID)
+			// Backoff to avoid a busy-loop while the threat persists.
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
 			continue
 		}
 

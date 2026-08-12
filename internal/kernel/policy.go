@@ -182,19 +182,35 @@ func (m *PolicyModule) onAssessmentResult(ctx context.Context, msg Message) erro
 		return nil
 	}
 
-	status, actions := m.EvaluateHost(result.HostID, result.FinalScore)
+	status, _ := m.EvaluateHost(result.HostID, result.FinalScore)
 
 	if result.PrismInferenceTrend == "collapsing" && result.PrismInferenceCollapseRisk > 0.7 {
-		actions = append(actions, PolicyAction{
-			Action:  "isolate_host",
-			Message: fmt.Sprintf("PREEMPTIVE ISOLATION: host %s Prism collapse risk %.2f (trend: %s, SSAM score: %.2f)",
-				result.HostID, result.PrismInferenceCollapseRisk, result.PrismInferenceTrend, result.FinalScore),
-		})
-		actions = append(actions, PolicyAction{
-			Action:  "notify_admin",
-			Message: fmt.Sprintf("Prism preemptive: host %s collapse risk %.2f",
-				result.HostID, result.PrismInferenceCollapseRisk),
-		})
+		preemptive := []PolicyAction{
+			{
+				HostID:  result.HostID,
+				Action:  "isolate_host",
+				Params:  map[string]string{"host_id": result.HostID},
+				Message: fmt.Sprintf("PREEMPTIVE ISOLATION: host %s Prism collapse risk %.2f (trend: %s, SSAM score: %.2f)",
+					result.HostID, result.PrismInferenceCollapseRisk, result.PrismInferenceTrend, result.FinalScore),
+			},
+			{
+				HostID:  result.HostID,
+				Action:  "notify_admin",
+				Message: fmt.Sprintf("Prism preemptive: host %s collapse risk %.2f",
+					result.HostID, result.PrismInferenceCollapseRisk),
+			},
+		}
+		for _, action := range preemptive {
+			if m.kernel != nil {
+				if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
+					Topic:   TopicPolicyAction,
+					Payload: action,
+					Source:  "policy",
+				}); len(errs) > 0 {
+					logger.WithComponent("policy").Warn("preemptive publish errors", "count", len(errs))
+				}
+			}
+		}
 		logger.WithComponent("policy").Warn("Prism preemptive isolation triggered",
 			"host_id", result.HostID,
 			"prism_collapse_risk", result.PrismInferenceCollapseRisk,
