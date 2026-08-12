@@ -25,6 +25,7 @@ func (s HostStatus) String() string {
 }
 
 type PolicyAction struct {
+	HostID  string
 	Action  string
 	Params  map[string]string
 	Message string

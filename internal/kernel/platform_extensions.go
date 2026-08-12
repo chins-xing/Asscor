@@ -264,4 +264,38 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 	r.RegisterPoint(ExtensionPoint{
 		Name: "recaller.dropped", Description: "Called when all black-box models unanimously drop a signal (audit trail)", Version: "1.0",
 	})
+
+	// ── 自动化全链路生命周期 (探测→定位→响应→报告→阻断→修复→验证→定位→归档→重复) ──
+	// 定位 (Locate): 攻击者定位聚合
+	r.RegisterPoint(ExtensionPoint{
+		Name: "locate.completed", Description: "Called when attacker location aggregation completes", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "locate.threat_active", Description: "Called when attacker activity is detected (loop continuation condition)", Version: "1.0",
+	})
+
+	// 阻断 (Block): 主动阻断执行
+	r.RegisterPoint(ExtensionPoint{
+		Name: "block.pre_apply", Description: "Called before a blocking action is executed", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "block.post_apply", Description: "Called after a blocking action is executed", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "block.confirmed", Description: "Called when a blocking action is confirmed effective", Version: "1.0",
+	})
+
+	// 生命周期编排 (Lifecycle): 状态机阶段转换 + 循环
+	r.RegisterPoint(ExtensionPoint{
+		Name: "lifecycle.phase_entered", Description: "Called when the lifecycle state machine enters a phase", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "lifecycle.phase_exited", Description: "Called when the lifecycle state machine exits a phase", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "lifecycle.repeat", Description: "Called when the lifecycle loops back (attacker activity persists)", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "lifecycle.completed", Description: "Called when the full lifecycle chain completes", Version: "1.0",
+	})
 }

@@ -91,25 +91,30 @@ func (m *PolicyModule) EvaluateHost(hostID string, score float64) (HostStatus, [
 	case score >= threshold-10:
 		status = HostWarning
 		actions = append(actions, PolicyAction{
+			HostID:  hostID,
 			Action:  "notify_admin",
 			Message: fmt.Sprintf("host %s score %.2f below threshold %.2f", hostID, score, threshold),
 		})
 	case score >= threshold-30:
 		status = HostCritical
 		actions = append(actions, PolicyAction{
+			HostID:  hostID,
 			Action:  "notify_admin",
 			Message: fmt.Sprintf("CRITICAL: host %s score %.2f", hostID, score),
 		}, PolicyAction{
+			HostID: hostID,
 			Action: "increase_assessment",
 			Params: map[string]string{"host_id": hostID},
 		})
 	default:
 		status = HostIsolated
 		actions = append(actions, PolicyAction{
+			HostID:  hostID,
 			Action:  "isolate_host",
 			Params:  map[string]string{"host_id": hostID},
 			Message: fmt.Sprintf("ISOLATING host %s: score %.2f", hostID, score),
 		}, PolicyAction{
+			HostID:  hostID,
 			Action:  "notify_admin",
 			Message: fmt.Sprintf("ISOLATED: host %s", hostID),
 		})

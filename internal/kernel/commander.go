@@ -381,23 +381,12 @@ func sortedKeys(m map[string]string) []string {
 }
 
 func (m *CommanderModule) onPolicyAction(ctx context.Context, msg Message) error {
-	hostID := ""
-	actionStr := ""
-	params := map[string]string{}
-
-	if v, ok := msg.Payload.(map[string]interface{}); ok {
-		if id, ok2 := v["HostID"].(string); ok2 {
-			hostID = id
-		}
-		if a, ok2 := v["Action"].(string); ok2 {
-			actionStr = a
-		}
-		if p, ok2 := v["Params"].(map[string]string); ok2 {
-			params = p
-		}
+	action, ok := msg.Payload.(PolicyAction)
+	if !ok {
+		logger.WithComponent("commander").Warn("policy action payload type mismatch", "payload_type", fmt.Sprintf("%T", msg.Payload))
+		return nil
 	}
-
-	m.EnqueueCommand(hostID, actionStr, params)
+	m.EnqueueCommand(action.HostID, action.Action, action.Params)
 	return nil
 }
 
