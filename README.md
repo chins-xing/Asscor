@@ -15,8 +15,8 @@
 > **Prism 已独立为 [github.com/chins-xing/prism](https://github.com/chins-xing/prism)**
 > （位于 `prism-lib/`），同样为零外部依赖。ASSCOR 平台通过薄适配层委托给这两个独立库。
 
-**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.2.2  
-**日期：** 2026-08-02  
+**算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.2.3  
+**日期：** 2026-08-12  
 **状态：** 发布
 
 > ⚠️ **基本前提——也是最基本的限制**
@@ -311,7 +311,7 @@ ASSCOR/
 │   ├── srd/           # SRD 数据流管线 — 已移至 internal/engine/srd/
 │   │                   #  manager.go — 风险状态管理器
 │   │                   #  pipeline.go — 数据处理管线
-│   ├── spc/           # SPC 模块独立包（v0.2.2 提取，16 文件/4,660 行）
+│   ├── spc/           # SPC 模块独立包（v0.2.3 提取，16 文件/4,660 行）
 │   ├── engine/        # 评估引擎核心 + 引擎适配器 (ssam/prism/srd)
 │   ├── semver/        # SemVer 版本约束共享包
 │   ├── extmgr/        # 扩展管理器（安装/卸载/生命周期/安全执行）
@@ -325,7 +325,7 @@ ASSCOR/
 │   ├── model/         # 数据模型定义
 │   ├── config/        # 配置解析器（INI 格式，支持行业模板覆盖）
 │   └── version/       # 版本信息
-├── optional/           # 可选扩展模块与扩展包 (v0.2.2)
+├── optional/           # 可选扩展模块与扩展包 (v0.2.3)
 │   ├── algorithms/     #   算法扩展: modules/ (单模块) + packages/ (扩展包)
 │   ├── pkgmgr/         #   扩展包管理器 CLI (asscor-pkg)
 │   └── SCHEMA.md       #   package.json 格式规范
@@ -345,7 +345,7 @@ ASSCOR/
 
 ```bash
 # 单二进制安装
-sudo ./ASSCOR-kernel-v0.2.2-linux-amd64 --install
+sudo ./ASSCOR-kernel-v0.2.3-linux-amd64 --install
 sudo systemctl start asscor-kernel
 sudo systemctl enable asscor-kernel  # 开机自启
 
@@ -356,7 +356,7 @@ sudo systemctl enable asscor-kernel  # 开机自启
 /opt/asscor/ASSCOR-kernel --cli /opt/asscor/asscor-cli.sock
 
 # 原地升级（无需手动停止）
-sudo ./ASSCOR-kernel-v0.2.2-linux-amd64 --upgrade
+sudo ./ASSCOR-kernel-v0.2.3-linux-amd64 --upgrade
 
 # 卸载
 sudo /opt/asscor/ASSCOR-kernel --uninstall
@@ -376,7 +376,7 @@ sudo /opt/asscor/ASSCOR-kernel --uninstall
 ### 10.2 Agent 部署
 
 ```bash
-sudo ./ASSCOR-agent-v0.2.2-linux-amd64 --install
+sudo ./ASSCOR-agent-v0.2.3-linux-amd64 --install
 sudo systemctl start asscor-agent
 ```
 
@@ -477,7 +477,7 @@ ASSCOR Platform
 
 ## 12. ATT&CK V19 威胁分析模块
 
-ASSCOR v0.2.2 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链。该模块作为 μKernel 插件（`attck`，优先级 21，版本 1.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
+ASSCOR v0.2.3 集成 MITRE ATT&CK V19 框架，构建了从检测、情报、仿真到评估的完整威胁分析能力链。该模块作为 μKernel 插件（`attck`，优先级 21，版本 1.0.0）运行，通过 DI 容器与 SSAM 评估引擎、SPC 态势计算器、CTI 威胁情报管理器深度集成。
 
 ### 13.1 四大核心子模块
 
@@ -569,7 +569,7 @@ ATTACKModule (Plugin v1.0.0)
 - **SSAM 1.2** — 引入 ACI、SPC、等保映射、AVD 扩展机制、μKernel 联动
 - **SSAM 1.3** — 移除4项重叠边缘因子（SYN Cookie/供应链/自动封禁/资源紧张），SPC 引入平方和衰减，增加边缘因子合规等级覆盖，内置冲突检测
 
-### ASSCOR v0.2.2 — 2026-08-02 技术债务清偿与架构加固发布
+### ASSCOR v0.2.3 — 2026-08-12 技术债务清偿与架构加固发布
 
 **技术债务清偿 (87→5, 94%)**：P0 全部清零 (19/19)、内核 17 接口/类型文件拆分、25 测试文件/222 用例/5 Benchmark 覆盖全核心基础设施、10+ nil-guard 修复。
 
@@ -684,7 +684,7 @@ ATTACKModule (Plugin v1.0.0)
 - **格式化输出** — 统一支持文本表格和 JSON 两种输出格式，通过 `--json` 参数切换
 - **HMAC 密钥管理** — 密钥元数据（创建时间/过期时间/哈希）、自动轮换（90 天）、文件权限 `0600`
 
-> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.2.2。两者版本号独立演进。
+> **说明：** SSAM（系统安全可接受性模型）是核心算法，当前版本 2.0，已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam) 纯函数式库。ASSCOR 是实现 SSAM 的开源平台框架，当前版本 v0.2.3。两者版本号独立演进。
 
 #### 第三批修复（SSAM 解耦与二次审计 — 2026-05-22）
 
