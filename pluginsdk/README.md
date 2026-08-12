@@ -36,7 +36,7 @@ ASSCOR Kernel                    Your Plugin (separate process)
 ## Plugin Interface
 
 ```go
-type Plugin interface {
+type RPCPlugin interface {
     Init(config map[string]string) error
     HandleRequest(method string, params json.RawMessage) (json.RawMessage, error)
     Shutdown() error

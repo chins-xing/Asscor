@@ -24,8 +24,10 @@ import (
 	"os"
 )
 
-// Plugin is the interface that all ASSCOR plugins must implement.
-type Plugin interface {
+// RPCPlugin is the interface that all ASSCOR RPC-based plugins must implement.
+// Note: this is distinct from kernel.Plugin (compiled-in, in-process).
+// RPCPlugin communicates via JSON-RPC over stdin/stdout as a separate OS process.
+type RPCPlugin interface {
 	// Init is called once after the plugin process starts. The config parameter
 	// contains the plugin-specific configuration from extension.json custom_config.
 	Init(config map[string]string) error
@@ -46,7 +48,7 @@ type Plugin interface {
 //	func main() {
 //	    pluginsdk.Serve(&MyPlugin{})
 //	}
-func Serve(p Plugin) {
+func Serve(p RPCPlugin) {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 1024*1024), 2*1024*1024)
 

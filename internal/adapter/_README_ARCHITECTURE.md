@@ -23,13 +23,23 @@ internal/adapterhub/   — 适配器编排层 (Orchestration Layer)
 ## 调用关系
 
 ```
-引擎评估器 (kernel/assessor)
+  引擎评估器 (kernel/assessor)
   │
   ├─→ adapter.List() → 从全局注册表获取所有已注册 Adapter
   │   └─→ adapter.ExecutePipeline() → 执行 Fetch→Parse→Map→Validate
   │
-  └─→ adapterhub.Manager → 管理适配器的运行时生命周期
-      └─→ adapterhub.Builder → 构建/启用适配器
+  └─→ kernel/adapter_integration → 管理适配器的运行时生命周期（同步循环/健康检查）
+      └─→ extmgr.SetKernelExtensions() → 通过扩展点桥接外部扩展适配器
 ```
 
-**关键区分**: `adapter/` 定义适配器接口和具体实现（静态注册），`adapterhub/` 在运行时编排它们（生命周期/规则/健康检查）。adapter/ 不知道自己如何被编排；adapterhub/ 不直接实现任何适配器。
+**关键区分**: `adapter/` 定义适配器接口和具体实现（静态注册 + 委托规则）。`kernel/adapter_integration` 在运行时编排适配器管线（周期执行 + 发现注入）。外部扩展通过 `extmgr` 桥接到内核扩展点。
+
+## 文件命名规范
+
+| 优先级 | 文件命名 | 示例 |
+|:---:|------|------|
+| P0 | 专用文件 (`<adapter>.go`) | `trivy.go`, `lynis.go`, `ansible.go`, `nuclei.go` |
+| P1 | 分组文件 (`p1_<category>.go`) | `p1_scanners.go`, `p1_management.go` |
+| P2 | 分组文件 (`p2_<category>.go`) | `p2_scanners.go`, `p2_management.go` |
+
+P0 适配器（核心安全扫描器）有专用文件以容纳复杂的 Parse/Map 逻辑。P1/P2 适配器按类别分组以减少文件数量。

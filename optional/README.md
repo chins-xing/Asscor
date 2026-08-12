@@ -11,37 +11,25 @@ optional/
 │   │   └── multi-algo-orchestrator/
 │   └── packages/                ←   多模块扩展包
 │       └── attck-ext-pack/
-│           └── package.json
-├── pkgmgr/                      ← 扩展包管理器 CLI
+│           ├── enable.go
+│           ├── package.json
+│           └── README.md
+├── pkgmgr/                      ← 扩展包管理工具 CLI
 │   ├── main.go
 │   ├── manifest.go
 │   └── fetcher.go
 ├── README.md
 └── SCHEMA.md
 ```
-optional/
-├── pkgmgr/                      ← 扩展包管理器 (asscor-pkg CLI)
-│   ├── main.go                  ←   CLI 入口
-│   ├── manifest.go              ←   package.json 解析 + 依赖求解 + 版本约束
-│   └── fetcher.go               ←   git 外部仓库克隆 + 兼容性校验
-├── SCHEMA.md                    ← package.json 格式规范文档
-├── algorithms/                  ← 按用途: 算法扩展
-│   ├── modules/                 ←   单模块扩展
-│   │   └── multi-algo-orchestrator/
-│   └── packages/                ←   多模块扩展包
-│       └── example-pack/
-│           └── package.json
-├── adapters/                    ← 按用途: 适配器扩展
-├── checks/                      ← 按用途: 检查项扩展
-└── platform/                    ← 按用途: 平台层扩展
-```
+
+> 注：`multi-algo-orchestrator` 和 `pkgmgr` 属于"monorepo 扩展" — 仍导入 `internal/*` 包，非独立部署模块。其他类别目录 (adapters/checks/platform) 按需创建。
 
 ## 单模块 vs 扩展包
 
 | 形式 | 目录 | 接入方式 | 适用 |
 |------|------|---------|------|
-| **单模块** | `<category>/modules/<name>/` | 直接 `import` + Extension Point 注册 | 单个独立功能 |
-| **扩展包** | `<category>/packages/<name>/` | `package.json` 声明 + `asscor-pkg install` | 多模块聚合 / 含外部依赖 |
+| **单模块** | `<category>/modules/<name>/` | `import` + Extension Point 注册 (monorepo) | 单功能扩展 |
+| **扩展包** | `<category>/packages/<name>/` | `package.json` + build tag 启用 | 多模块 / 编译开关控制 |
 
 ## 扩展包管理器 (asscor-pkg)
 
