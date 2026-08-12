@@ -42,6 +42,9 @@ func (m *HeartbeatModule) Init(ctx context.Context, kc KernelContext) error {
 	m.kernel = kc
 	m.agents = make(map[string]*AgentRecord)
 	m.timeout = 60 * time.Second
+	if cfg := kc.GetConfigObj(); cfg != nil && cfg.HeartbeatTimeoutSec > 0 {
+		m.timeout = time.Duration(cfg.HeartbeatTimeoutSec) * time.Second
+	}
 	m.stopCh = make(chan struct{})
 	m.state = PluginInitialized
 

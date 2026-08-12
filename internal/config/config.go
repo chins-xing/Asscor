@@ -24,6 +24,7 @@ type Config struct {
 	SPCEnabled   bool
 	ComplianceFramework string
 	DataDir      string
+	HeartbeatTimeoutSec int
 
 	ACINetworkSegmentation float64
 	ACILAPSEnabled        float64

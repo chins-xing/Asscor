@@ -86,6 +86,9 @@ type Agent struct {
 	hmacKeyConfigured bool
 	hmacKeyWarned    atomic.Bool
 	cachedPackages   []string
+	pkgHash          [32]byte
+	cpeHash          [32]byte
+	pkgSent          bool // true after first full packages send
 }
 
 func NewAgent(cfg AgentConfig) *Agent {
@@ -434,11 +437,24 @@ func (a *Agent) heartbeatCycle() error {
 	}
 
 	heartbeatReq := &apiv1.HeartbeatRequest{
-		HostId:        a.cfg.HostID,
-		SessionId:     a.sessionID,
-		Result:        snapshot,
-		Packages:      a.collectPackages(),
-		InstalledCPEs: a.collectCPEs(),
+		HostId:    a.cfg.HostID,
+		SessionId: a.sessionID,
+		Result:    snapshot,
+	}
+	if pkgs := a.collectPackages(); pkgs != nil {
+		h := sha256.Sum256([]byte(strings.Join(pkgs, ",")))
+		if !a.pkgSent || h != a.pkgHash {
+			heartbeatReq.Packages = pkgs
+			a.pkgHash = h
+			a.pkgSent = true
+		}
+	}
+	if cpes := a.collectCPEs(); cpes != nil {
+		h2 := sha256.Sum256([]byte(strings.Join(cpes, ",")))
+		if !a.pkgSent || h2 != a.cpeHash {
+			heartbeatReq.InstalledCPEs = cpes
+			a.cpeHash = h2
+		}
 	}
 
 	heartbeatResp, err := a.client.Heartbeat(heartbeatReq)
