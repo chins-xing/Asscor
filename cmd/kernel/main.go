@@ -243,6 +243,11 @@ k.SetConfig("config_path", resolvedConfigPath)
 	sourceManager := kernel.NewSourceManagerModule()
 	cliModule := cli.NewCLIModule()
 
+	k.Container().Bind((*kernel.AssessorInterface)(nil), assessor)
+	k.Container().Bind((*kernel.SPCInterface)(nil), spc)
+	k.Container().Bind((*kernel.CommanderInterface)(nil), commander)
+	k.Container().Bind((*kernel.PolicyInterface)(nil), policy)
+
 	plugins := []kernel.Plugin{heartbeat, spc, cti, scoringEngine, assessor, policy, commander, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, kernel.NewSRDPlugin()}
 
 	if *webuiPort > 0 {

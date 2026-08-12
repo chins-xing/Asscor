@@ -374,7 +374,7 @@ func (m *CTIModule) ReportThreat(severity string) {
 
 	if m.kernel != nil {
 		m.kernel.Bus().Publish(m.kernel.Context(), Message{
-			Topic:   "cti.threat_detected",
+			Topic:   TopicCTIThreatDetected,
 			Payload: map[string]interface{}{"severity": severity, "weight": weight, "active_count": m.activeThreats},
 			Source:  "cti",
 		})

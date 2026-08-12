@@ -241,7 +241,7 @@ func (m *ConfigWatcherModule) forceReload() {
 	}
 
 	m.kernel.Bus().Publish(m.kernel.Context(), Message{
-		Topic:   "config.reloaded",
+		Topic:   TopicConfigReloaded,
 		Payload: map[string]interface{}{"path": m.configPath},
 		Source:  "config_watcher",
 	})

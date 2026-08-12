@@ -118,7 +118,7 @@ func (m *HeartbeatModule) RecordHeartbeat(hostID string) {
 
 	if m.kernel != nil {
 		m.kernel.Bus().Publish(m.kernel.Context(), Message{
-			Topic:   "agent.heartbeat",
+			Topic:   TopicAgentHeartbeat,
 			Payload: hostID,
 			Source:  "heartbeat",
 		})
@@ -215,7 +215,8 @@ func (m *HeartbeatModule) checkTimeouts() {
 	m.mu.RUnlock()
 
 	for _, id := range timedOut {
-		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+		if m.kernel != nil {
+			m.kernel.Bus().Publish(m.kernel.Context(), Message{
 			Topic:   TopicAgentTimeout,
 			Payload: id,
 			Source:  "heartbeat",
@@ -224,6 +225,7 @@ func (m *HeartbeatModule) checkTimeouts() {
 			m.kernel.Extensions().Execute(m.kernel.Context(), "heartbeat.agent_timeout", map[string]interface{}{
 				"host_id": id,
 			})
+		}
 		}
 		logger.WithComponent("heartbeat").Warn("agent timed out", "host_id", id)
 

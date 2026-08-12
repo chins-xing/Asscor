@@ -332,11 +332,13 @@ func (m *AssessorModule) runSelfAssessment() {
 		logger.WithComponent("assessor").Warn("kernel self-assessment below threshold",
 			"score", result.FinalScore, "threshold", 90)
 
-		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+		if m.kernel != nil {
+			m.kernel.Bus().Publish(m.kernel.Context(), Message{
 			Topic:   TopicAssessorSelfCheck,
 			Payload: result,
 			Source:  "assessor.self_check",
 		})
+		}
 	}
 }
 
