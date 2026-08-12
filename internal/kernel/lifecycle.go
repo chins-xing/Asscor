@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/model"
 )
 
 // LifecyclePhase enumerates the automated security lifecycle phases.
@@ -124,14 +125,19 @@ func (s *inMemActivityStore) Clear(hostID string) {
 }
 
 // LifecycleEngine drives the automated security lifecycle state machine.
-// It fires extension points at each phase transition and loops back when
-// attacker activity persists after re-location.
+// It is a kernel Plugin that subscribes to assessment results and runs the
+// lifecycle (探测→定位→响应→报告→阻断→修复→验证→定位→归档→重复) per host.
 type LifecycleEngine struct {
 	kernel   KernelContext
 	locator  Locator
 	blocker  Blocker
 	activity ThreatActivityStore
-	phase    LifecyclePhase
+
+	mu     sync.Mutex
+	state  PluginState
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // NewLifecycleEngine creates a lifecycle state machine with default components.
@@ -139,17 +145,73 @@ func NewLifecycleEngine(kc KernelContext) *LifecycleEngine {
 	return &LifecycleEngine{
 		kernel:   kc,
 		activity: newInMemActivityStore(),
-		phase:    PhaseDetect,
+		state:    PluginUnregistered,
 	}
 }
 
-func (e *LifecycleEngine) SetLocator(l Locator)       { e.locator = l }
-func (e *LifecycleEngine) SetBlocker(b Blocker)       { e.blocker = b }
+// ── kernel.Plugin implementation ──
+
+func (e *LifecycleEngine) Info() PluginInfo {
+	return PluginInfo{Name: "lifecycle_engine", Version: "0.1.0", Description: "Automated security lifecycle state machine"}
+}
+
+func (e *LifecycleEngine) Dependencies() []PluginDependency { return nil }
+
+func (e *LifecycleEngine) Init(ctx context.Context, kc KernelContext) error {
+	e.kernel = kc
+	if e.locator == nil {
+		e.locator = NewKernelLocator(kc)
+	}
+	e.mu.Lock()
+	e.state = PluginInitialized
+	e.mu.Unlock()
+	return nil
+}
+
+func (e *LifecycleEngine) Start(ctx context.Context) error {
+	e.ctx, e.cancel = context.WithCancel(ctx)
+	// Subscribe to assessment results: run the lifecycle per assessed host.
+	e.kernel.Bus().Subscribe(TopicAssessorResult, "lifecycle_engine", func(ctx context.Context, msg Message) error {
+		if r, ok := msg.Payload.(*model.AssessmentResult); ok && r != nil {
+			e.wg.Add(1)
+			go func(hostID string) {
+				defer e.wg.Done()
+				e.Run(e.ctx, hostID)
+			}(r.HostID)
+		}
+		return nil
+	})
+	e.mu.Lock()
+	e.state = PluginStarted
+	e.mu.Unlock()
+	logger.WithComponent("lifecycle").Info("started")
+	return nil
+}
+
+func (e *LifecycleEngine) Stop(ctx context.Context) error {
+	if e.cancel != nil {
+		e.cancel()
+	}
+	e.wg.Wait()
+	e.mu.Lock()
+	e.state = PluginStopped
+	e.mu.Unlock()
+	return nil
+}
+
+func (e *LifecycleEngine) State() PluginState {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.state
+}
+
+// ── Configuration ──
+
+func (e *LifecycleEngine) SetLocator(l Locator)            { e.locator = l }
+func (e *LifecycleEngine) SetBlocker(b Blocker)            { e.blocker = b }
 func (e *LifecycleEngine) SetActivityStore(s ThreatActivityStore) { e.activity = s }
-func (e *LifecycleEngine) Phase() LifecyclePhase      { return e.phase }
 
 func (e *LifecycleEngine) enterPhase(p LifecyclePhase) {
-	e.phase = p
 	if e.kernel != nil && e.kernel.Extensions() != nil {
 		e.kernel.Extensions().Execute(e.kernel.Context(), "lifecycle.phase_entered", map[string]interface{}{"phase": p.String()})
 	}

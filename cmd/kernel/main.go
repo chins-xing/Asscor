@@ -248,7 +248,9 @@ k.SetConfig("config_path", resolvedConfigPath)
 	k.Container().Bind((*kernel.CommanderInterface)(nil), commander)
 	k.Container().Bind((*kernel.PolicyInterface)(nil), policy)
 
-	plugins := []kernel.Plugin{heartbeat, spc, cti, scoringEngine, assessor, policy, commander, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, kernel.NewSRDPlugin()}
+	lifecycle := kernel.NewLifecycleEngine(k)
+
+	plugins := []kernel.Plugin{heartbeat, spc, cti, scoringEngine, assessor, policy, commander, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
 
 	if *webuiPort > 0 {
 		webuiModule := webui.New(*webuiPort)
