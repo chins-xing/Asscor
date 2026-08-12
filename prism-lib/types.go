@@ -36,6 +36,7 @@ type PrismConfig struct {
 	MaxPathDepth int     // 最大搜索深度，默认 5
 	ScoreFloor   float64 // 下界稳定项，默认 0.40
 	CollapseBeta float64 // 塌缩超线性指数，默认 1.5
+	AggregationMode string // 传播聚合模式: "rss"(默认)/"max"/"linear"
 
 	// Semantic Layer
 	StableThreshold    float64 // Stable 隶属度上界阈值，默认 0.90

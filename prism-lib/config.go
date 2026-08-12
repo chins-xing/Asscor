@@ -11,6 +11,7 @@ func DefaultConfig() PrismConfig {
 		MaxPathDepth: 5,
 		ScoreFloor:   0.15,
 		CollapseBeta: 1.5,
+		AggregationMode: "rss",
 
 		// Semantic Layer
 		StableThreshold:    0.90,
