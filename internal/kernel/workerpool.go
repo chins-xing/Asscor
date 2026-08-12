@@ -103,15 +103,11 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 					p.onTaskTimeout()
 				}
 				taskCancel()
-				drainTimer := time.NewTimer(5 * time.Second)
 				select {
 				case <-done:
-					drainTimer.Stop()
-				case <-drainTimer.C:
+				case <-time.After(5 * time.Second):
 					logger.WithComponent("workerpool").Error("task did not complete after timeout + drain period, goroutine may leak")
-					drainTimer.Stop()
 				case <-p.ctx.Done():
-					drainTimer.Stop()
 				}
 			}
 		case <-p.ctx.Done():

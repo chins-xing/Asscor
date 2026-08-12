@@ -29,6 +29,7 @@ type BusMetrics struct {
 	PanicCount   int64
 	ErrorCount   int64
 	MessageCount int64
+	DroppedCount int64
 }
 
 type Bus struct {
@@ -119,7 +120,7 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 		select {
 		case b.maxGoroutines <- struct{}{}:
 		default:
-			atomic.AddInt64(&b.metrics.ErrorCount, 1)
+			atomic.AddInt64(&b.metrics.DroppedCount, 1)
 			logger.WithComponent("bus").Warn("max goroutines reached, dropping message",
 				"subscriber", sub.id, "topic", msg.Topic)
 			continue
@@ -141,9 +142,9 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 			select {
 			case b.dispatchSem <- struct{}{}:
 				acquired = true
-			default:
-				atomic.AddInt64(&b.metrics.ErrorCount, 1)
-				logger.WithComponent("bus").Warn("dispatch semaphore full, dropping message",
+		default:
+			atomic.AddInt64(&b.metrics.DroppedCount, 1)
+			logger.WithComponent("bus").Warn("dispatch semaphore full, dropping message",
 					"subscriber", s.id, "topic", msg.Topic,
 					"queue_size", b.queueSize)
 				return
@@ -187,6 +188,7 @@ func (b *Bus) GetMetrics() BusMetrics {
 		PanicCount:   atomic.LoadInt64(&b.metrics.PanicCount),
 		ErrorCount:   atomic.LoadInt64(&b.metrics.ErrorCount),
 		MessageCount: atomic.LoadInt64(&b.metrics.MessageCount),
+		DroppedCount: atomic.LoadInt64(&b.metrics.DroppedCount),
 	}
 }
 
