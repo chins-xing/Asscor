@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	prismlib "github.com/chins-xing/prism"
 )
 
 // TestProcessMultipleHostsNoDeadlock guards against the RWMutex re-entrancy
@@ -57,5 +59,23 @@ func TestAreConnectedSubnetOverlap(t *testing.T) {
 	// No topology → fallback connected (conservative)
 	if !p.areConnected("a", "unknown") {
 		t.Error("missing topology should fallback to connected")
+	}
+}
+
+// TestGetReachableHosts verifies lateral-movement scope computation.
+func TestGetReachableHosts(t *testing.T) {
+	p := NewPipeline(DefaultConfig())
+	p.SetTopology("a", []string{"10.0.0.0/24"}, "internal")
+	p.SetTopology("b", []string{"10.0.0.0/24"}, "internal")
+	p.SetTopology("c", []string{"192.168.0.0/24"}, "internal")
+
+	// Seed snapshots so GetReachableHosts has nodes to iterate.
+	p.snapshots["a"] = &prismlib.NodeState{HostID: "a", SSAMScore: 70}
+	p.snapshots["b"] = &prismlib.NodeState{HostID: "b", SSAMScore: 60}
+	p.snapshots["c"] = &prismlib.NodeState{HostID: "c", SSAMScore: 50}
+
+	reachable := p.GetReachableHosts("a")
+	if len(reachable) != 1 || reachable[0] != "b" {
+		t.Errorf("expected [b] reachable from a, got %v", reachable)
 	}
 }

@@ -23,13 +23,18 @@ func NewKernelLocator(kc KernelContext) *KernelLocator {
 	return &KernelLocator{kernel: kc}
 }
 
-// Locate aggregates subnet + policy evidence into an AttackerLocation.
+// Locate aggregates subnet + policy + SRD-propagation evidence into an AttackerLocation.
 func (l *KernelLocator) Locate(ctx context.Context, hostID string) (*AttackerLocation, error) {
 	loc := &AttackerLocation{}
 
 	// Subnet-level location from the topology registry.
 	if subnets := getTopology()[hostID]; len(subnets) > 0 {
 		loc.ActiveSubnets = subnets
+	}
+
+	// Lateral-movement scope from the SRD pipeline (subnet-overlap reachability).
+	if reachable := l.reachableHosts(hostID); len(reachable) > 0 {
+		loc.LateralPath = reachable
 	}
 
 	// Foothold: the host itself, if its policy status indicates a threat.
@@ -46,6 +51,22 @@ func (l *KernelLocator) Locate(ctx context.Context, hostID string) (*AttackerLoc
 	}
 
 	return loc, nil
+}
+
+// reachableHosts queries the SRD plugin for lateral-movement scope.
+func (l *KernelLocator) reachableHosts(hostID string) []string {
+	if l.kernel == nil {
+		return nil
+	}
+	plugin, ok := l.kernel.GetPlugin("srd_adapters")
+	if !ok {
+		return nil
+	}
+	p, ok := plugin.(interface{ GetReachableHosts(hostID string) []string })
+	if !ok {
+		return nil
+	}
+	return p.GetReachableHosts(hostID)
 }
 
 // HasActiveThreat reports whether the host still shows an active threat

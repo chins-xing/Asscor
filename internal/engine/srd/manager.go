@@ -180,6 +180,11 @@ func (m *Manager) SetTopology(hostID string, subnets []string, zone string) {
 	m.pipeline.SetTopology(hostID, subnets, zone)
 }
 
+// GetReachableHosts returns hosts sharing a subnet with hostID (lateral-movement scope).
+func (m *Manager) GetReachableHosts(hostID string) []string {
+	return m.pipeline.GetReachableHosts(hostID)
+}
+
 func (m *Manager) ProcessFile(ctx context.Context, path string) (*SRDResult, error) {
 	result, err := m.pipeline.ProcessFromFile(ctx, path)
 	if err != nil {

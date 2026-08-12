@@ -226,9 +226,14 @@ func (p *Pipeline) buildIncomingEdges(hostID string, allNodes map[string]*prisml
 // topology data is incomplete (conservative fallback to complete graph).
 func (p *Pipeline) areConnected(hostA, hostB string) bool {
 	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.areConnectedLocked(hostA, hostB)
+}
+
+// areConnectedLocked is the no-lock variant — caller must hold p.mu (R or W).
+func (p *Pipeline) areConnectedLocked(hostA, hostB string) bool {
 	a, aOK := p.topology[hostA]
 	b, bOK := p.topology[hostB]
-	p.mu.RUnlock()
 	if !aOK || !bOK {
 		return true // no topology data → assume connected (backward compatible)
 	}
@@ -240,6 +245,20 @@ func (p *Pipeline) areConnected(hostA, hostB string) bool {
 		}
 	}
 	return false
+}
+
+// GetReachableHosts returns hosts sharing a subnet with hostID — the
+// lateral-movement scope used by the lifecycle Locator.
+func (p *Pipeline) GetReachableHosts(hostID string) []string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	var reachable []string
+	for id := range p.snapshots {
+		if id != hostID && p.areConnectedLocked(hostID, id) {
+			reachable = append(reachable, id)
+		}
+	}
+	return reachable
 }
 
 // subnetOverlap reports whether two CIDR strings overlap.

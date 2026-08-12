@@ -66,6 +66,12 @@ func (s *SRDPlugin) SetTopology(hostID string, subnets []string, zone string) {
 	s.manager.SetTopology(hostID, subnets, zone)
 }
 
+// GetReachableHosts returns hosts sharing a subnet with hostID — the
+// lateral-movement scope for the lifecycle Locator.
+func (s *SRDPlugin) GetReachableHosts(hostID string) []string {
+	return s.manager.GetReachableHosts(hostID)
+}
+
 // syncTopology pulls the kernel's shared topology registry into the SRD pipeline.
 func (s *SRDPlugin) syncTopology() {
 	for hostID, subnets := range getTopology() {
