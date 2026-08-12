@@ -43,22 +43,28 @@ var CommonAttackPorts = []int{21, 22, 23, 25, 445, 3389, 8080, 9200, 6379}
 
 // Start begins listening on the given ports. Any connection is recorded and
 // immediately closed (no protocol response — pure "Expose" not "Simulate").
+// Per the "good enough" principle, a single port that fails to bind (already
+// in use) is skipped rather than failing the whole deployment.
 func (h *honeypot) Start(ports []int) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	var lastErr error
 	for _, port := range ports {
 		if _, exists := h.ports[port]; exists {
 			continue
 		}
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err != nil {
-			return fmt.Errorf("honeypot listen :%d: %w", port, err)
+			lastErr = err
+			continue // skip unavailable port — good enough
 		}
 		h.ports[port] = ln
 		go h.serve(port, ln)
 	}
-	h.started = true
-	return nil
+	if len(h.ports) > 0 {
+		h.started = true
+	}
+	return lastErr
 }
 
 func (h *honeypot) serve(port int, ln net.Listener) {
