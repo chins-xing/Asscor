@@ -124,11 +124,13 @@ func TestCircuitBreakerReopensOnFailureInHalfOpen(t *testing.T) {
 		t.Fatalf("expected StateHalfOpen after timeout, got %s", st)
 	}
 
-	cb.RecordFailure("s", "m")
+	for i := 0; i < 3; i++ {
+		cb.RecordFailure("s", "m")
+	}
 
 	st := cb.State("s", "m")
 	if st != StateOpen {
-		t.Fatalf("expected StateOpen after failure in half-open, got %s", st)
+		t.Fatalf("expected StateOpen after 3 failures in half-open, got %s", st)
 	}
 }
 

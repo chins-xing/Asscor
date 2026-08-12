@@ -38,7 +38,8 @@ type CircuitBreakerConfig struct {
 	Timeout       time.Duration
 	WindowSize    time.Duration
 	OnStateChange func(service, method string)
-	Extensions    ModuleExtensions
+	Extensions       ModuleExtensions
+	HalfOpenMaxFails int
 }
 
 type windowEntry struct {
@@ -51,6 +52,7 @@ type circuitRecord struct {
 	lastStateChange time.Time
 	mu              sync.Mutex
 	window          []windowEntry
+	halfOpenFails   int
 }
 
 func (cb *CircuitBreaker) fireBreakerExtension(k, state string) {
@@ -252,14 +254,22 @@ func (cb *CircuitBreaker) recordFailure(k string) {
 			}
 		}
 	case StateHalfOpen:
-		if atomic.CompareAndSwapInt32(&rec.state, int32(StateHalfOpen), int32(StateOpen)) {
-			rec.mu.Lock()
-			rec.lastStateChange = time.Now()
-			rec.mu.Unlock()
-			if cb.cfg.OnStateChange != nil {
-				cb.cfg.OnStateChange(k, "reopened")
+		rec.halfOpenFails++
+		maxFails := cb.cfg.HalfOpenMaxFails
+		if maxFails <= 0 {
+			maxFails = 3
+		}
+		if rec.halfOpenFails >= maxFails {
+			if atomic.CompareAndSwapInt32(&rec.state, int32(StateHalfOpen), int32(StateOpen)) {
+				rec.halfOpenFails = 0
+				rec.mu.Lock()
+				rec.lastStateChange = time.Now()
+				rec.mu.Unlock()
+				if cb.cfg.OnStateChange != nil {
+					cb.cfg.OnStateChange(k, "reopened")
+				}
+				cb.fireBreakerExtension(k, "open")
 			}
-			cb.fireBreakerExtension(k, "open")
 		}
 	}
 }
@@ -274,6 +284,7 @@ func (cb *CircuitBreaker) recordSuccess(k string) {
 	switch state {
 	case StateHalfOpen:
 		if atomic.CompareAndSwapInt32(&rec.state, int32(StateHalfOpen), int32(StateClosed)) {
+			rec.halfOpenFails = 0
 			rec.mu.Lock()
 			rec.window = rec.window[:0]
 			rec.lastStateChange = time.Now()
