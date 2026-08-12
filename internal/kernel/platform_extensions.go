@@ -251,4 +251,17 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 	r.RegisterPoint(ExtensionPoint{
 		Name: "srd.result_processed", Description: "Called after SRD pipeline processes an external tool result", Version: "1.0",
 	})
+
+	// ── 黑盒召回层 (可选扩展, 白盒主路径不变) ──
+	// 黑盒阵列作为辅助召回层, 仅发布候选信号; 白盒确定性验证兜底.
+	// 黑盒输出视为不可信输入, 经白盒复核后才进入决策.
+	r.RegisterPoint(ExtensionPoint{
+		Name: "recaller.candidates", Description: "Called when black-box recaller array publishes candidate risk signals (untrusted input)", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "recaller.filtered", Description: "Called after white-box arbitration retains validated candidate signals", Version: "1.0",
+	})
+	r.RegisterPoint(ExtensionPoint{
+		Name: "recaller.dropped", Description: "Called when all black-box models unanimously drop a signal (audit trail)", Version: "1.0",
+	})
 }

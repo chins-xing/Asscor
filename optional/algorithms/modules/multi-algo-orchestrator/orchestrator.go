@@ -66,6 +66,10 @@ const (
 	MergeWeightedAverage MergeStrategy = "weighted_average"
 	MergePrimaryOnly     MergeStrategy = "primary_only"
 	MergeConsensus       MergeStrategy = "consensus"
+	// MergeWhiteboxFirst merges only white-box algorithms (primary/secondary).
+	// Advisory (black-box) algorithms never enter the final score — their output
+	// is recorded as untrusted reference only, preserving white-box determinism.
+	MergeWhiteboxFirst MergeStrategy = "whitebox_first"
 )
 
 // CheckMode controls how checks from multiple algorithms are combined.
@@ -331,6 +335,10 @@ func (o *Orchestrator) buildOrchestrationResult(algoResults []AlgoResult) *Orche
 		if ar.Error != "" {
 			continue
 		}
+		// WhiteboxFirst: advisory (black-box) algorithms never enter the score pool.
+		if o.cfg.Merge == MergeWhiteboxFirst && ar.Role == RoleAdvisory {
+			continue
+		}
 		scores = append(scores, ar.Score)
 		weights = append(weights, ar.Confidence)
 		if ar.Score < minScore {
@@ -394,6 +402,10 @@ func (o *Orchestrator) buildOrchestrationResult(algoResults []AlgoResult) *Orche
 		} else {
 			r.FinalScore = minScore
 		}
+	case MergeWhiteboxFirst:
+		// scores already exclude advisory (black-box) algorithms.
+		// White-box pool merges with worst_of semantics to eliminate barrel effect.
+		r.FinalScore = minScore
 	default:
 		r.FinalScore = r.PrimaryScore
 	}
