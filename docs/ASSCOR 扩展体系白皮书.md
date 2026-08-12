@@ -1,40 +1,40 @@
-# ASSCOR À©Õ¹ÌåÏµ°×Æ¤Êé
+ï»¿# ASSCOR ï¿½ï¿½Õ¹ï¿½ï¿½Ïµï¿½ï¿½Æ¤ï¿½ï¿½
 
-**°æ±¾**£ºv1.1
-**ÈÕÆÚ**£º2026-08-02
-**×´Ì¬**£º·¢²¼
-**ÅäÌ×ÎÄµµ**£ºSSAM 2.0 °×Æ¤Êé£¨µÚÒ»ÆªÕÂ£©¡¢¹¤³ÌÊµÏÖ°×Æ¤Êé£¨µÚÈýÆªÕÂ£©
+**ï¿½æ±¾**ï¿½ï¿½v1.1
+**ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½2026-08-12
+**×´Ì¬**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+**ï¿½ï¿½ï¿½ï¿½ï¿½Äµï¿½**ï¿½ï¿½SSAM 2.0 ï¿½ï¿½Æ¤ï¿½é£¨ï¿½ï¿½Ò»Æªï¿½Â£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Êµï¿½Ö°ï¿½Æ¤ï¿½é£¨ï¿½ï¿½ï¿½ï¿½Æªï¿½Â£ï¿½
 
-> ±¾ÎÄÕûºÏÁË¡¶ASSCOR À©Õ¹½Ó¿Ú±¨¸æ¡·Óë¡¶ASSCOR ¿ÉÌæ»»ÐÔÆÀ¹À±¨¸æ¡·£¬ÏµÍ³²ûÊö ASSCOR µÄÀ©Õ¹¼Ü¹¹¡ª¡ª°üÀ¨²å¼þÉúÃüÖÜÆÚ¡¢DI ÈÝÆ÷¡¢ÊÂ¼þ×ÜÏß¡¢À©Õ¹µãÏµÍ³¡¢ÒµÎñÄ£¿é½Ó¿Ú¡¢¼ì²éÆ÷×¢²á±í£¬ÒÔ¼°È«²¿ºËÐÄÄ£¿éºÍ¼ì²éÆ÷µÄ¿ÉÌæ»»ÐÔÉè¼Æ¡£
+> ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë¡ï¿½ASSCOR ï¿½ï¿½Õ¹ï¿½Ó¿Ú±ï¿½ï¿½æ¡·ï¿½ë¡¶ASSCOR ï¿½ï¿½ï¿½æ»»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½æ¡·ï¿½ï¿½ÏµÍ³ï¿½ï¿½ï¿½ï¿½ ASSCOR ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½Ü¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú¡ï¿½DI ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ß¡ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ÏµÍ³ï¿½ï¿½Òµï¿½ï¿½Ä£ï¿½ï¿½Ó¿Ú¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼ï¿½È«ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½æ»»ï¿½ï¿½ï¿½ï¿½Æ¡ï¿½
 
 ---
 
 ## ÕªÒª
 
-ASSCOR ²ÉÓÃ"Î¢ÄÚºË + ²å¼þ"¼Ü¹¹£¬Í¨¹ý±ê×¼»¯½Ó¿Ú¡¢ÒÀÀµ×¢ÈëÈÝÆ÷¡¢ÊÂ¼þ×ÜÏßºÍÀ©Õ¹µãÏµÍ³£¬ÊµÏÖÁË´Óµ×²ã¼ì²éÆ÷µ½¶¥²ãÆÀ·ÖÒýÇæµÄ**È«Õ»¿ÉÌæ»»ÐÔ**¡£±¾ÎÄµµÏµÍ³¼ÇÂ¼ ASSCOR µÄÀ©Õ¹½Ó¿ÚÌåÏµ¡¢¿ÉÌæ»»ÐÔ»úÖÆ¡¢ÒÔ¼°À©Õ¹¿ª·¢¹æ·¶£¬ÎªµÚÈý·½¿ª·¢ÕßºÍÉçÇø¹±Ï×ÕßÌá¹©ÍêÕûµÄ½ÓÈëÖ¸ÄÏ¡£
+ASSCOR ï¿½ï¿½ï¿½ï¿½"Î¢ï¿½Úºï¿½ + ï¿½ï¿½ï¿½"ï¿½Ü¹ï¿½ï¿½ï¿½Í¨ï¿½ï¿½ï¿½ï¿½×¼ï¿½ï¿½ï¿½Ó¿Ú¡ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ßºï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ÏµÍ³ï¿½ï¿½Êµï¿½ï¿½ï¿½Ë´Óµ×²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½**È«Õ»ï¿½ï¿½ï¿½æ»»ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½Äµï¿½ÏµÍ³ï¿½ï¿½Â¼ ASSCOR ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½Ó¿ï¿½ï¿½ï¿½Ïµï¿½ï¿½ï¿½ï¿½ï¿½æ»»ï¿½Ô»ï¿½ï¿½Æ¡ï¿½ï¿½Ô¼ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½æ·¶ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ßºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½á¹©ï¿½ï¿½ï¿½ï¿½ï¿½Ä½ï¿½ï¿½ï¿½Ö¸ï¿½Ï¡ï¿½
 
 ---
 
 ## Ä¿Â¼
 
-1. [²å¼þÉúÃüÖÜÆÚ½Ó¿Ú](#Ò»²å¼þÉúÃüÖÜÆÚ½Ó¿Ú)
-2. [DI ÈÝÆ÷ÓëÒÀÀµ×¢Èë](#¶þdi-ÈÝÆ÷ÓëÒÀÀµ×¢Èë)
-3. [ÊÂ¼þ×ÜÏß](#ÈýÊÂ¼þ×ÜÏß)
-4. [À©Õ¹µãÏµÍ³](#ËÄÀ©Õ¹µãÏµÍ³)
-5. [ÒµÎñÄ£¿é½Ó¿Ú](#ÎåÒµÎñÄ£¿é½Ó¿Ú)
-6. [¼ì²éÆ÷×¢²á±íÓë¿ÉÌæ»»ÐÔ](#Áù¼ì²éÆ÷×¢²á±íÓë¿ÉÌæ»»ÐÔ)
-7. [ºËÐÄÄ£¿é¿ÉÌæ»»ÐÔ](#ÆßºËÐÄÄ£¿é¿ÉÌæ»»ÐÔ)
-8. [Íâ²¿ÊÊÅäÆ÷Óë¼ì²éÎ¯ÅÉ](#°ËÍâ²¿ÊÊÅäÆ÷Óë¼ì²éÎ¯ÅÉ)
-9. [À©Õ¹¿ª·¢¿ìËÙÖ¸ÄÏ](#¾ÅÀ©Õ¹¿ª·¢¿ìËÙÖ¸ÄÏ)
-10. [Ìæ»»¸´ÔÓ¶ÈÓëÈ±¿Ú·ÖÎö](#Ê®Ìæ»»¸´ÔÓ¶ÈÓëÈ±¿Ú·ÖÎö)
+1. [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú½Ó¿ï¿½](#Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú½Ó¿ï¿½)
+2. [DI ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½](#ï¿½ï¿½di-ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½)
+3. [ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½](#ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½)
+4. [ï¿½ï¿½Õ¹ï¿½ï¿½ÏµÍ³](#ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ÏµÍ³)
+5. [Òµï¿½ï¿½Ä£ï¿½ï¿½Ó¿ï¿½](#ï¿½ï¿½Òµï¿½ï¿½Ä£ï¿½ï¿½Ó¿ï¿½)
+6. [ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½æ»»ï¿½ï¿½](#ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½æ»»ï¿½ï¿½)
+7. [ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½æ»»ï¿½ï¿½](#ï¿½ßºï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½æ»»ï¿½ï¿½)
+8. [ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î¯ï¿½ï¿½](#ï¿½ï¿½ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î¯ï¿½ï¿½)
+9. [ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½](#ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½)
+10. [ï¿½æ»»ï¿½ï¿½ï¿½Ó¶ï¿½ï¿½ï¿½È±ï¿½Ú·ï¿½ï¿½ï¿½](#Ê®ï¿½æ»»ï¿½ï¿½ï¿½Ó¶ï¿½ï¿½ï¿½È±ï¿½Ú·ï¿½ï¿½ï¿½)
 
 ---
 
-## Ò»¡¢²å¼þÉúÃüÖÜÆÚ½Ó¿Ú
+## Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú½Ó¿ï¿½
 
-### 1.1 Plugin£¨ºËÐÄ½Ó¿Ú£©
+### 1.1 Pluginï¿½ï¿½ï¿½ï¿½ï¿½Ä½Ó¿Ú£ï¿½
 
-ËùÓÐ ASSCOR Ä£¿é±ØÐëÊµÏÖ `Plugin` ½Ó¿Ú£¬ºËÐÄ¶¨ÒåÎ»ÓÚ [plugin.go](file:///f:/Argus/internal/kernel/plugin.go#L102-L114)¡£
+ï¿½ï¿½ï¿½ï¿½ ASSCOR Ä£ï¿½ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½ `Plugin` ï¿½Ó¿Ú£ï¿½ï¿½ï¿½ï¿½Ä¶ï¿½ï¿½ï¿½Î»ï¿½ï¿½ [plugin.go](file:///f:/Argus/internal/kernel/plugin.go#L102-L114)ï¿½ï¿½
 
 ```go
 type Plugin interface {
@@ -47,21 +47,21 @@ type Plugin interface {
 }
 ```
 
-**ÉúÃüÖÜÆÚ×´Ì¬»ú**£º
+**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½ï¿½**ï¿½ï¿½
 
 ```
-Unregistered ¡ú Registered ¡ú Initialized ¡ú Started ¡ú Stopping ¡ú Stopped
-                                                    ¨K Failed
+Unregistered ï¿½ï¿½ Registered ï¿½ï¿½ Initialized ï¿½ï¿½ Started ï¿½ï¿½ Stopping ï¿½ï¿½ Stopped
+                                                    ï¿½K Failed
 ```
 
-| ½×¶Î | ·½·¨ | Ô¼¶¨ |
+| ï¿½×¶ï¿½ | ï¿½ï¿½ï¿½ï¿½ | Ô¼ï¿½ï¿½ |
 |------|------|------|
-| Registered | `RegisterPlugin()` | ²å¼þ×¢²áµ½ Kernel |
-| Initialized | `Init()` | ½ö×ö³õÊ¼»¯£¨¼ÓÔØÅäÖÃ¡¢×¢²áÀ©Õ¹µã¡¢°ó¶¨ DI£©£¬²»Æô¶¯³¤ÔËÐÐÈÎÎñ |
-| Started | `Start()` | Æô¶¯ goroutine¡¢¶©ÔÄ Bus¡¢Æô¶¯¶¨Ê±Æ÷ |
-| Stopping | `Stop()` | ÇåÀí goroutine¡¢¹Ø±Õ channel¡¢È¡Ïû context |
+| Registered | `RegisterPlugin()` | ï¿½ï¿½ï¿½×¢ï¿½áµ½ Kernel |
+| Initialized | `Init()` | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¡ï¿½×¢ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ã¡¢ï¿½ï¿½ DIï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| Started | `Start()` | ï¿½ï¿½ï¿½ goroutineï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Busï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ |
+| Stopping | `Stop()` | ï¿½ï¿½ï¿½ï¿½ goroutineï¿½ï¿½ï¿½Ø±ï¿½ channelï¿½ï¿½È¡ï¿½ï¿½ context |
 
-### 1.2 PriorityPlugin£¨ÓÅÏÈ¼¶²å¼þ£©
+### 1.2 PriorityPluginï¿½ï¿½ï¿½ï¿½ï¿½È¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 ```go
 type PriorityPlugin interface {
@@ -70,28 +70,28 @@ type PriorityPlugin interface {
 }
 ```
 
-ÊµÏÖ´Ë½Ó¿ÚµÄ²å¼þ°´ `Priority()` ÉýÐòÆô¶¯£¬½µÐòÍ£Ö¹¡£
+Êµï¿½Ö´Ë½Ó¿ÚµÄ²ï¿½ï¿½ï¿½ï¿½ `Priority()` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í£Ö¹ï¿½ï¿½
 
-**¸÷Ä£¿éÓÅÏÈ¼¶·ÖÅä**£º
+**ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½ï¿½È¼ï¿½ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½
 
-| ÓÅÏÈ¼¶ | ²å¼þ | ËµÃ÷ |
+| ï¿½ï¿½ï¿½È¼ï¿½ | ï¿½ï¿½ï¿½ | Ëµï¿½ï¿½ |
 |:------:|------|------|
-| 1 | ConfigWatcherModule | ÅäÖÃÎÄ¼þ¼àÌý£¬×î¸ßÓÅÏÈ¼¶ |
-| 2 | ConcurrencyModule | ²¢·¢¿ØÖÆ»ù´¡ÉèÊ© |
-| 3 | PersistenceModule | ³Ö¾Ã»¯²ã |
-| 5 | HeartbeatModule | Agent ÐÄÌø¹ÜÀí |
-| 10 | CTIModule | ÍøÂçÍþÐ²Çé±¨ |
-| 20 | SPCModule | °²È«Ì¬ÊÆ¼ÆËã |
-| 21 | ATTACKModule | ATT&CK ÖªÊ¶¿âÓëÐÐÎª·ÖÎö |
-| 35 | ScoringEngineModule | SSAM ÆÀ·ÖÒýÇæ |
-| 40 | AssessorModule | ÆÀ¹Àµ÷¶ÈÆ÷ |
-| 45 | AdapterIntegrationModule | Íâ²¿ÊÊÅäÆ÷¼¯³É |
-| 50 | PolicyModule | ²ßÂÔÒýÇæ |
-| 55 | SourceManagerModule | Íâ²¿Ô´¹ÜÀí |
-| 60 | CommanderModule | ÃüÁîÏÂ·¢ |
-| 70 | LogCollectorModule | ÈÕÖ¾ÊÕ¼¯ |
+| 1 | ConfigWatcherModule | ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¼ï¿½ |
+| 2 | ConcurrencyModule | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ»ï¿½ï¿½ï¿½ï¿½ï¿½Ê© |
+| 3 | PersistenceModule | ï¿½Ö¾Ã»ï¿½ï¿½ï¿½ |
+| 5 | HeartbeatModule | Agent ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| 10 | CTIModule | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð²ï¿½é±¨ |
+| 20 | SPCModule | ï¿½ï¿½È«Ì¬ï¿½Æ¼ï¿½ï¿½ï¿½ |
+| 21 | ATTACKModule | ATT&CK ÖªÊ¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ |
+| 35 | ScoringEngineModule | SSAM ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| 40 | AssessorModule | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| 45 | AdapterIntegrationModule | ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| 50 | PolicyModule | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| 55 | SourceManagerModule | ï¿½â²¿Ô´ï¿½ï¿½ï¿½ï¿½ |
+| 60 | CommanderModule | ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ |
+| 70 | LogCollectorModule | ï¿½ï¿½Ö¾ï¿½Õ¼ï¿½ |
 
-### 1.3 HealthCheckable£¨½¡¿µ¼ì²é£©
+### 1.3 HealthCheckableï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½é£©
 
 ```go
 type HealthCheckable interface {
@@ -99,9 +99,9 @@ type HealthCheckable interface {
 }
 ```
 
-ÊµÏÖÕß£ºSPCModule¡¢ConcurrencyModule µÈ¡£Kernel µÄ `HealthCheck()` ±éÀúËùÓÐÊµÏÖ´Ë½Ó¿ÚµÄ²å¼þ²¢ÊÕ¼¯×´Ì¬¡£
+Êµï¿½ï¿½ï¿½ß£ï¿½SPCModuleï¿½ï¿½ConcurrencyModule ï¿½È¡ï¿½Kernel ï¿½ï¿½ `HealthCheck()` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Êµï¿½Ö´Ë½Ó¿ÚµÄ²ï¿½ï¿½ï¿½ï¿½ï¿½Õ¼ï¿½×´Ì¬ï¿½ï¿½
 
-### 1.4 ConfigurablePlugin£¨ÈÈ¼ÓÔØÅäÖÃ£©
+### 1.4 ConfigurablePluginï¿½ï¿½ï¿½È¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã£ï¿½
 
 ```go
 type ConfigurablePlugin interface {
@@ -110,9 +110,9 @@ type ConfigurablePlugin interface {
 }
 ```
 
-ÈÈ¼ÓÔØÊ± Kernel µ÷ÓÃ `Configure(k.config)` ×¢ÈëÐÂÅäÖÃ¡£
+ï¿½È¼ï¿½ï¿½ï¿½Ê± Kernel ï¿½ï¿½ï¿½ï¿½ `Configure(k.config)` ×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¡ï¿½
 
-### 1.5 ¸¨ÖúÀàÐÍ
+### 1.5 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 ```go
 type PluginInfo struct {
@@ -127,27 +127,27 @@ type PluginDependency struct {
 
 ---
 
-## ¶þ¡¢DI ÈÝÆ÷ÓëÒÀÀµ×¢Èë
+## ï¿½ï¿½ï¿½ï¿½DI ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½
 
-DI ÈÝÆ÷¶¨ÒåÓÚ [di.go](file:///f:/Argus/internal/kernel/di.go)£¬Ìá¹©ÀàÐÍ°²È«µÄÒÀÀµ×¢Èë¡£
+DI ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ [di.go](file:///f:/Argus/internal/kernel/di.go)ï¿½ï¿½ï¿½á¹©ï¿½ï¿½ï¿½Í°ï¿½È«ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ë¡£
 
-### 2.1 ÈÝÆ÷½Ó¿Ú
+### 2.1 ï¿½ï¿½ï¿½ï¿½ï¿½Ó¿ï¿½
 
-| ·½·¨ | Ç©Ãû | ËµÃ÷ |
+| ï¿½ï¿½ï¿½ï¿½ | Ç©ï¿½ï¿½ | Ëµï¿½ï¿½ |
 |------|------|------|
-| `Bind` | `(iface interface{}, impl interface{})` | ÒÔ½Ó¿ÚµÄ reflect.Type Îª key ×¢²áÊµÏÖ£¬**ÖØ¸´µ÷ÓÃÖ±½Ó¸²¸Ç** |
-| `BindNamed` | `(name string, iface interface{}, impl interface{})` | ÃüÃû°ó¶¨ |
-| `Resolve` | `(iface interface{}) (interface{}, bool)` | °´ÀàÐÍ²éÕÒÊµÏÖ |
-| `ResolveNamed` | `(name string) (interface{}, bool)` | °´Ãû³Æ²éÕÒÊµÏÖ |
-| `Inject` | `(target interface{}) error` | Í¨¹ý `inject:"true"` »ò `inject:"Ãû³Æ"` ±êÇ©×Ô¶¯×¢Èë |
-| `Remove` | `(iface interface{})` | ÒÆ³ý°ó¶¨ |
-| `Count` | `() int` | ·µ»ØÒÑ°ó¶¨ÊýÁ¿ |
+| `Bind` | `(iface interface{}, impl interface{})` | ï¿½Ô½Ó¿Úµï¿½ reflect.Type Îª key ×¢ï¿½ï¿½Êµï¿½Ö£ï¿½**ï¿½Ø¸ï¿½ï¿½ï¿½ï¿½ï¿½Ö±ï¿½Ó¸ï¿½ï¿½ï¿½** |
+| `BindNamed` | `(name string, iface interface{}, impl interface{})` | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| `Resolve` | `(iface interface{}) (interface{}, bool)` | ï¿½ï¿½ï¿½ï¿½ï¿½Í²ï¿½ï¿½ï¿½Êµï¿½ï¿½ |
+| `ResolveNamed` | `(name string) (interface{}, bool)` | ï¿½ï¿½ï¿½ï¿½ï¿½Æ²ï¿½ï¿½ï¿½Êµï¿½ï¿½ |
+| `Inject` | `(target interface{}) error` | Í¨ï¿½ï¿½ `inject:"true"` ï¿½ï¿½ `inject:"ï¿½ï¿½ï¿½ï¿½"` ï¿½ï¿½Ç©ï¿½Ô¶ï¿½×¢ï¿½ï¿½ |
+| `Remove` | `(iface interface{})` | ï¿½Æ³ï¿½ï¿½ï¿½ |
+| `Count` | `() int` | ï¿½ï¿½ï¿½ï¿½ï¿½Ñ°ï¿½ï¿½ï¿½ï¿½ï¿½ |
 
-### 2.2 ÍêÕû DI °ó¶¨±í
+### 2.2 ï¿½ï¿½ï¿½ï¿½ DI ï¿½ó¶¨±ï¿½
 
-| ÐòºÅ | °ó¶¨½Ó¿Ú | °ó¶¨ÊµÀý | ÎÄ¼þÎ»ÖÃ |
+| ï¿½ï¿½ï¿½ | ï¿½ó¶¨½Ó¿ï¿½ | ï¿½ï¿½Êµï¿½ï¿½ | ï¿½Ä¼ï¿½Î»ï¿½ï¿½ |
 |:---:|------|------|------|
-| 1 | `(*engine.AssessorEngine)(nil)` | `ssam.NewEngineAdapter(cfg)` | `main.go` (Æ½Ì¨²ã×¢Èë) |
+| 1 | `(*engine.AssessorEngine)(nil)` | `ssam.NewEngineAdapter(cfg)` | `main.go` (Æ½Ì¨ï¿½ï¿½×¢ï¿½ï¿½) |
 | 2 | `(*AssessorInterface)(nil)` | AssessorModule | [assessor.go:L99](file:///f:/Argus/internal/kernel/assessor.go#L99) |
 | 3 | `(*PersistenceInterface)(nil)` | PersistenceModule | [persistence.go:L261](file:///f:/Argus/internal/kernel/persistence.go#L261) |
 | 4 | `(*ConcurrencyInterface)(nil)` | ConcurrencyModule | [workerpool.go:L209](file:///f:/Argus/internal/kernel/workerpool.go#L209) |
@@ -163,21 +163,21 @@ DI ÈÝÆ÷¶¨ÒåÓÚ [di.go](file:///f:/Argus/internal/kernel/di.go)£¬Ìá¹©ÀàÐÍ°²È«µÄÒÀÀ
 | 14 | `(*LogCollectorInterface)(nil)` | LogCollectorModule | [collector.go:L74](file:///f:/Argus/internal/kernel/collector.go#L74) |
 | 15 | `(*ScoringEngineProvider)(nil)` | ScoringEngineModule | [main.go:L131](file:///f:/Argus/cmd/kernel/main.go#L131) |
 
-### 2.3 ÒÀÀµ½âÎöÊ±»ú
+### 2.3 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½
 
-ºËÐÄÄ£¿éµÄÒÀÀµ½âÎö·¢ÉúÔÚ**ÔËÐÐÊ±**£¨·Ç Init Ê±¹Ì»¯£©£¬ÕâÊ¹µÃÈÈÌæ»»³ÉÎª¿ÉÄÜ£º
+ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½Ê±**ï¿½ï¿½ï¿½ï¿½ Init Ê±ï¿½Ì»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¹ï¿½ï¿½ï¿½ï¿½ï¿½æ»»ï¿½ï¿½Îªï¿½ï¿½ï¿½Ü£ï¿½
 
-| Ïû·ÑÄ£¿é | ÒÀÀµ½Ó¿Ú | ½âÎöÊ±»ú |
+| ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ï¿½Ó¿ï¿½ | ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ |
 |------|------|------|
-| Assessor | `SPCInterface` | Ã¿´ÎÆÀ¹ÀÊ± |
-| Assessor | `CTIInterface` | Ã¿´ÎÆÀ¹ÀÊ± |
-| Assessor | `ATTACKInterface` | Ã¿´ÎÆÀ¹ÀÊ± |
+| Assessor | `SPCInterface` | Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê± |
+| Assessor | `CTIInterface` | Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê± |
+| Assessor | `ATTACKInterface` | Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê± |
 | Assessor | `ScoringEngineProvider` | Init Ê± |
 
-### 2.4 µäÐÍ×¢ÈëÄ£Ê½
+### 2.4 ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½Ä£Ê½
 
 ```go
-// ÔÚÄ£¿é Init ÖÐÍ¨¹ý KernelContext »ñÈ¡ÒÀÀµ
+// ï¿½ï¿½Ä£ï¿½ï¿½ Init ï¿½ï¿½Í¨ï¿½ï¿½ KernelContext ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½
 var spc SPCInterface
 if impl, ok := kc.Container().Resolve((*SPCInterface)(nil)); ok {
     spc = impl.(SPCInterface)
@@ -186,32 +186,32 @@ if impl, ok := kc.Container().Resolve((*SPCInterface)(nil)); ok {
 
 ---
 
-## Èý¡¢ÊÂ¼þ×ÜÏß
+## ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½
 
-### 3.1 »°Ìâ³£Á¿
+### 3.1 ï¿½ï¿½ï¿½â³£ï¿½ï¿½
 
-¶¨ÒåÓÚ [plugin.go](file:///f:/Argus/internal/kernel/plugin.go#L83-L100)£º
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ [plugin.go](file:///f:/Argus/internal/kernel/plugin.go#L83-L100)ï¿½ï¿½
 
-| ³£Á¿ | Öµ | ËµÃ÷ |
+| ï¿½ï¿½ï¿½ï¿½ | Öµ | Ëµï¿½ï¿½ |
 |------|-----|------|
-| `TopicAssessorResult` | `"assessor.result"` | ÆÀ¹ÀÍê³Éºó·¢²¼ |
-| `TopicPolicyAction` | `"policy.action"` | ²ßÂÔÒýÇæ´¥·¢¶¯×÷Ê±·¢²¼ |
-| `TopicAgentRegistered` | `"agent.registered"` | Agent ×¢²áÊ±·¢²¼ |
-| `TopicAgentTimeout` | `"agent.timeout"` | Agent ³¬Ê±Ê±·¢²¼ |
-| `TopicConfigChanged` | `"config.changed"` | ÅäÖÃ±ä¸üÊ±·¢²¼ |
-| `TopicSPCUpdated` | `"spc.updated"` | SPC Êý¾Ý¸üÐÂÊ±·¢²¼ |
-| `TopicCTIUpdated` | `"cti.updated"` | CTI Çé±¨¸üÐÂÊ±·¢²¼ |
-| `TopicCommandEnqueued` | `"command.enqueued"` | ÃüÁîÈë¶ÓÊ±·¢²¼ |
-| `TopicCommandResult` | `"command.result"` | ÃüÁîÖ´ÐÐ½á¹û·µ»ØÊ±·¢²¼ |
-| `TopicAgentHeartbeat` | `"agent.heartbeat"` | Agent ÐÄÌøÊ±·¢²¼ |
-| `TopicConfigReloaded` | `"config.reloaded"` | ÅäÖÃÖØÔØÍê³ÉÊ±·¢²¼ |
-| `TopicCTIThreatDetected` | `"cti.threat_detected"` | CTI ÍþÐ²¼ì²âµ½Ê±·¢²¼ |
-| `TopicAdapterFindings` | `"adapter.findings"` | Adapter ·¢ÏÖ½á¹ûÊ±·¢²¼ |
-| `TopicSourceManagerDeployed` | `"source_manager.deployed"` | Íâ²¿Ô´²¿ÊðÍê³ÉÊ±·¢²¼ |
+| `TopicAssessorResult` | `"assessor.result"` | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éºó·¢²ï¿½ |
+| `TopicPolicyAction` | `"policy.action"` | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½æ´¥ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicAgentRegistered` | `"agent.registered"` | Agent ×¢ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicAgentTimeout` | `"agent.timeout"` | Agent ï¿½ï¿½Ê±Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicConfigChanged` | `"config.changed"` | ï¿½ï¿½ï¿½Ã±ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicSPCUpdated` | `"spc.updated"` | SPC ï¿½ï¿½ï¿½Ý¸ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicCTIUpdated` | `"cti.updated"` | CTI ï¿½é±¨ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicCommandEnqueued` | `"command.enqueued"` | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicCommandResult` | `"command.result"` | ï¿½ï¿½ï¿½ï¿½Ö´ï¿½Ð½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicAgentHeartbeat` | `"agent.heartbeat"` | Agent ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicConfigReloaded` | `"config.reloaded"` | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicCTIThreatDetected` | `"cti.threat_detected"` | CTI ï¿½ï¿½Ð²ï¿½ï¿½âµ½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicAdapterFindings` | `"adapter.findings"` | Adapter ï¿½ï¿½ï¿½Ö½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
+| `TopicSourceManagerDeployed` | `"source_manager.deployed"` | ï¿½â²¿Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ |
 
-### 3.2 ¶©ÔÄ¹ØÏµ±í
+### 3.2 ï¿½ï¿½ï¿½Ä¹ï¿½Ïµï¿½ï¿½
 
-| ¶©ÔÄÕß | Ö÷Ìâ | Handler |
+| ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ | Handler |
 |--------|------|---------|
 | **PersistenceModule** | `TopicAssessorResult` | `m.onAssessmentResult` |
 | **PersistenceModule** | `TopicAgentRegistered` | `m.onAgentRegistered` |
@@ -220,30 +220,30 @@ if impl, ok := kc.Container().Resolve((*SPCInterface)(nil)); ok {
 | **CommanderModule** | `TopicPolicyAction` | `m.onPolicyAction` |
 | **PolicyModule** | `TopicAssessorResult` | `m.onAssessmentResult` |
 
-### 3.3 ÊÂ¼þÁ÷Í¼
+### 3.3 ï¿½Â¼ï¿½ï¿½ï¿½Í¼
 
 ```
-Agent ÉÏ±¨ ¡ú HeartbeatModule
-    ©À©¤ TopicAgentRegistered ©¤©¤¡ú PersistenceModule (³Ö¾Ã»¯×¢²á¼ÇÂ¼)
-    ©¸©¤ TopicAgentHeartbeat   ©¤©¤¡ú (ÏµÍ³ÄÚ²¿)
+Agent ï¿½Ï±ï¿½ ï¿½ï¿½ HeartbeatModule
+    ï¿½ï¿½ï¿½ï¿½ TopicAgentRegistered ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ PersistenceModule (ï¿½Ö¾Ã»ï¿½×¢ï¿½ï¿½ï¿½Â¼)
+    ï¿½ï¿½ï¿½ï¿½ TopicAgentHeartbeat   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (ÏµÍ³ï¿½Ú²ï¿½)
 
-ÆÀ¹À´¥·¢ ¡ú AssessorModule
-    ©¸©¤ TopicAssessorResult
-        ©À©¤¡ú PersistenceModule (Ð´ÈëÆÀ¹ÀÀúÊ·)
-        ©À©¤¡ú ATTACKModule     (ATT&CK ¸²¸ÇÂÊ·ÖÎö / APT ¹éÒò)
-        ©¸©¤¡ú PolicyModule     (²ßÂÔÅÐ¶¨ ¡ú ¿ÉÄÜ´¥·¢¶¯×÷)
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ AssessorModule
+    ï¿½ï¿½ï¿½ï¿½ TopicAssessorResult
+        ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ PersistenceModule (Ð´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê·)
+        ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ATTACKModule     (ATT&CK ï¿½ï¿½ï¿½ï¿½ï¿½Ê·ï¿½ï¿½ï¿½ / APT ï¿½ï¿½ï¿½ï¿½)
+        ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ PolicyModule     (ï¿½ï¿½ï¿½ï¿½ï¿½Ð¶ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½Ü´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
 
-²ßÂÔÅÐ¶¨ ¡ú PolicyModule
-    ©¸©¤ TopicPolicyAction ©¤©¤¡ú CommanderModule (ÏÂ·¢ÃüÁîµ½ Agent)
+ï¿½ï¿½ï¿½ï¿½ï¿½Ð¶ï¿½ ï¿½ï¿½ PolicyModule
+    ï¿½ï¿½ï¿½ï¿½ TopicPolicyAction ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ CommanderModule (ï¿½Â·ï¿½ï¿½ï¿½ï¿½îµ½ Agent)
 ```
 
 ---
 
-## ËÄ¡¢À©Õ¹µãÏµÍ³
+## ï¿½Ä¡ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ÏµÍ³
 
-À©Õ¹µã¶¨ÒåÓÚ [extensions.go](file:///f:/Argus/internal/kernel/extensions.go)¡£
+ï¿½ï¿½Õ¹ï¿½ã¶¨ï¿½ï¿½ï¿½ï¿½ [extensions.go](file:///f:/Argus/internal/kernel/extensions.go)ï¿½ï¿½
 
-### 4.1 ºËÐÄÀàÐÍ
+### 4.1 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 ```go
 type ExtensionPoint struct {
@@ -255,105 +255,105 @@ type ExtensionPoint struct {
 type ExtensionHandler func(ctx context.Context, data interface{}) error
 ```
 
-### 4.2 ExtensionRegistry ·½·¨
+### 4.2 ExtensionRegistry ï¿½ï¿½ï¿½ï¿½
 
-| ·½·¨ | ËµÃ÷ |
+| ï¿½ï¿½ï¿½ï¿½ | Ëµï¿½ï¿½ |
 |------|------|
-| `RegisterPoint(point ExtensionPoint)` | ×¢²áÀ©Õ¹µã£¨½öÆ½Ì¨²ã¿ÉÓÃ£¬²å¼þ²»¿Éµ÷ÓÃ£© |
-| `RegisterExtension(pluginID, pointName string, handler ExtensionHandler, priority int) error` | ×¢²áÀ©Õ¹´¦ÀíÆ÷ |
-| `Execute(ctx, pointName string, data interface{}) []error` | Ö´ÐÐËùÓÐ´¦ÀíÆ÷ |
-| `ExecuteUntilFirst(ctx, pointName string, data interface{}) (string, interface{}, error)` | Ö´ÐÐµ½µÚÒ»¸ö·Ç nil ½á¹û£¬·µ»Ø²å¼þIDºÍ·µ»ØÖµ |
-| `UnregisterPlugin(pluginID string)` | ÒÆ³ýÖ¸¶¨²å¼þµÄËùÓÐÀ©Õ¹ |
-| `ListPoints() []ExtensionPoint` | ÁÐ³öËùÓÐÒÑ×¢²áÀ©Õ¹µã |
-| `ListExtensions(pointName string) []string` | ÁÐ³öÖ¸¶¨À©Õ¹µãµÄ´¦ÀíÆ÷ ID |
+| `RegisterPoint(point ExtensionPoint)` | ×¢ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ã£¨ï¿½ï¿½Æ½Ì¨ï¿½ï¿½ï¿½ï¿½Ã£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éµï¿½ï¿½Ã£ï¿½ |
+| `RegisterExtension(pluginID, pointName string, handler ExtensionHandler, priority int) error` | ×¢ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| `Execute(ctx, pointName string, data interface{}) []error` | Ö´ï¿½ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| `ExecuteUntilFirst(ctx, pointName string, data interface{}) (string, interface{}, error)` | Ö´ï¿½Ðµï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ nil ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø²ï¿½ï¿½IDï¿½Í·ï¿½ï¿½ï¿½Öµ |
+| `UnregisterPlugin(pluginID string)` | ï¿½Æ³ï¿½Ö¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ |
+| `ListPoints() []ExtensionPoint` | ï¿½Ð³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ |
+| `ListExtensions(pointName string) []string` | ï¿½Ð³ï¿½Ö¸ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½Ä´ï¿½ï¿½ï¿½ï¿½ï¿½ ID |
 
-### 4.3 ÄÚºË¼¶À©Õ¹µã£¨6 ¸ö£©
+### 4.3 ï¿½ÚºË¼ï¿½ï¿½ï¿½Õ¹ï¿½ã£¨6 ï¿½ï¿½ï¿½ï¿½
 
-| À©Õ¹µãÃû³Æ | ´¥·¢Ê±»ú |
+| ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ |
 |-----------|---------|
-| `kernel.pre_init` | ËùÓÐ²å¼þ Init Ö®Ç° |
-| `kernel.post_init` | ËùÓÐ²å¼þ Init Ö®ºó |
-| `kernel.pre_start` | ËùÓÐ²å¼þ Start Ö®Ç° |
-| `kernel.post_start` | ËùÓÐ²å¼þ Start Ö®ºó |
-| `kernel.pre_stop` | ¹Ø±ÕÐòÁÐ¿ªÊ¼Ç° |
-| `kernel.post_stop` | ËùÓÐ²å¼þ Stop Ö®ºó |
+| `kernel.pre_init` | ï¿½ï¿½ï¿½Ð²ï¿½ï¿½ Init Ö®Ç° |
+| `kernel.post_init` | ï¿½ï¿½ï¿½Ð²ï¿½ï¿½ Init Ö®ï¿½ï¿½ |
+| `kernel.pre_start` | ï¿½ï¿½ï¿½Ð²ï¿½ï¿½ Start Ö®Ç° |
+| `kernel.post_start` | ï¿½ï¿½ï¿½Ð²ï¿½ï¿½ Start Ö®ï¿½ï¿½ |
+| `kernel.pre_stop` | ï¿½Ø±ï¿½ï¿½ï¿½ï¿½Ð¿ï¿½Ê¼Ç° |
+| `kernel.post_stop` | ï¿½ï¿½ï¿½Ð²ï¿½ï¿½ Stop Ö®ï¿½ï¿½ |
 
-### 4.4 ÒµÎñÄ£¿éÀ©Õ¹µã£¨70 ¸ö£¬v0.2.2+£©
+### 4.4 Òµï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ã£¨70 ï¿½ï¿½ï¿½ï¿½v0.2.3+ï¿½ï¿½
 
-**AssessorModule£¨4 ¸ö£©**£º`assessor.pre_evaluate`¡¢`assessor.pre_score`¡¢`assessor.post_evaluate`¡¢`assessor.report_generated`¡¢`assessor.outbound`
+**AssessorModuleï¿½ï¿½4 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`assessor.pre_evaluate`ï¿½ï¿½`assessor.pre_score`ï¿½ï¿½`assessor.post_evaluate`ï¿½ï¿½`assessor.report_generated`ï¿½ï¿½`assessor.outbound`
 
-**PolicyModule£¨3 ¸ö£©**£º`policy.action_decided`¡¢`policy.notify`¡¢`policy.status_changed`
+**PolicyModuleï¿½ï¿½3 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`policy.action_decided`ï¿½ï¿½`policy.notify`ï¿½ï¿½`policy.status_changed`
 
-**RemediationModule£¨3 ¸ö£©**£º`remediation.pre_apply`¡¢`remediation.post_apply`¡¢`remediation.action_resolved`
+**RemediationModuleï¿½ï¿½3 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`remediation.pre_apply`ï¿½ï¿½`remediation.post_apply`ï¿½ï¿½`remediation.action_resolved`
 
-**VerifyModule£¨3 ¸ö£©**£º`verify.pre_check`¡¢`verify.post_check`¡¢`verify.status_changed`
+**VerifyModuleï¿½ï¿½3 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`verify.pre_check`ï¿½ï¿½`verify.post_check`ï¿½ï¿½`verify.status_changed`
 
-**ArchiveModule£¨3 ¸ö£©**£º`archive.pre_write`¡¢`archive.post_write`¡¢`archive.rotation`
+**ArchiveModuleï¿½ï¿½3 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`archive.pre_write`ï¿½ï¿½`archive.post_write`ï¿½ï¿½`archive.rotation`
 
-**CLI/WebUI Æ½Ì¨À©Õ¹£¨2 ¸ö£©**£º`cli.command.register`¡¢`webui.route.register`
+**CLI/WebUI Æ½Ì¨ï¿½ï¿½Õ¹ï¿½ï¿½2 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`cli.command.register`ï¿½ï¿½`webui.route.register`
 
-**SPCModule£¨3 ¸ö£©**£º`spc.pre_calculate`¡¢`spc.post_calculate`¡¢`spc.cve_updated`
+**SPCModuleï¿½ï¿½3 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`spc.pre_calculate`ï¿½ï¿½`spc.post_calculate`ï¿½ï¿½`spc.cve_updated`
 
-**ATTACKModule£¨13 ¸ö£©**£º
+**ATTACKModuleï¿½ï¿½13 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½
 
-| À©Õ¹µã | ´¥·¢Ê±»ú | ·ÖÀà |
+| ï¿½ï¿½Õ¹ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ |
 |------|------|------|
-| `attck.coverage.complete` | ¸²¸ÇÂÊ·ÖÎöÍê³É | ¸²¸ÇÂÊ |
-| `attck.apt.matched` | APT ×éÖ¯Æ¥Åä¼ì²â | APT ¹éÒò |
-| `attck.risk.predicted` | Ô¤²âÐÔ·çÏÕÆÀ¹ÀÍê³É | ·çÏÕÆÀ¹À |
-| `attck.detection.alert` | ¼ì²â¸æ¾¯´¥·¢ | ¼ì²â¸æ¾¯ |
-| `attck.detection.anomaly` | ¸ß·ÖÒì³£¼ì²âµ½ | ¼ì²â¸æ¾¯ |
-| `attck.emulation.complete` | ¶ÔÊÖ·ÂÕæÍê³É | ·ÂÕæ |
-| `attck.assessment.complete` | ²î¾à·ÖÎöÆÀ¹ÀÍê³É | ÆÀ¹À |
-| `attck.apt.chain_detected` | APT ¹¥»÷Á´ÖØ¹¹Íê³É | APT ¹éÒò |
-| `attck.apt.attribution` | APT ¹éÒòÖ´ÐÐ | APT ¹éÒò |
-| `attck.apt.hunt_confirmed` | ÍþÐ²á÷ÁÔ¼ÙÉèÈ·ÈÏ | ÍþÐ²á÷ÁÔ |
-| `attck.apt.report_generated` | APT ·ÖÎö±¨¸æÉú³É | ±¨¸æ |
-| `attck.behavioral.alert` | ÐÐÎª¸æ¾¯´¥·¢ | ÐÐÎª·ÖÎö |
-| `attck.behavioral.beacon` | C2 Beaconing ¼ì²âµ½ | ÐÐÎª·ÖÎö |
+| `attck.coverage.complete` | ï¿½ï¿½ï¿½ï¿½ï¿½Ê·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| `attck.apt.matched` | APT ï¿½ï¿½Ö¯Æ¥ï¿½ï¿½ï¿½ï¿½ | APT ï¿½ï¿½ï¿½ï¿½ |
+| `attck.risk.predicted` | Ô¤ï¿½ï¿½ï¿½Ô·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| `attck.detection.alert` | ï¿½ï¿½ï¿½æ¾¯ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½æ¾¯ |
+| `attck.detection.anomaly` | ï¿½ß·ï¿½ï¿½ì³£ï¿½ï¿½âµ½ | ï¿½ï¿½ï¿½æ¾¯ |
+| `attck.emulation.complete` | ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ |
+| `attck.assessment.complete` | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ |
+| `attck.apt.chain_detected` | APT ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø¹ï¿½ï¿½ï¿½ï¿½ | APT ï¿½ï¿½ï¿½ï¿½ |
+| `attck.apt.attribution` | APT ï¿½ï¿½ï¿½ï¿½Ö´ï¿½ï¿½ | APT ï¿½ï¿½ï¿½ï¿½ |
+| `attck.apt.hunt_confirmed` | ï¿½ï¿½Ð²ï¿½ï¿½ï¿½Ô¼ï¿½ï¿½ï¿½È·ï¿½ï¿½ | ï¿½ï¿½Ð²ï¿½ï¿½ï¿½ï¿½ |
+| `attck.apt.report_generated` | APT ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ |
+| `attck.behavioral.alert` | ï¿½ï¿½Îªï¿½æ¾¯ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ |
+| `attck.behavioral.beacon` | C2 Beaconing ï¿½ï¿½âµ½ | ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ |
 
-**HeartbeatModule£¨3 ¸ö£©**£º`heartbeat.agent_timeout`¡¢`heartbeat.agent_reconnected`¡¢`heartbeat.agent_pruned`
+**HeartbeatModuleï¿½ï¿½3 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`heartbeat.agent_timeout`ï¿½ï¿½`heartbeat.agent_reconnected`ï¿½ï¿½`heartbeat.agent_pruned`
 
-**ConfigWatcherModule£¨3 ¸ö£©**£º`config.pre_reload`¡¢`config.post_reload`¡¢`config.load_error`
+**ConfigWatcherModuleï¿½ï¿½3 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`config.pre_reload`ï¿½ï¿½`config.post_reload`ï¿½ï¿½`config.load_error`
 
-**CTIModule£¨3 ¸ö£©**£º`cti.pre_update`¡¢`cti.post_update`¡¢`cti.coefficient_changed`
+**CTIModuleï¿½ï¿½3 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`cti.pre_update`ï¿½ï¿½`cti.post_update`ï¿½ï¿½`cti.coefficient_changed`
 
-**AdapterIntegrationModule£¨2 ¸ö£©**£º`adapter.pre_fetch`¡¢`adapter.post_fetch`
+**AdapterIntegrationModuleï¿½ï¿½2 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`adapter.pre_fetch`ï¿½ï¿½`adapter.post_fetch`
 
-**SIEM Pusher£¨3 ¸ö£©**£º`siem.pre_push`¡¢`siem.post_push`¡¢`siem.push_failure`
+**SIEM Pusherï¿½ï¿½3 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`siem.pre_push`ï¿½ï¿½`siem.post_push`ï¿½ï¿½`siem.push_failure`
 
-**CommanderModule£¨2 ¸ö£©**£º`commander.command_expired`¡¢`commander.key_rotated`
+**CommanderModuleï¿½ï¿½2 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`commander.command_expired`ï¿½ï¿½`commander.key_rotated`
 
-**SourceManagerModule£¨4 ¸ö£©**£º`source.pre_deploy`¡¢`source.post_deploy`¡¢`source.pre_enable`¡¢`source.pre_disable`
+**SourceManagerModuleï¿½ï¿½4 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`source.pre_deploy`ï¿½ï¿½`source.post_deploy`ï¿½ï¿½`source.pre_enable`ï¿½ï¿½`source.pre_disable`
 
-**Log Collector£¨2 ¸ö£©**£º`log.entry_received`¡¢`agent.log_uploaded`
+**Log Collectorï¿½ï¿½2 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`log.entry_received`ï¿½ï¿½`agent.log_uploaded`
 
-**PersistenceModule£¨3 ¸ö£©**£º`persistence.pre_append`¡¢`persistence.post_append`¡¢`persistence.dashboard_written`
+**PersistenceModuleï¿½ï¿½3 ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½`persistence.pre_append`ï¿½ï¿½`persistence.post_append`ï¿½ï¿½`persistence.dashboard_written`
 
-**ÉúÃüÖÜÆÚ½×¶ÎÓ³Éä**£º
+**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú½×¶ï¿½Ó³ï¿½ï¿½**ï¿½ï¿½
 
-| ½×¶Î | À©Õ¹µã | ¸²¸ÇÄ£¿é |
+| ï¿½×¶ï¿½ | ï¿½ï¿½Õ¹ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ |
 |------|--------|---------|
-| **Ì½²â** | 23 | Assessor + SPC + ATT&CK + Heartbeat + Adapter + CTI |
-| **ÏìÓ¦** | 5 | Policy + ConfigWatcher |
-| **±¨¸æ** | 8 | Assessor + ATT&CK + SIEM + Log + Persistence |
-| **ÐÞ¸´** | 5 | Remediation + Commander |
-| **ÑéÖ¤** | 3 | Verify |
-| **¹éµµ** | 6 | Archive + Persistence |
+| **Ì½ï¿½ï¿½** | 23 | Assessor + SPC + ATT&CK + Heartbeat + Adapter + CTI |
+| **ï¿½ï¿½Ó¦** | 5 | Policy + ConfigWatcher |
+| **ï¿½ï¿½ï¿½ï¿½** | 8 | Assessor + ATT&CK + SIEM + Log + Persistence |
+| **ï¿½Þ¸ï¿½** | 5 | Remediation + Commander |
+| **ï¿½ï¿½Ö¤** | 3 | Verify |
+| **ï¿½éµµ** | 6 | Archive + Persistence |
 
-### 4.5 À©Õ¹µã×¢²áÊ¾Àý£¨v0.2.2 ¼¯ÖÐ»¯¼Ü¹¹£©
+### 4.5 ï¿½ï¿½Õ¹ï¿½ï¿½×¢ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½v0.2.3 ï¿½ï¿½ï¿½Ð»ï¿½ï¿½Ü¹ï¿½ï¿½ï¿½
 
-À©Õ¹µãÓÉÆ½Ì¨²ã `RegisterAllExtensionPoints()` ¼¯ÖÐ¶¨ÒåÔÚ `kernel/platform_extensions.go`¡£Ä£¿é²»¿É×¢²áÐÂÀ©Õ¹µã£¨`ModuleExtensions` ½Ó¿Ú²»º¬ `RegisterPoint`£©£¬Ö»ÄÜ¶©ÔÄÒÑÓÐÀ©Õ¹µã£º
+ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½Æ½Ì¨ï¿½ï¿½ `RegisterAllExtensionPoints()` ï¿½ï¿½ï¿½Ð¶ï¿½ï¿½ï¿½ï¿½ï¿½ `kernel/platform_extensions.go`ï¿½ï¿½Ä£ï¿½é²»ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ã£¨`ModuleExtensions` ï¿½Ó¿Ú²ï¿½ï¿½ï¿½ `RegisterPoint`ï¿½ï¿½ï¿½ï¿½Ö»ï¿½Ü¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ã£º
 
 ```go
-// Æ½Ì¨²ã: platform_extensions.go ¼¯ÖÐ×¢²á
+// Æ½Ì¨ï¿½ï¿½: platform_extensions.go ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½
 func RegisterAllExtensionPoints(r *ExtensionRegistry) {
     r.RegisterPoint(ExtensionPoint{
         Name: "spc.pre_calculate", Description: "Called before SPC calculation", Version: "1.0",
     })
 }
 
-// Ä£¿é: Ê¹ÓÃ RegisterExtension ¶©ÔÄ£¨²»¿É RegisterPoint£©
+// Ä£ï¿½ï¿½: Ê¹ï¿½ï¿½ RegisterExtension ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½ï¿½ RegisterPointï¿½ï¿½
 kc.Extensions().RegisterExtension("my_plugin", "spc.pre_calculate",
     func(ctx context.Context, data interface{}) error { return nil }, 10,
 )
@@ -361,11 +361,11 @@ kc.Extensions().RegisterExtension("my_plugin", "spc.pre_calculate",
 
 ---
 
-## Îå¡¢ÒµÎñÄ£¿é½Ó¿Ú
+## ï¿½å¡¢Òµï¿½ï¿½Ä£ï¿½ï¿½Ó¿ï¿½
 
 ### 5.1 ScoringEngineProvider
 
-[assessor.go:L20-L27](file:///f:/Argus/internal/kernel/assessor.go#L20-L27) ¡ª SSAM ÆÀ·ÖÒýÇæÌá¹©Õß
+[assessor.go:L20-L27](file:///f:/Argus/internal/kernel/assessor.go#L20-L27) ï¿½ï¿½ SSAM ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½á¹©ï¿½ï¿½
 
 ```go
 type ScoringEngineProvider interface {
@@ -380,7 +380,7 @@ type ScoringEngineProvider interface {
 
 ### 5.2 AssessorInterface
 
-[assessor.go:L515-L520](file:///f:/Argus/internal/kernel/assessor.go#L515-L520) ¡ª ÆÀ¹Àµ÷¶ÈÆ÷
+[assessor.go:L515-L520](file:///f:/Argus/internal/kernel/assessor.go#L515-L520) ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 ```go
 type AssessorInterface interface {
@@ -393,7 +393,7 @@ type AssessorInterface interface {
 
 ### 5.3 PolicyInterface
 
-[policy.go:L182-L185](file:///f:/Argus/internal/kernel/policy.go#L182-L185) ¡ª ²ßÂÔÒýÇæ
+[policy.go:L182-L185](file:///f:/Argus/internal/kernel/policy.go#L182-L185) ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 ```go
 type PolicyInterface interface {
@@ -404,7 +404,7 @@ type PolicyInterface interface {
 
 ### 5.4 SPCInterface
 
-[spc.go:L1194-L1213](file:///f:/Argus/internal/kernel/spc.go#L1194-L1213) ¡ª °²È«Ì¬ÊÆ¼ÆËã
+[spc.go:L1194-L1213](file:///f:/Argus/internal/kernel/spc.go#L1194-L1213) ï¿½ï¿½ ï¿½ï¿½È«Ì¬ï¿½Æ¼ï¿½ï¿½ï¿½
 
 ```go
 type SPCInterface interface {
@@ -431,7 +431,7 @@ type SPCInterface interface {
 
 ### 5.5 CTIInterface
 
-[cti.go:L166-L170](file:///f:/Argus/internal/kernel/cti.go#L166-L170) ¡ª ÍøÂçÍþÐ²Çé±¨
+[cti.go:L166-L170](file:///f:/Argus/internal/kernel/cti.go#L166-L170) ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð²ï¿½é±¨
 
 ```go
 type CTIInterface interface {
@@ -441,9 +441,9 @@ type CTIInterface interface {
 }
 ```
 
-### 5.6 ÆäÓàÄ£¿é½Ó¿Ú
+### 5.6 ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½Ó¿ï¿½
 
-| ½Ó¿Ú | ÎÄ¼þÎ»ÖÃ | ·½·¨Êý |
+| ï¿½Ó¿ï¿½ | ï¿½Ä¼ï¿½Î»ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
 |------|------|:---:|
 | `HeartbeatInterface` | [heartbeat.go:L223-L229](file:///f:/Argus/internal/kernel/heartbeat.go#L223-L229) | 5 |
 | `CommanderInterface` | [commander.go:L324-L328](file:///f:/Argus/internal/kernel/commander.go#L324-L328) | 3 |
@@ -457,11 +457,11 @@ type CTIInterface interface {
 
 ---
 
-## Áù¡¢¼ì²éÆ÷×¢²á±íÓë¿ÉÌæ»»ÐÔ
+## ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½æ»»ï¿½ï¿½
 
-### 6.1 ×¢²á±í»úÖÆ
+### 6.1 ×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-¼ì²éÆ÷Í¨¹ý [registry.go](file:///f:/Argus/internal/checks/registry.go) ÖÐÈ«¾Ö×¢²á±í¹ÜÀí£º
+ï¿½ï¿½ï¿½ï¿½ï¿½Í¨ï¿½ï¿½ [registry.go](file:///f:/Argus/internal/checks/registry.go) ï¿½ï¿½È«ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 ```go
 var (
@@ -469,14 +469,14 @@ var (
     registry []model.CheckItem
 )
 
-func Register(items ...model.CheckItem)     // ×¢²áÐÂ¼ì²éÏî
-func Unregister(checkIDs ...string)          // °´ ID ÒÆ³ý¼ì²éÏî
-func GetAll() []model.CheckItem             // »ñÈ¡È«²¿×¢²áÏî
-func GetByID(checkID string) (model.CheckItem, bool)  // °´ ID ²éÕÒ
-func GetByDomain(domain model.ScoreDomain) []model.CheckItem  // °´ÓòÉ¸Ñ¡
+func Register(items ...model.CheckItem)     // ×¢ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½
+func Unregister(checkIDs ...string)          // ï¿½ï¿½ ID ï¿½Æ³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+func GetAll() []model.CheckItem             // ï¿½ï¿½È¡È«ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½
+func GetByID(checkID string) (model.CheckItem, bool)  // ï¿½ï¿½ ID ï¿½ï¿½ï¿½ï¿½
+func GetByDomain(domain model.ScoreDomain) []model.CheckItem  // ï¿½ï¿½ï¿½ï¿½É¸Ñ¡
 ```
 
-Ä¬ÈÏ¼ì²éÏîÔÚ [init.go](file:///f:/Argus/internal/checks/init.go) ÖÐÍ¨¹ý `init()` ×Ô¶¯×¢²á£º
+Ä¬ï¿½Ï¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ [init.go](file:///f:/Argus/internal/checks/init.go) ï¿½ï¿½Í¨ï¿½ï¿½ `init()` ï¿½Ô¶ï¿½×¢ï¿½á£º
 
 ```go
 func init() {
@@ -484,9 +484,9 @@ func init() {
 }
 ```
 
-### 6.2 Ìæ»»¼ì²éÆ÷
+### 6.2 ï¿½æ»»ï¿½ï¿½ï¿½ï¿½ï¿½
 
-**·½°¸ A£ºÌæ»»µ¥¸ö¼ì²éÏî**
+**ï¿½ï¿½ï¿½ï¿½ Aï¿½ï¿½ï¿½æ»»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½**
 
 ```go
 checks.Unregister("AS-001")
@@ -495,290 +495,290 @@ checks.Register(model.CheckItem{
 })
 ```
 
-**·½°¸ B£ºÌæ»»È«²¿¼ì²éÏî**
+**ï¿½ï¿½ï¿½ï¿½ Bï¿½ï¿½ï¿½æ»»È«ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½**
 
 ```go
-checks.Unregister(/* »ñÈ¡ËùÓÐÏÖÓÐ ID */...)
+checks.Unregister(/* ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ID */...)
 checks.Register(myCustomCheckSet...)
 ```
 
-**·½°¸ C£º°´ºÏ¹æÒªÇó²Ã¼ô**
+**ï¿½ï¿½ï¿½ï¿½ Cï¿½ï¿½ï¿½ï¿½ï¿½Ï¹ï¿½Òªï¿½ï¿½Ã¼ï¿½**
 
 ```go
-ids := checks.GetByComplianceLevel("µÈ±£Èý¼¶")
-// ¹ýÂËºóÖØÐÂ×¢²á
+ids := checks.GetByComplianceLevel("ï¿½È±ï¿½ï¿½ï¿½ï¿½ï¿½")
+// ï¿½ï¿½ï¿½Ëºï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½
 checks.Unregister(getIDs(all)...)
 checks.Register(keep...)
 ```
 
-### 6.3 Ìæ»»×¢ÒâÊÂÏî
+### 6.3 ï¿½æ»»×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-| ×¢Òâµã | ËµÃ÷ |
+| ×¢ï¿½ï¿½ï¿½ | Ëµï¿½ï¿½ |
 |------|------|
-| ?? **±ßÔµÒò×Ó TriggerCheck ÒÀÀµ** | Ìæ»»¼ì²éÏîÐèÍ¬²½¸üÐÂ `TriggerCheck` Ó³Éä |
-| ?? **ATT&CK ¼¼ÊõÓ³Éä** | ÐèÔÚ ATTACKModule ÖÐÍ¬²½¸üÐÂ |
-| ?? **µÈ±£Ìõ¿î±ê×¢** | Ìæ»»ºóÐè±ê×¢ÕýÈ·µÄµÈ±£Ìõ¿î±àºÅ |
-| ? **ÔËÐÐÊ±°²È«** | `sync.RWMutex` ±£»¤£¬Ö§³Ö²¢·¢¶ÁÐ´ |
+| ?? **ï¿½ï¿½Ôµï¿½ï¿½ï¿½ï¿½ TriggerCheck ï¿½ï¿½ï¿½ï¿½** | ï¿½æ»»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ `TriggerCheck` Ó³ï¿½ï¿½ |
+| ?? **ATT&CK ï¿½ï¿½ï¿½ï¿½Ó³ï¿½ï¿½** | ï¿½ï¿½ï¿½ï¿½ ATTACKModule ï¿½ï¿½Í¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| ?? **ï¿½È±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢** | ï¿½æ»»ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½È·ï¿½ÄµÈ±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| ? **ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½È«** | `sync.RWMutex` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö§ï¿½Ö²ï¿½ï¿½ï¿½ï¿½ï¿½Ð´ |
 
 ---
 
-## Æß¡¢ºËÐÄÄ£¿é¿ÉÌæ»»ÐÔ
+## ï¿½ß¡ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½æ»»ï¿½ï¿½
 
-### 7.1 DI ÈÝÆ÷Ìæ»»Ô­Àí
+### 7.1 DI ï¿½ï¿½ï¿½ï¿½ï¿½æ»»Ô­ï¿½ï¿½
 
-DI ÈÝÆ÷£¨[di.go](file:///f:/Argus/internal/kernel/di.go#L23-L32)£©µÄ `Bind` ²ÉÓÃ**¸²¸Ç²ßÂÔ**¡ª¡ªÖØ¸´°ó¶¨Í¬Ò»½Ó¿Ú»á¾²Ä¬¸²¸ÇÖ®Ç°µÄÊµÏÖ£º
+DI ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½[di.go](file:///f:/Argus/internal/kernel/di.go#L23-L32)ï¿½ï¿½ï¿½ï¿½ `Bind` ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½ï¿½Ç²ï¿½ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½Ø¸ï¿½ï¿½ï¿½Í¬Ò»ï¿½Ó¿Ú»á¾²Ä¬ï¿½ï¿½ï¿½ï¿½Ö®Ç°ï¿½ï¿½Êµï¿½Ö£ï¿½
 
 ```go
 func (c *Container) Bind(iface interface{}, impl interface{}) {
     t := reflect.TypeOf(iface).Elem()
-    c.bindings[t] = impl  // Ö±½Ó¸²¸Ç£¬ÎÞ¼ì²é
+    c.bindings[t] = impl  // Ö±ï¿½Ó¸ï¿½ï¿½Ç£ï¿½ï¿½Þ¼ï¿½ï¿½
 }
 ```
 
-### 7.2 ¿ÉÌæ»»ÐÔ×ÜÀÀ
+### 7.2 ï¿½ï¿½ï¿½æ»»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-| ×é¼þ | ¿ÉÌæ»»ÐÔ | Ìæ»»»úÖÆ | ÈÈÌæ»» |
+| ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½æ»»ï¿½ï¿½ | ï¿½æ»»ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½æ»» |
 |------|:---:|------|:---:|
-| Ô­Éú¼ì²éÆ÷ | ? | ×¢²á±í API£¨Register/Unregister£© | ? |
-| SPC °²È«Ì¬ÊÆ¼ÆËã | ? | DI ÈÝÆ÷ Bind ¸²¸Ç SPCInterface | ? |
-| CTI ÍøÂçÍþÐ²Çé±¨ | ? | DI ÈÝÆ÷ Bind ¸²¸Ç CTIInterface | ? |
-| SSAM ÆÀ·ÖÒýÇæ | ? | DI ÈÝÆ÷ Bind ¸²¸Ç ScoringEngineProvider | ? |
-| ATT&CK ÖªÊ¶¿â | ? | DI ÈÝÆ÷ Bind ¸²¸Ç ATTACKInterface | ? |
-| Assessor ÆÀ¹Àµ÷¶È | ? | DI ÈÝÆ÷ Bind ¸²¸Ç AssessorInterface | ? |
-| Policy ²ßÂÔÒýÇæ | ? | DI ÈÝÆ÷ Bind ¸²¸Ç PolicyInterface | ? |
-| Commander ÃüÁîÏÂ·¢ | ? | DI ÈÝÆ÷ Bind ¸²¸Ç CommanderInterface | ? |
-| Persistence ³Ö¾Ã»¯ | ? | DI ÈÝÆ÷ Bind ¸²¸Ç PersistenceInterface | ? |
-| ÆäÓà 6 ¸öºËÐÄÄ£¿é | ? | DI ÈÝÆ÷ Bind ¸²¸Ç¶ÔÓ¦½Ó¿Ú | ? |
+| Ô­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ? | ×¢ï¿½ï¿½ï¿½ APIï¿½ï¿½Register/Unregisterï¿½ï¿½ | ? |
+| SPC ï¿½ï¿½È«Ì¬ï¿½Æ¼ï¿½ï¿½ï¿½ | ? | DI ï¿½ï¿½ï¿½ï¿½ Bind ï¿½ï¿½ï¿½ï¿½ SPCInterface | ? |
+| CTI ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð²ï¿½é±¨ | ? | DI ï¿½ï¿½ï¿½ï¿½ Bind ï¿½ï¿½ï¿½ï¿½ CTIInterface | ? |
+| SSAM ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ? | DI ï¿½ï¿½ï¿½ï¿½ Bind ï¿½ï¿½ï¿½ï¿½ ScoringEngineProvider | ? |
+| ATT&CK ÖªÊ¶ï¿½ï¿½ | ? | DI ï¿½ï¿½ï¿½ï¿½ Bind ï¿½ï¿½ï¿½ï¿½ ATTACKInterface | ? |
+| Assessor ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ? | DI ï¿½ï¿½ï¿½ï¿½ Bind ï¿½ï¿½ï¿½ï¿½ AssessorInterface | ? |
+| Policy ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ? | DI ï¿½ï¿½ï¿½ï¿½ Bind ï¿½ï¿½ï¿½ï¿½ PolicyInterface | ? |
+| Commander ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ | ? | DI ï¿½ï¿½ï¿½ï¿½ Bind ï¿½ï¿½ï¿½ï¿½ CommanderInterface | ? |
+| Persistence ï¿½Ö¾Ã»ï¿½ | ? | DI ï¿½ï¿½ï¿½ï¿½ Bind ï¿½ï¿½ï¿½ï¿½ PersistenceInterface | ? |
+| ï¿½ï¿½ï¿½ï¿½ 6 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ | ? | DI ï¿½ï¿½ï¿½ï¿½ Bind ï¿½ï¿½ï¿½Ç¶ï¿½Ó¦ï¿½Ó¿ï¿½ | ? |
 
-### 7.3 Ìæ»»ÒÀÀµÁ´
+### 7.3 ï¿½æ»»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-| Ìæ»»Ä£¿é | Ó°ÏìµÄÏÂÓÎ |
+| ï¿½æ»»Ä£ï¿½ï¿½ | Ó°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
 |------|------|
-| `SPCInterface` | Assessor ¡ú SSAM ¹«Ê½£¨P_score Òò×Ó£© |
-| `CTIInterface` | Assessor ¡ú SSAM ¹«Ê½£¨¦Ì ÍþÐ²ÏµÊý£© |
-| `ScoringEngineProvider` | Assessor ¡ú Õû¸öÆÀ·Ö¹ÜµÀ |
-| `ATTACKInterface` | Assessor ¡ú ¸²¸ÇÂÊ/APT ¹éÒò |
-| `PolicyInterface` | ²ßÂÔÅÐ¶¨ ¡ú Commander ÃüÁîÏÂ·¢ |
-| `ConcurrencyInterface` | ËùÓÐÊ¹ÓÃ WorkerPool µÄÄ£¿é |
+| `SPCInterface` | Assessor ï¿½ï¿½ SSAM ï¿½ï¿½Ê½ï¿½ï¿½P_score ï¿½ï¿½ï¿½Ó£ï¿½ |
+| `CTIInterface` | Assessor ï¿½ï¿½ SSAM ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ð²Ïµï¿½ï¿½ï¿½ï¿½ |
+| `ScoringEngineProvider` | Assessor ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¹Üµï¿½ |
+| `ATTACKInterface` | Assessor ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/APT ï¿½ï¿½ï¿½ï¿½ |
+| `PolicyInterface` | ï¿½ï¿½ï¿½ï¿½ï¿½Ð¶ï¿½ ï¿½ï¿½ Commander ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ |
+| `ConcurrencyInterface` | ï¿½ï¿½ï¿½ï¿½Ê¹ï¿½ï¿½ WorkerPool ï¿½ï¿½Ä£ï¿½ï¿½ |
 
-### 7.4 Ìæ»»Ê¾Àý
+### 7.4 ï¿½æ»»Ê¾ï¿½ï¿½
 
 ```go
-// Ìæ»» SPC Îª×Ô¶¨ÒåÊµÏÖ
+// ï¿½æ»» SPC Îªï¿½Ô¶ï¿½ï¿½ï¿½Êµï¿½ï¿½
 type MySPC struct{}
 func (m *MySPC) Calculate(hostID string, assetPackages []string) SPCCorrection {
     return SPCCorrection{Score: 1.0, Weight: 1.0}
 }
-// ÊµÏÖ SPCInterface µÄËùÓÐ·½·¨...
+// Êµï¿½ï¿½ SPCInterface ï¿½ï¿½ï¿½ï¿½ï¿½Ð·ï¿½ï¿½ï¿½...
 
-// ÔÚ main.go ÖÐÌæ»»
+// ï¿½ï¿½ main.go ï¿½ï¿½ï¿½æ»»
 k.Container().Bind((*kernel.SPCInterface)(nil), &MySPC{})
 ```
 
 ---
 
-## °Ë¡¢Íâ²¿ÊÊÅäÆ÷Óë¼ì²éÎ¯ÅÉ
+## ï¿½Ë¡ï¿½ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î¯ï¿½ï¿½
 
-### 8.1 Íâ²¿ÊÊÅäÆ÷»úÖÆ
+### 8.1 ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-[AdapterIntegrationModule](file:///f:/Argus/internal/kernel/adapter_integration.go) Ìá¹©Íâ²¿°²È«¹¤¾ßµÄ¼¯³É£º
+[AdapterIntegrationModule](file:///f:/Argus/internal/kernel/adapter_integration.go) ï¿½á¹©ï¿½â²¿ï¿½ï¿½È«ï¿½ï¿½ï¿½ßµÄ¼ï¿½ï¿½É£ï¿½
 
 ```
-Íâ²¿°²È«¹¤¾ß            AdapterIntegration          Assessor
-©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤            ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤          ©¤©¤©¤©¤©¤©¤©¤©¤
+ï¿½â²¿ï¿½ï¿½È«ï¿½ï¿½ï¿½ï¿½            AdapterIntegration          Assessor
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½            ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½          ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 Wazuh / OpenSCAP / Lynis / Falco
-    ©¸©¤¡ú   RunAdapters() ¡ú CollectFindings() ¡ú EvaluateFromResults()
-                                                  ©¦
+    ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½   RunAdapters() ï¿½ï¿½ CollectFindings() ï¿½ï¿½ EvaluateFromResults()
+                                                  ï¿½ï¿½
                                          []model.CheckResult
 ```
 
-### 8.2 Íâ²¿½á¹û×¢Èëµã
+### 8.2 ï¿½â²¿ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½
 
-Assessor Ìá¹©Á½¸öÆÀ¹ÀÈë¿Ú£º
+Assessor ï¿½á¹©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú£ï¿½
 
-| Èë¿Ú | Ç©Ãû | ¼ì²éÀ´Ô´ |
+| ï¿½ï¿½ï¿½ | Ç©ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ |
 |------|------|------|
-| `Evaluate` | `(hostID string)` | Ô­Éú¼ì²éÆ÷×¢²á±í |
-| `EvaluateFromResults` | `(hostID, hostname string, checkResults []model.CheckResult)` | Íâ²¿´«ÈëµÄ CheckResult ÇÐÆ¬ |
+| `Evaluate` | `(hostID string)` | Ô­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½ |
+| `EvaluateFromResults` | `(hostID, hostname string, checkResults []model.CheckResult)` | ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½ CheckResult ï¿½ï¿½Æ¬ |
 
-**ÍêÈ«Ìæ´úÔ­Éú¼ì²éÆ÷**£º
+**ï¿½ï¿½È«ï¿½ï¿½ï¿½Ô­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½
 
 ```go
-checks.Unregister(getAllIDs()...)           // Çå¿ÕÔ­Éú¼ì²éÆ÷
-adapterResults := adapter.CollectFindings()  // ÊÕ¼¯Íâ²¿¼ì²é½á¹û
+checks.Unregister(getAllIDs()...)           // ï¿½ï¿½ï¿½Ô­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+adapterResults := adapter.CollectFindings()  // ï¿½Õ¼ï¿½ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½
 result := assessor.EvaluateFromResults(hostID, hostname, adapterResults)
 ```
 
-### 8.3 ÊÊÅäÆ÷¼ì²éÏîµÄÄ£ÐÍ½á¹¹
+### 8.3 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½Í½á¹¹
 
 ```go
 type CheckResult struct {
-    CheckID           string       // ¼ì²éÏî ID
-    Domain            ScoreDomain  // ¹éÊôÓò£¨AS/BC/OT/RS£©
-    Passed            bool         // ÊÇ·ñÍ¨¹ý
-    Score             float64      // µÃ·Ö
-    Detail            string       // ÏêÇé
-    Description       string       // ÃèÊö
-    ComplianceRef     string       // ºÏ¹æÒýÓÃ
-    ATTACKTechniqueID string       // ATT&CK ¼¼Êõ ID
-    EdgeFactors       []string     // ´¥·¢µÄ±ßÔµÒò×Ó ID
+    CheckID           string       // ï¿½ï¿½ï¿½ï¿½ï¿½ ID
+    Domain            ScoreDomain  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½AS/BC/OT/RSï¿½ï¿½
+    Passed            bool         // ï¿½Ç·ï¿½Í¨ï¿½ï¿½
+    Score             float64      // ï¿½Ã·ï¿½
+    Detail            string       // ï¿½ï¿½ï¿½ï¿½
+    Description       string       // ï¿½ï¿½ï¿½ï¿½
+    ComplianceRef     string       // ï¿½Ï¹ï¿½ï¿½ï¿½ï¿½ï¿½
+    ATTACKTechniqueID string       // ATT&CK ï¿½ï¿½ï¿½ï¿½ ID
+    EdgeFactors       []string     // ï¿½ï¿½ï¿½ï¿½ï¿½Ä±ï¿½Ôµï¿½ï¿½ï¿½ï¿½ ID
 }
 ```
 
 ---
 
-## ¾Å¡¢À©Õ¹¿ª·¢¿ìËÙÖ¸ÄÏ
+## ï¿½Å¡ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
 
-### 9.1 ÐÂÔö²å¼þÇåµ¥
+### 9.1 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½åµ¥
 
-1. ÊµÏÖ `Plugin` ½Ó¿Ú£¨`Info/Dependencies/Init/Start/Stop/State`£©
-2. ÈçÐè¿ØÖÆÆô¶¯Ë³Ðò£¬ÊµÏÖ `PriorityPlugin` ½Ó¿Ú
-3. ÈçÐè½¡¿µ¼ì²é£¬ÊµÏÖ `HealthCheckable` ½Ó¿Ú
-4. ÈçÐèÈÈ¼ÓÔØÅäÖÃ£¬ÊµÏÖ `ConfigurablePlugin` ½Ó¿Ú
-5. ÔÚ `Init` ÖÐ£ºÍ¨¹ý `kc.Container().Resolve()` »ñÈ¡ÒÀÀµ¡¢Í¨¹ý `kc.Container().Bind()` ×¢²á×ÔÉí½Ó¿Ú¡¢Í¨¹ý `kc.Extensions().RegisterExtension()` ¶©ÔÄÀ©Õ¹µã
-6. ÔÚ `Start` ÖÐ£ºÍ¨¹ý `kc.Bus().Subscribe()` ¶©ÔÄÊÂ¼þ¡¢Æô¶¯ goroutine
-7. ÔÚ `Stop` ÖÐ£º¹Ø±Õ goroutine¡¢ÇåÀí×ÊÔ´
-8. ÔÚ [main.go](file:///f:/Argus/cmd/kernel/main.go) ÖÐÊµÀý»¯²¢×¢²á
+1. Êµï¿½ï¿½ `Plugin` ï¿½Ó¿Ú£ï¿½`Info/Dependencies/Init/Start/Stop/State`ï¿½ï¿½
+2. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë³ï¿½ï¿½Êµï¿½ï¿½ `PriorityPlugin` ï¿½Ó¿ï¿½
+3. ï¿½ï¿½ï¿½è½¡ï¿½ï¿½ï¿½ï¿½é£¬Êµï¿½ï¿½ `HealthCheckable` ï¿½Ó¿ï¿½
+4. ï¿½ï¿½ï¿½ï¿½ï¿½È¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã£ï¿½Êµï¿½ï¿½ `ConfigurablePlugin` ï¿½Ó¿ï¿½
+5. ï¿½ï¿½ `Init` ï¿½Ð£ï¿½Í¨ï¿½ï¿½ `kc.Container().Resolve()` ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¨ï¿½ï¿½ `kc.Container().Bind()` ×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó¿Ú¡ï¿½Í¨ï¿½ï¿½ `kc.Extensions().RegisterExtension()` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½
+6. ï¿½ï¿½ `Start` ï¿½Ð£ï¿½Í¨ï¿½ï¿½ `kc.Bus().Subscribe()` ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ goroutine
+7. ï¿½ï¿½ `Stop` ï¿½Ð£ï¿½ï¿½Ø±ï¿½ goroutineï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´
+8. ï¿½ï¿½ [main.go](file:///f:/Argus/cmd/kernel/main.go) ï¿½ï¿½Êµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½
 
-### 9.2 ÐÂÔöÀ©Õ¹µã£¨Æ½Ì¨²ã²Ù×÷£©
+### 9.2 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ã£¨Æ½Ì¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-À©Õ¹µã¶¨Òå¹éÊô ASSCOR Æ½Ì¨²ã£¨`kernel/platform_extensions.go`£©£¬²»¹éÊô¸÷Ä£¿é¡£ÐÂÔöÀ©Õ¹µãÐèÔÚ `RegisterAllExtensionPoints()` º¯ÊýÖÐÌí¼Ó£º
+ï¿½ï¿½Õ¹ï¿½ã¶¨ï¿½ï¿½ï¿½ï¿½ï¿½ ASSCOR Æ½Ì¨ï¿½ã£¨`kernel/platform_extensions.go`ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½é¡£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ `RegisterAllExtensionPoints()` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó£ï¿½
 
 ```go
-// platform_extensions.go: ¼¯ÖÐ×¢²á
+// platform_extensions.go: ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½
 func RegisterAllExtensionPoints(r *ExtensionRegistry) {
     r.RegisterPoint(ExtensionPoint{
-        Name: "module.phase", Description: "´¥·¢ËµÃ÷", Version: "1.0",
+        Name: "module.phase", Description: "ï¿½ï¿½ï¿½ï¿½Ëµï¿½ï¿½", Version: "1.0",
     })
 }
-// Ä£¿é´¥·¢: ÈÎÒâÎ»ÖÃ¾ù¿É
+// Ä£ï¿½é´¥ï¿½ï¿½: ï¿½ï¿½ï¿½ï¿½Î»ï¿½Ã¾ï¿½ï¿½ï¿½
 errs := kc.Extensions().Execute(ctx, "module.phase", data)
 ```
 
-### 9.3 ÐÂÔöÊÂ¼þÖ÷Ìâ
+### 9.3 ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½
 
-1. ÔÚ [plugin.go](file:///f:/Argus/internal/kernel/plugin.go) ÖÐÌí¼Ó `Topic*` ³£Á¿
-2. ·¢²¼·½µ÷ÓÃ `kc.Bus().Publish(ctx, TopicXxx, payload)`
-3. ¶©ÔÄ·½µ÷ÓÃ `kc.Bus().Subscribe(TopicXxx, "my_id", handler)`
-4. Handler Ç©Ãû£º`func(ctx context.Context, msg Message) error`
+1. ï¿½ï¿½ [plugin.go](file:///f:/Argus/internal/kernel/plugin.go) ï¿½ï¿½ï¿½ï¿½ï¿½ `Topic*` ï¿½ï¿½ï¿½ï¿½
+2. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ `kc.Bus().Publish(ctx, TopicXxx, payload)`
+3. ï¿½ï¿½ï¿½Ä·ï¿½ï¿½ï¿½ï¿½ï¿½ `kc.Bus().Subscribe(TopicXxx, "my_id", handler)`
+4. Handler Ç©ï¿½ï¿½ï¿½ï¿½`func(ctx context.Context, msg Message) error`
 
-### 9.4 ÃüÃûÔ¼¶¨
+### 9.4 ï¿½ï¿½ï¿½ï¿½Ô¼ï¿½ï¿½
 
-- À©Õ¹µãÃû³Æ£º`Ä£¿éÃû.½×¶Î`£¨Èç `spc.pre_calculate`£©
-- ÊÂ¼þÖ÷Ìâ£º`Ä£¿éÃû.ÊÂ¼þÃû`£¨Èç `assessor.result`£©
-- DI °ó¶¨ key£º`(*InterfaceName)(nil)` µÄ reflect.Type
+- ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½Æ£ï¿½`Ä£ï¿½ï¿½ï¿½ï¿½.ï¿½×¶ï¿½`ï¿½ï¿½ï¿½ï¿½ `spc.pre_calculate`ï¿½ï¿½
+- ï¿½Â¼ï¿½ï¿½ï¿½ï¿½â£º`Ä£ï¿½ï¿½ï¿½ï¿½.ï¿½Â¼ï¿½ï¿½ï¿½`ï¿½ï¿½ï¿½ï¿½ `assessor.result`ï¿½ï¿½
+- DI ï¿½ï¿½ keyï¿½ï¿½`(*InterfaceName)(nil)` ï¿½ï¿½ reflect.Type
 
 ---
 
-## Ê®¡¢Ìæ»»¸´ÔÓ¶ÈÓëÈ±¿Ú·ÖÎö
+## Ê®ï¿½ï¿½ï¿½æ»»ï¿½ï¿½ï¿½Ó¶ï¿½ï¿½ï¿½È±ï¿½Ú·ï¿½ï¿½ï¿½
 
-### 10.1 Ìæ»»ÄÑ¶È
+### 10.1 ï¿½æ»»ï¿½Ñ¶ï¿½
 
-| ÄÑ¶È | ×é¼þ |
+| ï¿½Ñ¶ï¿½ | ï¿½ï¿½ï¿½ |
 |:---:|------|
-| ? **µÍ**£¨¼¸ÐÐ´úÂë£© | ¼ì²éÆ÷¡¢CTI¡¢Policy¡¢Commander¡¢LogCollector¡¢Heartbeat |
-| ?? **ÖÐ**£¨< 50 ÐÐ£© | SPC¡¢Persistence¡¢AdapterIntegration¡¢SourceManager¡¢Concurrency |
-| ??? **¸ß**£¨ÐèÑéÖ¤£© | SSAM ÒýÇæ¡¢ATTACK¡¢Assessor |
+| ? **ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½ë£© | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½CTIï¿½ï¿½Policyï¿½ï¿½Commanderï¿½ï¿½LogCollectorï¿½ï¿½Heartbeat |
+| ?? **ï¿½ï¿½**ï¿½ï¿½< 50 ï¿½Ð£ï¿½ | SPCï¿½ï¿½Persistenceï¿½ï¿½AdapterIntegrationï¿½ï¿½SourceManagerï¿½ï¿½Concurrency |
+| ??? **ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¤ï¿½ï¿½ | SSAM ï¿½ï¿½ï¿½æ¡¢ATTACKï¿½ï¿½Assessor |
 
-### 10.2 ÒÑÖªÈ±¿Ú
+### 10.2 ï¿½ï¿½ÖªÈ±ï¿½ï¿½
 
-| È±¿Ú | ËµÃ÷ | Ó°Ïì |
+| È±ï¿½ï¿½ | Ëµï¿½ï¿½ | Ó°ï¿½ï¿½ |
 |------|------|:---:|
-| ¼ì²éÆ÷Óë DI ÈÝÆ÷²»Í³Ò» | ¼ì²éÆ÷ÓÃÈ«¾Ö×¢²á±í£¬ºËÐÄÄ£¿éÓÃ DI ÈÝÆ÷ | Á½Ì× API |
-| `Evaluate` Èë¿Ú²»Í¸Ã÷ | ÄÚ²¿µ÷ÓÃ `checks.GetAll()`£¬ÎÞ·¨¸²¸Ç¼ì²éÆ÷À´Ô´ | ÊÊÅäÆ÷ÐèÊÖ¶¯µ÷ÓÃ `EvaluateFromResults` |
-| ÊÊÅäÆ÷ÓëÔ­Éú¼ì²éÆ÷ºÏ²¢È±Ê§ | ÊÊÅäÆ÷½á¹ûÐèÊÖ¶¯´«Èë `EvaluateFromResults`£¬ÎÞ×Ô¶¯ºÏ²¢Í¨µÀ | Ðè¶îÍâ´úÂë |
+| ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ DI ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í³Ò» | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È«ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½ DI ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ API |
+| `Evaluate` ï¿½ï¿½Ú²ï¿½Í¸ï¿½ï¿½ | ï¿½Ú²ï¿½ï¿½ï¿½ï¿½ï¿½ `checks.GetAll()`ï¿½ï¿½ï¿½Þ·ï¿½ï¿½ï¿½ï¿½Ç¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½ `EvaluateFromResults` |
+| ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï²ï¿½È±Ê§ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½ `EvaluateFromResults`ï¿½ï¿½ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½Ï²ï¿½Í¨ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
 
-### 10.3 Í³¼Æ»ã×Ü
+### 10.3 Í³ï¿½Æ»ï¿½ï¿½ï¿½
 
-| Àà±ð | ÊýÁ¿ |
+| ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ |
 |------|:---:|
-| ºËÐÄ²å¼þ½Ó¿Ú | 4£¨Plugin / PriorityPlugin / HealthCheckable / ConfigurablePlugin£© |
-| ÒÑ×¢²á²å¼þ | 15 |
-| ÒµÎñÄ£¿é½Ó¿Ú | 13 |
-| DI ÈÝÆ÷°ó¶¨ | 15 |
-| ÊÂ¼þ×ÜÏß»°Ìâ | 13 |
-| ×ÜÏß¶©ÔÄ¹ØÏµ | 6 |
-| À©Õ¹µã×ÜÊý | 76£¨ÄÚºË 6 + ÒµÎñÄ£¿é 70£© |
-| È«²¿¿ÉÌæ»» | ? |
+| ï¿½ï¿½ï¿½Ä²ï¿½ï¿½ï¿½Ó¿ï¿½ | 4ï¿½ï¿½Plugin / PriorityPlugin / HealthCheckable / ConfigurablePluginï¿½ï¿½ |
+| ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ | 15 |
+| Òµï¿½ï¿½Ä£ï¿½ï¿½Ó¿ï¿½ | 13 |
+| DI ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | 15 |
+| ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ß»ï¿½ï¿½ï¿½ | 13 |
+| ï¿½ï¿½ï¿½ß¶ï¿½ï¿½Ä¹ï¿½Ïµ | 6 |
+| ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | 76ï¿½ï¿½ï¿½Úºï¿½ 6 + Òµï¿½ï¿½Ä£ï¿½ï¿½ 70ï¿½ï¿½ |
+| È«ï¿½ï¿½ï¿½ï¿½ï¿½æ»» | ? |
 
 ---
 
-## 11. Íâ²¿À©Õ¹Ä£¿éÓëÀ©Õ¹°ü£¨v0.2.2+£©
+## 11. ï¿½â²¿ï¿½ï¿½Õ¹Ä£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½v0.2.3+ï¿½ï¿½
 
-ASSCOR v0.2.2 ÒýÈëÁË**Íâ²¿À©Õ¹ÌåÏµ**¡ª¡ªÓëÄÚºË¼¯³ÉµÄ ExtensionManager (extmgr) »¥²¹µÄ¡¢¶ÀÁ¢±àÒëµÄÄ£¿é»¯À©Õ¹ÏµÍ³¡£ºËÐÄÉè¼ÆÔ­Ôò£º**Íâ²¿À©Õ¹²»ÐÞ¸ÄÄÚºË´úÂë£¬Í¨¹ý Go import ºÍ Extension Point ÏµÍ³¹ÒÔØ**¡£
+ASSCOR v0.2.3 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½**ï¿½â²¿ï¿½ï¿½Õ¹ï¿½ï¿½Ïµ**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÚºË¼ï¿½ï¿½Éµï¿½ ExtensionManager (extmgr) ï¿½ï¿½ï¿½ï¿½ï¿½Ä¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½é»¯ï¿½ï¿½Õ¹ÏµÍ³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô­ï¿½ï¿½**ï¿½â²¿ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½Þ¸ï¿½ï¿½ÚºË´ï¿½ï¿½ë£¬Í¨ï¿½ï¿½ Go import ï¿½ï¿½ Extension Point ÏµÍ³ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½
 
-### 11.1 Ä¿Â¼½á¹¹
+### 11.1 Ä¿Â¼ï¿½á¹¹
 
 ```
-optional/                          # Íâ²¿À©Õ¹¸ùÄ¿Â¼£¨¶ÀÁ¢ÓÚÄÚºË£©
-©À©¤©¤ README.md                      #   Ê¹ÓÃÖ¸ÄÏ
-©À©¤©¤ SCHEMA.md                      #   package.json ¸ñÊ½¹æ·¶
-©À©¤©¤ pkgmgr/                        #   À©Õ¹°ü¹ÜÀí¹¤¾ß (asscor-pkg CLI)
-©¦   ©À©¤©¤ main.go                    #     6 Ìõ CLI ÃüÁî
-©¦   ©À©¤©¤ manifest.go                #     package.json ½âÎö + ÒÀÀµÇó½â
-©¦   ©¸©¤©¤ fetcher.go                 #     git Íâ²¿²Ö¿â¿ËÂ¡ + ¼æÈÝÐÔÐ£Ñé
-©À©¤©¤ algorithms/                    #   °´ÓÃÍ¾: Ëã·¨À©Õ¹
-©¦   ©À©¤©¤ modules/                   #     µ¥Ä£¿éÀ©Õ¹
-©¦   ©¦   ©¸©¤©¤ multi-algo-orchestrator/ #   ¶àËã·¨±àÅÅÆ÷ (¶ÀÁ¢ Go module)
-©¦   ©¸©¤©¤ packages/                  #     ¶àÄ£¿éÀ©Õ¹°ü
-©¦       ©¸©¤©¤ example-pack/          #       Ê¾ÀýÀ©Õ¹°ü
-©¦           ©¸©¤©¤ package.json       #         ÒÀÀµÉùÃ÷ + Íâ²¿²Ö¿âÒýÓÃ
-©À©¤©¤ adapters/                      #   °´ÓÃÍ¾: ÊÊÅäÆ÷À©Õ¹
-©¦   ©À©¤©¤ modules/
-©¦   ©¸©¤©¤ packages/
-©À©¤©¤ checks/                        #   °´ÓÃÍ¾: ¼ì²éÏîÀ©Õ¹
-©¦   ©À©¤©¤ modules/
-©¦   ©¸©¤©¤ packages/
-©¸©¤©¤ platform/                      #   °´ÓÃÍ¾: Æ½Ì¨²ãÀ©Õ¹
-    ©À©¤©¤ modules/
-    ©¸©¤©¤ packages/
+optional/                          # ï¿½â²¿ï¿½ï¿½Õ¹ï¿½ï¿½Ä¿Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÚºË£ï¿½
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ README.md                      #   Ê¹ï¿½ï¿½Ö¸ï¿½ï¿½
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ SCHEMA.md                      #   package.json ï¿½ï¿½Ê½ï¿½æ·¶
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ pkgmgr/                        #   ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (asscor-pkg CLI)
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ main.go                    #     6 ï¿½ï¿½ CLI ï¿½ï¿½ï¿½ï¿½
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ manifest.go                #     package.json ï¿½ï¿½ï¿½ï¿½ + ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ fetcher.go                 #     git ï¿½â²¿ï¿½Ö¿ï¿½ï¿½Â¡ + ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð£ï¿½ï¿½
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ algorithms/                    #   ï¿½ï¿½ï¿½ï¿½Í¾: ï¿½ã·¨ï¿½ï¿½Õ¹
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ modules/                   #     ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½Õ¹
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ multi-algo-orchestrator/ #   ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ Go module)
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ packages/                  #     ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½
+ï¿½ï¿½       ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ example-pack/          #       Ê¾ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½
+ï¿½ï¿½           ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ package.json       #         ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ + ï¿½â²¿ï¿½Ö¿ï¿½ï¿½ï¿½ï¿½ï¿½
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ adapters/                      #   ï¿½ï¿½ï¿½ï¿½Í¾: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ modules/
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ packages/
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ checks/                        #   ï¿½ï¿½ï¿½ï¿½Í¾: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ modules/
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ packages/
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ platform/                      #   ï¿½ï¿½ï¿½ï¿½Í¾: Æ½Ì¨ï¿½ï¿½ï¿½ï¿½Õ¹
+    ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ modules/
+    ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ packages/
 ```
 
-### 11.2 µ¥Ä£¿é vs À©Õ¹°ü
+### 11.2 ï¿½ï¿½Ä£ï¿½ï¿½ vs ï¿½ï¿½Õ¹ï¿½ï¿½
 
-ASSCOR Íâ²¿À©Õ¹Ìá¹©Á½ÖÖÐÎÊ½£º
+ASSCOR ï¿½â²¿ï¿½ï¿½Õ¹ï¿½á¹©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê½ï¿½ï¿½
 
-| ÐÎÊ½ | Ä¿Â¼Â·¾¶ | ½ÓÈë·½Ê½ | ÊÊÓÃ³¡¾° |
+| ï¿½ï¿½Ê½ | Ä¿Â¼Â·ï¿½ï¿½ | ï¿½ï¿½ï¿½ë·½Ê½ | ï¿½ï¿½ï¿½Ã³ï¿½ï¿½ï¿½ |
 |------|---------|---------|---------|
-| **µ¥Ä£¿é** | `<category>/modules/<name>/` | ÔÚ `cmd/kernel/main.go` ÖÐ `import`£¬Í¨¹ý `Register()` ¹ÒÔØµ½ Extension Point | µ¥¸ö¶ÀÁ¢¹¦ÄÜ£¨Èç¶àËã·¨±àÅÅ£© |
-| **À©Õ¹°ü** | `<category>/packages/<name>/` | Í¨¹ý `package.json` ÉùÃ÷Ä£¿é¼¯ºÏ¡¢Íâ²¿ÒÀÀµºÍ³åÍ»£»Ê¹ÓÃ `asscor-pkg install` ×Ô¶¯À­È¡Íâ²¿²Ö¿â | ¶àÄ£¿é¾ÛºÏ¡¢º¬µÚÈý·½ git ²Ö¿âÒÀÀµµÄ¸´ÔÓÀ©Õ¹ |
+| **ï¿½ï¿½Ä£ï¿½ï¿½** | `<category>/modules/<name>/` | ï¿½ï¿½ `cmd/kernel/main.go` ï¿½ï¿½ `import`ï¿½ï¿½Í¨ï¿½ï¿½ `Register()` ï¿½ï¿½ï¿½Øµï¿½ Extension Point | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½ï¿½Å£ï¿½ |
+| **ï¿½ï¿½Õ¹ï¿½ï¿½** | `<category>/packages/<name>/` | Í¨ï¿½ï¿½ `package.json` ï¿½ï¿½ï¿½ï¿½Ä£ï¿½é¼¯ï¿½Ï¡ï¿½ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½Í³ï¿½Í»ï¿½ï¿½Ê¹ï¿½ï¿½ `asscor-pkg install` ï¿½Ô¶ï¿½ï¿½ï¿½È¡ï¿½â²¿ï¿½Ö¿ï¿½ | ï¿½ï¿½Ä£ï¿½ï¿½ÛºÏ¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ git ï¿½Ö¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¸ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ |
 
-µ¥Ä£¿éÊÇ²»´ò°üµÄ¶ÀÁ¢Ä£¿é¡£À©Õ¹°üÍ¨¹ý `package.json` ÉùÃ÷Ëùº¬Ä£¿é¡¢Íâ²¿ git ²Ö¿âÒýÓÃ¡¢ÒÀÀµ¼°³åÍ»£¬Ö§³Ö `asscor-pkg` ×Ô¶¯½âÎö¡£
+ï¿½ï¿½Ä£ï¿½ï¿½ï¿½Ç²ï¿½ï¿½ï¿½ï¿½ï¿½Ä¶ï¿½ï¿½ï¿½Ä£ï¿½é¡£ï¿½ï¿½Õ¹ï¿½ï¿½Í¨ï¿½ï¿½ `package.json` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½é¡¢ï¿½â²¿ git ï¿½Ö¿ï¿½ï¿½ï¿½ï¿½Ã¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í»ï¿½ï¿½Ö§ï¿½ï¿½ `asscor-pkg` ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-### 11.3 À©Õ¹°ü¹ÜÀíÆ÷ (asscor-pkg)
+### 11.3 ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (asscor-pkg)
 
-`asscor-pkg` ÊÇ×¨ÃÅ¹ÜÀí `optional/` ÏÂÀ©Õ¹°üµÄÃüÁîÐÐ¹¤¾ß¡£²»»á½øÈëÄÚºË¶þ½øÖÆ£¬Ðè¶ÀÁ¢¹¹½¨£º
+`asscor-pkg` ï¿½ï¿½×¨ï¿½Å¹ï¿½ï¿½ï¿½ `optional/` ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¹ï¿½ï¿½ß¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÚºË¶ï¿½ï¿½ï¿½ï¿½Æ£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 ```bash
 cd optional/pkgmgr && go build -o asscor-pkg .
 ```
 
-| ÃüÁî | ¹¦ÄÜ |
+| ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ |
 |------|------|
-| `asscor-pkg resolve` | µÝ¹éÉ¨Ãè `package.json`£¬½âÎöÒÀÀµÍ¼¡¢¼ì²â»·¡¢±¨¸æÎ´½â¾öÏî |
-| `asscor-pkg install` | ¿ËÂ¡ `external_sources` ÖÐÉùÃ÷µÄÍâ²¿ git ²Ö¿â + ¼æÈÝÐÔÐ£Ñé |
-| `asscor-pkg list` | ÁÐ³öËùÓÐÒÑ·¢ÏÖµÄÀ©Õ¹°ü |
-| `asscor-pkg info <name>` | ²é¿´À©Õ¹°üÏêÏ¸ÐÅÏ¢£¨Ä£¿é¡¢ÒÀÀµ¡¢Íâ²¿Ô´¡¢¼æÈÝÐÔ£© |
-| `asscor-pkg graph` | Êä³ö DOT ¸ñÊ½ÒÀÀµÍ¼£¨¿É¹ÜµÀµ½ `dot -Tpng`£© |
-| `asscor-pkg validate` | Ð£ÑéËùÓÐ `package.json` ¸ñÊ½ºÍ×Ö¶ÎºÏ·¨ÐÔ |
+| `asscor-pkg resolve` | ï¿½Ý¹ï¿½É¨ï¿½ï¿½ `package.json`ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½â»·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î´ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| `asscor-pkg install` | ï¿½ï¿½Â¡ `external_sources` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â²¿ git ï¿½Ö¿ï¿½ + ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð£ï¿½ï¿½ |
+| `asscor-pkg list` | ï¿½Ð³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ·ï¿½ï¿½Öµï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ |
+| `asscor-pkg info <name>` | ï¿½é¿´ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½Ï¸ï¿½ï¿½Ï¢ï¿½ï¿½Ä£ï¿½é¡¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â²¿Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô£ï¿½ |
+| `asscor-pkg graph` | ï¿½ï¿½ï¿½ DOT ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½É¹Üµï¿½ï¿½ï¿½ `dot -Tpng`ï¿½ï¿½ |
+| `asscor-pkg validate` | Ð£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ `package.json` ï¿½ï¿½Ê½ï¿½ï¿½ï¿½Ö¶ÎºÏ·ï¿½ï¿½ï¿½ |
 
-#### 11.3.1 ÒÀÀµÇó½âÆ÷
+#### 11.3.1 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-- **°æ±¾Ô¼Êø**£ºÖ§³Ö `>=` `<=` `>` `<` `^x.y.z` `~x.y.z` `1.0.0 - 2.0.0` `1.x` ¾«È·Æ¥Åä
-- **»·ÐÎÒÀÀµ¼ì²â**£ºDFS »ØËÝËã·¨£¬Ê¶±ð²¢±¨¸æÑ­»·ÒÀÀµ
-- **³åÍ»ÉùÃ÷**£ºÍ¨¹ý `conflicts` ×Ö¶ÎÉùÃ÷²»¼æÈÝÀ©Õ¹°ü
-- **¿ÉÑ¡ÒÀÀµ**£º±ê¼Ç `optional: true` µÄÒÀÀµÈ±Ê§²»ÊÓÎª´íÎó
-- **¼æÈÝÐÔÐ£Ñé**£º¼ì²é `asscor_version` / `go_version` / `ssam_version` / `platform` Ô¼Êø
+- **ï¿½æ±¾Ô¼ï¿½ï¿½**ï¿½ï¿½Ö§ï¿½ï¿½ `>=` `<=` `>` `<` `^x.y.z` `~x.y.z` `1.0.0 - 2.0.0` `1.x` ï¿½ï¿½È·Æ¥ï¿½ï¿½
+- **ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½DFS ï¿½ï¿½ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½Ê¶ï¿½ð²¢±ï¿½ï¿½ï¿½Ñ­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+- **ï¿½ï¿½Í»ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½Í¨ï¿½ï¿½ `conflicts` ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½
+- **ï¿½ï¿½Ñ¡ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½ `optional: true` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È±Ê§ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½
+- **ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð£ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½ `asscor_version` / `go_version` / `ssam_version` / `platform` Ô¼ï¿½ï¿½
 
-### 11.4 package.json Çåµ¥¸ñÊ½
+### 11.4 package.json ï¿½åµ¥ï¿½ï¿½Ê½
 
-Ã¿¸öÀ©Õ¹°ü¸ùÄ¿Â¼Ðè°üº¬ `package.json`¡£ÓëÄÚºË ExtensionManager µÄ `extension.json` »¥²¹¡ª¡ª`extension.json` ÃæÏòÔËÐÐÊ±²å¼þ°²×°£¬`package.json` ÃæÏò±àÒëÊ±ÒÀÀµ¹ÜÀí¡£
+Ã¿ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½Ä¿Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ `package.json`ï¿½ï¿½ï¿½ï¿½ï¿½Úºï¿½ ExtensionManager ï¿½ï¿½ `extension.json` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½`extension.json` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½×°ï¿½ï¿½`package.json` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 ```json
 {
   "name": "example-security-pack",
   "version": "1.0.0",
-  "description": "Ê¾ÀýÀ©Õ¹°ü",
+  "description": "Ê¾ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½",
   "compatibility": { "asscor_version": ">=0.2.1", "go_version": ">=1.26", "platform": ["linux"] },
   "modules": [
     { "id": "multi-algo-orchestrator", "path": "../../modules/multi-algo-orchestrator" }
@@ -791,20 +791,20 @@ cd optional/pkgmgr && go build -o asscor-pkg .
     { "package": "experimental-plugin", "version": ">=0.1.0", "optional": true }
   ],
   "conflicts": [
-    { "package": "legacy-scoring-only", "versions": "<=0.5.0", "reason": "Ê¹ÓÃÁËÆúÓÃµÄÆÀ·ÖÒýÇæ" }
+    { "package": "legacy-scoring-only", "versions": "<=0.5.0", "reason": "Ê¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ãµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½" }
   ]
 }
 ```
 
-ÍêÕû¹æ·¶¼û `optional/SCHEMA.md`¡£
+ï¿½ï¿½ï¿½ï¿½ï¿½æ·¶ï¿½ï¿½ `optional/SCHEMA.md`ï¿½ï¿½
 
-### 11.5 ¶àËã·¨±àÅÅÆ÷ (multi-algo-orchestrator)
+### 11.5 ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (multi-algo-orchestrator)
 
-Î»ÓÚ `optional/algorithms/modules/multi-algo-orchestrator/`£¬ÊÇÍâ²¿À©Õ¹ÌåÏµµÄÊ×¸öµ¥Ä£¿éÊµÏÖ¡£½â¾öµ¥Ò»ÆÀ·ÖËã·¨µÄ"Ä¾Í°Ð§Ó¦"¡ª¡ªÍ¨¹ý±àÅÅ¶à¸öËã·¨²¢ÐÐ/´®ÐÐ/¼¶ÁªÖ´ÐÐ£¬È¡×îµÍ·ÖÏû³ýµ¥Ò»Ëã·¨Æ«²î¡£
+Î»ï¿½ï¿½ `optional/algorithms/modules/multi-algo-orchestrator/`ï¿½ï¿½ï¿½ï¿½ï¿½â²¿ï¿½ï¿½Õ¹ï¿½ï¿½Ïµï¿½ï¿½ï¿½×¸ï¿½ï¿½ï¿½Ä£ï¿½ï¿½Êµï¿½Ö¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½"Ä¾Í°Ð§Ó¦"ï¿½ï¿½ï¿½ï¿½Í¨ï¿½ï¿½ï¿½ï¿½ï¿½Å¶ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½Ö´ï¿½Ð£ï¿½È¡ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ã·¨Æ«ï¿½î¡£
 
-#### 11.5.1 ½ÓÈë·½Ê½
+#### 11.5.1 ï¿½ï¿½ï¿½ë·½Ê½
 
-²»ÐÞ¸ÄÄÚºË´úÂë£¬Í¨¹ý Extension Point ÏµÍ³¹ÒÔØ£º
+ï¿½ï¿½ï¿½Þ¸ï¿½ï¿½ÚºË´ï¿½ï¿½ë£¬Í¨ï¿½ï¿½ Extension Point ÏµÍ³ï¿½ï¿½ï¿½Ø£ï¿½
 
 ```go
 import multialgo "github.com/asscor/asscor-optional-multi-algo"
@@ -814,49 +814,49 @@ cfg := multialgo.OrchestrationConfig{
     Merge: multialgo.MergeWorstOf,
     Algorithms: []multialgo.AlgorithmProfile{
         {ID: "ssam_v2", Name: "SSAM 2.0", Role: multialgo.RolePrimary, ...},
-        {ID: "baseline", Name: "»ù×¼Ëã·¨", Role: multialgo.RoleSecondary, ...},
+        {ID: "baseline", Name: "ï¿½ï¿½×¼ï¿½ã·¨", Role: multialgo.RoleSecondary, ...},
     },
 }
 orch := multialgo.NewOrchestrator(cfg)
-orch.Register(k.PlatformExtensionRegistry())  // ¶©ÔÄ assessor.pre_score À©Õ¹µã
+orch.Register(k.PlatformExtensionRegistry())  // ï¿½ï¿½ï¿½ï¿½ assessor.pre_score ï¿½ï¿½Õ¹ï¿½ï¿½
 ```
 
-#### 11.5.2 ÈýÖÖÖ´ÐÐÄ£Ê½
+#### 11.5.2 ï¿½ï¿½ï¿½ï¿½Ö´ï¿½ï¿½Ä£Ê½
 
-| Ä£Ê½ | ÐÐÎª | ÊÊÓÃ |
+| Ä£Ê½ | ï¿½ï¿½Îª | ï¿½ï¿½ï¿½ï¿½ |
 |------|------|------|
-| `sequential` | °´Ðò´®ÐÐÖ´ÐÐ | µ÷ÊÔÑéÖ¤ |
-| `parallel` | goroutine ²¢·¢Ö´ÐÐËùÓÐËã·¨ | ¸ßÐÔÄÜ |
-| `cascade` | Ö÷Ëã·¨¼°¸ñ (¡ÝãÐÖµ) ÔòÌø¹ý¸¨Ëã·¨ | Éú²ú½ÚÊ¡×ÊÔ´ |
+| `sequential` | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö´ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¤ |
+| `parallel` | goroutine ï¿½ï¿½ï¿½ï¿½Ö´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ã·¨ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| `cascade` | ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½Öµ) ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ã·¨ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¡ï¿½ï¿½Ô´ |
 
-#### 11.5.3 ÎåÖÖºÏ²¢²ßÂÔ
+#### 11.5.3 ï¿½ï¿½ï¿½ÖºÏ²ï¿½ï¿½ï¿½ï¿½ï¿½
 
-| ²ßÂÔ | ÐÐÎª | Ïû³ýÄ¾Í°Ð§Ó¦ |
+| ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½Îª | ï¿½ï¿½ï¿½ï¿½Ä¾Í°Ð§Ó¦ |
 |------|------|:---:|
-| `best_of` | È¡×î¸ß·Ö | ? |
-| `worst_of` | **È¡×îµÍ·Ö** | ? |
-| `weighted_average` | °´Ëã·¨ÖÃÐÅ¶È¼ÓÈ¨Æ½¾ù | ?? |
-| `consensus` | Ò»ÖÂÔòÆ½¾ù£¬·ÖÆçÈ¡×îµÍ | ? |
-| `primary_only` | ½öÊ¹ÓÃÖ÷Ëã·¨ | ? |
+| `best_of` | È¡ï¿½ï¿½ß·ï¿½ | ? |
+| `worst_of` | **È¡ï¿½ï¿½Í·ï¿½** | ? |
+| `weighted_average` | ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½ï¿½Å¶È¼ï¿½È¨Æ½ï¿½ï¿½ | ?? |
+| `consensus` | Ò»ï¿½ï¿½ï¿½ï¿½Æ½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ | ? |
+| `primary_only` | ï¿½ï¿½Ê¹ï¿½ï¿½ï¿½ï¿½ï¿½ã·¨ | ? |
 
-#### 11.5.4 ¼ì²éÏîÄ£Ê½
+#### 11.5.4 ï¿½ï¿½ï¿½ï¿½ï¿½Ä£Ê½
 
-| Ä£Ê½ | ÐÐÎª |
+| Ä£Ê½ | ï¿½ï¿½Îª |
 |------|------|
-| `merge` | ºÏ²¢ËùÓÐËã·¨¼ì²éÏî£¬°´ CheckID È¥ÖØ |
-| `independent` | ¸÷Ëã·¨ÓµÓÐ¶ÀÁ¢¼ì²éÏîÁÐ±í£¬»¥²»¸ÉÈÅ |
-| `tagged` | ¼ì²éÏî±ê×¢À´Ô´Ëã·¨£¬ÆÀ·ÖÒýÇæ¿É¼ûÀ´Ô´±êÇ© |
+| `merge` | ï¿½Ï²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½ï¿½ï¿½î£¬ï¿½ï¿½ CheckID È¥ï¿½ï¿½ |
+| `independent` | ï¿½ï¿½ï¿½ã·¨Óµï¿½Ð¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
+| `tagged` | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½Ô´ï¿½ã·¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É¼ï¿½ï¿½ï¿½Ô´ï¿½ï¿½Ç© |
 
-#### 11.5.5 Ä¾Í°Ð§Ó¦¶ÈÁ¿
+#### 11.5.5 Ä¾Í°Ð§Ó¦ï¿½ï¿½ï¿½ï¿½
 
-±àÅÅÆ÷Êä³öÖÐÌá¹©ÍêÕûµÄËã·¨¼ä²îÒì¶ÈÁ¿£º
-- `AlgoSpread`£º×î¸ß·Ö¡ª×îµÍ·Ö²îÒì
-- `AlgoVariance`£ºÍ³¼ÆËã·¨¼ä·½²î
-- `WorstAlgo` / `BestAlgo`£ºÊ¶±ð¶Ì°åºÍ³¤°åËã·¨
-- `EliminatedByCascade`£º¼¶ÁªÄ£Ê½ÏÂÌø¹ýµÄËã·¨ÁÐ±í
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½á¹©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+- `AlgoSpread`ï¿½ï¿½ï¿½ï¿½ß·Ö¡ï¿½ï¿½ï¿½Í·Ö²ï¿½ï¿½ï¿½
+- `AlgoVariance`ï¿½ï¿½Í³ï¿½ï¿½ï¿½ã·¨ï¿½ä·½ï¿½ï¿½
+- `WorstAlgo` / `BestAlgo`ï¿½ï¿½Ê¶ï¿½ï¿½Ì°ï¿½Í³ï¿½ï¿½ï¿½ï¿½ã·¨
+- `EliminatedByCascade`ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ã·¨ï¿½Ð±ï¿½
 
 ---
 
-## ½áÂÛ
+## ï¿½ï¿½ï¿½ï¿½
 
-ASSCOR µÄÀ©Õ¹ÌåÏµÌá¹©ÁË**ËÄÖÖ»¥²¹µÄÀ©Õ¹»úÖÆ**¡ª¡ª½ø³ÌÄÚ²å¼þ (Plugin ½Ó¿Ú)¡¢ÔËÐÐÊ±¹³×Ó (Extension Point)¡¢ÄÚºË°²×°Ê½À©Õ¹ (ExtensionManager + extension.json)¡¢Íâ²¿±àÒëÊ±À©Õ¹ (optional/ + pkgmgr + package.json)¡ª¡ª¸²¸ÇÁË´Óµ×²ã¼ì²éÂß¼­µ½¶¥²ãÆÀ·ÖÒýÇæ¡¢´ÓÄÚºËÄÚÇ¶µ½¶ÀÁ¢±àÒëÄ£¿éµÄÈ«²¿¿ÉÀ©Õ¹ÐÔÐèÇó¡£14 ¸öºËÐÄÄ£¿é½Ó¿ÚÈ«²¿Í¨¹ý DI ÈÝÆ÷×¢Èë£¬¼ì²éÆ÷Í¨¹ý×¢²á±í API ¹ÜÀí¡£Íâ²¿À©Õ¹Í¨¹ý Extension Point ÏµÍ³ÊµÏÖÁã´úÂëÇÖÈëÊ½¹ÒÔØ£¬À©Õ¹°üÍ¨¹ý `asscor-pkg` ¹¤¾ßÁ´¹ÜÀíÒÀÀµºÍÍâ²¿²Ö¿âÒýÓÃ¡£ÕâÌ×ÌåÏµÎªµÚÈý·½¿ª·¢ÕßÌá¹©ÁË´ÓÇáÁ¿¼¶¼ì²éÏîµ½ÍêÕûËã·¨±àÅÅµÄÈ«Î¬¶ÈÀ©Õ¹ÄÜÁ¦¡£
+ASSCOR ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½Ïµï¿½á¹©ï¿½ï¿½**ï¿½ï¿½ï¿½Ö»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú²ï¿½ï¿½ (Plugin ï¿½Ó¿ï¿½)ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ (Extension Point)ï¿½ï¿½ï¿½ÚºË°ï¿½×°Ê½ï¿½ï¿½Õ¹ (ExtensionManager + extension.json)ï¿½ï¿½ï¿½â²¿ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½Õ¹ (optional/ + pkgmgr + package.json)ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë´Óµ×²ï¿½ï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½æ¡¢ï¿½ï¿½ï¿½Úºï¿½ï¿½ï¿½Ç¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½È«ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½14 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½Ó¿ï¿½È«ï¿½ï¿½Í¨ï¿½ï¿½ DI ï¿½ï¿½ï¿½ï¿½×¢ï¿½ë£¬ï¿½ï¿½ï¿½ï¿½ï¿½Í¨ï¿½ï¿½×¢ï¿½ï¿½ï¿½ API ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â²¿ï¿½ï¿½Õ¹Í¨ï¿½ï¿½ Extension Point ÏµÍ³Êµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê½ï¿½ï¿½ï¿½Ø£ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½Í¨ï¿½ï¿½ `asscor-pkg` ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â²¿ï¿½Ö¿ï¿½ï¿½ï¿½ï¿½Ã¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÏµÎªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½á¹©ï¿½Ë´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½îµ½ï¿½ï¿½ï¿½ï¿½ï¿½ã·¨ï¿½ï¿½ï¿½Åµï¿½È«Î¬ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
