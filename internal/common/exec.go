@@ -221,6 +221,9 @@ func RunCmdQuiet(name string, args ...string) (string, bool) {
 }
 
 func ParseInt(s string) (int, error) {
+	if s == "" {
+		return 0, fmt.Errorf("empty string in ParseInt")
+	}
 	var n int
 	for _, c := range s {
 		if c < '0' || c > '9' {
