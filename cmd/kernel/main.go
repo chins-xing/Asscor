@@ -29,8 +29,6 @@ import (
 	_ "github.com/asscor/asscor/internal/checks"
 )
 
-var registeredATTACKInit func(assessor *kernel.AssessorModule)
-
 func main() {
 	configPath := flag.String("config", "config.ini", "configuration file path")
 	listenAddr := flag.String("listen", ":50051", "microkernel listen address")
@@ -231,9 +229,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 	k.Container().Bind((*kernel.PrismEngineProvider)(nil), prism.NewEngine())
 
 	assessor := &kernel.AssessorModule{}
-	if registeredATTACKInit != nil {
-		registeredATTACKInit(assessor)
-	}
+	initATTACK(assessor)
 	policy := &kernel.PolicyModule{}
 	spc := kernel.NewSPCModule()
 	cti := &kernel.CTIModule{}
