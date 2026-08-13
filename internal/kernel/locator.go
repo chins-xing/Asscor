@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"github.com/asscor/asscor/internal/topology"
 	"context"
 
 	"github.com/asscor/asscor/internal/logger"
@@ -28,7 +29,7 @@ func (l *KernelLocator) Locate(ctx context.Context, hostID string) (*AttackerLoc
 	loc := &AttackerLocation{}
 
 	// Subnet-level location from the topology registry.
-	if subnets := getTopology()[hostID]; len(subnets) > 0 {
+	if subnets := topology.GetTopology()[hostID]; len(subnets) > 0 {
 		loc.ActiveSubnets = subnets
 	}
 

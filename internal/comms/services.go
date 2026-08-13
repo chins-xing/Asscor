@@ -2,6 +2,7 @@ package comms
 
 import (
 	"github.com/asscor/asscor/internal/kernel"
+	"github.com/asscor/asscor/internal/topology"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -149,7 +150,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 			}
 		}
 		if len(req.NetworkInfo.Subnets) > 0 {
-			kernel.RecordTopology(req.HostId, req.NetworkInfo.Subnets)
+			topology.RecordTopology(req.HostId, req.NetworkInfo.Subnets)
 		}
 		logger.WithComponent("kernel").Debug("network info received", "host_id", req.HostId,
 			"zone", req.NetworkInfo.NetworkZone, "ips", len(req.NetworkInfo.LocalIPs), "subnets", len(req.NetworkInfo.Subnets))

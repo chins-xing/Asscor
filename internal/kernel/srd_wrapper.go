@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"github.com/asscor/asscor/internal/topology"
 	"context"
 
 	"github.com/asscor/asscor/internal/engine/srd"
@@ -44,7 +45,7 @@ func (s *SRDPlugin) Init(ctx context.Context, kc KernelContext) error {
 func (s *SRDPlugin) Start(ctx context.Context) error {
 	// Real-time topology sync: register a listener so every heartbeat-driven
 	// recordTopology immediately updates the SRD pipeline (no one-shot snapshot).
-	setTopologyListener(func(hostID string, subnets []string) {
+	topology.SetTopologyListener(func(hostID string, subnets []string) {
 		s.manager.SetTopology(hostID, subnets, "")
 	})
 	// Seed with any topology already recorded before Start.
@@ -53,7 +54,7 @@ func (s *SRDPlugin) Start(ctx context.Context) error {
 }
 
 func (s *SRDPlugin) Stop(ctx context.Context) error {
-	setTopologyListener(nil)
+	topology.SetTopologyListener(nil)
 	return s.manager.Stop(ctx)
 }
 
@@ -74,7 +75,7 @@ func (s *SRDPlugin) GetReachableHosts(hostID string) []string {
 
 // syncTopology pulls the kernel's shared topology registry into the SRD pipeline.
 func (s *SRDPlugin) syncTopology() {
-	for hostID, subnets := range getTopology() {
+	for hostID, subnets := range topology.GetTopology() {
 		s.manager.SetTopology(hostID, subnets, "")
 	}
 }
