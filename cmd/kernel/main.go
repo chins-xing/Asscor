@@ -16,7 +16,6 @@ import (
 	"github.com/asscor/asscor/internal/cli"
 	"github.com/asscor/asscor/internal/comms"
 	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/deploy"
 	"github.com/asscor/asscor/internal/extmgr"
 	"github.com/asscor/asscor/internal/integrity"
 	"github.com/asscor/asscor/internal/kernel"
@@ -58,7 +57,7 @@ func main() {
 	}
 
 	if *install {
-		if err := deploy.InstallKernel(*installPath); err != nil {
+		if err := cli.InstallKernel(*installPath); err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: install failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -67,7 +66,7 @@ func main() {
 		os.Exit(0)
 	}
 	if *uninstall {
-		if err := deploy.UninstallKernel(*installPath); err != nil {
+		if err := cli.UninstallKernel(*installPath); err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: uninstall failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -75,7 +74,7 @@ func main() {
 		os.Exit(0)
 	}
 	if *checkInstall {
-		if err := deploy.CheckKernelInstall(*installPath); err != nil {
+		if err := cli.CheckKernelInstall(*installPath); err != nil {
 			fmt.Fprintf(os.Stderr, "FAIL: %v\n", err)
 			os.Exit(1)
 		}
@@ -83,7 +82,7 @@ func main() {
 		os.Exit(0)
 	}
 	if *upgrade {
-		if err := deploy.UpgradeKernel(*installPath); err != nil {
+		if err := cli.UpgradeKernel(*installPath); err != nil {
 			fmt.Fprintf(os.Stderr, "UPGRADE FAILED: %v\n", err)
 			os.Exit(1)
 		}
