@@ -1,6 +1,7 @@
-package kernel
+package historicalstore
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -14,15 +15,6 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-type HostTrend struct {
-	HostID    string    `json:"host_id"`
-	Date      string    `json:"date"`
-	AvgScore  float64   `json:"avg_score"`
-	MinScore  float64   `json:"min_score"`
-	MaxScore  float64   `json:"max_score"`
-	Count     int       `json:"count"`
-	AcceptablePct float64 `json:"acceptable_pct"`
-}
 
 type HistoricalStore struct {
 	dataDir    string
@@ -36,7 +28,7 @@ func NewHistoricalStore(dataDir string) *HistoricalStore {
 	}
 }
 
-func (s *HistoricalStore) ComputeTrends(days int) ([]HostTrend, error) {
+func (s *HistoricalStore) ComputeTrends(days int) ([]kernel.HostTrend, error) {
 	if !s.enabled {
 		return nil, nil
 	}
@@ -94,7 +86,7 @@ func (s *HistoricalStore) ComputeTrends(days int) ([]HostTrend, error) {
 		f.Close()
 	}
 
-	var trends []HostTrend
+	var trends []kernel.HostTrend
 	for hostID, scores := range hostEntries {
 		if len(scores) == 0 {
 			continue
@@ -106,7 +98,7 @@ func (s *HistoricalStore) ComputeTrends(days int) ([]HostTrend, error) {
 			sum += s
 		}
 
-		trends = append(trends, HostTrend{
+		trends = append(trends, kernel.HostTrend{
 			HostID:    hostID,
 			AvgScore:  math.Round(sum/float64(len(scores))*100) / 100,
 			MinScore:  scores[0],

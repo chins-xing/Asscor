@@ -3,6 +3,7 @@
 package persistence
 
 import (
+	"github.com/asscor/asscor/internal/historicalstore"
 	"github.com/asscor/asscor/internal/kernel"
 	"archive/tar"
 	"bufio"
@@ -116,7 +117,7 @@ type Module struct {
 	backupDone  chan struct{}
 	bufSize     int
 	retentionDays int
-	history     *kernel.HistoricalStore
+	history     *historicalstore.HistoricalStore
 
 	enabled  bool
 	state    kernel.PluginState
@@ -175,7 +176,7 @@ func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 	m.flushDone = make(chan struct{})
 	m.cleanupDone = make(chan struct{})
 	m.backupDone = make(chan struct{})
-	m.history = kernel.NewHistoricalStore(m.dataDir)
+	m.history = historicalstore.NewHistoricalStore(m.dataDir)
 
 	kc.Container().Bind((*kernel.PersistenceInterface)(nil), m)
 
