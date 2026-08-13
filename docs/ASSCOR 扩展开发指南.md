@@ -1,6 +1,6 @@
 # ASSCOR 扩展开发指南
 
-**版本**：v1.2 | **适用**：ASSCOR v0.2.2 / SSAM 2.0 | **日期**：2026-07-14
+**版本**：v1.2 | **适用**：ASSCOR v0.2.3 / SSAM 2.0 | **日期**：2026-07-14
 
 ---
 
@@ -830,7 +830,7 @@ orch.Register(k.PlatformExtensionRegistry())
 
 - 检查项库：`internal/checks/linux/checks.go`（80 个内置检查项参考实现）
 - 适配器示例：`internal/adapter/scanner/`（11 个探测器）、`internal/adapter/management/`（10 个管理类）
-- 内核插件示例：`internal/kernel/`（17 个内置插件）
+- 内核插件示例：`internal/<模块名>/`（14 个模块，其中 11 个 build-tag 可选插件 + comms/historicalstore/topology/oscal 常编译），契约接口见 `internal/kernel/*_interface.go`
 - 扩展管理器：`internal/extmgr/`
 - 外部扩展模块：`optional/algorithms/modules/multi-algo-orchestrator/`
 - 扩展包示例：`optional/algorithms/packages/example-pack/package.json`

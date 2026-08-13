@@ -50,6 +50,8 @@
 
 ASSCOR 是一个**运行时可扩展的安全评估平台**。它通过四个互不重叠的核心能力域——攻击面管理、业务连续性、操作可信度、韧性——与独立边缘修正因子、动态威胁系数及安全态势计算相结合，将系统安全状态量化为一个 0–100 的分数。
 
+> **微内核架构：** ASSCOR 内核已从"上帝包"重构为**微内核 + build-tag 可选插件**架构。`internal/kernel/` 仅保留扩展框架（DI 容器、消息总线、扩展点注册表、插件生命周期）与生命周期引擎、接口契约，以及拦截器链等核心基础设施；14 个功能模块（评估引擎、SPC、策略、CTI、指令下发、心跳、ATT&CK、日志收集、数据源管理、持久化、SRD 封装、通信服务、历史存储、拓扑注册、OSCAL 导出）已剥离为独立包，通过 Go build-tag 按需编译，实现**默认构建零膨胀**（无 tag 编译最小内核，全 tag 编译完整功能）。
+
 ASSCOR 不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系统的"安全可接受性"聚合判断层，提供面向业务风险的统一视图。同时，SSAM 2.0 已实现与中国等级保护制度（GB/T 22239-2019）的双向映射，可作为等保合规效果的持续性量化验证工具。
 
 其核心算法引擎 **SSAM 2.0**（系统安全可接受性模型）的核心创新包括：
@@ -73,8 +75,8 @@ ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** �
 | **Agent** | 80 检查项并发执行，CPE 自动生成，HMAC 签名命令执行 |
 | **21 个适配器** | Trivy/Nuclei/Lynis/Suricata 等 Fetch→Parse→Map→Validate 管线 |
 | **Prism/SRD** | 三层风险引擎：Core(动态评分)→Semantic(四态模糊)→Inference(马尔可夫预测) |
-| **扩展体系** | 76 个内核扩展点 + 9 种 extmgr 类型 + 可选扩展包体系 (pkgmgr + package.json) |
-| **内核解耦** | 17 个接口/类型文件拆分 + SPC 模块提取 (internal/spc/) |
+| **扩展体系** | 89 个内核扩展点 + 9 种 extmgr 类型 + 可选扩展包体系 (pkgmgr + package.json) |
+| **微内核剥离** | 内核仅保留扩展框架+生命周期+接口契约；14 个模块剥离为 build-tag 可选插件 (零膨胀默认构建) |
 | **安全防护** | HMAC 评估签名 + 算法自校准完整性校验 + SHA-256 二进制校验 + mTLS |
 | **Web 仪表盘** | 主机详情 + 历史趋势 + 边缘因子可视化 |
 | **CLI** | 交互式终端 + Unix socket 远程连接 + 15 运维命令 |
@@ -296,28 +298,37 @@ ASSCOR/
 │   ├── paths.go       #   风险传播路径搜索
 │   └── go.mod         #   独立 Go module，零外部依赖
 ├── internal/
-│   ├── kernel/        # 内核核心模块（assessor, policy, spc, cti,
-│   │                   #  adapter_integration, config_watcher,
-│   │                   #  di, bus, circuitbreaker, interceptor,
-│   │                   #  attck, attck_detection, attck_ti,
-│   │                   #  attck_emulation, attck_assessment,
-│   │                   #  attck_apt_chain, attck_apt_detect,
-│   │                   #  attck_apt_attribution, attck_apt_hunt 等）
-│   ├── ssam/          # SSAM 薄适配层（委托给 ssam-lib）— 已移至 internal/engine/ssam/
-│   │                   #  adapter.go — ASSCOR config/model ↔ ssam 格式转换
-│   │                   #  defaults.go — 默认权重、边缘因子
-│   ├── prism/         # Prism 薄适配层（委托给 prism-lib）— 已移至 internal/engine/prism/
-│   │                   #  engine.go — 线程安全包装，集成到 ASSCOR 内核
-│   ├── srd/           # SRD 数据流管线 — 已移至 internal/engine/srd/
-│   │                   #  manager.go — 风险状态管理器
-│   │                   #  pipeline.go — 数据处理管线
-│   ├── spc/           # SPC 模块独立包（v0.2.3 提取，16 文件/4,660 行）
+│   ├── kernel/        # 微内核核心（仅扩展框架 + 生命周期 + 接口契约）
+│   │                   #  kernel.go/kernel_lifecycle.go — 内核引导、生命周期编排
+│   │                   #  plugin.go — 插件接口、状态机、优先级/健康检查接口
+│   │                   #  di.go — DI 容器 | bus.go — 消息总线 | ctxkey.go — 上下文键
+│   │                   #  extensions.go/platform_extensions.go — 扩展点注册表
+│   │                   #  lifecycle.go — 生命周期引擎 | locator.go — 定位器 | blocker.go — 阻断器
+│   │                   #  *_interface.go/*_types.go — 各模块接口契约与共享类型
+│   │                   #  interceptor.go/ratelimit.go/circuitbreaker.go/auditlog.go — 拦截器链
+│   │                   #  crypto*.go — CA/证书管理 | workerpool*.go — 并发控制
+│   │                   #  config_watcher.go — 配置监听 | adapter_integration*.go — 适配器集成
+│   │                   #  siem_push.go — SIEM 推送 | source_manager_service.go — 源管理服务
+│   ├── assessor/      # 评估引擎插件 (//go:build assessor) — AssessorModule + ScoringEngineModule
+│   ├── spc/           # SPC 安全态势计算插件 (//go:build spc)
+│   ├── policy/        # 策略管理插件 (//go:build policy)
+│   ├── cti/           # 威胁情报插件 (//go:build cti)
+│   ├── commander/     # 指令下发插件 (//go:build commander)
+│   ├── heartbeat/     # 心跳监控插件 (//go:build heartbeat)
+│   ├── attck/         # ATT&CK V19 插件 (//go:build attck_ext)
+│   ├── collector/     # 日志收集插件 (//go:build collector)
+│   ├── sourcemanager/ # 数据源管理插件 (//go:build sourcemanager)
+│   ├── persistence/   # 持久化插件 (//go:build persistence)
+│   ├── srdwrapper/    # SRD 封装插件 (//go:build srdwrapper)
+│   ├── comms/         # 通信服务（常编译核心基础设施：server/services/grpc_server）
+│   ├── historicalstore/ # 历史存储（纯工具包，常编译）
+│   ├── topology/      # 拓扑注册（纯工具包，常编译）
+│   ├── oscal/         # OSCAL 导出（纯工具包，常编译）
+│   ├── cli/           # CLI 命令模块 + 安装/卸载/升级（internal/deploy 已并入）
 │   ├── engine/        # 评估引擎核心 + 引擎适配器 (ssam/prism/srd)
 │   ├── semver/        # SemVer 版本约束共享包
 │   ├── extmgr/        # 扩展管理器（安装/卸载/生命周期/安全执行）
-│   │                   #  adapter.go — 外部工具数据适配
-│   ├── agent/         # Agent 核心模块（collector, executor）
-│   ├── engine/        # ASSCOR 评估引擎（含适配器流水线集成，内部调用 ssam 包）
+│   ├── agent/         # Agent 核心模块
 │   ├── adapter/       # 外部工具适配器框架（21 个适配器：11 探测器 + 10 管理类）
 │   │   ├── scanner/   #   探测器适配器（Trivy, Nuclei, Lynis, OpenSCAP 等）
 │   │   └── management/#   管理类适配器（Ansible, NetBox, FreeIPA, Jira 等）
