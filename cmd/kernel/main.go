@@ -235,7 +235,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 	cti := &kernel.CTIModule{}
 	commander := &kernel.CommanderModule{}
 	logCollector := &kernel.LogCollectorModule{}
-	heartbeat := &kernel.HeartbeatModule{}
+	heartbeat := newHeartbeat()
 	persistence := kernel.NewPersistenceModule(cfg.DataDir)
 	concurrency := kernel.NewConcurrencyModule(10)
 	configWatcher := kernel.NewConfigWatcherModule(resolvedConfigPath)
@@ -250,7 +250,10 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 	lifecycle := kernel.NewLifecycleEngine(k)
 
-	plugins := []kernel.Plugin{heartbeat, spc, cti, scoringEngine, assessor, policy, commander, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	plugins := []kernel.Plugin{spc, cti, scoringEngine, assessor, policy, commander, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	if hb, ok := heartbeat.(kernel.Plugin); ok {
+		plugins = append([]kernel.Plugin{hb}, plugins...)
+	}
 
 	if *webuiPort > 0 {
 		webuiModule := webui.New(*webuiPort)

@@ -362,33 +362,6 @@ func TestCTIModule_Lifecycle(t *testing.T) {
 	}
 }
 
-func TestHeartbeat_PruneDeadAgents(t *testing.T) {
-	m := &HeartbeatModule{
-		agents: make(map[string]*AgentRecord),
-		timeout: 60 * time.Second,
-	}
-
-	now := time.Now()
-	m.agents["host-a"] = &AgentRecord{HostID: "host-a", Active: true, LastSeen: now}
-	m.agents["host-b"] = &AgentRecord{HostID: "host-b", Active: false, LastSeen: now.Add(-30 * time.Minute)}
-	m.agents["host-c"] = &AgentRecord{HostID: "host-c", Active: false, LastSeen: now.Add(-2 * time.Hour)}
-
-	m.pruneDeadAgents()
-
-	if _, ok := m.agents["host-a"]; !ok {
-		t.Error("active host-a should not be pruned")
-	}
-	if _, ok := m.agents["host-b"]; !ok {
-		t.Error("inactive host-b (30min) should not be pruned (<1h cutoff)")
-	}
-	if _, ok := m.agents["host-c"]; ok {
-		t.Error("inactive host-c (2h) should be pruned (>1h cutoff)")
-	}
-	if len(m.agents) != 2 {
-		t.Errorf("expected 2 agents remaining, got %d", len(m.agents))
-	}
-}
-
 func TestCommander_CommandExpiry(t *testing.T) {
 	m := &CommanderModule{
 		pendingCmds: make(map[string]map[string]*pendingCommand),

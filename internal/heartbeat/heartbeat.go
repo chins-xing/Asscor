@@ -1,4 +1,6 @@
-package kernel
+//go:build heartbeat
+
+package heartbeat
 
 import (
 	"context"
@@ -6,23 +8,33 @@ import (
 	"sync"
 	"time"
 
+	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 )
 
-type HeartbeatModule struct {
-	kernel KernelContext
+// Module tracks Agent liveness and triggers alerts on timeout.
+// It is a build-tag optional module (//go:build heartbeat): the kernel keeps
+// only the HeartbeatInterface contract, this package provides the
+// implementation.
+type Module struct {
+	kc kernel.KernelContext
 
-	mu      sync.RWMutex
-	agents  map[string]*AgentRecord
-	state   PluginState
+	mu     sync.RWMutex
+	agents map[string]*kernel.AgentRecord
+	state  kernel.PluginState
 
-	timeout  time.Duration
-	stopCh   chan struct{}
-	stopped  bool
+	timeout time.Duration
+	stopCh  chan struct{}
+	stopped bool
 }
 
-func (m *HeartbeatModule) Info() PluginInfo {
-	return PluginInfo{
+// New creates a heartbeat module instance.
+func New() *Module {
+	return &Module{}
+}
+
+func (m *Module) Info() kernel.PluginInfo {
+	return kernel.PluginInfo{
 		Name:        "heartbeat",
 		Version:     "1.2.0",
 		Description: "Heartbeat monitor — tracks Agent liveness, triggers alerts on timeout (default 60s)",
@@ -30,59 +42,59 @@ func (m *HeartbeatModule) Info() PluginInfo {
 	}
 }
 
-func (m *HeartbeatModule) Dependencies() []PluginDependency {
+func (m *Module) Dependencies() []kernel.PluginDependency {
 	return nil
 }
 
-func (m *HeartbeatModule) Priority() int {
+func (m *Module) Priority() int {
 	return 5
 }
 
-func (m *HeartbeatModule) Init(ctx context.Context, kc KernelContext) error {
-	m.kernel = kc
-	m.agents = make(map[string]*AgentRecord)
+func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
+	m.kc = kc
+	m.agents = make(map[string]*kernel.AgentRecord)
 	m.timeout = 60 * time.Second
 	if cfg := kc.GetConfigObj(); cfg != nil && cfg.HeartbeatTimeoutSec > 0 {
 		m.timeout = time.Duration(cfg.HeartbeatTimeoutSec) * time.Second
 	}
 	m.stopCh = make(chan struct{})
-	m.state = PluginInitialized
+	m.state = kernel.PluginInitialized
 
-	kc.Container().Bind((*HeartbeatInterface)(nil), m)
+	kc.Container().Bind((*kernel.HeartbeatInterface)(nil), m)
 	return nil
 }
 
-func (m *HeartbeatModule) Start(ctx context.Context) error {
-	m.state = PluginStarted
+func (m *Module) Start(ctx context.Context) error {
+	m.state = kernel.PluginStarted
 	go m.monitorLoop()
 	logger.WithComponent("heartbeat").Info("started", "timeout", m.timeout)
 	return nil
 }
 
-func (m *HeartbeatModule) Stop(ctx context.Context) error {
-	m.state = PluginStopping
+func (m *Module) Stop(ctx context.Context) error {
+	m.state = kernel.PluginStopping
 	m.mu.Lock()
 	if !m.stopped {
 		m.stopped = true
 		close(m.stopCh)
 	}
 	m.mu.Unlock()
-	m.state = PluginStopped
+	m.state = kernel.PluginStopped
 	logger.WithComponent("heartbeat").Info("stopped")
 	return nil
 }
 
-func (m *HeartbeatModule) State() PluginState {
+func (m *Module) State() kernel.PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
 }
 
-func (m *HeartbeatModule) HealthCheck(ctx context.Context) error {
+func (m *Module) HealthCheck(ctx context.Context) error {
 	m.mu.RLock()
 	state := m.state
 	m.mu.RUnlock()
-	if state != PluginStarted {
+	if state != kernel.PluginStarted {
 		return fmt.Errorf("heartbeat not started (state=%s)", state)
 	}
 	m.mu.RLock()
@@ -94,14 +106,14 @@ func (m *HeartbeatModule) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-func (m *HeartbeatModule) RecordHeartbeat(hostID string) {
+func (m *Module) RecordHeartbeat(hostID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	agent, ok := m.agents[hostID]
 	wasInactive := ok && !agent.Active
 	if !ok {
-		agent = &AgentRecord{
+		agent = &kernel.AgentRecord{
 			HostID:     hostID,
 			Registered: time.Now(),
 			Active:     true,
@@ -112,31 +124,31 @@ func (m *HeartbeatModule) RecordHeartbeat(hostID string) {
 	agent.LastSeen = time.Now()
 	agent.Connections++
 	agent.Active = true
-	if wasInactive && m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "heartbeat.agent_reconnected", map[string]interface{}{
-			"host_id":      hostID,
-			"connections":  agent.Connections,
+	if wasInactive && m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "heartbeat.agent_reconnected", map[string]interface{}{
+			"host_id":     hostID,
+			"connections": agent.Connections,
 		})
 	}
 
-	if m.kernel != nil {
-		m.kernel.Bus().Publish(m.kernel.Context(), Message{
-			Topic:   TopicAgentHeartbeat,
+	if m.kc != nil {
+		m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
+			Topic:   kernel.TopicAgentHeartbeat,
 			Payload: hostID,
 			Source:  "heartbeat",
 		})
 	}
 }
 
-func (m *HeartbeatModule) RegisterAgent(hostID, hostname, version string) {
+func (m *Module) RegisterAgent(hostID, hostname, version string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.agents == nil {
-		m.agents = make(map[string]*AgentRecord)
+		m.agents = make(map[string]*kernel.AgentRecord)
 	}
 
-	m.agents[hostID] = &AgentRecord{
+	m.agents[hostID] = &kernel.AgentRecord{
 		HostID:     hostID,
 		Hostname:   hostname,
 		Version:    version,
@@ -145,9 +157,9 @@ func (m *HeartbeatModule) RegisterAgent(hostID, hostname, version string) {
 		Active:     true,
 	}
 
-	if m.kernel != nil {
-		m.kernel.Bus().Publish(m.kernel.Context(), Message{
-			Topic:   TopicAgentRegistered,
+	if m.kc != nil {
+		m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
+			Topic:   kernel.TopicAgentRegistered,
 			Payload: hostID,
 			Source:  "heartbeat",
 		})
@@ -156,24 +168,24 @@ func (m *HeartbeatModule) RegisterAgent(hostID, hostname, version string) {
 	logger.WithComponent("heartbeat").Info("agent registered", "host_id", hostID, "hostname", hostname)
 }
 
-func (m *HeartbeatModule) GetAgent(hostID string) *AgentRecord {
+func (m *Module) GetAgent(hostID string) *kernel.AgentRecord {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.agents[hostID]
 }
 
-func (m *HeartbeatModule) ListAgents() []*AgentRecord {
+func (m *Module) ListAgents() []*kernel.AgentRecord {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	agents := make([]*AgentRecord, 0, len(m.agents))
+	agents := make([]*kernel.AgentRecord, 0, len(m.agents))
 	for _, a := range m.agents {
 		agents = append(agents, a)
 	}
 	return agents
 }
 
-func (m *HeartbeatModule) IsAlive(hostID string) bool {
+func (m *Module) IsAlive(hostID string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -184,7 +196,7 @@ func (m *HeartbeatModule) IsAlive(hostID string) bool {
 	return agent.Active && time.Since(agent.LastSeen) < m.timeout
 }
 
-func (m *HeartbeatModule) monitorLoop() {
+func (m *Module) monitorLoop() {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.WithComponent("heartbeat").Error("monitorLoop panic recovered", "panic", r)
@@ -196,7 +208,7 @@ func (m *HeartbeatModule) monitorLoop() {
 
 	for {
 		select {
-		case <-m.kernel.Context().Done():
+		case <-m.kc.Context().Done():
 			return
 		case <-m.stopCh:
 			return
@@ -206,7 +218,7 @@ func (m *HeartbeatModule) monitorLoop() {
 	}
 }
 
-func (m *HeartbeatModule) checkTimeouts() {
+func (m *Module) checkTimeouts() {
 	m.mu.RLock()
 	now := time.Now()
 	var timedOut []string
@@ -218,17 +230,17 @@ func (m *HeartbeatModule) checkTimeouts() {
 	m.mu.RUnlock()
 
 	for _, id := range timedOut {
-		if m.kernel != nil {
-			m.kernel.Bus().Publish(m.kernel.Context(), Message{
-			Topic:   TopicAgentTimeout,
-			Payload: id,
-			Source:  "heartbeat",
-		})
-		if m.kernel.Extensions() != nil {
-			m.kernel.Extensions().Execute(m.kernel.Context(), "heartbeat.agent_timeout", map[string]interface{}{
-				"host_id": id,
+		if m.kc != nil {
+			m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
+				Topic:   kernel.TopicAgentTimeout,
+				Payload: id,
+				Source:  "heartbeat",
 			})
-		}
+			if m.kc.Extensions() != nil {
+				m.kc.Extensions().Execute(m.kc.Context(), "heartbeat.agent_timeout", map[string]interface{}{
+					"host_id": id,
+				})
+			}
 		}
 		logger.WithComponent("heartbeat").Warn("agent timed out", "host_id", id)
 
@@ -242,7 +254,7 @@ func (m *HeartbeatModule) checkTimeouts() {
 	m.pruneDeadAgents()
 }
 
-func (m *HeartbeatModule) pruneDeadAgents() {
+func (m *Module) pruneDeadAgents() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -250,8 +262,8 @@ func (m *HeartbeatModule) pruneDeadAgents() {
 	for id, agent := range m.agents {
 		if !agent.Active && agent.LastSeen.Before(cutoff) {
 			delete(m.agents, id)
-			if m.kernel != nil && m.kernel.Extensions() != nil {
-				m.kernel.Extensions().Execute(m.kernel.Context(), "heartbeat.agent_pruned", map[string]interface{}{
+			if m.kc != nil && m.kc.Extensions() != nil {
+				m.kc.Extensions().Execute(m.kc.Context(), "heartbeat.agent_pruned", map[string]interface{}{
 					"host_id":   id,
 					"last_seen": agent.LastSeen.Format(time.RFC3339),
 				})

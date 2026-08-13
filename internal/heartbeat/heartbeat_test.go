@@ -1,13 +1,17 @@
-package kernel
+//go:build heartbeat
+
+package heartbeat
 
 import (
 	"testing"
 	"time"
+
+	"github.com/asscor/asscor/internal/kernel"
 )
 
 func TestHeartbeatRecordAndGet(t *testing.T) {
-	m := &HeartbeatModule{
-		agents:  make(map[string]*AgentRecord),
+	m := &Module{
+		agents:  make(map[string]*kernel.AgentRecord),
 		timeout: 60 * time.Second,
 	}
 
@@ -29,8 +33,8 @@ func TestHeartbeatRecordAndGet(t *testing.T) {
 }
 
 func TestHeartbeatRegisterAgent(t *testing.T) {
-	m := &HeartbeatModule{
-		agents: make(map[string]*AgentRecord),
+	m := &Module{
+		agents: make(map[string]*kernel.AgentRecord),
 	}
 
 	m.RegisterAgent("host-02", "web-server", "1.0.0")
@@ -48,8 +52,8 @@ func TestHeartbeatRegisterAgent(t *testing.T) {
 }
 
 func TestHeartbeatMultipleAgents(t *testing.T) {
-	m := &HeartbeatModule{
-		agents: make(map[string]*AgentRecord),
+	m := &Module{
+		agents: make(map[string]*kernel.AgentRecord),
 	}
 
 	m.RegisterAgent("h1", "host1", "1.0")
@@ -71,8 +75,8 @@ func TestHeartbeatMultipleAgents(t *testing.T) {
 }
 
 func TestHeartbeatIsAlive(t *testing.T) {
-	m := &HeartbeatModule{
-		agents:  make(map[string]*AgentRecord),
+	m := &Module{
+		agents:  make(map[string]*kernel.AgentRecord),
 		timeout: 60 * time.Second,
 	}
 
@@ -83,5 +87,32 @@ func TestHeartbeatIsAlive(t *testing.T) {
 	m.RegisterAgent("alive", "alive-host", "1.0")
 	if !m.IsAlive("alive") {
 		t.Error("IsAlive should be true for registered agent")
+	}
+}
+
+func TestHeartbeat_PruneDeadAgents(t *testing.T) {
+	m := &Module{
+		agents:  make(map[string]*kernel.AgentRecord),
+		timeout: 60 * time.Second,
+	}
+
+	now := time.Now()
+	m.agents["host-a"] = &kernel.AgentRecord{HostID: "host-a", Active: true, LastSeen: now}
+	m.agents["host-b"] = &kernel.AgentRecord{HostID: "host-b", Active: false, LastSeen: now.Add(-30 * time.Minute)}
+	m.agents["host-c"] = &kernel.AgentRecord{HostID: "host-c", Active: false, LastSeen: now.Add(-2 * time.Hour)}
+
+	m.pruneDeadAgents()
+
+	if _, ok := m.agents["host-a"]; !ok {
+		t.Error("active host-a should not be pruned")
+	}
+	if _, ok := m.agents["host-b"]; !ok {
+		t.Error("inactive host-b (30min) should not be pruned (<1h cutoff)")
+	}
+	if _, ok := m.agents["host-c"]; ok {
+		t.Error("inactive host-c (2h) should be pruned (>1h cutoff)")
+	}
+	if len(m.agents) != 2 {
+		t.Errorf("expected 2 agents remaining, got %d", len(m.agents))
 	}
 }
