@@ -1,6 +1,9 @@
-package kernel
+//go:build collector
+
+package collector
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"encoding/json"
 	"io"
@@ -14,18 +17,18 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-type LogCollectorModule struct {
-	kernel  KernelContext
+type Module struct {
+	kc  kernel.KernelContext
 	logPath string
 
 	mu     sync.RWMutex
 	writer io.Writer
-	state  PluginState
+	state  kernel.PluginState
 	flushDone chan struct{}
 }
 
-func (m *LogCollectorModule) Info() PluginInfo {
-	return PluginInfo{
+func (m *Module) Info() kernel.PluginInfo {
+	return kernel.PluginInfo{
 		Name:        "log_collector",
 		Version:     "1.2.0",
 		Description: "Log collector — receives Agent log streams, writes to append-only file, forwards to SIEM",
@@ -33,17 +36,17 @@ func (m *LogCollectorModule) Info() PluginInfo {
 	}
 }
 
-func (m *LogCollectorModule) Dependencies() []PluginDependency {
+func (m *Module) Dependencies() []kernel.PluginDependency {
 	return nil
 }
 
-func (m *LogCollectorModule) Priority() int {
+func (m *Module) Priority() int {
 	return 70
 }
 
-func (m *LogCollectorModule) Init(ctx context.Context, kc KernelContext) error {
-	m.kernel = kc
-	m.state = PluginInitialized
+func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
+	m.kc = kc
+	m.state = kernel.PluginInitialized
 
 	m.logPath = "ASSCOR-kernel.log"
 	if cfg := kc.GetConfigObj(); cfg != nil {
@@ -72,21 +75,21 @@ func (m *LogCollectorModule) Init(ctx context.Context, kc KernelContext) error {
 		}
 	}
 
-	kc.Container().Bind((*LogCollectorInterface)(nil), m)
+	kc.Container().Bind((*kernel.LogCollectorInterface)(nil), m)
 
 	return nil
 }
 
-func (m *LogCollectorModule) Start(ctx context.Context) error {
-	m.state = PluginStarted
+func (m *Module) Start(ctx context.Context) error {
+	m.state = kernel.PluginStarted
 	m.flushDone = make(chan struct{})
 	go m.flushLoop()
 	logger.WithComponent("log_collector").Info("started", "path", m.logPath)
 	return nil
 }
 
-func (m *LogCollectorModule) Stop(ctx context.Context) error {
-	m.state = PluginStopping
+func (m *Module) Stop(ctx context.Context) error {
+	m.state = kernel.PluginStopping
 	if m.flushDone != nil {
 		select {
 		case <-m.flushDone:
@@ -100,12 +103,12 @@ func (m *LogCollectorModule) Stop(ctx context.Context) error {
 		f.Close()
 	}
 	m.mu.Unlock()
-	m.state = PluginStopped
+	m.state = kernel.PluginStopped
 	logger.WithComponent("log_collector").Info("stopped")
 	return nil
 }
 
-func (m *LogCollectorModule) flushLoop() {
+func (m *Module) flushLoop() {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.WithComponent("log_collector").Error("flushLoop panic", "panic", r)
@@ -129,7 +132,7 @@ func (m *LogCollectorModule) flushLoop() {
 	}
 }
 
-func (m *LogCollectorModule) State() PluginState {
+func (m *Module) State() kernel.PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
@@ -144,7 +147,7 @@ func sanitizeLogField(s string) string {
 	}, s)
 }
 
-func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
+func (m *Module) Append(entry *apiv1.LogEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -167,8 +170,8 @@ func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
 	data = append(data, '\n')
 	_, err = m.writer.Write(data)
 
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "log.entry_received", map[string]interface{}{
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "log.entry_received", map[string]interface{}{
 			"host_id":   entry.HostId,
 			"level":     entry.Level,
 			"timestamp": entry.Timestamp,
@@ -178,7 +181,7 @@ func (m *LogCollectorModule) Append(entry *apiv1.LogEntry) error {
 	return err
 }
 
-func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
+func (m *Module) AppendBatch(entries []*apiv1.LogEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -206,8 +209,8 @@ func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
 
 	_, err := m.writer.Write(buf)
 
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "agent.log_uploaded", map[string]interface{}{
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "agent.log_uploaded", map[string]interface{}{
 			"entry_count": len(entries),
 		})
 	}
@@ -215,8 +218,10 @@ func (m *LogCollectorModule) AppendBatch(entries []*apiv1.LogEntry) error {
 	return err
 }
 
-func (m *LogCollectorModule) LogPath() string {
+func (m *Module) LogPath() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.logPath
 }
+// New creates a log collector module instance.
+func New() *Module { return &Module{} }

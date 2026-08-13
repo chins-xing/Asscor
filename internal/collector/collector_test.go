@@ -1,4 +1,6 @@
-package kernel
+//go:build collector
+
+package collector
 
 import (
 	"bytes"
@@ -10,7 +12,7 @@ import (
 
 func TestLogCollectorAppend(t *testing.T) {
 	var buf bytes.Buffer
-	m := &LogCollectorModule{writer: &buf}
+	m := &Module{writer: &buf}
 
 	entry := &apiv1.LogEntry{
 		HostId:    "host-01",
@@ -46,7 +48,7 @@ func TestLogCollectorAppend(t *testing.T) {
 
 func TestLogCollectorAppendBatch(t *testing.T) {
 	var buf bytes.Buffer
-	m := &LogCollectorModule{writer: &buf}
+	m := &Module{writer: &buf}
 
 	entries := []*apiv1.LogEntry{
 		{HostId: "h1", Level: "INFO", Message: "msg1", Timestamp: 1000000},
@@ -70,7 +72,7 @@ func TestLogCollectorAppendBatch(t *testing.T) {
 }
 
 func TestLogCollectorNilWriter(t *testing.T) {
-	m := &LogCollectorModule{writer: nil}
+	m := &Module{writer: nil}
 
 	entry := &apiv1.LogEntry{HostId: "h", Level: "INFO", Message: "msg", Timestamp: 1}
 
@@ -81,7 +83,7 @@ func TestLogCollectorNilWriter(t *testing.T) {
 
 func TestLogCollectorSanitizeFields(t *testing.T) {
 	var buf bytes.Buffer
-	m := &LogCollectorModule{writer: &buf}
+	m := &Module{writer: &buf}
 
 	entry := &apiv1.LogEntry{
 		HostId:    "host\n01",
@@ -107,7 +109,7 @@ func TestLogCollectorSanitizeFields(t *testing.T) {
 
 func TestLogCollectorSetPath(t *testing.T) {
 	var buf bytes.Buffer
-	m := &LogCollectorModule{writer: &buf, logPath: "ASSCOR-kernel.log"}
+	m := &Module{writer: &buf, logPath: "ASSCOR-kernel.log"}
 
 	if path := m.LogPath(); path != "ASSCOR-kernel.log" {
 		t.Errorf("expected logPath=ASSCOR-kernel.log, got %s", path)
@@ -116,7 +118,7 @@ func TestLogCollectorSetPath(t *testing.T) {
 
 func TestLogCollectorExtensionPointFired(t *testing.T) {
 	var buf bytes.Buffer
-	m := &LogCollectorModule{writer: &buf}
+	m := &Module{writer: &buf}
 
 	entry := &apiv1.LogEntry{
 		HostId: "host-01", Level: "INFO", Message: "test", Timestamp: 1,
@@ -133,7 +135,7 @@ func TestLogCollectorExtensionPointFired(t *testing.T) {
 
 func BenchmarkLogCollectorAppend(b *testing.B) {
 	var buf bytes.Buffer
-	m := &LogCollectorModule{writer: &buf}
+	m := &Module{writer: &buf}
 
 	entry := &apiv1.LogEntry{
 		HostId: "host-01", Level: "INFO", Message: "benchmark test message", Timestamp: 1234567890,
@@ -147,7 +149,7 @@ func BenchmarkLogCollectorAppend(b *testing.B) {
 
 func BenchmarkLogCollectorAppendBatch(b *testing.B) {
 	var buf bytes.Buffer
-	m := &LogCollectorModule{writer: &buf}
+	m := &Module{writer: &buf}
 
 	entries := []*apiv1.LogEntry{
 		{HostId: "h1", Level: "INFO", Message: "msg1", Timestamp: 1},

@@ -239,7 +239,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 	spc := newSPC()
 	cti := newCTI()
 	commander := newCommander()
-	logCollector := &kernel.LogCollectorModule{}
+	logCollector := newLogCollector()
 	heartbeat := newHeartbeat()
 	persistence := kernel.NewPersistenceModule(cfg.DataDir)
 	concurrency := kernel.NewConcurrencyModule(10)
@@ -263,7 +263,10 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 	lifecycle := kernel.NewLifecycleEngine(k)
 
-	plugins := []kernel.Plugin{logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	plugins := []kernel.Plugin{persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	if lc, ok := logCollector.(kernel.Plugin); ok {
+		plugins = append(plugins, lc)
+	}
 	if s, ok := spc.(kernel.Plugin); ok {
 		plugins = append(plugins, s)
 	}
