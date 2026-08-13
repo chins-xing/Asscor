@@ -1,12 +1,15 @@
-package kernel
+//go:build srdwrapper
+
+package srdwrapper
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"testing"
 )
 
 func TestNewSRDPluginConstruction(t *testing.T) {
-	p := NewSRDPlugin()
+	p := New()
 	if p == nil {
 		t.Fatal("expected non-nil plugin")
 	}
@@ -24,7 +27,7 @@ func TestNewSRDPluginConstruction(t *testing.T) {
 }
 
 func TestSRDPluginDependencies(t *testing.T) {
-	p := NewSRDPlugin()
+	p := New()
 	deps := p.Dependencies()
 	if len(deps) != 0 {
 		t.Errorf("expected 0 dependencies, got %d", len(deps))
@@ -32,7 +35,7 @@ func TestSRDPluginDependencies(t *testing.T) {
 }
 
 func TestSRDPluginPriority(t *testing.T) {
-	p := NewSRDPlugin()
+	p := New()
 	prio := p.Priority()
 	if prio < 0 {
 		t.Errorf("expected non-negative priority, got %d", prio)
@@ -40,7 +43,7 @@ func TestSRDPluginPriority(t *testing.T) {
 }
 
 func TestSRDBusAdapterPublish(t *testing.T) {
-	k := NewKernel()
+	k := kernel.NewKernel()
 	adapter := &srdBusAdapter{kc: k}
 
 	ctx := context.Background()
@@ -54,7 +57,7 @@ func TestSRDBusAdapterPublish(t *testing.T) {
 }
 
 func TestSRDConfigAdapterGetConfig(t *testing.T) {
-	k := NewKernel()
+	k := kernel.NewKernel()
 	adapter := &srdConfigAdapter{kc: k}
 
 	cfg := adapter.GetConfigObj()

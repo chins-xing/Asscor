@@ -263,7 +263,10 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 	lifecycle := kernel.NewLifecycleEngine(k)
 
-	plugins := []kernel.Plugin{concurrency, configWatcher, adapterIntegration, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	plugins := []kernel.Plugin{concurrency, configWatcher, adapterIntegration, cliModule, lifecycle}
+	if srp := newSRDPlugin(); srp != nil {
+		plugins = append(plugins, srp)
+	}
 	if p, ok := persistence.(kernel.Plugin); ok {
 		plugins = append(plugins, p)
 	}

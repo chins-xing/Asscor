@@ -1,27 +1,30 @@
-package kernel
+//go:build srdwrapper
+
+package srdwrapper
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/topology"
 	"context"
 
 	"github.com/asscor/asscor/internal/engine/srd"
 )
 
-// SRDPlugin wraps srd.Manager to implement kernel.Plugin.
+// Module wraps srd.Manager to implement kernel.Plugin.
 // Bridges the gap between srd's local shadow types and kernel types.
-type SRDPlugin struct {
+type Module struct {
 	manager *srd.Manager
 }
 
-func NewSRDPlugin() *SRDPlugin {
-	return &SRDPlugin{
+func New() *Module {
+	return &Module{
 		manager: srd.NewManager(),
 	}
 }
 
-func (s *SRDPlugin) Info() PluginInfo {
+func (s *Module) Info() kernel.PluginInfo {
 	info := s.manager.Info()
-	return PluginInfo{
+	return kernel.PluginInfo{
 		Name:        info.Name,
 		Version:     info.Version,
 		Description: info.Description,
@@ -29,20 +32,20 @@ func (s *SRDPlugin) Info() PluginInfo {
 	}
 }
 
-func (s *SRDPlugin) Dependencies() []PluginDependency {
+func (s *Module) Dependencies() []kernel.PluginDependency {
 	return nil
 }
 
-func (s *SRDPlugin) Priority() int {
+func (s *Module) Priority() int {
 	return s.manager.Priority()
 }
 
-func (s *SRDPlugin) Init(ctx context.Context, kc KernelContext) error {
+func (s *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 	adapter := &srdKernelAdapter{kc: kc}
 	return s.manager.Init(ctx, adapter)
 }
 
-func (s *SRDPlugin) Start(ctx context.Context) error {
+func (s *Module) Start(ctx context.Context) error {
 	// Real-time topology sync: register a listener so every heartbeat-driven
 	// recordTopology immediately updates the SRD pipeline (no one-shot snapshot).
 	topology.SetTopologyListener(func(hostID string, subnets []string) {
@@ -53,36 +56,36 @@ func (s *SRDPlugin) Start(ctx context.Context) error {
 	return s.manager.Start(ctx)
 }
 
-func (s *SRDPlugin) Stop(ctx context.Context) error {
+func (s *Module) Stop(ctx context.Context) error {
 	topology.SetTopologyListener(nil)
 	return s.manager.Stop(ctx)
 }
 
-func (s *SRDPlugin) State() PluginState {
-	return PluginState(s.manager.State())
+func (s *Module) State() kernel.PluginState {
+	return kernel.PluginState(s.manager.State())
 }
 
 // SetTopology records a host's network position for SRD real-edge construction.
-func (s *SRDPlugin) SetTopology(hostID string, subnets []string, zone string) {
+func (s *Module) SetTopology(hostID string, subnets []string, zone string) {
 	s.manager.SetTopology(hostID, subnets, zone)
 }
 
 // GetReachableHosts returns hosts sharing a subnet with hostID — the
 // lateral-movement scope for the lifecycle Locator.
-func (s *SRDPlugin) GetReachableHosts(hostID string) []string {
+func (s *Module) GetReachableHosts(hostID string) []string {
 	return s.manager.GetReachableHosts(hostID)
 }
 
 // syncTopology pulls the kernel's shared topology registry into the SRD pipeline.
-func (s *SRDPlugin) syncTopology() {
+func (s *Module) syncTopology() {
 	for hostID, subnets := range topology.GetTopology() {
 		s.manager.SetTopology(hostID, subnets, "")
 	}
 }
 
-// srdKernelAdapter bridges kernel.KernelContext to srd.KernelContext.
+// srdKernelAdapter bridges kernel.kernel.KernelContext to srd.kernel.KernelContext.
 type srdKernelAdapter struct {
-	kc KernelContext
+	kc kernel.KernelContext
 }
 
 func (a *srdKernelAdapter) Context() context.Context {
@@ -98,11 +101,11 @@ func (a *srdKernelAdapter) GetConfigObj() srd.ConfigGetter {
 }
 
 type srdBusAdapter struct {
-	kc KernelContext
+	kc kernel.KernelContext
 }
 
 func (b *srdBusAdapter) Publish(ctx context.Context, topic string, payload interface{}) {
-	b.kc.Bus().Publish(ctx, Message{
+	b.kc.Bus().Publish(ctx, kernel.Message{
 		Topic:   topic,
 		Payload: payload,
 		Source:  "srd_adapters",
@@ -113,7 +116,7 @@ func (b *srdBusAdapter) Publish(ctx context.Context, topic string, payload inter
 }
 
 type srdConfigAdapter struct {
-	kc KernelContext
+	kc kernel.KernelContext
 }
 
 func (c *srdConfigAdapter) GetConfigObj() interface{} {
