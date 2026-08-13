@@ -1,8 +1,9 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
 	"math"
 	"sort"
@@ -11,7 +12,7 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *ATTACKModule) CreateHuntHypothesis(hypothesis HuntHypothesis) error {
+func (m *Module) CreateHuntHypothesis(hypothesis HuntHypothesis) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -49,7 +50,7 @@ func (m *ATTACKModule) CreateHuntHypothesis(hypothesis HuntHypothesis) error {
 	return nil
 }
 
-func (m *ATTACKModule) GetHuntHypothesis(hypothesisID string) *HuntHypothesis {
+func (m *Module) GetHuntHypothesis(hypothesisID string) *HuntHypothesis {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -62,7 +63,7 @@ func (m *ATTACKModule) GetHuntHypothesis(hypothesisID string) *HuntHypothesis {
 	return nil
 }
 
-func (m *ATTACKModule) ListHuntHypotheses(techniqueID string, status string) []HuntHypothesis {
+func (m *Module) ListHuntHypotheses(techniqueID string, status string) []HuntHypothesis {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -96,7 +97,7 @@ func (m *ATTACKModule) ListHuntHypotheses(techniqueID string, status string) []H
 	return result
 }
 
-func (m *ATTACKModule) DeleteHuntHypothesis(hypothesisID string) bool {
+func (m *Module) DeleteHuntHypothesis(hypothesisID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -110,7 +111,7 @@ func (m *ATTACKModule) DeleteHuntHypothesis(hypothesisID string) bool {
 	return false
 }
 
-func (m *ATTACKModule) ExecuteHunt(hypothesisID string, hostID string) (*HuntResult, error) {
+func (m *Module) ExecuteHunt(hypothesisID string, hostID string) (*HuntResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -156,13 +157,13 @@ func (m *ATTACKModule) ExecuteHunt(hypothesisID string, hostID string) (*HuntRes
 	}
 
 	if confirmed {
-		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+		m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 			Topic:   "attck.apt.hunt_confirmed",
 			Payload: result,
 				Source:  "attck.apt",
 			})
-			if m.kernel != nil {
-				m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.hunt_confirmed", result)
+			if m.kc != nil {
+				m.kc.Extensions().Execute(m.kc.Context(), "attck.apt.hunt_confirmed", result)
 			}
 		}
 
@@ -173,7 +174,7 @@ func (m *ATTACKModule) ExecuteHunt(hypothesisID string, hostID string) (*HuntRes
 	return result, nil
 }
 
-func (m *ATTACKModule) executeHuntLogic(hypothesis HuntHypothesis, hostID string) []HuntFinding {
+func (m *Module) executeHuntLogic(hypothesis HuntHypothesis, hostID string) []HuntFinding {
 	var findings []HuntFinding
 
 	for _, alert := range m.alerts {
@@ -250,7 +251,7 @@ func (m *ATTACKModule) executeHuntLogic(hypothesis HuntHypothesis, hostID string
 	return findings
 }
 
-func (m *ATTACKModule) GetHuntResults(hostID string, limit int) []HuntResult {
+func (m *Module) GetHuntResults(hostID string, limit int) []HuntResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -268,7 +269,7 @@ func (m *ATTACKModule) GetHuntResults(hostID string, limit int) []HuntResult {
 	return result
 }
 
-func (m *ATTACKModule) AutoGenerateHypotheses(hostID string) ([]HuntHypothesis, error) {
+func (m *Module) AutoGenerateHypotheses(hostID string) ([]HuntHypothesis, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -349,7 +350,7 @@ func (m *ATTACKModule) AutoGenerateHypotheses(hostID string) ([]HuntHypothesis, 
 	return newHypotheses, nil
 }
 
-func (m *ATTACKModule) predictNextTechniques(techID string) []string {
+func (m *Module) predictNextTechniques(techID string) []string {
 	transitions, ok := m.transMatrix[techID]
 	if !ok {
 		return nil
@@ -382,7 +383,7 @@ func (m *ATTACKModule) predictNextTechniques(techID string) []string {
 	return result
 }
 
-func (m *ATTACKModule) generateBeaconHypotheses(hostID string) []HuntHypothesis {
+func (m *Module) generateBeaconHypotheses(hostID string) []HuntHypothesis {
 	var hypotheses []HuntHypothesis
 
 	for _, beacon := range m.beaconDetections {
@@ -411,7 +412,7 @@ func (m *ATTACKModule) generateBeaconHypotheses(hostID string) []HuntHypothesis 
 	return hypotheses
 }
 
-func (m *ATTACKModule) GetAPTAnalysisReports(hostID string, limit int) []APTAnalysisReport {
+func (m *Module) GetAPTAnalysisReports(hostID string, limit int) []APTAnalysisReport {
 	m.mu.RLock()
 	chains := m.attackChains
 	alerts := m.behavioralAlerts

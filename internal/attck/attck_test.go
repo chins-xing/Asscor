@@ -1,17 +1,36 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/kernel"
 )
 
-func newTestATTACKModule() *ATTACKModule {
-	m := NewATTACKModule()
+type mockKernelContext struct{}
+
+func (m *mockKernelContext) Container() *kernel.Container               { return kernel.NewContainer() }
+func (m *mockKernelContext) Bus() *kernel.Bus                           { return kernel.NewBus(512) }
+func (m *mockKernelContext) Extensions() kernel.ModuleExtensions        { return kernel.NewExtensionRegistry() }
+func (m *mockKernelContext) Context() context.Context                   { return context.Background() }
+func (m *mockKernelContext) Config() map[string]string                  { return make(map[string]string) }
+func (m *mockKernelContext) SetConfig(key, value string)                {}
+func (m *mockKernelContext) GetConfigObj() *config.Config               { return nil }
+func (m *mockKernelContext) SetConfigObj(c *config.Config)              {}
+func (m *mockKernelContext) GetPlugin(name string) (kernel.Plugin, bool) { return nil, false }
+func (m *mockKernelContext) ListPlugins() []kernel.PluginInfo           { return nil }
+func (m *mockKernelContext) HealthCheck(ctx context.Context) []kernel.PluginHealthStatus {
+	return nil
+}
+
+func newTestATTACKModule() *Module {
+	m := New()
 	kc := &mockKernelContext{}
-	m.kernel = kc
+	m.kc = kc
 	m.loadDefaultMatrix()
 	m.loadDefaultAPTProfiles()
 	m.buildTransitionMatrix()
@@ -695,21 +714,21 @@ func TestATTACKModule_MatchThreatActor(t *testing.T) {
 }
 
 func TestATTACKModule_Priority(t *testing.T) {
-	m := NewATTACKModule()
+	m := New()
 	if m.Priority() != 21 {
 		t.Errorf("expected priority 21, got %d", m.Priority())
 	}
 }
 
 func TestATTACKModule_Version(t *testing.T) {
-	m := NewATTACKModule()
+	m := New()
 	if m.Version() != "v19" {
 		t.Errorf("expected v19, got %s", m.Version())
 	}
 }
 
 func TestATTACKModule_Info(t *testing.T) {
-	m := NewATTACKModule()
+	m := New()
 	info := m.Info()
 	if info.Version != "1.0.0" {
 		t.Errorf("expected version 1.0.0, got %s", info.Version)
@@ -720,14 +739,14 @@ func TestATTACKModule_Info(t *testing.T) {
 }
 
 func TestATTACKModule_InitAndLifecycle(t *testing.T) {
-	m := NewATTACKModule()
+	m := New()
 
 	kc := &mockKernelContext{}
 	err := m.Init(context.Background(), kc)
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
-	if m.State() != PluginInitialized {
+	if m.State() != kernel.PluginInitialized {
 		t.Errorf("expected initialized, got %s", m.State())
 	}
 
@@ -735,7 +754,7 @@ func TestATTACKModule_InitAndLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
-	if m.State() != PluginStarted {
+	if m.State() != kernel.PluginStarted {
 		t.Errorf("expected started, got %s", m.State())
 	}
 
@@ -743,7 +762,7 @@ func TestATTACKModule_InitAndLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stop failed: %v", err)
 	}
-	if m.State() != PluginStopped {
+	if m.State() != kernel.PluginStopped {
 		t.Errorf("expected stopped, got %s", m.State())
 	}
 }

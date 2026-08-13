@@ -1,6 +1,6 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
 	"fmt"
@@ -44,7 +44,7 @@ var causalRules = []CausalRelation{
 	{CauseTech: "T1005", EffectTech: "T1041", Strength: 0.7, Reason: "data collection precedes exfiltration"},
 }
 
-func (m *ATTACKModule) buildCausalGraph(stages []AttackStage) map[string][]CausalRelation {
+func (m *Module) buildCausalGraph(stages []AttackStage) map[string][]CausalRelation {
 	graph := make(map[string][]CausalRelation)
 	stageTechs := make(map[string]bool)
 	for _, s := range stages {
@@ -58,7 +58,7 @@ func (m *ATTACKModule) buildCausalGraph(stages []AttackStage) map[string][]Causa
 	return graph
 }
 
-func (m *ATTACKModule) applyCausalReasoning(stages []AttackStage) []AttackStage {
+func (m *Module) applyCausalReasoning(stages []AttackStage) []AttackStage {
 	if len(stages) < 2 {
 		return stages
 	}
@@ -133,7 +133,7 @@ func (m *ATTACKModule) applyCausalReasoning(stages []AttackStage) []AttackStage 
 	return result
 }
 
-func (m *ATTACKModule) ComputeCausalChain(techniqueIDs []string) *CausalChain {
+func (m *Module) ComputeCausalChain(techniqueIDs []string) *CausalChain {
 	chain := &CausalChain{}
 	visited := make(map[string]bool)
 

@@ -1,8 +1,9 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"math"
 	"sort"
@@ -121,13 +122,13 @@ type KillChainAssessment struct {
 	AssessmentTime time.Time     `json:"assessment_time"`
 }
 
-type ATTACKModule struct {
-	kernel             KernelContext
+type Module struct {
+	kc             kernel.KernelContext
 	mu                 sync.RWMutex
 	tactics            []ATTACKTactic
 	aptGroups          map[string]*APTGroupProfile
 	transMatrix        TransitionMatrix
-	state              PluginState
+	state              kernel.PluginState
 	attckVersion       string
 	beaconThreshold    float64
 	attributionThreshold float64
@@ -175,8 +176,8 @@ type HostAnalysisRecord struct {
 	AlertsTriggered   int                  `json:"alerts_triggered"`
 }
 
-func NewATTACKModule() *ATTACKModule {
-	return &ATTACKModule{
+func New() *Module {
+	return &Module{
 		aptGroups:            make(map[string]*APTGroupProfile),
 		transMatrix:          make(TransitionMatrix),
 		attckVersion:         "v19",
@@ -207,13 +208,13 @@ func NewATTACKModule() *ATTACKModule {
 }
 
 // IsEnabled reports whether the ATT&CK module is enabled via config.
-func (m *ATTACKModule) IsEnabled() bool {
+func (m *Module) IsEnabled() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.enabled
 }
 
-func (m *ATTACKModule) ConfigureFromConfig(cfg *config.Config) {
+func (m *Module) ConfigureFromConfig(cfg *config.Config) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -253,8 +254,8 @@ func (m *ATTACKModule) ConfigureFromConfig(cfg *config.Config) {
 	m.loadDefaultBehavioralIndicators()
 }
 
-func (m *ATTACKModule) Info() PluginInfo {
-	return PluginInfo{
+func (m *Module) Info() kernel.PluginInfo {
+	return kernel.PluginInfo{
 		Name:        "attck",
 		Version:     "1.0.0",
 		Description: "MITRE ATT&CK V19 — detection analytics, threat intelligence, adversary emulation, assessment & engineering",
@@ -262,17 +263,17 @@ func (m *ATTACKModule) Info() PluginInfo {
 	}
 }
 
-func (m *ATTACKModule) Dependencies() []PluginDependency {
+func (m *Module) Dependencies() []kernel.PluginDependency {
 	return nil
 }
 
-func (m *ATTACKModule) Priority() int {
+func (m *Module) Priority() int {
 	return 21
 }
 
-func (m *ATTACKModule) Init(ctx context.Context, kc KernelContext) error {
-	m.kernel = kc
-	m.state = PluginInitialized
+func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
+	m.kc = kc
+	m.state = kernel.PluginInitialized
 
 	cfg := kc.GetConfigObj()
 	if cfg != nil {
@@ -307,17 +308,17 @@ func (m *ATTACKModule) Init(ctx context.Context, kc KernelContext) error {
 	return nil
 }
 
-func (m *ATTACKModule) Start(ctx context.Context) error {
-	m.state = PluginStarted
-	m.kernel.Bus().Subscribe(TopicAssessorResult, "attck", m.onAssessmentResult)
+func (m *Module) Start(ctx context.Context) error {
+	m.state = kernel.PluginStarted
+	m.kc.Bus().Subscribe(kernel.TopicAssessorResult, "attck", m.onAssessmentResult)
 	logger.WithComponent("attck").Info("started", "version", m.attckVersion)
 	return nil
 }
 
-func (m *ATTACKModule) Stop(ctx context.Context) error {
-	m.state = PluginStopping
+func (m *Module) Stop(ctx context.Context) error {
+	m.state = kernel.PluginStopping
 
-	m.kernel.Bus().UnsubscribeAll("attck")
+	m.kc.Bus().UnsubscribeAll("attck")
 
 	m.mu.Lock()
 	m.alerts = nil
@@ -332,24 +333,24 @@ func (m *ATTACKModule) Stop(ctx context.Context) error {
 	m.lateralEvidences = nil
 	m.mu.Unlock()
 
-	m.state = PluginStopped
+	m.state = kernel.PluginStopped
 	logger.WithComponent("attck").Info("stopped")
 	return nil
 }
 
-func (m *ATTACKModule) State() PluginState {
+func (m *Module) State() kernel.PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
 }
 
-func (m *ATTACKModule) Version() string {
+func (m *Module) Version() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.attckVersion
 }
 
-func (m *ATTACKModule) extractFailedTechniques(checkResults map[string]bool) []string {
+func (m *Module) extractFailedTechniques(checkResults map[string]bool) []string {
 	m.mu.RLock()
 	tactics := m.tactics
 	m.mu.RUnlock()
@@ -373,7 +374,7 @@ func (m *ATTACKModule) extractFailedTechniques(checkResults map[string]bool) []s
 	return result
 }
 
-func (m *ATTACKModule) extractFailedChecks(checkResults map[string]bool) []string {
+func (m *Module) extractFailedChecks(checkResults map[string]bool) []string {
 	var failed []string
 	for checkID, passed := range checkResults {
 		if !passed {
@@ -391,7 +392,7 @@ func trimSlice[T any](s []T, maxLen int) []T {
 	return s
 }
 
-func (m *ATTACKModule) storeAnalysisRecord(record HostAnalysisRecord) {
+func (m *Module) storeAnalysisRecord(record HostAnalysisRecord) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -403,7 +404,7 @@ func (m *ATTACKModule) storeAnalysisRecord(record HostAnalysisRecord) {
 	m.analysisHistory[record.HostID] = history
 }
 
-func (m *ATTACKModule) GetHostAnalysisHistory(hostID string, limit int) []HostAnalysisRecord {
+func (m *Module) GetHostAnalysisHistory(hostID string, limit int) []HostAnalysisRecord {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -422,7 +423,7 @@ func (m *ATTACKModule) GetHostAnalysisHistory(hostID string, limit int) []HostAn
 	return result
 }
 
-func (m *ATTACKModule) onAssessmentResult(ctx context.Context, msg Message) error {
+func (m *Module) onAssessmentResult(ctx context.Context, msg kernel.Message) error {
 	result, ok := msg.Payload.(*model.AssessmentResult)
 	if !ok {
 		return nil
@@ -451,7 +452,7 @@ func (m *ATTACKModule) onAssessmentResult(ctx context.Context, msg Message) erro
 	coverages := m.CalculateCoverage(checkResults)
 	record.Coverages = coverages
 
-	m.kernel.Extensions().Execute(ctx, "attck.coverage.complete", coverages)
+	m.kc.Extensions().Execute(ctx, "attck.coverage.complete", coverages)
 
 	killChain := m.AssessKillChain(hostID, checkResults)
 	record.KillChain = killChain
@@ -470,7 +471,7 @@ func (m *ATTACKModule) onAssessmentResult(ctx context.Context, msg Message) erro
 	record.APTMatches = aptMatches
 
 	if len(aptMatches) > 0 {
-		m.kernel.Extensions().Execute(ctx, "attck.apt.matched", aptMatches)
+		m.kc.Extensions().Execute(ctx, "attck.apt.matched", aptMatches)
 	}
 
 	alertsTriggered := 0
@@ -500,7 +501,7 @@ func (m *ATTACKModule) onAssessmentResult(ctx context.Context, msg Message) erro
 	if chainID != "" {
 		attribution, err := m.PerformAttribution(chainID)
 		if err == nil && attribution != nil {
-			m.kernel.Extensions().Execute(ctx, "attck.apt.attribution", attribution)
+			m.kc.Extensions().Execute(ctx, "attck.apt.attribution", attribution)
 		}
 	}
 
@@ -516,10 +517,10 @@ func (m *ATTACKModule) onAssessmentResult(ctx context.Context, msg Message) erro
 	if len(record.FailedTechniques) > 0 {
 		predictedRisk := m.PredictRisk(hostID, record.FailedTechniques, 3)
 		record.PredictedRisk = &predictedRisk
-		m.kernel.Extensions().Execute(ctx, "attck.risk.predicted", predictedRisk)
+		m.kc.Extensions().Execute(ctx, "attck.risk.predicted", predictedRisk)
 
 		if predictedRisk.EnhancedThreat > 1.0 {
-			m.kernel.Bus().Publish(ctx, Message{
+			m.kc.Bus().Publish(ctx, kernel.Message{
 				Topic: "attck.threat.enhanced",
 				Payload: map[string]interface{}{
 					"host_id":       hostID,
@@ -534,7 +535,7 @@ func (m *ATTACKModule) onAssessmentResult(ctx context.Context, msg Message) erro
 
 	m.storeAnalysisRecord(record)
 
-	m.kernel.Bus().Publish(ctx, Message{
+	m.kc.Bus().Publish(ctx, kernel.Message{
 		Topic: "attck.analysis.complete",
 		Payload: map[string]interface{}{
 			"host_id":            hostID,
@@ -565,7 +566,7 @@ func (m *ATTACKModule) onAssessmentResult(ctx context.Context, msg Message) erro
 	return nil
 }
 
-func (m *ATTACKModule) triggerAlertsForFailedChecks(ctx context.Context, hostID string, checkResults map[string]bool) int {
+func (m *Module) triggerAlertsForFailedChecks(ctx context.Context, hostID string, checkResults map[string]bool) int {
 	triggered := 0
 
 	failedTechs := m.extractFailedTechniques(checkResults)
@@ -605,13 +606,13 @@ func (m *ATTACKModule) triggerAlertsForFailedChecks(ctx context.Context, hostID 
 		}
 
 		triggered++
-		m.kernel.Extensions().Execute(ctx, "attck.detection.alert", alert)
+		m.kc.Extensions().Execute(ctx, "attck.detection.alert", alert)
 	}
 
 	return triggered
 }
 
-func (m *ATTACKModule) GetLastAnalysis(hostID string) map[string]interface{} {
+func (m *Module) GetLastAnalysis(hostID string) map[string]interface{} {
 	m.mu.RLock()
 	history := m.analysisHistory[hostID]
 	m.mu.RUnlock()
@@ -665,7 +666,7 @@ func (m *ATTACKModule) GetLastAnalysis(hostID string) map[string]interface{} {
 	}
 }
 
-func (m *ATTACKModule) loadDefaultMatrix() {
+func (m *Module) loadDefaultMatrix() {
 	m.tactics = []ATTACKTactic{
 		{
 			ID: "TA0043", Name: "Reconnaissance", Domain: "attack_surface",
@@ -900,7 +901,7 @@ func (m *ATTACKModule) loadDefaultMatrix() {
 	}
 }
 
-func (m *ATTACKModule) buildTechniques(tacticID string, ids []string, checks map[string][]string) []ATTACKTechnique {
+func (m *Module) buildTechniques(tacticID string, ids []string, checks map[string][]string) []ATTACKTechnique {
 	techniques := make([]ATTACKTechnique, 0, len(ids))
 	for _, id := range ids {
 		t := ATTACKTechnique{
@@ -918,7 +919,7 @@ func (m *ATTACKModule) buildTechniques(tacticID string, ids []string, checks map
 	return techniques
 }
 
-func (m *ATTACKModule) loadDefaultAPTProfiles() {
+func (m *Module) loadDefaultAPTProfiles() {
 	m.aptGroups = map[string]*APTGroupProfile{
 		"G0016": {
 			GroupID: "G0016", Name: "APT29", Aliases: []string{"Cozy Bear", "The Dukes"},
@@ -983,7 +984,7 @@ func (m *ATTACKModule) loadDefaultAPTProfiles() {
 	}
 }
 
-func (m *ATTACKModule) buildTransitionMatrix() {
+func (m *Module) buildTransitionMatrix() {
 	m.transMatrix = TransitionMatrix{
 		"T1190": {"T1059": 0.7, "T1003": 0.5, "T1082": 0.4, "T1021": 0.3},
 		"T1566": {"T1059": 0.6, "T1547": 0.4, "T1082": 0.3},
@@ -1003,7 +1004,7 @@ func (m *ATTACKModule) buildTransitionMatrix() {
 	}
 }
 
-func (m *ATTACKModule) GetAllTactics() []ATTACKTactic {
+func (m *Module) GetAllTactics() []ATTACKTactic {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	result := make([]ATTACKTactic, len(m.tactics))
@@ -1011,7 +1012,7 @@ func (m *ATTACKModule) GetAllTactics() []ATTACKTactic {
 	return result
 }
 
-func (m *ATTACKModule) GetTechniquesByTactic(tacticID string) []ATTACKTechnique {
+func (m *Module) GetTechniquesByTactic(tacticID string) []ATTACKTechnique {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for _, tac := range m.tactics {
@@ -1024,7 +1025,7 @@ func (m *ATTACKModule) GetTechniquesByTactic(tacticID string) []ATTACKTechnique 
 	return nil
 }
 
-func (m *ATTACKModule) calculateCoverageLocked(checkResults map[string]bool) []ATTACKCoverage {
+func (m *Module) calculateCoverageLocked(checkResults map[string]bool) []ATTACKCoverage {
 	results := make([]ATTACKCoverage, 0, len(m.tactics))
 
 	for _, tactic := range m.tactics {
@@ -1101,18 +1102,18 @@ func (m *ATTACKModule) calculateCoverageLocked(checkResults map[string]bool) []A
 	return results
 }
 
-func (m *ATTACKModule) CalculateCoverage(checkResults map[string]bool) []ATTACKCoverage {
+func (m *Module) CalculateCoverage(checkResults map[string]bool) []ATTACKCoverage {
 	m.mu.RLock()
 	results := m.calculateCoverageLocked(checkResults)
 	m.mu.RUnlock()
 
-	if m.kernel != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.coverage.complete", results)
+	if m.kc != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "attck.coverage.complete", results)
 	}
 	return results
 }
 
-func (m *ATTACKModule) GetCoverageSummary(checkResults map[string]bool) map[string]interface{} {
+func (m *Module) GetCoverageSummary(checkResults map[string]bool) map[string]interface{} {
 	coverages := m.CalculateCoverage(checkResults)
 
 	var totalDC, totalPC, totalCC float64
@@ -1146,7 +1147,7 @@ func (m *ATTACKModule) GetCoverageSummary(checkResults map[string]bool) map[stri
 	}
 }
 
-func (m *ATTACKModule) MatchAPTGroup(detectedTechniques []string) []APTMatchResult {
+func (m *Module) MatchAPTGroup(detectedTechniques []string) []APTMatchResult {
 	m.mu.RLock()
 
 	detectedSet := make(map[string]bool)
@@ -1214,20 +1215,20 @@ func (m *ATTACKModule) MatchAPTGroup(detectedTechniques []string) []APTMatchResu
 	m.mu.RUnlock()
 
 	for _, r := range highConfResults {
-		if m.kernel != nil {
-			m.kernel.Bus().Publish(m.kernel.Context(), Message{
+		if m.kc != nil {
+			m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 				Topic:   "apt.threat.matched",
 				Payload: r,
 				Source:  "attck",
 			})
-			m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.matched", r)
+			m.kc.Extensions().Execute(m.kc.Context(), "attck.apt.matched", r)
 		}
 	}
 
 	return results
 }
 
-func (m *ATTACKModule) GetAPTGroup(groupID string) *APTGroupProfile {
+func (m *Module) GetAPTGroup(groupID string) *APTGroupProfile {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if g, ok := m.aptGroups[groupID]; ok {
@@ -1243,7 +1244,7 @@ func (m *ATTACKModule) GetAPTGroup(groupID string) *APTGroupProfile {
 	return nil
 }
 
-func (m *ATTACKModule) ListAPTGroups() []string {
+func (m *Module) ListAPTGroups() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	names := make([]string, 0, len(m.aptGroups))
@@ -1254,7 +1255,7 @@ func (m *ATTACKModule) ListAPTGroups() []string {
 	return names
 }
 
-func (m *ATTACKModule) PredictRisk(hostID string, detectedTechniques []string, maxDepth int) PredictiveRisk {
+func (m *Module) PredictRisk(hostID string, detectedTechniques []string, maxDepth int) PredictiveRisk {
 	if maxDepth <= 0 {
 		maxDepth = 3
 	}
@@ -1287,19 +1288,19 @@ func (m *ATTACKModule) PredictRisk(hostID string, detectedTechniques []string, m
 	predicted.Recommendations = recommendations
 	m.mu.RUnlock()
 
-	if m.kernel != nil {
-		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+	if m.kc != nil {
+		m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 			Topic:   "apt.risk.predicted",
 			Payload: predicted,
 			Source:  "attck",
 		})
-		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.risk.predicted", predicted)
+		m.kc.Extensions().Execute(m.kc.Context(), "attck.risk.predicted", predicted)
 	}
 
 	return predicted
 }
 
-func (m *ATTACKModule) findPaths(startTech string, maxDepth int) []PredictedPath {
+func (m *Module) findPaths(startTech string, maxDepth int) []PredictedPath {
 	var paths []PredictedPath
 
 	transitions, ok := m.transMatrix[startTech]
@@ -1345,7 +1346,7 @@ func (m *ATTACKModule) findPaths(startTech string, maxDepth int) []PredictedPath
 	return paths
 }
 
-func (m *ATTACKModule) generateRecommendations(detected []string, paths []PredictedPath) []string {
+func (m *Module) generateRecommendations(detected []string, paths []PredictedPath) []string {
 	var recs []string
 	seen := make(map[string]bool)
 
@@ -1371,7 +1372,7 @@ func (m *ATTACKModule) generateRecommendations(detected []string, paths []Predic
 	return recs
 }
 
-func (m *ATTACKModule) assessKillChainLocked(hostID string, checkResults map[string]bool, stages []KillChainStage) KillChainAssessment {
+func (m *Module) assessKillChainLocked(hostID string, checkResults map[string]bool, stages []KillChainStage) KillChainAssessment {
 	for si := range stages {
 		stage := &stages[si]
 		totalChecks := 0
@@ -1439,7 +1440,7 @@ func (m *ATTACKModule) assessKillChainLocked(hostID string, checkResults map[str
 	}
 }
 
-func (m *ATTACKModule) AssessKillChain(hostID string, checkResults map[string]bool) KillChainAssessment {
+func (m *Module) AssessKillChain(hostID string, checkResults map[string]bool) KillChainAssessment {
 	stages := []KillChainStage{
 		{Name: "侦察", Tactics: []string{"TA0043", "TA0042"}, Score: 100},
 		{Name: "投递", Tactics: []string{"TA0001"}, Score: 100},
@@ -1461,7 +1462,7 @@ func (m *ATTACKModule) AssessKillChain(hostID string, checkResults map[string]bo
 
 // GetTransitionMatrix returns the 4×4 Markov transition matrix.
 // Deprecated: reserved for future use, 0 callers.
-func (m *ATTACKModule) GetTransitionMatrix() TransitionMatrix {
+func (m *Module) GetTransitionMatrix() TransitionMatrix {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	result := make(TransitionMatrix)
@@ -1475,7 +1476,7 @@ func (m *ATTACKModule) GetTransitionMatrix() TransitionMatrix {
 	return result
 }
 
-func (m *ATTACKModule) AddTechniqueToTactic(tacticID string, tech ATTACKTechnique) {
+func (m *Module) AddTechniqueToTactic(tacticID string, tech ATTACKTechnique) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1492,7 +1493,7 @@ func (m *ATTACKModule) AddTechniqueToTactic(tacticID string, tech ATTACKTechniqu
 	}
 }
 
-func (m *ATTACKModule) UpdateCheckMapping(techID string, AsscorChecks []string) {
+func (m *Module) UpdateCheckMapping(techID string, AsscorChecks []string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1510,7 +1511,7 @@ func (m *ATTACKModule) UpdateCheckMapping(techID string, AsscorChecks []string) 
 	}
 }
 
-func (m *ATTACKModule) UpsertAPTGroup(profile APTGroupProfile) {
+func (m *Module) UpsertAPTGroup(profile APTGroupProfile) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.aptGroups[profile.GroupID] = &profile
@@ -1671,7 +1672,7 @@ type ATTCKAuxiliary interface {
 }
 
 type attackEngineAdapter struct {
-	m *ATTACKModule
+	m *Module
 }
 
 func (a *attackEngineAdapter) IsEnabled() bool     { return a.m.IsEnabled() }
@@ -1740,6 +1741,6 @@ func (a *attackEngineAdapter) GetAllTactics() []engine.ATTACKTacticInfo {
 	return result
 }
 
-func (m *ATTACKModule) AsEngineProvider() engine.ATTACKProvider {
+func (m *Module) AsEngineProvider() engine.ATTACKProvider {
 	return &attackEngineAdapter{m: m}
 }

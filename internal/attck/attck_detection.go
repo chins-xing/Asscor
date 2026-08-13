@@ -1,8 +1,9 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
 	"math"
 	"regexp"
@@ -13,7 +14,7 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *ATTACKModule) RegisterDetectionRule(rule DetectionRule) error {
+func (m *Module) RegisterDetectionRule(rule DetectionRule) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -42,7 +43,7 @@ func (m *ATTACKModule) RegisterDetectionRule(rule DetectionRule) error {
 	return nil
 }
 
-func (m *ATTACKModule) GetDetectionRule(ruleID string) *DetectionRule {
+func (m *Module) GetDetectionRule(ruleID string) *DetectionRule {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -55,7 +56,7 @@ func (m *ATTACKModule) GetDetectionRule(ruleID string) *DetectionRule {
 	return nil
 }
 
-func (m *ATTACKModule) ListDetectionRules(techniqueID string, enabledOnly bool) []DetectionRule {
+func (m *Module) ListDetectionRules(techniqueID string, enabledOnly bool) []DetectionRule {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -72,7 +73,7 @@ func (m *ATTACKModule) ListDetectionRules(techniqueID string, enabledOnly bool) 
 	return result
 }
 
-func (m *ATTACKModule) DeleteDetectionRule(ruleID string) bool {
+func (m *Module) DeleteDetectionRule(ruleID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -86,7 +87,7 @@ func (m *ATTACKModule) DeleteDetectionRule(ruleID string) bool {
 	return false
 }
 
-func (m *ATTACKModule) EvaluateDetectionRule(ruleID, hostID, rawLog string, fields map[string]string) (*DetectionAlert, error) {
+func (m *Module) EvaluateDetectionRule(ruleID, hostID, rawLog string, fields map[string]string) (*DetectionAlert, error) {
 	m.mu.Lock()
 
 	var rule *DetectionRule
@@ -133,13 +134,13 @@ func (m *ATTACKModule) EvaluateDetectionRule(ruleID, hostID, rawLog string, fiel
 
 	m.mu.Unlock()
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
+	m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 		Topic:   "attck.detection.alert",
 		Payload: alert,
 		Source:  "attck.detection",
 	})
-	if m.kernel != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.detection.alert", alert)
+	if m.kc != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "attck.detection.alert", alert)
 	}
 
 	logger.WithComponent("attck.detection").Info("alert triggered",
@@ -148,7 +149,7 @@ func (m *ATTACKModule) EvaluateDetectionRule(ruleID, hostID, rawLog string, fiel
 	return &alert, nil
 }
 
-func (m *ATTACKModule) matchRule(rule *DetectionRule, rawLog string, fields map[string]string) bool {
+func (m *Module) matchRule(rule *DetectionRule, rawLog string, fields map[string]string) bool {
 	if rule.Query == "" {
 		return false
 	}
@@ -168,7 +169,7 @@ func (m *ATTACKModule) matchRule(rule *DetectionRule, rawLog string, fields map[
 	return false
 }
 
-func (m *ATTACKModule) GetAlerts(hostID, severity string, limit int) []DetectionAlert {
+func (m *Module) GetAlerts(hostID, severity string, limit int) []DetectionAlert {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -189,7 +190,7 @@ func (m *ATTACKModule) GetAlerts(hostID, severity string, limit int) []Detection
 	return result
 }
 
-func (m *ATTACKModule) AcknowledgeAlert(alertID string) bool {
+func (m *Module) AcknowledgeAlert(alertID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -203,7 +204,7 @@ func (m *ATTACKModule) AcknowledgeAlert(alertID string) bool {
 	return false
 }
 
-func (m *ATTACKModule) RecordAnomaly(event AnomalyEvent) {
+func (m *Module) RecordAnomaly(event AnomalyEvent) {
 	m.mu.Lock()
 
 	if event.ID == "" {
@@ -219,13 +220,13 @@ func (m *ATTACKModule) RecordAnomaly(event AnomalyEvent) {
 	m.mu.Unlock()
 
 	if event.Score > 0.7 && event.TechniqueID != "" {
-		m.kernel.Bus().Publish(m.kernel.Context(), Message{
+		m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 			Topic:   "attck.detection.anomaly",
 			Payload: event,
 				Source:  "attck.detection",
 			})
-			if m.kernel != nil {
-				m.kernel.Extensions().Execute(m.kernel.Context(), "attck.detection.anomaly", event)
+			if m.kc != nil {
+				m.kc.Extensions().Execute(m.kc.Context(), "attck.detection.anomaly", event)
 			}
 		}
 
@@ -233,7 +234,7 @@ func (m *ATTACKModule) RecordAnomaly(event AnomalyEvent) {
 		"anomaly_id", event.ID, "type", event.EventType, "score", event.Score, "technique", event.TechniqueID)
 }
 
-func (m *ATTACKModule) GetAnomalies(hostID string, minScore float64, limit int) []AnomalyEvent {
+func (m *Module) GetAnomalies(hostID string, minScore float64, limit int) []AnomalyEvent {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -254,7 +255,7 @@ func (m *ATTACKModule) GetAnomalies(hostID string, minScore float64, limit int) 
 	return result
 }
 
-func (m *ATTACKModule) CorrelateAlerts(hostID string) []CorrelationResult {
+func (m *Module) CorrelateAlerts(hostID string) []CorrelationResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -325,7 +326,7 @@ func (m *ATTACKModule) CorrelateAlerts(hostID string) []CorrelationResult {
 	return results
 }
 
-func (m *ATTACKModule) calculateCorrelationScore(alerts []DetectionAlert, tacticID string) float64 {
+func (m *Module) calculateCorrelationScore(alerts []DetectionAlert, tacticID string) float64 {
 	severityWeight := map[string]float64{
 		"critical": 1.0,
 		"high":     0.8,
@@ -347,7 +348,7 @@ func (m *ATTACKModule) calculateCorrelationScore(alerts []DetectionAlert, tactic
 	return math.Round(score*1000) / 1000
 }
 
-func (m *ATTACKModule) isKillChainProgression(alerts []DetectionAlert) bool {
+func (m *Module) isKillChainProgression(alerts []DetectionAlert) bool {
 	tacticOrder := map[string]int{
 		"TA0043": 1, "TA0042": 2, "TA0001": 3, "TA0002": 4,
 		"TA0003": 5, "TA0004": 6, "TA0005": 7, "TA0006": 8,
@@ -391,7 +392,7 @@ func (m *ATTACKModule) isKillChainProgression(alerts []DetectionAlert) bool {
 	return maxConsecutive >= 3
 }
 
-func (m *ATTACKModule) GetDetectionSummary() DetectionSummary {
+func (m *Module) GetDetectionSummary() DetectionSummary {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -447,7 +448,7 @@ func (m *ATTACKModule) GetDetectionSummary() DetectionSummary {
 	return summary
 }
 
-func (m *ATTACKModule) findDetectionGaps() []string {
+func (m *Module) findDetectionGaps() []string {
 	ruleTechs := make(map[string]bool)
 	for _, r := range m.detectionRules {
 		if r.Enabled {
@@ -466,13 +467,13 @@ func (m *ATTACKModule) findDetectionGaps() []string {
 	return gaps
 }
 
-func (m *ATTACKModule) getTacticName(tacticID string) string {
+func (m *Module) getTacticName(tacticID string) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.getTacticNameLocked(tacticID)
 }
 
-func (m *ATTACKModule) getTacticNameLocked(tacticID string) string {
+func (m *Module) getTacticNameLocked(tacticID string) string {
 	for _, t := range m.tactics {
 		if t.ID == tacticID {
 			return t.Name
@@ -481,7 +482,7 @@ func (m *ATTACKModule) getTacticNameLocked(tacticID string) string {
 	return tacticID
 }
 
-func (m *ATTACKModule) loadDefaultDetectionRules() {
+func (m *Module) loadDefaultDetectionRules() {
 	m.detectionRules = []DetectionRule{
 		{
 			ID: "DET-001", Name: "Brute Force Login Attempt", Description: "Detects multiple failed login attempts indicating brute force activity",

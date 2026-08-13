@@ -1,8 +1,9 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
 	"math"
 	"sort"
@@ -18,7 +19,7 @@ var tacticOrderMap = map[string]int{
 	"TA0010": 12, "TA0040": 13,
 }
 
-func (m *ATTACKModule) ReconstructAttackChain(hostIDs []string) (*AttackChain, error) {
+func (m *Module) ReconstructAttackChain(hostIDs []string) (*AttackChain, error) {
 	m.mu.Lock()
 
 	if len(hostIDs) == 0 {
@@ -87,13 +88,13 @@ func (m *ATTACKModule) ReconstructAttackChain(hostIDs []string) (*AttackChain, e
 	m.attackChains = trimSlice(m.attackChains, maxAttackChains)
 	m.mu.Unlock()
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
+	m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 		Topic:   "attck.apt.chain_detected",
 		Payload: chain,
 		Source:  "attck.apt",
 	})
-	if m.kernel != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.chain_detected", chain)
+	if m.kc != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "attck.apt.chain_detected", chain)
 	}
 
 	logger.WithComponent("attck.apt").Info("attack chain reconstructed",
@@ -103,7 +104,7 @@ func (m *ATTACKModule) ReconstructAttackChain(hostIDs []string) (*AttackChain, e
 	return chain, nil
 }
 
-func (m *ATTACKModule) buildAttackStages(alerts []DetectionAlert, anomalies []AnomalyEvent, iocs []IOCEntry) []AttackStage {
+func (m *Module) buildAttackStages(alerts []DetectionAlert, anomalies []AnomalyEvent, iocs []IOCEntry) []AttackStage {
 	type stageCandidate struct {
 		tacticID     string
 		tacticName   string
@@ -215,7 +216,7 @@ func (m *ATTACKModule) buildAttackStages(alerts []DetectionAlert, anomalies []An
 	return stages
 }
 
-func (m *ATTACKModule) generateChainName(stages []AttackStage) string {
+func (m *Module) generateChainName(stages []AttackStage) string {
 	if len(stages) == 0 {
 		return "Empty Attack Chain"
 	}
@@ -230,7 +231,7 @@ func (m *ATTACKModule) generateChainName(stages []AttackStage) string {
 	return fmt.Sprintf("Multi-stage: %s → %s (%d stages)", first.TacticName, last.TacticName, len(stages))
 }
 
-func (m *ATTACKModule) calculateChainSeverity(stages []AttackStage) string {
+func (m *Module) calculateChainSeverity(stages []AttackStage) string {
 	criticalCount := 0
 	highCount := 0
 	for _, s := range stages {
@@ -253,7 +254,7 @@ func (m *ATTACKModule) calculateChainSeverity(stages []AttackStage) string {
 	}
 }
 
-func (m *ATTACKModule) calculateChainScore(stages []AttackStage) float64 {
+func (m *Module) calculateChainScore(stages []AttackStage) float64 {
 	if len(stages) == 0 {
 		return 0
 	}
@@ -280,7 +281,7 @@ func (m *ATTACKModule) calculateChainScore(stages []AttackStage) float64 {
 	return math.Round(score*1000) / 1000
 }
 
-func (m *ATTACKModule) GetAttackChains(hostID string, limit int) []AttackChain {
+func (m *Module) GetAttackChains(hostID string, limit int) []AttackChain {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -307,7 +308,7 @@ func (m *ATTACKModule) GetAttackChains(hostID string, limit int) []AttackChain {
 	return result
 }
 
-func (m *ATTACKModule) CorrelateMultiIndicator(hostIDs []string) []MultiIndicatorCorrelation {
+func (m *Module) CorrelateMultiIndicator(hostIDs []string) []MultiIndicatorCorrelation {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -429,7 +430,7 @@ func (m *ATTACKModule) CorrelateMultiIndicator(hostIDs []string) []MultiIndicato
 	return correlations
 }
 
-func (m *ATTACKModule) correlateByTransitions(alertByTech map[string][]DetectionAlert, hostSet map[string]bool) []MultiIndicatorCorrelation {
+func (m *Module) correlateByTransitions(alertByTech map[string][]DetectionAlert, hostSet map[string]bool) []MultiIndicatorCorrelation {
 	var correlations []MultiIndicatorCorrelation
 
 	for fromTech, fromAlerts := range alertByTech {

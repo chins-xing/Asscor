@@ -1,8 +1,9 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
 	"math"
 	"sort"
@@ -11,7 +12,7 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *ATTACKModule) performAttribution(stages []AttackStage, iocs []IOCEntry) *AttributionResult {
+func (m *Module) performAttribution(stages []AttackStage, iocs []IOCEntry) *AttributionResult {
 	if len(stages) == 0 {
 		return nil
 	}
@@ -233,7 +234,7 @@ func (m *ATTACKModule) performAttribution(stages []AttackStage, iocs []IOCEntry)
 	return result
 }
 
-func (m *ATTACKModule) calculateTechniqueOverlap(observed map[string]float64, actorTechs map[string]float64) (float64, []string) {
+func (m *Module) calculateTechniqueOverlap(observed map[string]float64, actorTechs map[string]float64) (float64, []string) {
 	var overlapTechs []string
 	var weightedOverlap float64
 	var weightedTotal float64
@@ -254,7 +255,7 @@ func (m *ATTACKModule) calculateTechniqueOverlap(observed map[string]float64, ac
 	return math.Round(score*1000) / 1000, overlapTechs
 }
 
-func (m *ATTACKModule) checkSectorAlignment(stages []AttackStage, group *APTGroupProfile) float64 {
+func (m *Module) checkSectorAlignment(stages []AttackStage, group *APTGroupProfile) float64 {
 	if len(group.PrimaryTargets) == 0 {
 		return 0
 	}
@@ -302,7 +303,7 @@ func (m *ATTACKModule) checkSectorAlignment(stages []AttackStage, group *APTGrou
 	return math.Min(alignmentScore, 1.0)
 }
 
-func (m *ATTACKModule) normalizeAttributionConfidence(rawScore float64, overlapCount int, evidenceCount int) float64 {
+func (m *Module) normalizeAttributionConfidence(rawScore float64, overlapCount int, evidenceCount int) float64 {
 	cappedOverlap := math.Min(float64(overlapCount), 10.0)
 	cappedEvidence := math.Min(float64(evidenceCount), 10.0)
 
@@ -313,7 +314,7 @@ func (m *ATTACKModule) normalizeAttributionConfidence(rawScore float64, overlapC
 	return confidence
 }
 
-func (m *ATTACKModule) PerformAttribution(chainID string) (*AttributionResult, error) {
+func (m *Module) PerformAttribution(chainID string) (*AttributionResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -345,7 +346,7 @@ func (m *ATTACKModule) PerformAttribution(chainID string) (*AttributionResult, e
 	return result, nil
 }
 
-func (m *ATTACKModule) GenerateAPTAnalysisReport(hostIDs []string) (*APTAnalysisReport, error) {
+func (m *Module) GenerateAPTAnalysisReport(hostIDs []string) (*APTAnalysisReport, error) {
 	m.mu.Lock()
 
 	if len(hostIDs) == 0 {
@@ -427,13 +428,13 @@ func (m *ATTACKModule) GenerateAPTAnalysisReport(hostIDs []string) (*APTAnalysis
 
 	m.mu.Unlock()
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
+	m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 		Topic:   "attck.apt.report_generated",
 		Payload: report,
 		Source:  "attck.apt",
 	})
-	if m.kernel != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.apt.report_generated", report)
+	if m.kc != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "attck.apt.report_generated", report)
 	}
 
 	logger.WithComponent("attck.apt").Info("APT analysis report generated",
@@ -442,7 +443,7 @@ func (m *ATTACKModule) GenerateAPTAnalysisReport(hostIDs []string) (*APTAnalysis
 	return report, nil
 }
 
-func (m *ATTACKModule) calculateAPTRiskScore(chains []AttackChain, alerts []BehavioralAlert, beacons []BeaconDetection, hunts []HuntResult) float64 {
+func (m *Module) calculateAPTRiskScore(chains []AttackChain, alerts []BehavioralAlert, beacons []BeaconDetection, hunts []HuntResult) float64 {
 	score := 0.0
 
 	for _, c := range chains {
@@ -488,7 +489,7 @@ func (m *ATTACKModule) calculateAPTRiskScore(chains []AttackChain, alerts []Beha
 	return math.Min(score, 1.0)
 }
 
-func (m *ATTACKModule) generateAPTSummary(chains []AttackChain, attributions []AttributionResult, alerts []BehavioralAlert, beacons []BeaconDetection, riskScore float64) string {
+func (m *Module) generateAPTSummary(chains []AttackChain, attributions []AttributionResult, alerts []BehavioralAlert, beacons []BeaconDetection, riskScore float64) string {
 	summary := fmt.Sprintf("APT Analysis: risk_score=%.2f, %d attack chains, %d behavioral alerts, %d beacon detections",
 		riskScore, len(chains), len(alerts), len(beacons))
 
@@ -500,7 +501,7 @@ func (m *ATTACKModule) generateAPTSummary(chains []AttackChain, attributions []A
 	return summary
 }
 
-func (m *ATTACKModule) generateAPTRecommendations(chains []AttackChain, attributions []AttributionResult, alerts []BehavioralAlert, beacons []BeaconDetection) []string {
+func (m *Module) generateAPTRecommendations(chains []AttackChain, attributions []AttributionResult, alerts []BehavioralAlert, beacons []BeaconDetection) []string {
 	var recs []string
 	seen := make(map[string]bool)
 

@@ -1,8 +1,9 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
 	"math"
 	"sort"
@@ -11,7 +12,7 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *ATTACKModule) PerformGapAnalysis(hostID string) (*AssessmentReport, error) {
+func (m *Module) PerformGapAnalysis(hostID string) (*AssessmentReport, error) {
 	m.mu.Lock()
 
 	report := &AssessmentReport{
@@ -137,13 +138,13 @@ func (m *ATTACKModule) PerformGapAnalysis(hostID string) (*AssessmentReport, err
 	}
 	m.mu.Unlock()
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
+	m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 		Topic:   "attck.assessment.complete",
 		Payload: report,
 		Source:  "attck.assessment",
 	})
-	if m.kernel != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.assessment.complete", report)
+	if m.kc != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "attck.assessment.complete", report)
 	}
 
 	logger.WithComponent("attck.assessment").Info("gap analysis completed",
@@ -153,7 +154,7 @@ func (m *ATTACKModule) PerformGapAnalysis(hostID string) (*AssessmentReport, err
 	return report, nil
 }
 
-func (m *ATTACKModule) calculateAssessmentScore(report *AssessmentReport) float64 {
+func (m *Module) calculateAssessmentScore(report *AssessmentReport) float64 {
 	if len(report.ControlMaps) == 0 {
 		return 0
 	}
@@ -167,7 +168,7 @@ func (m *ATTACKModule) calculateAssessmentScore(report *AssessmentReport) float6
 	return math.Round(score*1000) / 1000
 }
 
-func (m *ATTACKModule) getMitigationsForTechnique(techID string) []Mitigation {
+func (m *Module) getMitigationsForTechnique(techID string) []Mitigation {
 	mitigationMap := map[string][]Mitigation{
 		"T1566": {
 			{ID: "M1049", Name: "Antivirus/Antimalware", Description: "Use anti-phishing features", Category: "detection", Effectiveness: 0.6},
@@ -225,7 +226,7 @@ func (m *ATTACKModule) getMitigationsForTechnique(techID string) []Mitigation {
 	return nil
 }
 
-func (m *ATTACKModule) generateAssessmentRecommendations(report *AssessmentReport) []Recommendation {
+func (m *Module) generateAssessmentRecommendations(report *AssessmentReport) []Recommendation {
 	var recs []Recommendation
 
 	criticalGaps := make(map[string][]ControlGap)
@@ -322,7 +323,7 @@ func (m *ATTACKModule) generateAssessmentRecommendations(report *AssessmentRepor
 	return recs
 }
 
-func (m *ATTACKModule) GetControlMapping(techniqueID string) *ControlMapping {
+func (m *Module) GetControlMapping(techniqueID string) *ControlMapping {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -378,7 +379,7 @@ func (m *ATTACKModule) GetControlMapping(techniqueID string) *ControlMapping {
 	return nil
 }
 
-func (m *ATTACKModule) GetAssessmentReports(hostID string, limit int) []AssessmentReport {
+func (m *Module) GetAssessmentReports(hostID string, limit int) []AssessmentReport {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -396,7 +397,7 @@ func (m *ATTACKModule) GetAssessmentReports(hostID string, limit int) []Assessme
 	return result
 }
 
-func (m *ATTACKModule) CreateImprovementTrack(track ImprovementTrack) error {
+func (m *Module) CreateImprovementTrack(track ImprovementTrack) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -411,7 +412,7 @@ func (m *ATTACKModule) CreateImprovementTrack(track ImprovementTrack) error {
 	return nil
 }
 
-func (m *ATTACKModule) GetImprovementTrack(trackID string) *ImprovementTrack {
+func (m *Module) GetImprovementTrack(trackID string) *ImprovementTrack {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -421,7 +422,7 @@ func (m *ATTACKModule) GetImprovementTrack(trackID string) *ImprovementTrack {
 	return nil
 }
 
-func (m *ATTACKModule) ListImprovementTracks() []ImprovementTrack {
+func (m *Module) ListImprovementTracks() []ImprovementTrack {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -435,7 +436,7 @@ func (m *ATTACKModule) ListImprovementTracks() []ImprovementTrack {
 	return result
 }
 
-func (m *ATTACKModule) UpdateImprovementAction(trackID, actionID string, status string) error {
+func (m *Module) UpdateImprovementAction(trackID, actionID string, status string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -461,7 +462,7 @@ func (m *ATTACKModule) UpdateImprovementAction(trackID, actionID string, status 
 	return fmt.Errorf("action not found: %s", actionID)
 }
 
-func (m *ATTACKModule) CalculateImprovementProgress(trackID string) (float64, error) {
+func (m *Module) CalculateImprovementProgress(trackID string) (float64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

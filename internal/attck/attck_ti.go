@@ -1,6 +1,6 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *ATTACKModule) AddIOC(entry IOCEntry) error {
+func (m *Module) AddIOC(entry IOCEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -47,7 +47,7 @@ func (m *ATTACKModule) AddIOC(entry IOCEntry) error {
 	return nil
 }
 
-func (m *ATTACKModule) enrichTechniqueFromIOC(entry IOCEntry) {
+func (m *Module) enrichTechniqueFromIOC(entry IOCEntry) {
 	if len(entry.TechniqueIDs) == 0 {
 		return
 	}
@@ -72,7 +72,7 @@ func (m *ATTACKModule) enrichTechniqueFromIOC(entry IOCEntry) {
 	}
 }
 
-func (m *ATTACKModule) GetIOCs(iocType string, techniqueID string, limit int) []IOCEntry {
+func (m *Module) GetIOCs(iocType string, techniqueID string, limit int) []IOCEntry {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -101,7 +101,7 @@ func (m *ATTACKModule) GetIOCs(iocType string, techniqueID string, limit int) []
 	return result
 }
 
-func (m *ATTACKModule) SearchIOC(value string) []IOCEntry {
+func (m *Module) SearchIOC(value string) []IOCEntry {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -114,7 +114,7 @@ func (m *ATTACKModule) SearchIOC(value string) []IOCEntry {
 	return result
 }
 
-func (m *ATTACKModule) DeleteIOC(iocID string) bool {
+func (m *Module) DeleteIOC(iocID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -128,7 +128,7 @@ func (m *ATTACKModule) DeleteIOC(iocID string) bool {
 	return false
 }
 
-func (m *ATTACKModule) ExpireIOCs() int {
+func (m *Module) ExpireIOCs() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -150,7 +150,7 @@ func (m *ATTACKModule) ExpireIOCs() int {
 	return expired
 }
 
-func (m *ATTACKModule) UpsertThreatActor(profile ThreatActorProfile) error {
+func (m *Module) UpsertThreatActor(profile ThreatActorProfile) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -165,7 +165,7 @@ func (m *ATTACKModule) UpsertThreatActor(profile ThreatActorProfile) error {
 	return nil
 }
 
-func (m *ATTACKModule) GetThreatActor(actorID string) *ThreatActorProfile {
+func (m *Module) GetThreatActor(actorID string) *ThreatActorProfile {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -175,7 +175,7 @@ func (m *ATTACKModule) GetThreatActor(actorID string) *ThreatActorProfile {
 	return nil
 }
 
-func (m *ATTACKModule) ListThreatActors() []ThreatActorProfile {
+func (m *Module) ListThreatActors() []ThreatActorProfile {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -189,11 +189,11 @@ func (m *ATTACKModule) ListThreatActors() []ThreatActorProfile {
 	return result
 }
 
-func (m *ATTACKModule) MatchThreatActor(detectedTechniques []string) []APTMatchResult {
+func (m *Module) MatchThreatActor(detectedTechniques []string) []APTMatchResult {
 	return m.MatchAPTGroup(detectedTechniques)
 }
 
-func (m *ATTACKModule) AddTTPTrack(track TTPTrack) error {
+func (m *Module) AddTTPTrack(track TTPTrack) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -225,7 +225,7 @@ func (m *ATTACKModule) AddTTPTrack(track TTPTrack) error {
 	return nil
 }
 
-func (m *ATTACKModule) GetTTPTracks(actorID, techniqueID string) []TTPTrack {
+func (m *Module) GetTTPTracks(actorID, techniqueID string) []TTPTrack {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -242,7 +242,7 @@ func (m *ATTACKModule) GetTTPTracks(actorID, techniqueID string) []TTPTrack {
 	return result
 }
 
-func (m *ATTACKModule) EnrichAlertWithTI(alertID string) (*DetectionAlert, map[string]interface{}) {
+func (m *Module) EnrichAlertWithTI(alertID string) (*DetectionAlert, map[string]interface{}) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -299,7 +299,7 @@ func (m *ATTACKModule) EnrichAlertWithTI(alertID string) (*DetectionAlert, map[s
 	return alert, enrichment
 }
 
-func (m *ATTACKModule) predictFromTechnique(techID string, maxDepth int) []PredictedPath {
+func (m *Module) predictFromTechnique(techID string, maxDepth int) []PredictedPath {
 	transitions, ok := m.transMatrix[techID]
 	if !ok {
 		return nil
@@ -341,7 +341,7 @@ func (m *ATTACKModule) predictFromTechnique(techID string, maxDepth int) []Predi
 	return paths
 }
 
-func (m *ATTACKModule) GetTISummary() map[string]interface{} {
+func (m *Module) GetTISummary() map[string]interface{} {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -375,7 +375,7 @@ func (m *ATTACKModule) GetTISummary() map[string]interface{} {
 	}
 }
 
-func (m *ATTACKModule) loadDefaultThreatActors() {
+func (m *Module) loadDefaultThreatActors() {
 	m.threatActors = map[string]ThreatActorProfile{
 		"TA-APT29": {
 			ID: "TA-APT29", Name: "APT29", Aliases: []string{"Cozy Bear", "The Dukes"},

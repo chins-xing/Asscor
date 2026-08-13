@@ -1,8 +1,9 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
 	"sort"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *ATTACKModule) CreateScenario(scenario EmulationScenario) error {
+func (m *Module) CreateScenario(scenario EmulationScenario) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -44,7 +45,7 @@ func (m *ATTACKModule) CreateScenario(scenario EmulationScenario) error {
 	return nil
 }
 
-func (m *ATTACKModule) GetScenario(scenarioID string) *EmulationScenario {
+func (m *Module) GetScenario(scenarioID string) *EmulationScenario {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -56,7 +57,7 @@ func (m *ATTACKModule) GetScenario(scenarioID string) *EmulationScenario {
 	return nil
 }
 
-func (m *ATTACKModule) ListScenarios(actorProfile string) []EmulationScenario {
+func (m *Module) ListScenarios(actorProfile string) []EmulationScenario {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -70,7 +71,7 @@ func (m *ATTACKModule) ListScenarios(actorProfile string) []EmulationScenario {
 	return result
 }
 
-func (m *ATTACKModule) DeleteScenario(scenarioID string) bool {
+func (m *Module) DeleteScenario(scenarioID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -84,7 +85,7 @@ func (m *ATTACKModule) DeleteScenario(scenarioID string) bool {
 	return false
 }
 
-func (m *ATTACKModule) GenerateScenarioFromActor(actorID string) (*EmulationScenario, error) {
+func (m *Module) GenerateScenarioFromActor(actorID string) (*EmulationScenario, error) {
 	m.mu.RLock()
 	actor, ok := m.threatActors[actorID]
 	m.mu.RUnlock()
@@ -184,13 +185,13 @@ func (m *ATTACKModule) GenerateScenarioFromActor(actorID string) (*EmulationScen
 	return scenario, nil
 }
 
-func (m *ATTACKModule) getTacticForTechnique(techID string) string {
+func (m *Module) getTacticForTechnique(techID string) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.getTacticForTechniqueLocked(techID)
 }
 
-func (m *ATTACKModule) getTacticForTechniqueLocked(techID string) string {
+func (m *Module) getTacticForTechniqueLocked(techID string) string {
 	for _, tactic := range m.tactics {
 		for _, tech := range tactic.Techniques {
 			if tech.ID == techID {
@@ -201,7 +202,7 @@ func (m *ATTACKModule) getTacticForTechniqueLocked(techID string) string {
 	return ""
 }
 
-func (m *ATTACKModule) generateSafeCommands(techID string) []EmulationCommand {
+func (m *Module) generateSafeCommands(techID string) []EmulationCommand {
 	commands := []EmulationCommand{
 		{
 			ID:          fmt.Sprintf("cmd-%s-scout", techID),
@@ -225,7 +226,7 @@ func (m *ATTACKModule) generateSafeCommands(techID string) []EmulationCommand {
 	return commands
 }
 
-func (m *ATTACKModule) getExpectedDetectionRules(techID string) []string {
+func (m *Module) getExpectedDetectionRules(techID string) []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -238,7 +239,7 @@ func (m *ATTACKModule) getExpectedDetectionRules(techID string) []string {
 	return ruleIDs
 }
 
-func (m *ATTACKModule) weightToRiskLevel(weight float64) string {
+func (m *Module) weightToRiskLevel(weight float64) string {
 	switch {
 	case weight >= 0.8:
 		return "critical"
@@ -251,7 +252,7 @@ func (m *ATTACKModule) weightToRiskLevel(weight float64) string {
 	}
 }
 
-func (m *ATTACKModule) assessDifficulty(phases []EmulationPhase) string {
+func (m *Module) assessDifficulty(phases []EmulationPhase) string {
 	criticalCount := 0
 	for _, p := range phases {
 		if p.RiskLevel == "critical" {
@@ -268,7 +269,7 @@ func (m *ATTACKModule) assessDifficulty(phases []EmulationPhase) string {
 	}
 }
 
-func (m *ATTACKModule) RunEmulation(scenarioID, hostID string, safeMode bool) (*EmulationResult, error) {
+func (m *Module) RunEmulation(scenarioID, hostID string, safeMode bool) (*EmulationResult, error) {
 	m.mu.Lock()
 
 	var scenario *EmulationScenario
@@ -349,13 +350,13 @@ func (m *ATTACKModule) RunEmulation(scenarioID, hostID string, safeMode bool) (*
 	m.emulationResults = trimSlice(m.emulationResults, maxEmulationResults)
 	m.mu.Unlock()
 
-	m.kernel.Bus().Publish(m.kernel.Context(), Message{
+	m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 		Topic:   "attck.emulation.complete",
 		Payload: result,
 		Source:  "attck.emulation",
 	})
-	if m.kernel != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.emulation.complete", result)
+	if m.kc != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "attck.emulation.complete", result)
 	}
 
 	logger.WithComponent("attck.emulation").Info("emulation completed",
@@ -365,7 +366,7 @@ func (m *ATTACKModule) RunEmulation(scenarioID, hostID string, safeMode bool) (*
 	return result, nil
 }
 
-func (m *ATTACKModule) checkDetectionExists(techID string) bool {
+func (m *Module) checkDetectionExists(techID string) bool {
 	for _, r := range m.detectionRules {
 		if r.TechniqueID == techID && r.Enabled {
 			return true
@@ -374,7 +375,7 @@ func (m *ATTACKModule) checkDetectionExists(techID string) bool {
 	return false
 }
 
-func (m *ATTACKModule) generateEmulationRecommendations(result *EmulationResult) []string {
+func (m *Module) generateEmulationRecommendations(result *EmulationResult) []string {
 	var recs []string
 
 	for _, pr := range result.PhaseResults {
@@ -394,7 +395,7 @@ func (m *ATTACKModule) generateEmulationRecommendations(result *EmulationResult)
 	return recs
 }
 
-func (m *ATTACKModule) GetEmulationResults(scenarioID string, limit int) []EmulationResult {
+func (m *Module) GetEmulationResults(scenarioID string, limit int) []EmulationResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -412,7 +413,7 @@ func (m *ATTACKModule) GetEmulationResults(scenarioID string, limit int) []Emula
 	return result
 }
 
-func (m *ATTACKModule) loadDefaultScenarios() {
+func (m *Module) loadDefaultScenarios() {
 	m.scenarios = []EmulationScenario{
 		{
 			ID: "EMU-DEFAULT-001", Name: "Standard Network Intrusion",

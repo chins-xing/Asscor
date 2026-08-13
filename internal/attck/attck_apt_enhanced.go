@@ -1,8 +1,9 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
 	"math"
 	"sort"
@@ -122,7 +123,7 @@ type LateralMovementEvidence struct {
 
 
 
-func (m *ATTACKModule) ComputeGroupBaseline(role string) *GroupBaseline {
+func (m *Module) ComputeGroupBaseline(role string) *GroupBaseline {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -174,7 +175,7 @@ func (m *ATTACKModule) ComputeGroupBaseline(role string) *GroupBaseline {
 	return group
 }
 
-func (m *ATTACKModule) ApplyGroupBaseline(hostID string, role string) bool {
+func (m *Module) ApplyGroupBaseline(hostID string, role string) bool {
 	group := m.ComputeGroupBaseline(role)
 	if group == nil {
 		return false
@@ -198,22 +199,22 @@ func (m *ATTACKModule) ApplyGroupBaseline(hostID string, role string) bool {
 	return true
 }
 
-func (m *ATTACKModule) getAssetForHost(hostID string) *LocalAsset {
-	if m.kernel == nil {
+func (m *Module) getAssetForHost(hostID string) *kernel.LocalAsset {
+	if m.kc == nil {
 		return nil
 	}
-	impl, ok := m.kernel.Container().Resolve((*SPCInterface)(nil))
+	impl, ok := m.kc.Container().Resolve((*kernel.SPCInterface)(nil))
 	if !ok {
 		return nil
 	}
-	spc, ok := impl.(SPCInterface)
+	spc, ok := impl.(kernel.SPCInterface)
 	if !ok {
 		return nil
 	}
 	return spc.GetAsset(hostID)
 }
 
-func (m *ATTACKModule) BuildBayesianAttributionNetwork() *BayesianNetwork {
+func (m *Module) BuildBayesianAttributionNetwork() *BayesianNetwork {
 	nodes := make(map[string]*BayesianNode)
 
 	nodes["ttp_overlap"] = &BayesianNode{
@@ -347,7 +348,7 @@ func (m *ATTACKModule) BuildBayesianAttributionNetwork() *BayesianNetwork {
 	}
 }
 
-func (m *ATTACKModule) PerformBayesianAttribution(chainID string) (*BayesianInferenceResult, error) {
+func (m *Module) PerformBayesianAttribution(chainID string) (*BayesianInferenceResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -438,7 +439,7 @@ func (m *ATTACKModule) PerformBayesianAttribution(chainID string) (*BayesianInfe
 	return result, nil
 }
 
-func (m *ATTACKModule) computeTTPOverlapScore(stages []AttackStage) float64 {
+func (m *Module) computeTTPOverlapScore(stages []AttackStage) float64 {
 	if len(m.aptGroups) == 0 {
 		return 0
 	}
@@ -468,7 +469,7 @@ func (m *ATTACKModule) computeTTPOverlapScore(stages []AttackStage) float64 {
 	return maxOverlap
 }
 
-func (m *ATTACKModule) computeIOCStrength() float64 {
+func (m *Module) computeIOCStrength() float64 {
 	if len(m.iocs) == 0 {
 		return 0
 	}
@@ -487,7 +488,7 @@ func (m *ATTACKModule) computeIOCStrength() float64 {
 	return math.Min(avgConf+actorBonus, 1.0)
 }
 
-func (m *ATTACKModule) computeSectorScore(stages []AttackStage) float64 {
+func (m *Module) computeSectorScore(stages []AttackStage) float64 {
 	if len(m.aptGroups) == 0 {
 		return 0
 	}
@@ -502,7 +503,7 @@ func (m *ATTACKModule) computeSectorScore(stages []AttackStage) float64 {
 	return maxScore
 }
 
-func (m *ATTACKModule) computeKillChainCoherence(stages []AttackStage) float64 {
+func (m *Module) computeKillChainCoherence(stages []AttackStage) float64 {
 	if len(stages) < 2 {
 		return 0.5
 	}
@@ -527,7 +528,7 @@ func (m *ATTACKModule) computeKillChainCoherence(stages []AttackStage) float64 {
 	return float64(coherentTransitions) / float64(totalTransitions)
 }
 
-func (m *ATTACKModule) inferBayesian(network *BayesianNetwork, evidence map[string]string) map[string]float64 {
+func (m *Module) inferBayesian(network *BayesianNetwork, evidence map[string]string) map[string]float64 {
 	attributionNode := network.Nodes["attribution"]
 	if attributionNode == nil {
 		return map[string]float64{"unknown": 1.0}
@@ -596,7 +597,7 @@ func (m *ATTACKModule) inferBayesian(network *BayesianNetwork, evidence map[stri
 	return probs
 }
 
-func (m *ATTACKModule) FilterBeaconWithReputation(detections []BeaconDetection) []BeaconDetection {
+func (m *Module) FilterBeaconWithReputation(detections []BeaconDetection) []BeaconDetection {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -627,7 +628,7 @@ func (m *ATTACKModule) FilterBeaconWithReputation(detections []BeaconDetection) 
 	return filtered
 }
 
-func (m *ATTACKModule) AddReputationEntry(entry ReputationEntry) {
+func (m *Module) AddReputationEntry(entry ReputationEntry) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -636,7 +637,7 @@ func (m *ATTACKModule) AddReputationEntry(entry ReputationEntry) {
 		"destination", entry.Destination, "category", entry.Category, "legitimate", entry.IsLegitimate)
 }
 
-func (m *ATTACKModule) GetReputationEntries(category string) []ReputationEntry {
+func (m *Module) GetReputationEntries(category string) []ReputationEntry {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -650,7 +651,7 @@ func (m *ATTACKModule) GetReputationEntries(category string) []ReputationEntry {
 	return result
 }
 
-func (m *ATTACKModule) LoadYARARules(rules []YARARule) int {
+func (m *Module) LoadYARARules(rules []YARARule) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -671,7 +672,7 @@ func (m *ATTACKModule) LoadYARARules(rules []YARARule) int {
 	return loaded
 }
 
-func (m *ATTACKModule) LoadSigmaRules(rules []SigmaRule) int {
+func (m *Module) LoadSigmaRules(rules []SigmaRule) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -692,7 +693,7 @@ func (m *ATTACKModule) LoadSigmaRules(rules []SigmaRule) int {
 	return loaded
 }
 
-func (m *ATTACKModule) MatchYARARules(hostID string, filePaths []string, fileContents map[string]string) []RuleMatchResult {
+func (m *Module) MatchYARARules(hostID string, filePaths []string, fileContents map[string]string) []RuleMatchResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -724,7 +725,7 @@ func (m *ATTACKModule) MatchYARARules(hostID string, filePaths []string, fileCon
 	return results
 }
 
-func (m *ATTACKModule) MatchSigmaRules(hostID string, logEntries []map[string]string) []RuleMatchResult {
+func (m *Module) MatchSigmaRules(hostID string, logEntries []map[string]string) []RuleMatchResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -757,7 +758,7 @@ func (m *ATTACKModule) MatchSigmaRules(hostID string, logEntries []map[string]st
 	return results
 }
 
-func (m *ATTACKModule) matchYARAPattern(ruleContent string, fileContent string) bool {
+func (m *Module) matchYARAPattern(ruleContent string, fileContent string) bool {
 	keywords := extractYARAKeywords(ruleContent)
 	if len(keywords) == 0 {
 		return false
@@ -773,7 +774,7 @@ func (m *ATTACKModule) matchYARAPattern(ruleContent string, fileContent string) 
 	return matched > 0 && float64(matched)/float64(len(keywords)) >= 0.5
 }
 
-func (m *ATTACKModule) matchSigmaPattern(rule SigmaRule, entry map[string]string) bool {
+func (m *Module) matchSigmaPattern(rule SigmaRule, entry map[string]string) bool {
 	if rule.LogSource != "" {
 		if source, ok := entry["source"]; ok && source != rule.LogSource {
 			return false
@@ -821,7 +822,7 @@ func extractYARAKeywords(ruleContent string) []string {
 	return keywords
 }
 
-func (m *ATTACKModule) AnalyzeCrossHostConnections(connections []CrossHostConnection) []LateralMovementEvidence {
+func (m *Module) AnalyzeCrossHostConnections(connections []CrossHostConnection) []LateralMovementEvidence {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -893,7 +894,7 @@ func (m *ATTACKModule) AnalyzeCrossHostConnections(connections []CrossHostConnec
 	return evidences
 }
 
-func (m *ATTACKModule) computeLateralMovementScore(conns []CrossHostConnection, targets []string) float64 {
+func (m *Module) computeLateralMovementScore(conns []CrossHostConnection, targets []string) float64 {
 	connScore := math.Min(float64(len(conns))/10.0, 1.0) * 0.4
 	targetScore := math.Min(float64(len(targets))/5.0, 1.0) * 0.3
 

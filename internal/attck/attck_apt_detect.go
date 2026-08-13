@@ -1,6 +1,6 @@
-﻿//go:build attck_ext
+//go:build attck_ext
 
-package kernel
+package attck
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *ATTACKModule) RegisterBehavioralIndicator(indicator BehavioralIndicator) error {
+func (m *Module) RegisterBehavioralIndicator(indicator BehavioralIndicator) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -41,7 +41,7 @@ func (m *ATTACKModule) RegisterBehavioralIndicator(indicator BehavioralIndicator
 	return nil
 }
 
-func (m *ATTACKModule) ListBehavioralIndicators(techniqueID string) []BehavioralIndicator {
+func (m *Module) ListBehavioralIndicators(techniqueID string) []BehavioralIndicator {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -55,7 +55,7 @@ func (m *ATTACKModule) ListBehavioralIndicators(techniqueID string) []Behavioral
 	return result
 }
 
-func (m *ATTACKModule) DeleteBehavioralIndicator(indicatorID string) bool {
+func (m *Module) DeleteBehavioralIndicator(indicatorID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -68,7 +68,7 @@ func (m *ATTACKModule) DeleteBehavioralIndicator(indicatorID string) bool {
 	return false
 }
 
-func (m *ATTACKModule) UpdateBaseline(hostID string, metrics map[string]float64) {
+func (m *Module) UpdateBaseline(hostID string, metrics map[string]float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -98,7 +98,7 @@ func (m *ATTACKModule) UpdateBaseline(hostID string, metrics map[string]float64)
 	logger.WithComponent("attck.behavioral").Info("baseline updated", "host", hostID, "metrics", len(metrics), "samples", baseline.SampleCount)
 }
 
-func (m *ATTACKModule) GetBaseline(hostID string) *BehavioralBaseline {
+func (m *Module) GetBaseline(hostID string) *BehavioralBaseline {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -108,7 +108,7 @@ func (m *ATTACKModule) GetBaseline(hostID string) *BehavioralBaseline {
 	return nil
 }
 
-func (m *ATTACKModule) EvaluateBehavioralIndicators(hostID string, metrics map[string]float64) []BehavioralAlert {
+func (m *Module) EvaluateBehavioralIndicators(hostID string, metrics map[string]float64) []BehavioralAlert {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -166,8 +166,8 @@ func (m *ATTACKModule) EvaluateBehavioralIndicators(hostID string, metrics map[s
 	if len(alerts) > 0 {
 		logger.WithComponent("attck.behavioral").Info("behavioral alerts triggered", "host", hostID, "count", len(alerts))
 		for _, a := range alerts {
-			if m.kernel != nil {
-				m.kernel.Extensions().Execute(m.kernel.Context(), "attck.behavioral.alert", a)
+			if m.kc != nil {
+				m.kc.Extensions().Execute(m.kc.Context(), "attck.behavioral.alert", a)
 			}
 		}
 	}
@@ -175,7 +175,7 @@ func (m *ATTACKModule) EvaluateBehavioralIndicators(hostID string, metrics map[s
 	return alerts
 }
 
-func (m *ATTACKModule) evaluateOperator(observed float64, operator string, threshold float64) bool {
+func (m *Module) evaluateOperator(observed float64, operator string, threshold float64) bool {
 	switch operator {
 	case "gt":
 		return observed > threshold
@@ -194,7 +194,7 @@ func (m *ATTACKModule) evaluateOperator(observed float64, operator string, thres
 	}
 }
 
-func (m *ATTACKModule) GetBehavioralAlerts(hostID string, limit int) []BehavioralAlert {
+func (m *Module) GetBehavioralAlerts(hostID string, limit int) []BehavioralAlert {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -212,7 +212,7 @@ func (m *ATTACKModule) GetBehavioralAlerts(hostID string, limit int) []Behaviora
 	return result
 }
 
-func (m *ATTACKModule) DetectBeaconing(hostID string, events []TimeSeriesPoint) []BeaconDetection {
+func (m *Module) DetectBeaconing(hostID string, events []TimeSeriesPoint) []BeaconDetection {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -286,14 +286,14 @@ func (m *ATTACKModule) DetectBeaconing(hostID string, events []TimeSeriesPoint) 
 	logger.WithComponent("attck.behavioral").Info("beaconing detected",
 		"host", hostID, "interval", detection.Interval, "jitter", detection.Jitter, "score", score)
 
-	if m.kernel != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "attck.behavioral.beacon", &detection)
+	if m.kc != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "attck.behavioral.beacon", &detection)
 	}
 
 	return []BeaconDetection{detection}
 }
 
-func (m *ATTACKModule) GetBeaconDetections(hostID string, limit int) []BeaconDetection {
+func (m *Module) GetBeaconDetections(hostID string, limit int) []BeaconDetection {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -311,7 +311,7 @@ func (m *ATTACKModule) GetBeaconDetections(hostID string, limit int) []BeaconDet
 	return result
 }
 
-func (m *ATTACKModule) mean(values []float64) float64 {
+func (m *Module) mean(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
@@ -322,7 +322,7 @@ func (m *ATTACKModule) mean(values []float64) float64 {
 	return sum / float64(len(values))
 }
 
-func (m *ATTACKModule) stdDev(values []float64) float64 {
+func (m *Module) stdDev(values []float64) float64 {
 	if len(values) < 2 {
 		return 0
 	}
@@ -335,7 +335,7 @@ func (m *ATTACKModule) stdDev(values []float64) float64 {
 	return math.Sqrt(sum / float64(len(values)))
 }
 
-func (m *ATTACKModule) loadDefaultBehavioralIndicators() {
+func (m *Module) loadDefaultBehavioralIndicators() {
 	m.behavioralIndicators = []BehavioralIndicator{
 		{
 			ID: "BI-001", Name: "High Failed Login Rate", TechniqueID: "T1110",
