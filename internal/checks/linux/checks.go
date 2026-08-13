@@ -2,7 +2,9 @@ package linux
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/asscor/asscor/internal/common"
@@ -61,6 +64,41 @@ func (c *fileReadCache) read(path string) ([]byte, error) {
 	c.data[path] = cachedFile{content: data, deadline: time.Now().Add(30 * time.Second)}
 	c.mu.Unlock()
 	return data, nil
+}
+
+// isPermDenied reports whether err is a permission error (EACCES/EPERM) raised
+// when reading a root-only file or directory as a non-root user.
+func isPermDenied(err error) bool {
+	return err != nil && (errors.Is(err, fs.ErrPermission) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM))
+}
+
+// readFileAllowPerm reads a file via the cache, distinguishing permission
+// errors from other failures. Callers can degrade gracefully (skip the file)
+// when permDenied is true instead of reporting a spurious failure.
+func readFileAllowPerm(path string) (data []byte, permDenied bool, err error) {
+	data, err = fileCache.read(path)
+	if isPermDenied(err) {
+		return nil, true, err
+	}
+	return data, false, err
+}
+
+// statAllowPerm is os.Stat with permission-error detection.
+func statAllowPerm(path string) (info os.FileInfo, permDenied bool, err error) {
+	info, err = os.Stat(path)
+	if isPermDenied(err) {
+		return nil, true, err
+	}
+	return info, false, err
+}
+
+// readDirAllowPerm is os.ReadDir with permission-error detection.
+func readDirAllowPerm(path string) (entries []os.DirEntry, permDenied bool, err error) {
+	entries, err = os.ReadDir(path)
+	if isPermDenied(err) {
+		return nil, true, err
+	}
+	return entries, false, err
 }
 
 func All() []model.CheckItem {
@@ -458,6 +496,7 @@ func as012() model.CheckItem {
 		Delta:         -6,
 		ComplianceRef: "L3-CE-09",
 		Platform:      "linux",
+		Privilege:     model.PrivRoot,
 		Check: func() (bool, string) {
 			systemWhitelist := map[string]bool{
 				"root": true, "bin": true, "daemon": true, "adm": true,
@@ -955,6 +994,9 @@ func ac002() model.CheckItem {
 			if _, err := os.Stat("/etc/rsyncd.conf"); err == nil {
 				return true, "发现rsync远程备份配置"
 			}
+			if _, permDenied, _ := statAllowPerm("/root/.config/rclone/rclone.conf"); permDenied {
+				return false, "无法验证rclone远程备份配置：/root/.config/rclone/rclone.conf 需要 root 权限"
+			}
 			if _, err := os.Stat("/root/.config/rclone/rclone.conf"); err == nil {
 				return true, "发现rclone远程备份配置"
 			}
@@ -1205,13 +1247,22 @@ func bc006() model.CheckItem {
 				"/etc/rclone.conf",
 			}
 			var found []string
+			var blocked []string
 			for _, cfg := range configs {
-				if _, err := os.Stat(cfg); err == nil {
+				_, permDenied, err := statAllowPerm(cfg)
+				if err == nil {
 					found = append(found, cfg)
+					continue
+				}
+				if permDenied {
+					blocked = append(blocked, cfg)
 				}
 			}
 			if len(found) > 0 {
 				return true, fmt.Sprintf("发现远程备份配置: %s", strings.Join(found, ", "))
+			}
+			if len(blocked) > 0 {
+				return false, fmt.Sprintf("部分备份配置无法检查（需要 root 权限）: %s", strings.Join(blocked, ", "))
 			}
 			return false, "未发现异地备份配置 (rsync/rclone)"
 		},
@@ -1264,7 +1315,9 @@ func ot004() model.CheckItem {
 					indicators = append(indicators, "pip hash校验已启用")
 				}
 			}
-			if _, err := os.Stat("/root/.npmrc"); err == nil {
+			if _, permDenied, _ := statAllowPerm("/root/.npmrc"); permDenied {
+				indicators = append(indicators, "npm配置需 root 权限检查")
+			} else if _, err := os.Stat("/root/.npmrc"); err == nil {
 				data, _ := os.ReadFile("/root/.npmrc")
 				if strings.Contains(string(data), "integrity") {
 					indicators = append(indicators, "npm完整性校验已启用")
@@ -1329,6 +1382,7 @@ func ot008() model.CheckItem {
 		Delta:         -5,
 		ComplianceRef: "L3-CE-15",
 		Platform:      "linux",
+		Privilege:     model.PrivRoot,
 		Check: func() (bool, string) {
 			rulesDir := "/etc/audit/rules.d/"
 			entries, err := os.ReadDir(rulesDir)
@@ -1766,6 +1820,7 @@ func ot020() model.CheckItem {
 		Delta:         -10,
 		ComplianceRef: "L4-CE-05",
 		Platform:      "linux",
+		Privilege:     model.PrivRoot,
 		Check: func() (bool, string) {
 			rulesDir := "/etc/audit/rules.d/"
 			entries, err := os.ReadDir(rulesDir)

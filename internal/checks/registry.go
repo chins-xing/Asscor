@@ -73,6 +73,34 @@ func GetByDomain(domain string) []model.CheckItem {
 	return result
 }
 
+// GetByPrivilege returns checks matching the given privilege level. A check
+// with PrivRoot requires root/elevated privileges to read its target files or
+// directories; the main (non-root) agent delegates these to the privileged
+// agent process.
+func GetByPrivilege(priv model.PrivilegeLevel) []model.CheckItem {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+	var result []model.CheckItem
+	for _, item := range registry {
+		if item.Privilege == priv {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+// GetNormal returns checks that do NOT require root privileges. These run in
+// the main agent process under a regular (non-root) account.
+func GetNormal() []model.CheckItem {
+	return GetByPrivilege(model.PrivNormal)
+}
+
+// GetRoot returns checks that require root privileges. These are delegated to
+// the privileged agent process running under a dedicated privileged account.
+func GetRoot() []model.CheckItem {
+	return GetByPrivilege(model.PrivRoot)
+}
+
 func GetAll() []model.CheckItem {
 	registryMu.RLock()
 	defer registryMu.RUnlock()

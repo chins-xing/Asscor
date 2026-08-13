@@ -1168,26 +1168,7 @@ func (m *ScoringEngine) PrintReport(result *model.AssessmentResult) string {
 }
 
 func isPermDenied(detail string) bool {
-	lower := strings.ToLower(detail)
-	if strings.Contains(lower, "permission denied") ||
-		strings.Contains(lower, "permission_error") ||
-		strings.Contains(lower, "operation not permitted") ||
-		strings.Contains(lower, "access denied") ||
-		strings.Contains(lower, "access is denied") ||
-		strings.Contains(lower, "eacces") ||
-		strings.Contains(lower, "eperm") {
-		return true
-	}
-	if strings.Contains(detail, "权限") ||
-		strings.Contains(detail, "无权限") ||
-		strings.Contains(detail, "拒绝访问") ||
-		strings.Contains(detail, "許可") {
-		return true
-	}
-	if strings.Contains(lower, "open ") && strings.Contains(lower, "permission denied") {
-		return true
-	}
-	return false
+	return model.IsPermissionDeniedDetail(detail)
 }
 
 var _ kernel.ScoringEngineProvider = (*ScoringEngine)(nil)

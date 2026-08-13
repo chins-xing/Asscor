@@ -52,6 +52,9 @@ type AgentConfig struct {
 	LogFormat        string
 	LogLevel         string
 	LogOutput        string
+	// PrivilegedSocket is the Unix socket path of the privileged agent
+	// process. When empty, root checks/commands are reported as skipped.
+	PrivilegedSocket string
 }
 
 func DefaultConfig() AgentConfig {
@@ -71,6 +74,7 @@ func DefaultConfig() AgentConfig {
 		LogFormat:        "json",
 		LogLevel:         "info",
 		LogOutput:        "stderr",
+		PrivilegedSocket: "/run/asscor/agent-priv.sock",
 	}
 }
 
@@ -90,13 +94,14 @@ type Agent struct {
 	cpeHash          [32]byte
 	pkgSent          bool // true after first full packages send
 	cpeSent          bool // true after first full CPE send
+	privClient       *PrivilegedClient
 }
 
 func NewAgent(cfg AgentConfig) *Agent {
 	common.DefaultTimeout = time.Duration(cfg.CheckTimeoutSec) * time.Second
 
-	allChecks := checks.GetAll()
-	logger.WithComponent("agent").Info("loaded platform checks", "count", len(allChecks), "os", runtime.GOOS, "arch", runtime.GOARCH)
+	allChecks := checks.GetNormal()
+	logger.WithComponent("agent").Info("loaded non-root platform checks", "count", len(allChecks), "os", runtime.GOOS, "arch", runtime.GOARCH)
 
 	hmacKeyConfigured := cfg.HMACKey != "" || os.Getenv("ASSCOR_HMAC_KEY") != ""
 	if !hmacKeyConfigured {
@@ -108,6 +113,7 @@ func NewAgent(cfg AgentConfig) *Agent {
 		checkers:         allChecks,
 		checkCount:       len(allChecks),
 		hmacKeyConfigured: hmacKeyConfigured,
+		privClient:       NewPrivilegedClient(cfg.PrivilegedSocket),
 	}
 }
 
@@ -1266,24 +1272,7 @@ func (a *Agent) runChecks() []model.CheckResult {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 10)
 
-	var rootDetected bool
-	if os.Geteuid() == 0 {
-		rootDetected = true
-	}
-
 	for i, check := range a.checkers {
-		if check.Privilege == model.PrivRoot && !rootDetected {
-			results[i] = model.CheckResult{
-				CheckID: check.ID,
-				Domain:  check.Domain,
-				Name:    check.Name,
-				Passed:  false,
-				Delta:   0,
-				Detail:  "skipped — requires root privileges",
-			}
-			continue
-		}
-
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(idx int, c model.CheckItem) {
@@ -1314,19 +1303,53 @@ func (a *Agent) runChecks() []model.CheckResult {
 		}(i, check)
 	}
 	wg.Wait()
+
+	// Root-privilege checks are delegated to the privileged agent process.
+	// If it is unavailable (e.g. not yet socket-activated by the kernel),
+	// report those checks as skipped instead of silently dropping them.
+	results = append(results, a.runRootChecks()...)
+
+	return results
+}
+
+// runRootChecks delegates root-privilege checks to the privileged agent
+// process. On failure it returns "skipped" results so the kernel still sees
+// full check coverage without penalizing the host.
+func (a *Agent) runRootChecks() []model.CheckResult {
+	rootChecks := checks.GetRoot()
+	if len(rootChecks) == 0 {
+		return nil
+	}
+
+	if a.privClient != nil {
+		if res := a.privClient.RunRootChecks(); res != nil {
+			logger.WithComponent("agent").Info("received root check results from privileged agent", "count", len(res))
+			return res
+		}
+	}
+
+	results := make([]model.CheckResult, 0, len(rootChecks))
+	for _, c := range rootChecks {
+		results = append(results, model.CheckResult{
+			CheckID:       c.ID,
+			Domain:        c.Domain,
+			Name:          c.Name,
+			Passed:        true,
+			Delta:         0,
+			Detail:        "skipped — privileged agent unavailable",
+			ComplianceRef: c.ComplianceRef,
+		})
+	}
 	return results
 }
 
 func (a *Agent) runCommand(cmd *apiv1.Command) {
-	// Logical actions first: isolate_host / deisolate_host map to real OS
-	// firewall rules (not generic shell commands). These are the last-resort
-	// blocking mechanism — direct network isolation of a compromised host.
+	// Root-required logical actions (isolate_host/deisolate_host) are delegated
+	// to the privileged agent process — the non-root main agent cannot modify
+	// firewall rules itself.
 	switch cmd.Command {
-	case "isolate_host":
-		a.executeIsolation(cmd)
-		return
-	case "deisolate_host":
-		a.executeDeisolation(cmd)
+	case "isolate_host", "deisolate_host":
+		a.delegateRootCommand(cmd)
 		return
 	}
 
@@ -1360,42 +1383,23 @@ func (a *Agent) runCommand(cmd *apiv1.Command) {
 	}
 }
 
-// executeIsolation is the last-resort blocking action: drop all NEW inbound
-// traffic on this host while keeping established connections (so the agent's
-// link back to the kernel stays alive). Requires root (iptables).
-func (a *Agent) executeIsolation(cmd *apiv1.Command) {
-	if os.Geteuid() != 0 {
-		logger.WithComponent("agent").Error("isolate_host requires root privileges",
-			"command_id", cmd.CommandId)
+// delegateRootCommand forwards a root-required command (isolate_host /
+// deisolate_host) to the privileged agent process over the Unix socket.
+// The main agent never executes these itself.
+func (a *Agent) delegateRootCommand(cmd *apiv1.Command) {
+	if a.privClient == nil {
+		logger.WithComponent("agent").Error("privileged agent unavailable",
+			"command_id", cmd.CommandId, "command", cmd.Command)
 		return
 	}
-
-	// Accept already-established/related connections first, then drop the rest.
-	out1, err1 := common.RunCmdTimeout(30*time.Second, "iptables", "-A", "INPUT", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT")
-	out2, err2 := common.RunCmdTimeout(30*time.Second, "iptables", "-P", "INPUT", "DROP")
-
-	if err1 != nil || err2 != nil {
-		logger.WithComponent("agent").Error("isolate_host firewall rule failed",
-			"command_id", cmd.CommandId, "out1", out1, "err1", err1, "out2", out2, "err2", err2)
+	output, err := a.privClient.RunRootCommand(cmd.Command, cmd.Params)
+	if err != nil {
+		logger.WithComponent("agent").Error("privileged command failed",
+			"command_id", cmd.CommandId, "command", cmd.Command, "error", err)
 		return
 	}
-	logger.WithComponent("agent").Warn("host isolated — dropping new inbound traffic",
-		"command_id", cmd.CommandId)
-}
-
-// executeDeisolation restores the default ACCEPT policy and removes the
-// ESTABLISHED,RELATED accept rule added during isolation.
-func (a *Agent) executeDeisolation(cmd *apiv1.Command) {
-	if os.Geteuid() != 0 {
-		logger.WithComponent("agent").Error("deisolate_host requires root privileges",
-			"command_id", cmd.CommandId)
-		return
-	}
-
-	common.RunCmdTimeout(30*time.Second, "iptables", "-P", "INPUT", "ACCEPT")
-	common.RunCmdTimeout(30*time.Second, "iptables", "-D", "INPUT", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT")
-	logger.WithComponent("agent").Info("host de-isolated — inbound traffic restored",
-		"command_id", cmd.CommandId)
+	logger.WithComponent("agent").Info("privileged command executed",
+		"command_id", cmd.CommandId, "command", cmd.Command, "output", output)
 }
 
 func (a *Agent) Stop() {

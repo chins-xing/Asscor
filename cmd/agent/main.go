@@ -26,11 +26,21 @@ func main() {
 	uninstall := flag.Bool("uninstall", false, "remove agent systemd service")
 	showVersion := flag.Bool("version", false, "display version and exit")
 	upgrade := flag.Bool("upgrade", false, "upgrade existing agent installation in-place (requires root)")
+	privileged := flag.Bool("privileged", false, "run as the privileged agent worker process (systemd socket-activated, root-required business only)")
+	privSocket := flag.String("priv-socket", "/run/asscor/agent-priv.sock", "privileged agent unix socket path")
+	privPeerUser := flag.String("priv-peer-user", "asscor", "unix account allowed to connect to the privileged agent (peer credential check)")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Printf("ASSCOR Agent %s (SSAM %s)\n", version.ASSCORVersion, version.SSAMVersion)
 		os.Exit(0)
+	}
+	if *privileged {
+		if err := runPrivileged(*privSocket, *privPeerUser); err != nil {
+			fmt.Fprintf(os.Stderr, "agent-priv: fatal: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 	if *install {
 		if err := cli.InstallAgent(); err != nil {
@@ -83,6 +93,10 @@ func main() {
 		cfg.CertDir = *certDir
 	}
 
+	if *privSocket != "" {
+		cfg.PrivilegedSocket = *privSocket
+	}
+
 	if *logFormat != "" {
 		cfg.LogFormat = *logFormat
 	}
@@ -115,6 +129,20 @@ func main() {
 	}
 
 	log.Info("agent stopped")
+}
+
+// runPrivileged launches the privileged agent worker process. It only runs
+// when started by systemd socket activation (the kernel side); it never
+// self-starts and cannot be started by the main agent.
+func runPrivileged(socketPath, peerUser string) error {
+	priv, err := agent.NewPrivilegedAgent(agent.PrivilegedConfig{
+		AllowedPeerUID: agent.LookupUID(peerUser),
+		SocketPath:     socketPath,
+	})
+	if err != nil {
+		return err
+	}
+	return priv.Run()
 }
 
 func loadConfigFile(path string, cfg *agent.AgentConfig) error {
@@ -174,6 +202,8 @@ func loadConfigFile(path string, cfg *agent.AgentConfig) error {
 				cfg.CertDir = val
 			case "hmac_key":
 				cfg.HMACKey = val
+			case "priv_socket":
+				cfg.PrivilegedSocket = val
 			case "log_format":
 				cfg.LogFormat = val
 			case "log_level":

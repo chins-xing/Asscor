@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -59,15 +60,7 @@ type CheckItem struct {
 
 func (c CheckItem) Run() CheckResult {
 	if c.Privilege == PrivRoot && os.Geteuid() != 0 {
-		return CheckResult{
-			CheckID:       c.ID,
-			Domain:        c.Domain,
-			Name:          c.Name,
-			Passed:        true,
-			Delta:         0,
-			Detail:        "skipped — requires root privileges",
-			ComplianceRef: c.ComplianceRef,
-		}
+		return c.skipResult("skipped — requires root privileges")
 	}
 
 	var passed bool
@@ -83,6 +76,14 @@ func (c CheckItem) Run() CheckResult {
 		passed, detail = c.Check()
 	}()
 
+	// A check that failed solely because it could not read a root-only file
+	// or directory (EACCES/EPERM) is not a real failure — it is an
+	// "insufficient privilege" skip. Convert it so non-root agents do not get
+	// penalized for checks they cannot perform.
+	if !passed && IsPermissionDeniedDetail(detail) {
+		return c.skipResult("skipped — requires root privileges (" + detail + ")")
+	}
+
 	return CheckResult{
 		CheckID:       c.ID,
 		Domain:        c.Domain,
@@ -92,6 +93,42 @@ func (c CheckItem) Run() CheckResult {
 		Detail:        detail,
 		ComplianceRef: c.ComplianceRef,
 	}
+}
+
+// skipResult builds a neutral "skipped" CheckResult. A skipped check carries
+// Delta 0 (no score impact) and Passed true (not counted as a failure).
+func (c CheckItem) skipResult(detail string) CheckResult {
+	return CheckResult{
+		CheckID:       c.ID,
+		Domain:        c.Domain,
+		Name:          c.Name,
+		Passed:        true,
+		Delta:         0,
+		Detail:        detail,
+		ComplianceRef: c.ComplianceRef,
+	}
+}
+
+// IsPermissionDeniedDetail reports whether a check detail string indicates the
+// check could not complete because of insufficient permission (EACCES/EPERM).
+// It recognizes both Go error strings and the Chinese detail text emitted by
+// checks reading root-only files/directories.
+func IsPermissionDeniedDetail(detail string) bool {
+	lower := strings.ToLower(detail)
+	if strings.Contains(lower, "permission denied") ||
+		strings.Contains(lower, "operation not permitted") ||
+		strings.Contains(lower, "access denied") ||
+		strings.Contains(lower, "access is denied") ||
+		strings.Contains(lower, "eacces") ||
+		strings.Contains(lower, "eperm") ||
+		strings.Contains(lower, "requires root") {
+		return true
+	}
+	return strings.Contains(detail, "权限不足") ||
+		strings.Contains(detail, "无权限") ||
+		strings.Contains(detail, "拒绝访问") ||
+		strings.Contains(detail, "需要 root") ||
+		strings.Contains(detail, "需要root")
 }
 
 func (c CheckItem) MatchesPlatform() bool {

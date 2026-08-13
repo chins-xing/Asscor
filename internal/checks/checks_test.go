@@ -1,10 +1,12 @@
 package checks
 
 import (
+	"os"
 	"runtime"
 	"testing"
 
 	"github.com/asscor/asscor/internal/checks/linux"
+	"github.com/asscor/asscor/internal/model"
 )
 
 func TestGetAll_ContainsEFChecks(t *testing.T) {
@@ -181,7 +183,10 @@ func TestCheckItemRun_ConfiguresAllFields(t *testing.T) {
 		if result.Name != item.Name {
 			t.Errorf("%s: Name mismatch: got %q, want %q", item.ID, result.Name, item.Name)
 		}
-		if result.Delta != item.Delta {
+		// Root-requiring checks are skipped (Delta 0) when running as non-root;
+		// the privilege skip legitimately zeroes the delta in that case.
+		skipped := item.Privilege == model.PrivRoot && os.Geteuid() != 0
+		if result.Delta != item.Delta && !skipped {
 			t.Errorf("%s: Delta mismatch: got %.1f, want %.1f", item.ID, result.Delta, item.Delta)
 		}
 		if result.ComplianceRef != item.ComplianceRef {
@@ -191,4 +196,39 @@ func TestCheckItemRun_ConfiguresAllFields(t *testing.T) {
 	}
 
 	t.Logf("All %d check items: Run() correctly propagates all fields", len(items))
+}
+
+func TestGetByPrivilege_Split(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("root check split is Linux-specific")
+	}
+
+	normal := GetNormal()
+	root := GetRoot()
+	all := GetAll()
+
+	if len(normal)+len(root) != len(all) {
+		t.Errorf("normal(%d) + root(%d) != all(%d)", len(normal), len(root), len(all))
+	}
+
+	ids := make(map[string]bool)
+	for _, c := range all {
+		if ids[c.ID] {
+			t.Errorf("duplicate check ID %s", c.ID)
+		}
+		ids[c.ID] = true
+	}
+
+	for _, c := range root {
+		if c.Privilege != model.PrivRoot {
+			t.Errorf("root check %s has privilege %v, want PrivRoot", c.ID, c.Privilege)
+		}
+	}
+	for _, c := range normal {
+		if c.Privilege != model.PrivNormal {
+			t.Errorf("normal check %s has privilege %v, want PrivNormal", c.ID, c.Privilege)
+		}
+	}
+
+	t.Logf("split: %d normal + %d root = %d total", len(normal), len(root), len(all))
 }
