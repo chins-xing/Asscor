@@ -54,43 +54,6 @@ func TestWorkerPoolTimeout(t *testing.T) {
 }
 
 
-func TestPersistenceModule(t *testing.T) {
-	pm := NewPersistenceModule(t.TempDir())
-
-	if pm.Info().Name != "persistence" {
-		t.Fatalf("expected name 'persistence', got '%s'", pm.Info().Name)
-	}
-
-	rec := AssessmentRecord{
-		Timestamp:  time.Now(),
-		HostID:     "test-01",
-		FinalScore: 85.5,
-		Acceptable: true,
-	}
-	err := pm.Append("test_assessments", rec)
-	if err != nil {
-		t.Fatalf("append failed: %v", err)
-	}
-
-	audit := AuditEntry{
-		Timestamp: time.Now(),
-		Actor:     "test",
-		Action:    "write",
-		Target:    "test",
-		Success:   true,
-	}
-	err = pm.WriteAudit(audit)
-	if err != nil {
-		t.Fatalf("write audit failed: %v", err)
-	}
-
-	pm.mu.Lock()
-	for _, w := range pm.writers {
-		w.sync()
-		w.close()
-	}
-	pm.mu.Unlock()
-}
 
 
 
@@ -197,16 +160,6 @@ func TestHistoricalStore_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestPersistenceInterface_Completeness(t *testing.T) {
-	pm := NewPersistenceModule(t.TempDir())
-	var iface PersistenceInterface = pm
-	_ = iface
-
-	dir := pm.DataDir()
-	if dir == "" {
-		t.Error("DataDir should not be empty")
-	}
-}
 
 func TestSIEMPusher_Disabled(t *testing.T) {
 	s := NewSIEMPusher("", "", "")

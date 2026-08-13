@@ -1,6 +1,9 @@
-package kernel
+//go:build persistence
+
+package persistence
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"archive/tar"
 	"bufio"
 	"compress/gzip"
@@ -19,179 +22,6 @@ import (
 	"github.com/asscor/asscor/internal/model"
 	"github.com/asscor/asscor/internal/version"
 )
-
-// PrismResultFields holds the Prism engine output fields shared by AssessmentRecord and DashboardReport.
-type PrismResultFields struct {
-	PrismScore     float64 `json:"prism_score,omitempty"`
-	PrismPropRisk  float64 `json:"prism_prop_risk,omitempty"`
-	PrismDebtRaw   float64 `json:"prism_debt_raw,omitempty"`
-	PrismExternalRisk float64 `json:"prism_external_risk,omitempty"`
-	PrismPropPenalty  float64 `json:"prism_prop_penalty,omitempty"`
-	PrismDebtPenalty  float64 `json:"prism_debt_penalty,omitempty"`
-	PrismCollapseModifier float64 `json:"prism_collapse_modifier,omitempty"`
-	PrismRiskVelocity     float64 `json:"prism_risk_velocity,omitempty"`
-	PrismSemanticState    string  `json:"prism_semantic_state,omitempty"`
-	PrismStateVector      [4]float64 `json:"prism_state_vector,omitempty"`
-	PrismStableMem        float64 `json:"prism_stable_membership,omitempty"`
-	PrismDegradedMem      float64 `json:"prism_degraded_membership,omitempty"`
-	PrismUntrustedMem     float64 `json:"prism_untrusted_membership,omitempty"`
-	PrismCollapseMem      float64 `json:"prism_collapse_membership,omitempty"`
-	PrismInferenceTrend        string     `json:"prism_inference_trend,omitempty"`
-	PrismInferenceConfidence   float64    `json:"prism_inference_confidence,omitempty"`
-	PrismInferenceCollapseRisk float64    `json:"prism_inference_collapse_risk,omitempty"`
-	PrismInferenceFutureVector [4]float64 `json:"prism_inference_future_vector,omitempty"`
-	PrismInferenceModel        string     `json:"prism_inference_model,omitempty"`
-	PrismInferenceHorizonDays  int        `json:"prism_inference_horizon_days,omitempty"`
-	PrismIR                    json.RawMessage `json:"prism_ir,omitempty"`
-}
-
-// prismFieldsFromResult populates PrismResultFields from an AssessmentResult.
-func prismFieldsFromResult(ar *model.AssessmentResult) PrismResultFields {
-	return PrismResultFields{
-		PrismScore:                ar.PrismScore,
-		PrismPropRisk:             ar.PrismPropRisk,
-		PrismDebtRaw:              ar.PrismDebtRaw,
-		PrismExternalRisk:         ar.PrismExternalRisk,
-		PrismPropPenalty:          ar.PrismPropPenalty,
-		PrismDebtPenalty:          ar.PrismDebtPenalty,
-		PrismCollapseModifier:     ar.PrismCollapseModifier,
-		PrismRiskVelocity:         ar.PrismRiskVelocity,
-		PrismSemanticState:        ar.PrismSemanticState,
-		PrismStateVector:          ar.PrismStateVector,
-		PrismStableMem:            ar.PrismStableMem,
-		PrismDegradedMem:          ar.PrismDegradedMem,
-		PrismUntrustedMem:         ar.PrismUntrustedMem,
-		PrismCollapseMem:          ar.PrismCollapseMem,
-		PrismInferenceTrend:        ar.PrismInferenceTrend,
-		PrismInferenceConfidence:   ar.PrismInferenceConfidence,
-		PrismInferenceCollapseRisk: ar.PrismInferenceCollapseRisk,
-		PrismInferenceFutureVector: ar.PrismInferenceFutureVector,
-		PrismInferenceModel:        ar.PrismInferenceModel,
-		PrismInferenceHorizonDays:  ar.PrismInferenceHorizonDays,
-		PrismIR:                    ar.PrismIR,
-	}
-}
-
-type AssessmentRecord struct {
-	Timestamp      time.Time `json:"timestamp"`
-	HostID         string    `json:"host_id"`
-	Hostname       string    `json:"hostname,omitempty"`
-	FinalScore     float64   `json:"final_score"`
-	Threshold      float64   `json:"threshold,omitempty"`
-	Acceptable     bool      `json:"acceptable"`
-	AttackSurface  float64   `json:"attack_surface"`
-	BusinessCont   float64   `json:"business_continuity"`
-	OperationTrust float64   `json:"operation_trust"`
-	Resilience     float64   `json:"resilience"`
-	KernelSecurity float64   `json:"kernel_security,omitempty"`
-	ExtraScores    map[string]float64 `json:"extra_scores,omitempty"`
-	TwoFactorFail  float64   `json:"two_factor_failure"`
-	SYNCookieDis   float64   `json:"syn_cookie_disabled,omitempty"`
-	SELinuxDis     float64   `json:"selinux_disabled,omitempty"`
-	AppArmorDis    float64   `json:"apparmor_disabled,omitempty"`
-	NoSIEM         float64   `json:"no_siem,omitempty"`
-	NoIDS          float64   `json:"no_ids,omitempty"`
-	ThreatCoeff    float64   `json:"threat_coefficient"`
-	SPCScore       float64   `json:"spc_score,omitempty"`
-	PrismResultFields
-	SPCCVEs        []model.SPCCVEInfo `json:"spc_cves,omitempty"`
-	DomainWeightShift map[string]float64 `json:"domain_weight_shift,omitempty"`
-	CheckCount     int       `json:"check_count"`
-	FailedCount    int       `json:"failed_count"`
-	Checks         []CheckDetail `json:"checks,omitempty"`
-
-	ATTACKCoverage      []model.ATTACKCoverageInfo    `json:"attck_coverage,omitempty"`
-	ATTACKKillChain     *model.ATTACKKillChainInfo     `json:"attck_kill_chain,omitempty"`
-	ATTACKAPTMatches    []model.ATTACKAPTMatchInfo     `json:"attck_apt_matches,omitempty"`
-	ATTACKPredictedRisk *model.ATTACKPredictedRiskInfo `json:"attck_predicted_risk,omitempty"`
-	ATTACKFailedTechs   []string                       `json:"attck_failed_techniques,omitempty"`
-}
-
-type CheckDetail struct {
-	CheckID       string  `json:"check_id"`
-	Domain        string  `json:"domain"`
-	Name          string  `json:"name"`
-	Passed        bool    `json:"passed"`
-	Delta         float64 `json:"delta"`
-	Detail        string  `json:"detail"`
-	ComplianceRef string  `json:"compliance_ref,omitempty"`
-}
-
-type DashboardReport struct {
-	SchemaVersion string            `json:"schema_version"`
-	GeneratedAt   time.Time         `json:"generated_at"`
-	HostID        string            `json:"host_id"`
-	Hostname      string            `json:"hostname"`
-	Framework     string            `json:"framework"`
-	SSAMVersion   string            `json:"ssam_version"`
-
-	FinalScore float64 `json:"final_score"`
-	Threshold  float64 `json:"threshold"`
-	Acceptable bool    `json:"acceptable"`
-
-	DomainScores map[string]float64 `json:"domain_scores"`
-	DomainWeights map[string]float64 `json:"domain_weights"`
-
-	EdgeFactors map[string]float64 `json:"edge_factors"`
-	ThreatCoeff float64            `json:"threat_coefficient"`
-	SPCScore    float64            `json:"spc_score"`
-
-	PrismResultFields
-	SPCCVEs        []model.SPCCVEInfo `json:"spc_cves,omitempty"`
-	DomainWeightShift map[string]float64 `json:"domain_weight_shift,omitempty"`
-
-	Summary struct {
-		TotalChecks  int `json:"total_checks"`
-		PassedChecks int `json:"passed_checks"`
-		FailedChecks int `json:"failed_checks"`
-	} `json:"summary"`
-
-	Checks []CheckDetail `json:"checks"`
-
-	ATTACKCoverage      []model.ATTACKCoverageInfo    `json:"attck_coverage,omitempty"`
-	ATTACKKillChain     *model.ATTACKKillChainInfo     `json:"attck_kill_chain,omitempty"`
-	ATTACKAPTMatches    []model.ATTACKAPTMatchInfo     `json:"attck_apt_matches,omitempty"`
-	ATTACKPredictedRisk *model.ATTACKPredictedRiskInfo `json:"attck_predicted_risk,omitempty"`
-	ATTACKFailedTechs   []string                       `json:"attck_failed_techniques,omitempty"`
-
-	ComplianceFramework string `json:"compliance_framework,omitempty"`
-}
-
-type AgentRegistrationRecord struct {
-	Timestamp time.Time `json:"timestamp"`
-	HostID    string    `json:"host_id"`
-	Hostname  string    `json:"hostname"`
-	Version   string    `json:"version"`
-	Event     string    `json:"event"`
-}
-
-type AuditEntry struct {
-	Timestamp time.Time              `json:"timestamp"`
-	Actor     string                 `json:"actor"`
-	Action    string                 `json:"action"`
-	Target    string                 `json:"target"`
-	Detail    map[string]interface{} `json:"detail"`
-	Success   bool                   `json:"success"`
-}
-
-type CommandRecord struct {
-	Timestamp time.Time         `json:"timestamp"`
-	CommandID string            `json:"command_id"`
-	HostID    string            `json:"host_id"`
-	Command   string            `json:"command"`
-	Params    map[string]string `json:"params"`
-	Status    string            `json:"status"`
-	Signature string            `json:"signature"`
-}
-
-type CVECacheRecord struct {
-	Timestamp   time.Time              `json:"timestamp"`
-	TotalCount  int                    `json:"total_count"`
-	HighCount   int                    `json:"high_count"`
-	KEVCount    int                    `json:"kev_count"`
-	TopCVEs     []string               `json:"top_cves"`
-	Sources     map[string]interface{} `json:"sources"`
-}
 
 type jsonlWriter struct {
 	mu     sync.Mutex
@@ -273,8 +103,8 @@ func (w *jsonlWriter) close() error {
 	return nil
 }
 
-type PersistenceModule struct {
-	kernel KernelContext
+type Module struct {
+	kc kernel.KernelContext
 	cfg    *config.Config
 
 	mu          sync.Mutex
@@ -286,17 +116,17 @@ type PersistenceModule struct {
 	backupDone  chan struct{}
 	bufSize     int
 	retentionDays int
-	history     *HistoricalStore
+	history     *kernel.HistoricalStore
 
 	enabled  bool
-	state    PluginState
+	state    kernel.PluginState
 }
 
-func NewPersistenceModule(dataDir string) *PersistenceModule {
+func New(dataDir string) *Module {
 	if dataDir == "" {
 		dataDir = "data"
 	}
-	return &PersistenceModule{
+	return &Module{
 		dataDir: dataDir,
 		writers: make(map[string]*jsonlWriter),
 		bufSize: 64,
@@ -305,8 +135,8 @@ func NewPersistenceModule(dataDir string) *PersistenceModule {
 	}
 }
 
-func (m *PersistenceModule) Info() PluginInfo {
-	return PluginInfo{
+func (m *Module) Info() kernel.PluginInfo {
+	return kernel.PluginInfo{
 		Name:        "persistence",
 		Version:     "1.2.0",
 		Description: "Persistence manager — JSONL-based 3-tier storage with daily rotation and batch flush",
@@ -314,18 +144,18 @@ func (m *PersistenceModule) Info() PluginInfo {
 	}
 }
 
-func (m *PersistenceModule) Dependencies() []PluginDependency {
+func (m *Module) Dependencies() []kernel.PluginDependency {
 	return nil
 }
 
-func (m *PersistenceModule) Priority() int {
+func (m *Module) Priority() int {
 	return 3
 }
 
-func (m *PersistenceModule) Init(ctx context.Context, kc KernelContext) error {
-	m.kernel = kc
+func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
+	m.kc = kc
 	m.mu.Lock()
-	m.state = PluginInitialized
+	m.state = kernel.PluginInitialized
 	m.mu.Unlock()
 
 	if impl, ok := kc.Container().ResolveNamed("config"); ok {
@@ -345,21 +175,21 @@ func (m *PersistenceModule) Init(ctx context.Context, kc KernelContext) error {
 	m.flushDone = make(chan struct{})
 	m.cleanupDone = make(chan struct{})
 	m.backupDone = make(chan struct{})
-	m.history = NewHistoricalStore(m.dataDir)
+	m.history = kernel.NewHistoricalStore(m.dataDir)
 
-	kc.Container().Bind((*PersistenceInterface)(nil), m)
+	kc.Container().Bind((*kernel.PersistenceInterface)(nil), m)
 
 	return nil
 }
 
-func (m *PersistenceModule) Start(ctx context.Context) error {
+func (m *Module) Start(ctx context.Context) error {
 	m.mu.Lock()
-	m.state = PluginStarted
+	m.state = kernel.PluginStarted
 	m.mu.Unlock()
 
-	m.kernel.Bus().Subscribe(TopicAssessorResult, "persistence", m.onAssessmentResult)
-	m.kernel.Bus().Subscribe(TopicAgentRegistered, "persistence", m.onAgentRegistered)
-	m.kernel.Bus().Subscribe(TopicAgentTimeout, "persistence", m.onAgentTimeout)
+	m.kc.Bus().Subscribe(kernel.TopicAssessorResult, "persistence", m.onAssessmentResult)
+	m.kc.Bus().Subscribe(kernel.TopicAgentRegistered, "persistence", m.onAgentRegistered)
+	m.kc.Bus().Subscribe(kernel.TopicAgentTimeout, "persistence", m.onAgentTimeout)
 
 	go m.flushLoop()
 	go m.cleanupLoop()
@@ -368,8 +198,8 @@ func (m *PersistenceModule) Start(ctx context.Context) error {
 	return nil
 }
 
-func (m *PersistenceModule) Stop(ctx context.Context) error {
-	m.state = PluginStopping
+func (m *Module) Stop(ctx context.Context) error {
+	m.state = kernel.PluginStopping
 	m.mu.Lock()
 	closeChannel := func(ch chan struct{}) {
 		if ch != nil {
@@ -393,22 +223,22 @@ func (m *PersistenceModule) Stop(ctx context.Context) error {
 	}
 	m.mu.Unlock()
 
-	m.state = PluginStopped
+	m.state = kernel.PluginStopped
 	logger.WithComponent("persistence").Info("stopped")
 	return nil
 }
 
-func (m *PersistenceModule) State() PluginState {
+func (m *Module) State() kernel.PluginState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.state
 }
 
-func (m *PersistenceModule) HealthCheck(ctx context.Context) error {
+func (m *Module) HealthCheck(ctx context.Context) error {
 	m.mu.Lock()
 	state := m.state
 	m.mu.Unlock()
-	if state != PluginStarted {
+	if state != kernel.PluginStarted {
 		return fmt.Errorf("persistence not started (state=%s)", state)
 	}
 	info, err := os.Stat(m.dataDir)
@@ -421,13 +251,13 @@ func (m *PersistenceModule) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-func (m *PersistenceModule) Append(dataset string, record interface{}) error {
+func (m *Module) Append(dataset string, record interface{}) error {
 	if !m.enabled {
 		return nil
 	}
 
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "persistence.pre_append", map[string]interface{}{
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "persistence.pre_append", map[string]interface{}{
 			"dataset": dataset,
 		})
 	}
@@ -442,15 +272,15 @@ func (m *PersistenceModule) Append(dataset string, record interface{}) error {
 		return err
 	}
 
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "persistence.post_append", map[string]interface{}{
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "persistence.post_append", map[string]interface{}{
 			"dataset": dataset,
 		})
 	}
 	return nil
 }
 
-func (m *PersistenceModule) AppendBatch(dataset string, records []interface{}) error {
+func (m *Module) AppendBatch(dataset string, records []interface{}) error {
 	for _, rec := range records {
 		if err := m.Append(dataset, rec); err != nil {
 			return err
@@ -459,17 +289,17 @@ func (m *PersistenceModule) AppendBatch(dataset string, records []interface{}) e
 	return nil
 }
 
-func (m *PersistenceModule) WriteAudit(entry AuditEntry) error {
+func (m *Module) WriteAudit(entry kernel.AuditEntry) error {
 	return m.Append("audit", entry)
 }
 
-func (m *PersistenceModule) WriteCommand(record CommandRecord) error {
+func (m *Module) WriteCommand(record kernel.CommandRecord) error {
 	return m.Append("commands", record)
 }
 
-func (m *PersistenceModule) WriteAssessment(record AssessmentRecord) error {
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "archive.pre_write", map[string]interface{}{
+func (m *Module) WriteAssessment(record kernel.AssessmentRecord) error {
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "archive.pre_write", map[string]interface{}{
 			"dataset":  "assessments",
 			"host_id":  record.HostID,
 			"score":    record.FinalScore,
@@ -477,13 +307,13 @@ func (m *PersistenceModule) WriteAssessment(record AssessmentRecord) error {
 		})
 	}
 	err := m.Append("assessments", record)
-	if err == nil && m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "archive.post_write", map[string]interface{}{
+	if err == nil && m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "archive.post_write", map[string]interface{}{
 			"dataset": "assessments",
 			"host_id": record.HostID,
 			"score":   record.FinalScore,
 		})
-		m.kernel.Extensions().Execute(m.kernel.Context(), "persistence.record_written", map[string]interface{}{
+		m.kc.Extensions().Execute(m.kc.Context(), "persistence.record_written", map[string]interface{}{
 			"dataset":  "assessments",
 			"host_id":  record.HostID,
 			"score":    record.FinalScore,
@@ -493,7 +323,7 @@ func (m *PersistenceModule) WriteAssessment(record AssessmentRecord) error {
 	return err
 }
 
-func (m *PersistenceModule) WriteDashboardReport(report *DashboardReport) error {
+func (m *Module) WriteDashboardReport(report *kernel.DashboardReport) error {
 	data, err := json.Marshal(report)
 	if err != nil {
 		return fmt.Errorf("dashboard marshal: %w", err)
@@ -510,8 +340,8 @@ func (m *PersistenceModule) WriteDashboardReport(report *DashboardReport) error 
 		}
 		return fmt.Errorf("dashboard rename: %w", err)
 	}
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "persistence.dashboard_written", map[string]interface{}{
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "persistence.dashboard_written", map[string]interface{}{
 			"path":    path,
 			"host_id": report.HostID,
 		})
@@ -519,11 +349,11 @@ func (m *PersistenceModule) WriteDashboardReport(report *DashboardReport) error 
 	return nil
 }
 
-func (m *PersistenceModule) WriteCVECache(record CVECacheRecord) error {
+func (m *Module) WriteCVECache(record kernel.CVECacheRecord) error {
 	return m.Append("cve_cache", record)
 }
 
-func (m *PersistenceModule) getOrCreateWriter(dataset string) *jsonlWriter {
+func (m *Module) getOrCreateWriter(dataset string) *jsonlWriter {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -537,7 +367,7 @@ func (m *PersistenceModule) getOrCreateWriter(dataset string) *jsonlWriter {
 	return w
 }
 
-func (m *PersistenceModule) flushAll() {
+func (m *Module) flushAll() {
 	m.mu.Lock()
 	writers := make([]*jsonlWriter, 0, len(m.writers))
 	for _, w := range m.writers {
@@ -550,7 +380,7 @@ func (m *PersistenceModule) flushAll() {
 	}
 }
 
-func (m *PersistenceModule) flushLoop() {
+func (m *Module) flushLoop() {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.WithComponent("persistence").Error("flushLoop panic recovered", "panic", r)
@@ -568,7 +398,7 @@ func (m *PersistenceModule) flushLoop() {
 	}
 }
 
-func (m *PersistenceModule) RotateAll() {
+func (m *Module) RotateAll() {
 	m.mu.Lock()
 	for _, w := range m.writers {
 		w.close()
@@ -576,7 +406,7 @@ func (m *PersistenceModule) RotateAll() {
 	m.mu.Unlock()
 }
 
-func (m *PersistenceModule) cleanupLoop() {
+func (m *Module) cleanupLoop() {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.WithComponent("persistence").Error("cleanupLoop panic recovered", "panic", r)
@@ -598,7 +428,7 @@ func (m *PersistenceModule) cleanupLoop() {
 	}
 }
 
-func (m *PersistenceModule) cleanupOldLogs() {
+func (m *Module) cleanupOldLogs() {
 	cutoff := time.Now().AddDate(0, 0, -m.retentionDays)
 	entries, err := os.ReadDir(m.dataDir)
 	if err != nil {
@@ -633,7 +463,7 @@ func (m *PersistenceModule) cleanupOldLogs() {
 	}
 }
 
-func (m *PersistenceModule) backupLoop() {
+func (m *Module) backupLoop() {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.WithComponent("persistence").Error("backupLoop panic recovered", "panic", r)
@@ -659,7 +489,7 @@ func (m *PersistenceModule) backupLoop() {
 	}
 }
 
-func (m *PersistenceModule) createHourlySnapshot() {
+func (m *Module) createHourlySnapshot() {
 	snapshotDir := filepath.Join(m.dataDir, "snapshots")
 	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
 		logger.WithComponent("persistence").Error("failed to create snapshot dir", "error", err)
@@ -707,7 +537,7 @@ func (m *PersistenceModule) createHourlySnapshot() {
 	logger.WithComponent("persistence").Info("hourly snapshot created",
 		"path", snapshotPath, "entries", totalEntries)
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "archive.rotation", map[string]interface{}{
+	m.kc.Extensions().Execute(m.kc.Context(), "archive.rotation", map[string]interface{}{
 		"type":    "snapshot",
 		"path":    snapshotPath,
 		"entries": totalEntries,
@@ -716,7 +546,7 @@ func (m *PersistenceModule) createHourlySnapshot() {
 	m.pruneSnapshots(snapshotDir, 24)
 }
 
-func (m *PersistenceModule) pruneSnapshots(dir string, maxKeep int) {
+func (m *Module) pruneSnapshots(dir string, maxKeep int) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -733,7 +563,7 @@ func (m *PersistenceModule) pruneSnapshots(dir string, maxKeep int) {
 	}
 }
 
-func (m *PersistenceModule) createDailyArchive() {
+func (m *Module) createDailyArchive() {
 	archiveDir := filepath.Join(m.dataDir, "archives")
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
 		logger.WithComponent("persistence").Error("failed to create archive dir", "error", err)
@@ -795,7 +625,7 @@ func (m *PersistenceModule) createDailyArchive() {
 	logger.WithComponent("persistence").Info("daily archive created",
 		"path", archivePath, "files", archived)
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "archive.rotation", map[string]interface{}{
+	m.kc.Extensions().Execute(m.kc.Context(), "archive.rotation", map[string]interface{}{
 		"type":   "daily_archive",
 		"path":   archivePath,
 		"files":  archived,
@@ -804,7 +634,7 @@ func (m *PersistenceModule) createDailyArchive() {
 	m.pruneArchives(archiveDir, 90)
 }
 
-func (m *PersistenceModule) pruneArchives(dir string, maxDays int) {
+func (m *Module) pruneArchives(dir string, maxDays int) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -823,19 +653,19 @@ func (m *PersistenceModule) pruneArchives(dir string, maxDays int) {
 	}
 }
 
-func (m *PersistenceModule) DataDir() string {
+func (m *Module) DataDir() string {
 	return m.dataDir
 }
 
-func (m *PersistenceModule) ComputeTrends(days int) ([]HostTrend, error) {
+func (m *Module) ComputeTrends(days int) ([]kernel.HostTrend, error) {
 	return m.history.ComputeTrends(days)
 }
 
-func (m *PersistenceModule) ComputeRiskLevels(days int) (map[string]float64, error) {
+func (m *Module) ComputeRiskLevels(days int) (map[string]float64, error) {
 	return m.history.ComputeRiskLevels(days)
 }
 
-func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message) error {
+func (m *Module) onAssessmentResult(ctx context.Context, msg kernel.Message) error {
 	payload := msg.Payload
 	logger.WithComponent("persistence").Debug("received assessor.result event", "type", fmt.Sprintf("%T", payload))
 
@@ -843,9 +673,9 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 		logger.WithComponent("persistence").Info("processing assessment",
 			"host_id", ar.HostID, "score", ar.FinalScore, "acceptable", ar.Acceptable, "checks", len(ar.Checks))
 
-		checkDetails := make([]CheckDetail, 0, len(ar.Checks))
+		checkDetails := make([]kernel.CheckDetail, 0, len(ar.Checks))
 		for _, c := range ar.Checks {
-			checkDetails = append(checkDetails, CheckDetail{
+			checkDetails = append(checkDetails, kernel.CheckDetail{
 				CheckID:       c.CheckID,
 				Domain:        c.Domain,
 				Name:          c.Name,
@@ -856,7 +686,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			})
 		}
 
-		rec := AssessmentRecord{
+		rec := kernel.AssessmentRecord{
 			Timestamp:      time.Now(),
 			HostID:         ar.HostID,
 			Hostname:       ar.Hostname,
@@ -877,7 +707,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			NoIDS:          ar.EdgeFactors.NoIDS,
 			ThreatCoeff:    ar.ThreatCoeff,
 			SPCScore:       ar.SPCScore,
-			PrismResultFields:   prismFieldsFromResult(ar),
+			PrismResultFields:   kernel.PrismFieldsFromResult(ar),
 			CheckCount:     len(ar.Checks),
 			Checks:         checkDetails,
 		}
@@ -936,7 +766,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			"no_ids":              ar.EdgeFactors.NoIDS,
 		}
 
-		report := &DashboardReport{
+		report := &kernel.DashboardReport{
 			SchemaVersion: "1.0",
 			GeneratedAt:   time.Now(),
 			HostID:        ar.HostID,
@@ -951,7 +781,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			EdgeFactors:   edgeFactors,
 			ThreatCoeff:   ar.ThreatCoeff,
 			SPCScore:      ar.SPCScore,
-			PrismResultFields: prismFieldsFromResult(ar),
+			PrismResultFields: kernel.PrismFieldsFromResult(ar),
 			Checks:        checkDetails,
 			ComplianceFramework: m.cfg.ComplianceFramework,
 		}
@@ -997,7 +827,7 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 			return nil
 		}
 
-		rec := AssessmentRecord{
+		rec := kernel.AssessmentRecord{
 			Timestamp:  time.Now(),
 			HostID:     hostID,
 			FinalScore: finalScore,
@@ -1036,17 +866,17 @@ func (m *PersistenceModule) onAssessmentResult(ctx context.Context, msg Message)
 	return nil
 }
 
-func (m *PersistenceModule) onAgentRegistered(ctx context.Context, msg Message) error {
+func (m *Module) onAgentRegistered(ctx context.Context, msg kernel.Message) error {
 	if hostID, ok := msg.Payload.(string); ok {
-		hb, _ := m.kernel.GetPlugin("heartbeat")
+		hb, _ := m.kc.GetPlugin("heartbeat")
 		if hb == nil {
 			return nil
 		}
-		var record *AgentRegistrationRecord
-		if mi, ok2 := hb.(HeartbeatInterface); ok2 {
+		var record *kernel.AgentRegistrationRecord
+		if mi, ok2 := hb.(kernel.HeartbeatInterface); ok2 {
 			agent := mi.GetAgent(hostID)
 			if agent != nil {
-				record = &AgentRegistrationRecord{
+				record = &kernel.AgentRegistrationRecord{
 					Timestamp: time.Now(),
 					HostID:    agent.HostID,
 					Hostname:  agent.Hostname,
@@ -1062,9 +892,9 @@ func (m *PersistenceModule) onAgentRegistered(ctx context.Context, msg Message) 
 	return nil
 }
 
-func (m *PersistenceModule) onAgentTimeout(ctx context.Context, msg Message) error {
+func (m *Module) onAgentTimeout(ctx context.Context, msg kernel.Message) error {
 	if hostID, ok := msg.Payload.(string); ok {
-		record := &AgentRegistrationRecord{
+		record := &kernel.AgentRegistrationRecord{
 			Timestamp: time.Now(),
 			HostID:    hostID,
 			Event:     "timeout",
