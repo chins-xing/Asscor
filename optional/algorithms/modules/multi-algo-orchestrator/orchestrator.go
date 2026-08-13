@@ -34,7 +34,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/model"
 )
@@ -86,7 +85,7 @@ type AlgorithmProfile struct {
 	ID                string
 	Name              string
 	Role              AlgorithmRole
-	EngineConstructor func() engine.AssessorEngine
+	EngineConstructor func() kernel.AssessorEngine
 	Confidence        float64
 	SharedChecks      []string
 	IndependentChecks []model.CheckItem

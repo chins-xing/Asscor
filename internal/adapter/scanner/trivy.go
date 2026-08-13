@@ -1,3 +1,5 @@
+//go:build adapter
+
 package scanner
 
 import (

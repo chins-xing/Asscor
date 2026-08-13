@@ -1,3 +1,5 @@
+//go:build webui
+
 package webui
 
 import (

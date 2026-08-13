@@ -163,7 +163,7 @@ DI 容器定义于 [di.go](file:///f:/Argus/internal/kernel/di.go)，提供类�
 | 14 | `(*LogCollectorInterface)(nil)` | LogCollectorModule | [collector.go:L78](file:///f:/Argus/internal/collector/collector.go#L78) |
 | 15 | `(*ScoringEngineProvider)(nil)` | ScoringEngineModule | [main.go](file:///f:/Argus/cmd/kernel/main.go) |
 
-> **模块剥离说明：** 上表中实现位于 `internal/<模块名>/` 的插件均已从内核剥离为 build-tag 可选模块（`//go:build <tag>`），契约接口定义保留在 `internal/kernel/*_interface.go`。`(*ATTACKInterface)(nil)` 是 ATT&CK 模块内部接口（`internal/attck/`），对外经 `engine.ATTACKProvider` 注入评估引擎。`ConcurrencyModule`/`WorkerPool`/`AdapterIntegrationModule` 属于内核核心基础设施，仍常编译于 `internal/kernel/`。
+> **模块剥离说明：** 上表中实现位于 `internal/<模块名>/` 的插件均已从内核剥离为 build-tag 可选模块（`//go:build <tag>`），契约接口定义保留在 `internal/kernel/*_interface.go`（评估引擎契约上移至 `internal/kernel/engine_types.go`）。`(*ATTACKInterface)(nil)` 是 ATT&CK 模块内部接口（`internal/attck/`），对外经 `kernel.ATTACKProvider` 注入评估引擎。`ConcurrencyModule`/`WorkerPool`/`AdapterIntegrationModule` 属于内核核心基础设施，仍常编译于 `internal/kernel/`。
 
 ### 2.3 依赖解析时机
 

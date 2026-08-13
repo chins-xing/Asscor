@@ -1,11 +1,11 @@
 .PHONY: build docker-build docker-up docker-down docker-logs clean test
 
-MODULE_TAGS=heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper
+MODULE_TAGS=heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,webui,integrity,resilience,comms,checks,adapter,engine
 
 build:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags "$(MODULE_TAGS)" -trimpath -ldflags="-s -w" -o build/asscor-kernel ./cmd/kernel/
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o build/asscor-agent ./cmd/agent/
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags "spc,attck_ext" -trimpath -ldflags="-s -w" -o build/asscor ./cmd/asscor/
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -tags "checks" -o build/asscor-agent ./cmd/agent/
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags "engine,checks,adapter,spc,attck_ext" -trimpath -ldflags="-s -w" -o build/asscor ./cmd/asscor/
 
 test:
 	go test -count=1 ./...

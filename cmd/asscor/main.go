@@ -1,3 +1,5 @@
+//go:build engine
+
 package main
 
 import (
@@ -13,10 +15,6 @@ import (
 	"github.com/asscor/asscor/internal/model"
 	ascorprism "github.com/asscor/asscor/internal/engine/prism"
 	prismlib "github.com/chins-xing/prism"
-
-	_ "github.com/asscor/asscor/internal/adapter/management"
-	_ "github.com/asscor/asscor/internal/adapter/scanner"
-	_ "github.com/asscor/asscor/internal/checks"
 )
 
 var registeredASSCOrATTACKInit func(assessor *engine.Assessor, cfg *config.Config)

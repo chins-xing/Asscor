@@ -1,3 +1,5 @@
+//go:build resilience
+
 package resilience
 
 import (

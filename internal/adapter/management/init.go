@@ -1,3 +1,5 @@
+//go:build adapter
+
 package management
 
 import "github.com/asscor/asscor/internal/adapter"

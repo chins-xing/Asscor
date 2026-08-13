@@ -1,3 +1,5 @@
+//go:build checks
+
 package checks
 
 import (

@@ -1,3 +1,5 @@
+//go:build comms
+
 package comms
 
 import (

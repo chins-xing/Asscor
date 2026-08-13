@@ -14,17 +14,14 @@ import (
 
 	"github.com/asscor/asscor/internal/adapter"
 	"github.com/asscor/asscor/internal/cli"
-	"github.com/asscor/asscor/internal/comms"
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/extmgr"
 	"github.com/asscor/asscor/internal/integrity"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/engine/prism"
 	"github.com/asscor/asscor/internal/resilience"
-	"github.com/asscor/asscor/internal/engine/ssam"
 	"github.com/asscor/asscor/internal/version"
-	"github.com/asscor/asscor/internal/webui"
+
 
 	_ "github.com/asscor/asscor/internal/checks"
 )
@@ -215,12 +212,15 @@ k.SetConfig("config_path", resolvedConfigPath)
 	scoringEngine := newScoringEngine(cfg)
 
 	// Wire SSAM as an ASSCOR plugin engine (if not in legacy mode).
-	// SSAM depends on the engine.AssessorEngine interface defined by ASSCOR.
+	// SSAM depends on the AssessorEngine interface defined by the kernel.
 	if scoringEngine != nil {
 		if cfg.ScoringEngine != "legacy" {
-			ssamAdapter := ssam.NewEngineAdapter(cfg)
-			scoringEngine.SetPluginEngine(ssamAdapter)
-			log.Info("ssam engine adapter wired", "engine", ssamAdapter.Name())
+			if ssamAdapter := newSSAMEngineAdapter(cfg); ssamAdapter != nil {
+				scoringEngine.SetPluginEngine(ssamAdapter)
+				log.Info("ssam engine adapter wired", "engine", ssamAdapter.Name())
+			} else {
+				log.Info("using built-in DynamicScoringEngine (engine build tag disabled)")
+			}
 		} else {
 			log.Info("using built-in DynamicScoringEngine (legacy mode)")
 		}
@@ -228,7 +228,9 @@ k.SetConfig("config_path", resolvedConfigPath)
 		k.Container().Bind((*kernel.ScoringEngineProvider)(nil), scoringEngine)
 	}
 
-	k.Container().Bind((*kernel.PrismEngineProvider)(nil), prism.NewEngine())
+	if prismEngine := newPrismEngine(); prismEngine != nil {
+		k.Container().Bind((*kernel.PrismEngineProvider)(nil), prismEngine)
+	}
 
 	assessor := newAssessor()
 	if target, ok := assessor.(kernel.ATTACKInjectionTarget); ok {
@@ -298,8 +300,9 @@ k.SetConfig("config_path", resolvedConfigPath)
 	}
 
 	if *webuiPort > 0 {
-		webuiModule := webui.New(*webuiPort)
-		plugins = append(plugins, webuiModule)
+		if wm := newWebUI(*webuiPort); wm != nil {
+			plugins = append(plugins, wm)
+		}
 	}
 
 	for _, p := range plugins {
@@ -332,34 +335,12 @@ k.SetConfig("config_path", resolvedConfigPath)
 		log.Warn("debugger/tracer detected — runtime integrity compromised")
 	}
 
-	kernelSvc := comms.NewKernelServiceImpl(heartbeat, commander, cti, assessor, persistence, spc)
-	agentSvc := comms.NewAgentServiceImpl(assessor, commander, logCollector)
-
-	serverCfg := comms.DefaultServerConfig()
-	serverCfg.ListenAddr = *listenAddr
-
+	var tlsCfgForServer *tls.Config
 	if !*noMTLS {
-		serverCfg.TLSConfig = setupTLS(*certDir)
+		tlsCfgForServer = setupTLS(*certDir)
 	}
 
-	server := comms.NewServer(serverCfg, k)
-	for _, desc := range comms.BuildServiceDesc(kernelSvc, agentSvc) {
-		server.RegisterService(desc)
-	}
-
-	sourceManagerSvc := kernel.NewSourceManagerServiceImpl(sourceManager)
-	server.RegisterService(kernel.BuildSourceManagerServiceDesc(sourceManagerSvc))
-
-	interceptorCfg := kernel.ResolveInterceptorConfig(k.Config())
-	interceptors := kernel.NewInterceptors(interceptorCfg)
-	server.SetInterceptors(interceptors)
-
-	if interceptorCfg.RateLimitEnabled || interceptorCfg.CircuitBreakerEnabled {
-		log.Info("interceptors configured",
-			"rate_limit", interceptorCfg.RateLimitEnabled,
-			"circuit_breaker", interceptorCfg.CircuitBreakerEnabled,
-			"audit_log", interceptorCfg.AuditLogEnabled)
-	}
+	kernelSvcRuntime := newCommsRuntime(k, cfg, *listenAddr, tlsCfgForServer, *certDir, heartbeat, commander, cti, assessor, persistence, spc, logCollector, sourceManager)
 
 	if err := k.Bootstrap(); err != nil {
 		fmt.Fprintf(os.Stderr, "FATAL: kernel bootstrap failed: %v\n", err)
@@ -378,35 +359,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 	}
 	fmt.Fprintf(os.Stderr, "\n")
 
-	serverStarted := false
-	if err := server.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "WARN: server start failed: %v (running in CLI-only mode)\n", err)
-		log.Error("start microkernel server failed", "error", err)
-	} else {
-		serverStarted = true
-	}
-
-	grpcCfg := comms.DefaultGRPCServerConfig()
-	if v := cfg.AdapterConfig["grpc.enabled"]; v == "on" || v == "true" || v == "1" {
-		grpcCfg.Enabled = true
-	}
-	if v := cfg.AdapterConfig["grpc.listen_addr"]; v != "" {
-		grpcCfg.ListenAddr = v
-	}
-	if v := cfg.AdapterConfig["grpc.tls_enabled"]; v == "on" || v == "true" || v == "1" {
-		grpcCfg.TLSEnabled = true
-		grpcCfg.CertFile = filepath.Join(*certDir, "server.crt")
-		grpcCfg.KeyFile = filepath.Join(*certDir, "server.key")
-		grpcCfg.CAFile = filepath.Join(*certDir, "ca.crt")
-	}
-	grpcServer := comms.NewGRPCServer(grpcCfg, kernelSvc, agentSvc)
-	grpcStarted := false
-	if err := grpcServer.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "WARN: gRPC server start failed: %v\n", err)
-		log.Error("start gRPC server failed", "error", err)
-	} else {
-		grpcStarted = true
-	}
+	serverStarted, grpcStarted := kernelSvcRuntime.Start()
 
 	log.Info("ASSCOR μKernel started",
 		"version", version.ASSCORVersion,
@@ -449,10 +402,7 @@ loop:
 	}
 
 	if serverStarted {
-		server.Stop()
-	}
-	if grpcStarted {
-		grpcServer.Stop()
+		kernelSvcRuntime.Stop()
 	}
 	k.Shutdown()
 	log.Info("kernel stopped")

@@ -2,7 +2,6 @@ package kernel
 
 import (
 	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/model"
 	prismlib "github.com/chins-xing/prism"
 )
@@ -12,8 +11,8 @@ import (
 type ScoringEngineProvider interface {
 	Assess(hostID string, hostname string) *model.AssessmentResult
 	AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
-	PluginEngine() engine.AssessorEngine
-	SetPluginEngine(e engine.AssessorEngine)
+	PluginEngine() AssessorEngine
+	SetPluginEngine(e AssessorEngine)
 	RecomputeFinalScore(result *model.AssessmentResult) float64
 	ReloadWeights(cfg *config.Config)
 	ValidateEdgeFactors(registeredChecks []model.CheckItem) []string
@@ -32,5 +31,5 @@ type PrismEngineProvider interface {
 // ATTACKInjectionTarget accepts an optional ATT&CK analysis provider. The
 // assessor module implements it so the attck_ext extension can inject itself.
 type ATTACKInjectionTarget interface {
-	SetATTACKProvider(provider engine.ATTACKProvider)
+	SetATTACKProvider(provider ATTACKProvider)
 }

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/model"
 	"github.com/asscor/asscor/internal/version"
@@ -899,7 +898,7 @@ func attckCmdHandler(ctx *CommandContext) *CommandResult {
 
 	case "coverage":
 		type coverageProvider interface {
-			CalculateCoverage(checkResults map[string]bool) []engine.ATTACKCoverageResult
+			CalculateCoverage(checkResults map[string]bool) []kernel.ATTACKCoverageResult
 		}
 		cp, ok := attckPlugin.(coverageProvider)
 		if !ok {
@@ -926,7 +925,7 @@ func attckCmdHandler(ctx *CommandContext) *CommandResult {
 
 	case "killchain":
 		type killChainProvider interface {
-			AssessKillChain(hostID string, checkResults map[string]bool) engine.ATTACKKillChainResult
+			AssessKillChain(hostID string, checkResults map[string]bool) kernel.ATTACKKillChainResult
 		}
 		kp, ok := attckPlugin.(killChainProvider)
 		if !ok {

@@ -1,3 +1,5 @@
+//go:build engine
+
 package engine
 
 import (
@@ -13,114 +15,29 @@ import (
 	"github.com/asscor/asscor/internal/adapter"
 	"github.com/asscor/asscor/internal/checks"
 	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 )
 
-// AssessorEngine is the unified scoring engine interface owned by ASSCOR.
-// Algorithm implementations (SSAM, SRD, custom) depend on ASSCOR and implement this contract.
-// ASSCOR itself has zero dependency on any specific algorithm package.
-type AssessorEngine interface {
-	ComputeScore(ctx context.Context, result *model.AssessmentResult) error
-	Name() string
-	ReloadWeights(cfg *config.Config)
-}
-
-type SPCProvider interface {
-	Enabled() bool
-	GetAsset(hostID string) *SPCLocalAsset
-	UpsertAsset(asset SPCLocalAsset)
-	Calculate(hostID string, assetPackages []string) SPCCorrection
-}
-
-type ATTACKProvider interface {
-	IsEnabled() bool
-	Version() string
-	CalculateCoverage(checkResults map[string]bool) []ATTACKCoverageResult
-	AssessKillChain(hostID string, checkResults map[string]bool) ATTACKKillChainResult
-	MatchAPTGroup(detectedTechniques []string) []ATTACKAPTMatch
-	PredictRisk(hostID string, detectedTechniques []string, maxDepth int) ATTACKPredictedRisk
-	GetAllTactics() []ATTACKTacticInfo
-}
-
-type ATTACKCoverageResult struct {
-	TacticID        string
-	TacticName      string
-	TotalTechniques int
-	CoveredDet      int
-	CoverageDet     float64
-	CoveragePrev    float64
-	CoverageComp    float64
-	RiskLevel       string
-}
-
-type ATTACKKillChainResult struct {
-	OverallScore float64
-	WeakestStage string
-	Stages       []ATTACKKillChainStage
-}
-
-type ATTACKKillChainStage struct {
-	Name         string
-	Score        float64
-	Status       string
-	ChecksPassed int
-	ChecksTotal  int
-}
-
-type ATTACKAPTMatch struct {
-	GroupID     string
-	GroupName   string
-	Similarity  float64
-	Confidence  string
-	OverlapTech []string
-}
-
-type ATTACKPredictedRisk struct {
-	MaxRiskScore    float64
-	EnhancedThreat  float64
-	PredictedPaths  int
-	Recommendations []string
-}
-
-type ATTACKTacticInfo struct {
-	ID          string
-	Name        string
-	Techniques  []ATTACKTechniqueInfo
-}
-
-type ATTACKTechniqueInfo struct {
-	ID           string
-	Name         string
-	AsscorChecks []string
-}
-
-type SPCLocalAsset struct {
-	HostID        string
-	NetworkZone   string
-	Role          string
-	Packages      []string
-	InstalledCPEs []string
-	Compensations SPCCompensations
-}
-
-type SPCCompensations struct {
-	VirtualPatch  bool
-	WAFRules      bool
-	IPSRules      bool
-	AppWhitelist  bool
-}
-
-type SPCCorrection struct {
-	Score            float64
-	Weights          map[string]float64
-	Action           string
-	AffectedCVE      []string
-	TopCVEImpact     string
-	TotalPenalty     float64
-	PenaltyBreakdown []interface{}
-	KillChainScore   float64
-}
+// Contract type aliases. The canonical definitions live in the microkernel
+// (internal/kernel/engine_types.go); these aliases preserve the historical
+// engine.* names for callers that already reference them.
+type (
+	AssessorEngine       = kernel.AssessorEngine
+	SPCProvider          = kernel.SPCProvider
+	ATTACKProvider       = kernel.ATTACKProvider
+	ATTACKCoverageResult = kernel.ATTACKCoverageResult
+	ATTACKKillChainResult = kernel.ATTACKKillChainResult
+	ATTACKKillChainStage  = kernel.ATTACKKillChainStage
+	ATTACKAPTMatch        = kernel.ATTACKAPTMatch
+	ATTACKPredictedRisk   = kernel.ATTACKPredictedRisk
+	ATTACKTacticInfo      = kernel.ATTACKTacticInfo
+	ATTACKTechniqueInfo   = kernel.ATTACKTechniqueInfo
+	SPCLocalAsset         = kernel.SPCLocalAsset
+	SPCCompensations      = kernel.SPCCompensations
+	SPCCorrection         = kernel.SPCCorrection
+)
 
 type Assessor struct {
 	cfg             *config.Config

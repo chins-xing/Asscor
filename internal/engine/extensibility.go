@@ -1,3 +1,5 @@
+//go:build engine
+
 package engine
 
 import (
@@ -6,24 +8,27 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 )
 
-type AssessmentPhase string
-
-const (
-	PhasePreCheck     AssessmentPhase = "pre_check"
-	PhasePostCheck    AssessmentPhase = "post_check"
-	PhasePreScore     AssessmentPhase = "pre_score"
-	PhasePostScore    AssessmentPhase = "post_score"
-	PhasePreEdge      AssessmentPhase = "pre_edge"
-	PhasePostEdge     AssessmentPhase = "post_edge"
-	PhasePreReport    AssessmentPhase = "pre_report"
-	PhasePostReport   AssessmentPhase = "post_report"
+// Contract type aliases (canonical in internal/kernel/engine_types.go).
+type (
+	AssessmentPhase = kernel.AssessmentPhase
+	AssessmentHook  = kernel.AssessmentHook
 )
 
-type AssessmentHook func(ctx context.Context, result *model.AssessmentResult) error
+const (
+	PhasePreCheck    = kernel.PhasePreCheck
+	PhasePostCheck   = kernel.PhasePostCheck
+	PhasePreScore    = kernel.PhasePreScore
+	PhasePostScore   = kernel.PhasePostScore
+	PhasePreEdge     = kernel.PhasePreEdge
+	PhasePostEdge    = kernel.PhasePostEdge
+	PhasePreReport   = kernel.PhasePreReport
+	PhasePostReport  = kernel.PhasePostReport
+)
 
 type hookRegistration struct {
 	id       string

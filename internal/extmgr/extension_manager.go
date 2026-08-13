@@ -14,7 +14,6 @@ import (
 
 	"github.com/asscor/asscor/internal/checks"
 	"github.com/asscor/asscor/internal/common"
-	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
@@ -51,7 +50,7 @@ type ExtensionManager struct {
 	installer *ExtensionInstaller
 	lifecycle *ExtensionLifecycle
 	executor  *ExtensionExecutor
-	assessor  *engine.Assessor
+	assessor  kernel.HookRegistrar
 	repos     []ExtensionRepository
 
 	kernelExtensions kernel.ModuleExtensions // bridge to kernel Extension Points
@@ -122,7 +121,7 @@ func NewExtensionManager(cfg ManagerConfig) *ExtensionManager {
 	return mgr
 }
 
-func (m *ExtensionManager) SetAssessor(a *engine.Assessor) {
+func (m *ExtensionManager) SetAssessor(a kernel.HookRegistrar) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.assessor = a
@@ -369,7 +368,7 @@ func (m *ExtensionManager) onExtensionInstalled(spec ExtensionSpec) {
 			logger.WithComponent("extmgr").Info("registered hook on kernel extension point",
 				"extension_id", spec.ID, "extension_point", extPointName)
 		} else if a != nil {
-			a.RegisterHook(spec.ID, engine.PhasePostScore, func(ctx context.Context, result *model.AssessmentResult) error {
+			a.RegisterHook(spec.ID, kernel.PhasePostScore, func(ctx context.Context, result *model.AssessmentResult) error {
 				return m.executeHook(ctx, spec, result)
 			}, 50)
 			logger.WithComponent("extmgr").Info("registered hook on engine PhasePostScore (legacy)",

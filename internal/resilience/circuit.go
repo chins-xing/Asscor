@@ -10,6 +10,8 @@
 //   - Thread-safe via per-breaker mutex.
 //   - Half-open state: after cooldown, one trial call is allowed; success
 //     closes the circuit, failure re-opens it.
+//go:build resilience
+
 package resilience
 
 import (

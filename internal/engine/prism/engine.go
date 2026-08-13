@@ -1,3 +1,5 @@
+//go:build engine
+
 package prism
 
 import (
