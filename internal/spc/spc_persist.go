@@ -1,6 +1,9 @@
+//go:build spc
+
 package spc
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -23,7 +26,7 @@ func isCVEID(id string) bool {
 	return false
 }
 
-func (m *SPCModule) AddCVE(score SPCCVEScore) {
+func (m *Module) AddCVE(score kernel.SPCCVEScore) {
 	if !isCVEID(score.CVEID) {
 		logger.WithComponent("spc").Warn("invalid CVE ID ignored in AddCVE", "cve_id", score.CVEID)
 		return
@@ -46,7 +49,7 @@ func (m *SPCModule) AddCVE(score SPCCVEScore) {
 	m.cveCache = append(m.cveCache, score)
 }
 
-func (m *SPCModule) AddCVEs(scores []SPCCVEScore) {
+func (m *Module) AddCVEs(scores []kernel.SPCCVEScore) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, score := range scores {
@@ -71,7 +74,7 @@ func (m *SPCModule) AddCVEs(scores []SPCCVEScore) {
 	}
 }
 
-func (m *SPCModule) mergeCVEInPlace(idx int, incoming SPCCVEScore) {
+func (m *Module) mergeCVEInPlace(idx int, incoming kernel.SPCCVEScore) {
 	existing := &m.cveCache[idx]
 
 	incomingPriority := incoming.Source.Priority()
@@ -123,7 +126,7 @@ func (m *SPCModule) mergeCVEInPlace(idx int, incoming SPCCVEScore) {
 	}
 }
 
-func (m *SPCModule) evictLowestPriorityCVE() {
+func (m *Module) evictLowestPriorityCVE() {
 	worstIdx := -1
 	worstScore := 0.0
 	for i := range m.cveCache {
@@ -153,7 +156,7 @@ func (m *SPCModule) evictLowestPriorityCVE() {
 		"evicted_cve", evictedID, "cache_size", len(m.cveCache))
 }
 
-func (m *SPCModule) MergeCVEs(cves []SPCCVEScore) (added int, updated int) {
+func (m *Module) MergeCVEs(cves []kernel.SPCCVEScore) (added int, updated int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, cve := range cves {
@@ -177,21 +180,21 @@ func (m *SPCModule) MergeCVEs(cves []SPCCVEScore) (added int, updated int) {
 	return
 }
 
-func (m *SPCModule) GetCVEs() []SPCCVEScore {
+func (m *Module) GetCVEs() []kernel.SPCCVEScore {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	result := make([]SPCCVEScore, len(m.cveCache))
+	result := make([]kernel.SPCCVEScore, len(m.cveCache))
 	copy(result, m.cveCache)
 	return result
 }
 
-func (m *SPCModule) GetCVECount() int {
+func (m *Module) GetCVECount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.cveCache)
 }
 
-func (m *SPCModule) GetKEVCount() int {
+func (m *Module) GetKEVCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	count := 0
@@ -203,7 +206,7 @@ func (m *SPCModule) GetKEVCount() int {
 	return count
 }
 
-func (m *SPCModule) GetKEVCatalog() []string {
+func (m *Module) GetKEVCatalog() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	result := make([]string, 0, len(m.kevCatalog))
@@ -213,7 +216,7 @@ func (m *SPCModule) GetKEVCatalog() []string {
 	return result
 }
 
-func (m *SPCModule) Summary() map[string]interface{} {
+func (m *Module) Summary() map[string]interface{} {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return map[string]interface{}{
@@ -225,26 +228,26 @@ func (m *SPCModule) Summary() map[string]interface{} {
 	}
 }
 
-func (m *SPCModule) ClearCache() {
+func (m *Module) ClearCache() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cveCache = m.cveCache[:0]
 	m.cveIndex = make(map[string]int)
 }
 
-func (m *SPCModule) cacheFilePath() string {
+func (m *Module) cacheFilePath() string {
 	dataDir := "./data"
-	if m.kernel != nil {
-		if cfg := m.kernel.GetConfigObj(); cfg != nil && cfg.DataDir != "" {
+	if m.kc != nil {
+		if cfg := m.kc.GetConfigObj(); cfg != nil && cfg.DataDir != "" {
 			dataDir = cfg.DataDir
 		}
 	}
 	return filepath.Join(dataDir, "spc_cache.json")
 }
 
-func (m *SPCModule) saveCacheToDisk() {
+func (m *Module) saveCacheToDisk() {
 	m.mu.RLock()
-	cacheCopy := make([]SPCCVEScore, len(m.cveCache))
+	cacheCopy := make([]kernel.SPCCVEScore, len(m.cveCache))
 	copy(cacheCopy, m.cveCache)
 	lastUpd := m.lastUpdate
 	m.mu.RUnlock()
@@ -264,7 +267,7 @@ func (m *SPCModule) saveCacheToDisk() {
 		SavedAt    time.Time     `json:"saved_at"`
 		LastUpdate time.Time     `json:"last_update"`
 		CVECount   int           `json:"cve_count"`
-		CVEs       []SPCCVEScore `json:"cves"`
+		CVEs       []kernel.SPCCVEScore `json:"cves"`
 	}{
 		SavedAt:    time.Now(),
 		LastUpdate: lastUpd,
@@ -291,7 +294,7 @@ func (m *SPCModule) saveCacheToDisk() {
 	logger.WithComponent("spc").Info("SPC cache saved to disk", "path", path, "cve_count", len(cacheCopy))
 }
 
-func (m *SPCModule) loadCacheFromDisk() {
+func (m *Module) loadCacheFromDisk() {
 	path := m.cacheFilePath()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -303,7 +306,7 @@ func (m *SPCModule) loadCacheFromDisk() {
 		SavedAt    time.Time     `json:"saved_at"`
 		LastUpdate time.Time     `json:"last_update"`
 		CVECount   int           `json:"cve_count"`
-		CVEs       []SPCCVEScore `json:"cves"`
+		CVEs       []kernel.SPCCVEScore `json:"cves"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
 		logger.WithComponent("spc").Warn("failed to parse SPC cache file", "error", err)
@@ -322,16 +325,16 @@ func (m *SPCModule) loadCacheFromDisk() {
 	logger.WithComponent("spc").Info("SPC cache loaded from disk", "cve_count", len(m.cveCache), "last_update", payload.LastUpdate.Format(time.RFC3339))
 }
 
-func (m *SPCModule) LastUpdate() time.Time {
+func (m *Module) LastUpdate() time.Time {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.lastUpdate
 }
 
-func (m *SPCModule) generateSampleCVEs() []SPCCVEScore {
+func (m *Module) generateSampleCVEs() []kernel.SPCCVEScore {
 	logger.WithComponent("spc").Warn("USING SAMPLE CVE DATA — not suitable for production; configure NVD API key for real data")
 	now := time.Now()
-	return []SPCCVEScore{
+	return []kernel.SPCCVEScore{
 		{
 			CVEID:          "CVE-2024-1234",
 			Description:    "OpenSSL Remote Code Execution in TLS handshake",

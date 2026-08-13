@@ -235,7 +235,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 		initATTACK(target)
 	}
 	policy := newPolicy()
-	spc := kernel.NewSPCModule()
+	spc := newSPC()
 	cti := newCTI()
 	commander := newCommander()
 	logCollector := &kernel.LogCollectorModule{}
@@ -250,7 +250,9 @@ k.SetConfig("config_path", resolvedConfigPath)
 	if assessor != nil {
 		k.Container().Bind((*kernel.AssessorInterface)(nil), assessor)
 	}
-	k.Container().Bind((*kernel.SPCInterface)(nil), spc)
+	if spc != nil {
+		k.Container().Bind((*kernel.SPCInterface)(nil), spc)
+	}
 	if commander != nil {
 		k.Container().Bind((*kernel.CommanderInterface)(nil), commander)
 	}
@@ -260,7 +262,10 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 	lifecycle := kernel.NewLifecycleEngine(k)
 
-	plugins := []kernel.Plugin{spc, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	plugins := []kernel.Plugin{logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	if s, ok := spc.(kernel.Plugin); ok {
+		plugins = append(plugins, s)
+	}
 	if se, ok := scoringEngine.(kernel.Plugin); ok {
 		plugins = append(plugins, se)
 	}

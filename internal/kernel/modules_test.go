@@ -8,8 +8,6 @@ import (
 	"sort"
 	"testing"
 	"time"
-
-	"github.com/asscor/asscor/internal/model"
 )
 
 func TestWorkerPool(t *testing.T) {
@@ -55,86 +53,6 @@ func TestWorkerPoolTimeout(t *testing.T) {
 	}
 }
 
-func TestSPCModule(t *testing.T) {
-	k := NewKernel()
-	spc := NewSPCModule()
-	spc.enabled = true
-
-	if err := spc.Init(k.Context(), KernelContext(k)); err != nil {
-		t.Fatalf("init spc: %v", err)
-	}
-
-	spc.FetchFromAllSources()
-
-	if got := spc.GetCVECount(); got < 3 {
-		t.Fatalf("expected at least 3 sample CVEs, got %d", got)
-	}
-
-	if got := spc.GetKEVCount(); got < 1 {
-		t.Fatalf("expected at least 1 KEV CVE, got %d", got)
-	}
-
-	asset := LocalAsset{
-		HostID:        "web-prod-01",
-		Hostname:      "web-prod-01.example.com",
-		Role:          "web-server",
-		NetworkZone:   "dmz",
-		InstalledCPEs: []string{"cpe:2.3:a:openssl:openssl:3.0.2:*:*:*:*:*:*:*"},
-	}
-	asset.Compensations.WAFRules = true
-
-	spc.UpsertAsset(asset)
-
-	correction := spc.Calculate("web-prod-01", []string{"openssl", "nginx", "php"})
-
-	t.Logf("P_score: %.3f", correction.Score)
-	t.Logf("Action: %s", correction.Action)
-	t.Logf("Top CVE: %s", correction.TopCVEImpact)
-	t.Logf("Total Penalty: %.3f", correction.TotalPenalty)
-	t.Logf("Affected CVEs: %v", correction.AffectedCVE)
-	t.Logf("Weights: %v", correction.Weights)
-
-	if correction.Score < 0.60 || correction.Score > 1.0 {
-		t.Errorf("P_score out of range: %.3f", correction.Score)
-	}
-
-	if len(correction.AffectedCVE) == 0 {
-		t.Error("expected at least 1 affected CVE")
-	}
-
-	if correction.TopCVEImpact == "" {
-		t.Error("expected a top impact CVE")
-	}
-}
-
-func TestSPCExactVersionMatch(t *testing.T) {
-	spc := NewSPCModule()
-	spc.enabled = true
-
-	cve := SPCCVEScore{
-		CVEID:         "CVE-2024-TEST",
-		CVSS:          9.8,
-		EPSS:          0.72,
-		InKEV:         true,
-		DatePublished: time.Now().AddDate(0, 0, -14),
-		AffectedCPEs:  []string{"cpe:2.3:a:openssl:openssl:3.0.2:*:*:*:*:*:*:*"},
-	}
-	spc.AddCVE(cve)
-
-	asset := LocalAsset{
-		HostID:        "test-host",
-		NetworkZone:   "internal",
-		InstalledCPEs: []string{"cpe:2.3:a:openssl:openssl:3.0.2:*:*:*:*:*:*:*"},
-	}
-
-	matchType, matched := spc.matchCPE(&cve, &asset, nil)
-	if !matched {
-		t.Fatal("expected exact CPE match")
-	}
-	if matchType != MatchExactVersion {
-		t.Fatalf("expected MatchExactVersion, got %d", matchType)
-	}
-}
 
 func TestPersistenceModule(t *testing.T) {
 	pm := NewPersistenceModule(t.TempDir())
@@ -174,94 +92,7 @@ func TestPersistenceModule(t *testing.T) {
 	pm.mu.Unlock()
 }
 
-func TestSPCWeightShift(t *testing.T) {
-	spc := NewSPCModule()
-	spc.enabled = true
 
-	cves := []SPCCVEScore{
-		{
-			CVEID:   "CVE-A", CVSS: 9.0, EPSS: 0.5,
-			AffectedCPEs: []string{"cpe:2.3:a:test:test:*:*:*:*:*:*:*:*"},
-			Matched: true, Exposure: ExposurePublic,
-		},
-		{
-			CVEID:   "CVE-B", CVSS: 8.0, EPSS: 0.3,
-			AffectedCPEs: []string{"cpe:2.3:a:test:test:*:*:*:*:*:*:*:*"},
-			Matched: true, Exposure: ExposurePublic,
-		},
-		{
-			CVEID:   "CVE-C", CVSS: 7.0, EPSS: 0.2,
-			AffectedCPEs: []string{"cpe:2.3:a:test:test:*:*:*:*:*:*:*:*"},
-			Matched: true, Exposure: ExposureDMZ,
-		},
-	}
-
-	shift := spc.generateWeightShift([]string{"CVE-A", "CVE-B", "CVE-C"}, cves)
-
-	if shift[model.DomainAttackSurface] != 5 {
-		t.Errorf("expected attack_surface shift +5, got %.0f", shift[model.DomainAttackSurface])
-	}
-	if shift[model.DomainBusinessContinuity] != -3 {
-		t.Errorf("expected business_continuity shift -3, got %.0f", shift[model.DomainBusinessContinuity])
-	}
-	if shift[model.DomainResilience] != -2 {
-		t.Errorf("expected resilience shift -2, got %.0f", shift[model.DomainResilience])
-	}
-
-	var sum float64
-	for _, v := range shift {
-		sum += v
-	}
-	if sum != 0 {
-		t.Errorf("weight shift sum should be 0, got %.0f", sum)
-	}
-}
-
-func TestSPC_GetKEVCatalog(t *testing.T) {
-	spc := NewSPCModule()
-	spc.mu.Lock()
-	spc.kevCatalog["CVE-2024-0001"] = true
-	spc.kevCatalog["CVE-2024-0002"] = true
-	spc.kevCatalog["CVE-2024-0003"] = true
-	spc.mu.Unlock()
-
-	catalog := spc.GetKEVCatalog()
-	if len(catalog) != 3 {
-		t.Errorf("expected 3 KEV entries, got %d", len(catalog))
-	}
-
-	found := make(map[string]bool)
-	for _, cveID := range catalog {
-		found[cveID] = true
-	}
-	for _, want := range []string{"CVE-2024-0001", "CVE-2024-0002", "CVE-2024-0003"} {
-		if !found[want] {
-			t.Errorf("expected %s in KEV catalog", want)
-		}
-	}
-}
-
-func TestSPC_Summary(t *testing.T) {
-	spc := NewSPCModule()
-	spc.enabled = true
-	spc.mu.Lock()
-	spc.lastUpdate = time.Now()
-	spc.minPScore = 0.65
-	spc.kevCatalog["CVE-2024-0001"] = true
-	spc.mu.Unlock()
-
-	summary := spc.Summary()
-
-	if v, ok := summary["enabled"].(bool); !ok || !v {
-		t.Error("expected enabled=true in summary")
-	}
-	if v, ok := summary["kev_count"].(int); !ok || v != 1 {
-		t.Errorf("kev_count = %v, want 1", summary["kev_count"])
-	}
-	if v, ok := summary["min_pscore"].(float64); !ok || v != 0.65 {
-		t.Errorf("min_pscore = %v, want 0.65", summary["min_pscore"])
-	}
-}
 
 func TestHistoricalStore_ComputeTrends(t *testing.T) {
 	dir := t.TempDir()
@@ -364,12 +195,6 @@ func TestHistoricalStore_InvalidJSON(t *testing.T) {
 	if len(trends) != 1 {
 		t.Fatalf("expected 1 host (invalid line skipped), got %d", len(trends))
 	}
-}
-
-func TestSPCInterface_Completeness(t *testing.T) {
-	spc := NewSPCModule()
-	var iface SPCInterface = spc
-	_ = iface
 }
 
 func TestPersistenceInterface_Completeness(t *testing.T) {

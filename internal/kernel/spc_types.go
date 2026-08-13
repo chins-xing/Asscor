@@ -5,11 +5,11 @@ import (
 	"time"
 )
 
-const maxHTTPBodySize = 1 << 20
+const MaxHTTPBodySize = 1 << 20
 
-const defaultEPSSDataURL = "https://epss.cyentia.com/epss_scores-current.csv.gz"
-const defaultNVDBaseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-const defaultKEVCatalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+const DefaultEPSSDataURL = "https://epss.cyentia.com/epss_scores-current.csv.gz"
+const DefaultNVDBaseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+const DefaultKEVCatalogURL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
 type MatchType int
 
@@ -123,7 +123,7 @@ func (a SPCAction) String() string {
 	}
 }
 
-func classifyAction(pscore float64) SPCAction {
+func ClassifyAction(pscore float64) SPCAction {
 	switch {
 	case pscore >= 0.95:
 		return ActionNone
@@ -150,7 +150,7 @@ const (
 	SourceOSCAL CVESource = "oscal"
 )
 
-var cveSourcePriority = map[CVESource]int{
+var CVESourcePriority = map[CVESource]int{
 	SourceNVD:   100,
 	SourceKEV:   90,
 	SourceEPSS:  80,
@@ -161,7 +161,7 @@ var cveSourcePriority = map[CVESource]int{
 }
 
 func (s CVESource) Priority() int {
-	if p, ok := cveSourcePriority[s]; ok {
+	if p, ok := CVESourcePriority[s]; ok {
 		return p
 	}
 	return 0
@@ -270,9 +270,9 @@ type SPCMISPConfig struct {
 }
 
 type SPCMISPClient struct {
-	config   SPCMISPConfig
-	client   *http.Client
-	lastSync time.Time
+	Config   SPCMISPConfig
+	Client   *http.Client
+	LastSync time.Time
 }
 
 type SPCNVDConfig struct {

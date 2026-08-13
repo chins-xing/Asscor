@@ -1,6 +1,9 @@
+//go:build spc
+
 package spc
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"bufio"
 	"compress/gzip"
 	"fmt"
@@ -14,9 +17,9 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *SPCModule) FetchFromEPSS() SPCFetchResult {
+func (m *Module) FetchFromEPSS() kernel.SPCFetchResult {
 	start := time.Now()
-	result := SPCFetchResult{
+	result := kernel.SPCFetchResult{
 		Source:    "epss",
 		Timestamp: start,
 	}
@@ -31,7 +34,7 @@ func (m *SPCModule) FetchFromEPSS() SPCFetchResult {
 
 	dataURL := m.epssConfig.DataURL
 	if dataURL == "" {
-		dataURL = defaultEPSSDataURL
+		dataURL = kernel.DefaultEPSSDataURL
 	}
 
 	client := &http.Client{Timeout: 120 * time.Second}
@@ -123,7 +126,7 @@ func (m *SPCModule) FetchFromEPSS() SPCFetchResult {
 			updated++
 		} else if len(m.cveCache) < m.maxCacheSize {
 			m.cveIndex[cveID] = len(m.cveCache)
-			m.cveCache = append(m.cveCache, SPCCVEScore{
+			m.cveCache = append(m.cveCache, kernel.SPCCVEScore{
 				CVEID:       cveID,
 				EPSS:        epssVal,
 				EPSSPercent: percentileVal,

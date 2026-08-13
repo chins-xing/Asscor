@@ -1,6 +1,9 @@
+//go:build spc
+
 package spc
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,9 +15,9 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *SPCModule) FetchFromCNNVD() SPCFetchResult {
+func (m *Module) FetchFromCNNVD() kernel.SPCFetchResult {
 	start := time.Now()
-	result := SPCFetchResult{
+	result := kernel.SPCFetchResult{
 		Source:    "cnnvd",
 		Timestamp: time.Now(),
 	}
@@ -63,7 +66,7 @@ func (m *SPCModule) FetchFromCNNVD() SPCFetchResult {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxHTTPBodySize))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, kernel.MaxHTTPBodySize))
 		result.Error = fmt.Sprintf("CNNVD API returned HTTP %d: %s", resp.StatusCode, truncateString(string(body), 500))
 		result.Duration = time.Since(start)
 		logger.WithComponent("spc").Warn("CNNVD non-200 response", "status", resp.StatusCode)
@@ -93,7 +96,7 @@ func (m *SPCModule) FetchFromCNNVD() SPCFetchResult {
 		return result
 	}
 
-	var cves = make([]SPCCVEScore, 0, len(cnnvdResp.Data))
+	var cves = make([]kernel.SPCCVEScore, 0, len(cnnvdResp.Data))
 	for _, item := range cnnvdResp.Data {
 		cveID := strings.TrimSpace(item.CveID)
 		if cveID == "" {
@@ -132,7 +135,7 @@ func (m *SPCModule) FetchFromCNNVD() SPCFetchResult {
 			}
 		}
 
-		cve := SPCCVEScore{
+		cve := kernel.SPCCVEScore{
 			CVEID:         cveID,
 			Description:   desc,
 			CVSS:          cvss,
@@ -169,9 +172,9 @@ func (m *SPCModule) FetchFromCNNVD() SPCFetchResult {
 	return result
 }
 
-func (m *SPCModule) FetchFromCNVD() SPCFetchResult {
+func (m *Module) FetchFromCNVD() kernel.SPCFetchResult {
 	start := time.Now()
-	result := SPCFetchResult{
+	result := kernel.SPCFetchResult{
 		Source:    "cnvd",
 		Timestamp: time.Now(),
 	}
@@ -214,7 +217,7 @@ func (m *SPCModule) FetchFromCNVD() SPCFetchResult {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxHTTPBodySize))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, kernel.MaxHTTPBodySize))
 		result.Error = fmt.Sprintf("CNVD API returned HTTP %d: %s", resp.StatusCode, truncateString(string(body), 500))
 		result.Duration = time.Since(start)
 		logger.WithComponent("spc").Warn("CNVD non-200 response", "status", resp.StatusCode)
@@ -242,7 +245,7 @@ func (m *SPCModule) FetchFromCNVD() SPCFetchResult {
 		return result
 	}
 
-	var cves = make([]SPCCVEScore, 0, len(cnvdResp.Data))
+	var cves = make([]kernel.SPCCVEScore, 0, len(cnvdResp.Data))
 	for _, item := range cnvdResp.Data {
 		cveID := strings.TrimSpace(item.CveID)
 		if cveID == "" {
@@ -282,7 +285,7 @@ func (m *SPCModule) FetchFromCNVD() SPCFetchResult {
 			}
 		}
 
-		cve := SPCCVEScore{
+		cve := kernel.SPCCVEScore{
 			CVEID:         cveID,
 			Description:   desc,
 			CVSS:          cvss,

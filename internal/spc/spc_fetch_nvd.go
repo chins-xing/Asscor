@@ -1,6 +1,9 @@
+//go:build spc
+
 package spc
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,9 +18,9 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *SPCModule) FetchFromNVD() SPCFetchResult {
+func (m *Module) FetchFromNVD() kernel.SPCFetchResult {
 	start := time.Now()
-	result := SPCFetchResult{
+	result := kernel.SPCFetchResult{
 		Source:    "nvd",
 		Timestamp: time.Now(),
 	}
@@ -30,7 +33,7 @@ func (m *SPCModule) FetchFromNVD() SPCFetchResult {
 	m.mu.Unlock()
 
 	if baseURL == "" {
-		baseURL = defaultNVDBaseURL
+		baseURL = kernel.DefaultNVDBaseURL
 	}
 
 	if since.IsZero() {
@@ -184,7 +187,7 @@ type nvdReference struct {
 	Tags   []string `json:"tags"`
 }
 
-func (m *SPCModule) fetchNVDAPI(baseURL, apiKey string, since time.Time) ([]SPCCVEScore, error) {
+func (m *Module) fetchNVDAPI(baseURL, apiKey string, since time.Time) ([]kernel.SPCCVEScore, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 
 	maxRetries := 3
@@ -249,7 +252,7 @@ func (m *SPCModule) fetchNVDAPI(baseURL, apiKey string, since time.Time) ([]SPCC
 	)
 
 	type windowResult struct {
-		cves []SPCCVEScore
+		cves []kernel.SPCCVEScore
 		err  error
 		idx  int
 	}
@@ -279,7 +282,7 @@ func (m *SPCModule) fetchNVDAPI(baseURL, apiKey string, since time.Time) ([]SPCC
 
 	wg.Wait()
 
-	var allCVEs []SPCCVEScore
+	var allCVEs []kernel.SPCCVEScore
 	var firstErr error
 	for _, r := range results {
 		if r.err != nil && firstErr == nil {
@@ -296,8 +299,8 @@ func (m *SPCModule) fetchNVDAPI(baseURL, apiKey string, since time.Time) ([]SPCC
 	return allCVEs, nil
 }
 
-func (m *SPCModule) fetchNVDWindow(client *http.Client, baseURL, apiKey string, startDate, endDate time.Time, useLastMod, noRejected bool, startIdx *int, retryCount *int, maxRetries int, prog *common.ProgressBar) ([]SPCCVEScore, error) {
-	var allCVEs []SPCCVEScore
+func (m *Module) fetchNVDWindow(client *http.Client, baseURL, apiKey string, startDate, endDate time.Time, useLastMod, noRejected bool, startIdx *int, retryCount *int, maxRetries int, prog *common.ProgressBar) ([]kernel.SPCCVEScore, error) {
+	var allCVEs []kernel.SPCCVEScore
 
 	formatNVDDate := func(t time.Time) string {
 		return t.Format("2006-01-02T15:04:05.000") + "Z"
@@ -384,7 +387,7 @@ func (m *SPCModule) fetchNVDWindow(client *http.Client, baseURL, apiKey string, 
 		)
 
 		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(io.LimitReader(resp.Body, maxHTTPBodySize))
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, kernel.MaxHTTPBodySize))
 			logger.WithComponent("spc").Error("NVD API non-200 response",
 				"status", resp.StatusCode,
 				"body_preview", truncateString(string(body), 500),
@@ -430,7 +433,7 @@ func (m *SPCModule) fetchNVDWindow(client *http.Client, baseURL, apiKey string, 
 	return allCVEs, nil
 }
 
-func (m *SPCModule) waitWithProgress(prog *common.ProgressBar, duration time.Duration, label string) {
+func (m *Module) waitWithProgress(prog *common.ProgressBar, duration time.Duration, label string) {
 	interval := 2 * time.Second
 	if duration < interval {
 		interval = duration
@@ -442,9 +445,9 @@ func (m *SPCModule) waitWithProgress(prog *common.ProgressBar, duration time.Dur
 			interval = remaining
 		}
 
-		if m.kernel != nil {
+		if m.kc != nil {
 			select {
-			case <-m.kernel.Context().Done():
+			case <-m.kc.Context().Done():
 				return
 			case <-time.After(interval):
 			}
@@ -457,7 +460,7 @@ func (m *SPCModule) waitWithProgress(prog *common.ProgressBar, duration time.Dur
 	}
 }
 
-func (m *SPCModule) parseNVDCVE(cve nvdCVE) SPCCVEScore {
+func (m *Module) parseNVDCVE(cve nvdCVE) kernel.SPCCVEScore {
 	desc := ""
 	for _, d := range cve.Descriptions {
 		if d.Lang == "en" {
@@ -539,7 +542,7 @@ func (m *SPCModule) parseNVDCVE(cve nvdCVE) SPCCVEScore {
 		}
 	}
 
-	return SPCCVEScore{
+	return kernel.SPCCVEScore{
 		CVEID:          cve.ID,
 		Description:    desc,
 		CVSS:           cvssScore,

@@ -1,3 +1,5 @@
+//go:build spc
+
 package spc
 
 import (
@@ -15,27 +17,27 @@ import (
 	"github.com/asscor/asscor/internal/model"
 )
 
-type SPCModule struct {
-	kernel kernel.KernelContext
+type Module struct {
+	kc kernel.KernelContext
 
 	mu          sync.RWMutex
-	cveCache    []SPCCVEScore
+	cveCache    []kernel.SPCCVEScore
 	cveIndex    map[string]int
-	assetCache  map[string]*LocalAsset
+	assetCache  map[string]*kernel.LocalAsset
 	lastNVDFetch time.Time
 	lastUpdate  time.Time
-	fetchResults []SPCFetchResult
+	fetchResults []kernel.SPCFetchResult
 	state       kernel.PluginState
 
 	fetchInterval  time.Duration
-	mispConfig     SPCMISPConfig
-	nvdConfig      SPCNVDConfig
-	epssConfig     SPCEPSSConfig
-	kevConfig      SPCKEVConfig
-	cnnvdConfig    SPCCNNVDConfig
-	cnvdConfig     SPCCNVDConfig
-	oscalConfig    SPCOscalConfig
-	mispClient     *SPCMISPClient
+	mispConfig     kernel.SPCMISPConfig
+	nvdConfig      kernel.SPCNVDConfig
+	epssConfig     kernel.SPCEPSSConfig
+	kevConfig      kernel.SPCKEVConfig
+	cnnvdConfig    kernel.SPCCNNVDConfig
+	cnvdConfig     kernel.SPCCNVDConfig
+	oscalConfig    kernel.SPCOscalConfig
+	mispClient     *kernel.SPCMISPClient
 	enabled        bool
 	minPScore      float64
 	maxCacheSize   int
@@ -46,11 +48,11 @@ type SPCModule struct {
 	cancelFunc     context.CancelFunc
 }
 
-func NewSPCModule() *SPCModule {
-	return &SPCModule{
-		cveCache:      make([]SPCCVEScore, 0),
+func New() *Module {
+	return &Module{
+		cveCache:      make([]kernel.SPCCVEScore, 0),
 		cveIndex:      make(map[string]int),
-		assetCache:    make(map[string]*LocalAsset),
+		assetCache:    make(map[string]*kernel.LocalAsset),
 		kevCatalog:    make(map[string]bool),
 		fetchInterval: 1 * time.Hour,
 		minPScore:     0.60,
@@ -58,32 +60,32 @@ func NewSPCModule() *SPCModule {
 		enabled:       false,
 		nvdLimiter:    make(chan struct{}, 1),
 		done:          make(chan struct{}),
-		mispConfig: SPCMISPConfig{
+		mispConfig: kernel.SPCMISPConfig{
 			SyncHours: 1,
 			TLPFilter: "white",
 			VerifyTLS: true,
 		},
-		nvdConfig: SPCNVDConfig{
-			BaseURL:   defaultNVDBaseURL,
+		nvdConfig: kernel.SPCNVDConfig{
+			BaseURL:   kernel.DefaultNVDBaseURL,
 			SyncHours: 6,
 		},
-		epssConfig: SPCEPSSConfig{
+		epssConfig: kernel.SPCEPSSConfig{
 			Enabled:       true,
-			DataURL:       defaultEPSSDataURL,
+			DataURL:       kernel.DefaultEPSSDataURL,
 			SyncIntervalH: 24,
 		},
-		kevConfig: SPCKEVConfig{
+		kevConfig: kernel.SPCKEVConfig{
 			Enabled:       true,
-			CatalogURL:    defaultKEVCatalogURL,
+			CatalogURL:    kernel.DefaultKEVCatalogURL,
 			SyncIntervalH: 24,
 		},
-		oscalConfig: SPCOscalConfig{
+		oscalConfig: kernel.SPCOscalConfig{
 			InputFormat: "json",
 		},
 	}
 }
 
-func (m *SPCModule) Info() kernel.PluginInfo {
+func (m *Module) Info() kernel.PluginInfo {
 	return kernel.PluginInfo{
 		Name:        "spc",
 		Version:     "2.0.0",
@@ -92,19 +94,19 @@ func (m *SPCModule) Info() kernel.PluginInfo {
 	}
 }
 
-func (m *SPCModule) Dependencies() []kernel.PluginDependency {
+func (m *Module) Dependencies() []kernel.PluginDependency {
 	return nil
 }
 
-func (m *SPCModule) Priority() int {
+func (m *Module) Priority() int {
 	return 20
 }
 
-func (m *SPCModule) Init(ctx context.Context, kc kernel.KernelContext) error {
+func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 	if kc == nil {
 		return fmt.Errorf("kernel context must not be nil")
 	}
-	m.kernel = kc
+	m.kc = kc
 	m.state = kernel.PluginInitialized
 
 	cfg := kc.GetConfigObj()
@@ -112,14 +114,14 @@ func (m *SPCModule) Init(ctx context.Context, kc kernel.KernelContext) error {
 		m.enabled = false
 		m.minPScore = 0.60
 		m.fetchInterval = 24 * time.Hour
-		m.nvdConfig.BaseURL = defaultNVDBaseURL
+		m.nvdConfig.BaseURL = kernel.DefaultNVDBaseURL
 		m.nvdConfig.APIKey = os.Getenv("NVD_API_KEY")
 		m.nvdConfig.SyncHours = 24
 		m.epssConfig.Enabled = true
-		m.epssConfig.DataURL = defaultEPSSDataURL
+		m.epssConfig.DataURL = kernel.DefaultEPSSDataURL
 		m.epssConfig.SyncIntervalH = 24
 		m.kevConfig.Enabled = true
-		m.kevConfig.CatalogURL = defaultKEVCatalogURL
+		m.kevConfig.CatalogURL = kernel.DefaultKEVCatalogURL
 		m.kevConfig.SyncIntervalH = 24
 		m.mispConfig.BaseURL = ""
 		m.mispConfig.APIKey = os.Getenv("MISP_API_KEY")
@@ -134,12 +136,12 @@ func (m *SPCModule) Init(ctx context.Context, kc kernel.KernelContext) error {
 		logger.WithComponent("spc").Warn("NVD API key not configured, SPC may be rate limited")
 	}
 
-	kc.Container().Bind((*SPCInterface)(nil), m)
+	kc.Container().Bind((*kernel.SPCInterface)(nil), m)
 
 	return nil
 }
 
-func (m *SPCModule) Start(ctx context.Context) error {
+func (m *Module) Start(ctx context.Context) error {
 	m.state = kernel.PluginStarted
 	if m.enabled {
 		if m.mispConfig.BaseURL != "" && m.mispConfig.APIKey != "" {
@@ -160,7 +162,7 @@ func (m *SPCModule) Start(ctx context.Context) error {
 	return nil
 }
 
-func (m *SPCModule) Stop(ctx context.Context) error {
+func (m *Module) Stop(ctx context.Context) error {
 	m.state = kernel.PluginStopping
 
 	m.mu.Lock()
@@ -186,32 +188,32 @@ func (m *SPCModule) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (m *SPCModule) State() kernel.PluginState {
+func (m *Module) State() kernel.PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
 }
 
-func (m *SPCModule) HealthCheck(ctx context.Context) error {
+func (m *Module) HealthCheck(ctx context.Context) error {
 	if m.state != kernel.PluginStarted {
 		return fmt.Errorf("spc not started (state=%s)", m.state)
 	}
 	return nil
 }
 
-func (m *SPCModule) Enabled() bool {
+func (m *Module) Enabled() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.enabled
 }
 
-func (m *SPCModule) SetEnabled(v bool) {
+func (m *Module) SetEnabled(v bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.enabled = v
 }
 
-func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
+func (m *Module) ConfigureFromConfig(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
@@ -231,7 +233,7 @@ func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
 
 	m.nvdConfig.BaseURL = spcCfg.NVD.BaseURL
 	if m.nvdConfig.BaseURL == "" {
-		m.nvdConfig.BaseURL = defaultNVDBaseURL
+		m.nvdConfig.BaseURL = kernel.DefaultNVDBaseURL
 	}
 	m.nvdConfig.APIKey = spcCfg.NVD.APIKey
 	if m.nvdConfig.APIKey == "" {
@@ -247,7 +249,7 @@ func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
 	m.epssConfig.Enabled = spcCfg.EPSS.Enabled
 	m.epssConfig.DataURL = spcCfg.EPSS.DataURL
 	if m.epssConfig.DataURL == "" {
-		m.epssConfig.DataURL = defaultEPSSDataURL
+		m.epssConfig.DataURL = kernel.DefaultEPSSDataURL
 	}
 	m.epssConfig.SyncIntervalH = spcCfg.EPSS.SyncIntervalH
 	if m.epssConfig.SyncIntervalH == 0 {
@@ -257,7 +259,7 @@ func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
 	m.kevConfig.Enabled = spcCfg.CISAKEV.Enabled
 	m.kevConfig.CatalogURL = spcCfg.CISAKEV.CatalogURL
 	if m.kevConfig.CatalogURL == "" {
-		m.kevConfig.CatalogURL = defaultKEVCatalogURL
+		m.kevConfig.CatalogURL = kernel.DefaultKEVCatalogURL
 	}
 	m.kevConfig.SyncIntervalH = spcCfg.CISAKEV.SyncIntervalH
 	if m.kevConfig.SyncIntervalH == 0 {
@@ -302,7 +304,7 @@ func (m *SPCModule) ConfigureFromConfig(cfg *config.Config) {
 	}
 }
 
-func (m *SPCModule) fetchLoop() {
+func (m *Module) fetchLoop() {
 	fetchCtx, fetchCancel := context.WithCancel(context.Background())
 	m.mu.Lock()
 	m.cancelFunc = fetchCancel
@@ -321,7 +323,7 @@ func (m *SPCModule) fetchLoop() {
 		case <-fetchCtx.Done():
 			m.saveCacheToDisk()
 			return
-		case <-m.kernel.Context().Done():
+		case <-m.kc.Context().Done():
 			m.saveCacheToDisk()
 			return
 		case <-ticker.C:
@@ -332,15 +334,15 @@ func (m *SPCModule) fetchLoop() {
 	}
 }
 
-func (m *SPCModule) cleanupOldCVEs() {
+func (m *Module) cleanupOldCVEs() {
 	cutoff := time.Now().AddDate(0, 0, -365)
 
 	m.mu.RLock()
-	cacheCopy := make([]SPCCVEScore, len(m.cveCache))
+	cacheCopy := make([]kernel.SPCCVEScore, len(m.cveCache))
 	copy(cacheCopy, m.cveCache)
 	m.mu.RUnlock()
 
-	kept := make([]SPCCVEScore, 0, len(cacheCopy))
+	kept := make([]kernel.SPCCVEScore, 0, len(cacheCopy))
 	removedInBatch := 0
 	for _, cve := range cacheCopy {
 		if cve.DateModified.After(cutoff) || cve.InKEV {
@@ -366,25 +368,25 @@ func (m *SPCModule) cleanupOldCVEs() {
 	logger.WithComponent("spc").Info("cleaned old CVE records", "removed", removedInBatch, "kept", len(kept))
 }
 
-func (m *SPCModule) UpsertAsset(asset LocalAsset) {
+func (m *Module) UpsertAsset(asset kernel.LocalAsset) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.assetCache[asset.HostID] = &asset
 }
 
-func (m *SPCModule) GetAsset(hostID string) *LocalAsset {
+func (m *Module) GetAsset(hostID string) *kernel.LocalAsset {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.assetCache[hostID]
 }
 
-func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrection {
-	if m.kernel != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "spc.pre_calculate", hostID)
+func (m *Module) Calculate(hostID string, assetPackages []string) kernel.SPCCorrection {
+	if m.kc != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "spc.pre_calculate", hostID)
 	}
 
-	var cves []SPCCVEScore
-	var asset *LocalAsset
+	var cves []kernel.SPCCVEScore
+	var asset *kernel.LocalAsset
 	var kevCatalog map[string]bool
 
 	m.mu.RLock()
@@ -411,7 +413,7 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 
 	if len(cves) == 0 {
 		logger.WithComponent("spc").Warn("CVE cache is empty, SPC cannot calculate risk; returning neutral score. Data sync may still be in progress.")
-		return SPCCorrection{
+		return kernel.SPCCorrection{
 			Score:  1.0,
 			Action: "no_data",
 		}
@@ -457,7 +459,7 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 	var affectedCVE []string
 	var topImpactID string
 	var topImpactVal float64
-	var penalties []CVEPenalty
+	var penalties []kernel.CVEPenalty
 	matchStats := struct {
 		total      int
 		matched    int
@@ -480,13 +482,13 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 		matchStats.matched++
 
 		switch matchType {
-		case MatchExactVersion:
+		case kernel.MatchExactVersion:
 			matchStats.byExact++
-		case MatchVersionRange:
+		case kernel.MatchVersionRange:
 			matchStats.byProduct++
-		case MatchCPEProduct:
+		case kernel.MatchCPEProduct:
 			matchStats.byProduct++
-		case MatchCPEVendor:
+		case kernel.MatchCPEVendor:
 			matchStats.byVendor++
 		}
 		if len(cve.AffectedCPEs) == 0 {
@@ -555,7 +557,7 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 			products = strings.Join(parts, ", ")
 		}
 
-		penalties = append(penalties, CVEPenalty{
+		penalties = append(penalties, kernel.CVEPenalty{
 			CVEID:       cve.CVEID,
 			CVSS:        cve.CVSS,
 			EPSS:        cve.EPSS,
@@ -584,11 +586,11 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 	pscore := math.Max(m.minPScore, 1.00-totalPenalty)
 
 	weightShift := m.generateWeightShift(affectedCVE, cves)
-	action := classifyAction(pscore)
+	action := kernel.ClassifyAction(pscore)
 
 	killChainScore := m.calculateKillChainScore(cves, asset)
 
-	correction := SPCCorrection{
+	correction := kernel.SPCCorrection{
 		Score:            math.Round(pscore*1000) / 1000,
 		Weights:          weightShift,
 		Action:           action.String(),
@@ -610,12 +612,12 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 			matchStats.total, matchStats.matched, matchStats.byExact, matchStats.byProduct, matchStats.byVendor, matchStats.byDesc, matchStats.noCPEs),
 	)
 
-	if m.kernel != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "spc.post_calculate", correction)
+	if m.kc != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "spc.post_calculate", correction)
 	}
 
-	if m.kernel != nil {
-		if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), kernel.Message{
+	if m.kc != nil {
+		if errs := m.kc.Bus().PublishSync(m.kc.Context(), kernel.Message{
 			Topic:   "spc.vector.updated",
 			Payload: correction,
 			Source:  "spc",
@@ -627,18 +629,18 @@ func (m *SPCModule) Calculate(hostID string, assetPackages []string) SPCCorrecti
 	return correction
 }
 
-func (m *SPCModule) matchCPEFast(cve *SPCCVEScore, lowerPkgNames []string, lowerInstalledCPEs []string) (MatchType, bool) {
+func (m *Module) matchCPEFast(cve *kernel.SPCCVEScore, lowerPkgNames []string, lowerInstalledCPEs []string) (kernel.MatchType, bool) {
 	if len(cve.AffectedCPEs) == 0 {
 		if len(lowerPkgNames) == 0 {
-			return MatchNone, false
+			return kernel.MatchNone, false
 		}
 		lowerDesc := strings.ToLower(cve.Description)
 		for _, ln := range lowerPkgNames {
 			if strings.Contains(lowerDesc, ln) {
-				return MatchCPEProduct, true
+				return kernel.MatchCPEProduct, true
 			}
 		}
-		return MatchNone, false
+		return kernel.MatchNone, false
 	}
 
 	lowerVulnCPEs := make([]string, len(cve.AffectedCPEs))
@@ -647,7 +649,7 @@ func (m *SPCModule) matchCPEFast(cve *SPCCVEScore, lowerPkgNames []string, lower
 	}
 
 	if len(lowerInstalledCPEs) > 0 {
-		bestMatch := MatchNone
+		bestMatch := kernel.MatchNone
 		for _, myCPE := range lowerInstalledCPEs {
 			for _, vulnCPE := range lowerVulnCPEs {
 				matchLevel := m.compareCPE(myCPE, vulnCPE)
@@ -656,7 +658,7 @@ func (m *SPCModule) matchCPEFast(cve *SPCCVEScore, lowerPkgNames []string, lower
 				}
 			}
 		}
-		if bestMatch > MatchNone {
+		if bestMatch > kernel.MatchNone {
 			return bestMatch, true
 		}
 	}
@@ -664,15 +666,15 @@ func (m *SPCModule) matchCPEFast(cve *SPCCVEScore, lowerPkgNames []string, lower
 	for _, ln := range lowerPkgNames {
 		for _, lowerCPE := range lowerVulnCPEs {
 			if strings.Contains(lowerCPE, ln) {
-				return MatchCPEProduct, true
+				return kernel.MatchCPEProduct, true
 			}
 		}
 	}
 
-	return MatchNone, false
+	return kernel.MatchNone, false
 }
 
-func (m *SPCModule) matchCPE(cve *SPCCVEScore, asset *LocalAsset, packages []string) (MatchType, bool) {
+func (m *Module) matchCPE(cve *kernel.SPCCVEScore, asset *kernel.LocalAsset, packages []string) (kernel.MatchType, bool) {
 	pkgNames := extractPkgNames(packages)
 
 	if len(cve.AffectedCPEs) == 0 {
@@ -683,10 +685,10 @@ func (m *SPCModule) matchCPE(cve *SPCCVEScore, asset *LocalAsset, packages []str
 			lowerDesc := strings.ToLower(cve.Description)
 			lowerName := strings.ToLower(name)
 			if strings.Contains(lowerDesc, lowerName) {
-				return MatchCPEProduct, true
+				return kernel.MatchCPEProduct, true
 			}
 		}
-		return MatchNone, false
+		return kernel.MatchNone, false
 	}
 
 	if asset == nil || len(asset.InstalledCPEs) == 0 {
@@ -698,14 +700,14 @@ func (m *SPCModule) matchCPE(cve *SPCCVEScore, asset *LocalAsset, packages []str
 			for _, cpe := range cve.AffectedCPEs {
 				lowerCPE := strings.ToLower(cpe)
 				if strings.Contains(lowerCPE, lowerName) {
-					return MatchCPEProduct, true
+					return kernel.MatchCPEProduct, true
 				}
 			}
 		}
-		return MatchNone, false
+		return kernel.MatchNone, false
 	}
 
-	bestMatch := MatchNone
+	bestMatch := kernel.MatchNone
 
 	for _, myCPE := range asset.InstalledCPEs {
 		for _, vulnCPE := range cve.AffectedCPEs {
@@ -716,7 +718,7 @@ func (m *SPCModule) matchCPE(cve *SPCCVEScore, asset *LocalAsset, packages []str
 		}
 	}
 
-	if bestMatch > MatchNone {
+	if bestMatch > kernel.MatchNone {
 		return bestMatch, true
 	}
 
@@ -728,54 +730,54 @@ func (m *SPCModule) matchCPE(cve *SPCCVEScore, asset *LocalAsset, packages []str
 		for _, cpe := range cve.AffectedCPEs {
 			lowerCPE := strings.ToLower(cpe)
 			if strings.Contains(lowerCPE, lowerName) {
-				return MatchCPEProduct, true
+				return kernel.MatchCPEProduct, true
 			}
 		}
 	}
 
-	return MatchNone, false
+	return kernel.MatchNone, false
 }
 
-func (m *SPCModule) determineExposure(asset *LocalAsset) ExposureLevel {
+func (m *Module) determineExposure(asset *kernel.LocalAsset) kernel.ExposureLevel {
 	if asset == nil {
-		return ExposureInternal
+		return kernel.ExposureInternal
 	}
 
 	switch strings.ToLower(asset.NetworkZone) {
 	case "public", "internet", "wan":
-		return ExposurePublic
+		return kernel.ExposurePublic
 	case "dmz":
-		return ExposureDMZ
+		return kernel.ExposureDMZ
 	case "internal", "lan", "intranet":
-		return ExposureInternal
+		return kernel.ExposureInternal
 	case "localhost", "loopback":
-		return ExposureLocalhost
+		return kernel.ExposureLocalhost
 	default:
 		if asset.Role == "bastion" || asset.Role == "web-server" {
-			return ExposureDMZ
+			return kernel.ExposureDMZ
 		}
-		return ExposureInternal
+		return kernel.ExposureInternal
 	}
 }
 
-func (m *SPCModule) determineControlLevel(asset *LocalAsset) ControlLevel {
+func (m *Module) determineControlLevel(asset *kernel.LocalAsset) kernel.ControlLevel {
 	if asset == nil {
-		return ControlNone
+		return kernel.ControlNone
 	}
 
 	if asset.Compensations.VirtualPatch {
-		return ControlEffective
+		return kernel.ControlEffective
 	}
 	if asset.Compensations.WAFRules || asset.Compensations.IPSRules {
-		return ControlPartial
+		return kernel.ControlPartial
 	}
 	if asset.Compensations.AppWhitelist {
-		return ControlPartial
+		return kernel.ControlPartial
 	}
-	return ControlNone
+	return kernel.ControlNone
 }
 
-func (m *SPCModule) generateWeightShift(affectedCVE []string, cves []SPCCVEScore) map[string]float64 {
+func (m *Module) generateWeightShift(affectedCVE []string, cves []kernel.SPCCVEScore) map[string]float64 {
 	shift := map[string]float64{
 		model.DomainAttackSurface:      0,
 		model.DomainBusinessContinuity: 0,
@@ -783,14 +785,14 @@ func (m *SPCModule) generateWeightShift(affectedCVE []string, cves []SPCCVEScore
 		model.DomainResilience:         0,
 	}
 
-	cveMap := make(map[string]*SPCCVEScore, len(cves))
+	cveMap := make(map[string]*kernel.SPCCVEScore, len(cves))
 	for i := range cves {
 		cveMap[cves[i].CVEID] = &cves[i]
 	}
 
 	publicExposedCount := 0
 	for _, id := range affectedCVE {
-		if cve, ok := cveMap[id]; ok && cve.Exposure >= ExposureDMZ {
+		if cve, ok := cveMap[id]; ok && cve.Exposure >= kernel.ExposureDMZ {
 			publicExposedCount++
 		}
 	}
@@ -804,7 +806,7 @@ func (m *SPCModule) generateWeightShift(affectedCVE []string, cves []SPCCVEScore
 	return shift
 }
 
-func (m *SPCModule) calculateKillChainScore(cves []SPCCVEScore, asset *LocalAsset) float64 {
+func (m *Module) calculateKillChainScore(cves []kernel.SPCCVEScore, asset *kernel.LocalAsset) float64 {
 	if asset == nil {
 		return 100.0
 	}

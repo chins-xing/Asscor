@@ -1,6 +1,9 @@
+//go:build spc
+
 package spc
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"strconv"
 	"strings"
 )
@@ -40,14 +43,14 @@ func extractPkgNames(packages []string) []string {
 	return result
 }
 
-func installedCPEsCount(asset *LocalAsset) int {
+func installedCPEsCount(asset *kernel.LocalAsset) int {
 	if asset == nil {
 		return 0
 	}
 	return len(asset.InstalledCPEs)
 }
 
-func (m *SPCModule) compareCPE(installed, vuln string) MatchType {
+func (m *Module) compareCPE(installed, vuln string) kernel.MatchType {
 	cpePart := vuln
 	var versionRange string
 	if pipeIdx := strings.Index(vuln, "|"); pipeIdx >= 0 {
@@ -81,30 +84,30 @@ func (m *SPCModule) compareCPE(installed, vuln string) MatchType {
 
 	if matchCount >= 5 && versionRange == "" {
 		if len(instParts) > 5 && instParts[5] != "*" && instParts[5] != "-" && len(vulnParts) > 5 && vulnParts[5] != "*" && vulnParts[5] != "-" {
-			return MatchExactVersion
+			return kernel.MatchExactVersion
 		}
-		return MatchVersionRange
+		return kernel.MatchVersionRange
 	}
 	if matchCount >= 4 {
 		if versionRange != "" && len(instParts) > 5 {
 			instVersion := instParts[5]
 			if m.versionInRange(instVersion, versionRange) {
-				return MatchVersionRange
+				return kernel.MatchVersionRange
 			}
-			return MatchNone
+			return kernel.MatchNone
 		}
-		return MatchVersionRange
+		return kernel.MatchVersionRange
 	}
 	if matchCount >= 3 {
-		return MatchCPEProduct
+		return kernel.MatchCPEProduct
 	}
 	if matchCount >= 2 {
-		return MatchCPEVendor
+		return kernel.MatchCPEVendor
 	}
-	return MatchNone
+	return kernel.MatchNone
 }
 
-func (m *SPCModule) versionInRange(installedVersion, versionRange string) bool {
+func (m *Module) versionInRange(installedVersion, versionRange string) bool {
 	if installedVersion == "*" || installedVersion == "-" {
 		return true
 	}

@@ -1,6 +1,9 @@
+//go:build spc
+
 package spc
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -13,9 +16,9 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *SPCModule) FetchFromMISP() SPCFetchResult {
+func (m *Module) FetchFromMISP() kernel.SPCFetchResult {
 	start := time.Now()
-	result := SPCFetchResult{
+	result := kernel.SPCFetchResult{
 		Source:    "misp",
 		Timestamp: time.Now(),
 	}
@@ -24,7 +27,7 @@ func (m *SPCModule) FetchFromMISP() SPCFetchResult {
 	client := m.mispClient
 	m.mu.RUnlock()
 
-	if client == nil || client.config.BaseURL == "" {
+	if client == nil || client.Config.BaseURL == "" {
 		result.Duration = time.Since(start)
 		return result
 	}
@@ -49,7 +52,7 @@ func (m *SPCModule) FetchFromMISP() SPCFetchResult {
 
 	m.mu.Lock()
 	if client != nil {
-		client.lastSync = time.Now()
+		client.LastSync = time.Now()
 	}
 	m.mu.Unlock()
 
@@ -116,7 +119,7 @@ type mispAttribute struct {
 	Comment    string `json:"comment"`
 }
 
-func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
+func (m *Module) fetchMISPEvents(client *kernel.SPCMISPClient) []kernel.SPCCVEScore {
 	searchReq := mispEventSearchRequest{
 		ReturnFormat: "json",
 		Type:        []string{"vulnerability"},
@@ -127,8 +130,8 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 		Page:        1,
 	}
 
-	if client.config.TLPFilter != "" {
-		tlps := strings.Split(client.config.TLPFilter, ",")
+	if client.Config.TLPFilter != "" {
+		tlps := strings.Split(client.Config.TLPFilter, ",")
 		for _, tlp := range tlps {
 			tlp = strings.TrimSpace(tlp)
 			if tlp == "" {
@@ -159,14 +162,14 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 
 	const mispMaxRetries = 3
 
-	req, err := http.NewRequestWithContext(ctx, "POST", client.config.BaseURL+"/events/restSearch",
+	req, err := http.NewRequestWithContext(ctx, "POST", client.Config.BaseURL+"/events/restSearch",
 		strings.NewReader(string(body)))
 	if err != nil {
 		logger.WithComponent("spc").Error("MISP request creation failed", "error", err)
 		return nil
 	}
 
-	req.Header.Set("Authorization", client.config.APIKey)
+	req.Header.Set("Authorization", client.Config.APIKey)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -179,7 +182,7 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 			time.Sleep(backoff)
 		}
 
-		resp, err := client.client.Do(req)
+		resp, err := client.Client.Do(req)
 		if err != nil {
 			lastErr = err
 			logger.WithComponent("spc").Error("MISP API call failed", "error", err, "attempt", attempt+1)
@@ -208,7 +211,7 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 		}
 		resp.Body.Close()
 
-		var cves []SPCCVEScore
+		var cves []kernel.SPCCVEScore
 		for _, item := range eventResp.Response {
 			parsed := m.parseMISPEvent(item.Event)
 			cves = append(cves, parsed...)
@@ -222,7 +225,7 @@ func (m *SPCModule) fetchMISPEvents(client *SPCMISPClient) []SPCCVEScore {
 	return nil
 }
 
-func (m *SPCModule) parseMISPEvent(event mispEvent) []SPCCVEScore {
+func (m *Module) parseMISPEvent(event mispEvent) []kernel.SPCCVEScore {
 	var cveIDs []string
 	var descriptions []string
 
@@ -279,9 +282,9 @@ func (m *SPCModule) parseMISPEvent(event mispEvent) []SPCCVEScore {
 
 	pubDate, _ := time.Parse("2006-01-02", event.Date)
 
-	var results = make([]SPCCVEScore, 0, len(cveIDs))
+	var results = make([]kernel.SPCCVEScore, 0, len(cveIDs))
 	for _, cveID := range cveIDs {
-		results = append(results, SPCCVEScore{
+		results = append(results, kernel.SPCCVEScore{
 			CVEID:          cveID,
 			Description:    desc,
 			DatePublished:  pubDate,
@@ -317,7 +320,7 @@ func extractATTCKTechnique(tagName string) string {
 	return s
 }
 
-func (m *SPCModule) ConfigureMISP(baseURL, apiKey string) error {
+func (m *Module) ConfigureMISP(baseURL, apiKey string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -355,10 +358,10 @@ func (m *SPCModule) ConfigureMISP(baseURL, apiKey string) error {
 		return fmt.Errorf("MISP authentication failed: HTTP %d (expected 200)", resp.StatusCode)
 	}
 
-	m.mispClient = &SPCMISPClient{
-		config:   m.mispConfig,
-		client:   client,
-		lastSync: time.Now(),
+	m.mispClient = &kernel.SPCMISPClient{
+		Config:   m.mispConfig,
+		Client:   client,
+		LastSync: time.Now(),
 	}
 
 	logger.WithComponent("spc").Info("MISP connection verified", "url", baseURL)

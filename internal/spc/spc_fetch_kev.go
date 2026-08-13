@@ -1,6 +1,9 @@
+//go:build spc
+
 package spc
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,9 +14,9 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *SPCModule) FetchFromCISAKEV() SPCFetchResult {
+func (m *Module) FetchFromCISAKEV() kernel.SPCFetchResult {
 	start := time.Now()
-	result := SPCFetchResult{
+	result := kernel.SPCFetchResult{
 		Source:    "cisa_kev",
 		Timestamp: start,
 	}
@@ -28,7 +31,7 @@ func (m *SPCModule) FetchFromCISAKEV() SPCFetchResult {
 
 	catalogURL := m.kevConfig.CatalogURL
 	if catalogURL == "" {
-		catalogURL = defaultKEVCatalogURL
+		catalogURL = kernel.DefaultKEVCatalogURL
 	}
 
 	client := &http.Client{Timeout: 60 * time.Second}
@@ -115,7 +118,7 @@ func (m *SPCModule) FetchFromCISAKEV() SPCFetchResult {
 			if entry.Ransomware {
 				aptAssoc = []string{"ransomware"}
 			}
-			m.cveCache = append(m.cveCache, SPCCVEScore{
+			m.cveCache = append(m.cveCache, kernel.SPCCVEScore{
 				CVEID:          entry.CVEID,
 				InKEV:          true,
 				APTGroupAssoc:  aptAssoc,
@@ -151,7 +154,7 @@ func appendUnique(slice []string, val string) []string {
 	return append(slice, val)
 }
 
-func (m *SPCModule) isInKEVCatalog(cveID string) bool {
+func (m *Module) isInKEVCatalog(cveID string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.kevCatalog[cveID]

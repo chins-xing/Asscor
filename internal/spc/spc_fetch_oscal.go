@@ -1,6 +1,9 @@
+//go:build spc
+
 package spc
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -11,14 +14,14 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
-	var records []SPCVulnerabilityRecord
+func (m *Module) ImportOSCAL(data []byte, format string) (int, error) {
+	var records []kernel.SPCVulnerabilityRecord
 
 	switch strings.ToLower(format) {
 	case "json":
 		if err := json.Unmarshal(data, &records); err != nil {
 			var wrapper struct {
-				Findings []SPCVulnerabilityRecord `json:"findings"`
+				Findings []kernel.SPCVulnerabilityRecord `json:"findings"`
 			}
 			if err2 := json.Unmarshal(data, &wrapper); err2 != nil {
 				return 0, err
@@ -52,7 +55,7 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 		pubDate, _ := time.Parse("2006-01-02", rec.DatePublished)
 		modDate, _ := time.Parse("2006-01-02", rec.DateModified)
 
-		cve := SPCCVEScore{
+		cve := kernel.SPCCVEScore{
 			CVEID:          rec.CVEID,
 			Description:    rec.Description,
 			CVSS:           rec.CVSSScore,
@@ -84,8 +87,8 @@ func (m *SPCModule) ImportOSCAL(data []byte, format string) (int, error) {
 	return added, nil
 }
 
-func parseOSCALYAML(data []byte) ([]SPCVulnerabilityRecord, error) {
-	var records []SPCVulnerabilityRecord
+func parseOSCALYAML(data []byte) ([]kernel.SPCVulnerabilityRecord, error) {
+	var records []kernel.SPCVulnerabilityRecord
 	text := strings.TrimSpace(string(data))
 
 	if strings.HasPrefix(text, "---") {
@@ -94,7 +97,7 @@ func parseOSCALYAML(data []byte) ([]SPCVulnerabilityRecord, error) {
 	}
 
 	lines := strings.Split(text, "\n")
-	var currentRecord *SPCVulnerabilityRecord
+	var currentRecord *kernel.SPCVulnerabilityRecord
 	var inFindings bool
 	var inFinding bool
 	var listKey string
@@ -150,7 +153,7 @@ func parseOSCALYAML(data []byte) ([]SPCVulnerabilityRecord, error) {
 
 		if inFindings && indent == 2 && strings.HasSuffix(trimmed, ":") {
 			flushRecord()
-			currentRecord = &SPCVulnerabilityRecord{}
+			currentRecord = &kernel.SPCVulnerabilityRecord{}
 			inFinding = true
 			listKey = ""
 			listItems = nil
@@ -277,15 +280,15 @@ type oscalXMLFinding struct {
 	} `xml:"apt_group_assoc"`
 }
 
-func parseOSCALXML(data []byte) ([]SPCVulnerabilityRecord, error) {
+func parseOSCALXML(data []byte) ([]kernel.SPCVulnerabilityRecord, error) {
 	var root oscalXMLRoot
 	if err := xml.Unmarshal(data, &root); err != nil {
 		return nil, err
 	}
 
-	var records []SPCVulnerabilityRecord
+	var records []kernel.SPCVulnerabilityRecord
 	for _, f := range root.Findings.Finding {
-		rec := SPCVulnerabilityRecord{
+		rec := kernel.SPCVulnerabilityRecord{
 			CVEID:           f.CVEID,
 			Description:     f.Description,
 			CVSSScore:       f.CVSSScore,

@@ -1,3 +1,5 @@
+//go:build spc
+
 package spc
 
 import (
@@ -8,7 +10,7 @@ import (
 	"github.com/asscor/asscor/internal/common"
 )
 
-func (m *SPCModule) FetchFromAllSources() []SPCFetchResult {
+func (m *Module) FetchFromAllSources() []kernel.SPCFetchResult {
 	sourceCount := 1 // NVD
 	if m.epssConfig.Enabled {
 		sourceCount++
@@ -26,7 +28,7 @@ func (m *SPCModule) FetchFromAllSources() []SPCFetchResult {
 		sourceCount++
 	}
 
-	results := make([]SPCFetchResult, 0, sourceCount)
+	results := make([]kernel.SPCFetchResult, 0, sourceCount)
 
 	mp := common.NewMultiProgress()
 
@@ -77,16 +79,16 @@ func (m *SPCModule) FetchFromAllSources() []SPCFetchResult {
 	}
 	m.mu.Unlock()
 
-	if m.kernel != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "spc.cve_updated", results)
+	if m.kc != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "spc.cve_updated", results)
 	}
 
-	if m.kernel != nil {
-		if persister, ok := m.kernel.Container().ResolveNamed("persistence"); ok {
+	if m.kc != nil {
+		if persister, ok := m.kc.Container().ResolveNamed("persistence"); ok {
 		if pi, ok2 := persister.(kernel.PersistenceInterface); ok2 {
 			topCVEs := make([]string, 0, 10)
 			m.mu.RLock()
-			sorted := make([]SPCCVEScore, len(m.cveCache))
+			sorted := make([]kernel.SPCCVEScore, len(m.cveCache))
 			copy(sorted, m.cveCache)
 			sort.Slice(sorted, func(i, j int) bool {
 				return sorted[i].CVSS > sorted[j].CVSS
