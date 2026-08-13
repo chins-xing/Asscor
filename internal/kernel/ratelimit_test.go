@@ -82,7 +82,7 @@ func TestRateLimiterOnRejected(t *testing.T) {
 	defer rl.Stop()
 
 	interceptor := rl.Interceptor()
-	ctx := context.WithValue(context.Background(), ctxKey("client_addr"), "c1")
+	ctx := context.WithValue(context.Background(), CtxKey("client_addr"), "c1")
 	handler := func(ctx context.Context, service, method string, payload []byte) ([]byte, error) {
 		return payload, nil
 	}
@@ -105,7 +105,7 @@ func TestRateLimiterInterceptor(t *testing.T) {
 	defer rl.Stop()
 
 	interceptor := rl.Interceptor()
-	ctx := context.WithValue(context.Background(), ctxKey("client_addr"), "client-01")
+	ctx := context.WithValue(context.Background(), CtxKey("client_addr"), "client-01")
 
 	handler := func(ctx context.Context, service, method string, payload []byte) ([]byte, error) {
 		return append(payload, []byte("-ok")...), nil

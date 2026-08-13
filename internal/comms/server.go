@@ -1,6 +1,7 @@
-package kernel
+package comms
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"bufio"
 	"context"
 	"crypto/tls"
@@ -17,8 +18,6 @@ import (
 	apiv1 "github.com/asscor/asscor/api/v1"
 	"github.com/asscor/asscor/internal/logger"
 )
-
-type ctxKey string
 
 type ServerConfig struct {
 	ListenAddr       string
@@ -43,12 +42,12 @@ func DefaultServerConfig() ServerConfig {
 
 type Server struct {
 	cfg    ServerConfig
-	kernel *Kernel
+	kc *kernel.Kernel
 
 	registry *apiv1.ServiceRegistry
 	codec    apiv1.ServerCodec
 
-	interceptors *Interceptors
+	interceptors *kernel.Interceptors
 
 	mu       sync.RWMutex
 	listener net.Listener
@@ -58,7 +57,7 @@ type Server struct {
 	wg       sync.WaitGroup
 }
 
-func NewServer(cfg ServerConfig, k *Kernel) *Server {
+func NewServer(cfg ServerConfig, k *kernel.Kernel) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	maxConns := cfg.MaxConns
 	if maxConns <= 0 {
@@ -66,7 +65,7 @@ func NewServer(cfg ServerConfig, k *Kernel) *Server {
 	}
 	return &Server{
 		cfg:      cfg,
-		kernel:   k,
+		kc:   k,
 		registry: apiv1.NewServiceRegistry(),
 		codec:    &apiv1.JSONCodec{},
 		connSem:  make(chan struct{}, maxConns),
@@ -79,7 +78,7 @@ func (s *Server) RegisterService(desc *apiv1.ServiceDesc) {
 	s.registry.Register(desc)
 }
 
-func (s *Server) SetInterceptors(interceptors *Interceptors) {
+func (s *Server) SetInterceptors(interceptors *kernel.Interceptors) {
 	s.mu.Lock()
 	s.interceptors = interceptors
 	s.mu.Unlock()
@@ -155,9 +154,9 @@ func (s *Server) handleConn(conn net.Conn) {
 	br := bufio.NewReaderSize(conn, 256*1024)
 
 	clientAddr := conn.RemoteAddr().String()
-	ctx := context.WithValue(s.ctx, ctxKey("client_addr"), clientAddr)
+	ctx := context.WithValue(s.ctx, kernel.CtxKey("client_addr"), clientAddr)
 
-	var dispatch HandlerFunc
+	var dispatch kernel.HandlerFunc
 	s.mu.RLock()
 	ic := s.interceptors
 	s.mu.RUnlock()

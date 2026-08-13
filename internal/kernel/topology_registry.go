@@ -12,10 +12,10 @@ type topologyRegistry struct {
 
 var globalTopology = &topologyRegistry{data: make(map[string][]string)}
 
-// recordTopology stores a host's subnets for SRD real-edge construction and
+// RecordTopology stores a host's subnets for SRD real-edge construction and
 // notifies any registered listener (the SRD plugin) so the pipeline updates
 // in real time instead of a one-shot snapshot.
-func recordTopology(hostID string, subnets []string) {
+func RecordTopology(hostID string, subnets []string) {
 	// Defensive copy — avoid sharing the caller's slice.
 	cp := append([]string(nil), subnets...)
 

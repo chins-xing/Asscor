@@ -1,6 +1,7 @@
-package kernel
+package comms
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -22,21 +23,21 @@ var (
 )
 
 type KernelServiceImpl struct {
-	heartbeat   HeartbeatInterface
-	commander   CommanderInterface
-	cti         CTIInterface
-	assessor    AssessorInterface
-	persistence PersistenceInterface
-	spc         SPCInterface
+	heartbeat   kernel.HeartbeatInterface
+	commander   kernel.CommanderInterface
+	cti         kernel.CTIInterface
+	assessor    kernel.AssessorInterface
+	persistence kernel.PersistenceInterface
+	spc         kernel.SPCInterface
 }
 
 func NewKernelServiceImpl(
-	heartbeat HeartbeatInterface,
-	commander CommanderInterface,
-	cti CTIInterface,
-	assessor AssessorInterface,
-	persistence PersistenceInterface,
-	spc SPCInterface,
+	heartbeat kernel.HeartbeatInterface,
+	commander kernel.CommanderInterface,
+	cti kernel.CTIInterface,
+	assessor kernel.AssessorInterface,
+	persistence kernel.PersistenceInterface,
+	spc kernel.SPCInterface,
 ) *KernelServiceImpl {
 	return &KernelServiceImpl{
 		heartbeat:   heartbeat,
@@ -121,7 +122,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 
 		asset := s.spc.GetAsset(req.HostId)
 		if asset == nil {
-			asset = &LocalAsset{
+			asset = &kernel.LocalAsset{
 				HostID:        req.HostId,
 				Packages:      req.Packages,
 				InstalledCPEs: req.InstalledCPEs,
@@ -140,7 +141,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		if s.spc != nil && s.spc.Enabled() {
 			asset := s.spc.GetAsset(req.HostId)
 			if asset == nil {
-				asset = &LocalAsset{HostID: req.HostId}
+				asset = &kernel.LocalAsset{HostID: req.HostId}
 			}
 			if req.NetworkInfo.NetworkZone != "" && asset.NetworkZone == "" {
 				asset.NetworkZone = req.NetworkInfo.NetworkZone
@@ -148,7 +149,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 			}
 		}
 		if len(req.NetworkInfo.Subnets) > 0 {
-			recordTopology(req.HostId, req.NetworkInfo.Subnets)
+			kernel.RecordTopology(req.HostId, req.NetworkInfo.Subnets)
 		}
 		logger.WithComponent("kernel").Debug("network info received", "host_id", req.HostId,
 			"zone", req.NetworkInfo.NetworkZone, "ips", len(req.NetworkInfo.LocalIPs), "subnets", len(req.NetworkInfo.Subnets))
@@ -335,15 +336,15 @@ func convertATTACKPredictedRisk(src *model.ATTACKPredictedRiskInfo) *apiv1.ATTAC
 }
 
 type AgentServiceImpl struct {
-	assessor   AssessorInterface
-	commander  CommanderInterface
-	logCollect LogCollectorInterface
+	assessor   kernel.AssessorInterface
+	commander  kernel.CommanderInterface
+	logCollect kernel.LogCollectorInterface
 }
 
 func NewAgentServiceImpl(
-	assessor AssessorInterface,
-	commander CommanderInterface,
-	logCollect LogCollectorInterface,
+	assessor kernel.AssessorInterface,
+	commander kernel.CommanderInterface,
+	logCollect kernel.LogCollectorInterface,
 ) *AgentServiceImpl {
 	return &AgentServiceImpl{
 		assessor:   assessor,

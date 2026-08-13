@@ -14,6 +14,7 @@ import (
 
 	"github.com/asscor/asscor/internal/adapter"
 	"github.com/asscor/asscor/internal/cli"
+	"github.com/asscor/asscor/internal/comms"
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/deploy"
 	"github.com/asscor/asscor/internal/extmgr"
@@ -320,18 +321,18 @@ k.SetConfig("config_path", resolvedConfigPath)
 		log.Warn("debugger/tracer detected — runtime integrity compromised")
 	}
 
-	kernelSvc := kernel.NewKernelServiceImpl(heartbeat, commander, cti, assessor, persistence, spc)
-	agentSvc := kernel.NewAgentServiceImpl(assessor, commander, logCollector)
+	kernelSvc := comms.NewKernelServiceImpl(heartbeat, commander, cti, assessor, persistence, spc)
+	agentSvc := comms.NewAgentServiceImpl(assessor, commander, logCollector)
 
-	serverCfg := kernel.DefaultServerConfig()
+	serverCfg := comms.DefaultServerConfig()
 	serverCfg.ListenAddr = *listenAddr
 
 	if !*noMTLS {
 		serverCfg.TLSConfig = setupTLS(*certDir)
 	}
 
-	server := kernel.NewServer(serverCfg, k)
-	for _, desc := range kernel.BuildServiceDesc(kernelSvc, agentSvc) {
+	server := comms.NewServer(serverCfg, k)
+	for _, desc := range comms.BuildServiceDesc(kernelSvc, agentSvc) {
 		server.RegisterService(desc)
 	}
 
@@ -374,7 +375,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 		serverStarted = true
 	}
 
-	grpcCfg := kernel.DefaultGRPCServerConfig()
+	grpcCfg := comms.DefaultGRPCServerConfig()
 	if v := cfg.AdapterConfig["grpc.enabled"]; v == "on" || v == "true" || v == "1" {
 		grpcCfg.Enabled = true
 	}
@@ -387,7 +388,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 		grpcCfg.KeyFile = filepath.Join(*certDir, "server.key")
 		grpcCfg.CAFile = filepath.Join(*certDir, "ca.crt")
 	}
-	grpcServer := kernel.NewGRPCServer(grpcCfg, kernelSvc, agentSvc)
+	grpcServer := comms.NewGRPCServer(grpcCfg, kernelSvc, agentSvc)
 	grpcStarted := false
 	if err := grpcServer.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "WARN: gRPC server start failed: %v\n", err)

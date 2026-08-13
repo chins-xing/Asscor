@@ -118,7 +118,7 @@ func (r *RateLimiter) CleanupStale(maxAge time.Duration) {
 
 func (r *RateLimiter) Interceptor() Interceptor {
 	return func(ctx context.Context, service, method string, payload []byte, handler HandlerFunc) ([]byte, error) {
-		clientAddr, _ := ctx.Value(ctxKey("client_addr")).(string)
+		clientAddr, _ := ctx.Value(CtxKey("client_addr")).(string)
 		if clientAddr == "" {
 			clientAddr = "unknown"
 		}

@@ -1,4 +1,4 @@
-package kernel
+package comms
 
 import (
 	"context"
@@ -290,7 +290,7 @@ func DefaultGRPCClientConfig() GRPCClientConfig {
 type GRPCClient struct {
 	cfg    GRPCClientConfig
 	conn   *grpc.ClientConn
-	kernel apiv1.KernelServiceClient
+	kc apiv1.KernelServiceClient
 	mu     sync.RWMutex
 }
 
@@ -323,7 +323,7 @@ func (c *GRPCClient) Connect() error {
 
 	c.mu.Lock()
 	c.conn = conn
-	c.kernel = apiv1.NewKernelServiceClient(conn)
+	c.kc = apiv1.NewKernelServiceClient(conn)
 	c.mu.Unlock()
 
 	logger.WithComponent("grpc_client").Info("connected to gRPC server", "addr", c.cfg.ServerAddr)
@@ -341,7 +341,7 @@ func (c *GRPCClient) Close() error {
 
 func (c *GRPCClient) Register(ctx context.Context, hostId, hostname, version string) (*apiv1.PBRegisterResponse, error) {
 	c.mu.RLock()
-	kernel := c.kernel
+	kernel := c.kc
 	c.mu.RUnlock()
 
 	if kernel == nil {
@@ -357,7 +357,7 @@ func (c *GRPCClient) Register(ctx context.Context, hostId, hostname, version str
 
 func (c *GRPCClient) Heartbeat(ctx context.Context, hostId, sessionId string, result *apiv1.AssessmentResult, packages []string) (*apiv1.PBHeartbeatResponse, error) {
 	c.mu.RLock()
-	kernel := c.kernel
+	kernel := c.kc
 	c.mu.RUnlock()
 
 	if kernel == nil {
