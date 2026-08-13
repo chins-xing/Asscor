@@ -212,24 +212,28 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 	k.Container().BindNamed("config", (*config.Config)(nil), cfg)
 
-	scoringEngine := kernel.NewScoringEngineModule(cfg)
+	scoringEngine := newScoringEngine(cfg)
 
 	// Wire SSAM as an ASSCOR plugin engine (if not in legacy mode).
 	// SSAM depends on the engine.AssessorEngine interface defined by ASSCOR.
-	if cfg.ScoringEngine != "legacy" {
-		ssamAdapter := ssam.NewEngineAdapter(cfg)
-		scoringEngine.SetPluginEngine(ssamAdapter)
-		log.Info("ssam engine adapter wired", "engine", ssamAdapter.Name())
-	} else {
-		log.Info("using built-in DynamicScoringEngine (legacy mode)")
-	}
+	if scoringEngine != nil {
+		if cfg.ScoringEngine != "legacy" {
+			ssamAdapter := ssam.NewEngineAdapter(cfg)
+			scoringEngine.SetPluginEngine(ssamAdapter)
+			log.Info("ssam engine adapter wired", "engine", ssamAdapter.Name())
+		} else {
+			log.Info("using built-in DynamicScoringEngine (legacy mode)")
+		}
 
-	k.Container().Bind((*kernel.ScoringEngineProvider)(nil), scoringEngine)
+		k.Container().Bind((*kernel.ScoringEngineProvider)(nil), scoringEngine)
+	}
 
 	k.Container().Bind((*kernel.PrismEngineProvider)(nil), prism.NewEngine())
 
-	assessor := &kernel.AssessorModule{}
-	initATTACK(assessor)
+	assessor := newAssessor()
+	if target, ok := assessor.(kernel.ATTACKInjectionTarget); ok {
+		initATTACK(target)
+	}
 	policy := newPolicy()
 	spc := kernel.NewSPCModule()
 	cti := newCTI()
@@ -243,7 +247,9 @@ k.SetConfig("config_path", resolvedConfigPath)
 	sourceManager := kernel.NewSourceManagerModule()
 	cliModule := cli.NewCLIModule()
 
-	k.Container().Bind((*kernel.AssessorInterface)(nil), assessor)
+	if assessor != nil {
+		k.Container().Bind((*kernel.AssessorInterface)(nil), assessor)
+	}
 	k.Container().Bind((*kernel.SPCInterface)(nil), spc)
 	if commander != nil {
 		k.Container().Bind((*kernel.CommanderInterface)(nil), commander)
@@ -254,7 +260,13 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 	lifecycle := kernel.NewLifecycleEngine(k)
 
-	plugins := []kernel.Plugin{spc, scoringEngine, assessor, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	plugins := []kernel.Plugin{spc, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	if se, ok := scoringEngine.(kernel.Plugin); ok {
+		plugins = append(plugins, se)
+	}
+	if a, ok := assessor.(kernel.Plugin); ok {
+		plugins = append(plugins, a)
+	}
 	if hb, ok := heartbeat.(kernel.Plugin); ok {
 		plugins = append(plugins, hb)
 	}

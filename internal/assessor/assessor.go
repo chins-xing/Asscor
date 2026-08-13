@@ -1,4 +1,6 @@
-package kernel
+//go:build assessor
+
+package assessor
 
 import (
 	"context"
@@ -13,49 +15,41 @@ import (
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/integrity"
+	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 	ascorprism "github.com/asscor/asscor/internal/engine/prism"
 	prismlib "github.com/chins-xing/prism"
 )
 
-type ScoringEngineProvider interface {
-	Assess(hostID string, hostname string) *model.AssessmentResult
-	AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
-	PluginEngine() engine.AssessorEngine
-	RecomputeFinalScore(result *model.AssessmentResult) float64
-	ReloadWeights(cfg *config.Config)
-	ValidateEdgeFactors(registeredChecks []model.CheckItem) []string
-	PrintReport(result *model.AssessmentResult) string
-}
-
-type PrismEngineProvider interface {
-	ComputeDynamicScore(node *prismlib.NodeState, incomingEdges []prismlib.EdgeState, allNodes map[string]*prismlib.NodeState, nowUnix int64) prismlib.AssetRiskResult
-	ComputeSemanticState(core *prismlib.AssetRiskResult) *prismlib.SemanticRiskReport
-	PredictFuture(semantic *prismlib.SemanticRiskReport, model prismlib.InferenceModel) *prismlib.FutureRiskReport
-	Config() prismlib.PrismConfig
-	UpdateConfig(cfg prismlib.PrismConfig)
-}
-
-type AssessorModule struct {
-	kernel         KernelContext
+// Module is the ASSCOR assessment engine plugin: it computes domain scores and
+// the final acceptability score, applies SPC/CTI/ATT&CK/Prism corrections, and
+// publishes assessor.result. Build-tag optional (//go:build assessor); the
+// kernel keeps only the AssessorInterface contract.
+type Module struct {
+	kc             kernel.KernelContext
 	cfg            *config.Config
-	engine         ScoringEngineProvider
-	prismEngine    PrismEngineProvider
+	engine         kernel.ScoringEngineProvider
+	prismEngine    kernel.PrismEngineProvider
 	attackProvider engine.ATTACKProvider
 	failTracker    map[string]map[string]int64
 
 	mu      sync.RWMutex
 	results map[string]*model.AssessmentResult
 
-	siemPusher    *SIEMPusher
+	siemPusher    *kernel.SIEMPusher
 	consoleReport bool
-	state         PluginState
+	state         kernel.PluginState
 	selfCheckDone chan struct{}
 }
 
-func (m *AssessorModule) Info() PluginInfo {
-	return PluginInfo{
+// New creates an assessor module instance.
+func New() *Module {
+	return &Module{}
+}
+
+func (m *Module) Info() kernel.PluginInfo {
+	return kernel.PluginInfo{
 		Name:        "assessor",
 		Version:     "1.2.0",
 		Description: "ASSCOR assessment engine — computes domain scores and final acceptability score",
@@ -63,20 +57,20 @@ func (m *AssessorModule) Info() PluginInfo {
 	}
 }
 
-func (m *AssessorModule) Dependencies() []PluginDependency {
-	return []PluginDependency{
+func (m *Module) Dependencies() []kernel.PluginDependency {
+	return []kernel.PluginDependency{
 		{Name: "config", Interface: (*config.Config)(nil)},
-		{Interface: (*ScoringEngineProvider)(nil)},
+		{Interface: (*kernel.ScoringEngineProvider)(nil)},
 	}
 }
 
-func (m *AssessorModule) Priority() int {
+func (m *Module) Priority() int {
 	return 40
 }
 
-func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
-	m.kernel = kc
-	m.state = PluginInitialized
+func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
+	m.kc = kc
+	m.state = kernel.PluginInitialized
 	m.results = make(map[string]*model.AssessmentResult)
 	m.failTracker = make(map[string]map[string]int64)
 
@@ -89,9 +83,9 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 		m.cfg = config.Default()
 	}
 
-	if impl, ok := kc.Container().Resolve((*ScoringEngineProvider)(nil)); ok {
-		if engine, ok := impl.(ScoringEngineProvider); ok {
-			m.engine = engine
+	if impl, ok := kc.Container().Resolve((*kernel.ScoringEngineProvider)(nil)); ok {
+		if e, ok := impl.(kernel.ScoringEngineProvider); ok {
+			m.engine = e
 		}
 	}
 
@@ -100,9 +94,9 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 		return fmt.Errorf("ScoringEngineProvider not registered")
 	}
 
-	if impl, ok := kc.Container().Resolve((*PrismEngineProvider)(nil)); ok {
-		if prism, ok := impl.(PrismEngineProvider); ok {
-			m.prismEngine = prism
+	if impl, ok := kc.Container().Resolve((*kernel.PrismEngineProvider)(nil)); ok {
+		if p, ok := impl.(kernel.PrismEngineProvider); ok {
+			m.prismEngine = p
 		}
 	}
 
@@ -120,13 +114,13 @@ func (m *AssessorModule) Init(ctx context.Context, kc KernelContext) error {
 		logger.WithComponent("assessor").Warn("edge factor warning", "warning", w)
 	}
 
-	kc.Container().Bind((*AssessorInterface)(nil), m)
+	kc.Container().Bind((*kernel.AssessorInterface)(nil), m)
 
 	return nil
 }
 
 // SetATTACKProvider injects the ATT&CK analysis provider (may be nil to disable).
-func (m *AssessorModule) SetATTACKProvider(provider engine.ATTACKProvider) {
+func (m *Module) SetATTACKProvider(provider engine.ATTACKProvider) {
 	m.attackProvider = provider
 }
 
@@ -143,50 +137,50 @@ func filterAssessmentResult(result *model.AssessmentResult) map[string]interface
 		"threshold":   result.Threshold,
 		"check_count": len(result.Checks),
 		"domains": map[string]interface{}{
-			"attack_surface":     scores.AttackSurface,
+			"attack_surface":      scores.AttackSurface,
 			"business_continuity": scores.BusinessContinuity,
-			"operation_trust":    scores.OperationTrust,
-			"resilience":         scores.Resilience,
+			"operation_trust":     scores.OperationTrust,
+			"resilience":          scores.Resilience,
 		},
 	}
 }
 
-func (m *AssessorModule) setupSIEMPusher() {
+func (m *Module) setupSIEMPusher() {
 	if m.cfg == nil {
 		return
 	}
 	apiURL := m.cfg.AdapterConfig["wazuh_siem.api_url"]
 	username := m.cfg.AdapterConfig["wazuh_siem.username"]
 	password := m.cfg.AdapterConfig["wazuh_siem.password"]
-	m.siemPusher = NewSIEMPusher(apiURL, username, password)
+	m.siemPusher = kernel.NewSIEMPusher(apiURL, username, password)
 	if m.siemPusher.Enabled() {
 		logger.WithComponent("assessor").Info("SIEM push integration enabled", "url", apiURL)
 	}
 }
 
-func (m *AssessorModule) pushToSIEM(ctx context.Context, result *model.AssessmentResult) {
-	m.kernel.Extensions().Execute(ctx, "siem.pre_push", map[string]interface{}{
+func (m *Module) pushToSIEM(ctx context.Context, result *model.AssessmentResult) {
+	m.kc.Extensions().Execute(ctx, "siem.pre_push", map[string]interface{}{
 		"host_id": result.HostID,
 	})
 	if m.siemPusher != nil && m.siemPusher.Enabled() {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					m.kernel.Extensions().Execute(ctx, "siem.push_failure", map[string]interface{}{
+					m.kc.Extensions().Execute(ctx, "siem.push_failure", map[string]interface{}{
 						"host_id": result.HostID,
 						"error":   fmt.Sprintf("panic: %v", r),
 					})
 				}
 			}()
 			m.siemPusher.PushAssessment(ctx, result)
-			m.kernel.Extensions().Execute(ctx, "siem.post_push", map[string]interface{}{
+			m.kc.Extensions().Execute(ctx, "siem.post_push", map[string]interface{}{
 				"host_id": result.HostID,
 			})
 		}()
 	}
 }
 
-func (m *AssessorModule) setupConsoleReport() {
+func (m *Module) setupConsoleReport() {
 	if m.cfg == nil {
 		return
 	}
@@ -204,7 +198,7 @@ func (m *AssessorModule) setupConsoleReport() {
 	}
 }
 
-func (m *AssessorModule) setupPrismConfig() {
+func (m *Module) setupPrismConfig() {
 	if m.cfg == nil || m.prismEngine == nil {
 		return
 	}
@@ -277,23 +271,23 @@ func parseIntConfig(s string) int {
 	return v
 }
 
-func (m *AssessorModule) printConsoleReport(result *model.AssessmentResult) {
+func (m *Module) printConsoleReport(result *model.AssessmentResult) {
 	if !m.consoleReport || m.engine == nil || result == nil {
 		return
 	}
 	fmt.Fprint(os.Stderr, m.engine.PrintReport(result))
 }
 
-func (m *AssessorModule) Start(ctx context.Context) error {
-	m.state = PluginStarted
+func (m *Module) Start(ctx context.Context) error {
+	m.state = kernel.PluginStarted
 	m.selfCheckDone = make(chan struct{})
 	go m.selfAssessmentLoop()
 	logger.WithComponent("assessor").Info("started")
 	return nil
 }
 
-func (m *AssessorModule) Stop(ctx context.Context) error {
-	m.state = PluginStopping
+func (m *Module) Stop(ctx context.Context) error {
+	m.state = kernel.PluginStopping
 	m.mu.Lock()
 	if m.selfCheckDone != nil {
 		select {
@@ -303,12 +297,12 @@ func (m *AssessorModule) Stop(ctx context.Context) error {
 		}
 	}
 	m.mu.Unlock()
-	m.state = PluginStopped
+	m.state = kernel.PluginStopped
 	logger.WithComponent("assessor").Info("stopped")
 	return nil
 }
 
-func (m *AssessorModule) selfAssessmentLoop() {
+func (m *Module) selfAssessmentLoop() {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.WithComponent("assessor").Error("selfAssessmentLoop panic", "panic", r)
@@ -320,7 +314,7 @@ func (m *AssessorModule) selfAssessmentLoop() {
 
 	for {
 		select {
-		case <-m.kernel.Context().Done():
+		case <-m.kc.Context().Done():
 			return
 		case <-m.selfCheckDone:
 			return
@@ -330,7 +324,7 @@ func (m *AssessorModule) selfAssessmentLoop() {
 	}
 }
 
-func (m *AssessorModule) runSelfAssessment() {
+func (m *Module) runSelfAssessment() {
 	result := m.engine.Assess("kernel", "kernel")
 
 	logger.WithComponent("assessor").Info("kernel self-assessment completed",
@@ -340,24 +334,24 @@ func (m *AssessorModule) runSelfAssessment() {
 		logger.WithComponent("assessor").Warn("kernel self-assessment below threshold",
 			"score", result.FinalScore, "threshold", 90)
 
-		if m.kernel != nil {
-			m.kernel.Bus().Publish(m.kernel.Context(), Message{
-			Topic:   TopicAssessorSelfCheck,
-			Payload: result,
-			Source:  "assessor.self_check",
-		})
+		if m.kc != nil {
+			m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
+				Topic:   kernel.TopicAssessorSelfCheck,
+				Payload: result,
+				Source:  "assessor.self_check",
+			})
 		}
 	}
 }
 
-func (m *AssessorModule) State() PluginState {
+func (m *Module) State() kernel.PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
 }
 
-func (m *AssessorModule) HealthCheck(ctx context.Context) error {
-	if m.state != PluginStarted {
+func (m *Module) HealthCheck(ctx context.Context) error {
+	if m.state != kernel.PluginStarted {
 		return fmt.Errorf("assessor not started (state=%s)", m.state)
 	}
 	if m.engine == nil {
@@ -366,11 +360,11 @@ func (m *AssessorModule) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_evaluate", hostID)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.pre_check", map[string]interface{}{
-		"host_id":   hostID,
-		"trigger":   "explicit",
+func (m *Module) Evaluate(hostID string) *model.AssessmentResult {
+	m.kc.Extensions().Execute(m.kc.Context(), "assessor.pre_evaluate", hostID)
+	m.kc.Extensions().Execute(m.kc.Context(), "verify.pre_check", map[string]interface{}{
+		"host_id": hostID,
+		"trigger": "explicit",
 	})
 
 	m.mu.RLock()
@@ -382,16 +376,16 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 		prevScore = prevResult.FinalScore
 	}
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_check", map[string]interface{}{"host_id": hostID})
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_score", map[string]interface{}{"host_id": hostID})
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.pre_check", map[string]interface{}{"host_id": hostID})
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.pre_score", map[string]interface{}{"host_id": hostID})
 
 	result := m.engine.Assess(hostID, hostID)
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_check", result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_score", result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_edge", result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_edge", result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_score", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.post_check", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.post_score", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.pre_edge", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.post_edge", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "assessor.pre_score", result)
 
 	m.applyCTIOnly(result)
 
@@ -403,9 +397,9 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	m.results[hostID] = result
 	m.mu.Unlock()
 
-		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", filterAssessmentResult(result))
+	m.kc.Extensions().Execute(m.kc.Context(), "assessor.post_evaluate", filterAssessmentResult(result))
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.post_check", map[string]interface{}{
+	m.kc.Extensions().Execute(m.kc.Context(), "verify.post_check", map[string]interface{}{
 		"host_id":    hostID,
 		"trigger":    "explicit",
 		"prev_score": prevScore,
@@ -414,26 +408,26 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 		"acceptable": result.Acceptable,
 	})
 	if result.Acceptable != (prevResult != nil && prevResult.Acceptable) || prevResult == nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "verify.status_changed", map[string]interface{}{
-			"host_id":        hostID,
+		m.kc.Extensions().Execute(m.kc.Context(), "verify.status_changed", map[string]interface{}{
+			"host_id":         hostID,
 			"prev_acceptable": prevResult != nil && prevResult.Acceptable,
-			"new_acceptable": result.Acceptable,
-			"prev_score":     prevScore,
-			"new_score":      result.FinalScore,
+			"new_acceptable":  result.Acceptable,
+			"prev_score":      prevScore,
+			"new_score":       result.FinalScore,
 		})
 	}
 
-	m.pushToSIEM(m.kernel.Context(), result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.outbound", filterAssessmentResult(result))
+	m.pushToSIEM(m.kc.Context(), result)
+	m.kc.Extensions().Execute(m.kc.Context(), "assessor.outbound", filterAssessmentResult(result))
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_report", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.pre_report", result)
 
 	m.printConsoleReport(result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.report_generated", result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_report", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "assessor.report_generated", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.post_report", result)
 
-	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
-		Topic:   TopicAssessorResult,
+	if errs := m.kc.Bus().PublishSync(m.kc.Context(), kernel.Message{
+		Topic:   kernel.TopicAssessorResult,
 		Payload: result,
 		Source:  "assessor",
 	}); len(errs) > 0 {
@@ -443,7 +437,7 @@ func (m *AssessorModule) Evaluate(hostID string) *model.AssessmentResult {
 	return result
 }
 
-func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
+func (m *Module) EvaluateFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
 	logger.WithComponent("assessor").Info("EvaluateFromResults called", "host_id", hostID, "checks", len(checkResults))
 
 	m.mu.RLock()
@@ -451,12 +445,12 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	threatCoeff := m.cfg.ThreatCoeff
 	m.mu.RUnlock()
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.pre_evaluate", hostID)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_check", map[string]interface{}{"host_id": hostID, "checks_count": len(checkResults)})
-	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.pre_check", map[string]interface{}{
-		"host_id":   hostID,
-		"trigger":   "heartbeat",
-		"checks":    len(checkResults),
+	m.kc.Extensions().Execute(m.kc.Context(), "assessor.pre_evaluate", hostID)
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.pre_check", map[string]interface{}{"host_id": hostID, "checks_count": len(checkResults)})
+	m.kc.Extensions().Execute(m.kc.Context(), "verify.pre_check", map[string]interface{}{
+		"host_id": hostID,
+		"trigger": "heartbeat",
+		"checks":  len(checkResults),
 	})
 
 	m.mu.RLock()
@@ -469,12 +463,12 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	}
 
 	result := &model.AssessmentResult{
-		HostID:         hostID,
-		Hostname:       hostname,
-		Timestamp:      time.Now(),
-		Threshold:      threshold,
-		Checks:         checkResults,
-		UncertaintyNote: "This score is a model output, not an objective security truth. Use as a decision reference, not a decision substitute. See also Goodhart's Law.",
+		HostID:             hostID,
+		Hostname:           hostname,
+		Timestamp:          time.Now(),
+		Threshold:          threshold,
+		Checks:             checkResults,
+		UncertaintyNote:    "This score is a model output, not an objective security truth. Use as a decision reference, not a decision substitute. See also Goodhart's Law.",
 		ModelCoverageRatio: modelCoverage(checkResults),
 	}
 
@@ -490,7 +484,7 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 		}
 	}
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_check", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.post_check", result)
 
 	if len(result.Checks) == 0 {
 		result.Acceptable = true
@@ -504,11 +498,11 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 		result.ThreatCoeff = threatCoeff
 		result.SPCScore = 1.0
 	} else {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_score", result)
+		m.kc.Extensions().Execute(m.kc.Context(), "engine.pre_score", result)
 		m.applySPCAndCTI(hostID, result)
 		m.applyATTACK(hostID, result)
 		result.FinalScore = m.engine.RecomputeFinalScore(result)
-		m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_score", result)
+		m.kc.Extensions().Execute(m.kc.Context(), "engine.post_score", result)
 	}
 
 	logger.WithComponent("assessor").Info("assessment score computed", "host_id", hostID, "score", result.FinalScore, "spc_score", result.SPCScore, "threat_coeff", result.ThreatCoeff)
@@ -521,9 +515,9 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	m.results[hostID] = result
 	m.mu.Unlock()
 
-		m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.post_evaluate", filterAssessmentResult(result))
+	m.kc.Extensions().Execute(m.kc.Context(), "assessor.post_evaluate", filterAssessmentResult(result))
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "verify.post_check", map[string]interface{}{
+	m.kc.Extensions().Execute(m.kc.Context(), "verify.post_check", map[string]interface{}{
 		"host_id":    hostID,
 		"trigger":    "heartbeat",
 		"prev_score": prevScore,
@@ -532,29 +526,29 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 		"acceptable": result.Acceptable,
 	})
 	if result.Acceptable != (prevResult != nil && prevResult.Acceptable) || prevResult == nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "verify.status_changed", map[string]interface{}{
-			"host_id":        hostID,
+		m.kc.Extensions().Execute(m.kc.Context(), "verify.status_changed", map[string]interface{}{
+			"host_id":         hostID,
 			"prev_acceptable": prevResult != nil && prevResult.Acceptable,
-			"new_acceptable": result.Acceptable,
-			"prev_score":     prevScore,
-			"new_score":      result.FinalScore,
+			"new_acceptable":  result.Acceptable,
+			"prev_score":      prevScore,
+			"new_score":       result.FinalScore,
 		})
 	}
 
-	m.pushToSIEM(m.kernel.Context(), result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.outbound", filterAssessmentResult(result))
+	m.pushToSIEM(m.kc.Context(), result)
+	m.kc.Extensions().Execute(m.kc.Context(), "assessor.outbound", filterAssessmentResult(result))
 
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.pre_report", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.pre_report", result)
 
 	m.printConsoleReport(result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "assessor.report_generated", result)
-	m.kernel.Extensions().Execute(m.kernel.Context(), "engine.post_report", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "assessor.report_generated", result)
+	m.kc.Extensions().Execute(m.kc.Context(), "engine.post_report", result)
 
-	subCount := m.kernel.Bus().SubscriberCount(TopicAssessorResult)
+	subCount := m.kc.Bus().SubscriberCount(kernel.TopicAssessorResult)
 	logger.WithComponent("assessor").Debug("publishing assessor.result", "subscribers", subCount)
 
-	if errs := m.kernel.Bus().PublishSync(m.kernel.Context(), Message{
-		Topic:   TopicAssessorResult,
+	if errs := m.kc.Bus().PublishSync(m.kc.Context(), kernel.Message{
+		Topic:   kernel.TopicAssessorResult,
 		Payload: result,
 		Source:  "assessor",
 	}); len(errs) > 0 {
@@ -564,15 +558,15 @@ func (m *AssessorModule) EvaluateFromResults(hostID string, hostname string, che
 	return result
 }
 
-func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentResult) {
+func (m *Module) applySPCAndCTI(hostID string, result *model.AssessmentResult) {
 	m.mu.RLock()
 	threatCoeff := m.cfg.ThreatCoeff
 	m.mu.RUnlock()
 
 	spcScore := 1.0
 
-	if impl, ok := m.kernel.Container().Resolve((*SPCInterface)(nil)); ok {
-		if spc, ok2 := impl.(SPCInterface); ok2 && spc.Enabled() {
+	if impl, ok := m.kc.Container().Resolve((*kernel.SPCInterface)(nil)); ok {
+		if spc, ok2 := impl.(kernel.SPCInterface); ok2 && spc.Enabled() {
 			m.syncACIToAsset(spc, hostID, result)
 
 			var packages []string
@@ -618,8 +612,8 @@ func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentR
 		}
 	}
 
-	if impl, ok := m.kernel.Container().Resolve((*CTIInterface)(nil)); ok {
-		if cti, ok2 := impl.(CTIInterface); ok2 {
+	if impl, ok := m.kc.Container().Resolve((*kernel.CTIInterface)(nil)); ok {
+		if cti, ok2 := impl.(kernel.CTIInterface); ok2 {
 			threatCoeff = cti.GetCoefficient()
 		}
 	}
@@ -628,12 +622,12 @@ func (m *AssessorModule) applySPCAndCTI(hostID string, result *model.AssessmentR
 	result.ThreatCoeff = threatCoeff
 }
 
-func (m *AssessorModule) applyCTIOnly(result *model.AssessmentResult) {
+func (m *Module) applyCTIOnly(result *model.AssessmentResult) {
 	m.mu.RLock()
 	ctiCoeff := m.cfg.ThreatCoeff
 	m.mu.RUnlock()
-	if impl, ok := m.kernel.Container().Resolve((*CTIInterface)(nil)); ok {
-		if cti, ok2 := impl.(CTIInterface); ok2 {
+	if impl, ok := m.kc.Container().Resolve((*kernel.CTIInterface)(nil)); ok {
+		if cti, ok2 := impl.(kernel.CTIInterface); ok2 {
 			ctiCoeff = cti.GetCoefficient()
 		}
 	}
@@ -646,7 +640,7 @@ func (m *AssessorModule) applyCTIOnly(result *model.AssessmentResult) {
 	}
 }
 
-func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResult) {
+func (m *Module) applyATTACK(hostID string, result *model.AssessmentResult) {
 	provider := m.attackProvider
 	if provider == nil || !provider.IsEnabled() {
 		return
@@ -763,10 +757,10 @@ func (m *AssessorModule) applyATTACK(hostID string, result *model.AssessmentResu
 		"predicted_risk", result.ATTACKPredictedRisk != nil)
 }
 
-func (m *AssessorModule) syncACIToAsset(spc SPCInterface, hostID string, result *model.AssessmentResult) {
+func (m *Module) syncACIToAsset(spc kernel.SPCInterface, hostID string, result *model.AssessmentResult) {
 	asset := spc.GetAsset(hostID)
 	if asset == nil {
-		asset = &LocalAsset{HostID: hostID}
+		asset = &kernel.LocalAsset{HostID: hostID}
 	}
 
 	aciChecks := map[string]*bool{
@@ -823,13 +817,13 @@ func (m *AssessorModule) syncACIToAsset(spc SPCInterface, hostID string, result 
 	}
 }
 
-func (m *AssessorModule) GetResult(hostID string) *model.AssessmentResult {
+func (m *Module) GetResult(hostID string) *model.AssessmentResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.results[hostID]
 }
 
-func (m *AssessorModule) ReloadConfig(cfg *config.Config) {
+func (m *Module) ReloadConfig(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
@@ -860,7 +854,7 @@ func modelCoverage(results []model.CheckResult) float64 {
 	return float64(len(scored)) / float64(len(all))
 }
 
-func (m *AssessorModule) extractPackagesFromChecks(checks []model.CheckResult) []string {
+func (m *Module) extractPackagesFromChecks(checks []model.CheckResult) []string {
 	keywordMap := map[string][]string{
 		"ssh":        {"openssh", "ssh"},
 		"openssl":    {"openssl"},
@@ -909,7 +903,7 @@ func (m *AssessorModule) extractPackagesFromChecks(checks []model.CheckResult) [
 	return pkgs
 }
 
-func (m *AssessorModule) applyPrismToResult(hostID string, result *model.AssessmentResult, nowUnix int64) {
+func (m *Module) applyPrismToResult(hostID string, result *model.AssessmentResult, nowUnix int64) {
 	m.updateFailTracker(hostID, result, nowUnix)
 
 	node := m.buildNodeState(hostID, result)
@@ -940,7 +934,6 @@ func (m *AssessorModule) applyPrismToResult(hostID string, result *model.Assessm
 		result.PrismCollapseMem = semantic.CollapseMembership
 	}
 
-	// Inference Layer
 	// Inference Layer
 	future := m.prismEngine.PredictFuture(semantic, nil)
 	if future != nil {
@@ -982,7 +975,7 @@ func (m *AssessorModule) applyPrismToResult(hostID string, result *model.Assessm
 	)
 }
 
-func (m *AssessorModule) updateFailTracker(hostID string, result *model.AssessmentResult, nowUnix int64) {
+func (m *Module) updateFailTracker(hostID string, result *model.AssessmentResult, nowUnix int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1003,7 +996,7 @@ func (m *AssessorModule) updateFailTracker(hostID string, result *model.Assessme
 	}
 }
 
-func (m *AssessorModule) buildNodeState(hostID string, result *model.AssessmentResult) *prismlib.NodeState {
+func (m *Module) buildNodeState(hostID string, result *model.AssessmentResult) *prismlib.NodeState {
 	m.mu.RLock()
 	failMap := m.failTracker[hostID]
 	m.mu.RUnlock()
@@ -1032,7 +1025,7 @@ func (m *AssessorModule) buildNodeState(hostID string, result *model.AssessmentR
 	return node
 }
 
-func (m *AssessorModule) collectTopologySnapshot(currentHostID string, currentResult *model.AssessmentResult) (map[string]*prismlib.NodeState, []prismlib.EdgeState) {
+func (m *Module) collectTopologySnapshot(currentHostID string, currentResult *model.AssessmentResult) (map[string]*prismlib.NodeState, []prismlib.EdgeState) {
 	nodes := make(map[string]*prismlib.NodeState)
 	edges := make([]prismlib.EdgeState, 0)
 
@@ -1073,29 +1066,30 @@ func filterIncoming(hostID string, edges []prismlib.EdgeState) []prismlib.EdgeSt
 	return result
 }
 
-
-type ScoringEngineModule struct {
+// ScoringEngine wraps engine.Assessor as a ScoringEngineProvider plugin.
+type ScoringEngine struct {
 	mu     sync.Mutex
-	kernel KernelContext
+	kc     kernel.KernelContext
 	cfg    *config.Config
 	engine *engine.Assessor
 
-	state PluginState
+	state kernel.PluginState
 }
 
-func NewScoringEngineModule(cfg *config.Config) *ScoringEngineModule {
+// NewScoringEngine creates a scoring engine provider plugin.
+func NewScoringEngine(cfg *config.Config) *ScoringEngine {
 	if cfg == nil {
 		cfg = config.Default()
 	}
-	return &ScoringEngineModule{
+	return &ScoringEngine{
 		cfg:    cfg,
 		engine: engine.NewAssessor(cfg),
-		state:  PluginUnregistered,
+		state:  kernel.PluginUnregistered,
 	}
 }
 
-func (m *ScoringEngineModule) Info() PluginInfo {
-	return PluginInfo{
+func (m *ScoringEngine) Info() kernel.PluginInfo {
+	return kernel.PluginInfo{
 		Name:        "scoring_engine",
 		Version:     "1.0.0",
 		Description: "SSAM scoring engine provider - implements ScoringEngineProvider interface",
@@ -1103,73 +1097,73 @@ func (m *ScoringEngineModule) Info() PluginInfo {
 	}
 }
 
-func (m *ScoringEngineModule) Dependencies() []PluginDependency {
-	return []PluginDependency{
+func (m *ScoringEngine) Dependencies() []kernel.PluginDependency {
+	return []kernel.PluginDependency{
 		{Name: "config", Interface: (*config.Config)(nil)},
 	}
 }
 
-func (m *ScoringEngineModule) Priority() int {
+func (m *ScoringEngine) Priority() int {
 	return 35
 }
 
-func (m *ScoringEngineModule) Init(ctx context.Context, kc KernelContext) error {
+func (m *ScoringEngine) Init(ctx context.Context, kc kernel.KernelContext) error {
 	m.mu.Lock()
-	m.kernel = kc
-	m.state = PluginInitialized
+	m.kc = kc
+	m.state = kernel.PluginInitialized
 	m.mu.Unlock()
 	return nil
 }
 
-func (m *ScoringEngineModule) Start(ctx context.Context) error {
+func (m *ScoringEngine) Start(ctx context.Context) error {
 	m.mu.Lock()
-	m.state = PluginStarted
+	m.state = kernel.PluginStarted
 	m.mu.Unlock()
 	return nil
 }
 
-func (m *ScoringEngineModule) Stop(ctx context.Context) error {
+func (m *ScoringEngine) Stop(ctx context.Context) error {
 	m.mu.Lock()
-	m.state = PluginStopped
+	m.state = kernel.PluginStopped
 	m.mu.Unlock()
 	return nil
 }
 
-func (m *ScoringEngineModule) State() PluginState {
+func (m *ScoringEngine) State() kernel.PluginState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.state
 }
 
-func (m *ScoringEngineModule) Assess(hostID string, hostname string) *model.AssessmentResult {
+func (m *ScoringEngine) Assess(hostID string, hostname string) *model.AssessmentResult {
 	return m.engine.Assess(hostID, hostname)
 }
 
-func (m *ScoringEngineModule) AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
+func (m *ScoringEngine) AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult {
 	return m.engine.AssessFromResults(hostID, hostname, checkResults)
 }
 
-func (m *ScoringEngineModule) PluginEngine() engine.AssessorEngine {
+func (m *ScoringEngine) PluginEngine() engine.AssessorEngine {
 	return m.engine.PluginEngine()
 }
 
-func (m *ScoringEngineModule) SetPluginEngine(e engine.AssessorEngine) {
+func (m *ScoringEngine) SetPluginEngine(e engine.AssessorEngine) {
 	m.engine.SetPluginEngine(e)
 }
 
-func (m *ScoringEngineModule) RecomputeFinalScore(result *model.AssessmentResult) float64 {
+func (m *ScoringEngine) RecomputeFinalScore(result *model.AssessmentResult) float64 {
 	return m.engine.RecomputeFinalScore(result)
 }
 
-func (m *ScoringEngineModule) ReloadWeights(cfg *config.Config) {
+func (m *ScoringEngine) ReloadWeights(cfg *config.Config) {
 	m.engine.ReloadWeights(cfg)
 }
 
-func (m *ScoringEngineModule) ValidateEdgeFactors(registeredChecks []model.CheckItem) []string {
+func (m *ScoringEngine) ValidateEdgeFactors(registeredChecks []model.CheckItem) []string {
 	return m.engine.ValidateEdgeFactors(registeredChecks)
 }
 
-func (m *ScoringEngineModule) PrintReport(result *model.AssessmentResult) string {
+func (m *ScoringEngine) PrintReport(result *model.AssessmentResult) string {
 	return m.engine.PrintReport(result)
 }
 
@@ -1196,4 +1190,4 @@ func isPermDenied(detail string) bool {
 	return false
 }
 
-var _ ScoringEngineProvider = (*ScoringEngineModule)(nil)
+var _ kernel.ScoringEngineProvider = (*ScoringEngine)(nil)

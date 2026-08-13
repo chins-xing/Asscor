@@ -4,4 +4,4 @@ package main
 
 import "github.com/asscor/asscor/internal/kernel"
 
-func initATTACK(assessor *kernel.AssessorModule) {}
+func initATTACK(target kernel.ATTACKInjectionTarget) {}

@@ -10,7 +10,7 @@ import "github.com/asscor/asscor/internal/kernel"
 //	if cfg.ATTACK.Enabled {
 //	    attckext.Register(assessor)
 //	}
-func Register(assessor *kernel.AssessorModule) {
+func Register(target kernel.ATTACKInjectionTarget) {
 	attck := kernel.NewATTACKModule()
-	assessor.SetATTACKProvider(attck.AsEngineProvider())
+	target.SetATTACKProvider(attck.AsEngineProvider())
 }
