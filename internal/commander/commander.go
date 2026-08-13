@@ -1,4 +1,6 @@
-package kernel
+//go:build commander
+
+package commander
 
 import (
 	"context"
@@ -15,19 +17,23 @@ import (
 	"time"
 
 	apiv1 "github.com/asscor/asscor/api/v1"
+	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 )
 
-type CommanderModule struct {
-	kernel  KernelContext
+// Module signs and distributes commands to Agents via gRPC, managing retry
+// and timeout. It is a build-tag optional plugin (//go:build commander); the
+// kernel keeps only the CommanderInterface contract.
+type Module struct {
+	kc      kernel.KernelContext
 	hmacKey []byte
 
 	mu          sync.RWMutex
 	pendingCmds map[string]map[string]*pendingCommand
-	state       PluginState
+	state       kernel.PluginState
 
-	keyMeta     keyMetadata
-	prevHMACKey []byte
+	keyMeta      keyMetadata
+	prevHMACKey  []byte
 	keyRotatedAt time.Time
 
 	cmdTTL      time.Duration
@@ -35,8 +41,8 @@ type CommanderModule struct {
 }
 
 type pendingCommand struct {
-	Cmd         *apiv1.Command
-	EnqueuedAt  time.Time
+	Cmd        *apiv1.Command
+	EnqueuedAt time.Time
 }
 
 type keyMetadata struct {
@@ -47,8 +53,13 @@ type keyMetadata struct {
 
 const hmacKeyMaxAge = 90 * 24 * time.Hour
 
-func (m *CommanderModule) Info() PluginInfo {
-	return PluginInfo{
+// New creates a commander module instance.
+func New() *Module {
+	return &Module{}
+}
+
+func (m *Module) Info() kernel.PluginInfo {
+	return kernel.PluginInfo{
 		Name:        "commander",
 		Version:     "1.2.0",
 		Description: "Command dispatcher — signs and distributes commands to Agents via gRPC, manages retry and timeout",
@@ -56,16 +67,16 @@ func (m *CommanderModule) Info() PluginInfo {
 	}
 }
 
-func (m *CommanderModule) Dependencies() []PluginDependency {
+func (m *Module) Dependencies() []kernel.PluginDependency {
 	return nil
 }
 
-func (m *CommanderModule) Priority() int {
+func (m *Module) Priority() int {
 	return 60
 }
 
-func (m *CommanderModule) Init(ctx context.Context, kc KernelContext) error {
-	m.kernel = kc
+func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
+	m.kc = kc
 	m.pendingCmds = make(map[string]map[string]*pendingCommand)
 	m.cmdTTL = 30 * time.Minute
 
@@ -110,14 +121,14 @@ func (m *CommanderModule) Init(ctx context.Context, kc KernelContext) error {
 		}
 	}
 
-	m.state = PluginInitialized
+	m.state = kernel.PluginInitialized
 
-	kc.Container().Bind((*CommanderInterface)(nil), m)
+	kc.Container().Bind((*kernel.CommanderInterface)(nil), m)
 
 	return nil
 }
 
-func (m *CommanderModule) generateAndPersistKey(keyPath, metaPath string) {
+func (m *Module) generateAndPersistKey(keyPath, metaPath string) {
 	key, err := randomHex(32)
 	if err != nil {
 		logger.WithComponent("commander").Error("failed to generate HMAC key, HMAC signing disabled", "error", err)
@@ -147,7 +158,7 @@ func (m *CommanderModule) generateAndPersistKey(keyPath, metaPath string) {
 	}
 }
 
-func (m *CommanderModule) rotateKey(keyPath, metaPath string) {
+func (m *Module) rotateKey(keyPath, metaPath string) {
 	m.mu.Lock()
 	m.prevHMACKey = make([]byte, len(m.hmacKey))
 	copy(m.prevHMACKey, m.hmacKey)
@@ -176,14 +187,14 @@ func (m *CommanderModule) rotateKey(keyPath, metaPath string) {
 	}
 	logger.WithComponent("commander").Info("HMAC key rotated", "expires_at", m.keyMeta.ExpiresAt)
 
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "commander.key_rotated", map[string]interface{}{
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "commander.key_rotated", map[string]interface{}{
 			"expires_at": m.keyMeta.ExpiresAt.Format(time.RFC3339),
 		})
 	}
 }
 
-func (m *CommanderModule) KeyExpiry() time.Time {
+func (m *Module) KeyExpiry() time.Time {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.keyMeta.ExpiresAt
@@ -194,17 +205,17 @@ func sha256Hex(data []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-func (m *CommanderModule) Start(ctx context.Context) error {
-	m.state = PluginStarted
+func (m *Module) Start(ctx context.Context) error {
+	m.state = kernel.PluginStarted
 	m.cleanupDone = make(chan struct{})
-	m.kernel.Bus().Subscribe(TopicPolicyAction, "commander", m.onPolicyAction)
+	m.kc.Bus().Subscribe(kernel.TopicPolicyAction, "commander", m.onPolicyAction)
 	go m.cleanupExpiredCommands()
 	logger.WithComponent("commander").Info("started")
 	return nil
 }
 
-func (m *CommanderModule) Stop(ctx context.Context) error {
-	m.state = PluginStopping
+func (m *Module) Stop(ctx context.Context) error {
+	m.state = kernel.PluginStopping
 	m.mu.Lock()
 	if m.cleanupDone != nil {
 		select {
@@ -214,18 +225,18 @@ func (m *CommanderModule) Stop(ctx context.Context) error {
 		}
 	}
 	m.mu.Unlock()
-	m.kernel.Bus().UnsubscribeAll("commander")
-	m.state = PluginStopped
+	m.kc.Bus().UnsubscribeAll("commander")
+	m.state = kernel.PluginStopped
 	logger.WithComponent("commander").Info("stopped")
 	return nil
 }
 
-func (m *CommanderModule) cleanupExpiredCommands() {
+func (m *Module) cleanupExpiredCommands() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-m.kernel.Context().Done():
+		case <-m.kc.Context().Done():
 			return
 		case <-m.cleanupDone:
 			return
@@ -235,7 +246,7 @@ func (m *CommanderModule) cleanupExpiredCommands() {
 	}
 }
 
-func (m *CommanderModule) expireStaleCommands() {
+func (m *Module) expireStaleCommands() {
 	m.mu.Lock()
 	cutoff := time.Now().Add(-m.cmdTTL)
 	var expired []map[string]string
@@ -257,8 +268,8 @@ func (m *CommanderModule) expireStaleCommands() {
 	m.mu.Unlock()
 
 	for _, e := range expired {
-		if m.kernel != nil && m.kernel.Extensions() != nil {
-			m.kernel.Extensions().Execute(m.kernel.Context(), "commander.command_expired", map[string]interface{}{
+		if m.kc != nil && m.kc.Extensions() != nil {
+			m.kc.Extensions().Execute(m.kc.Context(), "commander.command_expired", map[string]interface{}{
 				"host_id": e["host_id"],
 				"cmd_id":  e["cmd_id"],
 			})
@@ -266,13 +277,13 @@ func (m *CommanderModule) expireStaleCommands() {
 	}
 }
 
-func (m *CommanderModule) State() PluginState {
+func (m *Module) State() kernel.PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
 }
 
-func (m *CommanderModule) EnqueueCommand(hostID string, action string, params map[string]string) string {
+func (m *Module) EnqueueCommand(hostID string, action string, params map[string]string) string {
 	cmdID := generateCmdID(hostID, action)
 
 	// Copy params and inject an anti-replay timestamp (required by the agent's
@@ -298,8 +309,8 @@ func (m *CommanderModule) EnqueueCommand(hostID string, action string, params ma
 	}
 	m.pendingCmds[hostID][cmdID] = &pendingCommand{Cmd: cmd, EnqueuedAt: time.Now()}
 
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "remediation.pre_apply", map[string]interface{}{
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "remediation.pre_apply", map[string]interface{}{
 			"host_id":    hostID,
 			"command_id": cmdID,
 			"action":     action,
@@ -310,7 +321,7 @@ func (m *CommanderModule) EnqueueCommand(hostID string, action string, params ma
 	return cmdID
 }
 
-func (m *CommanderModule) DequeueCommands(hostID string) []*apiv1.Command {
+func (m *Module) DequeueCommands(hostID string) []*apiv1.Command {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -328,7 +339,7 @@ func (m *CommanderModule) DequeueCommands(hostID string) []*apiv1.Command {
 	return result
 }
 
-func (m *CommanderModule) AckCommand(hostID string, cmdID string, success bool, output string) {
+func (m *Module) AckCommand(hostID string, cmdID string, success bool, output string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -348,15 +359,15 @@ func (m *CommanderModule) AckCommand(hostID string, cmdID string, success bool, 
 
 	logger.WithComponent("commander").Info("command executed", "command_id", cmdID, "host_id", hostID, "success", success)
 
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "remediation.post_apply", map[string]interface{}{
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "remediation.post_apply", map[string]interface{}{
 			"host_id":    hostID,
 			"command_id": cmdID,
 			"success":    success,
 			"output":     output,
 		})
 
-		m.kernel.Extensions().Execute(m.kernel.Context(), "remediation.action_resolved", map[string]interface{}{
+		m.kc.Extensions().Execute(m.kc.Context(), "remediation.action_resolved", map[string]interface{}{
 			"host_id":    hostID,
 			"command_id": cmdID,
 			"success":    success,
@@ -365,7 +376,7 @@ func (m *CommanderModule) AckCommand(hostID string, cmdID string, success bool, 
 	}
 }
 
-func (m *CommanderModule) sign(cmdID, action string, params map[string]string) []byte {
+func (m *Module) sign(cmdID, action string, params map[string]string) []byte {
 	m.mu.RLock()
 	key := make([]byte, len(m.hmacKey))
 	copy(key, m.hmacKey)
@@ -389,8 +400,8 @@ func sortedKeys(m map[string]string) []string {
 	return keys
 }
 
-func (m *CommanderModule) onPolicyAction(ctx context.Context, msg Message) error {
-	action, ok := msg.Payload.(PolicyAction)
+func (m *Module) onPolicyAction(ctx context.Context, msg kernel.Message) error {
+	action, ok := msg.Payload.(kernel.PolicyAction)
 	if !ok {
 		logger.WithComponent("commander").Warn("policy action payload type mismatch", "payload_type", fmt.Sprintf("%T", msg.Payload))
 		return nil

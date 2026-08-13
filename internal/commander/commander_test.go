@@ -1,4 +1,6 @@
-package kernel
+//go:build commander
+
+package commander
 
 import (
 	"testing"
@@ -8,7 +10,7 @@ import (
 )
 
 func TestCommanderEnqueueDequeue(t *testing.T) {
-	m := &CommanderModule{
+	m := &Module{
 		pendingCmds: make(map[string]map[string]*pendingCommand),
 	}
 
@@ -30,7 +32,7 @@ func TestCommanderEnqueueDequeue(t *testing.T) {
 }
 
 func TestCommanderDequeueEmpty(t *testing.T) {
-	m := &CommanderModule{
+	m := &Module{
 		pendingCmds: make(map[string]map[string]*pendingCommand),
 	}
 
@@ -41,7 +43,7 @@ func TestCommanderDequeueEmpty(t *testing.T) {
 }
 
 func TestCommanderEnqueueMultipleHosts(t *testing.T) {
-	m := &CommanderModule{
+	m := &Module{
 		pendingCmds: make(map[string]map[string]*pendingCommand),
 	}
 
@@ -64,7 +66,7 @@ func TestCommanderEnqueueMultipleHosts(t *testing.T) {
 }
 
 func TestCommanderAckCommand(t *testing.T) {
-	m := &CommanderModule{
+	m := &Module{
 		pendingCmds: make(map[string]map[string]*pendingCommand),
 	}
 
@@ -80,7 +82,7 @@ func TestCommanderAckCommand(t *testing.T) {
 }
 
 func TestCommanderAckNonexistent(t *testing.T) {
-	m := &CommanderModule{
+	m := &Module{
 		pendingCmds: make(map[string]map[string]*pendingCommand),
 	}
 
@@ -91,7 +93,7 @@ func TestCommanderAckNonexistent(t *testing.T) {
 	}
 }
 
-func (m *CommanderModule) enqueueTest(hostID, action string, params map[string]string) string {
+func (m *Module) enqueueTest(hostID, action string, params map[string]string) string {
 	id := hostID + "-" + action
 
 	m.mu.Lock()
@@ -105,4 +107,55 @@ func (m *CommanderModule) enqueueTest(hostID, action string, params map[string]s
 		EnqueuedAt: time.Now(),
 	}
 	return id
+}
+
+func TestCommander_CommandExpiry(t *testing.T) {
+	m := &Module{
+		pendingCmds: make(map[string]map[string]*pendingCommand),
+		cmdTTL:      30 * time.Minute,
+	}
+
+	m.pendingCmds["host-1"] = map[string]*pendingCommand{
+		"cmd-fresh":   {Cmd: &apiv1.Command{CommandId: "cmd-fresh"}, EnqueuedAt: time.Now()},
+		"cmd-expired": {Cmd: &apiv1.Command{CommandId: "cmd-expired"}, EnqueuedAt: time.Now().Add(-1 * time.Hour)},
+	}
+	m.pendingCmds["host-2"] = map[string]*pendingCommand{
+		"cmd-old": {Cmd: &apiv1.Command{CommandId: "cmd-old"}, EnqueuedAt: time.Now().Add(-2 * time.Hour)},
+	}
+
+	m.expireStaleCommands()
+
+	if cmds, ok := m.pendingCmds["host-1"]; !ok {
+		t.Error("host-1 should still exist")
+	} else if len(cmds) != 1 {
+		t.Errorf("host-1 should have 1 command, got %d", len(cmds))
+	}
+	if _, ok := m.pendingCmds["host-2"]; ok {
+		t.Error("host-2 should be removed (all commands expired)")
+	}
+}
+
+func TestCommander_EnqueueDequeue(t *testing.T) {
+	m := &Module{
+		pendingCmds: make(map[string]map[string]*pendingCommand),
+		cmdTTL:      30 * time.Minute,
+	}
+
+	id := m.EnqueueCommand("host-1", "restart", map[string]string{"service": "nginx"})
+	if id == "" {
+		t.Error("expected non-empty command ID")
+	}
+
+	cmds := m.DequeueCommands("host-1")
+	if len(cmds) != 1 {
+		t.Fatalf("expected 1 command, got %d", len(cmds))
+	}
+	if cmds[0].Command != "restart" {
+		t.Errorf("command = %s, want restart", cmds[0].Command)
+	}
+
+	cmds2 := m.DequeueCommands("host-1")
+	if len(cmds2) != 0 {
+		t.Error("second dequeue should return empty")
+	}
 }
