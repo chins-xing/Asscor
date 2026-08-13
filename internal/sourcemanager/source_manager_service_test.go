@@ -1,6 +1,9 @@
-package kernel
+//go:build sourcemanager
+
+package sourcemanager
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"testing"
 
@@ -8,13 +11,13 @@ import (
 )
 
 func TestSourceManagerServiceImpl_ListSources(t *testing.T) {
-	m := NewSourceManagerModule()
+	m := New()
 	m.stateDir = t.TempDir()
 
-	m.DeploySource(context.Background(), SourceSpec{ID: "trivy", Name: "Trivy", Category: SourceCategoryScanner, Priority: SourcePriorityP0, Version: "1.0"}, SourceConfig{})
-	m.DeploySource(context.Background(), SourceSpec{ID: "netbox", Name: "NetBox", Category: SourceCategoryManagement, Priority: SourcePriorityP0, Version: "3.5"}, SourceConfig{})
+	m.DeploySource(context.Background(), kernel.SourceSpec{ID: "trivy", Name: "Trivy", Category: kernel.SourceCategoryScanner, Priority: kernel.SourcePriorityP0, Version: "1.0"}, kernel.SourceConfig{})
+	m.DeploySource(context.Background(), kernel.SourceSpec{ID: "netbox", Name: "NetBox", Category: kernel.SourceCategoryManagement, Priority: kernel.SourcePriorityP0, Version: "3.5"}, kernel.SourceConfig{})
 
-	svc := NewSourceManagerServiceImpl(m)
+	svc := kernel.NewSourceManagerServiceImpl(m)
 
 	resp, err := svc.ListSources(context.Background(), &apiv1.ListSourcesRequest{})
 	if err != nil {
@@ -37,12 +40,12 @@ func TestSourceManagerServiceImpl_ListSources(t *testing.T) {
 }
 
 func TestSourceManagerServiceImpl_GetSource(t *testing.T) {
-	m := NewSourceManagerModule()
+	m := New()
 	m.stateDir = t.TempDir()
 
-	m.DeploySource(context.Background(), SourceSpec{ID: "trivy", Name: "Trivy", Category: SourceCategoryScanner, Priority: SourcePriorityP0, Version: "1.0"}, SourceConfig{})
+	m.DeploySource(context.Background(), kernel.SourceSpec{ID: "trivy", Name: "Trivy", Category: kernel.SourceCategoryScanner, Priority: kernel.SourcePriorityP0, Version: "1.0"}, kernel.SourceConfig{})
 
-	svc := NewSourceManagerServiceImpl(m)
+	svc := kernel.NewSourceManagerServiceImpl(m)
 
 	resp, err := svc.GetSource(context.Background(), &apiv1.GetSourceRequest{Id: "trivy"})
 	if err != nil {
@@ -62,10 +65,10 @@ func TestSourceManagerServiceImpl_GetSource(t *testing.T) {
 }
 
 func TestSourceManagerServiceImpl_DeploySource(t *testing.T) {
-	m := NewSourceManagerModule()
+	m := New()
 	m.stateDir = t.TempDir()
 
-	svc := NewSourceManagerServiceImpl(m)
+	svc := kernel.NewSourceManagerServiceImpl(m)
 
 	resp, err := svc.DeploySource(context.Background(), &apiv1.DeploySourceRequest{
 		Spec: &apiv1.SourceSpec{
@@ -88,18 +91,18 @@ func TestSourceManagerServiceImpl_DeploySource(t *testing.T) {
 	if !ok {
 		t.Fatal("source not found after deploy")
 	}
-	if status.State != SourceStateInstalled {
+	if status.State != kernel.SourceStateInstalled {
 		t.Errorf("expected installed, got %s", status.State)
 	}
 }
 
 func TestSourceManagerServiceImpl_EnableDisableSource(t *testing.T) {
-	m := NewSourceManagerModule()
+	m := New()
 	m.stateDir = t.TempDir()
 
-	m.DeploySource(context.Background(), SourceSpec{ID: "trivy", Name: "Trivy", Category: SourceCategoryScanner, Priority: SourcePriorityP0, Version: "1.0"}, SourceConfig{})
+	m.DeploySource(context.Background(), kernel.SourceSpec{ID: "trivy", Name: "Trivy", Category: kernel.SourceCategoryScanner, Priority: kernel.SourcePriorityP0, Version: "1.0"}, kernel.SourceConfig{})
 
-	svc := NewSourceManagerServiceImpl(m)
+	svc := kernel.NewSourceManagerServiceImpl(m)
 
 	resp, err := svc.EnableSource(context.Background(), &apiv1.EnableSourceRequest{Id: "trivy"})
 	if err != nil {
@@ -129,13 +132,13 @@ func TestSourceManagerServiceImpl_EnableDisableSource(t *testing.T) {
 }
 
 func TestSourceManagerServiceImpl_UpdateSource(t *testing.T) {
-	m := NewSourceManagerModule()
+	m := New()
 	m.stateDir = t.TempDir()
 
-	m.DeploySource(context.Background(), SourceSpec{ID: "trivy", Name: "Trivy", Category: SourceCategoryScanner, Priority: SourcePriorityP0, Version: "0.49"}, SourceConfig{})
+	m.DeploySource(context.Background(), kernel.SourceSpec{ID: "trivy", Name: "Trivy", Category: kernel.SourceCategoryScanner, Priority: kernel.SourcePriorityP0, Version: "0.49"}, kernel.SourceConfig{})
 	m.EnableSource(context.Background(), "trivy")
 
-	svc := NewSourceManagerServiceImpl(m)
+	svc := kernel.NewSourceManagerServiceImpl(m)
 
 	resp, err := svc.UpdateSource(context.Background(), &apiv1.UpdateSourceRequest{Id: "trivy", Version: "0.50"})
 	if err != nil {
@@ -152,12 +155,12 @@ func TestSourceManagerServiceImpl_UpdateSource(t *testing.T) {
 }
 
 func TestSourceManagerServiceImpl_UninstallSource(t *testing.T) {
-	m := NewSourceManagerModule()
+	m := New()
 	m.stateDir = t.TempDir()
 
-	m.DeploySource(context.Background(), SourceSpec{ID: "trivy", Name: "Trivy", Category: SourceCategoryScanner, Priority: SourcePriorityP0, Version: "1.0"}, SourceConfig{})
+	m.DeploySource(context.Background(), kernel.SourceSpec{ID: "trivy", Name: "Trivy", Category: kernel.SourceCategoryScanner, Priority: kernel.SourcePriorityP0, Version: "1.0"}, kernel.SourceConfig{})
 
-	svc := NewSourceManagerServiceImpl(m)
+	svc := kernel.NewSourceManagerServiceImpl(m)
 
 	resp, err := svc.UninstallSource(context.Background(), &apiv1.UninstallSourceRequest{Id: "trivy"})
 	if err != nil {
@@ -174,12 +177,12 @@ func TestSourceManagerServiceImpl_UninstallSource(t *testing.T) {
 }
 
 func TestSourceManagerServiceImpl_ConfigureSource(t *testing.T) {
-	m := NewSourceManagerModule()
+	m := New()
 	m.stateDir = t.TempDir()
 
-	m.DeploySource(context.Background(), SourceSpec{ID: "netbox", Name: "NetBox", Category: SourceCategoryManagement, Priority: SourcePriorityP0, Version: "3.5"}, SourceConfig{})
+	m.DeploySource(context.Background(), kernel.SourceSpec{ID: "netbox", Name: "NetBox", Category: kernel.SourceCategoryManagement, Priority: kernel.SourcePriorityP0, Version: "3.5"}, kernel.SourceConfig{})
 
-	svc := NewSourceManagerServiceImpl(m)
+	svc := kernel.NewSourceManagerServiceImpl(m)
 
 	resp, err := svc.ConfigureSource(context.Background(), &apiv1.ConfigureSourceRequest{
 		Id:       "netbox",
@@ -199,13 +202,13 @@ func TestSourceManagerServiceImpl_ConfigureSource(t *testing.T) {
 }
 
 func TestSourceManagerServiceImpl_GetAuditLog(t *testing.T) {
-	m := NewSourceManagerModule()
+	m := New()
 	m.stateDir = t.TempDir()
 
-	m.DeploySource(context.Background(), SourceSpec{ID: "trivy", Name: "Trivy", Category: SourceCategoryScanner, Priority: SourcePriorityP0, Version: "1.0"}, SourceConfig{})
+	m.DeploySource(context.Background(), kernel.SourceSpec{ID: "trivy", Name: "Trivy", Category: kernel.SourceCategoryScanner, Priority: kernel.SourcePriorityP0, Version: "1.0"}, kernel.SourceConfig{})
 	m.EnableSource(context.Background(), "trivy")
 
-	svc := NewSourceManagerServiceImpl(m)
+	svc := kernel.NewSourceManagerServiceImpl(m)
 
 	resp, err := svc.GetAuditLog(context.Background(), &apiv1.SourceAuditLogRequest{SourceId: "trivy"})
 	if err != nil {
@@ -217,11 +220,11 @@ func TestSourceManagerServiceImpl_GetAuditLog(t *testing.T) {
 }
 
 func TestBuildSourceManagerServiceDesc(t *testing.T) {
-	m := NewSourceManagerModule()
+	m := New()
 	m.stateDir = t.TempDir()
-	svc := NewSourceManagerServiceImpl(m)
+	svc := kernel.NewSourceManagerServiceImpl(m)
 
-	desc := BuildSourceManagerServiceDesc(svc)
+	desc := kernel.BuildSourceManagerServiceDesc(svc)
 	if desc.ServiceName != "ASSCOR.v1.SourceManagerService" {
 		t.Errorf("unexpected service name: %s", desc.ServiceName)
 	}
@@ -239,9 +242,9 @@ func TestBuildSourceManagerServiceDesc(t *testing.T) {
 }
 
 func TestSourceManagerServiceImpl_DeploySourceValidation(t *testing.T) {
-	m := NewSourceManagerModule()
+	m := New()
 	m.stateDir = t.TempDir()
-	svc := NewSourceManagerServiceImpl(m)
+	svc := kernel.NewSourceManagerServiceImpl(m)
 
 	resp, err := svc.DeploySource(context.Background(), &apiv1.DeploySourceRequest{
 		Spec: &apiv1.SourceSpec{Id: "", Name: "Test"},
@@ -262,21 +265,21 @@ func TestSourceManagerServiceImpl_DeploySourceValidation(t *testing.T) {
 }
 
 func TestConvertSourceStatus(t *testing.T) {
-	spec := &SourceSpec{
+	spec := &kernel.SourceSpec{
 		ID:          "trivy",
 		Name:        "Trivy",
-		Category:    SourceCategoryScanner,
-		Priority:    SourcePriorityP0,
+		Category:    kernel.SourceCategoryScanner,
+		Priority:    kernel.SourcePriorityP0,
 		Description: "Vulnerability scanner",
 	}
-	status := &SourceStatus{
+	status := &kernel.SourceStatus{
 		ID:      "trivy",
-		State:   SourceStateEnabled,
+		State:   kernel.SourceStateEnabled,
 		Version: "1.0",
 		Enabled: true,
 	}
 
-	pb := convertSourceStatus(status, spec)
+	pb := kernel.ConvertSourceStatus(status, spec)
 	if pb.Id != "trivy" {
 		t.Errorf("expected trivy, got %s", pb.Id)
 	}

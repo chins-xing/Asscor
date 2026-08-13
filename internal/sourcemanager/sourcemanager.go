@@ -1,6 +1,9 @@
-package kernel
+//go:build sourcemanager
+
+package sourcemanager
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,101 +17,30 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-type SourceState string
-
-const (
-	SourceStateNotInstalled SourceState = "not_installed"
-	SourceStateInstalled    SourceState = "installed"
-	SourceStateEnabled      SourceState = "enabled"
-	SourceStateRunning      SourceState = "running"
-	SourceStateError        SourceState = "error"
-	SourceStateDisabled     SourceState = "disabled"
-	SourceStateUninstalling SourceState = "uninstalling"
-)
-
-type SourceCategory string
-
-const (
-	SourceCategoryScanner    SourceCategory = "scanner"
-	SourceCategoryManagement SourceCategory = "management"
-)
-
-type SourcePriority string
-
-const (
-	SourcePriorityP0 SourcePriority = "P0"
-	SourcePriorityP1 SourcePriority = "P1"
-	SourcePriorityP2 SourcePriority = "P2"
-)
-
-type SourceSpec struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	Category     SourceCategory `json:"category"`
-	Priority     SourcePriority `json:"priority"`
-	Version      string         `json:"version"`
-	Description  string         `json:"description"`
-	Interface    string         `json:"interface,omitempty"`
-	AdapterID    string         `json:"adapter_id"`
-	OutputFormat string         `json:"output_format"`
-	AdaptDiff    string         `json:"adapt_difficulty"`
-	AccessValue  string         `json:"access_value"`
-	DelegatedChecks []string   `json:"delegated_checks,omitempty"`
-	DependsOn    []string       `json:"depends_on,omitempty"`
-}
-
-type SourceStatus struct {
-	ID         string      `json:"id"`
-	State      SourceState `json:"state"`
-	Version    string      `json:"version"`
-	Enabled    bool        `json:"enabled"`
-	LastSync   time.Time   `json:"last_sync,omitempty"`
-	LastError  string      `json:"last_error,omitempty"`
-	Findings   int         `json:"findings_count"`
-	SyncCount  int64       `json:"sync_count"`
-	ErrorCount int64       `json:"error_count"`
-	InstalledAt time.Time  `json:"installed_at,omitempty"`
-	ConfiguredAt time.Time `json:"configured_at,omitempty"`
-}
-
-type SourceConfig struct {
-	ID       string            `json:"id"`
-	Settings map[string]string `json:"settings"`
-}
-
-type AuditLogEntry struct {
-	Timestamp time.Time `json:"timestamp"`
-	Action    string    `json:"action"`
-	SourceID  string    `json:"source_id"`
-	Operator  string    `json:"operator"`
-	Detail    string    `json:"detail"`
-	Success   bool      `json:"success"`
-}
-
-type SourceManagerModule struct {
-	kernel KernelContext
+type Module struct {
+	kc kernel.KernelContext
 
 	mu       sync.RWMutex
-	specs    map[string]SourceSpec
-	statuses map[string]SourceStatus
-	configs  map[string]SourceConfig
-	auditLog []AuditLogEntry
+	specs    map[string]kernel.SourceSpec
+	statuses map[string]kernel.SourceStatus
+	configs  map[string]kernel.SourceConfig
+	auditLog []kernel.AuditLogEntry
 	stateDir string
-	state    PluginState
+	state    kernel.PluginState
 }
 
-func NewSourceManagerModule() *SourceManagerModule {
-	return &SourceManagerModule{
-		specs:    make(map[string]SourceSpec),
-		statuses: make(map[string]SourceStatus),
-		configs:  make(map[string]SourceConfig),
-		auditLog: make([]AuditLogEntry, 0),
+func New() *Module {
+	return &Module{
+		specs:    make(map[string]kernel.SourceSpec),
+		statuses: make(map[string]kernel.SourceStatus),
+		configs:  make(map[string]kernel.SourceConfig),
+		auditLog: make([]kernel.AuditLogEntry, 0),
 		stateDir: "data/source_manager",
 	}
 }
 
-func (m *SourceManagerModule) Info() PluginInfo {
-	return PluginInfo{
+func (m *Module) Info() kernel.PluginInfo {
+	return kernel.PluginInfo{
 		Name:        "source_manager",
 		Version:     "1.0.0",
 		Description: "External source lifecycle management — deploy, configure, enable/disable, update, uninstall",
@@ -116,19 +48,19 @@ func (m *SourceManagerModule) Info() PluginInfo {
 	}
 }
 
-func (m *SourceManagerModule) Dependencies() []PluginDependency {
-	return []PluginDependency{
-		{Name: "adapter_integration", Interface: (*AdapterIntegrationInterface)(nil)},
+func (m *Module) Dependencies() []kernel.PluginDependency {
+	return []kernel.PluginDependency{
+		{Name: "adapter_integration", Interface: (*kernel.AdapterIntegrationInterface)(nil)},
 	}
 }
 
-func (m *SourceManagerModule) Priority() int {
+func (m *Module) Priority() int {
 	return 55
 }
 
-func (m *SourceManagerModule) Init(ctx context.Context, kc KernelContext) error {
-	m.kernel = kc
-	m.state = PluginInitialized
+func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
+	m.kc = kc
+	m.state = kernel.PluginInitialized
 
 	os.MkdirAll(m.stateDir, 0755)
 	m.loadState()
@@ -137,34 +69,34 @@ func (m *SourceManagerModule) Init(ctx context.Context, kc KernelContext) error 
 		m.syncFromAdapterRegistry(cfg)
 	}
 
-	kc.Container().Bind((*SourceManagerInterface)(nil), m)
+	kc.Container().Bind((*kernel.SourceManagerInterface)(nil), m)
 	logger.WithComponent("source_manager").Info("initialized", "sources", len(m.specs))
 	return nil
 }
 
-func (m *SourceManagerModule) Start(ctx context.Context) error {
-	m.state = PluginStarted
+func (m *Module) Start(ctx context.Context) error {
+	m.state = kernel.PluginStarted
 	logger.WithComponent("source_manager").Info("started")
 	return nil
 }
 
-func (m *SourceManagerModule) Stop(ctx context.Context) error {
-	m.state = PluginStopping
+func (m *Module) Stop(ctx context.Context) error {
+	m.state = kernel.PluginStopping
 	m.saveState()
-	m.state = PluginStopped
+	m.state = kernel.PluginStopped
 	logger.WithComponent("source_manager").Info("stopped")
 	return nil
 }
 
-func (m *SourceManagerModule) State() PluginState {
+func (m *Module) State() kernel.PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
 }
 
-func (m *SourceManagerModule) DeploySource(ctx context.Context, spec SourceSpec, cfg SourceConfig) error {
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(ctx, "source.pre_deploy", map[string]interface{}{
+func (m *Module) DeploySource(ctx context.Context, spec kernel.SourceSpec, cfg kernel.SourceConfig) error {
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(ctx, "source.pre_deploy", map[string]interface{}{
 			"source_id": spec.ID,
 			"version":   spec.Version,
 		})
@@ -179,29 +111,29 @@ func (m *SourceManagerModule) DeploySource(ctx context.Context, spec SourceSpec,
 	if spec.Name == "" {
 		return fmt.Errorf("source name is required")
 	}
-	if spec.Category != SourceCategoryScanner && spec.Category != SourceCategoryManagement {
+	if spec.Category != kernel.SourceCategoryScanner && spec.Category != kernel.SourceCategoryManagement {
 		return fmt.Errorf("invalid source category: %s", spec.Category)
 	}
-	if spec.Priority != SourcePriorityP0 && spec.Priority != SourcePriorityP1 && spec.Priority != SourcePriorityP2 {
+	if spec.Priority != kernel.SourcePriorityP0 && spec.Priority != kernel.SourcePriorityP1 && spec.Priority != kernel.SourcePriorityP2 {
 		return fmt.Errorf("invalid source priority: %s", spec.Priority)
 	}
 
-	if existing, exists := m.statuses[spec.ID]; exists && existing.State != SourceStateNotInstalled {
+	if existing, exists := m.statuses[spec.ID]; exists && existing.State != kernel.SourceStateNotInstalled {
 		return fmt.Errorf("source %s already deployed (state: %s)", spec.ID, existing.State)
 	}
 
 	for _, dep := range spec.DependsOn {
 		depStatus, exists := m.statuses[dep]
-		if !exists || (depStatus.State != SourceStateEnabled && depStatus.State != SourceStateRunning) {
+		if !exists || (depStatus.State != kernel.SourceStateEnabled && depStatus.State != kernel.SourceStateRunning) {
 			return fmt.Errorf("dependency %s is not available (state: %s)", dep, depStatus.State)
 		}
 	}
 
 	now := time.Now()
 	m.specs[spec.ID] = spec
-	m.statuses[spec.ID] = SourceStatus{
+	m.statuses[spec.ID] = kernel.SourceStatus{
 		ID:          spec.ID,
-		State:       SourceStateInstalled,
+		State:       kernel.SourceStateInstalled,
 		Version:     spec.Version,
 		Enabled:     false,
 		InstalledAt: now,
@@ -216,8 +148,8 @@ func (m *SourceManagerModule) DeploySource(ctx context.Context, spec SourceSpec,
 
 	m.publishEvent(ctx, "source_manager.deployed", map[string]interface{}{"source_id": spec.ID, "version": spec.Version})
 
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(ctx, "source.post_deploy", map[string]interface{}{
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(ctx, "source.post_deploy", map[string]interface{}{
 			"source_id": spec.ID,
 			"version":   spec.Version,
 		})
@@ -227,7 +159,7 @@ func (m *SourceManagerModule) DeploySource(ctx context.Context, spec SourceSpec,
 	return nil
 }
 
-func (m *SourceManagerModule) UninstallSource(ctx context.Context, id string, force bool) error {
+func (m *Module) UninstallSource(ctx context.Context, id string, force bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -241,7 +173,7 @@ func (m *SourceManagerModule) UninstallSource(ctx context.Context, id string, fo
 		return fmt.Errorf("source %s status not found", id)
 	}
 
-	if status.State == SourceStateRunning && !force {
+	if status.State == kernel.SourceStateRunning && !force {
 		return fmt.Errorf("source %s is running, stop it first or use force", id)
 	}
 
@@ -271,9 +203,9 @@ func (m *SourceManagerModule) UninstallSource(ctx context.Context, id string, fo
 	return nil
 }
 
-func (m *SourceManagerModule) EnableSource(ctx context.Context, id string) error {
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(ctx, "source.pre_enable", map[string]interface{}{
+func (m *Module) EnableSource(ctx context.Context, id string) error {
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(ctx, "source.pre_enable", map[string]interface{}{
 			"source_id": id,
 		})
 	}
@@ -286,10 +218,10 @@ func (m *SourceManagerModule) EnableSource(ctx context.Context, id string) error
 	}
 
 	status := m.statuses[id]
-	if status.State == SourceStateEnabled || status.State == SourceStateRunning {
+	if status.State == kernel.SourceStateEnabled || status.State == kernel.SourceStateRunning {
 		return fmt.Errorf("source %s is already enabled", id)
 	}
-	if status.State == SourceStateNotInstalled {
+	if status.State == kernel.SourceStateNotInstalled {
 		return fmt.Errorf("source %s is not installed", id)
 	}
 
@@ -300,7 +232,7 @@ func (m *SourceManagerModule) EnableSource(ctx context.Context, id string) error
 		}
 	}
 
-	status.State = SourceStateEnabled
+	status.State = kernel.SourceStateEnabled
 	status.Enabled = true
 	status.ConfiguredAt = time.Now()
 	m.statuses[id] = status
@@ -316,9 +248,9 @@ func (m *SourceManagerModule) EnableSource(ctx context.Context, id string) error
 	return nil
 }
 
-func (m *SourceManagerModule) DisableSource(ctx context.Context, id string) error {
-	if m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(ctx, "source.pre_disable", map[string]interface{}{
+func (m *Module) DisableSource(ctx context.Context, id string) error {
+	if m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(ctx, "source.pre_disable", map[string]interface{}{
 			"source_id": id,
 		})
 	}
@@ -335,7 +267,7 @@ func (m *SourceManagerModule) DisableSource(ctx context.Context, id string) erro
 		return fmt.Errorf("source %s is already disabled", id)
 	}
 
-	status.State = SourceStateDisabled
+	status.State = kernel.SourceStateDisabled
 	status.Enabled = false
 	m.statuses[id] = status
 
@@ -350,7 +282,7 @@ func (m *SourceManagerModule) DisableSource(ctx context.Context, id string) erro
 	return nil
 }
 
-func (m *SourceManagerModule) UpdateSource(ctx context.Context, id string, version string) error {
+func (m *Module) UpdateSource(ctx context.Context, id string, version string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -360,7 +292,7 @@ func (m *SourceManagerModule) UpdateSource(ctx context.Context, id string, versi
 	}
 
 	status := m.statuses[id]
-	if status.State == SourceStateNotInstalled {
+	if status.State == kernel.SourceStateNotInstalled {
 		return fmt.Errorf("source %s is not installed", id)
 	}
 
@@ -369,9 +301,9 @@ func (m *SourceManagerModule) UpdateSource(ctx context.Context, id string, versi
 	m.specs[id] = spec
 
 	status.Version = version
-	status.State = SourceStateInstalled
+	status.State = kernel.SourceStateInstalled
 	if status.Enabled {
-		status.State = SourceStateEnabled
+		status.State = kernel.SourceStateEnabled
 	}
 	m.statuses[id] = status
 
@@ -384,7 +316,7 @@ func (m *SourceManagerModule) UpdateSource(ctx context.Context, id string, versi
 	return nil
 }
 
-func (m *SourceManagerModule) GetSourceStatus(id string) (*SourceStatus, bool) {
+func (m *Module) GetSourceStatus(id string) (*kernel.SourceStatus, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	s, ok := m.statuses[id]
@@ -395,10 +327,10 @@ func (m *SourceManagerModule) GetSourceStatus(id string) (*SourceStatus, bool) {
 	return &cp, true
 }
 
-func (m *SourceManagerModule) ListSources(category SourceCategory) []SourceStatus {
+func (m *Module) ListSources(category kernel.SourceCategory) []kernel.SourceStatus {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	var result []SourceStatus
+	var result []kernel.SourceStatus
 	for id, status := range m.statuses {
 		if spec, ok := m.specs[id]; ok && spec.Category == category {
 			cp := status
@@ -408,10 +340,10 @@ func (m *SourceManagerModule) ListSources(category SourceCategory) []SourceStatu
 	return result
 }
 
-func (m *SourceManagerModule) ListAllSources() []SourceStatus {
+func (m *Module) ListAllSources() []kernel.SourceStatus {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	result := make([]SourceStatus, 0, len(m.statuses))
+	result := make([]kernel.SourceStatus, 0, len(m.statuses))
 	for _, status := range m.statuses {
 		cp := status
 		result = append(result, cp)
@@ -419,7 +351,7 @@ func (m *SourceManagerModule) ListAllSources() []SourceStatus {
 	return result
 }
 
-func (m *SourceManagerModule) ConfigureSource(ctx context.Context, id string, cfg SourceConfig) error {
+func (m *Module) ConfigureSource(ctx context.Context, id string, cfg kernel.SourceConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -443,7 +375,7 @@ func (m *SourceManagerModule) ConfigureSource(ctx context.Context, id string, cf
 	return nil
 }
 
-func (m *SourceManagerModule) GetSourceConfig(id string) (*SourceConfig, bool) {
+func (m *Module) GetSourceConfig(id string) (*kernel.SourceConfig, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	cfg, ok := m.configs[id]
@@ -454,7 +386,7 @@ func (m *SourceManagerModule) GetSourceConfig(id string) (*SourceConfig, bool) {
 	return &cp, true
 }
 
-func (m *SourceManagerModule) GetSourceSpec(id string) (*SourceSpec, bool) {
+func (m *Module) GetSourceSpec(id string) (*kernel.SourceSpec, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	spec, ok := m.specs[id]
@@ -465,7 +397,7 @@ func (m *SourceManagerModule) GetSourceSpec(id string) (*SourceSpec, bool) {
 	return &cp, true
 }
 
-func (m *SourceManagerModule) RunSourceNow(ctx context.Context, id string) error {
+func (m *Module) RunSourceNow(ctx context.Context, id string) error {
 	m.mu.Lock()
 	status, exists := m.statuses[id]
 	if !exists {
@@ -476,14 +408,14 @@ func (m *SourceManagerModule) RunSourceNow(ctx context.Context, id string) error
 		m.mu.Unlock()
 		return fmt.Errorf("source %s is not enabled", id)
 	}
-	status.State = SourceStateRunning
+	status.State = kernel.SourceStateRunning
 	m.statuses[id] = status
 	m.mu.Unlock()
 
-	if m.kernel == nil {
+	if m.kc == nil {
 		m.mu.Lock()
 		status = m.statuses[id]
-		status.State = SourceStateEnabled
+		status.State = kernel.SourceStateEnabled
 		status.LastSync = time.Now()
 		status.SyncCount++
 		m.statuses[id] = status
@@ -492,11 +424,11 @@ func (m *SourceManagerModule) RunSourceNow(ctx context.Context, id string) error
 		return nil
 	}
 
-	impl, ok := m.kernel.Container().Resolve((*AdapterIntegrationInterface)(nil))
+	impl, ok := m.kc.Container().Resolve((*kernel.AdapterIntegrationInterface)(nil))
 	if !ok {
 		return fmt.Errorf("adapter integration not available")
 	}
-	adapterInteg, ok := impl.(AdapterIntegrationInterface)
+	adapterInteg, ok := impl.(kernel.AdapterIntegrationInterface)
 	if !ok {
 		return fmt.Errorf("adapter integration type mismatch")
 	}
@@ -510,11 +442,11 @@ func (m *SourceManagerModule) RunSourceNow(ctx context.Context, id string) error
 		if r.AdapterID == id || r.AdapterName == m.specs[id].Name {
 			findings = len(r.Findings)
 			if r.Error != nil {
-				status.State = SourceStateError
+				status.State = kernel.SourceStateError
 				status.LastError = r.Error.Error()
 				status.ErrorCount++
 			} else {
-				status.State = SourceStateEnabled
+				status.State = kernel.SourceStateEnabled
 				status.LastError = ""
 			}
 			break
@@ -532,11 +464,11 @@ func (m *SourceManagerModule) RunSourceNow(ctx context.Context, id string) error
 	return nil
 }
 
-func (m *SourceManagerModule) GetAuditLog(sourceID string, limit int) []AuditLogEntry {
+func (m *Module) GetAuditLog(sourceID string, limit int) []kernel.AuditLogEntry {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var filtered []AuditLogEntry
+	var filtered []kernel.AuditLogEntry
 	for i := len(m.auditLog) - 1; i >= 0; i-- {
 		if sourceID == "" || m.auditLog[i].SourceID == sourceID {
 			filtered = append(filtered, m.auditLog[i])
@@ -548,13 +480,13 @@ func (m *SourceManagerModule) GetAuditLog(sourceID string, limit int) []AuditLog
 	return filtered
 }
 
-func (m *SourceManagerModule) HealthCheck(ctx context.Context) error {
+func (m *Module) HealthCheck(ctx context.Context) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	errorCount := 0
 	for _, status := range m.statuses {
-		if status.State == SourceStateError {
+		if status.State == kernel.SourceStateError {
 			errorCount++
 		}
 	}
@@ -564,8 +496,8 @@ func (m *SourceManagerModule) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-func (m *SourceManagerModule) appendAuditLog(action, sourceID, operator, detail string, success bool) {
-	entry := AuditLogEntry{
+func (m *Module) appendAuditLog(action, sourceID, operator, detail string, success bool) {
+	entry := kernel.AuditLogEntry{
 		Timestamp: time.Now(),
 		Action:    action,
 		SourceID:  sourceID,
@@ -579,7 +511,7 @@ func (m *SourceManagerModule) appendAuditLog(action, sourceID, operator, detail 
 	}
 }
 
-func (m *SourceManagerModule) syncFromAdapterRegistry(cfg *config.Config) {
+func (m *Module) syncFromAdapterRegistry(cfg *config.Config) {
 	adapters := adapter.List()
 	for _, a := range adapters {
 		id := a.ID()
@@ -587,35 +519,35 @@ func (m *SourceManagerModule) syncFromAdapterRegistry(cfg *config.Config) {
 			continue
 		}
 
-		var category SourceCategory
+		var category kernel.SourceCategory
 		switch a.Category() {
 		case "scanner":
-			category = SourceCategoryScanner
+			category = kernel.SourceCategoryScanner
 		case "management":
-			category = SourceCategoryManagement
+			category = kernel.SourceCategoryManagement
 		default:
-			category = SourceCategoryScanner
+			category = kernel.SourceCategoryScanner
 		}
 
-		var priority SourcePriority
+		var priority kernel.SourcePriority
 		switch a.Priority() {
 		case "P0":
-			priority = SourcePriorityP0
+			priority = kernel.SourcePriorityP0
 		case "P1":
-			priority = SourcePriorityP1
+			priority = kernel.SourcePriorityP1
 		case "P2":
-			priority = SourcePriorityP2
+			priority = kernel.SourcePriorityP2
 		default:
-			priority = SourcePriorityP1
+			priority = kernel.SourcePriorityP1
 		}
 
 		enabled := a.IsEnabled(cfg.AdapterConfig)
-		state := SourceStateInstalled
+		state := kernel.SourceStateInstalled
 		if enabled {
-			state = SourceStateEnabled
+			state = kernel.SourceStateEnabled
 		}
 
-		m.specs[id] = SourceSpec{
+		m.specs[id] = kernel.SourceSpec{
 			ID:        id,
 			Name:      a.Name(),
 			Category:  category,
@@ -624,7 +556,7 @@ func (m *SourceManagerModule) syncFromAdapterRegistry(cfg *config.Config) {
 			AdapterID: id,
 		}
 
-		m.statuses[id] = SourceStatus{
+		m.statuses[id] = kernel.SourceStatus{
 			ID:          id,
 			State:       state,
 			Version:     a.Version(),
@@ -638,29 +570,29 @@ func (m *SourceManagerModule) syncFromAdapterRegistry(cfg *config.Config) {
 				settings[k] = v
 			}
 		}
-		m.configs[id] = SourceConfig{ID: id, Settings: settings}
+		m.configs[id] = kernel.SourceConfig{ID: id, Settings: settings}
 	}
 }
 
-func (m *SourceManagerModule) setAdapterEnabled(id string, enabled bool) {
-	if m.kernel == nil {
+func (m *Module) setAdapterEnabled(id string, enabled bool) {
+	if m.kc == nil {
 		return
 	}
-	if cfg := m.kernel.GetConfigObj(); cfg != nil {
+	if cfg := m.kc.GetConfigObj(); cfg != nil {
 		val := "off"
 		if enabled {
 			val = "on"
 		}
 		cfg.AdapterConfig[id] = val
-		m.kernel.SetConfig("adapters."+id, val)
+		m.kc.SetConfig("adapters."+id, val)
 	}
 }
 
-func (m *SourceManagerModule) applyConfigToAdapter(id string, cfg SourceConfig) {
-	if m.kernel == nil {
+func (m *Module) applyConfigToAdapter(id string, cfg kernel.SourceConfig) {
+	if m.kc == nil {
 		return
 	}
-	if kernelCfg := m.kernel.GetConfigObj(); kernelCfg != nil {
+	if kernelCfg := m.kc.GetConfigObj(); kernelCfg != nil {
 		for k, v := range cfg.Settings {
 			kernelCfg.AdapterConfig[id+"."+k] = v
 		}
@@ -670,11 +602,11 @@ func (m *SourceManagerModule) applyConfigToAdapter(id string, cfg SourceConfig) 
 	}
 }
 
-func (m *SourceManagerModule) removeConfigFromAdapter(id string, spec SourceSpec) {
-	if m.kernel == nil {
+func (m *Module) removeConfigFromAdapter(id string, spec kernel.SourceSpec) {
+	if m.kc == nil {
 		return
 	}
-	if cfg := m.kernel.GetConfigObj(); cfg != nil {
+	if cfg := m.kc.GetConfigObj(); cfg != nil {
 		delete(cfg.AdapterConfig, id)
 		prefix := id + "."
 		for k := range cfg.AdapterConfig {
@@ -685,11 +617,11 @@ func (m *SourceManagerModule) removeConfigFromAdapter(id string, spec SourceSpec
 	}
 }
 
-func (m *SourceManagerModule) publishEvent(ctx context.Context, topic string, payload map[string]interface{}) {
-	if m.kernel == nil {
+func (m *Module) publishEvent(ctx context.Context, topic string, payload map[string]interface{}) {
+	if m.kc == nil {
 		return
 	}
-	m.kernel.Bus().Publish(ctx, Message{
+	m.kc.Bus().Publish(ctx, kernel.Message{
 		Topic:     topic,
 		Payload:   payload,
 		Source:    "source_manager",
@@ -697,12 +629,12 @@ func (m *SourceManagerModule) publishEvent(ctx context.Context, topic string, pa
 	})
 }
 
-func (m *SourceManagerModule) saveState() {
+func (m *Module) saveState() {
 	state := struct {
-		Specs    map[string]SourceSpec    `json:"specs"`
-		Statuses map[string]SourceStatus  `json:"statuses"`
-		Configs  map[string]SourceConfig  `json:"configs"`
-		AuditLog []AuditLogEntry          `json:"audit_log"`
+		Specs    map[string]kernel.SourceSpec    `json:"specs"`
+		Statuses map[string]kernel.SourceStatus  `json:"statuses"`
+		Configs  map[string]kernel.SourceConfig  `json:"configs"`
+		AuditLog []kernel.AuditLogEntry          `json:"audit_log"`
 	}{
 		Specs:    m.specs,
 		Statuses: m.statuses,
@@ -732,7 +664,7 @@ func (m *SourceManagerModule) saveState() {
 	}
 }
 
-func (m *SourceManagerModule) loadState() {
+func (m *Module) loadState() {
 	path := filepath.Join(m.stateDir, "source_manager_state.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -743,10 +675,10 @@ func (m *SourceManagerModule) loadState() {
 	}
 
 	var state struct {
-		Specs    map[string]SourceSpec    `json:"specs"`
-		Statuses map[string]SourceStatus  `json:"statuses"`
-		Configs  map[string]SourceConfig  `json:"configs"`
-		AuditLog []AuditLogEntry          `json:"audit_log"`
+		Specs    map[string]kernel.SourceSpec    `json:"specs"`
+		Statuses map[string]kernel.SourceStatus  `json:"statuses"`
+		Configs  map[string]kernel.SourceConfig  `json:"configs"`
+		AuditLog []kernel.AuditLogEntry          `json:"audit_log"`
 	}
 	if err := json.Unmarshal(data, &state); err != nil {
 		logger.WithComponent("source_manager").Warn("failed to unmarshal state", "error", err)

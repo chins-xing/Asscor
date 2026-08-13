@@ -30,7 +30,7 @@ func (s *SourceManagerServiceImpl) ListSources(ctx context.Context, req *apiv1.L
 	items := make([]*apiv1.SourceStatus, 0, len(sources))
 	for _, src := range sources {
 		spec, _ := s.sourceManager.GetSourceSpec(src.ID)
-		items = append(items, convertSourceStatus(&src, spec))
+		items = append(items, ConvertSourceStatus(&src, spec))
 	}
 
 	return &apiv1.ListSourcesResponse{Sources: items}, nil
@@ -50,7 +50,7 @@ func (s *SourceManagerServiceImpl) GetSource(ctx context.Context, req *apiv1.Get
 	cfg, _ := s.sourceManager.GetSourceConfig(req.Id)
 
 	resp := &apiv1.GetSourceResponse{
-		Status: convertSourceStatus(status, spec),
+		Status: ConvertSourceStatus(status, spec),
 	}
 	if spec != nil {
 		resp.Spec = convertSourceSpec(spec)
@@ -321,7 +321,7 @@ func BuildSourceManagerServiceDesc(svc *SourceManagerServiceImpl) *apiv1.Service
 	}
 }
 
-func convertSourceStatus(s *SourceStatus, spec *SourceSpec) *apiv1.SourceStatus {
+func ConvertSourceStatus(s *SourceStatus, spec *SourceSpec) *apiv1.SourceStatus {
 	status := &apiv1.SourceStatus{
 		Id:          s.ID,
 		State:       string(s.State),

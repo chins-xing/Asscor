@@ -245,7 +245,7 @@ k.SetConfig("config_path", resolvedConfigPath)
 	concurrency := kernel.NewConcurrencyModule(10)
 	configWatcher := kernel.NewConfigWatcherModule(resolvedConfigPath)
 	adapterIntegration := kernel.NewAdapterIntegrationModule()
-	sourceManager := kernel.NewSourceManagerModule()
+	sourceManager := newSourceManager()
 	cliModule := cli.NewCLIModule()
 
 	if assessor != nil {
@@ -263,7 +263,10 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 	lifecycle := kernel.NewLifecycleEngine(k)
 
-	plugins := []kernel.Plugin{persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	plugins := []kernel.Plugin{persistence, concurrency, configWatcher, adapterIntegration, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	if sm, ok := sourceManager.(kernel.Plugin); ok {
+		plugins = append(plugins, sm)
+	}
 	if lc, ok := logCollector.(kernel.Plugin); ok {
 		plugins = append(plugins, lc)
 	}
