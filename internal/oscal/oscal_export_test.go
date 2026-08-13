@@ -1,6 +1,7 @@
-package kernel
+package oscal
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"encoding/json"
 	"encoding/xml"
 	"strings"
@@ -205,7 +206,7 @@ func TestOSCALExport_NoPrism(t *testing.T) {
 }
 
 func TestOSCALExport_FromRecord(t *testing.T) {
-	rec := &AssessmentRecord{
+	rec := &kernel.AssessmentRecord{
 		Timestamp:  time.Now(),
 		HostID:     "host-004",
 		Hostname:   "from-record",

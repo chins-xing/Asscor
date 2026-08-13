@@ -1,6 +1,7 @@
-package kernel
+package oscal
 
 import (
+	"github.com/asscor/asscor/internal/kernel"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -135,8 +136,8 @@ func ExportOSCAL(result *model.AssessmentResult, format string) ([]byte, error) 
 	}
 }
 
-// ExportOSCALFromRecord generates an OSCAL document from an AssessmentRecord.
-func ExportOSCALFromRecord(rec *AssessmentRecord, format string) ([]byte, error) {
+// ExportOSCALFromRecord generates an OSCAL document from an kernel.AssessmentRecord.
+func ExportOSCALFromRecord(rec *kernel.AssessmentRecord, format string) ([]byte, error) {
 	result := &model.AssessmentResult{
 		HostID:                rec.HostID,
 		Hostname:              rec.Hostname,
