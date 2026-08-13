@@ -230,9 +230,9 @@ k.SetConfig("config_path", resolvedConfigPath)
 
 	assessor := &kernel.AssessorModule{}
 	initATTACK(assessor)
-	policy := &kernel.PolicyModule{}
+	policy := newPolicy()
 	spc := kernel.NewSPCModule()
-	cti := &kernel.CTIModule{}
+	cti := newCTI()
 	commander := newCommander()
 	logCollector := &kernel.LogCollectorModule{}
 	heartbeat := newHeartbeat()
@@ -248,16 +248,24 @@ k.SetConfig("config_path", resolvedConfigPath)
 	if commander != nil {
 		k.Container().Bind((*kernel.CommanderInterface)(nil), commander)
 	}
-	k.Container().Bind((*kernel.PolicyInterface)(nil), policy)
+	if policy != nil {
+		k.Container().Bind((*kernel.PolicyInterface)(nil), policy)
+	}
 
 	lifecycle := kernel.NewLifecycleEngine(k)
 
-	plugins := []kernel.Plugin{spc, cti, scoringEngine, assessor, policy, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
+	plugins := []kernel.Plugin{spc, scoringEngine, assessor, logCollector, persistence, concurrency, configWatcher, adapterIntegration, sourceManager, cliModule, lifecycle, kernel.NewSRDPlugin()}
 	if hb, ok := heartbeat.(kernel.Plugin); ok {
 		plugins = append(plugins, hb)
 	}
 	if c, ok := commander.(kernel.Plugin); ok {
 		plugins = append(plugins, c)
+	}
+	if p, ok := policy.(kernel.Plugin); ok {
+		plugins = append(plugins, p)
+	}
+	if ct, ok := cti.(kernel.Plugin); ok {
+		plugins = append(plugins, ct)
 	}
 
 	if *webuiPort > 0 {

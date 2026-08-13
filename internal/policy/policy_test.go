@@ -1,39 +1,23 @@
-package kernel
+//go:build policy
+
+package policy
 
 import (
 	"testing"
 
 	"github.com/asscor/asscor/internal/config"
+	"github.com/asscor/asscor/internal/kernel"
 )
 
-func TestHostStatusString(t *testing.T) {
-	tests := []struct {
-		status HostStatus
-		want   string
-	}{
-		{HostOK, "OK"},
-		{HostWarning, "Warning"},
-		{HostCritical, "Critical"},
-		{HostIsolated, "Isolated"},
-		{HostStatus(99), "Unknown"},
-	}
-
-	for _, tt := range tests {
-		if got := tt.status.String(); got != tt.want {
-			t.Errorf("HostStatus(%d).String() = %q, want %q", tt.status, got, tt.want)
-		}
-	}
-}
-
 func TestPolicyEvaluateOK(t *testing.T) {
-	m := &PolicyModule{
+	m := &Module{
 		cfg:        &config.Config{Threshold: 80},
-		hostStatus: make(map[string]HostStatus),
+		hostStatus: make(map[string]kernel.HostStatus),
 	}
 
 	status, actions := m.EvaluateHost("host-01", 85.0)
 
-	if status != HostOK {
+	if status != kernel.HostOK {
 		t.Errorf("expected HostOK, got %s", status)
 	}
 	if len(actions) != 0 {
@@ -42,14 +26,14 @@ func TestPolicyEvaluateOK(t *testing.T) {
 }
 
 func TestPolicyEvaluateWarning(t *testing.T) {
-	m := &PolicyModule{
+	m := &Module{
 		cfg:        &config.Config{Threshold: 80},
-		hostStatus: make(map[string]HostStatus),
+		hostStatus: make(map[string]kernel.HostStatus),
 	}
 
 	status, actions := m.EvaluateHost("host-02", 75.0)
 
-	if status != HostWarning {
+	if status != kernel.HostWarning {
 		t.Errorf("expected HostWarning, got %s", status)
 	}
 	if len(actions) != 1 {
@@ -61,14 +45,14 @@ func TestPolicyEvaluateWarning(t *testing.T) {
 }
 
 func TestPolicyEvaluateCritical(t *testing.T) {
-	m := &PolicyModule{
+	m := &Module{
 		cfg:        &config.Config{Threshold: 80},
-		hostStatus: make(map[string]HostStatus),
+		hostStatus: make(map[string]kernel.HostStatus),
 	}
 
 	status, actions := m.EvaluateHost("host-03", 55.0)
 
-	if status != HostCritical {
+	if status != kernel.HostCritical {
 		t.Errorf("expected HostCritical, got %s", status)
 	}
 	if len(actions) < 2 {
@@ -86,14 +70,14 @@ func TestPolicyEvaluateCritical(t *testing.T) {
 }
 
 func TestPolicyEvaluateIsolated(t *testing.T) {
-	m := &PolicyModule{
+	m := &Module{
 		cfg:        &config.Config{Threshold: 80},
-		hostStatus: make(map[string]HostStatus),
+		hostStatus: make(map[string]kernel.HostStatus),
 	}
 
 	status, actions := m.EvaluateHost("host-04", 30.0)
 
-	if status != HostIsolated {
+	if status != kernel.HostIsolated {
 		t.Errorf("expected HostIsolated, got %s", status)
 	}
 	if len(actions) < 2 {
@@ -111,24 +95,24 @@ func TestPolicyEvaluateIsolated(t *testing.T) {
 }
 
 func TestPolicyThresholdBoundary(t *testing.T) {
-	m := &PolicyModule{
+	m := &Module{
 		cfg:        &config.Config{Threshold: 80},
-		hostStatus: make(map[string]HostStatus),
+		hostStatus: make(map[string]kernel.HostStatus),
 	}
 
-	if s, _ := m.EvaluateHost("h", 80.0); s != HostOK {
+	if s, _ := m.EvaluateHost("h", 80.0); s != kernel.HostOK {
 		t.Errorf("score=80 (==threshold) should be OK, got %s", s)
 	}
-	if s, _ := m.EvaluateHost("h", 79.0); s != HostWarning {
+	if s, _ := m.EvaluateHost("h", 79.0); s != kernel.HostWarning {
 		t.Errorf("score=79 should be Warning, got %s", s)
 	}
-	if s, _ := m.EvaluateHost("h", 70.0); s != HostWarning {
+	if s, _ := m.EvaluateHost("h", 70.0); s != kernel.HostWarning {
 		t.Errorf("score=70 should be Warning (threshold-10 inclusive), got %s", s)
 	}
-	if s, _ := m.EvaluateHost("h", 69.0); s != HostCritical {
+	if s, _ := m.EvaluateHost("h", 69.0); s != kernel.HostCritical {
 		t.Errorf("score=69 should be Critical, got %s", s)
 	}
-	if s, _ := m.EvaluateHost("h", 49.0); s != HostIsolated {
+	if s, _ := m.EvaluateHost("h", 49.0); s != kernel.HostIsolated {
 		t.Errorf("score=49 should be Isolated, got %s", s)
 	}
 }

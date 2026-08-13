@@ -1,4 +1,6 @@
-package kernel
+//go:build cti
+
+package cti
 
 import (
 	"context"
@@ -12,37 +14,42 @@ import (
 	"sync"
 	"time"
 
+	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 )
 
-type CTIModule struct {
-	kernel KernelContext
+// Module fetches OTX pulses and MISP events and computes the global threat
+// coefficient μ. It is a build-tag optional plugin (//go:build cti); the kernel
+// keeps only the CTIInterface contract.
+type Module struct {
+	kc kernel.KernelContext
 
 	mu            sync.RWMutex
 	coefficient   float64
 	lastUpdate    time.Time
 	activeThreats int
-	state         PluginState
+	state         kernel.PluginState
 
 	updateInterval time.Duration
 	stopCh         chan struct{}
 	stopped        bool
 
-	otxAPIKey    string
-	mispURL      string
-	mispAPIKey   string
+	otxAPIKey        string
+	mispURL          string
+	mispAPIKey       string
 	sourcesLastPulse time.Time
 }
 
-func NewCTIModule() *CTIModule {
-	return &CTIModule{
+// New creates a CTI module instance.
+func New() *Module {
+	return &Module{
 		coefficient:    1.0,
 		updateInterval: 15 * time.Minute,
 	}
 }
 
-func (m *CTIModule) Info() PluginInfo {
-	return PluginInfo{
+func (m *Module) Info() kernel.PluginInfo {
+	return kernel.PluginInfo{
 		Name:        "cti",
 		Version:     "1.3.0",
 		Description: "Cyber Threat Intelligence manager — fetches OTX pulses and MISP events, computes global threat coefficient μ",
@@ -50,20 +57,20 @@ func (m *CTIModule) Info() PluginInfo {
 	}
 }
 
-func (m *CTIModule) Dependencies() []PluginDependency {
+func (m *Module) Dependencies() []kernel.PluginDependency {
 	return nil
 }
 
-func (m *CTIModule) Priority() int {
+func (m *Module) Priority() int {
 	return 10
 }
 
-func (m *CTIModule) Init(ctx context.Context, kc KernelContext) error {
-	m.kernel = kc
+func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
+	m.kc = kc
 	m.coefficient = 1.0
 	m.updateInterval = 15 * time.Minute
 	m.stopCh = make(chan struct{})
-	m.state = PluginInitialized
+	m.state = kernel.PluginInitialized
 
 	m.otxAPIKey = os.Getenv("OTX_API_KEY")
 	m.mispURL = os.Getenv("MISP_URL")
@@ -81,37 +88,37 @@ func (m *CTIModule) Init(ctx context.Context, kc KernelContext) error {
 		}
 	}
 
-	kc.Container().Bind((*CTIInterface)(nil), m)
+	kc.Container().Bind((*kernel.CTIInterface)(nil), m)
 	return nil
 }
 
-func (m *CTIModule) Start(ctx context.Context) error {
-	m.state = PluginStarted
+func (m *Module) Start(ctx context.Context) error {
+	m.state = kernel.PluginStarted
 	go m.updateLoop()
 	logger.WithComponent("cti").Info("started", "coefficient", m.coefficient, "otx_configured", m.otxAPIKey != "", "misp_configured", m.mispURL != "")
 	return nil
 }
 
-func (m *CTIModule) Stop(ctx context.Context) error {
-	m.state = PluginStopping
+func (m *Module) Stop(ctx context.Context) error {
+	m.state = kernel.PluginStopping
 	m.mu.Lock()
 	if !m.stopped {
 		m.stopped = true
 		close(m.stopCh)
 	}
 	m.mu.Unlock()
-	m.state = PluginStopped
+	m.state = kernel.PluginStopped
 	logger.WithComponent("cti").Info("stopped")
 	return nil
 }
 
-func (m *CTIModule) State() PluginState {
+func (m *Module) State() kernel.PluginState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.state
 }
 
-func (m *CTIModule) updateLoop() {
+func (m *Module) updateLoop() {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.WithComponent("cti").Error("updateLoop panic recovered", "panic", r)
@@ -123,7 +130,7 @@ func (m *CTIModule) updateLoop() {
 
 	for {
 		select {
-		case <-m.kernel.Context().Done():
+		case <-m.kc.Context().Done():
 			return
 		case <-m.stopCh:
 			return
@@ -134,9 +141,9 @@ func (m *CTIModule) updateLoop() {
 	}
 }
 
-func (m *CTIModule) updateFromFeeds() {
-	if m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "cti.pre_update", nil)
+func (m *Module) updateFromFeeds() {
+	if m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "cti.pre_update", nil)
 	}
 
 	var totalWeight int
@@ -157,34 +164,34 @@ func (m *CTIModule) updateFromFeeds() {
 	}
 	m.mu.Unlock()
 
-	if m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "cti.post_update", map[string]interface{}{
-			"weight":       totalWeight,
-			"active_ctx":   m.activeThreats,
+	if m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "cti.post_update", map[string]interface{}{
+			"weight":     totalWeight,
+			"active_ctx": m.activeThreats,
 		})
 	}
 }
 
-func (m *CTIModule) fetchOTXPulses() int {
+func (m *Module) fetchOTXPulses() int {
 	type otxPulseIndicator struct {
 		Type string `json:"type"`
 	}
 
 	type otxPulse struct {
-		ID          string               `json:"id"`
-		Name        string               `json:"name"`
-		Description string               `json:"description"`
-		TLP         string               `json:"tlp"`
-		Adversary   string               `json:"adversary"`
-		Created     string               `json:"created"`
-		Modified    string               `json:"modified"`
-		Indicators  []otxPulseIndicator  `json:"indicators"`
-		Tags        []string             `json:"tags"`
+		ID          string              `json:"id"`
+		Name        string              `json:"name"`
+		Description string              `json:"description"`
+		TLP         string              `json:"tlp"`
+		Adversary   string              `json:"adversary"`
+		Created     string              `json:"created"`
+		Modified    string              `json:"modified"`
+		Indicators  []otxPulseIndicator `json:"indicators"`
+		Tags        []string            `json:"tags"`
 	}
 
 	type otxResponse struct {
-		Count  int       `json:"count"`
-		Next   string    `json:"next"`
+		Count   int        `json:"count"`
+		Next    string     `json:"next"`
 		Results []otxPulse `json:"results"`
 	}
 
@@ -260,7 +267,7 @@ func stringsContainAny(tags []string, needles ...string) bool {
 	return false
 }
 
-func (m *CTIModule) fetchMISPEvents() int {
+func (m *Module) fetchMISPEvents() int {
 	if m.mispURL == "" || m.mispAPIKey == "" {
 		return 0
 	}
@@ -321,7 +328,7 @@ func (m *CTIModule) fetchMISPEvents() int {
 	return weight
 }
 
-func (m *CTIModule) updateCoefficient() {
+func (m *Module) updateCoefficient() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -333,8 +340,8 @@ func (m *CTIModule) updateCoefficient() {
 
 	m.lastUpdate = time.Now()
 
-	if m.coefficient != prevCoeff && m.kernel != nil && m.kernel.Extensions() != nil {
-		m.kernel.Extensions().Execute(m.kernel.Context(), "cti.coefficient_changed", map[string]interface{}{
+	if m.coefficient != prevCoeff && m.kc != nil && m.kc.Extensions() != nil {
+		m.kc.Extensions().Execute(m.kc.Context(), "cti.coefficient_changed", map[string]interface{}{
 			"prev_coeff": prevCoeff,
 			"new_coeff":  m.coefficient,
 			"threats":    m.activeThreats,
@@ -344,7 +351,7 @@ func (m *CTIModule) updateCoefficient() {
 	logger.WithComponent("cti").Info("coefficient updated", "coefficient", m.coefficient, "active_threats", m.activeThreats)
 }
 
-func (m *CTIModule) GetCoefficient() float64 {
+func (m *Module) GetCoefficient() float64 {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.coefficient
@@ -365,23 +372,23 @@ func severityWeight(severity string) int {
 	}
 }
 
-func (m *CTIModule) ReportThreat(severity string) {
+func (m *Module) ReportThreat(severity string) {
 	weight := severityWeight(severity)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.activeThreats += weight
 
-	if m.kernel != nil {
-		m.kernel.Bus().Publish(m.kernel.Context(), Message{
-			Topic:   TopicCTIThreatDetected,
+	if m.kc != nil {
+		m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
+			Topic:   kernel.TopicCTIThreatDetected,
 			Payload: map[string]interface{}{"severity": severity, "weight": weight, "active_count": m.activeThreats},
 			Source:  "cti",
 		})
 	}
 }
 
-func (m *CTIModule) ClearThreat() {
+func (m *Module) ClearThreat() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.activeThreats > 0 {
@@ -389,7 +396,7 @@ func (m *CTIModule) ClearThreat() {
 	}
 }
 
-func (m *CTIModule) HealthCheck(ctx context.Context) error {
+func (m *Module) HealthCheck(ctx context.Context) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if time.Since(m.lastUpdate) > m.updateInterval*3 {
