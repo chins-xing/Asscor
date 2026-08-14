@@ -1,10 +1,10 @@
 # SSAM 接口规范与接入指南
 
 > **版本**：SSAM 2.0 | **模块路径**：`github.com/chins-xing/ssam`  
-> **ASSCOR 适配层**：`f:\Argus\internal\ssam\` (薄适配层，委托给 ssam-lib)  
+> **ASSCOR 适配层**：`f:\Argus\internal\engine\ssam\` (薄适配层，委托给 ssam-lib)  
 > **日期**：2026-06-28 | **状态**：发布
 
-本文档详细说明 SSAM 独立算法模块的接口规范、数据结构定义、配置适配机制及接入方式。SSAM V2.0 已独立为纯函数式 Go 模块 `github.com/chins-xing/ssam`（位于 `ssam-lib/`），可脱离 ASSCOR 框架独立使用。ASSCOR 平台通过 `internal/ssam/` 薄适配层委托调用 ssam-lib。
+本文档详细说明 SSAM 独立算法模块的接口规范、数据结构定义、配置适配机制及接入方式。SSAM V2.0 已独立为纯函数式 Go 模块 `github.com/chins-xing/ssam`（位于 `ssam-lib/`），可脱离 ASSCOR 框架独立使用。ASSCOR 平台通过 `internal/engine/ssam/` 薄适配层委托调用 ssam-lib。
 
 ---
 
@@ -24,7 +24,7 @@
 | `formulas_ast.go` | AST 驱动的公式实现，支持运行时动态构造评分公式 |
 | `engine_test.go` | 完整测试覆盖（V1.x 回归 + V2.0 三层模型 + IR 导出 + AST 解析） |
 
-ASSCOR 适配层（`internal/ssam/`）精简为两个文件：
+ASSCOR 适配层（`internal/engine/ssam/`）精简为两个文件：
 
 | 文件 | 职责 |
 |------|------|
@@ -673,7 +673,7 @@ engine.RegisterHook(ssam.HookPostEdge, "enrich-metadata", func(
 
 ### 8.5 方式五：通过 ASSCOR DI 容器集成（v0.2.2 依赖倒置架构）
 
-ASSCOR v0.2.2 定义了统一的 `engine.AssessorEngine` 接口。SSAM 通过 `ssam.EngineAdapter` 实现该接口，以插件形式注入：
+ASSCOR v0.2.2 定义了统一的 `kernel.AssessorEngine` 接口（规范定义于 `internal/kernel/engine_types.go`）。SSAM 通过 `ssam.EngineAdapter` 实现该接口，以插件形式注入：
 
 **注册端（cmd/kernel/main.go 平台层）：**
 
@@ -696,7 +696,7 @@ func main() {
 
 ```go
 type Assessor struct {
-    pluginEngine engine.AssessorEngine  // 统一接口，非 ssam 具体类型
+    pluginEngine kernel.AssessorEngine  // 统一接口，非 ssam 具体类型
 }
 
 func (a *Assessor) tryPluginScore(ctx context.Context, result *model.AssessmentResult) bool {
@@ -708,9 +708,9 @@ func (a *Assessor) tryPluginScore(ctx context.Context, result *model.AssessmentR
 ```
 
 **关键变化（v0.2.0 → v0.2.2）**:
-- 旧: `a.ssamEngine ssam.ScoringProvider` → 新: `a.pluginEngine engine.AssessorEngine`
+- 旧: `a.ssamEngine ssam.ScoringProvider` → 新: `a.pluginEngine kernel.AssessorEngine`
 - 旧: `ssam.NewEngine()` 在 assessor 内硬编码 → 新: `ssam.NewEngineAdapter(cfg)` 在 main.go 注入
-- 旧: `ssam.ScoringProvider` 直接绑定到 DI → 新: `engine.AssessorEngine` 统一接口
+- 旧: `ssam.ScoringProvider` 直接绑定到 DI → 新: `kernel.AssessorEngine` 统一接口
 - 旧: ASSCOR 依赖 SSAM 包 → 新: SSAM 依赖 ASSCOR 接口
 
 ---
@@ -833,7 +833,7 @@ engine := ssam.NewDefaultEngine()
 
 ssam-lib（`github.com/chins-xing/ssam`）是纯函数式库，零 goroutine、零锁、零共享状态。评估函数是无副作用的纯函数：相同的输入产生相同的输出，天然线程安全。并发调用由调用方管理。
 
-ASSCOR 适配层（`internal/ssam/`）的 `Engine` 包装器在读写权重、边缘因子、钩子配置时使用 `sync.RWMutex` 保护，但核心计算路径为无锁纯函数调用 ssam-lib。
+ASSCOR 适配层（`internal/engine/ssam/`）的 `Engine` 包装器在读写权重、边缘因子、钩子配置时使用 `sync.RWMutex` 保护，但核心计算路径为无锁纯函数调用 ssam-lib。
 
 ---
 
@@ -1039,16 +1039,16 @@ SSAM 模块包含完整的单元测试和集成测试：
 
 ```bash
 # 运行 SSAM 模块测试
-go test ./internal/ssam/... -v
+go test ./internal/engine/ssam/... -v
 
 # 运行适配器集成测试
-go test ./internal/ssam/... -v -run TestConfigTo
+go test ./internal/engine/ssam/... -v -run TestConfigTo
 
 # 运行完整评分流程测试
-go test ./internal/ssam/... -v -run TestComputeScore
+go test ./internal/engine/ssam/... -v -run TestComputeScore
 
 # 运行钩子测试
-go test ./internal/ssam/... -v -run TestHooks
+go test ./internal/engine/ssam/... -v -run TestHooks
 ```
 
 测试覆盖的关键场景：

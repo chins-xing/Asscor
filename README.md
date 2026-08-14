@@ -50,7 +50,7 @@
 
 ASSCOR 是一个**运行时可扩展的安全评估平台**。它通过四个互不重叠的核心能力域——攻击面管理、业务连续性、操作可信度、韧性——与独立边缘修正因子、动态威胁系数及安全态势计算相结合，将系统安全状态量化为一个 0–100 的分数。
 
-> **微内核架构：** ASSCOR 内核已从"上帝包"重构为**微内核 + build-tag 可选插件**架构。`internal/kernel/` 仅保留扩展框架（DI 容器、消息总线、扩展点注册表、插件生命周期）与生命周期引擎、接口契约，以及拦截器链等核心基础设施；全部功能模块（评估引擎、SPC、策略、CTI、指令下发、心跳、ATT&CK、日志收集、数据源管理、持久化、SRD 封装、通信服务、历史存储、拓扑注册、OSCAL 导出、Web 仪表盘、完整性、韧性、检查项、适配器）已剥离为独立包，通过 Go build-tag 按需编译，实现**默认构建零膨胀**（无 tag 编译最小内核，全 tag 编译完整功能）。
+> **微内核架构：** ASSCOR 内核已从"上帝包"重构为**微内核 + build-tag 可选插件**架构。`internal/kernel/` 仅保留扩展框架（DI 容器、消息总线、扩展点注册表、插件生命周期）与生命周期引擎、接口契约，以及拦截器链等核心基础设施；全部功能模块（评估引擎、SPC、策略、CTI、指令下发、心跳、ATT&CK、日志收集、数据源管理、持久化、SRD 封装、通信服务、Web 仪表盘、完整性、韧性、检查项、适配器）已剥离为独立包，通过 Go build-tag 按需编译，实现**默认构建零膨胀**（无 tag 编译最小内核，全 tag 编译完整功能）。历史存储（historicalstore）、拓扑注册（topology）、OSCAL 导出（oscal）为常编译纯工具包。
 
 ASSCOR 不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系统的"安全可接受性"聚合判断层，提供面向业务风险的统一视图。同时，SSAM 2.0 已实现与中国等级保护制度（GB/T 22239-2019）的双向映射，可作为等保合规效果的持续性量化验证工具。
 
@@ -66,7 +66,7 @@ ASSCOR 不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系�
 
 ## 1. ASSCOR 平台架构
 
-ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** 通信，支持 mTLS 加密。Kernel 负责评估协调和指令分发，Agent 负责本地检查执行与状态上报。核心能力见下表，完整细节见 [使用手册](docs/ASSCOR使用手册.md)。
+ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** 通信，支持 mTLS 加密。Kernel 负责评估协调和指令分发，Agent 负责本地检查执行与状态上报。核心能力见下表，完整细节见 [使用手册](docs/ASSCOR%20使用手册.md)。
 
 | 组件 | 功能 |
 |------|------|
@@ -277,7 +277,7 @@ ASSCOR/
 ├── cmd/
 │   ├── kernel/        # 微内核服务端入口（gRPC + JSONRPC 双协议栈）
 │   ├── agent/         # Agent 客户端入口（gRPC + JSONRPC）
-│   └── ASSCOR/         # 独立评估工具入口
+│   └── asscor/        # 独立评估工具入口
 ├── ssam-lib/          # SSAM V2.0 纯函数式引擎（独立 Go module: github.com/chins-xing/ssam）
 │   ├── types.go       #   V1.x 数据类型 (AssessmentInput/Output)
 │   ├── types_v2.go    #   V2.0 数据类型 (RiskContext, RiskLayers, AssessmentInputV2/OutputV2)
@@ -320,19 +320,23 @@ ASSCOR/
 │   ├── sourcemanager/ # 数据源管理插件 (//go:build sourcemanager)
 │   ├── persistence/   # 持久化插件 (//go:build persistence)
 │   ├── srdwrapper/    # SRD 封装插件 (//go:build srdwrapper)
-│   ├── comms/         # 通信服务（常编译核心基础设施：server/services/grpc_server）
+│   ├── webui/         # Web 仪表盘插件 (//go:build webui)
+│   ├── integrity/     # 完整性插件 (//go:build integrity) — HMAC 签名/算法校验/反调试
+│   ├── resilience/    # 韧性插件 (//go:build resilience) — 熔断器/防护/健康
+│   ├── comms/         # 通信服务插件 (//go:build comms) — server/services/grpc_server
+│   ├── checks/        # 检查项库 (//go:build checks) — 80 项 Linux 检查项 + registry 框架
+│   ├── adapter/       # 外部工具适配器框架 (//go:build adapter) — 21 个适配器（11 探测器 + 10 管理类），框架常编译
+│   │   ├── scanner/   #   探测器适配器（Trivy, Nuclei, Lynis, OpenSCAP 等）
+│   │   └── management/#   管理类适配器（Ansible, NetBox, FreeIPA, Jira 等）
+│   ├── adapterhub/    # 适配器管理中枢 (//go:build adapter)
+│   ├── engine/        # 评估引擎核心 + 引擎适配器 (//go:build engine) — ssam/prism/srd 子包
 │   ├── historicalstore/ # 历史存储（纯工具包，常编译）
 │   ├── topology/      # 拓扑注册（纯工具包，常编译）
 │   ├── oscal/         # OSCAL 导出（纯工具包，常编译）
 │   ├── cli/           # CLI 命令模块 + 安装/卸载/升级（internal/deploy 已并入）
-│   ├── engine/        # 评估引擎核心 + 引擎适配器 (ssam/prism/srd)
 │   ├── semver/        # SemVer 版本约束共享包
 │   ├── extmgr/        # 扩展管理器（安装/卸载/生命周期/安全执行）
 │   ├── agent/         # Agent 核心模块
-│   ├── adapter/       # 外部工具适配器框架（21 个适配器：11 探测器 + 10 管理类）
-│   │   ├── scanner/   #   探测器适配器（Trivy, Nuclei, Lynis, OpenSCAP 等）
-│   │   └── management/#   管理类适配器（Ansible, NetBox, FreeIPA, Jira 等）
-│   ├── checks/        # 检查项库（Linux/Windows，等保映射 59+9 项）
 │   ├── model/         # 数据模型定义
 │   ├── config/        # 配置解析器（INI 格式，支持行业模板覆盖）
 │   └── version/       # 版本信息
@@ -342,7 +346,7 @@ ASSCOR/
 │   └── SCHEMA.md       #   package.json 格式规范
 ├── pluginsdk/          # Plugin SDK — JSON-RPC 独立进程插件运行时 (RPCPlugin 接口)
 ├── api/v1/            # gRPC 服务接口定义与消息类型
-├── config/            # 行业专用配置文件（政府、金融、医疗、教育等）
+├── configs/           # 行业专用配置文件（政府、金融、医疗、教育等）
 ├── certs/             # TLS/mTLS 证书目录（已排除于版本控制）
 ├── docs/              # 技术文档与白皮书
 ├── build/             # 编译产物（Linux/Windows，已排除于版本控制）
@@ -405,7 +409,7 @@ curl http://localhost:8087/api/health
 
 ## 4. Prism / SRD 风险动力学引擎
 
-Prism 是 SRD（Systemic Risk Dynamics）的工程实现——一个零外部依赖的纯函数式风险动力学引擎，独立为 Go 模块 [github.com/chins-xing/prism](https://github.com/chins-xing/prism)（位于 `prism-lib/`）。ASSCOR 平台通过 `internal/prism/` 薄适配层委托调用。
+Prism 是 SRD（Systemic Risk Dynamics）的工程实现——一个零外部依赖的纯函数式风险动力学引擎，独立为 Go 模块 [github.com/chins-xing/prism](https://github.com/chins-xing/prism)（位于 `prism-lib/`）。ASSCOR 平台通过 `internal/engine/prism/` 薄适配层委托调用。
 
 **Prism 三层架构**：
 
@@ -415,7 +419,7 @@ Prism 是 SRD（Systemic Risk Dynamics）的工程实现——一个零外部依
 | **Semantic Layer** | 将 Core Layer 的 PrismScore 映射为四态隶属度向量 | `[μ_Stable, μ_Degraded, μ_Untrusted, μ_Collapse]` |
 | **Inference Layer** | 基于马尔可夫链+贝叶斯模型预测 N 步后的状态概率分布与趋势判断 | 未来状态分布、趋势（improving/stable/degrading/collapsing） |
 
-SRD 数据流管线（`internal/srd/`）提供风险状态管理、数据处理管线及外部工具数据适配（OpenSCAP/Lynis 等），将第三方评估报告转化为 Prism 节点状态，参与拓扑风险传播计算。
+SRD 数据流管线（`internal/engine/srd/`）提供风险状态管理、数据处理管线及外部工具数据适配（OpenSCAP/Lynis 等），将第三方评估报告转化为 Prism 节点状态，参与拓扑风险传播计算。
 
 ## 14. 版本历史
 
@@ -423,14 +427,14 @@ SSAM 2.0 提供了一套严谨且可进化的安全可接受性度量标准。�
 
 ### 2.4 SSAM V2.0 项目拆分
 
-自 SSAM V2.0 起，核心评分算法已独立为纯函数式库 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam)（位于 `ssam-lib/`），ASSCOR 平台通过 `internal/ssam/` 薄适配层委托调用：
+自 SSAM V2.0 起，核心评分算法已独立为纯函数式库 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam)（位于 `ssam-lib/`），ASSCOR 平台通过 `internal/engine/ssam/` 薄适配层委托调用：
 
 ```
 ┌─────────────────────────────────────────────────┐
 │                  ASSCOR Platform                  │
 │  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
 │  │ Assessor │─▶│ DI       │─▶│ ssam Adapter  │  │
-│  │ Module   │  │ Container│  │(internal/ssam) │  │
+│  │ Module   │  │ Container│  │(internal/engine/ssam) │  │
 │  └──────────┘  └──────────┘  └───────┬───────┘  │
 │       │              ▲              │            │
 │       ▼              │              ▼            │
@@ -456,12 +460,12 @@ SSAM 2.0 提供了一套严谨且可进化的安全可接受性度量标准。�
 
 Prism 项目拆分已整合入 [§4 Prism/SRD](#4-prism--srd-风险动力学引擎)。
 
-Prism 是 SRD（Systemic Risk Dynamics）理论的工程实现——一个零外部依赖的纯函数式风险动力学引擎，独立为 Go 模块 [github.com/chins-xing/prism](https://github.com/chins-xing/prism)（位于 `prism-lib/`）。ASSCOR 平台通过 `internal/prism/` 薄适配层委托调用：
+Prism 是 SRD（Systemic Risk Dynamics）理论的工程实现——一个零外部依赖的纯函数式风险动力学引擎，独立为 Go 模块 [github.com/chins-xing/prism](https://github.com/chins-xing/prism)（位于 `prism-lib/`）。ASSCOR 平台通过 `internal/engine/prism/` 薄适配层委托调用：
 
 ```
 ASSCOR Platform
     │
-    ├── internal/prism/  (线程安全适配层：engine.go)
+    ├── internal/engine/prism/  (线程安全适配层：engine.go)
     │       │
     │       └── 委托给 → prism-lib/  (github.com/chins-xing/prism)
     │                        ├── types.go      — 数据模型 (NodeState, PrismConfig, AssetRiskResult)
@@ -471,7 +475,7 @@ ASSCOR Platform
     │                        ├── inference.go  — Inference Layer 马尔可夫链预测
     │                        └── paths.go      — 风险传播路径搜索
     │
-    └── internal/srd/   (SRD 数据流管线)
+    └── internal/engine/srd/   (SRD 数据流管线)
                              ├── manager.go   — 风险状态管理器
                              ├── pipeline.go  — 数据处理管线
                              ├── adapter.go   — 外部工具数据适配

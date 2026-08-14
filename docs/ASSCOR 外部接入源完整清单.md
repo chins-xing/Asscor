@@ -93,7 +93,7 @@
 
 | 类别 | 测试文件 | 测试用例数 |
 |:---|:---|:---:|
-| 探测器适配器 | `internal/adapter/detector/..._test.go` | 100+ |
+| 探测器适配器 | `internal/adapter/scanner/..._test.go` | 100+ |
 | 管理类适配器 | `internal/adapter/management/management_test.go` | 50+ |
 
 ---

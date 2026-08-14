@@ -34,7 +34,7 @@ SSAM 和 Prism 是 ASSCOR 项目中两个核心算法库，均采用"零外部�
 │                    ASSCOR Kernel (消费方)                      │
 │                                                              │
 │  ┌───────────────────────┐    ┌───────────────────────────┐  │
-│  │  internal/ssam/       │    │  internal/prism/          │  │
+│  │  internal/engine/ssam/  │    │  internal/engine/prism/   │  │
 │  │  (ASSCOR 适配层)       │    │  (线程安全包装 + 配置管理)   │  │
 │  └───────────┬───────────┘    └─────────────┬──────────────┘  │
 │              │                               │                 │
@@ -244,7 +244,7 @@ prism-lib 完全独立于 ASSCOR，通过 `PrismConfig` 值类型接收配置，
 │  ===== 可移植边界 =====                               │
 ├──────────────────────────────────────────────────────┤
 │                  适配层 (Adapter)                     │
-│  internal/ssam / internal/prism                      │
+│  internal/engine/ssam / internal/engine/prism          │
 │  ⚠️ 依赖 ASSCOR 类型    ⚠️ 添加线程安全                │
 │  ⚠️ 添加 context.Context  ⚠️ 添加 Hook 机制           │
 │  ===== ASSCOR 绑定边界 =====                          │

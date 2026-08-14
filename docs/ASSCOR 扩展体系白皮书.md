@@ -147,7 +147,7 @@ DI 容器定义于 [di.go](file:///f:/Argus/internal/kernel/di.go)，提供类�
 
 | 序号 | 绑定接口 | 绑定实例 | 文件位置 |
 |:---:|------|------|------|
-| 1 | `(*engine.AssessorEngine)(nil)` | `ssam.NewEngineAdapter(cfg)` | `main.go` (平台层注入) |
+| 1 | `(*kernel.AssessorEngine)(nil)` | `ssam.NewEngineAdapter(cfg)` | `main.go` (平台层注入) |
 | 2 | `(*AssessorInterface)(nil)` | AssessorModule | [assessor.go:L117](file:///f:/Argus/internal/assessor/assessor.go#L117) |
 | 3 | `(*PersistenceInterface)(nil)` | PersistenceModule | [persistence.go:L181](file:///f:/Argus/internal/persistence/persistence.go#L181) |
 | 4 | `(*ConcurrencyInterface)(nil)` | ConcurrencyModule | [workerpool.go](file:///f:/Argus/internal/kernel/workerpool.go) |
@@ -375,8 +375,8 @@ kc.Extensions().RegisterExtension("my_plugin", "spc.pre_calculate",
 type ScoringEngineProvider interface {
     Assess(hostID string, hostname string) *model.AssessmentResult
     AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
-    PluginEngine() engine.AssessorEngine
-    SetPluginEngine(e engine.AssessorEngine)
+    PluginEngine() kernel.AssessorEngine
+    SetPluginEngine(e kernel.AssessorEngine)
     RecomputeFinalScore(result *model.AssessmentResult) float64
     ReloadWeights(cfg *config.Config)
     ValidateEdgeFactors(registeredChecks []model.CheckItem) []string
@@ -865,4 +865,4 @@ orch.Register(k.PlatformExtensionRegistry())  // 订阅 assessor.pre_score 扩�
 
 ## 结论
 
-ASSCOR 的扩展体系提供了**四种互补的扩展机制**——进程内插件 (Plugin 接口)、运行时钩子 (Extension Point)、内核安装式扩展 (ExtensionManager + extension.json)、外部编译时扩展 (optional/ + pkgmgr + package.json)——覆盖了从底层检查逻辑到顶层评分引擎、从内核内嵌到独立编译模块的全部可扩展性需求。14 个核心模块接口全部通过 DI 容器注入，检查器通过注册表 API 管理。外部扩展通过 Extension Point 系统实现零代码侵入式挂载，扩展包通过 `asscor-pkg` 工具链管理依赖和外部仓库引用。这套体系为第三方开发者提供了从轻量级检查项到完整算法编排的全维度扩展能力。
+ASSCOR 的扩展体系提供了**四种互补的扩展机制**——进程内插件 (Plugin 接口)、运行时钩子 (Extension Point)、内核安装式扩展 (ExtensionManager + extension.json)、外部编译时扩展 (optional/ + pkgmgr + package.json)——覆盖了从底层检查逻辑到顶层评分引擎、从内核内嵌到独立编译模块的全部可扩展性需求。18 个核心模块接口全部通过 DI 容器注入，检查器通过注册表 API 管理。外部扩展通过 Extension Point 系统实现零代码侵入式挂载，扩展包通过 `asscor-pkg` 工具链管理依赖和外部仓库引用。这套体系为第三方开发者提供了从轻量级检查项到完整算法编排的全维度扩展能力。

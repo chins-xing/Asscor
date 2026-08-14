@@ -32,7 +32,7 @@
 
 ASSCOR 是一个开源的分布式安全可接受性评估系统，实现了系统安全可接受性模型（SSAM）2.0。系统通过四个互斥核心域评估主机安全状态，并集成 MITRE ATT&CK V19 威胁分析框架，提供从安全评估、威胁检测到 APT 攻击分析的完整能力链。
 
-SSAM V2.0 引入三层语义模型（本征 Intrinsic / 暴露 Exposure / 威胁 Threat），以三个独立风险层加权平均取代旧版 ThreatCoeff/SPCScore 双重罚分机制，提升评分的可解释性与公正性。核心算法库已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam)（`ssam-lib/`），零外部依赖、纯函数式设计。ASSCOR 平台通过 `internal/ssam/` 薄适配层委托调用。
+SSAM V2.0 引入三层语义模型（本征 Intrinsic / 暴露 Exposure / 威胁 Threat），以三个独立风险层加权平均取代旧版 ThreatCoeff/SPCScore 双重罚分机制，提升评分的可解释性与公正性。核心算法库已独立为 [github.com/chins-xing/ssam](https://github.com/chins-xing/ssam)（`ssam-lib/`），零外部依赖、纯函数式设计。ASSCOR 平台通过 `internal/engine/ssam/` 薄适配层委托调用。
 
 | 核心域 | 权重 | 评估内容 |
 |--------|------|----------|
@@ -268,7 +268,7 @@ ASSCOR μKernel
 
   Listen:   :50051 (mTLS: true)
   Log:      json (info) -> stderr
-  Plugins:  17 loaded
+  Plugins:  18 loaded
     {heartbeat} v1.0.0 — Agent heartbeat tracking
     {spc} v1.0.0 — Security Posture Calculator
     {cti} v1.0.0 — Cyber Threat Intelligence
@@ -282,6 +282,9 @@ ASSCOR μKernel
     {config_watcher} v1.0.0 — Configuration hot-reload
     {adapter_integration} v1.0.0 — External adapter integration
     {source_manager} v1.0.0 — External source management
+    {webui} v1.0.0 — Web Dashboard
+    {comms} — JSONRPC + gRPC communication servers
+    {srd_adapters} v1.0.0 — SRD external result adapters
     {cli} v1.0.0 — Command-line interface
 ```
 

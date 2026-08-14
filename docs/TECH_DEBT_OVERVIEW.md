@@ -118,8 +118,8 @@
 | B12 | P0 | `internal/resilience` 零测试 — 熔断器/Guard |
 | B03 | P1 | `cmd/agent` 零测试 |
 | B06 | P1 | `internal/adapterhub` 零测试 |
-| B08 | P1 | `internal/deploy` 零测试 |
-| B11 | P1 | `internal/prism` 零测试 |
+| B08 | P1 | `internal/cli` 安装/升级逻辑零测试（原 `internal/deploy` 已并入） |
+| B11 | P1 | `internal/engine/prism` 零测试 |
 | B14 | P1 | `internal/webui` 零测试 |
 | B04 | P2 | `cmd/asscor` 零测试 |
 | B09 | P2 | `internal/model` 零测试 |
@@ -155,10 +155,10 @@
 
 | # | 等级 | 问题 |
 |---|:---:|------|
-| M01 | P0 | `internal/kernel/` 单体 — 66 文件/17 插件在一包 |
-| M02 | P1 | srd/prism/ssam 引擎适配器误放在 `internal/` 顶层 |
+| M01 | P0 | `internal/kernel/` 单体 — 66 文件/17 插件在一包（已剥离为微内核 + 18 个 build-tag 模块，内核仅保留扩展框架 + 生命周期 + 接口契约） |
+| M02 | P1 | srd/prism/ssam 引擎适配器误放在 `internal/` 顶层（已归位 `internal/engine/{srd,prism,ssam}/`） |
 | M03 | P1 | `adapter/` vs `adapterhub/` 命名含混，边界不清 |
-| M04 | P1 | `deploy/systemd/` vs `internal/deploy/` systemd 单元双重定义 |
+| M04 | P1 | `deploy/systemd/` vs `internal/cli/` systemd 单元双重定义（原 `internal/deploy` 已并入 cli） |
 
 ---
 
@@ -169,7 +169,7 @@
 | 扩展体系 | 8 | 14 | 5 | 零订阅者，体系纯死代码 |
 | 内核 | 6 | 13 | 6 | 测试覆盖率极低，上帝接口 |
 | 测试/基准 | 6 | 6 | 4 | 6 个核心包零测试，0 Benchmark |
-| 架构 | 1 | 7 | 8 | kernel/单体，引擎适配器误放 |
+| 架构 | 1 | 7 | 8 | kernel/单体（已剥离），引擎适配器误放（已归位） |
 | 配置 | 0 | 2 | 2 | 行业模板缺失段落 |
 | 安全 | 2 | 2 | 1 | 无二进制签名，漏洞数据暴露 |
 | ATT&CK | 0 | 1 | 3 | 上帝接口 85 方法，死代码 |

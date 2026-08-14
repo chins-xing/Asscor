@@ -340,28 +340,28 @@ func init() {
 
 钩子在评估流程的 8 个阶段插入自定义逻辑。
 
-**阶段与类型** (`internal/engine/extensibility.go`)：
+**阶段与类型**（规范定义于 `internal/kernel/engine_types.go`，`internal/engine/extensibility.go` 以别名重导出）：
 
 ```go
-type AssessmentPhase string
+type AssessmentPhase = kernel.AssessmentPhase
 const (
-    PhasePreCheck   AssessmentPhase = "pre_check"
-    PhasePostCheck  AssessmentPhase = "post_check"
-    PhasePreScore   AssessmentPhase = "pre_score"
-    PhasePostScore  AssessmentPhase = "post_score"
-    PhasePreEdge    AssessmentPhase = "pre_edge"
-    PhasePostEdge   AssessmentPhase = "post_edge"
-    PhasePreReport  AssessmentPhase = "pre_report"
-    PhasePostReport AssessmentPhase = "post_report"
+    PhasePreCheck   = kernel.PhasePreCheck    // "pre_check"
+    PhasePostCheck  = kernel.PhasePostCheck   // "post_check"
+    PhasePreScore   = kernel.PhasePreScore    // "pre_score"
+    PhasePostScore  = kernel.PhasePostScore   // "post_score"
+    PhasePreEdge    = kernel.PhasePreEdge     // "pre_edge"
+    PhasePostEdge   = kernel.PhasePostEdge    // "post_edge"
+    PhasePreReport  = kernel.PhasePreReport   // "pre_report"
+    PhasePostReport = kernel.PhasePostReport  // "post_report"
 )
 
-type AssessmentHook func(ctx context.Context, result *model.AssessmentResult) error
+type AssessmentHook = kernel.AssessmentHook
 ```
 
 **编写示例**：
 
 ```go
-assessor.RegisterHook("enrich-metadata", engine.PhasePostScore,
+assessor.RegisterHook("enrich-metadata", kernel.PhasePostScore,
     func(ctx context.Context, result *model.AssessmentResult) error {
         // 评分后为高风险主机附加元数据
         if result.FinalScore < 60 {
