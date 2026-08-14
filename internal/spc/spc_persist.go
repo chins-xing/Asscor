@@ -105,6 +105,7 @@ func (m *Module) mergeCVEInPlace(idx int, incoming kernel.SPCCVEScore) {
 	}
 	if len(incoming.AffectedCPEs) > 0 && (len(existing.AffectedCPEs) == 0 || incomingPriority > existingPriority) {
 		existing.AffectedCPEs = incoming.AffectedCPEs
+		m.invalidateLowerCaches(existing.CVEID)
 	}
 	if len(incoming.AttckTechniques) > 0 && (len(existing.AttckTechniques) == 0 || incomingPriority > existingPriority) {
 		existing.AttckTechniques = incoming.AttckTechniques
@@ -120,6 +121,7 @@ func (m *Module) mergeCVEInPlace(idx int, incoming kernel.SPCCVEScore) {
 	}
 	if incoming.Description != "" && (existing.Description == "" || incomingPriority > existingPriority) {
 		existing.Description = incoming.Description
+		m.invalidateLowerCaches(existing.CVEID)
 	}
 	if incomingPriority > existingPriority {
 		existing.Source = incoming.Source
@@ -147,6 +149,7 @@ func (m *Module) evictLowestPriorityCVE() {
 	evictedID := m.cveCache[worstIdx].CVEID
 	m.cveCache = append(m.cveCache[:worstIdx], m.cveCache[worstIdx+1:]...)
 	delete(m.cveIndex, evictedID)
+	m.invalidateLowerCaches(evictedID)
 	for id, idx := range m.cveIndex {
 		if idx > worstIdx {
 			m.cveIndex[id] = idx - 1
@@ -233,6 +236,20 @@ func (m *Module) ClearCache() {
 	defer m.mu.Unlock()
 	m.cveCache = m.cveCache[:0]
 	m.cveIndex = make(map[string]int)
+	m.clearLowerCaches()
+}
+
+// clearLowerCaches drops all cached lowercase CPE/Description data. Caller must
+// hold m.mu. Used on full cache replacement (ClearCache, loadCacheFromDisk).
+func (m *Module) clearLowerCaches() {
+	m.cpeLowerCache.Range(func(k, _ interface{}) bool {
+		m.cpeLowerCache.Delete(k)
+		return true
+	})
+	m.descLowerCache.Range(func(k, _ interface{}) bool {
+		m.descLowerCache.Delete(k)
+		return true
+	})
 }
 
 func (m *Module) cacheFilePath() string {
@@ -319,6 +336,7 @@ func (m *Module) loadCacheFromDisk() {
 	for i, cve := range m.cveCache {
 		m.cveIndex[cve.CVEID] = i
 	}
+	m.clearLowerCaches()
 	m.lastUpdate = payload.LastUpdate
 	m.mu.Unlock()
 

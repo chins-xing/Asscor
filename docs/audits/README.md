@@ -4,6 +4,7 @@
 
 | 文件 | 日期 | 说明 |
 |------|------|------|
+| [SECURITY_PERFORMANCE_AUDIT_2026-08-14.md](SECURITY_PERFORMANCE_AUDIT_2026-08-14.md) | 2026-08-14 | 安全与性能审计 — 命令执行/密钥/TLS/路径遍历/输入验证 + goroutine/内存/锁/IO；1 安全 P1（命令输出日志）2 性能 P1（SPC 热路径 ToLower/日志） |
 | [STABILITY_AUDIT_2026-08-14.md](STABILITY_AUDIT_2026-08-14.md) | 2026-08-14 | 全项目稳定性审计 — 错误处理/日志存留/模块与扩展包错误隔离/内核稳定性；2 P1（persistence 静默丢 sync 错误、pluginsdk 无 recover） |
 | [CODE_QUALITY_AUDIT_2026-08-14.md](CODE_QUALITY_AUDIT_2026-08-14.md) | 2026-08-14 | 微内核重构后代码质量审计 — 契约上移/stub 一致性/门控构建；修复 resilience stub API 与 extmgr.SetAssessor 接线 |
 | [PROJECT_COMPLETION_AUDIT.md](PROJECT_COMPLETION_AUDIT.md) | 2026-06-18 | **全量项目完成度审查** — 14大子系统逐项评级, 76检查项, 21适配器, 139测试函数 |

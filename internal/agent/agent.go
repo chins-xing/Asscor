@@ -1370,7 +1370,7 @@ func (a *Agent) runCommand(cmd *apiv1.Command) {
 		if err != nil && output == "" {
 			logger.WithComponent("agent").Error("command failed", "command_id", cmd.CommandId, "error", err)
 		} else if output != "" {
-			logger.WithComponent("agent").Info("command output", "command_id", cmd.CommandId, "output", output)
+			logger.WithComponent("agent").Info("command output", "command_id", cmd.CommandId, "output", truncateCommandOutput(output))
 		}
 		return
 	}
@@ -1384,7 +1384,7 @@ func (a *Agent) runCommand(cmd *apiv1.Command) {
 	if err != nil && output == "" {
 		logger.WithComponent("agent").Error("command failed", "command_id", cmd.CommandId, "error", err)
 	} else if output != "" {
-		logger.WithComponent("agent").Info("command output", "command_id", cmd.CommandId, "output", output)
+		logger.WithComponent("agent").Info("command output", "command_id", cmd.CommandId, "output", truncateCommandOutput(output))
 	}
 }
 
@@ -1404,7 +1404,19 @@ func (a *Agent) delegateRootCommand(cmd *apiv1.Command) {
 		return
 	}
 	logger.WithComponent("agent").Info("privileged command executed",
-		"command_id", cmd.CommandId, "command", cmd.Command, "output", output)
+		"command_id", cmd.CommandId, "command", cmd.Command, "output", truncateCommandOutput(output))
+}
+
+// truncateCommandOutput truncates command output to a bounded length for safe
+// logging. Command output (e.g. "ps aux", "ss -tlnp") may contain sensitive
+// system information; truncation prevents unbounded/sensitive data persisting
+// to logs while retaining enough context for diagnostics.
+func truncateCommandOutput(output string) string {
+	const maxLogOutput = 512
+	if len(output) <= maxLogOutput {
+		return output
+	}
+	return output[:maxLogOutput] + "... (truncated)"
 }
 
 func (a *Agent) Stop() {

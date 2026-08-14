@@ -29,6 +29,13 @@ type Module struct {
 	fetchResults []kernel.SPCFetchResult
 	state       kernel.PluginState
 
+	// Lowercase caches for the assessment hot path. matchCPEFast lowercases
+	// each CVE's AffectedCPEs/Description on every evaluation; precomputing
+	// these (lazily, keyed by CVEID) eliminates repeated allocation of up to
+	// 100k CPE strings per assessment.
+	cpeLowerCache  sync.Map // CVEID -> []string (lowercased AffectedCPEs)
+	descLowerCache sync.Map // CVEID -> string (lowercased Description)
+
 	fetchInterval  time.Duration
 	mispConfig     kernel.SPCMISPConfig
 	nvdConfig      kernel.SPCNVDConfig
@@ -403,7 +410,7 @@ func (m *Module) Calculate(hostID string, assetPackages []string) kernel.SPCCorr
 	kevCatalog = m.kevCatalog
 	m.mu.RUnlock()
 
-	logger.WithComponent("spc").Info("Calculate called",
+	logger.WithComponent("spc").Debug("Calculate called",
 		"host_id", hostID,
 		"cve_cache_size", len(cves),
 		"has_asset", asset != nil,
@@ -441,11 +448,22 @@ func (m *Module) Calculate(hostID string, assetPackages []string) kernel.SPCCorr
 		}
 	}
 
+	// Fast path: with no package names and no installed CPEs, no CVE can ever
+	// match (both matchCPEFast branches require at least one of these inputs).
+	// Short-circuit the O(cache) scan instead of iterating up to 100k CVEs.
+	if len(lowerPkgNames) == 0 && len(lowerInstalledCPEs) == 0 {
+		logger.WithComponent("spc").Debug("Calculate: no package/CPE inputs, returning neutral score", "host_id", hostID)
+		return kernel.SPCCorrection{
+			Score:  1.0,
+			Action: "no_input",
+		}
+	}
+
 	pkgSample := assetPackages
 	if len(pkgSample) > 10 {
 		pkgSample = pkgSample[:10]
 	}
-	logger.WithComponent("spc").Info("Calculate input",
+	logger.WithComponent("spc").Debug("Calculate input",
 		"host_id", hostID,
 		"cve_cache_size", len(cves),
 		"has_asset", asset != nil,
@@ -601,7 +619,7 @@ func (m *Module) Calculate(hostID string, assetPackages []string) kernel.SPCCorr
 		KillChainScore:   math.Round(killChainScore*100) / 100,
 	}
 
-	logger.WithComponent("spc").Info("Calculate result",
+	logger.WithComponent("spc").Debug("Calculate result",
 		"host_id", hostID,
 		"p_score", correction.Score,
 		"action", correction.Action,
@@ -634,7 +652,7 @@ func (m *Module) matchCPEFast(cve *kernel.SPCCVEScore, lowerPkgNames []string, l
 		if len(lowerPkgNames) == 0 {
 			return kernel.MatchNone, false
 		}
-		lowerDesc := strings.ToLower(cve.Description)
+		lowerDesc := m.loweredDescription(cve)
 		for _, ln := range lowerPkgNames {
 			if strings.Contains(lowerDesc, ln) {
 				return kernel.MatchCPEProduct, true
@@ -643,10 +661,7 @@ func (m *Module) matchCPEFast(cve *kernel.SPCCVEScore, lowerPkgNames []string, l
 		return kernel.MatchNone, false
 	}
 
-	lowerVulnCPEs := make([]string, len(cve.AffectedCPEs))
-	for i, cpe := range cve.AffectedCPEs {
-		lowerVulnCPEs[i] = strings.ToLower(cpe)
-	}
+	lowerVulnCPEs := m.loweredAffectedCPEs(cve)
 
 	if len(lowerInstalledCPEs) > 0 {
 		bestMatch := kernel.MatchNone
@@ -672,6 +687,40 @@ func (m *Module) matchCPEFast(cve *kernel.SPCCVEScore, lowerPkgNames []string, l
 	}
 
 	return kernel.MatchNone, false
+}
+
+// loweredAffectedCPEs returns the lowercased AffectedCPEs for a CVE, lazily
+// caching the result keyed by CVEID. CVE entries are immutable between cache
+// mutations (AddCVE/Merge/load), so the cache is safe to reuse across
+// assessments; eviction and in-place merge invalidate the entry explicitly.
+func (m *Module) loweredAffectedCPEs(cve *kernel.SPCCVEScore) []string {
+	if v, ok := m.cpeLowerCache.Load(cve.CVEID); ok {
+		return v.([]string)
+	}
+	v := make([]string, len(cve.AffectedCPEs))
+	for i, cpe := range cve.AffectedCPEs {
+		v[i] = strings.ToLower(cpe)
+	}
+	m.cpeLowerCache.Store(cve.CVEID, v)
+	return v
+}
+
+// loweredDescription returns the lowercased Description for a CVE, lazily
+// cached keyed by CVEID (see loweredAffectedCPEs).
+func (m *Module) loweredDescription(cve *kernel.SPCCVEScore) string {
+	if v, ok := m.descLowerCache.Load(cve.CVEID); ok {
+		return v.(string)
+	}
+	v := strings.ToLower(cve.Description)
+	m.descLowerCache.Store(cve.CVEID, v)
+	return v
+}
+
+// invalidateLowerCaches removes cached lowercase data for a CVE whose
+// AffectedCPEs/Description may have changed via in-place merge.
+func (m *Module) invalidateLowerCaches(cveID string) {
+	m.cpeLowerCache.Delete(cveID)
+	m.descLowerCache.Delete(cveID)
 }
 
 func (m *Module) matchCPE(cve *kernel.SPCCVEScore, asset *kernel.LocalAsset, packages []string) (kernel.MatchType, bool) {
