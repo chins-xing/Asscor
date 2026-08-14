@@ -4,6 +4,8 @@
 
 | 文件 | 日期 | 说明 |
 |------|------|------|
+| [STABILITY_AUDIT_2026-08-14.md](STABILITY_AUDIT_2026-08-14.md) | 2026-08-14 | 全项目稳定性审计 — 错误处理/日志存留/模块与扩展包错误隔离/内核稳定性；2 P1（persistence 静默丢 sync 错误、pluginsdk 无 recover） |
+| [CODE_QUALITY_AUDIT_2026-08-14.md](CODE_QUALITY_AUDIT_2026-08-14.md) | 2026-08-14 | 微内核重构后代码质量审计 — 契约上移/stub 一致性/门控构建；修复 resilience stub API 与 extmgr.SetAssessor 接线 |
 | [PROJECT_COMPLETION_AUDIT.md](PROJECT_COMPLETION_AUDIT.md) | 2026-06-18 | **全量项目完成度审查** — 14大子系统逐项评级, 76检查项, 21适配器, 139测试函数 |
 | [ARCHITECTURE_DEEP_DIVE.md](ARCHITECTURE_DEEP_DIVE.md) | 2026-06-05 | **深度架构分析** — 插件系统/DI/总线/SSAM V2.0/SPC/ATT&CK V19/适配器/扩展管理器 14章 |
 | [SPC_MODULE_AUDIT.md](SPC_MODULE_AUDIT.md) | 2026-05-27 | SPC 安全态势计算模块专项审计 |

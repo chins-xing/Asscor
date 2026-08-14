@@ -20,14 +20,14 @@ type (
 )
 
 const (
-	PhasePreCheck    = kernel.PhasePreCheck
-	PhasePostCheck   = kernel.PhasePostCheck
-	PhasePreScore    = kernel.PhasePreScore
-	PhasePostScore   = kernel.PhasePostScore
-	PhasePreEdge     = kernel.PhasePreEdge
-	PhasePostEdge    = kernel.PhasePostEdge
-	PhasePreReport   = kernel.PhasePreReport
-	PhasePostReport  = kernel.PhasePostReport
+	PhasePreCheck   = kernel.PhasePreCheck
+	PhasePostCheck  = kernel.PhasePostCheck
+	PhasePreScore   = kernel.PhasePreScore
+	PhasePostScore  = kernel.PhasePostScore
+	PhasePreEdge    = kernel.PhasePreEdge
+	PhasePostEdge   = kernel.PhasePostEdge
+	PhasePreReport  = kernel.PhasePreReport
+	PhasePostReport = kernel.PhasePostReport
 )
 
 type hookRegistration struct {

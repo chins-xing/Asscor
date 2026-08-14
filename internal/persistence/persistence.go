@@ -93,7 +93,9 @@ func (w *jsonlWriter) close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.buf != nil {
-		w.buf.Flush()
+		if err := w.buf.Flush(); err != nil {
+			return err
+		}
 	}
 	if w.file != nil {
 		err := w.file.Close()
@@ -220,7 +222,9 @@ func (m *Module) Stop(ctx context.Context) error {
 
 	m.mu.Lock()
 	for _, w := range m.writers {
-		w.close()
+		if err := w.close(); err != nil {
+			logger.WithComponent("persistence").Error("close writer failed", "path", w.path, "error", err)
+		}
 	}
 	m.mu.Unlock()
 
@@ -377,7 +381,9 @@ func (m *Module) flushAll() {
 	m.mu.Unlock()
 
 	for _, w := range writers {
-		w.sync()
+		if err := w.sync(); err != nil {
+			logger.WithComponent("persistence").Error("flush failed", "path", w.path, "error", err)
+		}
 	}
 }
 
@@ -402,7 +408,9 @@ func (m *Module) flushLoop() {
 func (m *Module) RotateAll() {
 	m.mu.Lock()
 	for _, w := range m.writers {
-		w.close()
+		if err := w.close(); err != nil {
+			logger.WithComponent("persistence").Error("rotate close writer failed", "path", w.path, "error", err)
+		}
 	}
 	m.mu.Unlock()
 }

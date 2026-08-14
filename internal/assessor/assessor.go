@@ -1167,8 +1167,20 @@ func (m *ScoringEngine) PrintReport(result *model.AssessmentResult) string {
 	return m.engine.PrintReport(result)
 }
 
+// RegisterHook delegates hook registration to the underlying engine.Assessor,
+// satisfying kernel.HookRegistrar so extmgr can attach legacy assessment hooks.
+func (m *ScoringEngine) RegisterHook(id string, phase kernel.AssessmentPhase, hook kernel.AssessmentHook, priority int) {
+	m.engine.RegisterHook(id, phase, hook, priority)
+}
+
+// UnregisterHook delegates hook removal to the underlying engine.Assessor.
+func (m *ScoringEngine) UnregisterHook(id string) {
+	m.engine.UnregisterHook(id)
+}
+
 func isPermDenied(detail string) bool {
 	return model.IsPermissionDeniedDetail(detail)
 }
 
 var _ kernel.ScoringEngineProvider = (*ScoringEngine)(nil)
+var _ kernel.HookRegistrar = (*ScoringEngine)(nil)

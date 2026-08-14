@@ -128,6 +128,11 @@ func (a *Agent) Run() error {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.WithComponent("agent").Error("signal handler panic", "panic", r)
+			}
+		}()
 		<-sigCh
 		logger.WithComponent("agent").Info("received shutdown signal")
 		cancel()

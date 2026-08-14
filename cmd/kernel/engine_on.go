@@ -4,9 +4,9 @@ package main
 
 import (
 	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/kernel"
 	ascorprism "github.com/asscor/asscor/internal/engine/prism"
 	"github.com/asscor/asscor/internal/engine/ssam"
+	"github.com/asscor/asscor/internal/kernel"
 )
 
 // newSSAMEngineAdapter returns the SSAM algorithm engine adapter, or nil when

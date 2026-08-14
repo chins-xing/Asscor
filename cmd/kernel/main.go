@@ -320,6 +320,11 @@ k.SetConfig("config_path", resolvedConfigPath)
 	// can subscribe to the 89 extension points (assessor.*, spc.*, attck.*, etc.)
 	if mgr := extmgr.GetManager(); mgr != nil {
 		mgr.SetKernelExtensions(k.PlatformExtensionRegistry())
+		// Wire the legacy engine-hook path so hook-type extensions can also
+		// register directly on the assessment engine phases.
+		if hr, ok := scoringEngine.(kernel.HookRegistrar); ok {
+			mgr.SetAssessor(hr)
+		}
 	}
 
 	// Algorithm integrity guard: verify the SSAM/Prism calibration constants

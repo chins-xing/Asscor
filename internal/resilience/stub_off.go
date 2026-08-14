@@ -29,16 +29,31 @@ func RecordSuccess(module string) {}
 // Allow always returns true.
 func Allow(module string) bool { return true }
 
-// State is a stub circuit state.
+// State is the circuit breaker state, mirroring the real implementation.
 type State int
 
-// Status always reports closed.
-func Status(module string) (State, string) { return 0, "" }
+// Circuit breaker states.
+const (
+	StateClosed State = iota
+	StateOpen
+	StateHalfOpen
+)
 
-// Snapshot is a stub telemetry record.
+// String reports "closed" in the no-op build.
+func (s State) String() string { return "closed" }
+
+// Status always reports closed.
+func Status(module string) (State, string) { return StateClosed, "" }
+
+// Snapshot is a stub telemetry record, mirroring the real implementation.
 type Snapshot struct {
-	Module string `json:"module"`
-	State  string `json:"state"`
+	Module      string    `json:"module"`
+	State       string    `json:"state"`
+	Failures    int       `json:"failures"`
+	Successes   int       `json:"successes"`
+	LastFailure time.Time `json:"last_failure,omitempty"`
+	OpenedAt    time.Time `json:"opened_at,omitempty"`
+	TotalTrips  int       `json:"total_trips"`
 }
 
 // All returns no snapshots.
@@ -47,10 +62,14 @@ func All() []Snapshot { return nil }
 // Reset is a no-op.
 func Reset(module string) {}
 
-// ModuleHealth is a stub health record.
+// ModuleHealth is a stub health record, mirroring the real implementation.
 type ModuleHealth struct {
-	Name    string
-	Healthy bool
+	Name      string
+	Healthy   bool
+	LastCheck time.Time
+	Message   string
+	Panics    int
+	Restarts  int
 }
 
 // ReportHealth is a no-op.
@@ -76,5 +95,3 @@ func (r *ErrorRateLimiter) AllowError() bool { return true }
 
 // NewErrorRateLimiter returns a stub limiter.
 func NewErrorRateLimiter(perMinute int) *ErrorRateLimiter { return &ErrorRateLimiter{} }
-
-var _ = time.Now

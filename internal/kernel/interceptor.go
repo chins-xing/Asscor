@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -37,7 +38,14 @@ func (c *InterceptorChain) Then(handler HandlerFunc) HandlerFunc {
 	for i := len(chain) - 1; i >= 0; i-- {
 		ic := chain[i]
 		next := handler
-		handler = func(ctx context.Context, service, method string, payload []byte) ([]byte, error) {
+		handler = func(ctx context.Context, service, method string, payload []byte) (resp []byte, err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.WithComponent("interceptor").Error("interceptor panic recovered",
+						"service", service, "method", method, "panic", r)
+					err = fmt.Errorf("interceptor panic: %v", r)
+				}
+			}()
 			return ic(ctx, service, method, payload, next)
 		}
 	}

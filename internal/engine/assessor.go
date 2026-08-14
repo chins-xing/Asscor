@@ -24,10 +24,10 @@ import (
 // (internal/kernel/engine_types.go); these aliases preserve the historical
 // engine.* names for callers that already reference them.
 type (
-	AssessorEngine       = kernel.AssessorEngine
-	SPCProvider          = kernel.SPCProvider
-	ATTACKProvider       = kernel.ATTACKProvider
-	ATTACKCoverageResult = kernel.ATTACKCoverageResult
+	AssessorEngine        = kernel.AssessorEngine
+	SPCProvider           = kernel.SPCProvider
+	ATTACKProvider        = kernel.ATTACKProvider
+	ATTACKCoverageResult  = kernel.ATTACKCoverageResult
 	ATTACKKillChainResult = kernel.ATTACKKillChainResult
 	ATTACKKillChainStage  = kernel.ATTACKKillChainStage
 	ATTACKAPTMatch        = kernel.ATTACKAPTMatch
@@ -40,14 +40,14 @@ type (
 )
 
 type Assessor struct {
-	cfg             *config.Config
-	scoringEngine   *DynamicScoringEngine
-	pluginEngine    AssessorEngine
-	spcProvider     SPCProvider
-	attackProvider  ATTACKProvider
-	maxWorkers      int
-	resultsCache    sync.Map
-	mu              sync.RWMutex
+	cfg            *config.Config
+	scoringEngine  *DynamicScoringEngine
+	pluginEngine   AssessorEngine
+	spcProvider    SPCProvider
+	attackProvider ATTACKProvider
+	maxWorkers     int
+	resultsCache   sync.Map
+	mu             sync.RWMutex
 }
 
 func NewAssessor(cfg *config.Config) *Assessor {
@@ -543,12 +543,12 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 	}
 
 	mapped := model.EdgeFactors{
-		TwoFactorFailure: 1.0,
+		TwoFactorFailure:  1.0,
 		SYNCookieDisabled: 1.0,
-		SELinuxDisabled:  1.0,
-		AppArmorDisabled: 1.0,
-		NoSIEM:           1.0,
-		NoIDS:            1.0,
+		SELinuxDisabled:   1.0,
+		AppArmorDisabled:  1.0,
+		NoSIEM:            1.0,
+		NoIDS:             1.0,
 	}
 	if v, ok := localFactors["EF-002FA"]; ok && v < 1.0 {
 		mapped.TwoFactorFailure = v
@@ -734,7 +734,7 @@ func (a *Assessor) computeDynamicFinalScore(scores *model.DynamicDomainScores, r
 	totalLayerWeight := intrinsicWeight + exposureWeight + threatWeight
 
 	weightedAvg := (intrinsicCoeff*intrinsicWeight + exposureCoeff*exposureWeight + threatCoeff*threatWeight) / totalLayerWeight
-	finalScore := math.Round(weightedAvg * 100 * 100) / 100
+	finalScore := math.Round(weightedAvg*100*100) / 100
 
 	return finalScore
 }

@@ -170,11 +170,25 @@ func (b *Bus) PublishSync(ctx context.Context, msg Message) []error {
 
 	errs := make([]error, 0)
 	for _, sub := range subs {
-		if err := sub.handler(ctx, msg); err != nil {
+		if err := b.invokeHandler(sub, ctx, msg); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", sub.id, err))
 		}
 	}
 	return errs
+}
+
+// invokeHandler calls a subscriber handler with panic recovery, returning the
+// handler error or a wrapped panic error so a panicking subscriber cannot
+// propagate into the publisher's goroutine.
+func (b *Bus) invokeHandler(sub subscriber, ctx context.Context, msg Message) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			atomic.AddInt64(&b.metrics.PanicCount, 1)
+			logger.WithComponent("bus").Error("subscriber panic (sync)", "subscriber", sub.id, "topic", msg.Topic, "panic", r)
+			err = fmt.Errorf("subscriber %s panicked: %v", sub.id, r)
+		}
+	}()
+	return sub.handler(ctx, msg)
 }
 
 func (b *Bus) SubscriberCount(topic string) int {

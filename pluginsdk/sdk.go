@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 )
 
 // RPCPlugin is the interface that all ASSCOR RPC-based plugins must implement.
@@ -49,6 +50,15 @@ type RPCPlugin interface {
 //	    pluginsdk.Serve(&MyPlugin{})
 //	}
 func Serve(p RPCPlugin) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "plugin fatal panic: %v\n", r)
+			buf := make([]byte, 8192)
+			n := runtime.Stack(buf, false)
+			fmt.Fprintf(os.Stderr, "%s\n", buf[:n])
+		}
+	}()
+
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 1024*1024), 2*1024*1024)
 
@@ -67,27 +77,30 @@ func Serve(p RPCPlugin) {
 		}
 
 		var result json.RawMessage
-		var err error
 
-		switch req.Method {
-		case "init":
-			var cfg map[string]string
-			json.Unmarshal(req.Params, &cfg)
-			err = p.Init(cfg)
-			if err == nil {
-				result = json.RawMessage(`{"status":"ok"}`)
+		if err := func() (rerr error) {
+			defer func() {
+				if r := recover(); r != nil {
+					rerr = fmt.Errorf("panic: %v", r)
+				}
+			}()
+			switch req.Method {
+			case "init":
+				var cfg map[string]string
+				json.Unmarshal(req.Params, &cfg)
+				if rerr = p.Init(cfg); rerr == nil {
+					result = json.RawMessage(`{"status":"ok"}`)
+				}
+			case "shutdown":
+				if rerr = p.Shutdown(); rerr == nil {
+					writeResponse(encoder, req.ID, json.RawMessage(`{"status":"ok"}`))
+					return
+				}
+			default:
+				result, rerr = p.HandleRequest(req.Method, req.Params)
 			}
-		case "shutdown":
-			err = p.Shutdown()
-			if err == nil {
-				writeResponse(encoder, req.ID, json.RawMessage(`{"status":"ok"}`))
-				return
-			}
-		default:
-			result, err = p.HandleRequest(req.Method, req.Params)
-		}
-
-		if err != nil {
+			return rerr
+		}(); err != nil {
 			writeError(encoder, req.ID, -32603, err.Error())
 			continue
 		}
