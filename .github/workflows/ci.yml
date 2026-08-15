@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  # Full module set — keep in sync with scripts/build.sh MODULE_TAGS
+  MODULE_TAGS: "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,webui,integrity,resilience,comms,checks,adapter,engine"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Format check (gofmt)
+        run: |
+          unformatted=$(gofmt -l internal cmd optional pluginsdk api)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt needed on the following files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet (no tags)
+        run: go vet ./internal/... ./cmd/...
+
+      - name: Build minimal kernel (zero-bloat default)
+        run: go build ./cmd/kernel/
+
+      - name: Build all binaries (full tags)
+        run: |
+          go build -tags "$MODULE_TAGS" ./cmd/kernel/
+          go build -tags "checks" ./cmd/agent/
+          go build -tags "engine,checks,adapter,spc,attck_ext" ./cmd/asscor/
+
+      - name: Test (no tags — kernel + always-compiled packages)
+        run: go test ./internal/...
+
+      - name: Test (full tags — all optional modules)
+        run: go test -tags "$MODULE_TAGS" ./internal/...
+
+      - name: Plugin SDK (independent module)
+        working-directory: pluginsdk
+        run: |
+          go vet ./...
+          go build ./...
+          go test ./...
