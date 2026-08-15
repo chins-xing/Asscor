@@ -118,7 +118,54 @@ privileged → agent: SO_PEERCRED + 白名单
 
 ---
 
-## 七、审计边界
+## 八、修复验证与后续发现（2026-08-16 晚，专项排查）
+
+### 8.1 I-01 修复的线上验证（真机 10.0.0.1，Ubuntu 24.04）
+
+I-01 已实施修复：mTLS 对端证书指纹绑定 host_id（`BindAgentCert`/`VerifyAgentCert`），
+持久化到 `<data_dir>/heartbeat_identity.json`（0600，temp+rename）。线上验证结果：
+
+| 场景 | 结果 |
+|------|------|
+| 真证书首次注册（`45869aa3...`） | ✅ accepted，绑定持久化 |
+| 伪造证书注册（同 CA，CN "ASSCOR Agent evil"，`8936cf10...`） | ✅ 拒绝：`certificate identity conflict: host ... is bound to a different certificate`（audit ERR） |
+| 真证书恢复后重注册（同指纹） | ✅ accepted，绑定不变 |
+
+### 8.2 专项排查发现的严重缺陷（已修复）：剪除丢失身份锚定
+
+**线上异常**：07:19:52 与 07:26:19 两次出现伪造证书注册被 accepted 并覆写
+identity.json，即使 kernel 日志显示 07:19:14 / 07:24:07 已加载绑定（count=1）。
+
+**根因**（`internal/heartbeat/heartbeat.go`）：持久化绑定在 kernel 重启后由
+`loadIdentityLocked` 恢复到 `AgentRecord`，但该 record 的 `LastSeen` 为零值且
+`Active=false`。监控循环（10s tick）的 `checkTimeouts` → `pruneDeadAgents`
+（cutoff 1h，零值 LastSeen 必然早于）在 agent 重连前就把整个 record **连同
+`CertFingerprint` 一并删除**。此后任意证书的 Register 都被当作"首次绑定"
+接受并覆写持久化文件——身份锚定形同虚设。
+
+**修复**（commit `f58a5a6`）：
+- `pruneDeadAgents` 永不删除携带 `CertFingerprint` 的锚定 record（身份锚定
+  与存活跟踪解耦，锚定在显式吊销前永久有效）；
+- `checkTimeouts` 跳过 `LastSeen` 为零值的已恢复锚定（避免 kernel 启动即误报超时）。
+
+**回归测试**：`internal/heartbeat/identity_prune_test.go`（5 个场景：reload→
+monitor→prune 后锚定存活且伪造证书被拒、长期离线绑定主机锚定保留、无绑定死
+记录仍可剪除、零值锚定不误报超时、超时事件后锚定仍存活）。
+
+**修复后线上复验**（决定性场景）：停 agent → 重启 kernel（加载 45869aa3）→
+agent 保持下线 15s 越过监控 tick → identity.json 不变、无 prune 记录 → 伪造
+证书注册**被拒**、identity.json 未被覆写 → 恢复真证书重注册 accepted。全链路
+通过，两服务 active。
+
+### 8.3 待办（承接本审计）
+
+- **P1 I-03**：证书吊销——指纹绑定已提供吊销粒度（吊销 = 删除锚定记录 + 拒绝该
+  指纹），下一步实现 CRL/按 host 撤销；
+- 07:19:52 异常此前曾被误判为测试脚本时序问题，实际为 8.2 缺陷，已更正。
+
+---
+
+## 九、审计边界
 
 - 基于 v0.2.3 代码树（`ed86fd9`）静态盘点，未做动态渗透
 - 已确认的良好基线：服务账户分层、HMAC 轮换、证书 0600、扩展多重防护、CLI peer 校验（v0.2.3 收紧）
