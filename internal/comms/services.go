@@ -546,6 +546,12 @@ func (s *AgentServiceImpl) ExecuteCommand(ctx context.Context, req *apiv1.Comman
 		}, fmt.Errorf("command_id and host_id are required")
 	}
 
+	// Identity event (audit I-02): command confirmation attributed to the
+	// connecting agent's certificate identity.
+	logger.WithComponent("identity").Info("identity: command acknowledged",
+		"host_id", req.HostId, "fingerprint", truncateFingerprint(kernel.PeerCertFingerprintFromContext(ctx)),
+		"command_id", req.CommandId, "action", "command_ack", "result", "accepted")
+
 	if s.commander != nil {
 		s.commander.AckCommand(req.HostId, req.CommandId, true, "")
 	}
