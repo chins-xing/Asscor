@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -63,7 +64,9 @@ func runCLIClient(sockPath string) {
 		os.Exit(0)
 	}()
 
+	readerDone := make(chan struct{})
 	go func() {
+		defer close(readerDone)
 		buf := make([]byte, 4096)
 		for {
 			n, err := conn.Read(buf)
@@ -86,6 +89,10 @@ func runCLIClient(sockPath string) {
 	if err == nil {
 		defer restoreTerm(tty.Fd(), oldState)
 	}
+	// Echo input only when running on a real terminal in raw mode (which no
+	// longer echoes by itself). When stdin is a pipe (scripted usage), echoing
+	// would pollute the captured output.
+	echoInput := tty != os.Stdin
 
 	encoder := gob.NewEncoder(conn)
 	var line []byte
@@ -94,7 +101,9 @@ func runCLIClient(sockPath string) {
 
 	for {
 		if showPrompt {
-			os.Stdout.WriteString("\r\nasscor> ")
+			if echoInput {
+				os.Stdout.WriteString("\r\nasscor> ")
+			}
 			showPrompt = false
 		}
 
@@ -107,12 +116,22 @@ func runCLIClient(sockPath string) {
 		switch {
 		case ch == 0x0d || ch == 0x0a:
 			cmd := strings.TrimSpace(string(line))
-			os.Stdout.WriteString("\r\n")
+			if echoInput {
+				os.Stdout.WriteString("\r\n")
+			}
 			line = line[:0]
 			showPrompt = true
 
 			if cmd == "exit" || cmd == "quit" {
 				encoder.Encode("exit")
+				// Wait for the server to close the connection (it flushes its
+				// "Goodbye" response first). Scripted usage pipes commands in
+				// and reads the output back; exiting immediately used to race
+				// the reader goroutine and drop the last command's result.
+				select {
+				case <-readerDone:
+				case <-time.After(2 * time.Second):
+				}
 				fmt.Fprintln(os.Stderr, "disconnected. Kernel continues running.")
 				return
 			}
@@ -132,7 +151,9 @@ func runCLIClient(sockPath string) {
 			_ = ch
 		case ch >= 0x20 && ch < 0x7f:
 			line = append(line, ch)
-			os.Stdout.Write(buf)
+			if echoInput {
+				os.Stdout.Write(buf)
+			}
 		}
 	}
 }
