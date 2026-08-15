@@ -15,7 +15,8 @@ import (
 // Module tracks Agent liveness and triggers alerts on timeout.
 // It is a build-tag optional module (//go:build heartbeat): the kernel keeps
 // only the HeartbeatInterface contract, this package provides the
-// implementation.
+// Module tracks agent liveness and identity. CertFingerprint binds each
+// host_id to the mTLS certificate it registered with (identity hardening).
 type Module struct {
 	kc kernel.KernelContext
 
@@ -148,14 +149,19 @@ func (m *Module) RegisterAgent(hostID, hostname, version string) {
 		m.agents = make(map[string]*kernel.AgentRecord)
 	}
 
-	m.agents[hostID] = &kernel.AgentRecord{
-		HostID:     hostID,
-		Hostname:   hostname,
-		Version:    version,
-		LastSeen:   time.Now(),
-		Registered: time.Now(),
-		Active:     true,
+	rec := m.agents[hostID]
+	if rec == nil {
+		rec = &kernel.AgentRecord{}
+		m.agents[hostID] = rec
 	}
+	rec.HostID = hostID
+	rec.Hostname = hostname
+	rec.Version = version
+	rec.LastSeen = time.Now()
+	if rec.Registered.IsZero() {
+		rec.Registered = time.Now()
+	}
+	rec.Active = true
 
 	if m.kc != nil {
 		m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
@@ -166,6 +172,68 @@ func (m *Module) RegisterAgent(hostID, hostname, version string) {
 	}
 
 	logger.WithComponent("heartbeat").Info("agent registered", "host_id", hostID, "hostname", hostname)
+}
+
+// BindAgentCert binds hostID to the presented mTLS certificate fingerprint on
+// first registration (one certificate, one identity). An empty fingerprint
+// (mTLS disabled, development only) always succeeds and stores nothing.
+func (m *Module) BindAgentCert(hostID, fingerprint string) bool {
+	if fingerprint == "" {
+		return true // mTLS disabled — no binding (development mode)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.agents == nil {
+		m.agents = make(map[string]*kernel.AgentRecord)
+	}
+
+	// The fingerprint must not already belong to another host.
+	for id, rec := range m.agents {
+		if id != hostID && rec.CertFingerprint == fingerprint {
+			logger.WithComponent("heartbeat").Warn("cert fingerprint already bound to another host",
+				"host_id", hostID, "other_host", id, "fingerprint", shortFP(fingerprint))
+			return false
+		}
+	}
+
+	rec := m.agents[hostID]
+	if rec == nil {
+		rec = &kernel.AgentRecord{HostID: hostID}
+		m.agents[hostID] = rec
+	}
+	if rec.CertFingerprint != "" && rec.CertFingerprint != fingerprint {
+		logger.WithComponent("heartbeat").Warn("host already bound to a different certificate",
+			"host_id", hostID, "old_fingerprint", shortFP(rec.CertFingerprint), "new_fingerprint", shortFP(fingerprint))
+		return false
+	}
+	rec.CertFingerprint = fingerprint
+	return true
+}
+
+// shortFP shortens a certificate fingerprint for log output without panicking
+// on short test values.
+func shortFP(fp string) string {
+	if len(fp) <= 12 {
+		return fp
+	}
+	return fp[:12] + "..."
+}
+
+// VerifyAgentCert checks the connecting certificate fingerprint matches the
+// one bound to hostID. Returns true when hostID has no binding yet (first
+// contact, BindAgentCert will establish it) or the fingerprints match. An
+// empty fingerprint (no mTLS) always verifies.
+func (m *Module) VerifyAgentCert(hostID, fingerprint string) bool {
+	if fingerprint == "" {
+		return true // mTLS disabled — no verification (development mode)
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rec := m.agents[hostID]
+	if rec == nil || rec.CertFingerprint == "" {
+		return true // not bound yet
+	}
+	return rec.CertFingerprint == fingerprint
 }
 
 func (m *Module) GetAgent(hostID string) *kernel.AgentRecord {

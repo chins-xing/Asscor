@@ -185,7 +185,22 @@ func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterReq
 		return nil, fmt.Errorf("heartbeat service not available")
 	}
 
+	// Identity hardening (audit I-01): bind the presenting mTLS certificate
+	// fingerprint to this host_id on first registration. A legal certificate
+	// cannot impersonate a different host, and one certificate maps to one
+	// identity. Empty fingerprint (no mTLS, development) skips binding.
+	fp := kernel.PeerCertFingerprintFromContext(ctx)
+	if !s.heartbeat.BindAgentCert(req.HostId, fp) {
+		logger.WithComponent("identity").Warn("registration rejected: certificate identity mismatch",
+			"host_id", req.HostId, "fingerprint", truncateFingerprint(fp))
+		return &apiv1.RegisterResponse{Accepted: false}, fmt.Errorf("certificate identity conflict: host %q is bound to a different certificate", req.HostId)
+	}
+
 	s.heartbeat.RegisterAgent(req.HostId, req.Hostname, req.Version)
+
+	// Identity event (audit I-02): unified registration record.
+	logger.WithComponent("identity").Info("identity: agent registered",
+		"host_id", req.HostId, "fingerprint", truncateFingerprint(fp), "action", "register", "result", "accepted")
 
 	return &apiv1.RegisterResponse{
 		Accepted:  true,
@@ -193,10 +208,27 @@ func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterReq
 	}, nil
 }
 
+// truncateFingerprint shortens a cert fingerprint for logging (full value in
+// structured fields when needed). Empty input stays empty.
+func truncateFingerprint(fp string) string {
+	if len(fp) <= 16 {
+		return fp
+	}
+	return fp[:16] + "..."
+}
+
 func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatRequest) (*apiv1.HeartbeatResponse, error) {
 	logger.WithComponent("kernel").Info("heartbeat received", "host_id", req.HostId, "has_result", req.Result != nil, "has_assessor", s.assessor != nil)
 
+	// Identity hardening (audit I-01): verify the presenting certificate
+	// matches the one bound to this host_id at registration.
 	if s.heartbeat != nil {
+		fp := kernel.PeerCertFingerprintFromContext(ctx)
+		if !s.heartbeat.VerifyAgentCert(req.HostId, fp) {
+			logger.WithComponent("identity").Warn("heartbeat rejected: certificate identity mismatch",
+				"host_id", req.HostId, "fingerprint", truncateFingerprint(fp))
+			return &apiv1.HeartbeatResponse{Ok: false}, fmt.Errorf("certificate identity mismatch for host %q", req.HostId)
+		}
 		s.heartbeat.RecordHeartbeat(req.HostId)
 	}
 

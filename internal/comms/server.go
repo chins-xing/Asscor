@@ -5,7 +5,9 @@ package comms
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -157,6 +159,20 @@ func (s *Server) handleConn(conn net.Conn) {
 
 	clientAddr := conn.RemoteAddr().String()
 	ctx := context.WithValue(s.ctx, kernel.CtxKey("client_addr"), clientAddr)
+
+	// Identity hardening (audit I-01): capture the mTLS peer certificate
+	// fingerprint so service handlers can bind/verify host_id ↔ certificate.
+	// Non-TLS connections (development mode) yield an empty fingerprint and
+	// skip identity binding.
+	if tc, ok := conn.(*tls.Conn); ok {
+		if err := tc.Handshake(); err == nil {
+			state := tc.ConnectionState()
+			if len(state.PeerCertificates) > 0 {
+				fp := sha256.Sum256(state.PeerCertificates[0].Raw)
+				ctx = context.WithValue(ctx, kernel.CtxPeerCertFingerprint, hex.EncodeToString(fp[:]))
+			}
+		}
+	}
 
 	var dispatch kernel.HandlerFunc
 	s.mu.RLock()
