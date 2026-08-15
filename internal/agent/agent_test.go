@@ -453,3 +453,109 @@ func TestStopAndIsRunning(t *testing.T) {
 		t.Error("IsRunning should be false after Stop")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// runChecks / runCheckWithTimeout / checkTimeout
+// ---------------------------------------------------------------------------
+
+func testCheckItem(id string, fn func() (bool, string)) model.CheckItem {
+	return model.CheckItem{
+		ID:            id,
+		Domain:        model.DomainAttackSurface,
+		Name:          "Test " + id,
+		Delta:         -5,
+		ComplianceRef: "L3-TEST",
+		Check:         fn,
+	}
+}
+
+func TestCheckTimeoutFallback(t *testing.T) {
+	a := &Agent{cfg: AgentConfig{CheckTimeoutSec: 0}}
+	if got := a.checkTimeout(); got != 60*time.Second {
+		t.Errorf("checkTimeout with 0 config = %v, want 60s", got)
+	}
+	a = &Agent{cfg: AgentConfig{CheckTimeoutSec: 5}}
+	if got := a.checkTimeout(); got != 5*time.Second {
+		t.Errorf("checkTimeout with 5 config = %v, want 5s", got)
+	}
+}
+
+func TestRunChecksBasic(t *testing.T) {
+	a := &Agent{
+		checkers: []model.CheckItem{
+			testCheckItem("C-001", func() (bool, string) { return true, "ok" }),
+			testCheckItem("C-002", func() (bool, string) { return false, "bad" }),
+			testCheckItem("C-003", func() (bool, string) { panic("boom") }),
+		},
+	}
+	results := a.runChecks()
+	if len(results) != 3 {
+		t.Fatalf("got %d results, want 3", len(results))
+	}
+	// Results must preserve checker order.
+	if results[0].CheckID != "C-001" || !results[0].Passed {
+		t.Errorf("results[0] = %+v, want C-001 passed", results[0])
+	}
+	if results[1].CheckID != "C-002" || results[1].Passed {
+		t.Errorf("results[1] = %+v, want C-002 failed", results[1])
+	}
+	// Panic must be recovered by model.CheckItem.Run() and reported as failure.
+	if results[2].CheckID != "C-003" || results[2].Passed {
+		t.Errorf("results[2] = %+v, want C-003 failed after panic", results[2])
+	}
+	if !strings.Contains(results[2].Detail, "panic") {
+		t.Errorf("results[2].Detail = %q, want panic mention", results[2].Detail)
+	}
+	// Metadata must survive through runChecks.
+	for _, r := range results {
+		if r.Domain != model.DomainAttackSurface || r.Delta != -5 || r.ComplianceRef != "L3-TEST" {
+			t.Errorf("result %s lost metadata: %+v", r.CheckID, r)
+		}
+	}
+}
+
+func TestRunChecksTimeout(t *testing.T) {
+	a := &Agent{
+		cfg: AgentConfig{CheckTimeoutSec: 1},
+		checkers: []model.CheckItem{
+			testCheckItem("C-SLOW", func() (bool, string) {
+				time.Sleep(3 * time.Second)
+				return true, "too late"
+			}),
+		},
+	}
+	results := a.runChecks()
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	r := results[0]
+	if r.Passed {
+		t.Error("slow check should be reported as failed (timeout)")
+	}
+	if !strings.Contains(r.Detail, "timed out") {
+		t.Errorf("Detail = %q, want timeout mention", r.Detail)
+	}
+	// The timeout result must retain full scoring metadata so the kernel can
+	// attribute the failure to the right domain/weight.
+	if r.CheckID != "C-SLOW" || r.Domain != model.DomainAttackSurface ||
+		r.Delta != -5 || r.ComplianceRef != "L3-TEST" || r.Name == "" {
+		t.Errorf("timeout result lost metadata: %+v", r)
+	}
+}
+
+func TestRunChecksEmpty(t *testing.T) {
+	a := &Agent{}
+	results := a.runChecks()
+	if len(results) != 0 {
+		t.Errorf("empty checkers should yield empty results (no root checks registered without checks tag), got %d", len(results))
+	}
+}
+
+func TestRunCheckWithTimeoutCompletes(t *testing.T) {
+	a := &Agent{cfg: AgentConfig{CheckTimeoutSec: 5}}
+	item := testCheckItem("C-FAST", func() (bool, string) { return true, "fast" })
+	r := a.runCheckWithTimeout(item, a.checkTimeout())
+	if !r.Passed || r.Detail != "fast" {
+		t.Errorf("fast check should complete normally: %+v", r)
+	}
+}

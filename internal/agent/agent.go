@@ -1272,39 +1272,30 @@ var cpeVendorMap = map[string]*vendorProductEntry{
 	"networkmanager":  {vendor: "freedesktop", product: "networkmanager"},
 }
 
+// checkConcurrency bounds the number of concurrently executing normal checks.
+const checkConcurrency = 10
+
+// runChecks executes all normal-privilege checks concurrently (bounded by
+// checkConcurrency workers), each under a hard per-check timeout derived from
+// cfg.CheckTimeoutSec, then appends root-privilege check results delegated to
+// the privileged agent. Results are returned in checker order.
 func (a *Agent) runChecks() []model.CheckResult {
 	results := make([]model.CheckResult, len(a.checkers))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 10)
+	if len(a.checkers) == 0 {
+		return append(results, a.runRootChecks()...)
+	}
 
+	timeout := a.checkTimeout()
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, checkConcurrency)
 	for i, check := range a.checkers {
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(idx int, c model.CheckItem) {
 			defer wg.Done()
 			defer func() { <-sem }()
-
-			done := make(chan model.CheckResult, 1)
-			checkCtx, checkCancel := context.WithTimeout(context.Background(), 60*time.Second)
-			go func() {
-				defer checkCancel()
-				r := c.Run()
-				select {
-				case done <- r:
-				case <-checkCtx.Done():
-				}
-			}()
-
-			select {
-			case r := <-done:
-				results[idx] = r
-			case <-checkCtx.Done():
-				results[idx] = model.CheckResult{
-					CheckID: c.ID,
-					Passed:  false,
-					Detail:  "check timed out after 60s",
-				}
-			}
+			results[idx] = a.runCheckWithTimeout(c, timeout)
 		}(i, check)
 	}
 	wg.Wait()
@@ -1315,6 +1306,41 @@ func (a *Agent) runChecks() []model.CheckResult {
 	results = append(results, a.runRootChecks()...)
 
 	return results
+}
+
+// checkTimeout returns the per-check hard timeout, defaulting to 60s when the
+// configured CheckTimeoutSec is unset (zero).
+func (a *Agent) checkTimeout() time.Duration {
+	if a.cfg.CheckTimeoutSec > 0 {
+		return time.Duration(a.cfg.CheckTimeoutSec) * time.Second
+	}
+	return 60 * time.Second
+}
+
+// runCheckWithTimeout executes one check under a hard timeout and returns a
+// fully-populated result. On timeout the result retains the check's
+// Domain/Delta/Name/ComplianceRef so the kernel still receives complete
+// scoring metadata instead of a bare failure with no domain attribution.
+func (a *Agent) runCheckWithTimeout(c model.CheckItem, timeout time.Duration) model.CheckResult {
+	done := make(chan model.CheckResult, 1)
+	go func() {
+		done <- c.Run()
+	}()
+	select {
+	case r := <-done:
+		return r
+	case <-time.After(timeout):
+		logger.WithComponent("agent").Warn("check timed out", "check_id", c.ID, "timeout", timeout.String())
+		return model.CheckResult{
+			CheckID:       c.ID,
+			Domain:        c.Domain,
+			Name:          c.Name,
+			Passed:        false,
+			Delta:         c.Delta,
+			Detail:        fmt.Sprintf("check timed out after %s", timeout),
+			ComplianceRef: c.ComplianceRef,
+		}
+	}
 }
 
 // runRootChecks delegates root-privilege checks to the privileged agent
