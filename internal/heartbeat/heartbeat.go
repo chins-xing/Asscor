@@ -359,6 +359,12 @@ func (m *Module) checkTimeouts() {
 	now := time.Now()
 	var timedOut []string
 	for id, agent := range m.agents {
+		// Records restored from the persisted identity file have a zero
+		// LastSeen until the agent actually connects. They are anchors, not
+		// live agents: do not mark them timed out on kernel start.
+		if agent.LastSeen.IsZero() {
+			continue
+		}
 		if now.Sub(agent.LastSeen) > m.timeout {
 			timedOut = append(timedOut, id)
 		}
@@ -396,6 +402,15 @@ func (m *Module) pruneDeadAgents() {
 
 	cutoff := time.Now().Add(-1 * time.Hour)
 	for id, agent := range m.agents {
+		// Identity anchors (host_id ↔ cert-fingerprint bindings) must never be
+		// pruned by liveness tracking: they are permanent until explicitly
+		// revoked. Deleting the record here would drop the CertFingerprint from
+		// memory, letting any certificate re-bind the host on next registration
+		// (the persisted file would then be silently overwritten — the very
+		// impersonation the binding exists to stop).
+		if agent.CertFingerprint != "" {
+			continue
+		}
 		if !agent.Active && agent.LastSeen.Before(cutoff) {
 			delete(m.agents, id)
 			if m.kc != nil && m.kc.Extensions() != nil {
