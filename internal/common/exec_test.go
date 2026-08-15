@@ -51,8 +51,8 @@ func TestContainsShellMetachar(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		if got := containsShellMetachar(tt.input); got != tt.expected {
-			t.Errorf("containsShellMetachar(%q) = %v, want %v", tt.input, got, tt.expected)
+		if got := ContainsShellMetachar(tt.input); got != tt.expected {
+			t.Errorf("ContainsShellMetachar(%q) = %v, want %v", tt.input, got, tt.expected)
 		}
 	}
 }
@@ -160,7 +160,7 @@ func BenchmarkIsCommandAllowed(b *testing.B) {
 
 func BenchmarkContainsShellMetachar(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		containsShellMetachar("cmd | other; rm -rf /")
+		ContainsShellMetachar("cmd | other; rm -rf /")
 	}
 }
 

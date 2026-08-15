@@ -18,8 +18,8 @@ import (
 )
 
 // userCheckCommandTimeout bounds execution of a user-defined check command.
-// User checks run through the shell (`sh -c`) to support pipes/globs, so a
-// hard timeout is mandatory to prevent a hung command from stalling checks.
+// User checks run via direct exec of a whitelisted command (no shell), so a
+// hard timeout still guards against a hung command stalling checks.
 const userCheckCommandTimeout = 30 * time.Second
 
 // userCheckAllowedCommands is the supplemental allowlist for user_check
@@ -53,6 +53,67 @@ func isUserCheckCommandAllowed(cmd string) bool {
 	first = strings.Trim(first, "'\"")
 	first = filepath.Base(first)
 	return common.IsCommandAllowed(first) || userCheckAllowedCommands[first]
+}
+
+// parseUserCheckCommand splits a user_check command into an executable name
+// and argument array WITHOUT invoking a shell: the whole string must be free
+// of shell metacharacters (pipes, redirection, command substitution, job
+// control), and the first token must be whitelisted. Any shell feature is
+// rejected at construction time, closing the sh -c bypass where a whitelisted
+// first token was followed by arbitrary shell syntax.
+func parseUserCheckCommand(cmd string) (name string, args []string, ok bool) {
+	trimmed := strings.TrimSpace(cmd)
+	if trimmed == "" || common.ContainsShellMetachar(trimmed) {
+		return "", nil, false
+	}
+	parts, valid := splitUserCheckArgs(trimmed)
+	if !valid || len(parts) == 0 {
+		return "", nil, false
+	}
+	name = filepath.Base(strings.Trim(parts[0], "'\""))
+	if !isUserCheckCommandAllowed(name) {
+		return "", nil, false
+	}
+	return name, parts[1:], true
+}
+
+// splitUserCheckArgs splits a command string on whitespace, honoring single
+// and double quotes. Unbalanced quotes yield ok=false.
+func splitUserCheckArgs(s string) (parts []string, ok bool) {
+	var cur []rune
+	inQuote := false
+	var quote rune
+	for _, c := range s {
+		switch {
+		case c == '\'' || c == '"':
+			if inQuote {
+				if c == quote {
+					inQuote = false
+				} else {
+					cur = append(cur, c)
+				}
+			} else {
+				inQuote = true
+				quote = c
+			}
+		case c == ' ' || c == '\t':
+			if inQuote {
+				cur = append(cur, c)
+			} else if len(cur) > 0 {
+				parts = append(parts, string(cur))
+				cur = cur[:0]
+			}
+		default:
+			cur = append(cur, c)
+		}
+	}
+	if inQuote {
+		return nil, false
+	}
+	if len(cur) > 0 {
+		parts = append(parts, string(cur))
+	}
+	return parts, true
 }
 
 var registered = make(map[string]bool)
@@ -160,23 +221,27 @@ func ParseUserChecks(adapterConfig map[string]string) []model.CheckItem {
 		}
 
 		if e.command != "" {
-			// Tighten the sh -c surface: reject commands whose first token is
-			// not in the combined allowlist at construction time, so a bad
-			// configuration is surfaced immediately instead of failing at
-			// check execution (or worse, executing an arbitrary command).
-			if !isUserCheckCommandAllowed(e.command) {
-				logger.WithComponent("config").Warn("user check command rejected: first token not in allowlist",
+			// Reject at construction time any command that is not a simple
+			// "whitelisted command + args" invocation. Shell features (pipes,
+			// redirection, ; && ||, $(), backticks) are not allowed: the check
+			// runs via direct exec (no `sh -c`), so a whitelisted first token
+			// can never be followed by arbitrary shell syntax.
+			name, args, ok := parseUserCheckCommand(e.command)
+			if !ok {
+				logger.WithComponent("config").Warn("user check command rejected: must be a whitelisted command with no shell metacharacters",
 					"check_id", e.id, "command", e.command)
 				continue
 			}
-			cmd := e.command
+			cmdName := name
+			cmdArgs := args
+			fullCmd := e.command
 			match := e.outputMatch
 			item.Check = func() (bool, string) {
 				logger.WithComponent("config").Info("user check command executing",
-					"check_id", item.ID, "command", cmd)
+					"check_id", item.ID, "command", fullCmd)
 				ctx, cancel := context.WithTimeout(context.Background(), userCheckCommandTimeout)
 				defer cancel()
-				out, err := exec.CommandContext(ctx, "sh", "-c", cmd).CombinedOutput()
+				out, err := exec.CommandContext(ctx, cmdName, cmdArgs...).CombinedOutput()
 				if err != nil {
 					if ctx.Err() == context.DeadlineExceeded {
 						return false, fmt.Sprintf("command timed out after %s", userCheckCommandTimeout)
