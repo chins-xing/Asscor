@@ -635,7 +635,20 @@ func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 	}
 
 	for sectionName, kv := range sections {
-		if !adapterSections[sectionName] {
+		if !adapterSections[sectionName] && !strings.HasPrefix(sectionName, "user_check.") {
+			continue
+		}
+		// user_check sections: support both `[user_check]` (single check) and
+		// `[user_check.<name>]` (multiple named checks). Flatten to
+		// "user_check.<name>.<field>" keys consumed by RegisterUserChecks.
+		if sectionName == "user_check" || strings.HasPrefix(sectionName, "user_check.") {
+			checkName := "default"
+			if rest := strings.TrimPrefix(sectionName, "user_check"); rest != "" {
+				checkName = strings.TrimPrefix(rest, ".")
+			}
+			for k, v := range kv {
+				cfg.AdapterConfig["user_check."+checkName+"."+k] = v
+			}
 			continue
 		}
 		switch sectionName {

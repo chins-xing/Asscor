@@ -8,6 +8,7 @@ import (
 
 	"github.com/asscor/asscor/internal/agent"
 	"github.com/asscor/asscor/internal/cli"
+	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/version"
 )
@@ -212,6 +213,13 @@ func loadConfigFile(path string, cfg *agent.AgentConfig) error {
 				cfg.LogOutput = val
 			}
 		}
+	}
+
+	// Load configuration-defined user checks ([user_check.<name>] sections).
+	// The full config parser understands these sections; it also re-parses the
+	// [agent] section which is ignored here (already applied above).
+	if fullCfg, err := config.Parse(string(data)); err == nil {
+		cfg.UserCheckItems = config.ParseUserChecks(fullCfg.AdapterConfig)
 	}
 
 	return nil

@@ -55,6 +55,11 @@ type AgentConfig struct {
 	// PrivilegedSocket is the Unix socket path of the privileged agent
 	// process. When empty, root checks/commands are reported as skipped.
 	PrivilegedSocket string
+	// UserCheckItems are configuration-defined checks loaded from the agent
+	// config file ([user_check.*] sections). They are appended to the
+	// compiled-in checks at agent construction, letting administrators add or
+	// adjust checks without recompiling.
+	UserCheckItems []model.CheckItem
 }
 
 func DefaultConfig() AgentConfig {
@@ -101,7 +106,8 @@ func NewAgent(cfg AgentConfig) *Agent {
 	common.DefaultTimeout = time.Duration(cfg.CheckTimeoutSec) * time.Second
 
 	allChecks := checks.GetNormal()
-	logger.WithComponent("agent").Info("loaded non-root platform checks", "count", len(allChecks), "os", runtime.GOOS, "arch", runtime.GOARCH)
+	allChecks = append(allChecks, cfg.UserCheckItems...)
+	logger.WithComponent("agent").Info("loaded non-root platform checks", "count", len(allChecks), "os", runtime.GOOS, "arch", runtime.GOARCH, "user_checks", len(cfg.UserCheckItems))
 
 	hmacKeyConfigured := cfg.HMACKey != "" || os.Getenv("ASSCOR_HMAC_KEY") != ""
 	if !hmacKeyConfigured {

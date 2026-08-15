@@ -61,6 +61,25 @@ func TestNewAgentNoHMACKey(t *testing.T) {
 	}
 }
 
+// TestNewAgentAppendsUserCheckItems verifies configuration-defined checks
+// ([user_check.*] in agent.ini) are appended to the compiled-in checkers.
+func TestNewAgentAppendsUserCheckItems(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.UserCheckItems = []model.CheckItem{
+		testCheckItem("CU-001", func() (bool, string) { return true, "user-defined" }),
+		testCheckItem("CU-002", func() (bool, string) { return false, "user-fail" }),
+	}
+	a := NewAgent(cfg)
+
+	found := map[string]bool{}
+	for _, c := range a.checkers {
+		found[c.ID] = true
+	}
+	if !found["CU-001"] || !found["CU-002"] {
+		t.Errorf("user check items not appended to checkers: got %v", found)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // truncateCommandOutput
 // ---------------------------------------------------------------------------
