@@ -54,3 +54,39 @@ func TestSkipResult_Neutral(t *testing.T) {
 		t.Error("skipResult should propagate ComplianceRef")
 	}
 }
+
+// TestCheckItemRunPropagatesSource verifies the Source marker flows from
+// CheckItem into CheckResult through both the normal and skip result paths.
+func TestCheckItemRunPropagatesSource(t *testing.T) {
+	// User-defined check: normal execution.
+	userItem := CheckItem{
+		ID:     "CU-001",
+		Domain: DomainOperationTrust,
+		Name:   "user check",
+		Check:  func() (bool, string) { return true, "ok" },
+		Source: CheckSourceUser,
+	}
+	if r := userItem.Run(); r.Source != CheckSourceUser {
+		t.Errorf("Run() Source = %q, want %q", r.Source, CheckSourceUser)
+	}
+
+	// Builtin check: zero value must stay empty (builtin semantics).
+	builtinItem := CheckItem{
+		ID:    "AS-001",
+		Check: func() (bool, string) { return true, "ok" },
+	}
+	if r := builtinItem.Run(); r.Source != "" {
+		t.Errorf("builtin Run() Source = %q, want empty", r.Source)
+	}
+
+	// Skip path must also propagate Source.
+	rootItem := CheckItem{
+		ID:        "CU-ROOT",
+		Check:     func() (bool, string) { return false, "permission denied" },
+		Source:    CheckSourceUser,
+		Privilege: PrivRoot,
+	}
+	if r := rootItem.skipResult("skipped"); r.Source != CheckSourceUser {
+		t.Errorf("skipResult Source = %q, want %q", r.Source, CheckSourceUser)
+	}
+}

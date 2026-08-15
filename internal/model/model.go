@@ -108,6 +108,7 @@ func (c CheckItem) Run() CheckResult {
 		Delta:         c.Delta,
 		Detail:        detail,
 		ComplianceRef: c.ComplianceRef,
+		Source:        c.Source,
 	}
 }
 
@@ -122,6 +123,7 @@ func (c CheckItem) skipResult(detail string) CheckResult {
 		Delta:         0,
 		Detail:        detail,
 		ComplianceRef: c.ComplianceRef,
+		Source:        c.Source,
 	}
 }
 
@@ -159,6 +161,10 @@ type CheckResult struct {
 	Delta         float64 `json:"delta"`
 	Detail        string  `json:"detail"`
 	ComplianceRef string  `json:"compliance_ref,omitempty"`
+	// Source carries the origin of the check (builtin/user). Empty means
+	// builtin; user-defined checks carry CheckSourceUser so reports and
+	// auditing can distinguish configuration-injected checks.
+	Source CheckSource `json:"source,omitempty"`
 }
 
 type DomainScores struct {

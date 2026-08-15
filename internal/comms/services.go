@@ -171,6 +171,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 				Delta:         c.Delta,
 				Detail:        c.Detail,
 				ComplianceRef: c.ComplianceRef,
+				Source:        model.CheckSource(c.Source),
 			})
 		}
 
@@ -230,6 +231,7 @@ func convertAssessmentResult(r *model.AssessmentResult) *apiv1.AssessmentResult 
 			Delta:         c.Delta,
 			Detail:        c.Detail,
 			ComplianceRef: c.ComplianceRef,
+			Source:        string(c.Source),
 		})
 	}
 
@@ -371,6 +373,7 @@ func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotR
 					Delta:         c.Delta,
 					Detail:        c.Detail,
 					ComplianceRef: c.ComplianceRef,
+					Source:        string(c.Source),
 				}
 			}
 			result = &apiv1.AssessmentResult{

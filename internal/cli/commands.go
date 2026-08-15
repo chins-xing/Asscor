@@ -655,8 +655,11 @@ func assessCmdHandler(ctx *CommandContext) *CommandResult {
 			ar.PrismSemanticState, ar.PrismInferenceTrend, ar.PrismInferenceCollapseRisk))
 	}
 	b.WriteString(fmt.Sprintf("  Checks:     %d total", len(ar.Checks)))
-	passes, fails, skipped := 0, 0, 0
+	passes, fails, skipped, userChecks := 0, 0, 0, 0
 	for _, c := range ar.Checks {
+		if c.Source == model.CheckSourceUser {
+			userChecks++
+		}
 		if strings.Contains(c.Detail, "skipped") {
 			skipped++
 		} else if c.Passed {
@@ -665,7 +668,11 @@ func assessCmdHandler(ctx *CommandContext) *CommandResult {
 			fails++
 		}
 	}
-	b.WriteString(fmt.Sprintf(" (%d pass, %d fail, %d skipped)\n", passes, fails, skipped))
+	if userChecks > 0 {
+		b.WriteString(fmt.Sprintf(" (%d pass, %d fail, %d skipped, %d user-defined)\n", passes, fails, skipped, userChecks))
+	} else {
+		b.WriteString(fmt.Sprintf(" (%d pass, %d fail, %d skipped)\n", passes, fails, skipped))
+	}
 	b.WriteString("\n")
 	return &CommandResult{ExitCode: ExitOK, Output: b.String(), Data: ar}
 }

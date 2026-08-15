@@ -60,6 +60,11 @@ type AgentConfig struct {
 	// compiled-in checks at agent construction, letting administrators add or
 	// adjust checks without recompiling.
 	UserCheckItems []model.CheckItem
+	// CheckDeltas overrides per-check Delta values by check ID, loaded from
+	// the [check_deltas] section of the agent config file. Applied to both
+	// builtin and user checkers at construction (kernel-side equivalent:
+	// config.ini [check_deltas]).
+	CheckDeltas map[string]float64
 }
 
 func DefaultConfig() AgentConfig {
@@ -107,7 +112,17 @@ func NewAgent(cfg AgentConfig) *Agent {
 
 	allChecks := checks.GetNormal()
 	allChecks = append(allChecks, cfg.UserCheckItems...)
-	logger.WithComponent("agent").Info("loaded non-root platform checks", "count", len(allChecks), "os", runtime.GOOS, "arch", runtime.GOARCH, "user_checks", len(cfg.UserCheckItems))
+	// Apply [check_deltas] overrides from the agent config: per-check Delta
+	// values configured by the administrator replace the compiled-in defaults
+	// (mirrors the kernel-side config.ini [check_deltas] behavior).
+	if len(cfg.CheckDeltas) > 0 {
+		for i := range allChecks {
+			if d, ok := cfg.CheckDeltas[allChecks[i].ID]; ok {
+				allChecks[i].Delta = d
+			}
+		}
+	}
+	logger.WithComponent("agent").Info("loaded non-root platform checks", "count", len(allChecks), "os", runtime.GOOS, "arch", runtime.GOARCH, "user_checks", len(cfg.UserCheckItems), "delta_overrides", len(cfg.CheckDeltas))
 
 	hmacKeyConfigured := cfg.HMACKey != "" || os.Getenv("ASSCOR_HMAC_KEY") != ""
 	if !hmacKeyConfigured {
@@ -443,6 +458,7 @@ func (a *Agent) heartbeatCycle() error {
 				Delta:         r.Delta,
 				Detail:        r.Detail,
 				ComplianceRef: r.ComplianceRef,
+				Source:        string(r.Source),
 			})
 		}
 
@@ -622,10 +638,16 @@ func (a *Agent) printAssessmentReport(result *apiv1.AssessmentResult) {
 			if !c.Passed {
 				status = "FAIL"
 			}
+			// Mark configuration-defined checks so operators can tell them
+			// apart from the builtin platform checks at a glance.
+			tag := ""
+			if c.Source == "user" {
+				tag = " [user]"
+			}
 			if c.Detail != "" {
-				fmt.Printf("  [%s] %s : %s (%s)\n", status, c.CheckId, c.Name, c.Detail)
+				fmt.Printf("  [%s]%s %s : %s (%s)\n", status, tag, c.CheckId, c.Name, c.Detail)
 			} else {
-				fmt.Printf("  [%s] %s : %s\n", status, c.CheckId, c.Name)
+				fmt.Printf("  [%s]%s %s : %s\n", status, tag, c.CheckId, c.Name)
 			}
 		}
 	}

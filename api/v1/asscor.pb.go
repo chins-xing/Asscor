@@ -122,6 +122,9 @@ type CheckResult struct {
 	Delta         float64 `json:"delta"`
 	Detail        string  `json:"detail"`
 	ComplianceRef string  `json:"compliance_ref,omitempty"`
+	// Source distinguishes user-defined checks ("user") from builtin checks
+	// (empty). Propagated end-to-end so reports can label custom checks.
+	Source string `json:"source,omitempty"`
 }
 
 type Command struct {

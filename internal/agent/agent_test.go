@@ -80,6 +80,49 @@ func TestNewAgentAppendsUserCheckItems(t *testing.T) {
 	}
 }
 
+// TestNewAgentAppliesCheckDeltas verifies [check_deltas] overrides from the
+// agent config replace the compiled-in Delta for matching check IDs.
+func TestNewAgentAppliesCheckDeltas(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.UserCheckItems = []model.CheckItem{
+		testCheckItem("CU-DELTA-001", func() (bool, string) { return true, "x" }), // Delta -5 by default
+		testCheckItem("CU-DELTA-002", func() (bool, string) { return false, "y" }),
+	}
+	cfg.CheckDeltas = map[string]float64{"CU-DELTA-001": -12, "CU-DELTA-002": 2}
+	a := NewAgent(cfg)
+
+	deltas := map[string]float64{}
+	for _, c := range a.checkers {
+		deltas[c.ID] = c.Delta
+	}
+	if deltas["CU-DELTA-001"] != -12 {
+		t.Errorf("CU-DELTA-001 delta = %v, want -12 (overridden)", deltas["CU-DELTA-001"])
+	}
+	if deltas["CU-DELTA-002"] != 2 {
+		t.Errorf("CU-DELTA-002 delta = %v, want 2 (overridden)", deltas["CU-DELTA-002"])
+	}
+}
+
+// TestRunChecksPreservesSource verifies the user-source marker survives the
+// check execution pipeline (runChecks → CheckResult.Source).
+func TestRunChecksPreservesSource(t *testing.T) {
+	a := &Agent{
+		checkers: []model.CheckItem{
+			testCheckItem("CU-SRC-001", func() (bool, string) { return true, "user-check" }),
+		},
+	}
+	// Mark the checker as user-defined (ParseUserChecks sets this).
+	a.checkers[0].Source = model.CheckSourceUser
+
+	results := a.runChecks()
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if results[0].Source != model.CheckSourceUser {
+		t.Errorf("Source = %q, want %q (marker must propagate through runChecks)", results[0].Source, model.CheckSourceUser)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // truncateCommandOutput
 // ---------------------------------------------------------------------------

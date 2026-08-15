@@ -212,6 +212,13 @@ func loadConfigFile(path string, cfg *agent.AgentConfig) error {
 			case "log_output":
 				cfg.LogOutput = val
 			}
+		case "check_deltas":
+			if f, err := strconv.ParseFloat(val, 64); err == nil {
+				if cfg.CheckDeltas == nil {
+					cfg.CheckDeltas = make(map[string]float64)
+				}
+				cfg.CheckDeltas[key] = f
+			}
 		}
 	}
 
