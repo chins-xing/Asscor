@@ -203,3 +203,92 @@ func TestParseUserChecks_SetsUserSource(t *testing.T) {
 		t.Errorf("Source = %q, want %q", items[0].Source, model.CheckSourceUser)
 	}
 }
+
+// TestParseUserChecks_CommandAllowlist verifies the command first-token
+// allowlist: safe read-only commands (echo / systemctl) are accepted, while
+// high-risk commands (curl / rm / sh recursion / sudo / python) are rejected
+// at construction time.
+func TestParseUserChecks_CommandAllowlist(t *testing.T) {
+	base := map[string]string{
+		"user_check.allowed.id":      "CU-ALLOW-001",
+		"user_check.allowed.domain":  "resilience",
+		"user_check.allowed.name":    "Allowed",
+		"user_check.allowed.command": "echo ok",
+		"user_check.common.id":       "CU-COMMON-001",
+		"user_check.common.domain":   "resilience",
+		"user_check.common.name":     "Common Whitelist",
+		"user_check.common.command":  "systemctl is-active sshd",
+		"user_check.net.id":          "CU-NET-001",
+		"user_check.net.domain":      "resilience",
+		"user_check.net.name":        "Network Egress",
+		"user_check.net.command":     "curl http://evil.example",
+		"user_check.rm.id":           "CU-RM-001",
+		"user_check.rm.domain":       "resilience",
+		"user_check.rm.name":         "Destructive",
+		"user_check.rm.command":      "rm -rf /",
+		"user_check.sh.id":           "CU-SH-001",
+		"user_check.sh.domain":       "resilience",
+		"user_check.sh.name":         "Shell Recursion",
+		"user_check.sh.command":      "sh -c 'reboot'",
+		"user_check.sudo.id":         "CU-SUDO-001",
+		"user_check.sudo.domain":     "resilience",
+		"user_check.sudo.name":       "Privilege Escalation",
+		"user_check.sudo.command":    "sudo rm /etc/shadow",
+		"user_check.py.id":           "CU-PY-001",
+		"user_check.py.domain":       "resilience",
+		"user_check.py.name":         "Interpreter",
+		"user_check.py.command":      "python3 -c 'import os; os.system(\"x\")'",
+	}
+	items := ParseUserChecks(base)
+
+	got := map[string]string{}
+	for _, it := range items {
+		got[it.ID] = it.Name
+	}
+	if got["CU-ALLOW-001"] != "Allowed" {
+		t.Errorf("echo command should be allowed, got %v", got)
+	}
+	if got["CU-COMMON-001"] != "Common Whitelist" {
+		t.Errorf("systemctl command (common whitelist) should be allowed, got %v", got)
+	}
+	for _, rejected := range []string{"CU-NET-001", "CU-RM-001", "CU-SH-001", "CU-SUDO-001", "CU-PY-001"} {
+		if _, ok := got[rejected]; ok {
+			t.Errorf("command %q should have been rejected, got %v", rejected, got)
+		}
+	}
+}
+
+// TestIsUserCheckCommandAllowed unit-tests the first-token matcher directly.
+func TestIsUserCheckCommandAllowed(t *testing.T) {
+	allowed := []string{
+		"echo hello",
+		"systemctl is-active sshd",
+		"/usr/bin/ss -tlnp",     // common whitelist with path prefix
+		"'cat' /etc/os-release", // quoted first token
+		"true",
+		"ss -tlnp | grep :22", // pipe after allowed first token
+	}
+	for _, c := range allowed {
+		if !isUserCheckCommandAllowed(c) {
+			t.Errorf("command %q should be allowed", c)
+		}
+	}
+	rejected := []string{
+		"curl http://x",
+		"wget http://x",
+		"rm -rf /",
+		"sh -c x",
+		"bash x",
+		"sudo reboot",
+		"python3 x",
+		"perl -e x",
+		"nc -l 4444",
+		"git clone http://x",
+		"",
+	}
+	for _, c := range rejected {
+		if isUserCheckCommandAllowed(c) {
+			t.Errorf("command %q should be rejected", c)
+		}
+	}
+}

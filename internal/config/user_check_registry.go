@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/asscor/asscor/internal/checks"
+	"github.com/asscor/asscor/internal/common"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 )
@@ -19,6 +21,39 @@ import (
 // User checks run through the shell (`sh -c`) to support pipes/globs, so a
 // hard timeout is mandatory to prevent a hung command from stalling checks.
 const userCheckCommandTimeout = 30 * time.Second
+
+// userCheckAllowedCommands is the supplemental allowlist for user_check
+// commands beyond the common execution whitelist (internal/common/exec.go).
+// Only safe, read-only diagnostic commands are allowed: no network egress
+// (curl/wget), no file mutation (rm/mv/cp/tee), no recursive shells, no
+// interpreters with arbitrary execution (python/perl/node), no privilege
+// escalation (sudo). This tightens the `sh -c` execution surface that
+// otherwise accepts any command string from configuration.
+var userCheckAllowedCommands = map[string]bool{
+	"echo": true, "true": true, "false": true, "test": true, "[": true,
+	"cat": true, "ls": true, "grep": true, "head": true, "tail": true,
+	"cut": true, "wc": true, "date": true, "stat": true, "df": true,
+	"free": true, "uptime": true, "hostname": true, "id": true, "whoami": true,
+	"basename": true, "dirname": true, "uniq": true, "sort": true, "tr": true,
+	"md5sum": true, "sha256sum": true, "pgrep": true, "pidof": true,
+	"readlink": true, "du": true, "find": true, "env": true, "printenv": true,
+	"journalctl": true, "loginctl": true,
+}
+
+// isUserCheckCommandAllowed reports whether a user_check command's first
+// token is an allowed command: either in the common execution whitelist
+// (systemctl/ss/iptables/…, see internal/common/exec.go) or in the
+// supplemental read-only diagnostic set above. Path prefixes and quotes are
+// stripped before matching.
+func isUserCheckCommandAllowed(cmd string) bool {
+	first := strings.TrimSpace(cmd)
+	if i := strings.IndexAny(first, " \t"); i > 0 {
+		first = first[:i]
+	}
+	first = strings.Trim(first, "'\"")
+	first = filepath.Base(first)
+	return common.IsCommandAllowed(first) || userCheckAllowedCommands[first]
+}
 
 var registered = make(map[string]bool)
 
@@ -125,9 +160,20 @@ func ParseUserChecks(adapterConfig map[string]string) []model.CheckItem {
 		}
 
 		if e.command != "" {
+			// Tighten the sh -c surface: reject commands whose first token is
+			// not in the combined allowlist at construction time, so a bad
+			// configuration is surfaced immediately instead of failing at
+			// check execution (or worse, executing an arbitrary command).
+			if !isUserCheckCommandAllowed(e.command) {
+				logger.WithComponent("config").Warn("user check command rejected: first token not in allowlist",
+					"check_id", e.id, "command", e.command)
+				continue
+			}
 			cmd := e.command
 			match := e.outputMatch
 			item.Check = func() (bool, string) {
+				logger.WithComponent("config").Info("user check command executing",
+					"check_id", item.ID, "command", cmd)
 				ctx, cancel := context.WithTimeout(context.Background(), userCheckCommandTimeout)
 				defer cancel()
 				out, err := exec.CommandContext(ctx, "sh", "-c", cmd).CombinedOutput()
