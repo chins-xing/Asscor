@@ -151,6 +151,13 @@ func (a *Agent) applySyncedCheckConfig(cc *apiv1.AgentCheckConfig) {
 		synced = config.ParseUserChecks(cc.UserChecks)
 	}
 
+	// Extend the execution allowlist with kernel-synced commands (idempotent).
+	// The built-in 25-command baseline is never removed; the kernel only
+	// augments it centrally so agents cannot locally alter it.
+	if len(cc.AllowedCommands) > 0 {
+		common.AddAllowedCommands(cc.AllowedCommands...)
+	}
+
 	a.syncedChecks = synced
 	a.checkers = buildAgentCheckers(a.cfg, synced)
 	if len(cc.CheckDeltas) > 0 {
@@ -163,7 +170,7 @@ func (a *Agent) applySyncedCheckConfig(cc *apiv1.AgentCheckConfig) {
 	a.syncedCfgVersion = cc.Version
 
 	logger.WithComponent("agent").Info("applied synced check config from kernel",
-		"version", cc.Version, "user_checks", len(synced), "delta_overrides", len(cc.CheckDeltas), "total_checks", len(a.checkers))
+		"version", cc.Version, "user_checks", len(synced), "delta_overrides", len(cc.CheckDeltas), "allowed_commands", len(cc.AllowedCommands), "total_checks", len(a.checkers))
 }
 
 func NewAgent(cfg AgentConfig) *Agent {

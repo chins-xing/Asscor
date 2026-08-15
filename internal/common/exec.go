@@ -6,10 +6,16 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
 var DefaultTimeout = 10 * time.Second
+
+// allowedCommandsMu guards allowedCommands so the kernel→agent config sync
+// (AddAllowedCommands) can extend the whitelist at runtime without racing
+// concurrent check executions.
+var allowedCommandsMu sync.RWMutex
 
 var allowedCommands = map[string]bool{
 	"systemctl":    true,
@@ -57,7 +63,25 @@ var allowedShellCommands = map[string]bool{
 }
 
 func IsCommandAllowed(name string) bool {
+	allowedCommandsMu.RLock()
+	defer allowedCommandsMu.RUnlock()
 	return allowedCommands[name]
+}
+
+// AddAllowedCommands appends extra whitelisted command names to the execution
+// allowlist (idempotent, thread-safe). This is how the kernel extends an
+// agent's check-command whitelist centrally via the config-sync channel
+// (AgentCheckConfig.AllowedCommands): the built-in 25-command baseline can
+// never be removed, only augmented by the trusted control plane.
+func AddAllowedCommands(names ...string) {
+	allowedCommandsMu.Lock()
+	defer allowedCommandsMu.Unlock()
+	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if n != "" {
+			allowedCommands[n] = true
+		}
+	}
 }
 
 func containsShellMetachar(s string) bool {
@@ -75,6 +99,8 @@ func ParseCommand(cmd string) (name string, args []string, ok bool) {
 	}
 	name = parts[0]
 	args = parts[1:]
+	allowedCommandsMu.RLock()
+	defer allowedCommandsMu.RUnlock()
 	if !allowedCommands[name] {
 		return "", nil, false
 	}
@@ -129,7 +155,10 @@ func RunCmd(name string, args ...string) (string, error) {
 }
 
 func RunCmdTimeout(timeout time.Duration, name string, args ...string) (string, error) {
-	if !allowedCommands[name] {
+	allowedCommandsMu.RLock()
+	ok := allowedCommands[name]
+	allowedCommandsMu.RUnlock()
+	if !ok {
 		return "", fmt.Errorf("command %q is not in allowlist", name)
 	}
 

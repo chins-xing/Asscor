@@ -643,7 +643,7 @@ func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 		"interceptor": true, "prism": true, "integrity": true,
 		"resilience": true,
 		"user_check": true, "adapter_script": true,
-		"grpc": true, "log": true, "comms": true,
+		"grpc": true, "log": true, "comms": true, "commands": true,
 	}
 
 	for sectionName, kv := range sections {

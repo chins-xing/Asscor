@@ -19,6 +19,7 @@ func TestBuildAgentCheckConfig(t *testing.T) {
 			"user_check.audit.domain":    "operation_trust",
 			"user_check.audit.name":      "Audit Log",
 			"user_check.audit.file_path": "/var/log/audit/audit.log",
+			"commands.extra_whitelist":   "auditctl, ausearch, auditctl",
 			"unrelated.key":              "ignored",
 		},
 		CheckDeltas: map[string]float64{"AS-001": -12, "CU-MYSQL-001": -9},
@@ -40,6 +41,13 @@ func TestBuildAgentCheckConfig(t *testing.T) {
 	}
 	if cc.CheckDeltas["AS-001"] != -12 || cc.CheckDeltas["CU-MYSQL-001"] != -9 {
 		t.Errorf("CheckDeltas not copied: %v", cc.CheckDeltas)
+	}
+	// extra_whitelist parsed, trimmed, deduplicated.
+	if len(cc.AllowedCommands) != 2 {
+		t.Fatalf("AllowedCommands = %v, want [auditctl ausearch] (deduplicated)", cc.AllowedCommands)
+	}
+	if cc.AllowedCommands[0] != "auditctl" || cc.AllowedCommands[1] != "ausearch" {
+		t.Errorf("AllowedCommands = %v, want [auditctl ausearch]", cc.AllowedCommands)
 	}
 	if cc.Version == "" {
 		t.Error("Version must be non-empty for configured content")
@@ -66,9 +74,10 @@ func TestAgentCheckConfigVersionStable(t *testing.T) {
 		"user_check.b.id": "CU-B-001",
 	}
 	deltas := map[string]float64{"AS-001": -10}
+	commands := []string{"auditctl"}
 
-	v1 := agentCheckConfigVersion(userChecks, deltas)
-	v2 := agentCheckConfigVersion(userChecks, deltas)
+	v1 := agentCheckConfigVersion(userChecks, deltas, commands)
+	v2 := agentCheckConfigVersion(userChecks, deltas, commands)
 	if v1 != v2 {
 		t.Errorf("version not stable for identical content: %q vs %q", v1, v2)
 	}
@@ -78,7 +87,7 @@ func TestAgentCheckConfigVersionStable(t *testing.T) {
 		"user_check.b.id": "CU-B-001",
 		"user_check.a.id": "CU-A-001",
 	}
-	if v3 := agentCheckConfigVersion(reordered, deltas); v3 != v1 {
+	if v3 := agentCheckConfigVersion(reordered, deltas, commands); v3 != v1 {
 		t.Errorf("version depends on map iteration order: %q vs %q", v3, v1)
 	}
 
@@ -86,7 +95,12 @@ func TestAgentCheckConfigVersionStable(t *testing.T) {
 		"user_check.a.id": "CU-A-001",
 		"user_check.b.id": "CU-B-002", // different value
 	}
-	if v4 := agentCheckConfigVersion(changed, deltas); v4 == v1 {
+	if v4 := agentCheckConfigVersion(changed, deltas, commands); v4 == v1 {
 		t.Error("version must change when content changes")
+	}
+
+	// Allowed-commands changes must also alter the fingerprint.
+	if v5 := agentCheckConfigVersion(userChecks, deltas, []string{"ausearch"}); v5 == v1 {
+		t.Error("version must change when allowed commands change")
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	apiv1 "github.com/asscor/asscor/api/v1"
+	"github.com/asscor/asscor/internal/common"
 	"github.com/asscor/asscor/internal/model"
 )
 
@@ -196,6 +197,32 @@ func TestApplySyncedCheckConfigNil(t *testing.T) {
 	a.applySyncedCheckConfig(&apiv1.AgentCheckConfig{Version: ""})
 	if len(a.checkers) != before {
 		t.Errorf("nil/empty config must be a no-op, checkers = %d (was %d)", len(a.checkers), before)
+	}
+}
+
+// TestApplySyncedCheckConfigAllowedCommands verifies kernel-synced commands
+// extend the execution allowlist (the builtin baseline is preserved).
+func TestApplySyncedCheckConfigAllowedCommands(t *testing.T) {
+	a := NewAgent(DefaultConfig())
+	cc := &apiv1.AgentCheckConfig{
+		AllowedCommands: []string{"zx-sync-auditctl", "zx-sync-ausearch"},
+		Version:         "v-cmd-1",
+	}
+	a.applySyncedCheckConfig(cc)
+
+	if !common.IsCommandAllowed("zx-sync-auditctl") {
+		t.Error("synced command should be allowed after applySyncedCheckConfig")
+	}
+	if !common.IsCommandAllowed("zx-sync-ausearch") {
+		t.Error("second synced command should be allowed")
+	}
+	// Builtin baseline preserved.
+	if !common.IsCommandAllowed("systemctl") {
+		t.Error("builtin baseline must survive command extension")
+	}
+	// checkers unchanged (no user checks in this config) but version recorded.
+	if a.syncedCfgVersion != "v-cmd-1" {
+		t.Errorf("syncedCfgVersion = %q, want v-cmd-1", a.syncedCfgVersion)
 	}
 }
 

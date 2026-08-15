@@ -71,8 +71,9 @@ func (s *KernelServiceImpl) SetConfig(cfg *config.Config) {
 
 // buildAgentCheckConfig extracts the check-item configuration to sync to
 // agents from the kernel's config: the [user_check.*] sections (as flattened
-// keys) and the [check_deltas] overrides. Returns nil when nothing is
-// configured, so agents keep their local bootstrap config unchanged.
+// keys), the [check_deltas] overrides, and the [commands] extra whitelist.
+// Returns nil when nothing is configured, so agents keep their local
+// bootstrap config unchanged.
 func (s *KernelServiceImpl) buildAgentCheckConfig() *apiv1.AgentCheckConfig {
 	if s.cfg == nil {
 		return nil
@@ -96,20 +97,35 @@ func (s *KernelServiceImpl) buildAgentCheckConfig() *apiv1.AgentCheckConfig {
 		}
 	}
 
-	if len(userChecks) == 0 && len(checkDeltas) == 0 {
+	// [commands] extra_whitelist: comma/space-separated command names appended
+	// to the agent's execution allowlist (deduplicated, trimmed).
+	var allowedCommands []string
+	if v := s.cfg.AdapterConfig["commands.extra_whitelist"]; v != "" {
+		seen := make(map[string]bool)
+		for _, part := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' }) {
+			part = strings.TrimSpace(part)
+			if part != "" && !seen[part] {
+				seen[part] = true
+				allowedCommands = append(allowedCommands, part)
+			}
+		}
+	}
+
+	if len(userChecks) == 0 && len(checkDeltas) == 0 && len(allowedCommands) == 0 {
 		return nil
 	}
 
 	return &apiv1.AgentCheckConfig{
-		UserChecks:  userChecks,
-		CheckDeltas: checkDeltas,
-		Version:     agentCheckConfigVersion(userChecks, checkDeltas),
+		UserChecks:      userChecks,
+		CheckDeltas:     checkDeltas,
+		AllowedCommands: allowedCommands,
+		Version:         agentCheckConfigVersion(userChecks, checkDeltas, allowedCommands),
 	}
 }
 
 // agentCheckConfigVersion computes a stable content fingerprint so agents can
 // skip reapplying unchanged configuration.
-func agentCheckConfigVersion(userChecks map[string]string, checkDeltas map[string]float64) string {
+func agentCheckConfigVersion(userChecks map[string]string, checkDeltas map[string]float64, allowedCommands []string) string {
 	h := sha256.New()
 	if len(userChecks) > 0 {
 		keys := make([]string, 0, len(userChecks))
@@ -130,6 +146,9 @@ func agentCheckConfigVersion(userChecks map[string]string, checkDeltas map[strin
 		for _, id := range ids {
 			fmt.Fprintf(h, "d:%s=%s\n", id, strconv.FormatFloat(checkDeltas[id], 'f', -1, 64))
 		}
+	}
+	for _, c := range allowedCommands {
+		fmt.Fprintf(h, "c:%s\n", c)
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }

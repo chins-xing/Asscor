@@ -59,6 +59,10 @@ type AgentCheckConfig struct {
 	UserChecks map[string]string `json:"user_checks,omitempty"`
 	// CheckDeltas overrides check IDs → delta values ([check_deltas] section).
 	CheckDeltas map[string]float64 `json:"check_deltas,omitempty"`
+	// AllowedCommands are extra command names appended to the agent's
+	// execution allowlist ([commands] extra_whitelist). The built-in baseline
+	// is never removed; the kernel only augments it centrally.
+	AllowedCommands []string `json:"allowed_commands,omitempty"`
 	// Version is a monotonic fingerprint of the config content; agents skip
 	// reapplying an unchanged configuration.
 	Version string `json:"version,omitempty"`
