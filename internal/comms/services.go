@@ -5,8 +5,14 @@ package comms
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/topology"
 	"regexp"
@@ -32,6 +38,10 @@ type KernelServiceImpl struct {
 	assessor    kernel.AssessorInterface
 	persistence kernel.PersistenceInterface
 	spc         kernel.SPCInterface
+	// cfg is the kernel configuration; its [user_check.*] and [check_deltas]
+	// sections are synced to agents via heartbeat (check_config). Nil disables
+	// syncing (agent keeps its local bootstrap config).
+	cfg *config.Config
 }
 
 func NewKernelServiceImpl(
@@ -50,6 +60,78 @@ func NewKernelServiceImpl(
 		persistence: persistence,
 		spc:         spc,
 	}
+}
+
+// SetConfig wires the kernel configuration into the service so heartbeat
+// responses can sync check-item configuration (user checks + delta overrides)
+// to agents. Call before serving; nil disables syncing.
+func (s *KernelServiceImpl) SetConfig(cfg *config.Config) {
+	s.cfg = cfg
+}
+
+// buildAgentCheckConfig extracts the check-item configuration to sync to
+// agents from the kernel's config: the [user_check.*] sections (as flattened
+// keys) and the [check_deltas] overrides. Returns nil when nothing is
+// configured, so agents keep their local bootstrap config unchanged.
+func (s *KernelServiceImpl) buildAgentCheckConfig() *apiv1.AgentCheckConfig {
+	if s.cfg == nil {
+		return nil
+	}
+
+	var userChecks map[string]string
+	for k, v := range s.cfg.AdapterConfig {
+		if strings.HasPrefix(k, "user_check.") {
+			if userChecks == nil {
+				userChecks = make(map[string]string)
+			}
+			userChecks[k] = v
+		}
+	}
+
+	var checkDeltas map[string]float64
+	if len(s.cfg.CheckDeltas) > 0 {
+		checkDeltas = make(map[string]float64, len(s.cfg.CheckDeltas))
+		for id, d := range s.cfg.CheckDeltas {
+			checkDeltas[id] = d
+		}
+	}
+
+	if len(userChecks) == 0 && len(checkDeltas) == 0 {
+		return nil
+	}
+
+	return &apiv1.AgentCheckConfig{
+		UserChecks:  userChecks,
+		CheckDeltas: checkDeltas,
+		Version:     agentCheckConfigVersion(userChecks, checkDeltas),
+	}
+}
+
+// agentCheckConfigVersion computes a stable content fingerprint so agents can
+// skip reapplying unchanged configuration.
+func agentCheckConfigVersion(userChecks map[string]string, checkDeltas map[string]float64) string {
+	h := sha256.New()
+	if len(userChecks) > 0 {
+		keys := make([]string, 0, len(userChecks))
+		for k := range userChecks {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Fprintf(h, "u:%s=%s\n", k, userChecks[k])
+		}
+	}
+	if len(checkDeltas) > 0 {
+		ids := make([]string, 0, len(checkDeltas))
+		for id := range checkDeltas {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			fmt.Fprintf(h, "d:%s=%s\n", id, strconv.FormatFloat(checkDeltas[id], 'f', -1, 64))
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
 func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterRequest) (*apiv1.RegisterResponse, error) {
@@ -202,6 +284,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		Ok:                true,
 		ThreatCoefficient: threatCoeff,
 		PendingCommands:   pendingCmds,
+		CheckConfig:       s.buildAgentCheckConfig(),
 	}, nil
 }
 

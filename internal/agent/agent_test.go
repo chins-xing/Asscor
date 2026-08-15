@@ -124,6 +124,82 @@ func TestRunChecksPreservesSource(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// applySyncedCheckConfig — kernel → agent check configuration sync
+// ---------------------------------------------------------------------------
+
+func TestApplySyncedCheckConfig(t *testing.T) {
+	a := NewAgent(DefaultConfig())
+	before := len(a.checkers)
+
+	cc := &apiv1.AgentCheckConfig{
+		UserChecks: map[string]string{
+			"user_check.sync1.id":        "CU-SYNC-001",
+			"user_check.sync1.domain":    "resilience",
+			"user_check.sync1.name":      "Synced Check",
+			"user_check.sync1.command":   "true",
+			"user_check.sync2.id":        "CU-SYNC-002",
+			"user_check.sync2.domain":    "operation_trust",
+			"user_check.sync2.name":      "Synced File Check",
+			"user_check.sync2.file_path": "/etc/hostname",
+		},
+		CheckDeltas: map[string]float64{"CU-SYNC-001": -7},
+		Version:     "v1",
+	}
+	a.applySyncedCheckConfig(cc)
+
+	if len(a.checkers) != before+2 {
+		t.Errorf("checkers = %d, want %d (2 synced checks added)", len(a.checkers), before+2)
+	}
+	if a.syncedCfgVersion != "v1" {
+		t.Errorf("syncedCfgVersion = %q, want v1", a.syncedCfgVersion)
+	}
+	// Synced delta override applied.
+	for _, c := range a.checkers {
+		if c.ID == "CU-SYNC-001" && c.Delta != -7 {
+			t.Errorf("CU-SYNC-001 delta = %v, want -7 (synced override)", c.Delta)
+		}
+		if c.ID == "CU-SYNC-001" && c.Source != model.CheckSourceUser {
+			t.Errorf("CU-SYNC-001 Source = %q, want user", c.Source)
+		}
+	}
+}
+
+func TestApplySyncedCheckConfigSkipsUnchangedVersion(t *testing.T) {
+	a := NewAgent(DefaultConfig())
+	before := len(a.checkers)
+
+	cc := &apiv1.AgentCheckConfig{
+		UserChecks: map[string]string{
+			"user_check.s.id":      "CU-S-001",
+			"user_check.s.domain":  "resilience",
+			"user_check.s.name":    "S",
+			"user_check.s.command": "true",
+		},
+		Version: "v1",
+	}
+	a.applySyncedCheckConfig(cc)
+	if len(a.checkers) != before+1 {
+		t.Fatalf("first apply should add 1 check, got %d (was %d)", len(a.checkers), before)
+	}
+
+	// Same version: no-op even if content differs (fingerprint governs).
+	a.applySyncedCheckConfig(&apiv1.AgentCheckConfig{UserChecks: cc.UserChecks, Version: "v1"})
+	if len(a.checkers) != before+1 {
+		t.Errorf("unchanged version must not reapply, checkers = %d", len(a.checkers))
+	}
+}
+
+func TestApplySyncedCheckConfigNil(t *testing.T) {
+	a := NewAgent(DefaultConfig())
+	before := len(a.checkers)
+	a.applySyncedCheckConfig(nil)
+	a.applySyncedCheckConfig(&apiv1.AgentCheckConfig{Version: ""})
+	if len(a.checkers) != before {
+		t.Errorf("nil/empty config must be a no-op, checkers = %d (was %d)", len(a.checkers), before)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // truncateCommandOutput
 // ---------------------------------------------------------------------------
 

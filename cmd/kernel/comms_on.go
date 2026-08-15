@@ -42,6 +42,9 @@ func newCommsRuntime(
 	log := logger.WithComponent("kernel")
 
 	kernelSvc := comms.NewKernelServiceImpl(heartbeat, commander, cti, assessor, persistence, spc)
+	// Sync check-item configuration (user checks + delta overrides) to agents
+	// via heartbeat so config.ini is the single source of truth.
+	kernelSvc.SetConfig(cfg)
 	agentSvc := comms.NewAgentServiceImpl(assessor, commander, logCollector)
 
 	serverCfg := comms.DefaultServerConfig()

@@ -110,10 +110,22 @@ func InstallAgent() error {
 	}
 
 	if _, err := os.Stat(agentConfigPath); os.IsNotExist(err) {
-		os.WriteFile(agentConfigPath, []byte("[agent]\nheartbeat_sec = 30\ncheck_interval_sec = 300\nlog_format = text\n"), 0644)
+		os.WriteFile(agentConfigPath, []byte("[agent]\nheartbeat_sec = 30\ncheck_interval_sec = 300\nlog_format = text\n"), 0640)
 	}
 
-	chownAsscor(agentBinDir, "/etc/asscor")
+	// Security: the agent config is the primary source of agent behavior
+	// (HMAC key, user checks, delta overrides). The main agent runs as the
+	// `asscor` user, so the file must be root-owned and group-readable only:
+	//   - agent.ini: 0640 root:asscor — root can modify, asscor group can
+	//     read (the agent needs to read it), nobody else can read or write.
+	//   - /etc/asscor: 0750 root:asscor — the agent can read but never write
+	//     its own configuration directory, preventing a compromised agent
+	//     from tampering with its config (e.g. injecting user_check commands
+	//     or replacing the HMAC key).
+	chownAsscor(agentBinDir) // binary + logs stay asscor-owned
+	exec.Command("chown", "-R", "root:asscor", "/etc/asscor").Run()
+	exec.Command("chmod", "0750", "/etc/asscor").Run()
+	exec.Command("chmod", "0640", agentConfigPath).Run()
 	// /run/asscor must be owned by root with group access for the agent so the
 	// privileged socket (SocketUser=root SocketGroup=asscor) is connectable.
 	exec.Command("chown", "root:asscor", "/run/asscor").Run()

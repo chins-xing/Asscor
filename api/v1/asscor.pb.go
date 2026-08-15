@@ -45,6 +45,23 @@ type HeartbeatResponse struct {
 	ThreatCoefficient float64           `json:"threat_coefficient"`
 	PendingCommands   []*Command        `json:"pending_commands"`
 	AssessmentResult  *AssessmentResult `json:"assessment_result,omitempty"`
+	// CheckConfig carries the check-item configuration (user checks + delta
+	// overrides) synced from the kernel's config.ini. Agents apply it
+	// in-memory, making the kernel config file the single source of truth for
+	// check definitions; the local agent.ini stays a minimal bootstrap file.
+	CheckConfig *AgentCheckConfig `json:"check_config,omitempty"`
+}
+
+// AgentCheckConfig is the check-item configuration the kernel syncs to agents.
+type AgentCheckConfig struct {
+	// UserChecks holds flattened "user_check.<name>.<field>" keys → values
+	// (the same format consumed by config.ParseUserChecks).
+	UserChecks map[string]string `json:"user_checks,omitempty"`
+	// CheckDeltas overrides check IDs → delta values ([check_deltas] section).
+	CheckDeltas map[string]float64 `json:"check_deltas,omitempty"`
+	// Version is a monotonic fingerprint of the config content; agents skip
+	// reapplying an unchanged configuration.
+	Version string `json:"version,omitempty"`
 }
 
 type AssessmentResult struct {

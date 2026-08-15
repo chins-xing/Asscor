@@ -28,6 +28,7 @@ import (
 	apiv1 "github.com/asscor/asscor/api/v1"
 	"github.com/asscor/asscor/internal/checks"
 	"github.com/asscor/asscor/internal/common"
+	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/model"
 )
 
@@ -105,23 +106,70 @@ type Agent struct {
 	pkgSent           bool // true after first full packages send
 	cpeSent           bool // true after first full CPE send
 	privClient        *PrivilegedClient
+	// syncedChecks holds checks pushed from the kernel via heartbeat
+	// (config.ini [user_check.*]). syncedCfgVersion fingerprints the last
+	// applied sync so unchanged config is skipped. cfgMu guards checkers
+	// replacement when a synced config arrives mid-cycle.
+	syncedChecks     []model.CheckItem
+	syncedCfgVersion string
+	cfgMu            sync.Mutex
+}
+
+// buildAgentCheckers assembles the agent's check set: compiled-in normal
+// checks + local user checks ([user_check.*] in agent.ini) + synced checks
+// (pushed from the kernel), then applies local [check_deltas] overrides.
+func buildAgentCheckers(cfg AgentConfig, synced []model.CheckItem) []model.CheckItem {
+	all := checks.GetNormal()
+	all = append(all, cfg.UserCheckItems...)
+	all = append(all, synced...)
+
+	if len(cfg.CheckDeltas) > 0 {
+		for i := range all {
+			if d, ok := cfg.CheckDeltas[all[i].ID]; ok {
+				all[i].Delta = d
+			}
+		}
+	}
+	return all
+}
+
+// applySyncedCheckConfig applies check-item configuration synced from the
+// kernel (config.ini [user_check.*] + [check_deltas]) to the live checkers.
+// It is a no-op for nil config, empty version, or an unchanged version.
+func (a *Agent) applySyncedCheckConfig(cc *apiv1.AgentCheckConfig) {
+	if cc == nil || cc.Version == "" {
+		return
+	}
+	a.cfgMu.Lock()
+	defer a.cfgMu.Unlock()
+	if cc.Version == a.syncedCfgVersion {
+		return
+	}
+
+	var synced []model.CheckItem
+	if len(cc.UserChecks) > 0 {
+		synced = config.ParseUserChecks(cc.UserChecks)
+	}
+
+	a.syncedChecks = synced
+	a.checkers = buildAgentCheckers(a.cfg, synced)
+	if len(cc.CheckDeltas) > 0 {
+		for i := range a.checkers {
+			if d, ok := cc.CheckDeltas[a.checkers[i].ID]; ok {
+				a.checkers[i].Delta = d
+			}
+		}
+	}
+	a.syncedCfgVersion = cc.Version
+
+	logger.WithComponent("agent").Info("applied synced check config from kernel",
+		"version", cc.Version, "user_checks", len(synced), "delta_overrides", len(cc.CheckDeltas), "total_checks", len(a.checkers))
 }
 
 func NewAgent(cfg AgentConfig) *Agent {
 	common.DefaultTimeout = time.Duration(cfg.CheckTimeoutSec) * time.Second
 
-	allChecks := checks.GetNormal()
-	allChecks = append(allChecks, cfg.UserCheckItems...)
-	// Apply [check_deltas] overrides from the agent config: per-check Delta
-	// values configured by the administrator replace the compiled-in defaults
-	// (mirrors the kernel-side config.ini [check_deltas] behavior).
-	if len(cfg.CheckDeltas) > 0 {
-		for i := range allChecks {
-			if d, ok := cfg.CheckDeltas[allChecks[i].ID]; ok {
-				allChecks[i].Delta = d
-			}
-		}
-	}
+	allChecks := buildAgentCheckers(cfg, nil)
 	logger.WithComponent("agent").Info("loaded non-root platform checks", "count", len(allChecks), "os", runtime.GOOS, "arch", runtime.GOARCH, "user_checks", len(cfg.UserCheckItems), "delta_overrides", len(cfg.CheckDeltas))
 
 	hmacKeyConfigured := cfg.HMACKey != "" || os.Getenv("ASSCOR_HMAC_KEY") != ""
@@ -512,6 +560,13 @@ func (a *Agent) heartbeatCycle() error {
 	}
 
 	a.pendingCmd = heartbeatResp.PendingCommands
+
+	// Apply check-item configuration synced from the kernel (config.ini
+	// [user_check.*] + [check_deltas]). The kernel config file is the primary
+	// source of truth for check definitions; unchanged versions are skipped.
+	if heartbeatResp.CheckConfig != nil {
+		a.applySyncedCheckConfig(heartbeatResp.CheckConfig)
+	}
 
 	if heartbeatResp.AssessmentResult != nil && len(checkResults) > 0 {
 		a.printAssessmentReport(heartbeatResp.AssessmentResult)

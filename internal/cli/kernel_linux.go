@@ -94,11 +94,18 @@ func InstallKernel(installPath string) error {
 	}
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		os.WriteFile(configPath, []byte("data_dir = "+dataDir+"\n[weights]\nattack_surface = 35\nbusiness_continuity = 25\noperation_trust = 25\nresilience = 15\n"), 0644)
+		os.WriteFile(configPath, []byte("data_dir = "+dataDir+"\n[weights]\nattack_surface = 35\nbusiness_continuity = 25\noperation_trust = 25\nresilience = 15\n"), 0640)
 	}
 
 	exec.Command("useradd", "-r", "-s", "/sbin/nologin", "-d", "/opt/asscor", "-M", "asscor").Run()
-	chownAsscor(installPath, defaultConfigDir, dataDir, logsDir)
+	// Writable runtime dirs (binary install path, data, logs) belong to asscor;
+	// the configuration directory is root-owned with group read access so the
+	// kernel (User=asscor) can read but never write its own config — a
+	// compromised kernel/agent process cannot tamper with config.ini.
+	chownAsscor(installPath, dataDir, logsDir)
+	exec.Command("chown", "-R", "root:asscor", defaultConfigDir).Run()
+	exec.Command("chmod", "0750", defaultConfigDir).Run()
+	exec.Command("chmod", "0640", configPath).Run()
 
 	writeSystemdUnit(installPath)
 	writeCLISymlinks(binPath, installPath)
