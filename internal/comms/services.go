@@ -190,6 +190,13 @@ func (s *KernelServiceImpl) Register(ctx context.Context, req *apiv1.RegisterReq
 	// cannot impersonate a different host, and one certificate maps to one
 	// identity. Empty fingerprint (no mTLS, development) skips binding.
 	fp := kernel.PeerCertFingerprintFromContext(ctx)
+	// Identity hardening (audit I-03): a revoked certificate must not
+	// register, even for a host it was previously bound to.
+	if s.heartbeat.IsCertRevoked(fp) {
+		logger.WithComponent("identity").Warn("registration rejected: certificate revoked",
+			"host_id", req.HostId, "fingerprint", truncateFingerprint(fp))
+		return &apiv1.RegisterResponse{Accepted: false}, fmt.Errorf("certificate revoked: fingerprint %q", truncateFingerprint(fp))
+	}
 	if !s.heartbeat.BindAgentCert(req.HostId, fp) {
 		logger.WithComponent("identity").Warn("registration rejected: certificate identity mismatch",
 			"host_id", req.HostId, "fingerprint", truncateFingerprint(fp))

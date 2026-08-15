@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +37,11 @@ type Module struct {
 
 	// identityPath persists host_id ↔ cert-fingerprint bindings.
 	identityPath string
+
+	// revoked maps certificate fingerprint → revocation record (audit I-03).
+	// Revocations are persisted so they survive kernel restarts.
+	revoked     map[string]kernel.RevokedCertInfo
+	revokedPath string
 }
 
 // New creates a heartbeat module instance.
@@ -66,9 +73,12 @@ func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 	if cfg := kc.GetConfigObj(); cfg != nil && cfg.HeartbeatTimeoutSec > 0 {
 		m.timeout = time.Duration(cfg.HeartbeatTimeoutSec) * time.Second
 	}
+	m.revoked = make(map[string]kernel.RevokedCertInfo)
 	if cfg := kc.GetConfigObj(); cfg != nil && cfg.DataDir != "" {
 		m.identityPath = filepath.Join(cfg.DataDir, "heartbeat_identity.json")
 		m.loadIdentityLocked()
+		m.revokedPath = filepath.Join(cfg.DataDir, "revoked_certificates.json")
+		m.loadRevokedLocked()
 	}
 	m.stopCh = make(chan struct{})
 	m.state = kernel.PluginInitialized
@@ -130,6 +140,60 @@ func (m *Module) saveIdentityLocked() {
 	if err := os.Rename(tmp, m.identityPath); err != nil {
 		logger.WithComponent("heartbeat").Warn("cannot persist identity bindings (rename)", "error", err)
 	}
+}
+
+// loadRevokedLocked restores persisted certificate revocations so they survive
+// kernel restarts. Call with m.mu held (Init runs single-threaded).
+func (m *Module) loadRevokedLocked() {
+	if m.revokedPath == "" {
+		return
+	}
+	data, err := os.ReadFile(m.revokedPath)
+	if err != nil {
+		return // no revocations yet
+	}
+	var list []kernel.RevokedCertInfo
+	if err := json.Unmarshal(data, &list); err != nil {
+		logger.WithComponent("heartbeat").Warn("cannot parse revoked certificates, ignoring", "path", m.revokedPath, "error", err)
+		return
+	}
+	for _, rc := range list {
+		if rc.Fingerprint != "" {
+			m.revoked[rc.Fingerprint] = rc
+		}
+	}
+	logger.WithComponent("heartbeat").Info("loaded revoked certificates", "count", len(m.revoked), "path", m.revokedPath)
+}
+
+// saveRevokedLocked atomically persists all revocations. Call with m.mu held.
+func (m *Module) saveRevokedLocked() {
+	if m.revokedPath == "" {
+		return
+	}
+	list := m.sortedRevokedLocked()
+	data, err := json.Marshal(list)
+	if err != nil {
+		return
+	}
+	tmp := m.revokedPath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		logger.WithComponent("heartbeat").Warn("cannot persist revoked certificates", "error", err)
+		return
+	}
+	if err := os.Rename(tmp, m.revokedPath); err != nil {
+		logger.WithComponent("heartbeat").Warn("cannot persist revoked certificates (rename)", "error", err)
+	}
+}
+
+// sortedRevokedLocked returns revocations ordered by RevokedAt. Call with
+// m.mu held.
+func (m *Module) sortedRevokedLocked() []kernel.RevokedCertInfo {
+	out := make([]kernel.RevokedCertInfo, 0, len(m.revoked))
+	for _, rc := range m.revoked {
+		out = append(out, rc)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].RevokedAt.Before(out[j].RevokedAt) })
+	return out
 }
 
 func (m *Module) Start(ctx context.Context) error {
@@ -250,6 +314,17 @@ func (m *Module) BindAgentCert(hostID, fingerprint string) bool {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.revoked == nil {
+		m.revoked = make(map[string]kernel.RevokedCertInfo)
+	}
+	if _, ok := m.revoked[fingerprint]; ok {
+		// Defense in depth: the Register handler rejects revoked certs with
+		// an explicit message; this guard keeps the invariant even if a
+		// future caller forgets to check first.
+		logger.WithComponent("heartbeat").Warn("registration rejected: certificate fingerprint revoked",
+			"host_id", hostID, "fingerprint", shortFP(fingerprint))
+		return false
+	}
 	if m.agents == nil {
 		m.agents = make(map[string]*kernel.AgentRecord)
 	}
@@ -290,18 +365,103 @@ func shortFP(fp string) string {
 // VerifyAgentCert checks the connecting certificate fingerprint matches the
 // one bound to hostID. Returns true when hostID has no binding yet (first
 // contact, BindAgentCert will establish it) or the fingerprints match. An
-// empty fingerprint (no mTLS) always verifies.
+// empty fingerprint (no mTLS) always verifies. A revoked fingerprint never
+// verifies, regardless of binding (audit I-03).
 func (m *Module) VerifyAgentCert(hostID, fingerprint string) bool {
 	if fingerprint == "" {
 		return true // mTLS disabled — no verification (development mode)
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	if _, ok := m.revoked[fingerprint]; ok {
+		return false
+	}
 	rec := m.agents[hostID]
 	if rec == nil || rec.CertFingerprint == "" {
 		return true // not bound yet
 	}
 	return rec.CertFingerprint == fingerprint
+}
+
+// IsCertRevoked reports whether the certificate fingerprint has been revoked.
+// An empty fingerprint (no mTLS) is never revoked.
+func (m *Module) IsCertRevoked(fingerprint string) bool {
+	if fingerprint == "" {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, ok := m.revoked[fingerprint]
+	return ok
+}
+
+// RevokeCert revokes a certificate fingerprint (audit I-03) and unbinds any
+// host currently bound to it, so the host can re-register with a freshly
+// issued certificate. The revocation is persisted and enforced at every
+// identity checkpoint (Register / Heartbeat / VerifyAgentCert).
+func (m *Module) RevokeCert(fingerprint, reason string) error {
+	if fingerprint == "" {
+		return fmt.Errorf("cannot revoke an empty fingerprint (mTLS disabled)")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.revoked == nil {
+		m.revoked = make(map[string]kernel.RevokedCertInfo)
+	}
+	if _, ok := m.revoked[fingerprint]; ok {
+		return fmt.Errorf("certificate fingerprint already revoked")
+	}
+	m.revoked[fingerprint] = kernel.RevokedCertInfo{
+		Fingerprint: fingerprint,
+		Reason:      reason,
+		RevokedAt:   time.Now().UTC(),
+	}
+
+	// Unbind every host currently bound to the revoked certificate. The
+	// revoked fingerprint itself stays rejected, so only a freshly issued
+	// certificate can re-establish the identity.
+	var unbound []string
+	for id, rec := range m.agents {
+		if rec.CertFingerprint == fingerprint {
+			rec.CertFingerprint = ""
+			unbound = append(unbound, id)
+		}
+	}
+
+	m.saveRevokedLocked()
+	m.saveIdentityLocked()
+	if len(unbound) > 0 {
+		logger.WithComponent("heartbeat").Warn("certificate revoked, identity unbound",
+			"fingerprint", shortFP(fingerprint), "hosts", strings.Join(unbound, ","))
+	}
+	logger.WithComponent("heartbeat").Info("certificate revoked",
+		"fingerprint", shortFP(fingerprint), "reason", reason)
+	return nil
+}
+
+// UnrevokeCert removes a fingerprint from the revocation list — the recovery
+// path for a mistaken revocation. The certificate becomes usable again; any
+// host it was bound to must re-register (first contact re-binds).
+func (m *Module) UnrevokeCert(fingerprint string) error {
+	if fingerprint == "" {
+		return fmt.Errorf("cannot unrevoke an empty fingerprint")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.revoked[fingerprint]; !ok {
+		return fmt.Errorf("certificate fingerprint is not revoked")
+	}
+	delete(m.revoked, fingerprint)
+	m.saveRevokedLocked()
+	logger.WithComponent("heartbeat").Info("certificate unrevoked", "fingerprint", shortFP(fingerprint))
+	return nil
+}
+
+// ListRevokedCerts returns all revoked fingerprints, oldest first.
+func (m *Module) ListRevokedCerts() []kernel.RevokedCertInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.sortedRevokedLocked()
 }
 
 func (m *Module) GetAgent(hostID string) *kernel.AgentRecord {

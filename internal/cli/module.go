@@ -107,6 +107,10 @@ func (b *kernelBridge) Sources() SourceAccess {
 	return &sourceBridge{kernel: b.kernel}
 }
 
+func (b *kernelBridge) Revocations() RevocationAccess {
+	return &revocationBridge{kernel: b.kernel}
+}
+
 func (b *kernelBridge) CheckPermission(level PermissionLevel) bool {
 	// Local CLI (Unix socket / stdin on the kernel host) runs with operator
 	// privileges. Read/Write/Admin are permitted; Super (destructive kernel
@@ -234,6 +238,45 @@ func (a *agentBridge) SendCommand(hostID, action string, params map[string]strin
 	}
 	cmdID := cmd.EnqueueCommand(hostID, action, params)
 	return cmdID, nil
+}
+
+// revocationBridge exposes certificate revocation management through the
+// heartbeat module (audit I-03).
+type revocationBridge struct {
+	kernel kernel.KernelContext
+}
+
+func (r *revocationBridge) heartbeat() (kernel.HeartbeatInterface, bool) {
+	p, ok := r.kernel.GetPlugin("heartbeat")
+	if !ok {
+		return nil, false
+	}
+	hb, ok := p.(kernel.HeartbeatInterface)
+	return hb, ok
+}
+
+func (r *revocationBridge) Revoke(fingerprint, reason string) error {
+	hb, ok := r.heartbeat()
+	if !ok {
+		return fmt.Errorf("heartbeat module not available")
+	}
+	return hb.RevokeCert(fingerprint, reason)
+}
+
+func (r *revocationBridge) Unrevoke(fingerprint string) error {
+	hb, ok := r.heartbeat()
+	if !ok {
+		return fmt.Errorf("heartbeat module not available")
+	}
+	return hb.UnrevokeCert(fingerprint)
+}
+
+func (r *revocationBridge) ListRevoked() []kernel.RevokedCertInfo {
+	hb, ok := r.heartbeat()
+	if !ok {
+		return nil
+	}
+	return hb.ListRevokedCerts()
 }
 
 type logBridge struct {

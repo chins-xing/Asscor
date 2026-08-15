@@ -15,13 +15,14 @@ import (
 )
 
 type mockKernel struct {
-	plugins   map[string]interface{}
-	config    map[string]string
-	agents    []AgentInfo
-	logs      []LogEntry
-	permLevel PermissionLevel
-	registry  *Registry
-	history   *History
+	plugins     map[string]interface{}
+	config      map[string]string
+	agents      []AgentInfo
+	logs        []LogEntry
+	permLevel   PermissionLevel
+	registry    *Registry
+	history     *History
+	revocations RevocationAccess
 }
 
 func newMockKernel() *mockKernel {
@@ -126,6 +127,44 @@ func (m *mockKernel) History() *History {
 
 func (m *mockKernel) Sources() SourceAccess {
 	return &mockSourceAccess{}
+}
+
+type mockRevocationAccess struct {
+	revoked map[string]string // fingerprint → reason
+}
+
+func (r *mockRevocationAccess) Revoke(fingerprint, reason string) error {
+	if r.revoked == nil {
+		r.revoked = make(map[string]string)
+	}
+	if _, ok := r.revoked[fingerprint]; ok {
+		return fmt.Errorf("certificate fingerprint already revoked")
+	}
+	r.revoked[fingerprint] = reason
+	return nil
+}
+
+func (r *mockRevocationAccess) Unrevoke(fingerprint string) error {
+	if _, ok := r.revoked[fingerprint]; !ok {
+		return fmt.Errorf("certificate fingerprint is not revoked")
+	}
+	delete(r.revoked, fingerprint)
+	return nil
+}
+
+func (r *mockRevocationAccess) ListRevoked() []kernel.RevokedCertInfo {
+	var out []kernel.RevokedCertInfo
+	for fp, reason := range r.revoked {
+		out = append(out, kernel.RevokedCertInfo{Fingerprint: fp, Reason: reason})
+	}
+	return out
+}
+
+func (m *mockKernel) Revocations() RevocationAccess {
+	if m.revocations != nil {
+		return m.revocations
+	}
+	return &mockRevocationAccess{}
 }
 
 type mockSourceAccess struct{}

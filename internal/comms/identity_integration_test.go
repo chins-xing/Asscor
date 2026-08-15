@@ -87,3 +87,45 @@ func TestRegisterWithoutFingerprint(t *testing.T) {
 		t.Errorf("no-fingerprint registration should succeed (err=%v, accepted=%v)", err, resp != nil && resp.Accepted)
 	}
 }
+
+// TestRegisterRejectsRevokedCert (audit I-03): a revoked certificate cannot
+// register — neither for a host it was previously bound to nor a fresh one.
+func TestRegisterRejectsRevokedCert(t *testing.T) {
+	svc := newIdentityService()
+	// Bind host-a → fp-a, then revoke fp-a (compromised).
+	if _, err := svc.Register(ctxWithFP("fp-a"), &apiv1.RegisterRequest{HostId: "host-a", Hostname: "h-a", Version: "v0.2.3"}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if err := svc.heartbeat.RevokeCert("fp-a", "compromised"); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+
+	// Same host, revoked cert: rejected.
+	if resp, err := svc.Register(ctxWithFP("fp-a"), &apiv1.RegisterRequest{HostId: "host-a", Hostname: "h-a", Version: "v0.2.3"}); err == nil || resp.Accepted {
+		t.Errorf("revoked cert must not re-register host-a (err=%v, accepted=%v)", err, resp != nil && resp.Accepted)
+	}
+	// Different host, revoked cert: rejected too.
+	if resp, err := svc.Register(ctxWithFP("fp-a"), &apiv1.RegisterRequest{HostId: "host-b", Hostname: "h-b", Version: "v0.2.3"}); err == nil || resp.Accepted {
+		t.Errorf("revoked cert must not register host-b (err=%v, accepted=%v)", err, resp != nil && resp.Accepted)
+	}
+	// The host can re-register with a fresh certificate.
+	if resp, err := svc.Register(ctxWithFP("fp-new"), &apiv1.RegisterRequest{HostId: "host-a", Hostname: "h-a", Version: "v0.2.3"}); err != nil || !resp.Accepted {
+		t.Errorf("host must re-register with a new cert after revocation (err=%v, accepted=%v)", err, resp != nil && resp.Accepted)
+	}
+}
+
+// TestHeartbeatRejectsRevokedCert: a revoked certificate is rejected by the
+// heartbeat identity check even when the host binding still matches.
+func TestHeartbeatRejectsRevokedCert(t *testing.T) {
+	svc := newIdentityService()
+	if _, err := svc.Register(ctxWithFP("fp-a"), &apiv1.RegisterRequest{HostId: "host-a", Hostname: "h-a", Version: "v0.2.3"}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if err := svc.heartbeat.RevokeCert("fp-a", "compromised"); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+
+	if resp, err := svc.Heartbeat(ctxWithFP("fp-a"), &apiv1.HeartbeatRequest{HostId: "host-a"}); err == nil || resp.Ok {
+		t.Errorf("revoked cert heartbeat must be rejected (err=%v, ok=%v)", err, resp != nil && resp.Ok)
+	}
+}

@@ -167,6 +167,7 @@ type KernelAccess interface {
 	Agents() AgentAccess
 	Logs() LogAccess
 	Sources() SourceAccess
+	Revocations() RevocationAccess
 	CheckPermission(level PermissionLevel) bool
 	Registry() *Registry
 	History() *History
@@ -188,6 +189,15 @@ type SourceAccess interface {
 	GetSourceSpec(id string) (*kernel.SourceSpec, bool)
 	RunSourceNow(ctx context.Context, id string) error
 	GetAuditLog(sourceID string, limit int) []kernel.AuditLogEntry
+}
+
+// RevocationAccess exposes certificate revocation management (audit I-03):
+// revoke a compromised certificate fingerprint, list revocations, and restore
+// a mistakenly revoked one.
+type RevocationAccess interface {
+	Revoke(fingerprint, reason string) error
+	Unrevoke(fingerprint string) error
+	ListRevoked() []kernel.RevokedCertInfo
 }
 
 type BusAccess = kernel.BusAccess
@@ -491,6 +501,7 @@ func (e *Engine) RegisterBuiltinCommands() {
 		{sourceCmdInfo, sourceCmdHandler, sourceCompletions},
 		{diagCmdInfo, diagCmdHandler, nil},
 		{policyCmdInfo, policyCmdHandler, nil},
+		{certCmdInfo, certCmdHandler, certCompletions},
 	}
 
 	for _, b := range builtins {
