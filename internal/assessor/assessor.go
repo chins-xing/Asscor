@@ -188,9 +188,6 @@ func (m *Module) setupConsoleReport() {
 	if v == "" {
 		// Try global key first (config.ini top-level entry), then section-prefixed fallback.
 		v = m.cfg.AdapterConfig["console_report"]
-		if v == "" {
-			v = m.cfg.AdapterConfig["webui.console_report"]
-		}
 	}
 	m.consoleReport = v == "true" || v == "yes" || v == "1"
 	if m.consoleReport {

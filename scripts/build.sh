@@ -8,7 +8,7 @@ set -euo pipefail
 VERSION="${1:-dev}"
 BUILD_DIR="build"
 # 内核可选模块 build-tag（微内核零膨胀：去掉 tag 编译最小内核）
-MODULE_TAGS="heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,webui,integrity,resilience,comms,checks,adapter,engine"
+MODULE_TAGS="heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine"
 BINARIES=(
     "cmd/kernel:ASSCOR-kernel-linux-amd64"
     "cmd/agent:ASSCOR-agent-linux-amd64"

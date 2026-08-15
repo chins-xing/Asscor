@@ -9,7 +9,6 @@ services:
     image: asscor/asscor-kernel:latest
     container_name: asscor-kernel
     ports:
-      - "8087:8087"
       - "50051:50051"
       - "50052:50052"
     volumes:
@@ -33,8 +32,9 @@ services:
       - /tmp:exec,size=64M
     read_only: true
     restart: unless-stopped
+    # Web UI removed (attack-surface hardening); health checked via process liveness.
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8087/api/health"]
+      test: ["CMD", "pgrep", "-f", "ASSCOR-kernel"]
       interval: 30s
       timeout: 5s
       retries: 3

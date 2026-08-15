@@ -628,7 +628,7 @@ func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 		"ansible":             true, "netbox": true, "snipe_it": true,
 		"freeipa": true, "keycloak": true, "wazuh_siem": true,
 		"rundeck": true, "jira": true, "terraform": true, "opentofu": true,
-		"interceptor": true, "webui": true, "prism": true, "integrity": true,
+		"interceptor": true, "prism": true, "integrity": true,
 		"resilience": true,
 		"user_check": true, "adapter_script": true,
 		"grpc": true, "log": true,

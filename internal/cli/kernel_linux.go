@@ -29,7 +29,7 @@ Type=simple
 User=asscor
 Group=asscor
 WorkingDirectory=%s
-ExecStart=%s --config=%s --listen=:50051 --webui-port=8087 --pid-file=%s/ASSCOR-kernel.pid --log-format=json --log-output=%s/kernel.log
+ExecStart=%s --config=%s --listen=:50051 --pid-file=%s/ASSCOR-kernel.pid --log-format=json --log-output=%s/kernel.log
 ExecReload=/bin/kill -HUP $MAINPID
 ExecStop=/bin/kill -SIGTERM $MAINPID
 Restart=on-failure

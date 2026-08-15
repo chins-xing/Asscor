@@ -34,14 +34,15 @@ COPY configs/ /etc/asscor/config/
 
 RUN chown -R asscor:asscor /opt/asscor /etc/asscor /var/lib/asscor /var/log/asscor
 
-EXPOSE 50051 50052 8087
+EXPOSE 50051 50052
 
 USER asscor
 WORKDIR /opt/asscor
 
 STOPSIGNAL SIGTERM
 
+# Web UI removed (attack-surface hardening); health is checked via process liveness.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s \
-    CMD wget -qO- http://localhost:8087/api/health || exit 1
+    CMD pgrep -f ASSCOR-kernel || exit 1
 
-ENTRYPOINT ["./ASSCOR-kernel", "--config=/etc/asscor/config.ini", "--listen=:50051", "--webui-port=8087", "--log-output=/var/log/asscor/kernel.log"]
+ENTRYPOINT ["./ASSCOR-kernel", "--config=/etc/asscor/config.ini", "--listen=:50051", "--log-output=/var/log/asscor/kernel.log"]

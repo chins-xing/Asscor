@@ -124,9 +124,6 @@ func RegisterAllExtensionPoints(r *ExtensionRegistry) {
 	r.RegisterPoint(ExtensionPoint{
 		Name: "cli.command.register", Description: "Register custom CLI commands from plugins", Version: "1.0",
 	})
-	r.RegisterPoint(ExtensionPoint{
-		Name: "webui.route.register", Description: "Register additional HTTP routes on the web server", Version: "1.0",
-	})
 
 	// ── 探测辅助: 心跳/Agent生命周期 ──
 	r.RegisterPoint(ExtensionPoint{

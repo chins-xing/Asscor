@@ -400,15 +400,13 @@ func (m *ExtensionManager) onExtensionInstalled(spec ExtensionSpec) {
 			logger.WithComponent("extmgr").Info("scoring plugin installed (no engine bridge configured)", "extension_id", spec.ID)
 		}
 	case ExtTypeWebPanel:
-		if m.kernelExtensions != nil {
-			m.kernelExtensions.RegisterExtension(spec.ID, "webui.route.register", func(ctx context.Context, data interface{}) error {
-				return m.executeExtension(ctx, spec, "register_route")
-			}, 50)
-			logger.WithComponent("extmgr").Info("registered web panel via extension point", "extension_id", spec.ID)
-		} else if m.OnWebPanelRoute != nil {
+		// Web panel extension type removed together with the Web UI component
+		// (attack-surface hardening). Only the callback fallback remains for
+		// external integrators.
+		if m.OnWebPanelRoute != nil {
 			m.OnWebPanelRoute(spec)
 		} else {
-			logger.WithComponent("extmgr").Info("web panel installed (no webui bridge configured)", "extension_id", spec.ID)
+			logger.WithComponent("extmgr").Info("web panel installed (webui component removed)", "extension_id", spec.ID)
 		}
 	case ExtTypeAdapter, ExtTypeCustom:
 		logger.WithComponent("extmgr").Info("extension installed (type handled by adapter registry)",

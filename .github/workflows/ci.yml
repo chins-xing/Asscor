@@ -7,7 +7,7 @@ on:
 
 env:
   # Full module set — keep in sync with scripts/build.sh MODULE_TAGS
-  MODULE_TAGS: "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,webui,integrity,resilience,comms,checks,adapter,engine"
+  MODULE_TAGS: "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine"
 
 jobs:
   build-and-test:

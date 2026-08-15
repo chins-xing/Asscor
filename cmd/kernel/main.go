@@ -44,7 +44,6 @@ func main() {
 	logFormat := flag.String("log-format", "json", "log format: json, text")
 	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
 	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
-	webuiPort := flag.Int("webui-port", 8087, "Web UI dashboard port (0 to disable)")
 	flag.Parse()
 
 	if *showVersion {
@@ -296,12 +295,6 @@ func main() {
 	}
 	if ct, ok := cti.(kernel.Plugin); ok {
 		plugins = append(plugins, ct)
-	}
-
-	if *webuiPort > 0 {
-		if wm := newWebUI(*webuiPort); wm != nil {
-			plugins = append(plugins, wm)
-		}
 	}
 
 	for _, p := range plugins {

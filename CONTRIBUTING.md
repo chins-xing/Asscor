@@ -1,4 +1,4 @@
-# 贡献指南 (Contributing Guide)
+﻿# 贡献指南 (Contributing Guide)
 
 感谢你对 ASSCOR 的兴趣！本指南帮助你在 **10 分钟内** 完成从 clone 到跑通全部测试，并了解项目的构建、测试与贡献规范。
 
@@ -37,7 +37,7 @@ git clone <repo-url> ASSCOR && cd ASSCOR
 go build ./cmd/kernel/
 
 # 3. 全功能内核构建（18 个模块全开）
-go build -tags "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,webui,integrity,resilience,comms,checks,adapter,engine" ./cmd/kernel/
+go build -tags "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine" ./cmd/kernel/
 
 # 4. 一键构建全部三个二进制（Linux amd64）→ build/
 ./scripts/build.sh
@@ -46,7 +46,7 @@ go build -tags "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,
 go test ./internal/...
 
 # 6. 测试（全 tag：所有模块）
-go test -tags "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,webui,integrity,resilience,comms,checks,adapter,engine" ./internal/...
+go test -tags "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine" ./internal/...
 ```
 
 > 没有独立 tag 的 `go test ./internal/assessor/` 会报 "build constraints exclude all Go files" —— 这是**预期行为**：可选模块需要对应 tag 才有内容。
