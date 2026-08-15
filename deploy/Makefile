@@ -1,6 +1,6 @@
 .PHONY: build docker-build docker-up docker-down docker-logs clean test
 
-MODULE_TAGS=heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,webui,integrity,resilience,comms,checks,adapter,engine
+MODULE_TAGS=heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine
 
 build:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags "$(MODULE_TAGS)" -trimpath -ldflags="-s -w" -o build/asscor-kernel ./cmd/kernel/
