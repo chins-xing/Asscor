@@ -19,6 +19,14 @@ func socketPath() string {
 	return defaultSocketPath
 }
 
+// cliPeerAllowed reports whether a connecting peer UID may use the CLI socket.
+// Only root (management/install operations) and the kernel's own account (the
+// asscor user the kernel runs as) are allowed; any other local user is
+// rejected. This mirrors the privileged-agent peer check (SO_PEERCRED).
+func cliPeerAllowed(peerUID, kernelEUID uint32) bool {
+	return peerUID == 0 || peerUID == kernelEUID
+}
+
 type cliSession struct {
 	conn   net.Conn
 	engine *Engine
@@ -40,7 +48,10 @@ func (m *CLIModule) serveCLI(ctx context.Context) {
 	defer ln.Close()
 	defer os.Remove(sockPath)
 
-	if err := os.Chmod(sockPath, 0660); err != nil {
+	// Restrict the CLI socket to its owner (the kernel's account): 0600 blocks
+	// other local users from reaching the management commands. On Linux the
+	// per-connection SO_PEERCRED check additionally allows root.
+	if err := os.Chmod(sockPath, 0600); err != nil {
 		logger.WithComponent("cli").Warn("cannot chmod socket", "error", err)
 	}
 
@@ -59,6 +70,14 @@ func (m *CLIModule) serveCLI(ctx context.Context) {
 				logger.WithComponent("cli").Warn("accept error", "error", err)
 				continue
 			}
+		}
+
+		// Reject connections from users other than root or the kernel's own
+		// account before any command is processed.
+		if err := verifyPeerCLI(conn); err != nil {
+			logger.WithComponent("cli").Warn("cli connection rejected", "error", err)
+			conn.Close()
+			continue
 		}
 
 		session := &cliSession{
