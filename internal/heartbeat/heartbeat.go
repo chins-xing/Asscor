@@ -4,7 +4,10 @@ package heartbeat
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -17,6 +20,8 @@ import (
 // only the HeartbeatInterface contract, this package provides the
 // Module tracks agent liveness and identity. CertFingerprint binds each
 // host_id to the mTLS certificate it registered with (identity hardening).
+// Bindings are persisted to <data_dir>/heartbeat_identity.json so they survive
+// kernel restarts (a restarted kernel must not lose the identity anchor).
 type Module struct {
 	kc kernel.KernelContext
 
@@ -27,6 +32,9 @@ type Module struct {
 	timeout time.Duration
 	stopCh  chan struct{}
 	stopped bool
+
+	// identityPath persists host_id ↔ cert-fingerprint bindings.
+	identityPath string
 }
 
 // New creates a heartbeat module instance.
@@ -58,11 +66,70 @@ func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 	if cfg := kc.GetConfigObj(); cfg != nil && cfg.HeartbeatTimeoutSec > 0 {
 		m.timeout = time.Duration(cfg.HeartbeatTimeoutSec) * time.Second
 	}
+	if cfg := kc.GetConfigObj(); cfg != nil && cfg.DataDir != "" {
+		m.identityPath = filepath.Join(cfg.DataDir, "heartbeat_identity.json")
+		m.loadIdentityLocked()
+	}
 	m.stopCh = make(chan struct{})
 	m.state = kernel.PluginInitialized
 
 	kc.Container().Bind((*kernel.HeartbeatInterface)(nil), m)
 	return nil
+}
+
+// loadIdentityLocked restores persisted host_id ↔ cert-fingerprint bindings
+// so identity anchors survive kernel restarts. Call with m.mu held (Init runs
+// single-threaded).
+func (m *Module) loadIdentityLocked() {
+	if m.identityPath == "" {
+		return
+	}
+	data, err := os.ReadFile(m.identityPath)
+	if err != nil {
+		return // no bindings yet
+	}
+	var fpMap map[string]string
+	if err := json.Unmarshal(data, &fpMap); err != nil {
+		logger.WithComponent("heartbeat").Warn("cannot parse identity bindings, ignoring", "path", m.identityPath, "error", err)
+		return
+	}
+	for host, fp := range fpMap {
+		if fp == "" {
+			continue
+		}
+		rec := m.agents[host]
+		if rec == nil {
+			rec = &kernel.AgentRecord{HostID: host}
+			m.agents[host] = rec
+		}
+		rec.CertFingerprint = fp
+	}
+	logger.WithComponent("heartbeat").Info("loaded identity bindings", "count", len(fpMap), "path", m.identityPath)
+}
+
+// saveIdentityLocked atomically persists all bindings. Call with m.mu held.
+func (m *Module) saveIdentityLocked() {
+	if m.identityPath == "" {
+		return
+	}
+	fpMap := make(map[string]string)
+	for host, rec := range m.agents {
+		if rec.CertFingerprint != "" {
+			fpMap[host] = rec.CertFingerprint
+		}
+	}
+	data, err := json.Marshal(fpMap)
+	if err != nil {
+		return
+	}
+	tmp := m.identityPath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		logger.WithComponent("heartbeat").Warn("cannot persist identity bindings", "error", err)
+		return
+	}
+	if err := os.Rename(tmp, m.identityPath); err != nil {
+		logger.WithComponent("heartbeat").Warn("cannot persist identity bindings (rename)", "error", err)
+	}
 }
 
 func (m *Module) Start(ctx context.Context) error {
@@ -207,6 +274,7 @@ func (m *Module) BindAgentCert(hostID, fingerprint string) bool {
 		return false
 	}
 	rec.CertFingerprint = fingerprint
+	m.saveIdentityLocked()
 	return true
 }
 
