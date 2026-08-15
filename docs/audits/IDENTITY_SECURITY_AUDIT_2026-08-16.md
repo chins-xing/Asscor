@@ -112,7 +112,7 @@ privileged → agent: SO_PEERCRED + 白名单
 
 1. **P0 I-01**：agent 证书携带/绑定 host_id（签发时嵌入或注册时校验 host_id ↔ 证书映射，heartbeat 维护该映射并拒绝不匹配）
 2. **P0 I-02**：身份事件统一审计——注册/心跳/命令执行统一记录（身份类型 + 标识 + 动作 + 时间），可查询单一视图
-3. **P1 I-03**：证书吊销列表（CRL）或按 host 撤销（维护 host_id → 证书序列号映射，吊销即拒绝）
+3. **P1 I-03**：证书吊销列表（CRL）或按 host 撤销（维护 host_id → 证书序列号映射，吊销即拒绝）——**✅ 已实现（commit `35236cc`）并线上验证（见 8.3）**
 4. **P1 I-04/05**：连接器凭证统一走环境变量/密钥文件（对齐 SPC/CTI 的 env 优先机制），移除配置占位符歧义；评估独立密钥存储
 5. **P2**：扩展安装来源审计 + AI 身份治理随 v0.3.0 立项
 
@@ -157,11 +157,32 @@ agent 保持下线 15s 越过监控 tick → identity.json 不变、无 prune �
 证书注册**被拒**、identity.json 未被覆写 → 恢复真证书重注册 accepted。全链路
 通过，两服务 active。
 
-### 8.3 待办（承接本审计）
+### 8.3 证书吊销 I-03 已实现并线上验证（commit `35236cc`）
 
-- **P1 I-03**：证书吊销——指纹绑定已提供吊销粒度（吊销 = 删除锚定记录 + 拒绝该
-  指纹），下一步实现 CRL/按 host 撤销；
-- 07:19:52 异常此前曾被误判为测试脚本时序问题，实际为 8.2 缺陷，已更正。
+**实现**（`internal/heartbeat` + `internal/cli` + `internal/comms`）：
+- 吊销按证书 SHA-256 指纹（与身份绑定同一粒度）：`RevokeCert`/`UnrevokeCert`/
+  `IsCertRevoked`/`ListRevokedCerts`，持久化 `<data_dir>/revoked_certificates.json`
+  （0600，temp+rename，重启后加载）；
+- 吊销时自动解绑所有绑定该指纹的 host（可用新签发证书重新注册），指纹本身
+  永久拒绝——任何证书都无法再冒充该身份；
+- 强制点全覆盖：Register 显式拒绝（`certificate revoked`）、VerifyAgentCert
+  对已吊销指纹恒 false（覆盖 Heartbeat）、BindAgentCert 深度防御；
+- CLI `cert` 命令：`revoke <fp> [--reason]`（admin 权限）/ `unrevoke` /
+  `revocations`，支持粘贴 openssl 冒号格式指纹。
+
+**线上验证（10.0.0.1，真机）**：
+| 场景 | 结果 |
+|------|------|
+| CLI 吊销伪造证书（`8936cf10...`，--reason=compromised-test） | ✅ 持久化到 revoked_certificates.json |
+| 伪造证书注册 | ✅ 拒绝：`certificate revoked: fingerprint "8936cf10..."`（audit ERR） |
+| 重启 kernel 后吊销列表 | ✅ 仍加载（`loaded revoked certificates count=1`） |
+| 吊销真证书（`45869aa3...`） | ✅ 自动解绑：identity.json 清空 + 日志 `identity unbound` |
+| 真证书 agent 重连 | ✅ 拒绝（certificate revoked） |
+| 解除吊销后同证书重注册 | ✅ accepted，重新绑定并持久化（误吊销零损失恢复） |
+| `cert revocations` 脚本化输出 | ✅ 干净可解析（修复 CLI 客户端显示竞态，commit `e8cf692`） |
+
+**遗留（P1 I-04/05、P2 I-06/07）**：连接器凭证集中持有与机制统一、扩展来源
+审计、AI 身份治理——见第九节。
 
 ---
 
