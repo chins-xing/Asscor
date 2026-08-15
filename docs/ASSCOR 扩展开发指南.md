@@ -26,7 +26,7 @@ ASSCOR 采用微内核 + 插件架构，提供 **10 种扩展方式**，覆盖�
 | `edge_factor` | ?? 低 | `model.RegisterEdgeFactor()` | 编译期 init() / 配置 |
 | `cli_command` | ?? 低 | `CLIModule.RegisterCommand()` | 扩展点 |
 | `custom` | ?? 中 | `kernel.Plugin` 接口 | 插件注册 |
-| `web_panel` | ?? 中 | `webui.route.register` 扩展点 | 运行时 |
+| `web_panel` | ❌ 已移除 | Web UI 组件已删除 (2026-08-15)，web_panel 类型不再可桥接 | — |
 
 ### 1.2 选择指南
 
@@ -830,7 +830,7 @@ orch.Register(k.PlatformExtensionRegistry())
 
 - 检查项库：`internal/checks/linux/checks.go`（80 个内置检查项参考实现）
 - 适配器示例：`internal/adapter/scanner/`（11 个探测器）、`internal/adapter/management/`（10 个管理类）
-- 内核插件示例：`internal/<模块名>/`（全部功能模块均已剥离为 build-tag 可选插件：heartbeat/commander/policy/cti/assessor/attck_ext/spc/collector/sourcemanager/persistence/srdwrapper/webui/integrity/resilience/comms/checks/adapter/engine；常编译包仅 historicalstore/topology/oscal 纯工具 + kernel 核心），契约接口见 `internal/kernel/*_interface.go`、`internal/kernel/engine_types.go`
+- 内核插件示例：`internal/<模块名>/`（全部功能模块均已剥离为 build-tag 可选插件：heartbeat/commander/policy/cti/assessor/attck_ext/spc/collector/sourcemanager/persistence/srdwrapper/integrity/resilience/comms/checks/adapter/engine；常编译包仅 historicalstore/topology/oscal 纯工具 + kernel 核心），契约接口见 `internal/kernel/*_interface.go`、`internal/kernel/engine_types.go`
 - 扩展管理器：`internal/extmgr/`
 - 外部扩展模块：`optional/algorithms/modules/multi-algo-orchestrator/`
 - 扩展包示例：`optional/algorithms/packages/example-pack/package.json`

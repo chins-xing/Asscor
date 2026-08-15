@@ -144,8 +144,8 @@ ASSCOR-kernel [选项]
 |------|--------|------|
 | `--config` | `config.ini` | 配置文件路径 |
 | `--listen` | `:50051` | gRPC 监听地址 |
-| `--webui-port` | `8087` | Web 仪表盘端口（0 禁用） |
-| `--no-mtls` | `false` | 禁用 mTLS（**仅限开发环境**） |
+
+| `--no-mtls` | `false` | 禁用 mTLS（**仅限开发环境**；生产被 `[comms] require_mtls=true` 拒绝） |
 | `--cert-dir` | `certs` | TLS 证书目录 |
 | `--verify-certs` | `false` | 验证证书链一致性后退出 |
 | `--force-regen-certs` | `false` | 强制重新生成所有 TLS 证书 |
@@ -245,7 +245,8 @@ ASSCOR-kernel [选项]
 # 标准启动（mTLS 启用）
 ./ASSCOR-kernel-linux --config=/etc/asscor/config.ini --listen=:50051
 
-# 开发模式（无 mTLS）
+# 开发模式（无 mTLS）——需先在 config.ini 显式设置 [comms] require_mtls=false，
+# 否则生产强制 mTLS 会拒绝 --no-mtls 启动（仅限隔离开发环境）
 ./ASSCOR-kernel-linux --no-mtls --log-level=debug --log-format=text
 
 # 守护进程模式
@@ -282,7 +283,7 @@ ASSCOR μKernel
     {config_watcher} v1.0.0 — Configuration hot-reload
     {adapter_integration} v1.0.0 — External adapter integration
     {source_manager} v1.0.0 — External source management
-    {webui} v1.0.0 — Web Dashboard
+    
     {comms} — JSONRPC + gRPC communication servers
     {srd_adapters} v1.0.0 — SRD external result adapters
     {cli} v1.0.0 — Command-line interface
@@ -773,7 +774,7 @@ kill $(cat /var/run/ASSCOR-kernel.pid)
 | 模式 | 报告位置 |
 |------|----------|
 | 单机 `ASSCOR` | 终端 stdout（`-json > file` 可保存） |
-| Kernel 服务模式 | `/var/lib/asscor/latest-assessment.json`（最新）<br>`/var/lib/asscor/assessments-<date>.jsonl`（历史）<br>WebUI `http://<host>:8087` |
+| Kernel 服务模式 | `/var/lib/asscor/latest-assessment.json`（最新）<br>`/var/lib/asscor/assessments-<date>.jsonl`（历史）<br>（Web UI 已于 2026-08-15 因攻击面收紧移除） |
 
 ---
 

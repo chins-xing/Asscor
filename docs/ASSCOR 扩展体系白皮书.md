@@ -292,7 +292,7 @@ type ExtensionHandler func(ctx context.Context, data interface{}) error
 
 **ArchiveModule（3 个）**：`archive.pre_write`、`archive.post_write`、`archive.rotation`
 
-**CLI/WebUI 平台扩展（2 个）**：`cli.command.register`、`webui.route.register`
+**CLI 平台扩展（1 个）**：`cli.command.register`（Web UI 组件已于 2026-08-15 移除，webui.route.register 扩展点同步删除）
 
 **SPCModule（3 个）**：`spc.pre_calculate`、`spc.post_calculate`、`spc.cve_updated`
 

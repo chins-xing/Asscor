@@ -120,7 +120,7 @@
 | B06 | P1 | `internal/adapterhub` 零测试 |
 | B08 | P1 | `internal/cli` 安装/升级逻辑零测试（原 `internal/deploy` 已并入） |
 | B11 | P1 | `internal/engine/prism` 零测试 |
-| B14 | P1 | `internal/webui` 零测试 |
+| B14 | ✅ 已消除 | `internal/webui` 组件已移除 (2026-08-15, P0-1 攻击面收紧) |
 | B04 | P2 | `cmd/asscor` 零测试 |
 | B09 | P2 | `internal/model` 零测试 |
 | B13 | P2 | `internal/version` 零测试 |

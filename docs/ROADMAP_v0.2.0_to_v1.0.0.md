@@ -47,7 +47,7 @@ v1.0.0 不是"功能做完了"，而是：
 ### 0.4.0 — extmgr 接线完成
 - [ ] `ExtTypeScoringPlugin` → `Engine.RegisterFormula()` 实际注册
 - [ ] `ExtTypeCLICommand` → `cli.command.register` 扩展点桥接
-- [ ] `ExtTypeWebPanel` → `webui.route.register` 实际注册路由
+- [x] ~~`ExtTypeWebPanel` → `webui.route.register`~~ → Web UI 组件已移除 (2026-08-15)，该类型取消
 - [ ] `ExtTypeAdapter` → `adapter.Register()` 桥接
 - [ ] ExtensionManager 测试覆盖
 
