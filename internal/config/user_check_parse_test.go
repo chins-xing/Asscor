@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/asscor/asscor/internal/checks"
+	"github.com/asscor/asscor/internal/model"
 )
 
 // TestParse_UserCheckSections verifies the full ini → AdapterConfig → registry
@@ -161,5 +162,44 @@ func TestParseUserChecks_MissingFile(t *testing.T) {
 	}
 	if !strings.Contains(detail, "cannot read") {
 		t.Errorf("detail = %q, want 'cannot read' mention", detail)
+	}
+}
+
+// TestParseUserChecks_RejectsNonCUPrefix enforces the reserved CU- prefix:
+// a user check attempting to use a builtin-style ID (e.g. AS-999) is rejected
+// so it can never collide with compiled-in platform checks.
+func TestParseUserChecks_RejectsNonCUPrefix(t *testing.T) {
+	items := ParseUserChecks(map[string]string{
+		"user_check.collide.id":      "AS-999", // builtin-style prefix
+		"user_check.collide.domain":  "attack_surface",
+		"user_check.collide.name":    "Collide",
+		"user_check.collide.command": "true",
+		"user_check.valid.id":        "CU-OK-001",
+		"user_check.valid.domain":    "resilience",
+		"user_check.valid.name":      "Valid",
+		"user_check.valid.command":   "true",
+	})
+	if len(items) != 1 {
+		t.Fatalf("got %d items, want 1 (AS-999 rejected, CU-OK-001 kept): %+v", len(items), items)
+	}
+	if items[0].ID != "CU-OK-001" {
+		t.Errorf("unexpected item: %+v", items[0])
+	}
+}
+
+// TestParseUserChecks_SetsUserSource verifies every returned item carries the
+// user source marker, distinguishing it from builtin checks.
+func TestParseUserChecks_SetsUserSource(t *testing.T) {
+	items := ParseUserChecks(map[string]string{
+		"user_check.src.id":        "CU-SRC-001",
+		"user_check.src.domain":    "operation_trust",
+		"user_check.src.name":      "Source Check",
+		"user_check.src.file_path": filepath.Join(t.TempDir(), "x.conf"),
+	})
+	if len(items) != 1 {
+		t.Fatalf("got %d items, want 1", len(items))
+	}
+	if items[0].Source != model.CheckSourceUser {
+		t.Errorf("Source = %q, want %q", items[0].Source, model.CheckSourceUser)
 	}
 }

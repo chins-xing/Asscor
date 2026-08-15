@@ -3,6 +3,7 @@ package checks
 import (
 	"sync"
 
+	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 )
 
@@ -12,12 +13,29 @@ var (
 	idIndex    = make(map[string]int)
 )
 
+// UserCheckIDPrefix is the reserved ID prefix for configuration-defined user
+// checks. ParseUserChecks enforces it; built-in checks never use it. Keeping
+// the two namespaces disjoint guarantees a user check can never shadow or
+// overwrite a compiled-in platform check.
+const UserCheckIDPrefix = "CU-"
+
+// Register adds check items to the registry, skipping items whose platform
+// does not match. It refuses to overwrite an already-registered ID: a
+// duplicate registration (e.g. a user check colliding with a builtin check)
+// is dropped with a warning instead of silently replacing the existing item.
 func Register(items ...model.CheckItem) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	for _, item := range items {
 		if !item.MatchesPlatform() {
 			continue
+		}
+		if item.ID != "" {
+			if _, exists := idIndex[item.ID]; exists {
+				logger.WithComponent("checks").Warn("check ID already registered, duplicate skipped",
+					"check_id", item.ID, "source", item.Source)
+				continue
+			}
 		}
 		idx := len(registry)
 		registry = append(registry, item)

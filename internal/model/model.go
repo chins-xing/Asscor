@@ -46,6 +46,18 @@ func (p PrivilegeLevel) String() string {
 	}
 }
 
+// CheckSource identifies the origin of a check item, separating built-in
+// platform checks from configuration-defined user checks.
+type CheckSource string
+
+const (
+	// CheckSourceBuiltin marks compiled-in platform checks (internal/checks/linux).
+	// Zero value ("") also means builtin for backward compatibility.
+	CheckSourceBuiltin CheckSource = "builtin"
+	// CheckSourceUser marks configuration-defined checks ([user_check.*]).
+	CheckSourceUser CheckSource = "user"
+)
+
 type CheckItem struct {
 	ID            string
 	Domain        string
@@ -56,6 +68,10 @@ type CheckItem struct {
 	Platform      string
 	Check         CheckFunc
 	Privilege     PrivilegeLevel
+	// Source distinguishes user-defined checks from builtin ones. Empty means
+	// builtin. It lets consumers (registry, reporting, auditing) tell apart
+	// configuration-injected checks from the compiled-in platform set.
+	Source CheckSource
 }
 
 func (c CheckItem) Run() CheckResult {

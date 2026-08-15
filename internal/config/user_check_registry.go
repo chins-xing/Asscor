@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/asscor/asscor/internal/checks"
+	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 )
 
@@ -45,6 +46,13 @@ func RegisterUserChecks(cfg *Config) {
 // Supported fields: id, domain, name, description, delta, command,
 // output_match, file_path, file_regex. An entry is skipped when it lacks
 // id/domain/name or has neither command nor file_path.
+//
+// Enforced separation from builtin checks:
+//   - ID must use the reserved prefix checks.UserCheckIDPrefix ("CU-"); any
+//     other prefix is rejected with a warning so a user check can never
+//     collide with the compiled-in platform checks (AS-/OT-/RS-/BC-/EF-/KS-…).
+//   - Every returned item carries Source=model.CheckSourceUser, letting
+//     consumers tell configuration-defined checks apart from builtins.
 func ParseUserChecks(adapterConfig map[string]string) []model.CheckItem {
 	type entry struct {
 		id, domain, name, desc, command, outputMatch, filePath, fileRegex string
@@ -101,6 +109,11 @@ func ParseUserChecks(adapterConfig map[string]string) []model.CheckItem {
 		if e.command == "" && e.filePath == "" {
 			continue
 		}
+		if !strings.HasPrefix(e.id, checks.UserCheckIDPrefix) {
+			logger.WithComponent("config").Warn("user check ID must use reserved prefix CU-, check skipped",
+				"check_id", e.id)
+			continue
+		}
 
 		item := model.CheckItem{
 			ID:          e.id,
@@ -108,6 +121,7 @@ func ParseUserChecks(adapterConfig map[string]string) []model.CheckItem {
 			Name:        e.name,
 			Description: e.desc,
 			Delta:       e.delta,
+			Source:      model.CheckSourceUser,
 		}
 
 		if e.command != "" {
