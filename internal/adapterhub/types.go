@@ -26,7 +26,7 @@ type Category string
 const (
 	CategoryScanner    Category = "scanner"
 	CategoryManagement Category = "management"
-	CategoryPrism     Category = "prism"
+	CategoryPrism      Category = "prism"
 )
 
 // Priority represents the adapter priority level.
@@ -71,7 +71,7 @@ type HealthInfo struct {
 type AdapterState int
 
 const (
-	StateRegistered  AdapterState = iota
+	StateRegistered AdapterState = iota
 	StateInitialized
 	StateRunning
 	StateStopping
@@ -181,8 +181,8 @@ type CapabilityType string
 const (
 	CapabilityScan      CapabilityType = "scan"
 	CapabilityMonitor   CapabilityType = "monitor"
-	CapabilityImport   CapabilityType = "import"
-	CapabilityExport   CapabilityType = "export"
+	CapabilityImport    CapabilityType = "import"
+	CapabilityExport    CapabilityType = "export"
 	CapabilityTransform CapabilityType = "transform"
-	CapabilityValidate CapabilityType = "validate"
+	CapabilityValidate  CapabilityType = "validate"
 )

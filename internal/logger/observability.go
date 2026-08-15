@@ -12,18 +12,18 @@ import (
 // ObsMetrics exposes runtime observability counters for the kernel.
 // Zero external dependencies — pure atomic counters.
 type ObsMetrics struct {
-	AssessmentsStarted    int64
-	AssessmentsCompleted  int64
-	AssessmentsFailed     int64
-	HeartbeatsReceived    int64
-	HeartbeatsFailed      int64
-	CommandsDispatched    int64
-	SPCFetchesCompleted   int64
-	SPCFetchesFailed      int64
-	BusMessagesPublished  int64
-	BusMessagesDropped    int64
-	ExtensionsExecuted    int64
-	ExtensionsFailed      int64
+	AssessmentsStarted   int64
+	AssessmentsCompleted int64
+	AssessmentsFailed    int64
+	HeartbeatsReceived   int64
+	HeartbeatsFailed     int64
+	CommandsDispatched   int64
+	SPCFetchesCompleted  int64
+	SPCFetchesFailed     int64
+	BusMessagesPublished int64
+	BusMessagesDropped   int64
+	ExtensionsExecuted   int64
+	ExtensionsFailed     int64
 }
 
 var globalMetrics = &ObsMetrics{}
@@ -76,7 +76,7 @@ func TraceContext(parent context.Context) context.Context {
 
 // LatencyTracker records operation duration for observability.
 type LatencyTracker struct {
-	mu       sync.Mutex
+	mu        sync.Mutex
 	latencies map[string][]time.Duration
 }
 

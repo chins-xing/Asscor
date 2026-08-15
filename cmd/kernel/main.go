@@ -22,7 +22,6 @@ import (
 	"github.com/asscor/asscor/internal/resilience"
 	"github.com/asscor/asscor/internal/version"
 
-
 	_ "github.com/asscor/asscor/internal/checks"
 )
 
@@ -191,7 +190,7 @@ func main() {
 	k := kernel.NewKernel()
 	k.SetConfigObj(cfg)
 
-k.SetConfig("config_path", resolvedConfigPath)
+	k.SetConfig("config_path", resolvedConfigPath)
 	k.SetConfig("listen_addr", *listenAddr)
 	k.SetConfig("cert_dir", *certDir)
 

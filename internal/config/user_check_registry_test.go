@@ -9,11 +9,11 @@ import (
 
 func TestRegisterUserChecks_Command(t *testing.T) {
 	cfg := &Config{AdapterConfig: map[string]string{
-		"user_check.testcheck.id":          "CU-TEST-001",
-		"user_check.testcheck.domain":      "attack_surface",
-		"user_check.testcheck.name":        "Test Command Check",
-		"user_check.testcheck.command":     "echo hello",
-		"user_check.testcheck.delta":       "-5",
+		"user_check.testcheck.id":           "CU-TEST-001",
+		"user_check.testcheck.domain":       "attack_surface",
+		"user_check.testcheck.name":         "Test Command Check",
+		"user_check.testcheck.command":      "echo hello",
+		"user_check.testcheck.delta":        "-5",
 		"user_check.testcheck.output_match": "hello",
 	}}
 
@@ -51,12 +51,12 @@ func TestRegisterUserChecks_FilePath(t *testing.T) {
 	f.Close()
 
 	cfg := &Config{AdapterConfig: map[string]string{
-		"user_check.fc.id":       "CU-TEST-002",
-		"user_check.fc.domain":   "operation_trust",
-		"user_check.fc.name":     "File Check",
-		"user_check.fc.file_path": f.Name(),
+		"user_check.fc.id":         "CU-TEST-002",
+		"user_check.fc.domain":     "operation_trust",
+		"user_check.fc.name":       "File Check",
+		"user_check.fc.file_path":  f.Name(),
 		"user_check.fc.file_regex": "secure_config\\s*=\\s*true",
-		"user_check.fc.delta":    "-8",
+		"user_check.fc.delta":      "-8",
 	}}
 
 	RegisterUserChecks(cfg)
@@ -75,9 +75,9 @@ func TestRegisterUserChecks_SkipInvalid(t *testing.T) {
 	cfg := &Config{AdapterConfig: map[string]string{
 		"user_check.bad.id": "CU-SKIP",
 		// Missing domain and name.
-		"user_check.bad2.id":      "CU-SKIP2",
-		"user_check.bad2.domain":  "resilience",
-		"user_check.bad2.name":    "Missing command and file",
+		"user_check.bad2.id":     "CU-SKIP2",
+		"user_check.bad2.domain": "resilience",
+		"user_check.bad2.name":   "Missing command and file",
 	}}
 	RegisterUserChecks(cfg)
 	_, ok := checks.GetByID("CU-SKIP")

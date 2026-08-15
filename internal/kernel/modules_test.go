@@ -48,15 +48,6 @@ func TestWorkerPoolTimeout(t *testing.T) {
 	}
 }
 
-
-
-
-
-
-
-
-
-
 func TestSIEMPusher_Disabled(t *testing.T) {
 	s := NewSIEMPusher("", "", "")
 	if s.Enabled() {

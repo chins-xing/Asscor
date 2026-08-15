@@ -365,13 +365,13 @@ func (m *Module) GetTISummary() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_iocs":          len(m.iocs),
-		"iocs_by_type":        iocsByType,
-		"total_threat_actors": len(m.threatActors),
+		"total_iocs":           len(m.iocs),
+		"iocs_by_type":         iocsByType,
+		"total_threat_actors":  len(m.threatActors),
 		"actors_by_motivation": actorsByMotivation,
-		"total_ttp_tracks":    len(m.ttpTracks),
-		"ttps_by_tactic":      ttpsByTactic,
-		"attck_version":       m.attckVersion,
+		"total_ttp_tracks":     len(m.ttpTracks),
+		"ttps_by_tactic":       ttpsByTactic,
+		"attck_version":        m.attckVersion,
 	}
 }
 
@@ -380,7 +380,7 @@ func (m *Module) loadDefaultThreatActors() {
 		"TA-APT29": {
 			ID: "TA-APT29", Name: "APT29", Aliases: []string{"Cozy Bear", "The Dukes"},
 			Description: "Russian threat group targeting government and diplomatic organizations.",
-			Country: "Russia", Motivation: "espionage",
+			Country:     "Russia", Motivation: "espionage",
 			TargetSectors: []string{"government", "diplomatic", "think_tank"},
 			Techniques: map[string]float64{
 				"T1566": 0.9, "T1071": 0.8, "T1003": 0.85, "T1059": 0.7,
@@ -391,12 +391,12 @@ func (m *Module) loadDefaultThreatActors() {
 				{ID: "C001", Name: "Operation Ghost", Description: "Targeting diplomatic entities", Techniques: []string{"T1566", "T1071", "T1003"}},
 			},
 			MISPGalaxyID: "misp-galaxy:threat-actor=\"APT 29\"",
-			LastUpdated: time.Now(),
+			LastUpdated:  time.Now(),
 		},
 		"TA-APT41": {
 			ID: "TA-APT41", Name: "APT41", Aliases: []string{"Wicked Spider", "Double Dragon"},
 			Description: "Chinese threat group conducting both espionage and financially motivated operations.",
-			Country: "China", Motivation: "espionage+financial",
+			Country:     "China", Motivation: "espionage+financial",
 			TargetSectors: []string{"multi_industry", "healthcare", "telecom"},
 			Techniques: map[string]float64{
 				"T1190": 0.95, "T1059": 0.8, "T1021": 0.7, "T1003": 0.6,
@@ -407,12 +407,12 @@ func (m *Module) loadDefaultThreatActors() {
 				{ID: "C002", Name: "Operation Soft Cell", Description: "Telecom sector targeting", Techniques: []string{"T1190", "T1059", "T1021"}},
 			},
 			MISPGalaxyID: "misp-galaxy:threat-actor=\"APT 41\"",
-			LastUpdated: time.Now(),
+			LastUpdated:  time.Now(),
 		},
 		"TA-Lazarus": {
 			ID: "TA-Lazarus", Name: "Lazarus Group", Aliases: []string{"HIDDEN COBRA", "Zinc"},
 			Description: "North Korean state-sponsored group targeting financial institutions and cryptocurrency exchanges.",
-			Country: "North Korea", Motivation: "financial+espionage",
+			Country:     "North Korea", Motivation: "financial+espionage",
 			TargetSectors: []string{"financial", "cryptocurrency", "defense"},
 			Techniques: map[string]float64{
 				"T1566": 0.85, "T1190": 0.9, "T1059": 0.75, "T1486": 0.8,
@@ -423,7 +423,7 @@ func (m *Module) loadDefaultThreatActors() {
 				{ID: "C003", Name: "Operation AppleJeus", Description: "Cryptocurrency targeting", Techniques: []string{"T1566", "T1190", "T1486"}},
 			},
 			MISPGalaxyID: "misp-galaxy:threat-actor=\"Lazarus Group\"",
-			LastUpdated: time.Now(),
+			LastUpdated:  time.Now(),
 		},
 	}
 }

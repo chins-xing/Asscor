@@ -114,10 +114,10 @@ func Serve(p RPCPlugin) {
 }
 
 const (
-	ErrParse     = -32700 // JSON-RPC standard: parse error
-	ErrInternal  = -32603 // JSON-RPC standard: internal error
-	ErrMethodNF  = -32601 // JSON-RPC standard: method not found
-	ErrApp       = -32000 // Implementation-defined: application error
+	ErrParse    = -32700 // JSON-RPC standard: parse error
+	ErrInternal = -32603 // JSON-RPC standard: internal error
+	ErrMethodNF = -32601 // JSON-RPC standard: method not found
+	ErrApp      = -32000 // Implementation-defined: application error
 )
 
 type rpcRequest struct {

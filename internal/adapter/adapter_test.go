@@ -33,43 +33,43 @@ func TestParseSeverity(t *testing.T) {
 
 func TestNormalizedFindingToCheckResult(t *testing.T) {
 	tests := []struct {
-		name     string
-		finding  NormalizedFinding
+		name          string
+		finding       NormalizedFinding
 		expectedDelta float64
 	}{
 		{
-			name:     "passed finding has zero delta",
-			finding:  NormalizedFinding{Passed: true, Severity: SeverityCritical},
+			name:          "passed finding has zero delta",
+			finding:       NormalizedFinding{Passed: true, Severity: SeverityCritical},
 			expectedDelta: 0,
 		},
 		{
-			name:     "critical failure",
-			finding:  NormalizedFinding{Passed: false, Severity: SeverityCritical},
+			name:          "critical failure",
+			finding:       NormalizedFinding{Passed: false, Severity: SeverityCritical},
 			expectedDelta: -20,
 		},
 		{
-			name:     "high failure",
-			finding:  NormalizedFinding{Passed: false, Severity: SeverityHigh},
+			name:          "high failure",
+			finding:       NormalizedFinding{Passed: false, Severity: SeverityHigh},
 			expectedDelta: -15,
 		},
 		{
-			name:     "medium failure",
-			finding:  NormalizedFinding{Passed: false, Severity: SeverityMedium},
+			name:          "medium failure",
+			finding:       NormalizedFinding{Passed: false, Severity: SeverityMedium},
 			expectedDelta: -10,
 		},
 		{
-			name:     "low failure",
-			finding:  NormalizedFinding{Passed: false, Severity: SeverityLow},
+			name:          "low failure",
+			finding:       NormalizedFinding{Passed: false, Severity: SeverityLow},
 			expectedDelta: -5,
 		},
 		{
-			name:     "info failure",
-			finding:  NormalizedFinding{Passed: false, Severity: SeverityInfo},
+			name:          "info failure",
+			finding:       NormalizedFinding{Passed: false, Severity: SeverityInfo},
 			expectedDelta: -2,
 		},
 		{
-			name:     "none severity",
-			finding:  NormalizedFinding{Passed: false, Severity: SeverityNone},
+			name:          "none severity",
+			finding:       NormalizedFinding{Passed: false, Severity: SeverityNone},
 			expectedDelta: 0,
 		},
 	}
@@ -187,44 +187,44 @@ func TestDefaultValidate(t *testing.T) {
 
 func TestApplyDelegation(t *testing.T) {
 	tests := []struct {
-		name         string
-		finding      *NormalizedFinding
-		adapterID    string
+		name          string
+		finding       *NormalizedFinding
+		adapterID     string
 		expectCheckID string
 		expectDomain  string
 	}{
 		{
-			name:         "trivy delegation with kernel resource",
-			finding:      &NormalizedFinding{Title: "CVE in kernel", Resource: "kernel-package"},
-			adapterID:    "trivy",
+			name:          "trivy delegation with kernel resource",
+			finding:       &NormalizedFinding{Title: "CVE in kernel", Resource: "kernel-package"},
+			adapterID:     "trivy",
 			expectCheckID: "KS-001",
 			expectDomain:  "kernel_security",
 		},
 		{
-			name:         "trivy delegation fallback",
-			finding:      &NormalizedFinding{Title: "CVE in nginx"},
-			adapterID:    "trivy",
+			name:          "trivy delegation fallback",
+			finding:       &NormalizedFinding{Title: "CVE in nginx"},
+			adapterID:     "trivy",
 			expectCheckID: "AS-005",
 			expectDomain:  "attack_surface",
 		},
 		{
-			name:         "nuclei delegation",
-			finding:      &NormalizedFinding{Title: "Web vuln"},
-			adapterID:    "nuclei",
+			name:          "nuclei delegation",
+			finding:       &NormalizedFinding{Title: "Web vuln"},
+			adapterID:     "nuclei",
 			expectCheckID: "AS-005",
 			expectDomain:  "attack_surface",
 		},
 		{
-			name:         "lynis delegation",
-			finding:      &NormalizedFinding{Title: "Compliance issue"},
-			adapterID:    "lynis",
+			name:          "lynis delegation",
+			finding:       &NormalizedFinding{Title: "Compliance issue"},
+			adapterID:     "lynis",
 			expectCheckID: "OT-099",
 			expectDomain:  "operation_trust",
 		},
 		{
-			name:         "already has domain and checkID",
-			finding:      &NormalizedFinding{Title: "Test", Domain: "resilience", CheckID: "RS-001"},
-			adapterID:    "trivy",
+			name:          "already has domain and checkID",
+			finding:       &NormalizedFinding{Title: "Test", Domain: "resilience", CheckID: "RS-001"},
+			adapterID:     "trivy",
 			expectCheckID: "RS-001",
 			expectDomain:  "resilience",
 		},

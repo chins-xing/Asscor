@@ -88,12 +88,12 @@ func TestParseOSCALXML(t *testing.T) {
 		Findings: oscalXMLFindings{
 			Finding: []oscalXMLFinding{
 				{
-					CVEID:       "CVE-2024-XML01",
-					Description: "Test XML vulnerability",
-					CVSSScore:   8.5,
-					CVSSVector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-					EPSSScore:   0.45,
-					InKEV:       true,
+					CVEID:         "CVE-2024-XML01",
+					Description:   "Test XML vulnerability",
+					CVSSScore:     8.5,
+					CVSSVector:    "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+					EPSSScore:     0.45,
+					InKEV:         true,
 					DatePublished: "2024-01-15",
 					AffectedCPEs: struct {
 						CPE []string `xml:"cpe"`
@@ -296,9 +296,9 @@ func TestParseMISPEvent(t *testing.T) {
 	spc := New()
 
 	event := mispEvent{
-		ID:    "1234",
-		Info:  "Active exploitation of OpenSSL vulnerability",
-		Date:  "2024-01-15",
+		ID:   "1234",
+		Info: "Active exploitation of OpenSSL vulnerability",
+		Date: "2024-01-15",
 		Tags: []mispTag{
 			{Name: "misp-galaxy:mitre-attck-pattern=\"Initial Access - T1190\""},
 			{Name: "misp-galaxy:threat-actor=\"APT29\""},
@@ -466,22 +466,22 @@ func TestSPCCleanupOldCVEs(t *testing.T) {
 
 	now := time.Now()
 	spc.AddCVE(kernel.SPCCVEScore{
-		CVEID:        "CVE-OLD-01",
-		CVSS:         5.0,
-		DateModified: now.AddDate(0, 0, -400),
+		CVEID:         "CVE-OLD-01",
+		CVSS:          5.0,
+		DateModified:  now.AddDate(0, 0, -400),
 		DatePublished: now.AddDate(0, 0, -500),
 	})
 	spc.AddCVE(kernel.SPCCVEScore{
-		CVEID:        "CVE-KEV-01",
-		CVSS:         9.0,
-		InKEV:        true,
-		DateModified: now.AddDate(0, 0, -400),
+		CVEID:         "CVE-KEV-01",
+		CVSS:          9.0,
+		InKEV:         true,
+		DateModified:  now.AddDate(0, 0, -400),
 		DatePublished: now.AddDate(0, 0, -500),
 	})
 	spc.AddCVE(kernel.SPCCVEScore{
-		CVEID:        "CVE-RECENT-01",
-		CVSS:         7.0,
-		DateModified: now.AddDate(0, 0, -10),
+		CVEID:         "CVE-RECENT-01",
+		CVSS:          7.0,
+		DateModified:  now.AddDate(0, 0, -10),
 		DatePublished: now.AddDate(0, 0, -30),
 	})
 
@@ -575,9 +575,9 @@ func TestMISPEventNoCVEAttributes(t *testing.T) {
 	spc := New()
 
 	event := mispEvent{
-		ID:    "5678",
-		Info:  "Suspicious activity without CVE",
-		Date:  "2024-02-01",
+		ID:   "5678",
+		Info: "Suspicious activity without CVE",
+		Date: "2024-02-01",
 		Attribute: []mispAttribute{
 			{Type: "ip-dst", Value: "10.0.0.1", Category: "Network activity"},
 		},
@@ -624,19 +624,19 @@ func TestSPCWeightShift(t *testing.T) {
 
 	cves := []kernel.SPCCVEScore{
 		{
-			CVEID:   "CVE-A", CVSS: 9.0, EPSS: 0.5,
+			CVEID: "CVE-A", CVSS: 9.0, EPSS: 0.5,
 			AffectedCPEs: []string{"cpe:2.3:a:test:test:*:*:*:*:*:*:*:*"},
-			Matched: true, Exposure: kernel.ExposurePublic,
+			Matched:      true, Exposure: kernel.ExposurePublic,
 		},
 		{
-			CVEID:   "CVE-B", CVSS: 8.0, EPSS: 0.3,
+			CVEID: "CVE-B", CVSS: 8.0, EPSS: 0.3,
 			AffectedCPEs: []string{"cpe:2.3:a:test:test:*:*:*:*:*:*:*:*"},
-			Matched: true, Exposure: kernel.ExposurePublic,
+			Matched:      true, Exposure: kernel.ExposurePublic,
 		},
 		{
-			CVEID:   "CVE-C", CVSS: 7.0, EPSS: 0.2,
+			CVEID: "CVE-C", CVSS: 7.0, EPSS: 0.2,
 			AffectedCPEs: []string{"cpe:2.3:a:test:test:*:*:*:*:*:*:*:*"},
-			Matched: true, Exposure: kernel.ExposureDMZ,
+			Matched:      true, Exposure: kernel.ExposureDMZ,
 		},
 	}
 

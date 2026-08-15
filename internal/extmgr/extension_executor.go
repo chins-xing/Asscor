@@ -48,10 +48,10 @@ func buildEnv(base []string, custom map[string]string) ([]string, error) {
 type ExecutionPolicy string
 
 const (
-	ExecPolicyAllowed    ExecutionPolicy = "allowed"
-	ExecPolicyWhitelist  ExecutionPolicy = "whitelist"
-	ExecPolicySandboxed  ExecutionPolicy = "sandboxed"
-	ExecPolicyDisabled   ExecutionPolicy = "disabled"
+	ExecPolicyAllowed   ExecutionPolicy = "allowed"
+	ExecPolicyWhitelist ExecutionPolicy = "whitelist"
+	ExecPolicySandboxed ExecutionPolicy = "sandboxed"
+	ExecPolicyDisabled  ExecutionPolicy = "disabled"
 )
 
 type ExecutionConfig struct {
@@ -71,8 +71,8 @@ type ExecutionResult struct {
 }
 
 type ExtensionExecutor struct {
-	mu     sync.RWMutex
-	config ExecutionConfig
+	mu        sync.RWMutex
+	config    ExecutionConfig
 	whitelist map[string]bool
 }
 

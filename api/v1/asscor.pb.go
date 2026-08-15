@@ -17,9 +17,9 @@ type RegisterRequest struct {
 }
 
 type RegisterResponse struct {
-	Accepted   bool   `json:"accepted"`
-	SessionId  string `json:"session_id"`
-	CACertPEM  []byte `json:"ca_cert_pem,omitempty"`
+	Accepted  bool   `json:"accepted"`
+	SessionId string `json:"session_id"`
+	CACertPEM []byte `json:"ca_cert_pem,omitempty"`
 }
 
 type HeartbeatRequest struct {
@@ -33,11 +33,11 @@ type HeartbeatRequest struct {
 
 // NetworkInfo carries the agent's network topology data for real-edge risk diffusion.
 type NetworkInfo struct {
-	LocalIPs     []string `json:"local_ips,omitempty"`      // 本机所有 IP 地址
-	Subnets      []string `json:"subnets,omitempty"`        // 可达子网 (CIDR 格式, 如 "10.0.0.0/24")
-	Gateways     []string `json:"gateways,omitempty"`       // 默认网关 IP
-	Neighbors    []string `json:"neighbors,omitempty"`      // ARP 邻居表 (同子网主机 IP)
-	NetworkZone  string   `json:"network_zone,omitempty"`   // 区域: internal/dmz/public/wan/cloud
+	LocalIPs    []string `json:"local_ips,omitempty"`    // 本机所有 IP 地址
+	Subnets     []string `json:"subnets,omitempty"`      // 可达子网 (CIDR 格式, 如 "10.0.0.0/24")
+	Gateways    []string `json:"gateways,omitempty"`     // 默认网关 IP
+	Neighbors   []string `json:"neighbors,omitempty"`    // ARP 邻居表 (同子网主机 IP)
+	NetworkZone string   `json:"network_zone,omitempty"` // 区域: internal/dmz/public/wan/cloud
 }
 
 type HeartbeatResponse struct {
@@ -57,11 +57,11 @@ type AssessmentResult struct {
 	SpcCVEs      []SPCCVEInfo       `json:"spc_cves,omitempty"`
 	Checks       []*CheckResult     `json:"checks"`
 
-	ATTACKCoverage      []ATTACKCoverageInfo    `json:"attck_coverage,omitempty"`
-	ATTACKKillChain     *ATTACKKillChainInfo    `json:"attck_kill_chain,omitempty"`
-	ATTACKAPTMatches    []ATTACKAPTMatchInfo    `json:"attck_apt_matches,omitempty"`
+	ATTACKCoverage      []ATTACKCoverageInfo     `json:"attck_coverage,omitempty"`
+	ATTACKKillChain     *ATTACKKillChainInfo     `json:"attck_kill_chain,omitempty"`
+	ATTACKAPTMatches    []ATTACKAPTMatchInfo     `json:"attck_apt_matches,omitempty"`
 	ATTACKPredictedRisk *ATTACKPredictedRiskInfo `json:"attck_predicted_risk,omitempty"`
-	ATTACKFailedTechs   []string                `json:"attck_failed_techniques,omitempty"`
+	ATTACKFailedTechs   []string                 `json:"attck_failed_techniques,omitempty"`
 }
 
 type ATTACKCoverageInfo struct {
@@ -82,11 +82,11 @@ type ATTACKKillChainInfo struct {
 }
 
 type ATTACKKillChainStage struct {
-	Name         string `json:"name"`
+	Name         string  `json:"name"`
 	Score        float64 `json:"score"`
-	Status       string `json:"status"`
-	ChecksPassed int    `json:"checks_passed"`
-	ChecksTotal  int    `json:"checks_total"`
+	Status       string  `json:"status"`
+	ChecksPassed int     `json:"checks_passed"`
+	ChecksTotal  int     `json:"checks_total"`
 }
 
 type ATTACKAPTMatchInfo struct {
@@ -105,13 +105,13 @@ type ATTACKPredictedRiskInfo struct {
 }
 
 type SPCCVEInfo struct {
-	CVEID      string  `json:"cve_id"`
-	CVSS       float64 `json:"cvss"`
-	EPSS       float64 `json:"epss"`
-	InKEV      bool    `json:"in_kev"`
-	HasPoC     bool    `json:"has_poc"`
-	Penalty    float64 `json:"penalty"`
-	Product    string  `json:"product,omitempty"`
+	CVEID   string  `json:"cve_id"`
+	CVSS    float64 `json:"cvss"`
+	EPSS    float64 `json:"epss"`
+	InKEV   bool    `json:"in_kev"`
+	HasPoC  bool    `json:"has_poc"`
+	Penalty float64 `json:"penalty"`
+	Product string  `json:"product,omitempty"`
 }
 
 type CheckResult struct {
@@ -185,7 +185,7 @@ type GetSourceResponse struct {
 }
 
 type DeploySourceRequest struct {
-	Spec   *SourceSpec   `json:"spec"`
+	Spec   *SourceSpec       `json:"spec"`
 	Config map[string]string `json:"config,omitempty"`
 }
 
@@ -247,9 +247,9 @@ type RunSourceRequest struct {
 }
 
 type RunSourceResponse struct {
-	Success      bool   `json:"success"`
-	FindingsCount int32 `json:"findings_count"`
-	Error        string `json:"error,omitempty"`
+	Success       bool   `json:"success"`
+	FindingsCount int32  `json:"findings_count"`
+	Error         string `json:"error,omitempty"`
 }
 
 type SourceAuditLogRequest struct {

@@ -14,7 +14,6 @@ import (
 	"time"
 )
 
-
 func GenerateCA(config CertConfig) (*CertPair, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {

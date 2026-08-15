@@ -63,7 +63,9 @@ func (b *KernelBlocker) IsBlocked(ctx context.Context, hostID string) bool {
 	if !ok {
 		return false
 	}
-	p, ok := plugin.(interface{ GetHostStatus(hostID string) HostStatus })
+	p, ok := plugin.(interface {
+		GetHostStatus(hostID string) HostStatus
+	})
 	if !ok {
 		return false
 	}

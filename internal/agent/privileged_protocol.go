@@ -27,10 +27,10 @@ type PrivilegedRequest struct {
 // PrivilegedResponse is the JSON envelope returned by the privileged agent
 // process.
 type PrivilegedResponse struct {
-	OK      bool                  `json:"ok"`
-	Error   string                `json:"error,omitempty"`
-	Checks  []model.CheckResult   `json:"checks,omitempty"`
-	Output  string                `json:"output,omitempty"`
+	OK     bool                `json:"ok"`
+	Error  string              `json:"error,omitempty"`
+	Checks []model.CheckResult `json:"checks,omitempty"`
+	Output string              `json:"output,omitempty"`
 }
 
 // readPrivilegedRequest decodes one newline-delimited JSON request.

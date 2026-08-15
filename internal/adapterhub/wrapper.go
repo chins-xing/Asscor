@@ -12,11 +12,11 @@ import (
 
 // SSAMAdapter wraps an existing SSAM adapter to UnifiedAdapter.
 type SSAMAdapter struct {
-	id           string
-	name         string
-	priority     Priority
-	ssamAdapter  adapter.Adapter
-	transformer  adapterFindingsTransformer
+	id          string
+	name        string
+	priority    Priority
+	ssamAdapter adapter.Adapter
+	transformer adapterFindingsTransformer
 }
 
 // adapterFindingsTransformer transforms SSAM findings to NormalizedFinding.
@@ -80,7 +80,7 @@ func (a *SSAMAdapter) Execute(ctx AdapterContext, input Input) (Output, error) {
 
 	return Output{
 		AdapterID: a.id,
-		Findings:   transformed,
+		Findings:  transformed,
 		Duration:  time.Since(start),
 		Timestamp: time.Now(),
 	}, nil

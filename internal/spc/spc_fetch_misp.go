@@ -3,11 +3,11 @@
 package spc
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"io"
 	"net/http"
 	"strings"
@@ -62,15 +62,15 @@ func (m *Module) FetchFromMISP() kernel.SPCFetchResult {
 }
 
 type mispEventSearchRequest struct {
-	ReturnFormat  string   `json:"returnFormat"`
-	Type         []string `json:"type"`
-	Category     []string `json:"category"`
-	Tags         []string `json:"tags,omitempty"`
-	DateFrom     string   `json:"date,omitempty"`
-	Published    bool     `json:"published"`
-	EnforceWarninglist bool `json:"enforceWarninglist"`
-	Limit        int      `json:"limit"`
-	Page         int      `json:"page"`
+	ReturnFormat       string   `json:"returnFormat"`
+	Type               []string `json:"type"`
+	Category           []string `json:"category"`
+	Tags               []string `json:"tags,omitempty"`
+	DateFrom           string   `json:"date,omitempty"`
+	Published          bool     `json:"published"`
+	EnforceWarninglist bool     `json:"enforceWarninglist"`
+	Limit              int      `json:"limit"`
+	Page               int      `json:"page"`
 }
 
 type mispEventResponse struct {
@@ -98,36 +98,36 @@ type mispTag struct {
 }
 
 type mispGalaxy struct {
-	Name     string           `json:"name"`
-	Type     string           `json:"type"`
-	Cluster  []mispGalaxyCluster `json:"GalaxyCluster"`
+	Name    string              `json:"name"`
+	Type    string              `json:"type"`
+	Cluster []mispGalaxyCluster `json:"GalaxyCluster"`
 }
 
 type mispGalaxyCluster struct {
-	Value   string   `json:"value"`
-	TagName string   `json:"tag_name"`
+	Value   string `json:"value"`
+	TagName string `json:"tag_name"`
 	Meta    struct {
 		Synonyms []string `json:"synonyms"`
 	} `json:"meta"`
 }
 
 type mispAttribute struct {
-	Type       string `json:"type"`
-	Category   string `json:"category"`
-	Value      string `json:"value"`
-	ToIDS      bool   `json:"to_ids"`
-	Comment    string `json:"comment"`
+	Type     string `json:"type"`
+	Category string `json:"category"`
+	Value    string `json:"value"`
+	ToIDS    bool   `json:"to_ids"`
+	Comment  string `json:"comment"`
 }
 
 func (m *Module) fetchMISPEvents(client *kernel.SPCMISPClient) []kernel.SPCCVEScore {
 	searchReq := mispEventSearchRequest{
-		ReturnFormat: "json",
-		Type:        []string{"vulnerability"},
-		Category:    []string{"External analysis"},
-		Published:   true,
+		ReturnFormat:       "json",
+		Type:               []string{"vulnerability"},
+		Category:           []string{"External analysis"},
+		Published:          true,
 		EnforceWarninglist: true,
-		Limit:       100,
-		Page:        1,
+		Limit:              100,
+		Page:               1,
 	}
 
 	if client.Config.TLPFilter != "" {
@@ -285,10 +285,10 @@ func (m *Module) parseMISPEvent(event mispEvent) []kernel.SPCCVEScore {
 	var results = make([]kernel.SPCCVEScore, 0, len(cveIDs))
 	for _, cveID := range cveIDs {
 		results = append(results, kernel.SPCCVEScore{
-			CVEID:          cveID,
-			Description:    desc,
-			DatePublished:  pubDate,
-			DateModified:   time.Now(),
+			CVEID:           cveID,
+			Description:     desc,
+			DatePublished:   pubDate,
+			DateModified:    time.Now(),
 			AttckTechniques: attckTechs,
 			MISPGalaxyTags:  galaxyTags,
 			APTGroupAssoc:   aptGroups,

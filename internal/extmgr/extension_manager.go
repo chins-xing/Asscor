@@ -57,9 +57,9 @@ type ExtensionManager struct {
 
 	// Callbacks for extension types that need external wiring.
 	// Set before enabling extensions; nil means the type is skipped.
-	OnCLICommand    func(spec ExtensionSpec)  // register CLI command
-	OnScoringPlugin func(spec ExtensionSpec)  // register scoring formula
-	OnWebPanelRoute func(spec ExtensionSpec)  // register web UI route
+	OnCLICommand    func(spec ExtensionSpec) // register CLI command
+	OnScoringPlugin func(spec ExtensionSpec) // register scoring formula
+	OnWebPanelRoute func(spec ExtensionSpec) // register web UI route
 }
 
 type ExtensionRepository struct {

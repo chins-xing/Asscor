@@ -3,13 +3,13 @@
 package comms
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"io"
 	"log/slog"
 	"net"
@@ -43,8 +43,8 @@ func DefaultServerConfig() ServerConfig {
 }
 
 type Server struct {
-	cfg    ServerConfig
-	kc *kernel.Kernel
+	cfg ServerConfig
+	kc  *kernel.Kernel
 
 	registry *apiv1.ServiceRegistry
 	codec    apiv1.ServerCodec
@@ -67,7 +67,7 @@ func NewServer(cfg ServerConfig, k *kernel.Kernel) *Server {
 	}
 	return &Server{
 		cfg:      cfg,
-		kc:   k,
+		kc:       k,
 		registry: apiv1.NewServiceRegistry(),
 		codec:    &apiv1.JSONCodec{},
 		connSem:  make(chan struct{}, maxConns),

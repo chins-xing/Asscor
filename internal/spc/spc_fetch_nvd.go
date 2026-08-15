@@ -3,10 +3,10 @@
 package spc
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"io"
 	"net/http"
 	"net/url"
@@ -90,9 +90,9 @@ func (m *Module) FetchFromNVD() kernel.SPCFetchResult {
 }
 
 type nvdAPIResponse struct {
-	TotalResults int              `json:"totalResults"`
-	ResultsPerPage int            `json:"resultsPerPage"`
-	StartIndex int                `json:"startIndex"`
+	TotalResults    int           `json:"totalResults"`
+	ResultsPerPage  int           `json:"resultsPerPage"`
+	StartIndex      int           `json:"startIndex"`
 	Vulnerabilities []nvdVulnItem `json:"vulnerabilities"`
 }
 
@@ -101,15 +101,15 @@ type nvdVulnItem struct {
 }
 
 type nvdCVE struct {
-	ID             string          `json:"id"`
-	SourceIdentifier string        `json:"sourceIdentifier"`
-	Published      string          `json:"published"`
-	LastModified   string          `json:"lastModified"`
-	Descriptions   []nvdLangStr   `json:"descriptions"`
-	Metrics        nvdMetrics      `json:"metrics"`
-	Weaknesses     []nvdWeakness   `json:"weaknesses"`
-	Configurations []nvdConfig     `json:"configurations"`
-	References     []nvdReference  `json:"references"`
+	ID               string         `json:"id"`
+	SourceIdentifier string         `json:"sourceIdentifier"`
+	Published        string         `json:"published"`
+	LastModified     string         `json:"lastModified"`
+	Descriptions     []nvdLangStr   `json:"descriptions"`
+	Metrics          nvdMetrics     `json:"metrics"`
+	Weaknesses       []nvdWeakness  `json:"weaknesses"`
+	Configurations   []nvdConfig    `json:"configurations"`
+	References       []nvdReference `json:"references"`
 }
 
 type nvdLangStr struct {
@@ -118,34 +118,34 @@ type nvdLangStr struct {
 }
 
 type nvdMetrics struct {
-	CVSSMetricV40 []nvdCVSSMetric `json:"cvssMetricV40"`
-	CVSSMetricV31 []nvdCVSSMetric `json:"cvssMetricV31"`
-	CVSSMetricV30 []nvdCVSSMetric `json:"cvssMetricV30"`
+	CVSSMetricV40 []nvdCVSSMetric   `json:"cvssMetricV40"`
+	CVSSMetricV31 []nvdCVSSMetric   `json:"cvssMetricV31"`
+	CVSSMetricV30 []nvdCVSSMetric   `json:"cvssMetricV30"`
 	CVSSMetricV2  []nvdCVSSMetricV2 `json:"cvssMetricV2"`
 }
 
 type nvdCVSSMetric struct {
-	Source   string     `json:"source"`
-	Type     string     `json:"type"`
-	CVSSData nvdCVSSData `json:"cvssData"`
-	ExploitabilityScore float64 `json:"exploitabilityScore"`
-	ImpactScore         float64 `json:"impactScore"`
+	Source              string      `json:"source"`
+	Type                string      `json:"type"`
+	CVSSData            nvdCVSSData `json:"cvssData"`
+	ExploitabilityScore float64     `json:"exploitabilityScore"`
+	ImpactScore         float64     `json:"impactScore"`
 }
 
 type nvdCVSSData struct {
-	Version                       string  `json:"version"`
-	VectorString                  string  `json:"vectorString"`
-	BaseScore                     float64 `json:"baseScore"`
-	BaseSeverity                  string  `json:"baseSeverity"`
+	Version      string  `json:"version"`
+	VectorString string  `json:"vectorString"`
+	BaseScore    float64 `json:"baseScore"`
+	BaseSeverity string  `json:"baseSeverity"`
 }
 
 type nvdCVSSMetricV2 struct {
-	Source       string       `json:"source"`
-	Type         string       `json:"type"`
-	CVSSData     nvdCVSSDataV2 `json:"cvssData"`
-	BaseSeverity string       `json:"baseSeverity"`
-	ExploitabilityScore float64 `json:"exploitabilityScore"`
-	ImpactScore         float64 `json:"impactScore"`
+	Source              string        `json:"source"`
+	Type                string        `json:"type"`
+	CVSSData            nvdCVSSDataV2 `json:"cvssData"`
+	BaseSeverity        string        `json:"baseSeverity"`
+	ExploitabilityScore float64       `json:"exploitabilityScore"`
+	ImpactScore         float64       `json:"impactScore"`
 }
 
 type nvdCVSSDataV2 struct {
@@ -155,19 +155,19 @@ type nvdCVSSDataV2 struct {
 }
 
 type nvdWeakness struct {
-	Source          string        `json:"source"`
-	Type            string        `json:"type"`
-	Description     []nvdLangStr  `json:"description"`
+	Source      string       `json:"source"`
+	Type        string       `json:"type"`
+	Description []nvdLangStr `json:"description"`
 }
 
 type nvdConfig struct {
-	Operator string      `json:"operator"`
-	Nodes    []nvdNode   `json:"nodes"`
+	Operator string    `json:"operator"`
+	Nodes    []nvdNode `json:"nodes"`
 }
 
 type nvdNode struct {
-	Operator string     `json:"operator"`
-	Negate   bool       `json:"negate"`
+	Operator string        `json:"operator"`
+	Negate   bool          `json:"negate"`
 	CPEMatch []nvdCPEMatch `json:"cpeMatch"`
 }
 
@@ -182,8 +182,8 @@ type nvdCPEMatch struct {
 }
 
 type nvdReference struct {
-	Source string `json:"source"`
-	URL    string `json:"url"`
+	Source string   `json:"source"`
+	URL    string   `json:"url"`
 	Tags   []string `json:"tags"`
 }
 
@@ -543,13 +543,13 @@ func (m *Module) parseNVDCVE(cve nvdCVE) kernel.SPCCVEScore {
 	}
 
 	return kernel.SPCCVEScore{
-		CVEID:          cve.ID,
-		Description:    desc,
-		CVSS:           cvssScore,
-		CVSSVector:     cvssVector,
-		AffectedCPEs:   affectedCPEs,
+		CVEID:           cve.ID,
+		Description:     desc,
+		CVSS:            cvssScore,
+		CVSSVector:      cvssVector,
+		AffectedCPEs:    affectedCPEs,
 		AttckTechniques: attckTechs,
-		DatePublished:  pubDate,
-		DateModified:   modDate,
+		DatePublished:   pubDate,
+		DateModified:    modDate,
 	}
 }

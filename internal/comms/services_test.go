@@ -16,10 +16,10 @@ func TestConvertAssessmentResultNil(t *testing.T) {
 
 func TestConvertAssessmentResultBasic(t *testing.T) {
 	r := &model.AssessmentResult{
-		FinalScore: 85.5,
-		Acceptable: true,
+		FinalScore:  85.5,
+		Acceptable:  true,
 		ThreatCoeff: 0.92,
-		SPCScore:   0.85,
+		SPCScore:    0.85,
 		DomainScores: model.DomainScores{
 			AttackSurface:      80,
 			BusinessContinuity: 90,

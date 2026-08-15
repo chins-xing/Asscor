@@ -46,26 +46,26 @@ func (s State) String() string {
 
 // Snapshot captures the breaker state for telemetry / audit.
 type Snapshot struct {
-	Module       string    `json:"module"`
-	State        string    `json:"state"`
-	Failures     int       `json:"failures"`
-	Successes    int       `json:"successes"`
-	LastFailure  time.Time `json:"last_failure,omitempty"`
-	OpenedAt     time.Time `json:"opened_at,omitempty"`
-	TotalTrips   int       `json:"total_trips"`
+	Module      string    `json:"module"`
+	State       string    `json:"state"`
+	Failures    int       `json:"failures"`
+	Successes   int       `json:"successes"`
+	LastFailure time.Time `json:"last_failure,omitempty"`
+	OpenedAt    time.Time `json:"opened_at,omitempty"`
+	TotalTrips  int       `json:"total_trips"`
 }
 
 type breaker struct {
-	mu             sync.Mutex
-	state          State
-	failures       int
-	successes      int
-	lastFailure    time.Time
-	openedAt       time.Time
-	totalTrips     int
-	threshold      int
-	window         time.Duration
-	cooldown       time.Duration
+	mu          sync.Mutex
+	state       State
+	failures    int
+	successes   int
+	lastFailure time.Time
+	openedAt    time.Time
+	totalTrips  int
+	threshold   int
+	window      time.Duration
+	cooldown    time.Duration
 }
 
 // Default config: 5 failures in 5 minutes → open for 1 minute.

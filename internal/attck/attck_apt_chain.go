@@ -3,8 +3,8 @@
 package attck
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"math"
 	"sort"
 	"time"
@@ -106,17 +106,17 @@ func (m *Module) ReconstructAttackChain(hostIDs []string) (*AttackChain, error) 
 
 func (m *Module) buildAttackStages(alerts []DetectionAlert, anomalies []AnomalyEvent, iocs []IOCEntry) []AttackStage {
 	type stageCandidate struct {
-		tacticID     string
-		tacticName   string
-		techniqueID  string
+		tacticID      string
+		tacticName    string
+		techniqueID   string
 		techniqueName string
-		alertIDs     []string
-		anomalyIDs   []string
-		iocIDs       []string
-		hostIDs      []string
-		evidence     []string
-		confidence   float64
-		timestamp    time.Time
+		alertIDs      []string
+		anomalyIDs    []string
+		iocIDs        []string
+		hostIDs       []string
+		evidence      []string
+		confidence    float64
+		timestamp     time.Time
 	}
 
 	candidates := make(map[string]*stageCandidate)

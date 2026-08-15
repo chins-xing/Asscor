@@ -3,9 +3,9 @@
 package collector
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"encoding/json"
+	"github.com/asscor/asscor/internal/kernel"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,12 +18,12 @@ import (
 )
 
 type Module struct {
-	kc  kernel.KernelContext
+	kc      kernel.KernelContext
 	logPath string
 
-	mu     sync.RWMutex
-	writer io.Writer
-	state  kernel.PluginState
+	mu        sync.RWMutex
+	writer    io.Writer
+	state     kernel.PluginState
 	flushDone chan struct{}
 }
 
@@ -223,5 +223,6 @@ func (m *Module) LogPath() string {
 	defer m.mu.RUnlock()
 	return m.logPath
 }
+
 // New creates a log collector module instance.
 func New() *Module { return &Module{} }

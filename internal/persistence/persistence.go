@@ -3,14 +3,14 @@
 package persistence
 
 import (
-	"github.com/asscor/asscor/internal/historicalstore"
-	"github.com/asscor/asscor/internal/kernel"
 	"archive/tar"
 	"bufio"
 	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/asscor/asscor/internal/historicalstore"
+	"github.com/asscor/asscor/internal/kernel"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,11 +25,11 @@ import (
 )
 
 type jsonlWriter struct {
-	mu     sync.Mutex
-	file   *os.File
-	buf    *bufio.Writer
-	path   string
-	day    int
+	mu   sync.Mutex
+	file *os.File
+	buf  *bufio.Writer
+	path string
+	day  int
 }
 
 func (w *jsonlWriter) write(data []byte) error {
@@ -107,22 +107,22 @@ func (w *jsonlWriter) close() error {
 }
 
 type Module struct {
-	kc kernel.KernelContext
-	cfg    *config.Config
+	kc  kernel.KernelContext
+	cfg *config.Config
 
-	mu          sync.Mutex
-	dataDir     string
-	writers     map[string]*jsonlWriter
-	flushTicker *time.Ticker
-	flushDone   chan struct{}
-	cleanupDone chan struct{}
-	backupDone  chan struct{}
-	bufSize     int
+	mu            sync.Mutex
+	dataDir       string
+	writers       map[string]*jsonlWriter
+	flushTicker   *time.Ticker
+	flushDone     chan struct{}
+	cleanupDone   chan struct{}
+	backupDone    chan struct{}
+	bufSize       int
 	retentionDays int
-	history     *historicalstore.HistoricalStore
+	history       *historicalstore.HistoricalStore
 
-	enabled  bool
-	state    kernel.PluginState
+	enabled bool
+	state   kernel.PluginState
 }
 
 func New(dataDir string) *Module {
@@ -130,10 +130,10 @@ func New(dataDir string) *Module {
 		dataDir = "data"
 	}
 	return &Module{
-		dataDir: dataDir,
-		writers: make(map[string]*jsonlWriter),
-		bufSize: 64,
-		enabled: true,
+		dataDir:       dataDir,
+		writers:       make(map[string]*jsonlWriter),
+		bufSize:       64,
+		enabled:       true,
 		retentionDays: 90,
 	}
 }
@@ -305,10 +305,10 @@ func (m *Module) WriteCommand(record kernel.CommandRecord) error {
 func (m *Module) WriteAssessment(record kernel.AssessmentRecord) error {
 	if m.kc != nil && m.kc.Extensions() != nil {
 		m.kc.Extensions().Execute(m.kc.Context(), "archive.pre_write", map[string]interface{}{
-			"dataset":  "assessments",
-			"host_id":  record.HostID,
-			"score":    record.FinalScore,
-			"checks":   len(record.Checks),
+			"dataset": "assessments",
+			"host_id": record.HostID,
+			"score":   record.FinalScore,
+			"checks":  len(record.Checks),
 		})
 	}
 	err := m.Append("assessments", record)
@@ -319,10 +319,10 @@ func (m *Module) WriteAssessment(record kernel.AssessmentRecord) error {
 			"score":   record.FinalScore,
 		})
 		m.kc.Extensions().Execute(m.kc.Context(), "persistence.record_written", map[string]interface{}{
-			"dataset":  "assessments",
-			"host_id":  record.HostID,
-			"score":    record.FinalScore,
-			"checks":   len(record.Checks),
+			"dataset": "assessments",
+			"host_id": record.HostID,
+			"score":   record.FinalScore,
+			"checks":  len(record.Checks),
 		})
 	}
 	return err
@@ -635,9 +635,9 @@ func (m *Module) createDailyArchive() {
 		"path", archivePath, "files", archived)
 
 	m.kc.Extensions().Execute(m.kc.Context(), "archive.rotation", map[string]interface{}{
-		"type":   "daily_archive",
-		"path":   archivePath,
-		"files":  archived,
+		"type":  "daily_archive",
+		"path":  archivePath,
+		"files": archived,
 	})
 
 	m.pruneArchives(archiveDir, 90)
@@ -696,29 +696,29 @@ func (m *Module) onAssessmentResult(ctx context.Context, msg kernel.Message) err
 		}
 
 		rec := kernel.AssessmentRecord{
-			Timestamp:      time.Now(),
-			HostID:         ar.HostID,
-			Hostname:       ar.Hostname,
-			FinalScore:     ar.FinalScore,
-			Threshold:      ar.Threshold,
-			Acceptable:     ar.Acceptable,
-			AttackSurface:  ar.DomainScores.AttackSurface,
-			BusinessCont:   ar.DomainScores.BusinessContinuity,
-			OperationTrust: ar.DomainScores.OperationTrust,
-			Resilience:     ar.DomainScores.Resilience,
-			KernelSecurity: ar.DomainScores.KernelSecurity,
-			ExtraScores:    ar.DomainScores.Extra,
-			TwoFactorFail:  ar.EdgeFactors.TwoFactorFailure,
-			SYNCookieDis:   ar.EdgeFactors.SYNCookieDisabled,
-			SELinuxDis:     ar.EdgeFactors.SELinuxDisabled,
-			AppArmorDis:    ar.EdgeFactors.AppArmorDisabled,
-			NoSIEM:         ar.EdgeFactors.NoSIEM,
-			NoIDS:          ar.EdgeFactors.NoIDS,
-			ThreatCoeff:    ar.ThreatCoeff,
-			SPCScore:       ar.SPCScore,
-			PrismResultFields:   kernel.PrismFieldsFromResult(ar),
-			CheckCount:     len(ar.Checks),
-			Checks:         checkDetails,
+			Timestamp:         time.Now(),
+			HostID:            ar.HostID,
+			Hostname:          ar.Hostname,
+			FinalScore:        ar.FinalScore,
+			Threshold:         ar.Threshold,
+			Acceptable:        ar.Acceptable,
+			AttackSurface:     ar.DomainScores.AttackSurface,
+			BusinessCont:      ar.DomainScores.BusinessContinuity,
+			OperationTrust:    ar.DomainScores.OperationTrust,
+			Resilience:        ar.DomainScores.Resilience,
+			KernelSecurity:    ar.DomainScores.KernelSecurity,
+			ExtraScores:       ar.DomainScores.Extra,
+			TwoFactorFail:     ar.EdgeFactors.TwoFactorFailure,
+			SYNCookieDis:      ar.EdgeFactors.SYNCookieDisabled,
+			SELinuxDis:        ar.EdgeFactors.SELinuxDisabled,
+			AppArmorDis:       ar.EdgeFactors.AppArmorDisabled,
+			NoSIEM:            ar.EdgeFactors.NoSIEM,
+			NoIDS:             ar.EdgeFactors.NoIDS,
+			ThreatCoeff:       ar.ThreatCoeff,
+			SPCScore:          ar.SPCScore,
+			PrismResultFields: kernel.PrismFieldsFromResult(ar),
+			CheckCount:        len(ar.Checks),
+			Checks:            checkDetails,
 		}
 
 		for _, c := range ar.Checks {
@@ -776,22 +776,22 @@ func (m *Module) onAssessmentResult(ctx context.Context, msg kernel.Message) err
 		}
 
 		report := &kernel.DashboardReport{
-			SchemaVersion: "1.0",
-			GeneratedAt:   time.Now(),
-			HostID:        ar.HostID,
-			Hostname:      ar.Hostname,
-			Framework:     "ASSCOR",
-			SSAMVersion:   version.SSAMVersion,
-			FinalScore:    ar.FinalScore,
-			Threshold:     ar.Threshold,
-			Acceptable:    ar.Acceptable,
-			DomainScores:  domainScores,
-			DomainWeights: domainWeights,
-			EdgeFactors:   edgeFactors,
-			ThreatCoeff:   ar.ThreatCoeff,
-			SPCScore:      ar.SPCScore,
-			PrismResultFields: kernel.PrismFieldsFromResult(ar),
-			Checks:        checkDetails,
+			SchemaVersion:       "1.0",
+			GeneratedAt:         time.Now(),
+			HostID:              ar.HostID,
+			Hostname:            ar.Hostname,
+			Framework:           "ASSCOR",
+			SSAMVersion:         version.SSAMVersion,
+			FinalScore:          ar.FinalScore,
+			Threshold:           ar.Threshold,
+			Acceptable:          ar.Acceptable,
+			DomainScores:        domainScores,
+			DomainWeights:       domainWeights,
+			EdgeFactors:         edgeFactors,
+			ThreatCoeff:         ar.ThreatCoeff,
+			SPCScore:            ar.SPCScore,
+			PrismResultFields:   kernel.PrismFieldsFromResult(ar),
+			Checks:              checkDetails,
 			ComplianceFramework: m.cfg.ComplianceFramework,
 		}
 		report.Summary.TotalChecks = rec.CheckCount

@@ -86,8 +86,8 @@ func (s SemVer) Compare(other SemVer) int {
 }
 
 func (s SemVer) Less(other SemVer) bool    { return s.Compare(other) < 0 }
-func (s SemVer) Greater(other SemVer) bool  { return s.Compare(other) > 0 }
-func (s SemVer) Equal(other SemVer) bool    { return s.Compare(other) == 0 }
+func (s SemVer) Greater(other SemVer) bool { return s.Compare(other) > 0 }
+func (s SemVer) Equal(other SemVer) bool   { return s.Compare(other) == 0 }
 
 // Constraint represents a version constraint.
 type Constraint struct {

@@ -34,10 +34,10 @@ func NewRateLimiter(ratePerSec float64, burst int, onRejected func(service, meth
 		burst = int(ratePerSec)
 	}
 	rl := &RateLimiter{
-		rate:       ratePerSec,
-		burst:      burst,
-		buckets:    make(map[string]*clientBucket),
-		onRejected: onRejected,
+		rate:        ratePerSec,
+		burst:       burst,
+		buckets:     make(map[string]*clientBucket),
+		onRejected:  onRejected,
 		stopCleanup: make(chan struct{}),
 	}
 	rl.startAutoCleanup()

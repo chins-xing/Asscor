@@ -27,8 +27,8 @@ import (
 //   - Direct exec (no shell injection vector)
 type ScriptAdapter struct {
 	BaseAdapter
-	scriptPath  string
-	adapterID   string
+	scriptPath string
+	adapterID  string
 }
 
 // NewScriptAdapter creates an adapter for a user-defined script.

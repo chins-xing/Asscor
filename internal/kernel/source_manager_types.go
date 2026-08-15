@@ -30,19 +30,19 @@ const (
 )
 
 type SourceSpec struct {
-	ID             string         `json:"id"`
-	Name           string         `json:"name"`
-	Category       SourceCategory `json:"category"`
-	Priority       SourcePriority `json:"priority"`
-	Version        string         `json:"version"`
-	Description    string         `json:"description"`
-	Interface      string         `json:"interface,omitempty"`
-	AdapterID      string         `json:"adapter_id"`
-	OutputFormat   string         `json:"output_format"`
-	AdaptDiff      string         `json:"adapt_difficulty"`
-	AccessValue    string         `json:"access_value"`
-	DelegatedChecks []string      `json:"delegated_checks,omitempty"`
-	DependsOn      []string       `json:"depends_on,omitempty"`
+	ID              string         `json:"id"`
+	Name            string         `json:"name"`
+	Category        SourceCategory `json:"category"`
+	Priority        SourcePriority `json:"priority"`
+	Version         string         `json:"version"`
+	Description     string         `json:"description"`
+	Interface       string         `json:"interface,omitempty"`
+	AdapterID       string         `json:"adapter_id"`
+	OutputFormat    string         `json:"output_format"`
+	AdaptDiff       string         `json:"adapt_difficulty"`
+	AccessValue     string         `json:"access_value"`
+	DelegatedChecks []string       `json:"delegated_checks,omitempty"`
+	DependsOn       []string       `json:"depends_on,omitempty"`
 }
 
 type SourceStatus struct {

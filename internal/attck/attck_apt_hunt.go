@@ -3,8 +3,8 @@
 package attck
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"math"
 	"sort"
 	"time"
@@ -160,12 +160,12 @@ func (m *Module) ExecuteHunt(hypothesisID string, hostID string) (*HuntResult, e
 		m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 			Topic:   "attck.apt.hunt_confirmed",
 			Payload: result,
-				Source:  "attck.apt",
-			})
-			if m.kc != nil {
-				m.kc.Extensions().Execute(m.kc.Context(), "attck.apt.hunt_confirmed", result)
-			}
+			Source:  "attck.apt",
+		})
+		if m.kc != nil {
+			m.kc.Extensions().Execute(m.kc.Context(), "attck.apt.hunt_confirmed", result)
 		}
+	}
 
 	logger.WithComponent("attck.hunt").Info("hunt executed",
 		"hypothesis", hypothesisID, "host", hostID,

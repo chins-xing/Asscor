@@ -52,13 +52,13 @@ func TestAssessFromResults_Empty(t *testing.T) {
 
 func TestComputeDynamicFinalScore_Formula(t *testing.T) {
 	tests := []struct {
-		name        string
+		name         string
 		domainScores model.DomainScores
-		weights     model.Weights
-		edgeFactor  float64
-		threatCoeff float64
-		spcScore    float64
-		expected    float64
+		weights      model.Weights
+		edgeFactor   float64
+		threatCoeff  float64
+		spcScore     float64
+		expected     float64
 	}{
 		{
 			name: "all perfect",
@@ -178,8 +178,8 @@ func TestComputeDynamicFinalScore_Formula(t *testing.T) {
 
 func TestComputeDynamicDomainScores(t *testing.T) {
 	tests := []struct {
-		name     string
-		checks   []model.CheckResult
+		name        string
+		checks      []model.CheckResult
 		expectedMap map[string]float64
 	}{
 		{
@@ -480,8 +480,8 @@ func TestAssessFromResults_RealWorldScenario(t *testing.T) {
 }
 
 type mockSPCProvider struct {
-	enabled   bool
-	asset     *SPCLocalAsset
+	enabled    bool
+	asset      *SPCLocalAsset
 	correction SPCCorrection
 }
 

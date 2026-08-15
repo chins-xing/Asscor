@@ -31,7 +31,7 @@ func (a *AuditLogInterceptor) Interceptor() Interceptor {
 
 			a.onAudit(InterceptorEvent{
 				Timestamp:   start,
-				ClientAddr:    clientAddr,
+				ClientAddr:  clientAddr,
 				Service:     service,
 				Method:      method,
 				RequestSize: len(payload),

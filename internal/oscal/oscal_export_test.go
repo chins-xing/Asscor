@@ -1,9 +1,9 @@
 package oscal
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"encoding/json"
 	"encoding/xml"
+	"github.com/asscor/asscor/internal/kernel"
 	"strings"
 	"testing"
 	"time"
@@ -25,14 +25,14 @@ func TestOSCALExport_JSON(t *testing.T) {
 			OperationTrust:     80.0,
 			Resilience:         87.0,
 		},
-		ThreatCoeff: 1.0,
-		SPCScore:    0.92,
-		PrismScore:  82.0,
-		PrismSemanticState:  "stable",
-		PrismStableMem:      0.75,
-		PrismDegradedMem:    0.15,
-		PrismUntrustedMem:   0.07,
-		PrismCollapseMem:    0.03,
+		ThreatCoeff:                1.0,
+		SPCScore:                   0.92,
+		PrismScore:                 82.0,
+		PrismSemanticState:         "stable",
+		PrismStableMem:             0.75,
+		PrismDegradedMem:           0.15,
+		PrismUntrustedMem:          0.07,
+		PrismCollapseMem:           0.03,
 		PrismInferenceTrend:        "stable",
 		PrismInferenceConfidence:   0.85,
 		PrismInferenceCollapseRisk: 0.05,
@@ -102,11 +102,11 @@ func TestOSCALExport_XML(t *testing.T) {
 			OperationTrust:     55.0,
 			Resilience:         55.0,
 		},
-		PrismScore:           52.0,
-		PrismSemanticState:   "degraded",
-		PrismInferenceTrend:  "degrading",
+		PrismScore:                 52.0,
+		PrismSemanticState:         "degraded",
+		PrismInferenceTrend:        "degrading",
 		PrismInferenceCollapseRisk: 0.35,
-		PrismRiskVelocity:    -2.1,
+		PrismRiskVelocity:          -2.1,
 		Checks: []model.CheckResult{
 			{CheckID: "AS-001", Domain: "attack_surface", Name: "Unnecessary Services", Passed: false, Delta: -10.0, Detail: "Found unnecessary services"},
 		},
@@ -273,24 +273,24 @@ func TestOSCALExport_ObservationsHaveMethods(t *testing.T) {
 
 func TestOSCALExport_PrismFields(t *testing.T) {
 	result := &model.AssessmentResult{
-		HostID:     "host-006",
-		Hostname:   "prism-test",
-		Timestamp:  time.Now(),
-		FinalScore: 70.0,
-		PrismScore: 65.0,
-		PrismSemanticState:     "degraded",
-		PrismStableMem:         0.20,
-		PrismDegradedMem:       0.55,
-		PrismUntrustedMem:      0.15,
-		PrismCollapseMem:       0.10,
-		PrismInferenceTrend:           "degrading",
-		PrismInferenceConfidence:      0.72,
-		PrismInferenceCollapseRisk:    0.30,
-		PrismInferenceModel:           "MarkovChain",
-		PrismInferenceHorizonDays:     30,
-		PrismRiskVelocity:             -1.5,
-		PrismExternalRisk:             0.35,
-		Checks: []model.CheckResult{},
+		HostID:                     "host-006",
+		Hostname:                   "prism-test",
+		Timestamp:                  time.Now(),
+		FinalScore:                 70.0,
+		PrismScore:                 65.0,
+		PrismSemanticState:         "degraded",
+		PrismStableMem:             0.20,
+		PrismDegradedMem:           0.55,
+		PrismUntrustedMem:          0.15,
+		PrismCollapseMem:           0.10,
+		PrismInferenceTrend:        "degrading",
+		PrismInferenceConfidence:   0.72,
+		PrismInferenceCollapseRisk: 0.30,
+		PrismInferenceModel:        "MarkovChain",
+		PrismInferenceHorizonDays:  30,
+		PrismRiskVelocity:          -1.5,
+		PrismExternalRisk:          0.35,
+		Checks:                     []model.CheckResult{},
 	}
 
 	data, err := ExportOSCAL(result, "json")

@@ -33,11 +33,11 @@ func (s CircuitState) String() string {
 }
 
 type CircuitBreakerConfig struct {
-	FailureRatio  float64
-	MinRequests   int
-	Timeout       time.Duration
-	WindowSize    time.Duration
-	OnStateChange func(service, method string)
+	FailureRatio     float64
+	MinRequests      int
+	Timeout          time.Duration
+	WindowSize       time.Duration
+	OnStateChange    func(service, method string)
 	Extensions       ModuleExtensions
 	HalfOpenMaxFails int
 }
@@ -109,10 +109,10 @@ func (r *circuitRecord) stats(windowSize time.Duration) (failures, successes int
 }
 
 type CircuitBreaker struct {
-	mu           sync.RWMutex
-	records      map[string]*circuitRecord
-	cfg          CircuitBreakerConfig
-	stopCleanup  chan struct{}
+	mu            sync.RWMutex
+	records       map[string]*circuitRecord
+	cfg           CircuitBreakerConfig
+	stopCleanup   chan struct{}
 	cleanupTicker *time.Ticker
 }
 
@@ -130,9 +130,9 @@ func NewCircuitBreaker(cfg CircuitBreakerConfig) *CircuitBreaker {
 		cfg.WindowSize = 60 * time.Second
 	}
 	cb := &CircuitBreaker{
-		records:      make(map[string]*circuitRecord),
-		cfg:          cfg,
-		stopCleanup:  make(chan struct{}),
+		records:       make(map[string]*circuitRecord),
+		cfg:           cfg,
+		stopCleanup:   make(chan struct{}),
 		cleanupTicker: time.NewTicker(5 * time.Minute),
 	}
 	go cb.cleanupLoop()
@@ -217,10 +217,10 @@ func (cb *CircuitBreaker) state(k string) CircuitState {
 		if time.Since(lastChange) > cb.cfg.Timeout {
 			if atomic.CompareAndSwapInt32(&rec.state, int32(StateOpen), int32(StateHalfOpen)) {
 				rec.lastStateChange = time.Now()
-			if cb.cfg.OnStateChange != nil {
-				cb.cfg.OnStateChange(k, "state_change_to_half_open")
-			}
-			cb.fireBreakerExtension(k, "half_open")
+				if cb.cfg.OnStateChange != nil {
+					cb.cfg.OnStateChange(k, "state_change_to_half_open")
+				}
+				cb.fireBreakerExtension(k, "half_open")
 			}
 			return StateHalfOpen
 		}

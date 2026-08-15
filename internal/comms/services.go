@@ -3,12 +3,12 @@
 package comms
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/topology"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
+	"github.com/asscor/asscor/internal/topology"
 	"regexp"
 
 	apiv1 "github.com/asscor/asscor/api/v1"
@@ -18,11 +18,11 @@ import (
 )
 
 var (
-	hostIDPattern    = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
-	cpePattern       = regexp.MustCompile(`^cpe:2\.3:[aoh]:[^:]*:[^:]*:[^:]*:.*$`)
-	maxPackages      = 50000
-	maxCPEs          = 50000
-	maxPackageLen    = 256
+	hostIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
+	cpePattern    = regexp.MustCompile(`^cpe:2\.3:[aoh]:[^:]*:[^:]*:[^:]*:.*$`)
+	maxPackages   = 50000
+	maxCPEs       = 50000
+	maxPackageLen = 256
 )
 
 type KernelServiceImpl struct {
@@ -374,8 +374,8 @@ func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotR
 				}
 			}
 			result = &apiv1.AssessmentResult{
-				FinalScore: ar.FinalScore,
-				Acceptable: ar.Acceptable,
+				FinalScore:   ar.FinalScore,
+				Acceptable:   ar.Acceptable,
 				DomainScores: ar.DomainScores.GetAllDomainScores(),
 				EdgeFactors: map[string]float64{
 					"two_factor_failure":  ar.EdgeFactors.TwoFactorFailure,
@@ -385,7 +385,7 @@ func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotR
 					"no_siem":             ar.EdgeFactors.NoSIEM,
 					"no_ids":              ar.EdgeFactors.NoIDS,
 				},
-				Checks: checks,
+				Checks:              checks,
 				ATTACKCoverage:      convertATTACKCoverage(ar.ATTACKCoverage),
 				ATTACKKillChain:     convertATTACKKillChain(ar.ATTACKKillChain),
 				ATTACKAPTMatches:    convertATTACKAPTMatch(ar.ATTACKAPTMatches),

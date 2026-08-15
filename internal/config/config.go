@@ -16,23 +16,23 @@ type CustomEdgeFactorConfig struct {
 }
 
 type Config struct {
-	Weights      model.Weights
-	Threshold    float64
-	EdgeFactors       model.EdgeFactors
-	EdgeFactorsCustom map[string]CustomEdgeFactorConfig
-	ThreatCoeff  float64
-	SPCEnabled   bool
+	Weights             model.Weights
+	Threshold           float64
+	EdgeFactors         model.EdgeFactors
+	EdgeFactorsCustom   map[string]CustomEdgeFactorConfig
+	ThreatCoeff         float64
+	SPCEnabled          bool
 	ComplianceFramework string
-	DataDir      string
+	DataDir             string
 	HeartbeatTimeoutSec int
 
 	ACINetworkSegmentation float64
-	ACILAPSEnabled        float64
-	ACIOfflineBackup      float64
-	ACIEDRRunning         float64
-	ACIRemoteLogging      float64
-	ACIAppWhitelist       float64
-	ACIDLPMeasures        float64
+	ACILAPSEnabled         float64
+	ACIOfflineBackup       float64
+	ACIEDRRunning          float64
+	ACIRemoteLogging       float64
+	ACIAppWhitelist        float64
+	ACIDLPMeasures         float64
 
 	CheckDeltas map[string]float64
 
@@ -47,13 +47,13 @@ type Config struct {
 
 	ExtMgrCfg ExtMgrConfig
 
-	HotloadEnabled bool
+	HotloadEnabled   bool
 	HotloadIntervalS int
 
 	PrismDefaultTransmission float64
 
 	ScoringEngine string
-	Zones          map[string]string // hostID → network zone mapping
+	Zones         map[string]string // hostID → network zone mapping
 }
 
 type ExtMgrConfig struct {
@@ -81,24 +81,24 @@ func Default() *Config {
 		ThreatCoeff: 1.0,
 		SPCEnabled:  false,
 		EdgeFactors: model.EdgeFactors{
-			TwoFactorFailure: 1.0,
+			TwoFactorFailure:  1.0,
 			SYNCookieDisabled: 0.75,
-			SELinuxDisabled:  0.80,
-			AppArmorDisabled: 0.82,
-			NoSIEM:           0.90,
-			NoIDS:            0.88,
+			SELinuxDisabled:   0.80,
+			AppArmorDisabled:  0.82,
+			NoSIEM:            0.90,
+			NoIDS:             0.88,
 		},
 		ACINetworkSegmentation: -15,
-		ACILAPSEnabled:        -10,
-		ACIOfflineBackup:      -20,
-		ACIEDRRunning:         -10,
-		ACIRemoteLogging:      -10,
-		ACIAppWhitelist:       -10,
-		ACIDLPMeasures:        -5,
-		CheckDeltas:           make(map[string]float64),
-		Extensions:            make(map[string]bool),
-		ExtensionWeights:      make(map[string]float64),
-		AdapterConfig:         make(map[string]string),
+		ACILAPSEnabled:         -10,
+		ACIOfflineBackup:       -20,
+		ACIEDRRunning:          -10,
+		ACIRemoteLogging:       -10,
+		ACIAppWhitelist:        -10,
+		ACIDLPMeasures:         -5,
+		CheckDeltas:            make(map[string]float64),
+		Extensions:             make(map[string]bool),
+		ExtensionWeights:       make(map[string]float64),
+		AdapterConfig:          make(map[string]string),
 		SPC: model.SPCConfig{
 			Enabled:            false,
 			MinPScore:          0.60,
@@ -106,11 +106,11 @@ func Default() *Config {
 			FetchIntervalH:     1,
 			MaxCacheSize:       100000,
 			NVD: model.NVConfig{
-				BaseURL:        "https://services.nvd.nist.gov/rest/json/cves/2.0",
-				APIKey:         "",
-				SyncIntervalH:  6,
-				UseLastMod:     false,
-				NoRejected:     true,
+				BaseURL:       "https://services.nvd.nist.gov/rest/json/cves/2.0",
+				APIKey:        "",
+				SyncIntervalH: 6,
+				UseLastMod:    false,
+				NoRejected:    true,
 			},
 			EPSS: model.EPSSConfig{
 				Enabled:       true,
@@ -123,11 +123,11 @@ func Default() *Config {
 				SyncIntervalH: 24,
 			},
 			MISP: model.MISPConfig{
-				BaseURL:        "",
-				APIKey:         "",
-				VerifyTLS:      true,
-				SyncIntervalH:  1,
-				TLPFilter:      "white",
+				BaseURL:       "",
+				APIKey:        "",
+				VerifyTLS:     true,
+				SyncIntervalH: 1,
+				TLPFilter:     "white",
 			},
 			OSCAL: model.OSCALConfig{
 				Enabled:     false,
@@ -157,8 +157,8 @@ func Default() *Config {
 			ExecutionTimeout: 30,
 			WorkingDir:       "./extensions/runtime",
 		},
-		HotloadEnabled:   false,
-		HotloadIntervalS: 30,
+		HotloadEnabled:           false,
+		HotloadIntervalS:         30,
 		PrismDefaultTransmission: 0.3,
 		ATTACK: model.ATTACKConfig{
 			Enabled:              true,
@@ -206,47 +206,70 @@ func Parse(content string) (*Config, error) {
 			}
 			if f, ok := getFloat(sec, k); ok {
 				switch k {
-				case "attack_surface":     cfg.Weights.AttackSurface = f
-				case "business_continuity": cfg.Weights.BusinessContinuity = f
-				case "operation_trust":    cfg.Weights.OperationTrust = f
-				case "resilience":         cfg.Weights.Resilience = f
-				case "kernel_security":    cfg.Weights.KernelSecurity = f
+				case "attack_surface":
+					cfg.Weights.AttackSurface = f
+				case "business_continuity":
+					cfg.Weights.BusinessContinuity = f
+				case "operation_trust":
+					cfg.Weights.OperationTrust = f
+				case "resilience":
+					cfg.Weights.Resilience = f
+				case "kernel_security":
+					cfg.Weights.KernelSecurity = f
 				}
 			}
 		}
 	}
 
 	if sec, ok := sections["acceptability"]; ok {
-		if f, ok := getFloat(sec, "threshold"); ok { cfg.Threshold = f }
-		if v, ok := sec["compliance_framework"]; ok { cfg.ComplianceFramework = v }
-		if v, ok := sec["data_dir"]; ok { cfg.DataDir = v }
+		if f, ok := getFloat(sec, "threshold"); ok {
+			cfg.Threshold = f
+		}
+		if v, ok := sec["compliance_framework"]; ok {
+			cfg.ComplianceFramework = v
+		}
+		if v, ok := sec["data_dir"]; ok {
+			cfg.DataDir = v
+		}
 	}
 
 	if sec, ok := sections["global"]; ok {
-		if v, ok := sec["data_dir"]; ok && v != "" { cfg.DataDir = v }
+		if v, ok := sec["data_dir"]; ok && v != "" {
+			cfg.DataDir = v
+		}
 	}
 
 	if sec, ok := sections["edge_factors"]; ok {
 		for k := range sec {
 			if f, ok := getFloat(sec, k); ok {
 				switch k {
-				case "two_factor_failure":   cfg.EdgeFactors.TwoFactorFailure = f
-				case "syn_cookie_disabled":   cfg.EdgeFactors.SYNCookieDisabled = f
-				case "selinux_disabled":      cfg.EdgeFactors.SELinuxDisabled = f
-				case "apparmor_disabled":     cfg.EdgeFactors.AppArmorDisabled = f
-				case "no_siem":               cfg.EdgeFactors.NoSIEM = f
-				case "no_ids":                cfg.EdgeFactors.NoIDS = f
+				case "two_factor_failure":
+					cfg.EdgeFactors.TwoFactorFailure = f
+				case "syn_cookie_disabled":
+					cfg.EdgeFactors.SYNCookieDisabled = f
+				case "selinux_disabled":
+					cfg.EdgeFactors.SELinuxDisabled = f
+				case "apparmor_disabled":
+					cfg.EdgeFactors.AppArmorDisabled = f
+				case "no_siem":
+					cfg.EdgeFactors.NoSIEM = f
+				case "no_ids":
+					cfg.EdgeFactors.NoIDS = f
 				}
 			}
 		}
 	}
 
 	if sec, ok := sections["edge_factors.level4_override"]; ok {
-		if f, ok := getFloat(sec, "two_factor_failure"); ok { cfg.EdgeFactors.TwoFactorFailure = f }
+		if f, ok := getFloat(sec, "two_factor_failure"); ok {
+			cfg.EdgeFactors.TwoFactorFailure = f
+		}
 	}
 
 	if sec, ok := sections["threat"]; ok {
-		if f, ok := getFloat(sec, "coefficient"); ok { cfg.ThreatCoeff = f }
+		if f, ok := getFloat(sec, "coefficient"); ok {
+			cfg.ThreatCoeff = f
+		}
 		cfg.SPCEnabled = getBool(sec, "spc_enabled")
 	}
 
@@ -254,13 +277,20 @@ func Parse(content string) (*Config, error) {
 		for k := range sec {
 			if f, ok := getFloat(sec, k); ok {
 				switch k {
-				case "aci_network_segmentation": cfg.ACINetworkSegmentation = f
-				case "aci_laps_enabled":         cfg.ACILAPSEnabled = f
-				case "aci_offline_backup":       cfg.ACIOfflineBackup = f
-				case "aci_edr_running":          cfg.ACIEDRRunning = f
-				case "aci_remote_logging":       cfg.ACIRemoteLogging = f
-				case "aci_app_whitelist":        cfg.ACIAppWhitelist = f
-				case "aci_dlp_measures":         cfg.ACIDLPMeasures = f
+				case "aci_network_segmentation":
+					cfg.ACINetworkSegmentation = f
+				case "aci_laps_enabled":
+					cfg.ACILAPSEnabled = f
+				case "aci_offline_backup":
+					cfg.ACIOfflineBackup = f
+				case "aci_edr_running":
+					cfg.ACIEDRRunning = f
+				case "aci_remote_logging":
+					cfg.ACIRemoteLogging = f
+				case "aci_app_whitelist":
+					cfg.ACIAppWhitelist = f
+				case "aci_dlp_measures":
+					cfg.ACIDLPMeasures = f
 				}
 			}
 		}
@@ -595,7 +625,7 @@ func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 		"falco": true, "clamav": true, "osv_scanner": true,
 		"aide": true, "nikto": true,
 		"management_adapters": true,
-		"ansible": true, "netbox": true, "snipe_it": true,
+		"ansible":             true, "netbox": true, "snipe_it": true,
 		"freeipa": true, "keycloak": true, "wazuh_siem": true,
 		"rundeck": true, "jira": true, "terraform": true, "opentofu": true,
 		"interceptor": true, "webui": true, "prism": true, "integrity": true,

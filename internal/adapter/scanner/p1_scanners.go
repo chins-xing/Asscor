@@ -128,17 +128,17 @@ func NewWazuhAgentAdapter() *WazuhAgentAdapter {
 }
 
 type wazuhAlert struct {
-	Timestamp string          `json:"timestamp"`
-	Rule      wazuhRule       `json:"rule"`
-	Agent     wazuhAgentInfo  `json:"agent"`
-	Location  string          `json:"location"`
-	FullLog   string          `json:"full_log"`
+	Timestamp string         `json:"timestamp"`
+	Rule      wazuhRule      `json:"rule"`
+	Agent     wazuhAgentInfo `json:"agent"`
+	Location  string         `json:"location"`
+	FullLog   string         `json:"full_log"`
 }
 
 type wazuhRule struct {
-	ID          int    `json:"id"`
-	Level       int    `json:"level"`
-	Description string `json:"description"`
+	ID          int      `json:"id"`
+	Level       int      `json:"level"`
+	Description string   `json:"description"`
 	Groups      []string `json:"groups"`
 }
 
@@ -201,11 +201,11 @@ func NewSuricataAdapter() *SuricataAdapter {
 }
 
 type suricataEVE struct {
-	Timestamp   string          `json:"timestamp"`
-	EventType   string          `json:"event_type"`
-	SrcIP       string          `json:"src_ip"`
-	DestIP      string          `json:"dest_ip"`
-	Alert       *suricataAlert  `json:"alert"`
+	Timestamp string         `json:"timestamp"`
+	EventType string         `json:"event_type"`
+	SrcIP     string         `json:"src_ip"`
+	DestIP    string         `json:"dest_ip"`
+	Alert     *suricataAlert `json:"alert"`
 }
 
 type suricataAlert struct {
@@ -255,9 +255,9 @@ func (s *SuricataAdapter) Fetch(ctx context.Context, config map[string]string) (
 }
 
 type suricataCombinedOutput struct {
-	BuildInfo string               `json:"build_info"`
-	Alerts    []suricataEVEAlert   `json:"alerts,omitempty"`
-	Stats     string               `json:"stats,omitempty"`
+	BuildInfo string             `json:"build_info"`
+	Alerts    []suricataEVEAlert `json:"alerts,omitempty"`
+	Stats     string             `json:"stats,omitempty"`
 }
 
 type suricataEVEAlert struct {
@@ -429,9 +429,9 @@ func (f *FalcoAdapter) Fetch(ctx context.Context, config map[string]string) ([]b
 }
 
 type falcoCombinedOutput struct {
-	Version    string             `json:"version"`
-	Events     []falcoLogEvent    `json:"events,omitempty"`
-	JSONEvents []falcoJSONEvent   `json:"json_events,omitempty"`
+	Version    string           `json:"version"`
+	Events     []falcoLogEvent  `json:"events,omitempty"`
+	JSONEvents []falcoJSONEvent `json:"json_events,omitempty"`
 }
 
 type falcoLogEvent struct {
@@ -441,12 +441,12 @@ type falcoLogEvent struct {
 }
 
 type falcoJSONEvent struct {
-	Time       string `json:"time"`
-	Rule       string `json:"rule"`
-	Priority   string `json:"priority"`
-	Output     string `json:"output"`
-	Source     string `json:"source"`
-	Tags       string `json:"tags,omitempty"`
+	Time     string `json:"time"`
+	Rule     string `json:"rule"`
+	Priority string `json:"priority"`
+	Output   string `json:"output"`
+	Source   string `json:"source"`
+	Tags     string `json:"tags,omitempty"`
 }
 
 func parseFalcoLogLines(data []byte, maxEvents int) []falcoLogEvent {
@@ -750,8 +750,8 @@ func (c *ClamAVAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) 
 				Domain:      model.DomainResilience,
 				DelegatedTo: "clamav",
 				Metadata: map[string]string{
-					"file":     filePath,
-					"malware":  malwareName,
+					"file":    filePath,
+					"malware": malwareName,
 				},
 			})
 			idx++

@@ -16,17 +16,17 @@ import (
 )
 
 type netboxDevice struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	DisplayName  string `json:"display_name"`
-	DeviceType   netboxRef `json:"device_type"`
-	DeviceRole   netboxRef `json:"device_role"`
-	Site         netboxRef `json:"site"`
-	Status       netboxStatus `json:"status"`
-	PrimaryIP    netboxIP `json:"primary_ip"`
-	Serial       string `json:"serial"`
-	AssetTag     string `json:"asset_tag"`
-	Comments     string `json:"comments"`
+	ID           int                    `json:"id"`
+	Name         string                 `json:"name"`
+	DisplayName  string                 `json:"display_name"`
+	DeviceType   netboxRef              `json:"device_type"`
+	DeviceRole   netboxRef              `json:"device_role"`
+	Site         netboxRef              `json:"site"`
+	Status       netboxStatus           `json:"status"`
+	PrimaryIP    netboxIP               `json:"primary_ip"`
+	Serial       string                 `json:"serial"`
+	AssetTag     string                 `json:"asset_tag"`
+	Comments     string                 `json:"comments"`
 	CustomFields map[string]interface{} `json:"custom_fields"`
 }
 
@@ -151,13 +151,13 @@ func (n *NetBoxAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) 
 			Detail:      fmt.Sprintf("Asset %s (role: %s) at site %s, status: %s", dev.Name, dev.DeviceRole.Name, dev.Site.Name, dev.Status.Label),
 			Domain:      model.DomainBusinessContinuity,
 			Metadata: map[string]string{
-				"netbox_id":          fmt.Sprintf("%d", dev.ID),
-				"site":               dev.Site.Name,
-				"role":               dev.DeviceRole.Name,
-				"status":             dev.Status.Value,
-				"criticality":        criticality,
-				"serial":             dev.Serial,
-				"asset_tag":          dev.AssetTag,
+				"netbox_id":   fmt.Sprintf("%d", dev.ID),
+				"site":        dev.Site.Name,
+				"role":        dev.DeviceRole.Name,
+				"status":      dev.Status.Value,
+				"criticality": criticality,
+				"serial":      dev.Serial,
+				"asset_tag":   dev.AssetTag,
 			},
 		}
 

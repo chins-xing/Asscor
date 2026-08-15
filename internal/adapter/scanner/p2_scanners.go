@@ -19,9 +19,9 @@ type osvResult struct {
 }
 
 type osvPackageResult struct {
-	Package      osvPackage      `json:"package"`
-	Source       osvSource       `json:"source"`
-	Vulnerabilities []osvVuln    `json:"vulnerabilities"`
+	Package         osvPackage `json:"package"`
+	Source          osvSource  `json:"source"`
+	Vulnerabilities []osvVuln  `json:"vulnerabilities"`
 }
 
 type osvPackage struct {
@@ -36,11 +36,11 @@ type osvSource struct {
 }
 
 type osvVuln struct {
-	ID      string   `json:"id"`
-	Summary string   `json:"summary"`
-	Details string   `json:"details"`
-	Aliases []string `json:"aliases"`
-	Severity []osvSeverity `json:"severity"`
+	ID               string        `json:"id"`
+	Summary          string        `json:"summary"`
+	Details          string        `json:"details"`
+	Aliases          []string      `json:"aliases"`
+	Severity         []osvSeverity `json:"severity"`
 	DatabaseSpecific struct {
 		URL string `json:"url"`
 	} `json:"database_specific"`

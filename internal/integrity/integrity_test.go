@@ -14,12 +14,12 @@ func TestSigner_SignVerifies(t *testing.T) {
 	s := GetSigner()
 
 	r := &model.AssessmentResult{
-		HostID:      "test-host",
-		Hostname:    "test",
-		FinalScore:  85.5,
-		Acceptable:  true,
-		Threshold:   80,
-		SPCScore:    0.95,
+		HostID:     "test-host",
+		Hostname:   "test",
+		FinalScore: 85.5,
+		Acceptable: true,
+		Threshold:  80,
+		SPCScore:   0.95,
 		DomainScores: model.DomainScores{
 			AttackSurface:      90,
 			BusinessContinuity: 85,

@@ -131,11 +131,11 @@ func DefaultInterceptorConfig() InterceptorConfig {
 }
 
 type Interceptors struct {
-	Chain              *InterceptorChain
-	RateLimiter        *RateLimiter
-	CircuitBreaker     *CircuitBreaker
-	AuditLog           *AuditLogInterceptor
-	config             InterceptorConfig
+	Chain          *InterceptorChain
+	RateLimiter    *RateLimiter
+	CircuitBreaker *CircuitBreaker
+	AuditLog       *AuditLogInterceptor
+	config         InterceptorConfig
 }
 
 func NewInterceptors(cfg InterceptorConfig) *Interceptors {

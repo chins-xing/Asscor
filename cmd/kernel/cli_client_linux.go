@@ -22,9 +22,9 @@ const (
 
 type termios struct {
 	Iflag, Oflag, Cflag, Lflag uint32
-	Line                        uint8
-	Cc                          [32]uint8
-	_                           [3]byte
+	Line                       uint8
+	Cc                         [32]uint8
+	_                          [3]byte
 }
 
 func makeRaw(fd uintptr) (*termios, error) {

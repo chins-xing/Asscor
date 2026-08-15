@@ -56,10 +56,10 @@ func ks001() model.CheckItem {
 }
 
 type cveCacheEntry struct {
-	CVEID           string   `json:"cve_id"`
-	Description     string   `json:"description"`
+	CVEID            string   `json:"cve_id"`
+	Description      string   `json:"description"`
 	AffectedVersions []string `json:"affected_versions"`
-	KernelVersions  []string `json:"kernel_versions"`
+	KernelVersions   []string `json:"kernel_versions"`
 }
 
 func checkKernelCVEs(kernelVer string) int {

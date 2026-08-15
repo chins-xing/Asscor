@@ -117,7 +117,7 @@ func (m *PBSnapshotRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *PBSnapshotRequest) ProtoMessage()  {}
 
 type PBSnapshotResponse struct {
-	HostId string             `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
+	HostId string              `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
 	Result *PBAssessmentResult `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
 }
 
@@ -298,8 +298,8 @@ func RegisterAgentServiceServer(s grpc.ServiceRegistrar, srv AgentServiceServer)
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName:    "StreamLogs",
-				ServerStreams:  false,
-				ClientStreams:  true,
+				ServerStreams: false,
+				ClientStreams: true,
 			},
 		},
 		Metadata: "api/v1/ASSCOR.proto",
@@ -398,8 +398,8 @@ func (c *agentServiceClient) ExecuteCommand(ctx context.Context, req *PBCommandR
 func (c *agentServiceClient) StreamLogs(ctx context.Context, opts ...grpc.CallOption) (AgentService_StreamLogsClient, error) {
 	stream, err := c.cc.NewStream(ctx, &grpc.StreamDesc{
 		StreamName:    "StreamLogs",
-		ServerStreams:  false,
-		ClientStreams:  true,
+		ServerStreams: false,
+		ClientStreams: true,
 	}, "/ASSCOR.v1.AgentService/StreamLogs", opts...)
 	if err != nil {
 		return nil, err

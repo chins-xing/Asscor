@@ -204,15 +204,15 @@ func (m *Module) onAssessmentResult(ctx context.Context, msg kernel.Message) err
 
 		preemptive := []kernel.PolicyAction{
 			{
-				HostID:  result.HostID,
-				Action:  "isolate_host",
-				Params:  map[string]string{"host_id": result.HostID},
+				HostID: result.HostID,
+				Action: "isolate_host",
+				Params: map[string]string{"host_id": result.HostID},
 				Message: fmt.Sprintf("PREEMPTIVE ISOLATION: host %s Prism collapse risk %.2f (trend: %s, SSAM score: %.2f)",
 					result.HostID, result.PrismInferenceCollapseRisk, result.PrismInferenceTrend, result.FinalScore),
 			},
 			{
-				HostID:  result.HostID,
-				Action:  "notify_admin",
+				HostID: result.HostID,
+				Action: "notify_admin",
 				Message: fmt.Sprintf("Prism preemptive: host %s collapse risk %.2f",
 					result.HostID, result.PrismInferenceCollapseRisk),
 			},

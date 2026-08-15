@@ -13,16 +13,16 @@ import (
 
 type mockKC struct{}
 
-func (m *mockKC) Container() *kernel.Container               { return kernel.NewContainer() }
-func (m *mockKC) Bus() *kernel.Bus                           { return kernel.NewBus(512) }
-func (m *mockKC) Extensions() kernel.ModuleExtensions        { return kernel.NewExtensionRegistry() }
-func (m *mockKC) Context() context.Context                   { return context.Background() }
-func (m *mockKC) Config() map[string]string                  { return make(map[string]string) }
-func (m *mockKC) SetConfig(key, value string)                {}
-func (m *mockKC) GetConfigObj() *config.Config               { return nil }
-func (m *mockKC) SetConfigObj(c *config.Config)              {}
+func (m *mockKC) Container() *kernel.Container                { return kernel.NewContainer() }
+func (m *mockKC) Bus() *kernel.Bus                            { return kernel.NewBus(512) }
+func (m *mockKC) Extensions() kernel.ModuleExtensions         { return kernel.NewExtensionRegistry() }
+func (m *mockKC) Context() context.Context                    { return context.Background() }
+func (m *mockKC) Config() map[string]string                   { return make(map[string]string) }
+func (m *mockKC) SetConfig(key, value string)                 {}
+func (m *mockKC) GetConfigObj() *config.Config                { return nil }
+func (m *mockKC) SetConfigObj(c *config.Config)               {}
 func (m *mockKC) GetPlugin(name string) (kernel.Plugin, bool) { return nil, false }
-func (m *mockKC) ListPlugins() []kernel.PluginInfo           { return nil }
+func (m *mockKC) ListPlugins() []kernel.PluginInfo            { return nil }
 func (m *mockKC) HealthCheck(ctx context.Context) []kernel.PluginHealthStatus {
 	return nil
 }

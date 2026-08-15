@@ -179,14 +179,14 @@ func agentStatusHandler(ctx *CommandContext, agents AgentAccess) *CommandResult 
 
 	if ctx.JSON {
 		data := map[string]interface{}{
-			"host_id":    agent.HostID,
-			"hostname":   agent.Hostname,
-			"version":    agent.Version,
-			"active":     agent.Active,
-			"alive":      alive,
-			"last_seen":  agent.LastSeen.Format(time.RFC3339),
-			"registered": agent.Registered.Format(time.RFC3339),
-			"uptime":     time.Since(agent.Registered).Round(time.Second).String(),
+			"host_id":     agent.HostID,
+			"hostname":    agent.Hostname,
+			"version":     agent.Version,
+			"active":      agent.Active,
+			"alive":       alive,
+			"last_seen":   agent.LastSeen.Format(time.RFC3339),
+			"registered":  agent.Registered.Format(time.RFC3339),
+			"uptime":      time.Since(agent.Registered).Round(time.Second).String(),
 			"connections": agent.Connections,
 		}
 		jsonData, _ := json.MarshalIndent(data, "", "  ")
@@ -247,9 +247,9 @@ func agentLifecycleAction(ctx *CommandContext, agents AgentAccess, action string
 				status = fmt.Sprintf("error: %v", err)
 			}
 			results = append(results, map[string]string{
-				"host_id":   a.HostID,
+				"host_id":    a.HostID,
 				"command_id": cmdID,
-				"status":    status,
+				"status":     status,
 			})
 		}
 

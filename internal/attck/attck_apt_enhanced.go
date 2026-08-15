@@ -3,8 +3,8 @@
 package attck
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"math"
 	"sort"
 	"strings"
@@ -14,19 +14,19 @@ import (
 )
 
 type GroupBaseline struct {
-	Role         string             `json:"role"`
-	Metrics      map[string]float64 `json:"metrics"`
-	SampleCount  int                `json:"sample_count"`
-	HostIDs      []string           `json:"host_ids"`
-	ComputedAt   time.Time          `json:"computed_at"`
+	Role        string             `json:"role"`
+	Metrics     map[string]float64 `json:"metrics"`
+	SampleCount int                `json:"sample_count"`
+	HostIDs     []string           `json:"host_ids"`
+	ComputedAt  time.Time          `json:"computed_at"`
 }
 
 type BayesianNode struct {
-	Name        string   `json:"name"`
-	States      []string `json:"states"`
-	Parents     []string `json:"parents"`
+	Name        string      `json:"name"`
+	States      []string    `json:"states"`
+	Parents     []string    `json:"parents"`
 	CPT         [][]float64 `json:"cpt"`
-	Description string   `json:"description"`
+	Description string      `json:"description"`
 }
 
 type BayesianNetwork struct {
@@ -41,21 +41,21 @@ type BayesianEdge struct {
 }
 
 type BayesianInferenceResult struct {
-	TargetNode  string             `json:"target_node"`
+	TargetNode    string             `json:"target_node"`
 	Probabilities map[string]float64 `json:"probabilities"`
-	Evidence     map[string]string  `json:"evidence"`
-	TopActor     string             `json:"top_actor"`
-	TopProb      float64            `json:"top_probability"`
-	Confidence   float64            `json:"confidence"`
+	Evidence      map[string]string  `json:"evidence"`
+	TopActor      string             `json:"top_actor"`
+	TopProb       float64            `json:"top_probability"`
+	Confidence    float64            `json:"confidence"`
 }
 
 type ReputationEntry struct {
-	Destination string   `json:"destination"`
-	Service     string   `json:"service"`
-	Category    string   `json:"category"`
-	IsLegitimate bool    `json:"is_legitimate"`
-	Reason      string   `json:"reason"`
-	Source      string   `json:"source"`
+	Destination  string `json:"destination"`
+	Service      string `json:"service"`
+	Category     string `json:"category"`
+	IsLegitimate bool   `json:"is_legitimate"`
+	Reason       string `json:"reason"`
+	Source       string `json:"source"`
 }
 
 type YARARule struct {
@@ -87,41 +87,39 @@ type SigmaRule struct {
 }
 
 type RuleMatchResult struct {
-	RuleID      string   `json:"rule_id"`
-	RuleName    string   `json:"rule_name"`
-	RuleType    string   `json:"rule_type"`
-	TechniqueID string   `json:"technique_id"`
-	TacticIDs   []string `json:"tactic_ids"`
-	Severity    string   `json:"severity"`
-	MatchDetail string   `json:"match_detail"`
-	HostID      string   `json:"host_id"`
-	Confidence  float64  `json:"confidence"`
+	RuleID      string    `json:"rule_id"`
+	RuleName    string    `json:"rule_name"`
+	RuleType    string    `json:"rule_type"`
+	TechniqueID string    `json:"technique_id"`
+	TacticIDs   []string  `json:"tactic_ids"`
+	Severity    string    `json:"severity"`
+	MatchDetail string    `json:"match_detail"`
+	HostID      string    `json:"host_id"`
+	Confidence  float64   `json:"confidence"`
 	Timestamp   time.Time `json:"timestamp"`
 }
 
 type CrossHostConnection struct {
-	SourceHost string    `json:"source_host"`
-	DestHost   string    `json:"dest_host"`
-	Port       int       `json:"port"`
-	Protocol   string    `json:"protocol"`
-	Service    string    `json:"service"`
-	Count      int       `json:"connection_count"`
-	FirstSeen  time.Time `json:"first_seen"`
-	LastSeen   time.Time `json:"last_seen"`
-	IsAnomalous bool     `json:"is_anomalous"`
-	TechniqueID string   `json:"technique_id"`
+	SourceHost  string    `json:"source_host"`
+	DestHost    string    `json:"dest_host"`
+	Port        int       `json:"port"`
+	Protocol    string    `json:"protocol"`
+	Service     string    `json:"service"`
+	Count       int       `json:"connection_count"`
+	FirstSeen   time.Time `json:"first_seen"`
+	LastSeen    time.Time `json:"last_seen"`
+	IsAnomalous bool      `json:"is_anomalous"`
+	TechniqueID string    `json:"technique_id"`
 }
 
 type LateralMovementEvidence struct {
-	SourceHost     string               `json:"source_host"`
-	TargetHosts    []string             `json:"target_hosts"`
-	TechniqueID    string               `json:"technique_id"`
-	Connections    []CrossHostConnection `json:"connections"`
-	Score          float64              `json:"score"`
-	Timestamp      time.Time            `json:"timestamp"`
+	SourceHost  string                `json:"source_host"`
+	TargetHosts []string              `json:"target_hosts"`
+	TechniqueID string                `json:"technique_id"`
+	Connections []CrossHostConnection `json:"connections"`
+	Score       float64               `json:"score"`
+	Timestamp   time.Time             `json:"timestamp"`
 }
-
-
 
 func (m *Module) ComputeGroupBaseline(role string) *GroupBaseline {
 	m.mu.RLock()

@@ -3,9 +3,9 @@
 package spc
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"encoding/json"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"net/http"
 	"strings"
 	"time"
@@ -56,17 +56,17 @@ func (m *Module) FetchFromCISAKEV() kernel.SPCFetchResult {
 		DateReleased    string `json:"dateReleased"`
 		Count           int    `json:"count"`
 		Vulnerabilities []struct {
-			CVEID                       string   `json:"cveID"`
-			VendorProject               string   `json:"vendorProject"`
-			Product                     string   `json:"product"`
-			VulnerabilityName           string   `json:"vulnerabilityName"`
-			DateAdded                   string   `json:"dateAdded"`
-			ShortDescription            string   `json:"shortDescription"`
-			RequiredAction              string   `json:"requiredAction"`
-			DueDate                     string   `json:"dueDate"`
-			KnownRansomwareCampaignUse  string   `json:"knownRansomwareCampaignUse"`
-			Notes                       string   `json:"notes"`
-			CWEs                        []string `json:"cwes"`
+			CVEID                      string   `json:"cveID"`
+			VendorProject              string   `json:"vendorProject"`
+			Product                    string   `json:"product"`
+			VulnerabilityName          string   `json:"vulnerabilityName"`
+			DateAdded                  string   `json:"dateAdded"`
+			ShortDescription           string   `json:"shortDescription"`
+			RequiredAction             string   `json:"requiredAction"`
+			DueDate                    string   `json:"dueDate"`
+			KnownRansomwareCampaignUse string   `json:"knownRansomwareCampaignUse"`
+			Notes                      string   `json:"notes"`
+			CWEs                       []string `json:"cwes"`
 		} `json:"vulnerabilities"`
 	}
 
@@ -119,11 +119,11 @@ func (m *Module) FetchFromCISAKEV() kernel.SPCFetchResult {
 				aptAssoc = []string{"ransomware"}
 			}
 			m.cveCache = append(m.cveCache, kernel.SPCCVEScore{
-				CVEID:          entry.CVEID,
-				InKEV:          true,
-				APTGroupAssoc:  aptAssoc,
-				CWEs:           entry.CWEs,
-				Description:    entry.Description,
+				CVEID:         entry.CVEID,
+				InKEV:         true,
+				APTGroupAssoc: aptAssoc,
+				CWEs:          entry.CWEs,
+				Description:   entry.Description,
 			})
 			kevCreated++
 		}

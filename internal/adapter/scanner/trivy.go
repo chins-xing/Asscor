@@ -20,26 +20,26 @@ type trivyResult struct {
 }
 
 type trivyScanResult struct {
-	Target          string              `json:"Target"`
-	Type            string              `json:"Type"`
-	Vulnerabilities []trivyVulnerability `json:"Vulnerabilities"`
-	Misconfigurations []trivyMisconfig  `json:"Misconfigurations"`
+	Target            string               `json:"Target"`
+	Type              string               `json:"Type"`
+	Vulnerabilities   []trivyVulnerability `json:"Vulnerabilities"`
+	Misconfigurations []trivyMisconfig     `json:"Misconfigurations"`
 }
 
 type trivyVulnerability struct {
-	VulnerabilityID  string  `json:"VulnerabilityID"`
-	PkgName          string  `json:"PkgName"`
-	Severity         string  `json:"Severity"`
-	Title            string  `json:"Title"`
-	Description      string  `json:"Description"`
-	FixedVersion     string  `json:"FixedVersion"`
-	PrimaryURL       string  `json:"PrimaryURL"`
-	CVSS             map[string]trivyCVSS `json:"CVSS"`
+	VulnerabilityID string               `json:"VulnerabilityID"`
+	PkgName         string               `json:"PkgName"`
+	Severity        string               `json:"Severity"`
+	Title           string               `json:"Title"`
+	Description     string               `json:"Description"`
+	FixedVersion    string               `json:"FixedVersion"`
+	PrimaryURL      string               `json:"PrimaryURL"`
+	CVSS            map[string]trivyCVSS `json:"CVSS"`
 }
 
 type trivyCVSS struct {
-	V3Score float64 `json:"V3Score"`
-	V3Vector string `json:"V3Vector"`
+	V3Score  float64 `json:"V3Score"`
+	V3Vector string  `json:"V3Vector"`
 }
 
 type trivyMisconfig struct {

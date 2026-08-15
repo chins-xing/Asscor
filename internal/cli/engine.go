@@ -16,24 +16,24 @@ import (
 type ExitCode int
 
 const (
-	ExitOK      ExitCode = 0
-	ExitError   ExitCode = 1
-	ExitUsage   ExitCode = 2
-	ExitCancel  ExitCode = 130
+	ExitOK     ExitCode = 0
+	ExitError  ExitCode = 1
+	ExitUsage  ExitCode = 2
+	ExitCancel ExitCode = 130
 )
 
 type CommandCategory string
 
 const (
-	CategoryCore    CommandCategory = "core"
-	CategoryAssess  CommandCategory = "assess"
-	CategorySPC     CommandCategory = "spc"
-	CategoryATTACK  CommandCategory = "attck"
-	CategoryPlugin  CommandCategory = "plugin"
-	CategorySystem  CommandCategory = "system"
-	CategoryDebug   CommandCategory = "debug"
-	CategoryAgent   CommandCategory = "agent"
-	CategorySource  CommandCategory = "source"
+	CategoryCore   CommandCategory = "core"
+	CategoryAssess CommandCategory = "assess"
+	CategorySPC    CommandCategory = "spc"
+	CategoryATTACK CommandCategory = "attck"
+	CategoryPlugin CommandCategory = "plugin"
+	CategorySystem CommandCategory = "system"
+	CategoryDebug  CommandCategory = "debug"
+	CategoryAgent  CommandCategory = "agent"
+	CategorySource CommandCategory = "source"
 )
 
 type CommandParam struct {
@@ -73,27 +73,27 @@ type CommandInfo struct {
 }
 
 type CommandContext struct {
-	Ctx      context.Context
-	Args     []string
-	Params   map[string]string
-	Options  map[string]string
-	Flags    map[string]bool
-	Repeat   map[string][]string
-	Stdin    io.Reader
-	Stdout   io.Writer
-	Stderr   io.Writer
-	Kernel   KernelAccess
-	Verbose  bool
-	JSON     bool
-	Quiet    bool
+	Ctx     context.Context
+	Args    []string
+	Params  map[string]string
+	Options map[string]string
+	Flags   map[string]bool
+	Repeat  map[string][]string
+	Stdin   io.Reader
+	Stdout  io.Writer
+	Stderr  io.Writer
+	Kernel  KernelAccess
+	Verbose bool
+	JSON    bool
+	Quiet   bool
 }
 
 type CommandResult struct {
-	ExitCode   ExitCode
-	Output     string
-	Err        error
-	Data       interface{}
-	Duration   time.Duration
+	ExitCode ExitCode
+	Output   string
+	Err      error
+	Data     interface{}
+	Duration time.Duration
 }
 
 type CommandHandler func(ctx *CommandContext) *CommandResult
@@ -150,10 +150,10 @@ type LogEntry struct {
 type PermissionLevel int
 
 const (
-	PermRead    PermissionLevel = 0
-	PermWrite   PermissionLevel = 1
-	PermAdmin   PermissionLevel = 2
-	PermSuper   PermissionLevel = 3
+	PermRead  PermissionLevel = 0
+	PermWrite PermissionLevel = 1
+	PermAdmin PermissionLevel = 2
+	PermSuper PermissionLevel = 3
 )
 
 type KernelAccess interface {
@@ -193,16 +193,16 @@ type SourceAccess interface {
 type BusAccess = kernel.BusAccess
 
 type commandEntry struct {
-	info    CommandInfo
-	handler CommandHandler
+	info        CommandInfo
+	handler     CommandHandler
 	completions func(ctx *CommandContext, partial string) []string
-	source  string
+	source      string
 }
 
 type Registry struct {
-	mu       sync.RWMutex
-	commands map[string]*commandEntry
-	aliases  map[string]string
+	mu         sync.RWMutex
+	commands   map[string]*commandEntry
+	aliases    map[string]string
 	categories map[string]CommandCategory
 }
 
@@ -347,16 +347,16 @@ func (r *Registry) Completions(partial string) []string {
 }
 
 type ParsedInput struct {
-	Command  string
-	Args     []string
-	Params   map[string]string
-	Options  map[string]string
-	Flags    map[string]bool
-	Repeat   map[string][]string
-	Verbose  bool
-	JSON     bool
-	Quiet    bool
-	Help     bool
+	Command string
+	Args    []string
+	Params  map[string]string
+	Options map[string]string
+	Flags   map[string]bool
+	Repeat  map[string][]string
+	Verbose bool
+	JSON    bool
+	Quiet   bool
+	Help    bool
 }
 
 func ParseInput(tokens []string) *ParsedInput {
@@ -440,10 +440,10 @@ type Engine struct {
 	history  *History
 	output   *Output
 
-	mu       sync.RWMutex
-	running  bool
-	ctx      context.Context
-	cancel   context.CancelFunc
+	mu      sync.RWMutex
+	running bool
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 func NewEngine(kernel KernelAccess) *Engine {
@@ -472,8 +472,8 @@ func (e *Engine) Output() *Output {
 
 func (e *Engine) RegisterBuiltinCommands() {
 	builtins := []struct {
-		info    CommandInfo
-		handler CommandHandler
+		info        CommandInfo
+		handler     CommandHandler
 		completions func(ctx *CommandContext, partial string) []string
 	}{
 		{helpCmdInfo, helpCmdHandler, helpCompletions},
@@ -500,13 +500,13 @@ func (e *Engine) RegisterBuiltinCommands() {
 	}
 
 	aliases := map[string]string{
-		"?":     "help",
-		"v":     "version",
-		"st":    "status",
-		"h":     "history",
-		"ag":    "agent",
-		"ak":    "attck",
-		"dg":    "diag",
+		"?":  "help",
+		"v":  "version",
+		"st": "status",
+		"h":  "history",
+		"ag": "agent",
+		"ak": "attck",
+		"dg": "diag",
 	}
 	for alias, target := range aliases {
 		if err := e.registry.RegisterAlias(alias, target); err != nil {

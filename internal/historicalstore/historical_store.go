@@ -1,10 +1,10 @@
 package historicalstore
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"math"
 	"os"
 	"path/filepath"
@@ -15,10 +15,9 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-
 type HistoricalStore struct {
-	dataDir    string
-	enabled    bool
+	dataDir string
+	enabled bool
 }
 
 func NewHistoricalStore(dataDir string) *HistoricalStore {
@@ -99,13 +98,13 @@ func (s *HistoricalStore) ComputeTrends(days int) ([]kernel.HostTrend, error) {
 		}
 
 		trends = append(trends, kernel.HostTrend{
-			HostID:    hostID,
-			AvgScore:  math.Round(sum/float64(len(scores))*100) / 100,
-			MinScore:  scores[0],
-			MaxScore:  scores[len(scores)-1],
-			Count:     len(scores),
+			HostID:        hostID,
+			AvgScore:      math.Round(sum/float64(len(scores))*100) / 100,
+			MinScore:      scores[0],
+			MaxScore:      scores[len(scores)-1],
+			Count:         len(scores),
 			AcceptablePct: math.Round(float64(hostAcceptable[hostID])/float64(len(scores))*10000) / 100,
-			Date:      time.Now().Format("2006-01-02"),
+			Date:          time.Now().Format("2006-01-02"),
 		})
 	}
 

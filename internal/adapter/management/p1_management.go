@@ -80,7 +80,7 @@ func (f *FreeIPAAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error)
 		adapter.ApplyDelegation(findings[i], "freeipa")
 	}
 
-		if len(findings) == 0 {
+	if len(findings) == 0 {
 		findings = append(findings, &adapter.NormalizedFinding{
 			ID:          "FREEIPA-USERS",
 			Source:      "freeipa",

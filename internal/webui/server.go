@@ -72,26 +72,26 @@ func (m *Module) handleHealth(w http.ResponseWriter, r *http.Request) {
 // ──────────────────────────── API: Dashboard ────────────────────────────
 
 type dashboardResponse struct {
-	TotalHosts    int             `json:"total_hosts"`
-	Acceptable    int             `json:"acceptable"`
-	Unacceptable  int             `json:"unacceptable"`
-	AvgScore      float64         `json:"avg_score"`
-	Hosts         []hostSummary   `json:"hosts"`
+	TotalHosts   int           `json:"total_hosts"`
+	Acceptable   int           `json:"acceptable"`
+	Unacceptable int           `json:"unacceptable"`
+	AvgScore     float64       `json:"avg_score"`
+	Hosts        []hostSummary `json:"hosts"`
 }
 
 type hostSummary struct {
-	HostID     string  `json:"host_id"`
-	Hostname   string  `json:"hostname"`
-	FinalScore float64 `json:"final_score"`
-	Acceptable bool    `json:"acceptable"`
-	Threshold  float64 `json:"threshold"`
-	CheckCount int     `json:"check_count"`
-	FailedCount int    `json:"failed_count"`
-	SPCScore   float64 `json:"spc_score,omitempty"`
-	PrismScore float64 `json:"prism_score,omitempty"`
-	PrismSemanticState string `json:"prism_semantic_state,omitempty"`
-	PrismInferenceTrend string `json:"prism_inference_trend,omitempty"`
-	Timestamp  string  `json:"timestamp"`
+	HostID              string  `json:"host_id"`
+	Hostname            string  `json:"hostname"`
+	FinalScore          float64 `json:"final_score"`
+	Acceptable          bool    `json:"acceptable"`
+	Threshold           float64 `json:"threshold"`
+	CheckCount          int     `json:"check_count"`
+	FailedCount         int     `json:"failed_count"`
+	SPCScore            float64 `json:"spc_score,omitempty"`
+	PrismScore          float64 `json:"prism_score,omitempty"`
+	PrismSemanticState  string  `json:"prism_semantic_state,omitempty"`
+	PrismInferenceTrend string  `json:"prism_inference_trend,omitempty"`
+	Timestamp           string  `json:"timestamp"`
 }
 
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -106,18 +106,18 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	for hostID, ar := range m.latest {
 		ts := ar.Timestamp.Format("2006-01-02 15:04:05")
 		resp.Hosts = append(resp.Hosts, hostSummary{
-			HostID:      hostID,
-			Hostname:    ar.Hostname,
-			FinalScore:  ar.FinalScore,
-			Acceptable:  ar.Acceptable,
-			Threshold:   ar.Threshold,
-			CheckCount:  len(ar.Checks),
-			FailedCount: countFailed(ar.Checks),
-			SPCScore:    ar.SPCScore,
-			PrismScore:  ar.PrismScore,
-			PrismSemanticState: ar.PrismSemanticState,
+			HostID:              hostID,
+			Hostname:            ar.Hostname,
+			FinalScore:          ar.FinalScore,
+			Acceptable:          ar.Acceptable,
+			Threshold:           ar.Threshold,
+			CheckCount:          len(ar.Checks),
+			FailedCount:         countFailed(ar.Checks),
+			SPCScore:            ar.SPCScore,
+			PrismScore:          ar.PrismScore,
+			PrismSemanticState:  ar.PrismSemanticState,
 			PrismInferenceTrend: ar.PrismInferenceTrend,
-			Timestamp:   ts,
+			Timestamp:           ts,
 		})
 		totalScore += ar.FinalScore
 		if ar.Acceptable {
@@ -197,17 +197,17 @@ type reportResponse struct {
 		NoIDS             float64 `json:"no_ids"`
 	} `json:"edge_factors"`
 
-	ThreatCoeff float64 `json:"threat_coefficient"`
-	SPCScore    float64 `json:"spc_score,omitempty"`
-	PrismScore  float64 `json:"prism_score,omitempty"`
-	PrismSemanticState string `json:"prism_semantic_state,omitempty"`
-	PrismInferenceTrend string `json:"prism_inference_trend,omitempty"`
+	ThreatCoeff         float64 `json:"threat_coefficient"`
+	SPCScore            float64 `json:"spc_score,omitempty"`
+	PrismScore          float64 `json:"prism_score,omitempty"`
+	PrismSemanticState  string  `json:"prism_semantic_state,omitempty"`
+	PrismInferenceTrend string  `json:"prism_inference_trend,omitempty"`
 
-	CheckCount  int               `json:"check_count"`
-	FailedCount int               `json:"failed_count"`
+	CheckCount  int                 `json:"check_count"`
+	FailedCount int                 `json:"failed_count"`
 	Checks      []model.CheckResult `json:"checks"`
 
-	ATTACKCoverage []model.ATTACKCoverageInfo `json:"attck_coverage,omitempty"`
+	ATTACKCoverage  []model.ATTACKCoverageInfo `json:"attck_coverage,omitempty"`
 	ATTACKKillChain *model.ATTACKKillChainInfo `json:"attck_kill_chain,omitempty"`
 }
 
@@ -219,22 +219,22 @@ func (m *Module) handleReport(w http.ResponseWriter, hostID string) {
 	}
 
 	resp := reportResponse{
-		HostID:     ar.HostID,
-		Hostname:   ar.Hostname,
-		Timestamp:  ar.Timestamp.Format("2006-01-02 15:04:05"),
-		FinalScore: ar.FinalScore,
-		Acceptable: ar.Acceptable,
-		Threshold:  ar.Threshold,
-		ThreatCoeff: ar.ThreatCoeff,
-		SPCScore:   ar.SPCScore,
-		PrismScore: ar.PrismScore,
-		PrismSemanticState: ar.PrismSemanticState,
+		HostID:              ar.HostID,
+		Hostname:            ar.Hostname,
+		Timestamp:           ar.Timestamp.Format("2006-01-02 15:04:05"),
+		FinalScore:          ar.FinalScore,
+		Acceptable:          ar.Acceptable,
+		Threshold:           ar.Threshold,
+		ThreatCoeff:         ar.ThreatCoeff,
+		SPCScore:            ar.SPCScore,
+		PrismScore:          ar.PrismScore,
+		PrismSemanticState:  ar.PrismSemanticState,
 		PrismInferenceTrend: ar.PrismInferenceTrend,
-		CheckCount: len(ar.Checks),
-		FailedCount: countFailed(ar.Checks),
-		Checks:     ar.Checks,
-		ATTACKCoverage: ar.ATTACKCoverage,
-		ATTACKKillChain: ar.ATTACKKillChain,
+		CheckCount:          len(ar.Checks),
+		FailedCount:         countFailed(ar.Checks),
+		Checks:              ar.Checks,
+		ATTACKCoverage:      ar.ATTACKCoverage,
+		ATTACKKillChain:     ar.ATTACKKillChain,
 	}
 	resp.DomainScores.AttackSurface = ar.DomainScores.AttackSurface
 	resp.DomainScores.BusinessContinuity = ar.DomainScores.BusinessContinuity
@@ -264,11 +264,11 @@ func (m *Module) handleHistory(w http.ResponseWriter, hostID string) {
 	}
 
 	type historyPoint struct {
-		Timestamp  string  `json:"timestamp"`
-		FinalScore float64 `json:"final_score"`
-		Acceptable bool    `json:"acceptable"`
-		CheckCount int     `json:"check_count"`
-		FailedCount int    `json:"failed_count"`
+		Timestamp   string  `json:"timestamp"`
+		FinalScore  float64 `json:"final_score"`
+		Acceptable  bool    `json:"acceptable"`
+		CheckCount  int     `json:"check_count"`
+		FailedCount int     `json:"failed_count"`
 	}
 
 	points := make([]historyPoint, len(history))
@@ -283,9 +283,9 @@ func (m *Module) handleHistory(w http.ResponseWriter, hostID string) {
 	}
 
 	writeJSON(w, map[string]interface{}{
-		"host_id":   hostID,
-		"hostname":  m.hostnames[hostID],
-		"history":   points,
+		"host_id":  hostID,
+		"hostname": m.hostnames[hostID],
+		"history":  points,
 	})
 }
 

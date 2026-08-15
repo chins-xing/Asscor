@@ -143,11 +143,11 @@ func (d *localDownloader) Fetch(spec ExtensionSpec, dest string) (string, error)
 }
 
 type ExtensionInstaller struct {
-	httpDownloader *httpDownloader
-	gitDownloader  *gitDownloader
+	httpDownloader  *httpDownloader
+	gitDownloader   *gitDownloader
 	localDownloader *localDownloader
-	extensionsDir  string
-	tmpDir         string
+	extensionsDir   string
+	tmpDir          string
 }
 
 func NewExtensionInstaller(extensionsDir string) *ExtensionInstaller {

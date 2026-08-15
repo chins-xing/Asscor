@@ -1,10 +1,10 @@
 package oscal
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"time"
 
 	"github.com/asscor/asscor/internal/model"
@@ -22,21 +22,21 @@ import (
 
 // OSCALAssessmentResults is the top-level OSCAL assessment-results document.
 type OSCALAssessmentResults struct {
-	XMLName xml.Name  `xml:"http://csrc.nist.gov/ns/oscal/1.0 assessment-results" json:"-"`
-	UUID    string    `xml:"uuid"                json:"uuid"`
+	XMLName  xml.Name      `xml:"http://csrc.nist.gov/ns/oscal/1.0 assessment-results" json:"-"`
+	UUID     string        `xml:"uuid"                json:"uuid"`
 	Metadata OSCALMetadata `xml:"metadata"       json:"metadata"`
-	Results []OSCALResult `xml:"results>result"  json:"results"`
+	Results  []OSCALResult `xml:"results>result"  json:"results"`
 }
 
 // OSCALMetadata carries document-level metadata.
 type OSCALMetadata struct {
-	Title       string           `xml:"title"        json:"title"`
-	Published   string           `xml:"published"    json:"published"`
-	LastModified string          `xml:"last-modified" json:"last-modified"`
-	Version     string           `xml:"version"      json:"version"`
-	OSCALVersion string          `xml:"oscal-version" json:"oscal-version"`
-	Props       []OSCALProp      `xml:"prop"         json:"props,omitempty"`
-	Parties     []OSCALParty     `xml:"party"        json:"parties,omitempty"`
+	Title        string       `xml:"title"        json:"title"`
+	Published    string       `xml:"published"    json:"published"`
+	LastModified string       `xml:"last-modified" json:"last-modified"`
+	Version      string       `xml:"version"      json:"version"`
+	OSCALVersion string       `xml:"oscal-version" json:"oscal-version"`
+	Props        []OSCALProp  `xml:"prop"         json:"props,omitempty"`
+	Parties      []OSCALParty `xml:"party"        json:"parties,omitempty"`
 }
 
 // OSCALProp is a generic key-value property.
@@ -56,24 +56,24 @@ type OSCALParty struct {
 
 // OSCALResult represents a single assessment result entry.
 type OSCALResult struct {
-	UUID        string                `xml:"uuid,attr"      json:"uuid"`
-	Title       string                `xml:"title"           json:"title"`
-	Description string                `xml:"description"     json:"description"`
-	Start       string                `xml:"start"           json:"start"`
-	Props       []OSCALProp           `xml:"prop"            json:"props,omitempty"`
-	Findings    []OSCALFinding        `xml:"finding"         json:"findings,omitempty"`
-	Observations []OSCALObservation   `xml:"observation"     json:"observations,omitempty"`
-	Risks       []OSCALRisk           `xml:"risk"            json:"risks,omitempty"`
+	UUID         string             `xml:"uuid,attr"      json:"uuid"`
+	Title        string             `xml:"title"           json:"title"`
+	Description  string             `xml:"description"     json:"description"`
+	Start        string             `xml:"start"           json:"start"`
+	Props        []OSCALProp        `xml:"prop"            json:"props,omitempty"`
+	Findings     []OSCALFinding     `xml:"finding"         json:"findings,omitempty"`
+	Observations []OSCALObservation `xml:"observation"     json:"observations,omitempty"`
+	Risks        []OSCALRisk        `xml:"risk"            json:"risks,omitempty"`
 }
 
 // OSCALFinding represents a discrete security finding.
 type OSCALFinding struct {
-	UUID        string        `xml:"uuid,attr"     json:"uuid"`
-	Title       string        `xml:"title"          json:"title"`
-	Description string        `xml:"description"    json:"description"`
-	Risk        OSCALRiskStatus `xml:"risk"         json:"risk"`
+	UUID                string                    `xml:"uuid,attr"     json:"uuid"`
+	Title               string                    `xml:"title"          json:"title"`
+	Description         string                    `xml:"description"    json:"description"`
+	Risk                OSCALRiskStatus           `xml:"risk"         json:"risk"`
 	RelatedObservations []OSCALRelatedObservation `xml:"related-observation" json:"related-observations,omitempty"`
-	Props       []OSCALProp   `xml:"prop"           json:"props,omitempty"`
+	Props               []OSCALProp               `xml:"prop"           json:"props,omitempty"`
 }
 
 // OSCALRiskStatus indicates the risk level of a finding.
@@ -90,13 +90,13 @@ type OSCALRelatedObservation struct {
 
 // OSCALObservation documents a specific evaluation event.
 type OSCALObservation struct {
-	UUID        string      `xml:"uuid,attr"    json:"uuid"`
-	Title       string      `xml:"title"         json:"title"`
-	Description string      `xml:"description"   json:"description"`
-	Methods     []string    `xml:"method"        json:"methods"`
-	Collected   string      `xml:"collected"     json:"collected"`
+	UUID             string                  `xml:"uuid,attr"    json:"uuid"`
+	Title            string                  `xml:"title"         json:"title"`
+	Description      string                  `xml:"description"   json:"description"`
+	Methods          []string                `xml:"method"        json:"methods"`
+	Collected        string                  `xml:"collected"     json:"collected"`
 	RelevantEvidence []OSCALRelevantEvidence `xml:"relevant-evidence" json:"relevant-evidence,omitempty"`
-	Props       []OSCALProp `xml:"prop"          json:"props,omitempty"`
+	Props            []OSCALProp             `xml:"prop"          json:"props,omitempty"`
 }
 
 // OSCALRelevantEvidence references evidence supporting an observation.
@@ -139,25 +139,25 @@ func ExportOSCAL(result *model.AssessmentResult, format string) ([]byte, error) 
 // ExportOSCALFromRecord generates an OSCAL document from an kernel.AssessmentRecord.
 func ExportOSCALFromRecord(rec *kernel.AssessmentRecord, format string) ([]byte, error) {
 	result := &model.AssessmentResult{
-		HostID:                rec.HostID,
-		Hostname:              rec.Hostname,
-		Timestamp:             rec.Timestamp,
-		FinalScore:            rec.FinalScore,
-		Acceptable:            rec.Acceptable,
-		Threshold:             rec.Threshold,
+		HostID:     rec.HostID,
+		Hostname:   rec.Hostname,
+		Timestamp:  rec.Timestamp,
+		FinalScore: rec.FinalScore,
+		Acceptable: rec.Acceptable,
+		Threshold:  rec.Threshold,
 		DomainScores: model.DomainScores{
 			AttackSurface:      rec.AttackSurface,
 			BusinessContinuity: rec.BusinessCont,
 			OperationTrust:     rec.OperationTrust,
 			Resilience:         rec.Resilience,
 		},
-		ThreatCoeff:           rec.ThreatCoeff,
-		SPCScore:              rec.SPCScore,
-		PrismScore:            rec.PrismScore,
-		PrismSemanticState:    rec.PrismSemanticState,
-		PrismInferenceTrend:   rec.PrismInferenceTrend,
+		ThreatCoeff:                rec.ThreatCoeff,
+		SPCScore:                   rec.SPCScore,
+		PrismScore:                 rec.PrismScore,
+		PrismSemanticState:         rec.PrismSemanticState,
+		PrismInferenceTrend:        rec.PrismInferenceTrend,
 		PrismInferenceCollapseRisk: rec.PrismInferenceCollapseRisk,
-		PrismRiskVelocity:     rec.PrismRiskVelocity,
+		PrismRiskVelocity:          rec.PrismRiskVelocity,
 	}
 	return ExportOSCAL(result, format)
 }
@@ -345,10 +345,10 @@ func buildOSCAL(result *model.AssessmentResult) *OSCALAssessmentResults {
 	// Result entry
 	doc.Results = []OSCALResult{
 		{
-			UUID:         assessmentUUID,
-			Title:        fmt.Sprintf("Security Assessment for %s", result.Hostname),
-			Description:  fmt.Sprintf("Automated security assessment performed by ASSCOR on %s", result.Timestamp.Format("2006-01-02 15:04:05")),
-			Start:        result.Timestamp.Format(time.RFC3339),
+			UUID:        assessmentUUID,
+			Title:       fmt.Sprintf("Security Assessment for %s", result.Hostname),
+			Description: fmt.Sprintf("Automated security assessment performed by ASSCOR on %s", result.Timestamp.Format("2006-01-02 15:04:05")),
+			Start:       result.Timestamp.Format(time.RFC3339),
 			Props: []OSCALProp{
 				{Name: "assessment-tool", Value: "ASSCOR"},
 				{Name: "ssam-version", Value: "2.0"},

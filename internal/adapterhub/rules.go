@@ -11,23 +11,23 @@ import (
 type RuleType string
 
 const (
-	RuleTypeSeverity      RuleType = "severity"
-	RuleTypeDomain       RuleType = "domain"
-	RuleTypeDelta        RuleType = "delta"
-	RuleTypeValidation   RuleType = "validation"
-	RuleTypeTransform    RuleType = "transform"
-	RuleTypeFilter       RuleType = "filter"
-	RuleTypeAggregation  RuleType = "aggregation"
+	RuleTypeSeverity    RuleType = "severity"
+	RuleTypeDomain      RuleType = "domain"
+	RuleTypeDelta       RuleType = "delta"
+	RuleTypeValidation  RuleType = "validation"
+	RuleTypeTransform   RuleType = "transform"
+	RuleTypeFilter      RuleType = "filter"
+	RuleTypeAggregation RuleType = "aggregation"
 )
 
 // RuleSet contains all rules for adapter processing.
 type RuleSet struct {
-	SeverityRules    []SeverityRule
-	DomainRules      []DomainRule
-	DeltaRules       []DeltaRule
-	ValidationRules  []ValidationRule
-	TransformRules   []TransformRule
-	FilterRules      []FilterRule
+	SeverityRules   []SeverityRule
+	DomainRules     []DomainRule
+	DeltaRules      []DeltaRule
+	ValidationRules []ValidationRule
+	TransformRules  []TransformRule
+	FilterRules     []FilterRule
 }
 
 // SeverityRule normalizes severity values from various tools to standard Severity levels.
@@ -87,12 +87,12 @@ type ValidationRule struct {
 
 // TransformRule transforms finding data based on patterns.
 type TransformRule struct {
-	Name         string
-	Tool         string
-	Priority     int
-	Field        string
+	Name          string
+	Tool          string
+	Priority      int
+	Field         string
 	TransformFunc func(input string) string
-	Description  string
+	Description   string
 }
 
 // FilterRule filters findings based on criteria.
@@ -133,7 +133,7 @@ func NewRuleEngine(globalRules *RuleSet) *RuleEngine {
 	return &RuleEngine{
 		globalRules:    globalRules,
 		toolRules:      make(map[string]*RuleSet),
-		defaultProfile:  DefaultGenericProfile(),
+		defaultProfile: DefaultGenericProfile(),
 	}
 }
 
@@ -448,7 +448,7 @@ func (p *SeverityProfile) DeltaFromSeverity(severity string) float64 {
 // BuiltInProfiles returns all built-in severity profiles.
 func BuiltInProfiles() map[string]*SeverityProfile {
 	return map[string]*SeverityProfile{
-		"generic":  DefaultGenericProfile(),
+		"generic": DefaultGenericProfile(),
 		"cvss":    {Critical: -15, High: -10, Medium: -7.5, Low: -5, Info: 0, Unknown: -5},
 		"lynis":   {Critical: -15, High: -10, Medium: -7.5, Low: -5, Info: 0, Unknown: -5},
 		"cis":     {Critical: -15, High: -10, Medium: -7.5, Low: -5, Info: 0, Unknown: -5},

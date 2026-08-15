@@ -20,12 +20,12 @@ type Config struct {
 
 // RuleSetConfig holds the configuration for rule sets.
 type RuleSetConfig struct {
-	SeverityRules    []SeverityRuleConfig
-	DomainRules      []DomainRuleConfig
-	DeltaRules       []DeltaRuleConfig
-	ValidationRules  []ValidationRuleConfig
-	TransformRules   []TransformRuleConfig
-	FilterRules      []FilterRuleConfig
+	SeverityRules   []SeverityRuleConfig
+	DomainRules     []DomainRuleConfig
+	DeltaRules      []DeltaRuleConfig
+	ValidationRules []ValidationRuleConfig
+	TransformRules  []TransformRuleConfig
+	FilterRules     []FilterRuleConfig
 }
 
 // SeverityRuleConfig holds configuration for a severity rule.
@@ -101,7 +101,7 @@ type FilterConditionConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		SyncInterval:    6 * time.Hour,
-		HealthInterval: 1 * time.Minute,
+		HealthInterval:  1 * time.Minute,
 		MaxConcurrency:  10,
 		AdapterDefaults: make(map[string]map[string]string),
 		RuleProfiles:    BuiltInProfiles(),
@@ -129,11 +129,11 @@ func DefaultRuleSetConfig() *RuleSetConfig {
 				Tool:     "lynis",
 				Priority: 10,
 				Mappings: map[string]string{
-					"warning":  "high",
-					"suggest":  "medium",
-					"note":     "low",
-					"pass":     "info",
-					"skipped":  "info",
+					"warning": "high",
+					"suggest": "medium",
+					"note":    "low",
+					"pass":    "info",
+					"skipped": "info",
 				},
 				Description: "Lynis severity mapping",
 			},
@@ -153,9 +153,9 @@ func DefaultRuleSetConfig() *RuleSetConfig {
 				Tool:     "clamav",
 				Priority: 10,
 				Mappings: map[string]string{
-					"infected":  "critical",
-					"warning":   "high",
-					"clean":     "info",
+					"infected": "critical",
+					"warning":  "high",
+					"clean":    "info",
 				},
 				Description: "ClamAV severity mapping",
 			},
@@ -318,10 +318,10 @@ func DefaultRuleSetConfig() *RuleSetConfig {
 		},
 		FilterRules: []FilterRuleConfig{
 			{
-				Tool:       "",
-				Priority:   100,
-				Conditions: []FilterConditionConfig{},
-				Action:     "include",
+				Tool:        "",
+				Priority:    100,
+				Conditions:  []FilterConditionConfig{},
+				Action:      "include",
 				Description: "Default: include all findings",
 			},
 		},

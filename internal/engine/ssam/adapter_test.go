@@ -132,11 +132,11 @@ func TestEdgeFactorsRoundTrip(t *testing.T) {
 
 func TestModelToInput(t *testing.T) {
 	result := &model.AssessmentResult{
-		HostID:     "host-001",
-		Hostname:   "server1",
-		Threshold:  80,
+		HostID:      "host-001",
+		Hostname:    "server1",
+		Threshold:   80,
 		ThreatCoeff: 0.95,
-		SPCScore:   0.88,
+		SPCScore:    0.88,
 		Checks: []model.CheckResult{
 			{CheckID: "AS-001", Domain: "attack_surface", Passed: false, Delta: -10},
 		},

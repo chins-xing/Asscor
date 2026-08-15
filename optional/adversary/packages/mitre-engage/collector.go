@@ -27,20 +27,20 @@ type CaptureInfo struct {
 	SourceIP    string         `json:"source_ip"`
 	SourcePort  string         `json:"source_port,omitempty"`
 	Timestamp   time.Time      `json:"timestamp"`
-	TriggerType string         `json:"trigger_type"`           // "honeypot" | "honeytoken" | "honey_credential"
-	Credential  string         `json:"credential,omitempty"`   // what the attacker tried (username/password)
-	File        string         `json:"file,omitempty"`         // what decoy file was touched
-	Technique   string         `json:"technique,omitempty"`    // inferred ATT&CK technique (e.g. T1078, T1110)
-	Quality     CaptureQuality `json:"quality"`                // 0..1 intelligence value
+	TriggerType string         `json:"trigger_type"`         // "honeypot" | "honeytoken" | "honey_credential"
+	Credential  string         `json:"credential,omitempty"` // what the attacker tried (username/password)
+	File        string         `json:"file,omitempty"`       // what decoy file was touched
+	Technique   string         `json:"technique,omitempty"`  // inferred ATT&CK technique (e.g. T1078, T1110)
+	Quality     CaptureQuality `json:"quality"`              // 0..1 intelligence value
 }
 
 // Collector aggregates capture intelligence. It deduplicates low-value noise
 // and surfaces high-value attacker behavior.
 type Collector struct {
-	mu        sync.Mutex
-	captures  []CaptureInfo
+	mu         sync.Mutex
+	captures   []CaptureInfo
 	minQuality CaptureQuality // captures below this threshold are dropped
-	maxSize   int             // ring buffer bound
+	maxSize    int            // ring buffer bound
 }
 
 // NewCollector creates a capture collector with quality floor and size bound.

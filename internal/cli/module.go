@@ -485,12 +485,12 @@ func (bb *busBridge) Subscribe(topic, subscriberID string) <-chan interface{} {
 }
 
 type CLIModule struct {
-	kernel     kernel.KernelContext
-	engine     *Engine
-	bridge     *kernelBridge
-	enabled    bool
-	done       chan struct{}
-	socketPath string
+	kernel        kernel.KernelContext
+	engine        *Engine
+	bridge        *kernelBridge
+	enabled       bool
+	done          chan struct{}
+	socketPath    string
 	logRedirected bool
 
 	mu    sync.RWMutex

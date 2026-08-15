@@ -3,10 +3,10 @@
 package spc
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"strconv"
 	"strings"
 	"time"
@@ -56,20 +56,20 @@ func (m *Module) ImportOSCAL(data []byte, format string) (int, error) {
 		modDate, _ := time.Parse("2006-01-02", rec.DateModified)
 
 		cve := kernel.SPCCVEScore{
-			CVEID:          rec.CVEID,
-			Description:    rec.Description,
-			CVSS:           rec.CVSSScore,
-			CVSSVector:     rec.CVSSVector,
-			EPSS:           rec.EPSSScore,
-			EPSSPercent:    rec.EPSSPercent,
-			InKEV:          rec.InKEV,
-			DatePublished:  pubDate,
-			DateModified:   modDate,
-			AffectedCPEs:   rec.AffectedCPEs,
-			AttckTechniques: rec.AttckTechniques,
-			MISPGalaxyTags:  rec.MISPGalaxyTags,
+			CVEID:            rec.CVEID,
+			Description:      rec.Description,
+			CVSS:             rec.CVSSScore,
+			CVSSVector:       rec.CVSSVector,
+			EPSS:             rec.EPSSScore,
+			EPSSPercent:      rec.EPSSPercent,
+			InKEV:            rec.InKEV,
+			DatePublished:    pubDate,
+			DateModified:     modDate,
+			AffectedCPEs:     rec.AffectedCPEs,
+			AttckTechniques:  rec.AttckTechniques,
+			MISPGalaxyTags:   rec.MISPGalaxyTags,
 			OSCALFindingUUID: rec.OSCALFindingUUID,
-			APTGroupAssoc:   rec.APTGroupAssoc,
+			APTGroupAssoc:    rec.APTGroupAssoc,
 		}
 
 		if idx, exists := m.cveIndex[cve.CVEID]; exists {
@@ -247,8 +247,8 @@ func parseFloat(s string) (float64, error) {
 }
 
 type oscalXMLRoot struct {
-	XMLName  struct{}          `xml:"oscal"`
-	Findings oscalXMLFindings  `xml:"findings"`
+	XMLName  struct{}         `xml:"oscal"`
+	Findings oscalXMLFindings `xml:"findings"`
 }
 
 type oscalXMLFindings struct {
@@ -256,16 +256,16 @@ type oscalXMLFindings struct {
 }
 
 type oscalXMLFinding struct {
-	CVEID          string   `xml:"cve_id"`
-	Description    string   `xml:"description"`
-	CVSSScore      float64  `xml:"cvss_score"`
-	CVSSVector     string   `xml:"cvss_vector"`
-	EPSSScore      float64  `xml:"epss_score"`
-	EPSSPercent    float64  `xml:"epss_percentile"`
-	InKEV          bool     `xml:"in_kev"`
-	DatePublished  string   `xml:"date_published"`
-	DateModified   string   `xml:"date_modified"`
-	AffectedCPEs   struct {
+	CVEID         string  `xml:"cve_id"`
+	Description   string  `xml:"description"`
+	CVSSScore     float64 `xml:"cvss_score"`
+	CVSSVector    string  `xml:"cvss_vector"`
+	EPSSScore     float64 `xml:"epss_score"`
+	EPSSPercent   float64 `xml:"epss_percentile"`
+	InKEV         bool    `xml:"in_kev"`
+	DatePublished string  `xml:"date_published"`
+	DateModified  string  `xml:"date_modified"`
+	AffectedCPEs  struct {
 		CPE []string `xml:"cpe"`
 	} `xml:"affected_cpes"`
 	AttckTechniques struct {
@@ -289,20 +289,20 @@ func parseOSCALXML(data []byte) ([]kernel.SPCVulnerabilityRecord, error) {
 	var records []kernel.SPCVulnerabilityRecord
 	for _, f := range root.Findings.Finding {
 		rec := kernel.SPCVulnerabilityRecord{
-			CVEID:           f.CVEID,
-			Description:     f.Description,
-			CVSSScore:       f.CVSSScore,
-			CVSSVector:      f.CVSSVector,
-			EPSSScore:       f.EPSSScore,
-			EPSSPercent:     f.EPSSPercent,
-			InKEV:           f.InKEV,
-			DatePublished:   f.DatePublished,
-			DateModified:    f.DateModified,
-			AffectedCPEs:    f.AffectedCPEs.CPE,
-			AttckTechniques: f.AttckTechniques.Technique,
-			MISPGalaxyTags:  f.MISPGalaxyTags.Tag,
+			CVEID:            f.CVEID,
+			Description:      f.Description,
+			CVSSScore:        f.CVSSScore,
+			CVSSVector:       f.CVSSVector,
+			EPSSScore:        f.EPSSScore,
+			EPSSPercent:      f.EPSSPercent,
+			InKEV:            f.InKEV,
+			DatePublished:    f.DatePublished,
+			DateModified:     f.DateModified,
+			AffectedCPEs:     f.AffectedCPEs.CPE,
+			AttckTechniques:  f.AttckTechniques.Technique,
+			MISPGalaxyTags:   f.MISPGalaxyTags.Tag,
 			OSCALFindingUUID: f.OSCALFindingUUID,
-			APTGroupAssoc:   f.APTGroupAssoc.Group,
+			APTGroupAssoc:    f.APTGroupAssoc.Group,
 		}
 		records = append(records, rec)
 	}
@@ -313,4 +313,3 @@ func parseOSCALXML(data []byte) ([]kernel.SPCVulnerabilityRecord, error) {
 
 	return records, nil
 }
-

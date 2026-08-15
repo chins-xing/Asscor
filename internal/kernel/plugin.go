@@ -72,29 +72,29 @@ type BusAccess interface {
 }
 
 type MessageProtocol struct {
-	Version   string                 `json:"version"`
-	Topic     string                 `json:"topic"`
-	Source    string                 `json:"source"`
-	Timestamp time.Time              `json:"timestamp"`
-	Payload   interface{}            `json:"payload"`
-	Metadata  map[string]string      `json:"metadata,omitempty"`
+	Version   string            `json:"version"`
+	Topic     string            `json:"topic"`
+	Source    string            `json:"source"`
+	Timestamp time.Time         `json:"timestamp"`
+	Payload   interface{}       `json:"payload"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
 const (
-	TopicAssessorResult  = "assessor.result"
-	TopicAssessorSelfCheck = "assessor.self_check"
-	TopicPolicyAction    = "policy.action"
-	TopicAgentRegistered = "agent.registered"
-	TopicAgentTimeout    = "agent.timeout"
-	TopicConfigChanged   = "config.changed"
-	TopicSPCUpdated      = "spc.updated"
-	TopicCTIUpdated      = "cti.updated"
-	TopicCommandEnqueued = "command.enqueued"
-	TopicCommandResult   = "command.result"
-	TopicAgentHeartbeat  = "agent.heartbeat"
-	TopicConfigReloaded  = "config.reloaded"
-	TopicCTIThreatDetected = "cti.threat_detected"
-	TopicAdapterFindings = "adapter.findings"
+	TopicAssessorResult        = "assessor.result"
+	TopicAssessorSelfCheck     = "assessor.self_check"
+	TopicPolicyAction          = "policy.action"
+	TopicAgentRegistered       = "agent.registered"
+	TopicAgentTimeout          = "agent.timeout"
+	TopicConfigChanged         = "config.changed"
+	TopicSPCUpdated            = "spc.updated"
+	TopicCTIUpdated            = "cti.updated"
+	TopicCommandEnqueued       = "command.enqueued"
+	TopicCommandResult         = "command.result"
+	TopicAgentHeartbeat        = "agent.heartbeat"
+	TopicConfigReloaded        = "config.reloaded"
+	TopicCTIThreatDetected     = "cti.threat_detected"
+	TopicAdapterFindings       = "adapter.findings"
 	TopicSourceManagerDeployed = "source_manager.deployed"
 
 	MessageProtocolVersion = "1.0"

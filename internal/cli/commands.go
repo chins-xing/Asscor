@@ -159,11 +159,11 @@ func statusCmdHandler(ctx *CommandContext) *CommandResult {
 	healthResults := ctx.Kernel.HealthCheck(ctx.Ctx)
 
 	type statusOutput struct {
-		Plugins  int              `json:"plugins"`
-		Healthy  int              `json:"healthy"`
-		Unhealthy int             `json:"unhealthy"`
-		Details  []PluginInfo     `json:"details,omitempty"`
-		Health   []HealthStatus   `json:"health,omitempty"`
+		Plugins   int            `json:"plugins"`
+		Healthy   int            `json:"healthy"`
+		Unhealthy int            `json:"unhealthy"`
+		Details   []PluginInfo   `json:"details,omitempty"`
+		Health    []HealthStatus `json:"health,omitempty"`
 	}
 
 	healthy, unhealthy := 0, 0
@@ -546,10 +546,10 @@ func spcCmdHandler(ctx *CommandContext) *CommandResult {
 
 		if ctx.JSON {
 			jsonData, _ := json.MarshalIndent(map[string]interface{}{
-				"host_id":  hostID,
-				"score":    correction.Score,
+				"host_id":   hostID,
+				"score":     correction.Score,
 				"penalties": len(correction.Weights),
-				"weights":  correction.Weights,
+				"weights":   correction.Weights,
 			}, "", "  ")
 			return &CommandResult{ExitCode: ExitOK, Output: string(jsonData) + "\n"}
 		}
@@ -561,7 +561,9 @@ func spcCmdHandler(ctx *CommandContext) *CommandResult {
 		}
 
 	case "fetch":
-		fetchProvider, ok := spcPlugin.(interface{ FetchFromAllSources() []kernel.SPCFetchResult })
+		fetchProvider, ok := spcPlugin.(interface {
+			FetchFromAllSources() []kernel.SPCFetchResult
+		})
 		if !ok {
 			return &CommandResult{ExitCode: ExitError, Output: "SPC module does not support manual fetch\n"}
 		}
@@ -669,7 +671,9 @@ func assessCmdHandler(ctx *CommandContext) *CommandResult {
 }
 
 func acceptVerdict(ok bool) string {
-	if ok { return "ACCEPTABLE" }
+	if ok {
+		return "ACCEPTABLE"
+	}
 	return "NOT ACCEPTABLE"
 }
 
@@ -1082,8 +1086,10 @@ func getMapStr(m map[string]interface{}, key string) string {
 func getMapInt(m map[string]interface{}, key string) int {
 	if v, ok := m[key]; ok {
 		switch n := v.(type) {
-		case int: return n
-		case float64: return int(n)
+		case int:
+			return n
+		case float64:
+			return int(n)
 		}
 	}
 	return 0
@@ -1091,11 +1097,15 @@ func getMapInt(m map[string]interface{}, key string) int {
 
 func getMapStrSlice(m map[string]interface{}, key string) []string {
 	if v, ok := m[key]; ok {
-		if ss, ok := v.([]string); ok { return ss }
+		if ss, ok := v.([]string); ok {
+			return ss
+		}
 		if si, ok := v.([]interface{}); ok {
 			var result []string
 			for _, e := range si {
-				if s, ok := e.(string); ok { result = append(result, s) }
+				if s, ok := e.(string); ok {
+					result = append(result, s)
+				}
 			}
 			return result
 		}
@@ -1104,8 +1114,12 @@ func getMapStrSlice(m map[string]interface{}, key string) []string {
 }
 
 func joinStrSlice(ss []string, sep string) string {
-	if len(ss) == 0 { return "" }
+	if len(ss) == 0 {
+		return ""
+	}
 	r := ss[0]
-	for _, s := range ss[1:] { r += sep + s }
+	for _, s := range ss[1:] {
+		r += sep + s
+	}
 	return r
 }

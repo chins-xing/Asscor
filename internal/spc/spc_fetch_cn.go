@@ -3,10 +3,10 @@
 package spc
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"io"
 	"net/http"
 	"strings"
@@ -75,16 +75,16 @@ func (m *Module) FetchFromCNNVD() kernel.SPCFetchResult {
 
 	type cnnvdResponse struct {
 		Data []struct {
-			CveID      string `json:"cve_id"`
-			CnnvdID    string `json:"cnnvd_id"`
-			Name       string `json:"name"`
-			Severity   string `json:"severity"`
-			TypeName   string `json:"type_name"`
+			CveID       string `json:"cve_id"`
+			CnnvdID     string `json:"cnnvd_id"`
+			Name        string `json:"name"`
+			Severity    string `json:"severity"`
+			TypeName    string `json:"type_name"`
 			ProductName string `json:"product"`
 			VendorName  string `json:"vendor"`
 			PublishDate string `json:"publish_date"`
 			UpdateDate  string `json:"update_date"`
-			Href       string `json:"href"`
+			Href        string `json:"href"`
 		} `json:"data"`
 	}
 

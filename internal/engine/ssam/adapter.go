@@ -95,10 +95,10 @@ func DomainScoresFromLegacy(legacy model.DomainScores) map[string]float64 {
 	m := legacy.GetAllDomainScores()
 	if len(m) == 0 {
 		m = map[string]float64{
-			model.DomainAttackSurface:    legacy.AttackSurface,
+			model.DomainAttackSurface:      legacy.AttackSurface,
 			model.DomainBusinessContinuity: legacy.BusinessContinuity,
-			model.DomainOperationTrust:   legacy.OperationTrust,
-			model.DomainResilience:       legacy.Resilience,
+			model.DomainOperationTrust:     legacy.OperationTrust,
+			model.DomainResilience:         legacy.Resilience,
 		}
 	}
 	return m

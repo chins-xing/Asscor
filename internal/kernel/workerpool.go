@@ -162,13 +162,13 @@ func (p *WorkerPool) ResetMetrics() {
 }
 
 type ConcurrencyStatus struct {
-	GoroutineCount    int       `json:"goroutine_count"`
-	HeapAllocMB       uint64    `json:"heap_alloc_mb"`
-	WorkerPoolActive  int       `json:"worker_pool_active"`
-	WorkerPoolQueued  int       `json:"worker_pool_queued"`
-	BusTopics         []string  `json:"bus_topics"`
-	AgentCount        int       `json:"agent_count"`
-	Timestamp         time.Time `json:"timestamp"`
+	GoroutineCount   int       `json:"goroutine_count"`
+	HeapAllocMB      uint64    `json:"heap_alloc_mb"`
+	WorkerPoolActive int       `json:"worker_pool_active"`
+	WorkerPoolQueued int       `json:"worker_pool_queued"`
+	BusTopics        []string  `json:"bus_topics"`
+	AgentCount       int       `json:"agent_count"`
+	Timestamp        time.Time `json:"timestamp"`
 }
 
 type ConcurrencyModule struct {

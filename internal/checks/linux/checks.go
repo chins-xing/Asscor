@@ -1102,7 +1102,7 @@ func as010() model.CheckItem {
 		Delta:         -5,
 		ComplianceRef: "L3-CE-06",
 		Platform:      "linux",
-	Check: func() (bool, string) {
+		Check: func() (bool, string) {
 			data, err := os.ReadFile("/etc/passwd")
 			if err != nil {
 				return false, "无法读取/etc/passwd"

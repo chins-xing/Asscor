@@ -32,9 +32,9 @@ type Module struct {
 	listenPort int
 
 	// In-memory result cache
-	history    map[string][]model.AssessmentResult // hostID -> ordered history (newest last)
-	latest     map[string]*model.AssessmentResult  // hostID -> latest
-	hostnames  map[string]string                   // hostID -> hostname
+	history   map[string][]model.AssessmentResult // hostID -> ordered history (newest last)
+	latest    map[string]*model.AssessmentResult  // hostID -> latest
+	hostnames map[string]string                   // hostID -> hostname
 
 	// Extension-registered HTTP handlers (populated via webui.route.register).
 	extraRoutes map[string]http.Handler
@@ -54,7 +54,7 @@ func New(listenPort int) *Module {
 		latest:      make(map[string]*model.AssessmentResult),
 		hostnames:   make(map[string]string),
 		extraRoutes: make(map[string]http.Handler),
-		done:       make(chan struct{}),
+		done:        make(chan struct{}),
 	}
 }
 

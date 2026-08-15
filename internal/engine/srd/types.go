@@ -7,39 +7,39 @@ import "time"
 // ExternalAssessmentReport is the canonical form consumed by the SRD/Prism engine
 // from any external assessment tool. All tool-specific adapters normalize into this type.
 type ExternalAssessmentReport struct {
-	Tool       string                   `json:"tool"`
-	HostID     string                   `json:"host_id"`
-	Hostname   string                   `json:"hostname"`
-	ScanTime   time.Time                `json:"scan_time"`
-	RawScore   float64                  `json:"raw_score"`
-	RawGrade   string                   `json:"raw_grade,omitempty"`
-	Items      []ExternalCheckResult    `json:"items"`
-	Metadata   map[string]string        `json:"metadata,omitempty"`
+	Tool     string                `json:"tool"`
+	HostID   string                `json:"host_id"`
+	Hostname string                `json:"hostname"`
+	ScanTime time.Time             `json:"scan_time"`
+	RawScore float64               `json:"raw_score"`
+	RawGrade string                `json:"raw_grade,omitempty"`
+	Items    []ExternalCheckResult `json:"items"`
+	Metadata map[string]string     `json:"metadata,omitempty"`
 }
 
 // ExternalCheckResult represents a single finding from an external tool,
 // normalized to a form compatible with SRD's CheckFailure.
 type ExternalCheckResult struct {
-	CheckID    string                 `json:"check_id"`
-	RuleID     string                 `json:"rule_id,omitempty"`
-	Title      string                 `json:"title"`
-	Description string                 `json:"description,omitempty"`
-	Severity   string                 `json:"severity"`
-	Result     string                 `json:"result"`
-	Delta      float64                `json:"delta"`
-	FailAt     int64                  `json:"fail_at_unix"`
-	Category   string                 `json:"category"`
-	Refs       []string               `json:"refs,omitempty"`
+	CheckID     string   `json:"check_id"`
+	RuleID      string   `json:"rule_id,omitempty"`
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	Severity    string   `json:"severity"`
+	Result      string   `json:"result"`
+	Delta       float64  `json:"delta"`
+	FailAt      int64    `json:"fail_at_unix"`
+	Category    string   `json:"category"`
+	Refs        []string `json:"refs,omitempty"`
 }
 
 // SeverityProfile defines how an external tool's severity levels map to SSAM delta values.
 type SeverityProfile struct {
 	Critical float64
-	High    float64
-	Medium  float64
-	Low     float64
-	Info    float64
-	Unknown float64
+	High     float64
+	Medium   float64
+	Low      float64
+	Info     float64
+	Unknown  float64
 }
 
 // Known profiles for common tools.
@@ -126,10 +126,10 @@ type Config struct {
 	SyncIntervalSec     int
 	DefaultTransmission float64
 	Profiles            map[string]SeverityProfile
-	ProfilesDefault  string
-	ScanPaths        map[string]string
-	DefaultProfile   string
-	EnabledAdapters  map[string]bool
+	ProfilesDefault     string
+	ScanPaths           map[string]string
+	DefaultProfile      string
+	EnabledAdapters     map[string]bool
 }
 
 // DefaultConfig returns sensible defaults.
@@ -137,9 +137,9 @@ func DefaultConfig() Config {
 	return Config{
 		SyncIntervalSec: 3600,
 		Profiles: map[string]SeverityProfile{
-			"cvss":   CVSSProfile,
-			"lynis":  LynisProfile,
-			"cis":    CISProfile,
+			"cvss":    CVSSProfile,
+			"lynis":   LynisProfile,
+			"cis":     CISProfile,
 			"generic": GenericProfile,
 		},
 		ProfilesDefault: "generic",

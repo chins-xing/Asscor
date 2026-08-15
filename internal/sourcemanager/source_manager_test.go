@@ -166,7 +166,7 @@ func TestSourceManagerModule_ConfigureSource(t *testing.T) {
 	m.DeploySource(context.Background(), spec, kernel.SourceConfig{})
 
 	newCfg := kernel.SourceConfig{Settings: map[string]string{
-		"api_url":  "https://netbox.internal",
+		"api_url":   "https://netbox.internal",
 		"api_token": "secret123",
 	}}
 	err := m.ConfigureSource(context.Background(), "netbox", newCfg)

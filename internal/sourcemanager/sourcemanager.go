@@ -3,10 +3,10 @@
 package sourcemanager
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"os"
 	"path/filepath"
 	"sync"
@@ -631,10 +631,10 @@ func (m *Module) publishEvent(ctx context.Context, topic string, payload map[str
 
 func (m *Module) saveState() {
 	state := struct {
-		Specs    map[string]kernel.SourceSpec    `json:"specs"`
-		Statuses map[string]kernel.SourceStatus  `json:"statuses"`
-		Configs  map[string]kernel.SourceConfig  `json:"configs"`
-		AuditLog []kernel.AuditLogEntry          `json:"audit_log"`
+		Specs    map[string]kernel.SourceSpec   `json:"specs"`
+		Statuses map[string]kernel.SourceStatus `json:"statuses"`
+		Configs  map[string]kernel.SourceConfig `json:"configs"`
+		AuditLog []kernel.AuditLogEntry         `json:"audit_log"`
 	}{
 		Specs:    m.specs,
 		Statuses: m.statuses,
@@ -675,10 +675,10 @@ func (m *Module) loadState() {
 	}
 
 	var state struct {
-		Specs    map[string]kernel.SourceSpec    `json:"specs"`
-		Statuses map[string]kernel.SourceStatus  `json:"statuses"`
-		Configs  map[string]kernel.SourceConfig  `json:"configs"`
-		AuditLog []kernel.AuditLogEntry          `json:"audit_log"`
+		Specs    map[string]kernel.SourceSpec   `json:"specs"`
+		Statuses map[string]kernel.SourceStatus `json:"statuses"`
+		Configs  map[string]kernel.SourceConfig `json:"configs"`
+		AuditLog []kernel.AuditLogEntry         `json:"audit_log"`
 	}
 	if err := json.Unmarshal(data, &state); err != nil {
 		logger.WithComponent("source_manager").Warn("failed to unmarshal state", "error", err)

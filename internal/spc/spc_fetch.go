@@ -85,42 +85,42 @@ func (m *Module) FetchFromAllSources() []kernel.SPCFetchResult {
 
 	if m.kc != nil {
 		if persister, ok := m.kc.Container().ResolveNamed("persistence"); ok {
-		if pi, ok2 := persister.(kernel.PersistenceInterface); ok2 {
-			topCVEs := make([]string, 0, 10)
-			m.mu.RLock()
-			sorted := make([]kernel.SPCCVEScore, len(m.cveCache))
-			copy(sorted, m.cveCache)
-			sort.Slice(sorted, func(i, j int) bool {
-				return sorted[i].CVSS > sorted[j].CVSS
-			})
-			for i := 0; i < len(sorted) && i < 10; i++ {
-				topCVEs = append(topCVEs, sorted[i].CVEID)
-			}
-			kevCount := 0
-			highCount := 0
-			for _, cve := range m.cveCache {
-				if cve.InKEV {
-					kevCount++
+			if pi, ok2 := persister.(kernel.PersistenceInterface); ok2 {
+				topCVEs := make([]string, 0, 10)
+				m.mu.RLock()
+				sorted := make([]kernel.SPCCVEScore, len(m.cveCache))
+				copy(sorted, m.cveCache)
+				sort.Slice(sorted, func(i, j int) bool {
+					return sorted[i].CVSS > sorted[j].CVSS
+				})
+				for i := 0; i < len(sorted) && i < 10; i++ {
+					topCVEs = append(topCVEs, sorted[i].CVEID)
 				}
-				if cve.CVSS >= 7.0 {
-					highCount++
+				kevCount := 0
+				highCount := 0
+				for _, cve := range m.cveCache {
+					if cve.InKEV {
+						kevCount++
+					}
+					if cve.CVSS >= 7.0 {
+						highCount++
+					}
 				}
-			}
-			m.mu.RUnlock()
+				m.mu.RUnlock()
 
-			pi.WriteCVECache(kernel.CVECacheRecord{
-				Timestamp:  time.Now(),
-				TotalCount: len(m.cveCache),
-				HighCount:  highCount,
-				KEVCount:   kevCount,
-				TopCVEs:    topCVEs,
-				Sources: map[string]interface{}{
-					"nvd":  result,
-					"misp": result2,
-				},
-			})
+				pi.WriteCVECache(kernel.CVECacheRecord{
+					Timestamp:  time.Now(),
+					TotalCount: len(m.cveCache),
+					HighCount:  highCount,
+					KEVCount:   kevCount,
+					TopCVEs:    topCVEs,
+					Sources: map[string]interface{}{
+						"nvd":  result,
+						"misp": result2,
+					},
+				})
+			}
 		}
-	}
 	}
 
 	return results

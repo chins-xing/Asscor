@@ -24,11 +24,11 @@ func newLynisAdapter() Adapter { return &lynisAdapter{} }
 
 // LynisReport is the JSON structure emitted by `lynis show report --json`.
 type LynisReport struct {
-	Header    LynisHeader    `json:"header"`
-	Host      LynisHost      `json:"host"`
-	Groups    map[string]interface{} `json:"groups,omitempty"`
-	Tests     map[string]LynisTest  `json:"tests,omitempty"`
-	Plugins   map[string]json.RawMessage `json:"plugins,omitempty"`
+	Header  LynisHeader                `json:"header"`
+	Host    LynisHost                  `json:"host"`
+	Groups  map[string]interface{}     `json:"groups,omitempty"`
+	Tests   map[string]LynisTest       `json:"tests,omitempty"`
+	Plugins map[string]json.RawMessage `json:"plugins,omitempty"`
 }
 
 type LynisHeader struct {
@@ -48,10 +48,10 @@ type LynisHost struct {
 }
 
 type LynisTest struct {
-	Result    string  `json:"result"`
-	UUID      string  `json:"uuid,omitempty"`
-	Date      string  `json:"date,omitempty"`
-	WarnCount int     `json:"warnings,omitempty"`
+	Result    string `json:"result"`
+	UUID      string `json:"uuid,omitempty"`
+	Date      string `json:"date,omitempty"`
+	WarnCount int    `json:"warnings,omitempty"`
 }
 
 // LynisReportDat is the key=value format from /var/log/lynis-report.dat.
@@ -75,7 +75,7 @@ type LynisItem struct {
 	Date     string
 }
 
-func (a *lynisAdapter) ToolID()   string { return "lynis" }
+func (a *lynisAdapter) ToolID() string   { return "lynis" }
 func (a *lynisAdapter) ToolName() string { return "Lynis (Unix/Linux Security Auditing)" }
 
 func (a *lynisAdapter) IsEnabled(cfg Config) bool {
@@ -157,11 +157,11 @@ func (a *lynisAdapter) parseJSON(input []byte) (*ExternalAssessmentReport, error
 		}
 		result.Items = append(result.Items, ExternalCheckResult{
 			CheckID:  sanitizeLynisID(id),
-			Title:   id,
-			Result:  res,
+			Title:    id,
+			Result:   res,
 			Severity: level,
-			Delta:   delta,
-			FailAt:  scanTime.Unix(),
+			Delta:    delta,
+			FailAt:   scanTime.Unix(),
 			Category: "Lynis",
 		})
 	}
@@ -182,11 +182,11 @@ func (a *lynisAdapter) parseJSON(input []byte) (*ExternalAssessmentReport, error
 		}
 		result.Items = append(result.Items, ExternalCheckResult{
 			CheckID:  sanitizeLynisID(id),
-			Title:   id,
-			Result:  res,
+			Title:    id,
+			Result:   res,
 			Severity: level,
-			Delta:   delta,
-			FailAt:  failAt,
+			Delta:    delta,
+			FailAt:   failAt,
 			Category: "Lynis",
 		})
 	}

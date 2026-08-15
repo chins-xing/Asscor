@@ -10,16 +10,16 @@ const (
 )
 
 type DomainMeta struct {
-	ID          string
-	Label       string
-	Description string
-	Category    DomainCategory
+	ID            string
+	Label         string
+	Description   string
+	Category      DomainCategory
 	DefaultWeight float64
 }
 
 type DomainRegistry struct {
-	mu       sync.RWMutex
-	domains  map[string]DomainMeta
+	mu      sync.RWMutex
+	domains map[string]DomainMeta
 }
 
 var globalDomainRegistry = &DomainRegistry{

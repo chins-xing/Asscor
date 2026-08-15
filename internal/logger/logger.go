@@ -168,15 +168,15 @@ func TraceID(ctx context.Context) string {
 	return ""
 }
 
-func Debug(msg string, args ...any)  { L().Debug(msg, args...) }
-func Info(msg string, args ...any)   { L().Info(msg, args...) }
-func Warn(msg string, args ...any)   { L().Warn(msg, args...) }
-func Error(msg string, args ...any)  { L().Error(msg, args...) }
+func Debug(msg string, args ...any) { L().Debug(msg, args...) }
+func Info(msg string, args ...any)  { L().Info(msg, args...) }
+func Warn(msg string, args ...any)  { L().Warn(msg, args...) }
+func Error(msg string, args ...any) { L().Error(msg, args...) }
 
-func DebugCtx(ctx context.Context, msg string, args ...any)  { L().DebugContext(ctx, msg, args...) }
-func InfoCtx(ctx context.Context, msg string, args ...any)   { L().InfoContext(ctx, msg, args...) }
-func WarnCtx(ctx context.Context, msg string, args ...any)   { L().WarnContext(ctx, msg, args...) }
-func ErrorCtx(ctx context.Context, msg string, args ...any)  { L().ErrorContext(ctx, msg, args...) }
+func DebugCtx(ctx context.Context, msg string, args ...any) { L().DebugContext(ctx, msg, args...) }
+func InfoCtx(ctx context.Context, msg string, args ...any)  { L().InfoContext(ctx, msg, args...) }
+func WarnCtx(ctx context.Context, msg string, args ...any)  { L().WarnContext(ctx, msg, args...) }
+func ErrorCtx(ctx context.Context, msg string, args ...any) { L().ErrorContext(ctx, msg, args...) }
 
 func RedirectToFile(path string) error {
 	if globalSwitcher == nil {

@@ -18,18 +18,18 @@ type honeytokenHit struct {
 // attacker who reads or uses a decoy reveals their presence. Uses only the
 // standard library: files are placed under a configurable decoy root.
 type honeytokenDeployer struct {
-	mu    sync.Mutex
-	root  string
+	mu     sync.Mutex
+	root   string
 	tokens map[string]honeytokenHit
-	onHit func(honeytokenHit)
+	onHit  func(honeytokenHit)
 }
 
 // NewHoneytokenDeployer creates a decoy deployer rooted at root.
 func NewHoneytokenDeployer(root string, onHit func(honeytokenHit)) *honeytokenDeployer {
 	return &honeytokenDeployer{
-		root:  root,
+		root:   root,
 		tokens: make(map[string]honeytokenHit),
-		onHit: onHit,
+		onHit:  onHit,
 	}
 }
 

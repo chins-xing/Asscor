@@ -3,8 +3,8 @@
 package srdwrapper
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"context"
+	"github.com/asscor/asscor/internal/kernel"
 	"testing"
 )
 

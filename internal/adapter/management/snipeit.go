@@ -16,18 +16,18 @@ import (
 )
 
 type snipeITAsset struct {
-	ID             int    `json:"id"`
-	Name           string `json:"name"`
-	AssetTag       string `json:"asset_tag"`
-	Serial         string `json:"serial"`
-	Model          snipeITRef `json:"model"`
-	Category       snipeITRef `json:"category"`
-	StatusLabel    snipeITStatusLabel `json:"status_label"`
-	AssignedTo     *snipeITRef `json:"assigned_to"`
-	Location       *snipeITRef `json:"location"`
-	PurchaseDate   *snipeITDate `json:"purchase_date"`
-	WarrantyExpires *snipeITDate `json:"warranty_expires"`
-	Notes          string `json:"notes"`
+	ID              int                `json:"id"`
+	Name            string             `json:"name"`
+	AssetTag        string             `json:"asset_tag"`
+	Serial          string             `json:"serial"`
+	Model           snipeITRef         `json:"model"`
+	Category        snipeITRef         `json:"category"`
+	StatusLabel     snipeITStatusLabel `json:"status_label"`
+	AssignedTo      *snipeITRef        `json:"assigned_to"`
+	Location        *snipeITRef        `json:"location"`
+	PurchaseDate    *snipeITDate       `json:"purchase_date"`
+	WarrantyExpires *snipeITDate       `json:"warranty_expires"`
+	Notes           string             `json:"notes"`
 }
 
 type snipeITRef struct {
@@ -43,13 +43,13 @@ type snipeITStatusLabel struct {
 }
 
 type snipeITDate struct {
-	Date     string `json:"date"`
+	Date      string `json:"date"`
 	Formatted string `json:"formatted"`
 }
 
 type snipeITResponse struct {
-	Total int             `json:"total"`
-	Rows  []snipeITAsset  `json:"rows"`
+	Total int            `json:"total"`
+	Rows  []snipeITAsset `json:"rows"`
 }
 
 type SnipeITAdapter struct {
@@ -156,15 +156,15 @@ func (s *SnipeITAdapter) Parse(raw []byte) ([]*adapter.NormalizedFinding, error)
 			Detail:      fmt.Sprintf("Asset %s (tag: %s) status: %s, assigned to: %s", asset.Name, asset.AssetTag, asset.StatusLabel.Name, assignedTo),
 			Domain:      model.DomainBusinessContinuity,
 			Metadata: map[string]string{
-				"snipeit_id":    fmt.Sprintf("%d", asset.ID),
-				"asset_tag":     asset.AssetTag,
-				"serial":        asset.Serial,
-				"model":         asset.Model.Name,
-				"category":      asset.Category.Name,
-				"status":        asset.StatusLabel.Name,
-				"status_type":   statusType,
-				"assigned_to":   assignedTo,
-				"location":      location,
+				"snipeit_id":  fmt.Sprintf("%d", asset.ID),
+				"asset_tag":   asset.AssetTag,
+				"serial":      asset.Serial,
+				"model":       asset.Model.Name,
+				"category":    asset.Category.Name,
+				"status":      asset.StatusLabel.Name,
+				"status_type": statusType,
+				"assigned_to": assignedTo,
+				"location":    location,
 			},
 		}
 

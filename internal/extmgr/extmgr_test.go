@@ -183,13 +183,13 @@ func TestExtensionLifecycleCRUD(t *testing.T) {
 	el := NewExtensionLifecycle(dir)
 
 	spec := ExtensionSpec{
-		ID:          "test-ext-1",
-		Name:        "Test Extension 1",
-		Version:     "1.0.0",
-		ExtType:     ExtTypeCheckModule,
-		Description: "A test extension",
-		Author:      "Test Author",
-		Source:      SourceSpec{URL: "https://example.com/ext.zip", Type: "http"},
+		ID:           "test-ext-1",
+		Name:         "Test Extension 1",
+		Version:      "1.0.0",
+		ExtType:      ExtTypeCheckModule,
+		Description:  "A test extension",
+		Author:       "Test Author",
+		Source:       SourceSpec{URL: "https://example.com/ext.zip", Type: "http"},
 		CustomConfig: map[string]string{"mode": "strict"},
 	}
 
@@ -354,13 +354,13 @@ func TestExtensionLifecycleListByType(t *testing.T) {
 
 func TestExtensionSpecJSON(t *testing.T) {
 	spec := ExtensionSpec{
-		ID:      "json-ext",
-		Name:    "JSON Extension",
-		Version: "1.2.3-beta",
-		ExtType: ExtTypeAdapter,
+		ID:          "json-ext",
+		Name:        "JSON Extension",
+		Version:     "1.2.3-beta",
+		ExtType:     ExtTypeAdapter,
 		Description: "An adapter extension",
-		Author: "ASSCOR Team",
-		License: "MIT",
+		Author:      "ASSCOR Team",
+		License:     "MIT",
 		Source: SourceSpec{
 			URL:      "https://ext.example.com/json-ext.zip",
 			Type:     "http",
@@ -457,8 +457,8 @@ func TestExtensionManagerRepository(t *testing.T) {
 	dir := t.TempDir()
 
 	cfg := ManagerConfig{
-		ExtensionsDir: filepath.Join(dir, "extensions"),
-		StateDir:      filepath.Join(dir, "state"),
+		ExtensionsDir:  filepath.Join(dir, "extensions"),
+		StateDir:       filepath.Join(dir, "state"),
 		RepositoryURLs: []string{"https://repo1.example.com", "https://repo2.example.com"},
 	}
 

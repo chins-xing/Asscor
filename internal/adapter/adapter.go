@@ -69,8 +69,8 @@ type NormalizedFinding struct {
 	FixVersion  string
 	Reference   string
 
-	Passed  bool
-	Detail  string
+	Passed bool
+	Detail string
 
 	RawData  string
 	Metadata map[string]string
@@ -144,11 +144,11 @@ func NewBaseAdapter(id, name, category, priority, version string) BaseAdapter {
 	}
 }
 
-func (b BaseAdapter) ID() string        { return b.id }
-func (b BaseAdapter) Name() string      { return b.name }
-func (b BaseAdapter) Category() string  { return b.category }
-func (b BaseAdapter) Priority() string  { return b.priority }
-func (b BaseAdapter) Version() string   { return b.version }
+func (b BaseAdapter) ID() string       { return b.id }
+func (b BaseAdapter) Name() string     { return b.name }
+func (b BaseAdapter) Category() string { return b.category }
+func (b BaseAdapter) Priority() string { return b.priority }
+func (b BaseAdapter) Version() string  { return b.version }
 
 func (b BaseAdapter) IsEnabled(config map[string]string) bool {
 	v, ok := config[b.id]

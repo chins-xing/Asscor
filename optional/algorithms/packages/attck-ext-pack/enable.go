@@ -19,4 +19,3 @@
 //
 // See package.json for extension point hooks and register.go for the registration implementation.
 package attckext
-

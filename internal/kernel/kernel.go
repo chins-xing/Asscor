@@ -202,11 +202,10 @@ func (k *Kernel) ListPlugins() []PluginInfo {
 	return infos
 }
 
-
 type PluginHealthStatus struct {
-	Name   string `json:"name"`
-	Healthy bool  `json:"healthy"`
-	Error  string `json:"error,omitempty"`
+	Name    string `json:"name"`
+	Healthy bool   `json:"healthy"`
+	Error   string `json:"error,omitempty"`
 }
 
 func (k *Kernel) HealthCheck(ctx context.Context) []PluginHealthStatus {

@@ -3,7 +3,7 @@ package integrity
 import "sync/atomic"
 
 var (
-	signingEnabled  int32 = 1
+	signingEnabled    int32 = 1
 	algoVerifyEnabled int32 = 1
 	antiDebugEnabled  int32
 )

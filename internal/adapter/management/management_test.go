@@ -319,8 +319,8 @@ func TestSnipeITAdapterParse_Empty(t *testing.T) {
 func TestSnipeITAdapterParse_StatusMapping(t *testing.T) {
 	s := NewSnipeITAdapter()
 	tests := []struct {
-		statusType   string
-		expectPassed bool
+		statusType     string
+		expectPassed   bool
 		expectSeverity adapter.Severity
 	}{
 		{"deployed", true, adapter.SeverityInfo},
@@ -625,8 +625,8 @@ func TestOpenTofuAdapterParse_NoResources(t *testing.T) {
 
 func TestManagerAdapterDomainMapping(t *testing.T) {
 	tests := []struct {
-		name    string
-		newFn   func() adapter.Adapter
+		name       string
+		newFn      func() adapter.Adapter
 		wantDomain string
 	}{
 		{"Ansible", func() adapter.Adapter { return NewAnsibleAdapter() }, model.DomainOperationTrust},
@@ -675,16 +675,16 @@ func TestAllManagerAdaptersRegistered(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"ansible":     false,
-		"netbox":      false,
-		"snipe_it":    false,
-		"freeipa":     false,
-		"keycloak":    false,
-		"wazuh_siem":  false,
-		"rundeck":     false,
-		"jira":        false,
-		"terraform":   false,
-		"opentofu":    false,
+		"ansible":    false,
+		"netbox":     false,
+		"snipe_it":   false,
+		"freeipa":    false,
+		"keycloak":   false,
+		"wazuh_siem": false,
+		"rundeck":    false,
+		"jira":       false,
+		"terraform":  false,
+		"opentofu":   false,
 	}
 
 	for _, a := range adapters {

@@ -90,9 +90,9 @@ func NewManager() *Manager {
 func (m *Manager) Info() PluginInfo {
 	return PluginInfo{
 		Name:        "srd_adapters",
-		Version:    "1.0.0",
+		Version:     "1.0.0",
 		Description: "SRD external adapters — normalizes OpenSCAP, Lynis and generic JSON reports into Prism/SRD input",
-		Author:     "ASSCOR Core Team",
+		Author:      "ASSCOR Core Team",
 	}
 }
 
@@ -296,21 +296,21 @@ func (m *Manager) publishResult(ctx context.Context, result *SRDResult) {
 
 	pr := result.PrismResult
 	payload := map[string]interface{}{
-		"tool":       result.Report.Tool,
-		"host_id":    result.Report.HostID,
-		"hostname":   result.Report.Hostname,
-		"scan_time":  result.Report.ScanTime,
-		"item_count": len(result.Report.Items),
-		"raw_score":  result.Report.RawScore,
-		"ssam_score": pr.SsamScore,
-		"prism_score": pr.PrismScore,
-		"external_risk": pr.ExternalRisk,
-		"prop_penalty": pr.PropPenalty,
-		"debt_penalty": pr.DebtPenalty,
-		"propagated_risk": pr.PropagatedRisk,
-		"debt_raw": pr.DebtRaw,
+		"tool":              result.Report.Tool,
+		"host_id":           result.Report.HostID,
+		"hostname":          result.Report.Hostname,
+		"scan_time":         result.Report.ScanTime,
+		"item_count":        len(result.Report.Items),
+		"raw_score":         result.Report.RawScore,
+		"ssam_score":        pr.SsamScore,
+		"prism_score":       pr.PrismScore,
+		"external_risk":     pr.ExternalRisk,
+		"prop_penalty":      pr.PropPenalty,
+		"debt_penalty":      pr.DebtPenalty,
+		"propagated_risk":   pr.PropagatedRisk,
+		"debt_raw":          pr.DebtRaw,
 		"collapse_modifier": pr.CollapseModifier,
-		"risk_velocity": pr.RiskVelocity,
+		"risk_velocity":     pr.RiskVelocity,
 	}
 
 	if result.SemanticResult != nil {

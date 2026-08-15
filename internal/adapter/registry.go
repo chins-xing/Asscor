@@ -66,15 +66,15 @@ func ResetRegistryForTesting() {
 }
 
 type PipelineResult struct {
-	AdapterID    string
-	AdapterName  string
-	Findings     []*NormalizedFinding
-	Error        error
+	AdapterID   string
+	AdapterName string
+	Findings    []*NormalizedFinding
+	Error       error
 }
 
 type Pipeline struct {
-	adapters  []Adapter
-	config    map[string]string
+	adapters   []Adapter
+	config     map[string]string
 	maxWorkers int
 }
 

@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"sync"
 
-	ssam "github.com/chins-xing/ssam"
 	prismlib "github.com/chins-xing/prism"
+	ssam "github.com/chins-xing/ssam"
 
 	"github.com/asscor/asscor/internal/logger"
 )

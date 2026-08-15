@@ -3,8 +3,8 @@
 package attck
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"math"
 	"sort"
 	"time"
@@ -16,11 +16,11 @@ func (m *Module) PerformGapAnalysis(hostID string) (*AssessmentReport, error) {
 	m.mu.Lock()
 
 	report := &AssessmentReport{
-		ID:              fmt.Sprintf("assess-%d", time.Now().UnixNano()),
-		HostID:          hostID,
-		Framework:       "MITRE ATT&CK",
-		Version:         m.attckVersion,
-		AssessmentTime:  time.Now(),
+		ID:             fmt.Sprintf("assess-%d", time.Now().UnixNano()),
+		HostID:         hostID,
+		Framework:      "MITRE ATT&CK",
+		Version:        m.attckVersion,
+		AssessmentTime: time.Now(),
 	}
 
 	totalTechs := 0
@@ -34,7 +34,7 @@ func (m *Module) PerformGapAnalysis(hostID string) (*AssessmentReport, error) {
 				TechniqueID:   tech.ID,
 				TechniqueName: tech.Name,
 				TacticID:      tactic.ID,
-				AsscorChecks:   tech.AsscorChecks,
+				AsscorChecks:  tech.AsscorChecks,
 			}
 
 			for _, r := range m.detectionRules {
@@ -247,15 +247,15 @@ func (m *Module) generateAssessmentRecommendations(report *AssessmentReport) []R
 			techIDs = append(techIDs, g.TechniqueID)
 		}
 		recs = append(recs, Recommendation{
-			ID:          fmt.Sprintf("rec-%d", len(recs)+1),
-			Priority:    "critical",
-			Category:    "no_coverage",
-			Title:       "Address techniques with zero coverage",
-			Description: fmt.Sprintf("%d techniques have no controls, detections, or mitigations. These represent the highest risk gaps.", len(criticalGaps["no_coverage"])),
+			ID:           fmt.Sprintf("rec-%d", len(recs)+1),
+			Priority:     "critical",
+			Category:     "no_coverage",
+			Title:        "Address techniques with zero coverage",
+			Description:  fmt.Sprintf("%d techniques have no controls, detections, or mitigations. These represent the highest risk gaps.", len(criticalGaps["no_coverage"])),
 			TechniqueIDs: techIDs,
-			Effort:      "high",
-			Impact:      "critical",
-			Status:      "open",
+			Effort:       "high",
+			Impact:       "critical",
+			Status:       "open",
 		})
 	}
 
@@ -265,15 +265,15 @@ func (m *Module) generateAssessmentRecommendations(report *AssessmentReport) []R
 			techIDs = append(techIDs, g.TechniqueID)
 		}
 		recs = append(recs, Recommendation{
-			ID:          fmt.Sprintf("rec-%d", len(recs)+1),
-			Priority:    "high",
-			Category:    "detection_gap",
-			Title:       "Implement missing detection rules",
-			Description: fmt.Sprintf("%d techniques lack detection rules. Adding these will significantly improve visibility.", len(highGaps["detection_gap"])),
+			ID:           fmt.Sprintf("rec-%d", len(recs)+1),
+			Priority:     "high",
+			Category:     "detection_gap",
+			Title:        "Implement missing detection rules",
+			Description:  fmt.Sprintf("%d techniques lack detection rules. Adding these will significantly improve visibility.", len(highGaps["detection_gap"])),
 			TechniqueIDs: techIDs,
-			Effort:      "medium",
-			Impact:      "high",
-			Status:      "open",
+			Effort:       "medium",
+			Impact:       "high",
+			Status:       "open",
 		})
 	}
 
@@ -334,7 +334,7 @@ func (m *Module) GetControlMapping(techniqueID string) *ControlMapping {
 					TechniqueID:   tech.ID,
 					TechniqueName: tech.Name,
 					TacticID:      tactic.ID,
-					AsscorChecks:   tech.AsscorChecks,
+					AsscorChecks:  tech.AsscorChecks,
 				}
 
 				for _, r := range m.detectionRules {

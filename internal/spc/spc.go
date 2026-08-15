@@ -3,9 +3,9 @@
 package spc
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"context"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"math"
 	"os"
 	"strings"
@@ -20,14 +20,14 @@ import (
 type Module struct {
 	kc kernel.KernelContext
 
-	mu          sync.RWMutex
-	cveCache    []kernel.SPCCVEScore
-	cveIndex    map[string]int
-	assetCache  map[string]*kernel.LocalAsset
+	mu           sync.RWMutex
+	cveCache     []kernel.SPCCVEScore
+	cveIndex     map[string]int
+	assetCache   map[string]*kernel.LocalAsset
 	lastNVDFetch time.Time
-	lastUpdate  time.Time
+	lastUpdate   time.Time
 	fetchResults []kernel.SPCFetchResult
-	state       kernel.PluginState
+	state        kernel.PluginState
 
 	// Lowercase caches for the assessment hot path. matchCPEFast lowercases
 	// each CVE's AffectedCPEs/Description on every evaluation; precomputing
@@ -36,23 +36,23 @@ type Module struct {
 	cpeLowerCache  sync.Map // CVEID -> []string (lowercased AffectedCPEs)
 	descLowerCache sync.Map // CVEID -> string (lowercased Description)
 
-	fetchInterval  time.Duration
-	mispConfig     kernel.SPCMISPConfig
-	nvdConfig      kernel.SPCNVDConfig
-	epssConfig     kernel.SPCEPSSConfig
-	kevConfig      kernel.SPCKEVConfig
-	cnnvdConfig    kernel.SPCCNNVDConfig
-	cnvdConfig     kernel.SPCCNVDConfig
-	oscalConfig    kernel.SPCOscalConfig
-	mispClient     *kernel.SPCMISPClient
-	enabled        bool
-	minPScore      float64
-	maxCacheSize   int
-	kevCatalog     map[string]bool
-	nvdLimiter     chan struct{}
-	nvdTimers      []*time.Timer
-	done           chan struct{}
-	cancelFunc     context.CancelFunc
+	fetchInterval time.Duration
+	mispConfig    kernel.SPCMISPConfig
+	nvdConfig     kernel.SPCNVDConfig
+	epssConfig    kernel.SPCEPSSConfig
+	kevConfig     kernel.SPCKEVConfig
+	cnnvdConfig   kernel.SPCCNNVDConfig
+	cnvdConfig    kernel.SPCCNVDConfig
+	oscalConfig   kernel.SPCOscalConfig
+	mispClient    *kernel.SPCMISPClient
+	enabled       bool
+	minPScore     float64
+	maxCacheSize  int
+	kevCatalog    map[string]bool
+	nvdLimiter    chan struct{}
+	nvdTimers     []*time.Timer
+	done          chan struct{}
+	cancelFunc    context.CancelFunc
 }
 
 func New() *Module {
@@ -479,13 +479,13 @@ func (m *Module) Calculate(hostID string, assetPackages []string) kernel.SPCCorr
 	var topImpactVal float64
 	var penalties []kernel.CVEPenalty
 	matchStats := struct {
-		total      int
-		matched    int
-		byProduct  int
-		byDesc     int
-		byVendor   int
-		byExact    int
-		noCPEs     int
+		total     int
+		matched   int
+		byProduct int
+		byDesc    int
+		byVendor  int
+		byExact   int
+		noCPEs    int
 	}{}
 
 	for i := range cves {

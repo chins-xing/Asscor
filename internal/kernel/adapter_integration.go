@@ -141,7 +141,7 @@ func (m *AdapterIntegrationModule) RunAdapters(ctx context.Context) []adapter.Pi
 
 	if m.kernel.Extensions() != nil {
 		m.kernel.Extensions().Execute(ctx, "adapter.post_fetch", map[string]interface{}{
-			"adapter_count": len(results),
+			"adapter_count":  len(results),
 			"total_findings": totalFindings,
 		})
 	}
@@ -171,7 +171,7 @@ func (m *AdapterIntegrationModule) publishAdapterFindings(results []adapter.Pipe
 		}
 
 		m.kernel.Bus().Publish(context.Background(), Message{
-			Topic:     "adapter.findings",
+			Topic: "adapter.findings",
 			Payload: map[string]interface{}{
 				"adapter_id": r.AdapterID,
 				"adapter":    r.AdapterName,

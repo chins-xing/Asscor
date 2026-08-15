@@ -140,9 +140,9 @@ func GuardGo(module string, op string, fn func()) {
 // window for a given module. Excess errors are dropped (with a periodic
 // summary log).
 type ErrorRateLimiter struct {
-	count    int
-	limit    int
-	window   time.Time
+	count  int
+	limit  int
+	window time.Time
 }
 
 // AllowError returns true if the error should be logged. Returns false if

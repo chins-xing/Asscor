@@ -20,7 +20,7 @@ type genericAdapter struct{}
 
 func newGenericAdapter() Adapter { return &genericAdapter{} }
 
-func (a *genericAdapter) ToolID()   string { return "generic" }
+func (a *genericAdapter) ToolID() string   { return "generic" }
 func (a *genericAdapter) ToolName() string { return "Generic JSON (fallback for other tools)" }
 
 func (a *genericAdapter) IsEnabled(cfg Config) bool {
@@ -133,7 +133,7 @@ func (a *genericAdapter) buildFromItems(items []GenericCheckItem, profile Severi
 
 		report.Items = append(report.Items, ExternalCheckResult{
 			CheckID:     checkID,
-			RuleID:     item.RuleID,
+			RuleID:      item.RuleID,
 			Title:       item.Title,
 			Description: item.Description,
 			Severity:    item.Severity,

@@ -290,10 +290,10 @@ func DefaultGRPCClientConfig() GRPCClientConfig {
 }
 
 type GRPCClient struct {
-	cfg    GRPCClientConfig
-	conn   *grpc.ClientConn
-	kc apiv1.KernelServiceClient
-	mu     sync.RWMutex
+	cfg  GRPCClientConfig
+	conn *grpc.ClientConn
+	kc   apiv1.KernelServiceClient
+	mu   sync.RWMutex
 }
 
 func NewGRPCClient(cfg GRPCClientConfig) *GRPCClient {

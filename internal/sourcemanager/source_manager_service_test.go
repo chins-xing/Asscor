@@ -3,8 +3,8 @@
 package sourcemanager
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"context"
+	"github.com/asscor/asscor/internal/kernel"
 	"testing"
 
 	apiv1 "github.com/asscor/asscor/api/v1"

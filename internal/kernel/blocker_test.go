@@ -18,7 +18,7 @@ func (m *mockCommander) EnqueueCommand(hostID string, action string, params map[
 	m.action = action
 	return "cmd-1"
 }
-func (m *mockCommander) DequeueCommands(hostID string) []*apiv1.Command { return nil }
+func (m *mockCommander) DequeueCommands(hostID string) []*apiv1.Command                      { return nil }
 func (m *mockCommander) AckCommand(hostID string, cmdID string, success bool, output string) {}
 
 func TestKernelBlockerBlock(t *testing.T) {

@@ -71,11 +71,11 @@ func (m *mockKernel) SetConfig(key, value string) {
 
 func (m *mockKernel) Evaluate(hostID string) (interface{}, error) {
 	return &model.AssessmentResult{
-		HostID:    hostID,
-		FinalScore: 85.5,
-		Acceptable: true,
+		HostID:       hostID,
+		FinalScore:   85.5,
+		Acceptable:   true,
 		DomainScores: model.DomainScores{AttackSurface: 90, BusinessContinuity: 85, OperationTrust: 80, Resilience: 75},
-		Checks:     []model.CheckResult{{CheckID: "AS-001", Passed: true}, {CheckID: "OT-001", Passed: false, Detail: "test"}},
+		Checks:       []model.CheckResult{{CheckID: "AS-001", Passed: true}, {CheckID: "OT-001", Passed: false, Detail: "test"}},
 	}, nil
 }
 
@@ -136,8 +136,8 @@ func (s *mockSourceAccess) DeploySource(ctx context.Context, spec kernel.SourceS
 func (s *mockSourceAccess) UninstallSource(ctx context.Context, id string, force bool) error {
 	return nil
 }
-func (s *mockSourceAccess) EnableSource(ctx context.Context, id string) error    { return nil }
-func (s *mockSourceAccess) DisableSource(ctx context.Context, id string) error   { return nil }
+func (s *mockSourceAccess) EnableSource(ctx context.Context, id string) error  { return nil }
+func (s *mockSourceAccess) DisableSource(ctx context.Context, id string) error { return nil }
 func (s *mockSourceAccess) UpdateSource(ctx context.Context, id string, version string) error {
 	return nil
 }
@@ -251,13 +251,13 @@ func newTestEngine(kernel KernelAccess) *Engine {
 
 func TestParseInput_Basic(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    []string
-		command  string
-		args     []string
-		json     bool
-		verbose  bool
-		help     bool
+		name    string
+		input   []string
+		command string
+		args    []string
+		json    bool
+		verbose bool
+		help    bool
 	}{
 		{"empty", []string{}, "", nil, false, false, false},
 		{"simple", []string{"help"}, "help", nil, false, false, false},

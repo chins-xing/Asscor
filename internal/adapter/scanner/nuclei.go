@@ -15,33 +15,33 @@ import (
 )
 
 type nucleiResultItem struct {
-	TemplateID  string      `json:"template-id"`
-	TemplateURL string      `json:"template-url"`
-	Info        nucleiInfo   `json:"info"`
-	Type        string      `json:"type"`
-	Host        string      `json:"host"`
-	MatchedAt   string      `json:"matched-at"`
-	Severity    string      `json:"severity"`
-	Timestamp   string      `json:"timestamp"`
-	MatcherName string      `json:"matcher-name"`
-	ExtractedResults []string `json:"extracted-results"`
-	IP          string      `json:"ip"`
-	CurlCommand string      `json:"curl-command"`
+	TemplateID       string     `json:"template-id"`
+	TemplateURL      string     `json:"template-url"`
+	Info             nucleiInfo `json:"info"`
+	Type             string     `json:"type"`
+	Host             string     `json:"host"`
+	MatchedAt        string     `json:"matched-at"`
+	Severity         string     `json:"severity"`
+	Timestamp        string     `json:"timestamp"`
+	MatcherName      string     `json:"matcher-name"`
+	ExtractedResults []string   `json:"extracted-results"`
+	IP               string     `json:"ip"`
+	CurlCommand      string     `json:"curl-command"`
 }
 
 type nucleiInfo struct {
-	Name        string   `json:"name"`
-	Author      []string `json:"author"`
-	Description string   `json:"description"`
-	Reference   []string `json:"reference"`
-	Severity    string   `json:"severity"`
-	Tags        []string `json:"tags"`
+	Name           string               `json:"name"`
+	Author         []string             `json:"author"`
+	Description    string               `json:"description"`
+	Reference      []string             `json:"reference"`
+	Severity       string               `json:"severity"`
+	Tags           []string             `json:"tags"`
 	Classification nucleiClassification `json:"classification"`
 }
 
 type nucleiClassification struct {
-	CVEScore float64  `json:"cvss-score"`
-	CVEID    []string `json:"cve-id"`
+	CVEScore float64           `json:"cvss-score"`
+	CVEID    []string          `json:"cve-id"`
 	CVEMap   map[string]string `json:"cve-map"`
 }
 

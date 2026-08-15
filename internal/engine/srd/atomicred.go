@@ -41,29 +41,29 @@ type AtomicRedTechnique struct {
 	Platform      string                `json:"platform,omitempty"`
 	Tests         []AtomicRedTestResult `json:"tests,omitempty"`
 	// Flat format: single test per entry
-	TestName         string `json:"test_name,omitempty"`
-	TestNumber       string `json:"test_number,omitempty"`
-	TestGUID         string `json:"test_guid,omitempty"`
-	ExecutionTime    string `json:"execution_time,omitempty"`
-	ExecutionStatus  string `json:"execution_status,omitempty"`
-	Status           string `json:"status,omitempty"`
-	DetectionTriggered bool `json:"detection_triggered,omitempty"`
-	Hostname         string `json:"hostname,omitempty"`
-	ComputerName     string `json:"computer_name,omitempty"`
-	Output           string `json:"output,omitempty"`
-	Error            string `json:"error,omitempty"`
+	TestName           string `json:"test_name,omitempty"`
+	TestNumber         string `json:"test_number,omitempty"`
+	TestGUID           string `json:"test_guid,omitempty"`
+	ExecutionTime      string `json:"execution_time,omitempty"`
+	ExecutionStatus    string `json:"execution_status,omitempty"`
+	Status             string `json:"status,omitempty"`
+	DetectionTriggered bool   `json:"detection_triggered,omitempty"`
+	Hostname           string `json:"hostname,omitempty"`
+	ComputerName       string `json:"computer_name,omitempty"`
+	Output             string `json:"output,omitempty"`
+	Error              string `json:"error,omitempty"`
 }
 
 // AtomicRedTestResult is a single test execution within a technique.
 type AtomicRedTestResult struct {
-	TestName         string `json:"test_name"`
-	TestNumber       string `json:"test_number,omitempty"`
-	TestGUID         string `json:"test_guid,omitempty"`
-	ExecutionTime    string `json:"execution_time,omitempty"`
-	Status           string `json:"status"`
-	DetectionTriggered bool `json:"detection_triggered,omitempty"`
-	Output           string `json:"output,omitempty"`
-	Error            string `json:"error,omitempty"`
+	TestName           string `json:"test_name"`
+	TestNumber         string `json:"test_number,omitempty"`
+	TestGUID           string `json:"test_guid,omitempty"`
+	ExecutionTime      string `json:"execution_time,omitempty"`
+	Status             string `json:"status"`
+	DetectionTriggered bool   `json:"detection_triggered,omitempty"`
+	Output             string `json:"output,omitempty"`
+	Error              string `json:"error,omitempty"`
 }
 
 // --- Adapter implementation ---

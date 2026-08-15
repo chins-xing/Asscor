@@ -3,10 +3,10 @@
 package spc
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"bufio"
 	"compress/gzip"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"io"
 	"net/http"
 	"strconv"

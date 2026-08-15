@@ -345,17 +345,17 @@ func ConvertSourceStatus(s *SourceStatus, spec *SourceSpec) *apiv1.SourceStatus 
 
 func convertSourceSpec(s *SourceSpec) *apiv1.SourceSpec {
 	return &apiv1.SourceSpec{
-		Id:             s.ID,
-		Name:           s.Name,
-		Category:       string(s.Category),
-		Priority:       string(s.Priority),
-		Version:        s.Version,
-		Description:    s.Description,
-		Interface:      s.Interface,
-		AdapterId:      s.AdapterID,
-		OutputFormat:   s.OutputFormat,
+		Id:              s.ID,
+		Name:            s.Name,
+		Category:        string(s.Category),
+		Priority:        string(s.Priority),
+		Version:         s.Version,
+		Description:     s.Description,
+		Interface:       s.Interface,
+		AdapterId:       s.AdapterID,
+		OutputFormat:    s.OutputFormat,
 		AdaptDifficulty: s.AdaptDiff,
-		AccessValue:    s.AccessValue,
-		DependsOn:      s.DependsOn,
+		AccessValue:     s.AccessValue,
+		DependsOn:       s.DependsOn,
 	}
 }

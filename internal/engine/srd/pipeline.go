@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/logger"
 	ascorprism "github.com/asscor/asscor/internal/engine/prism"
+	"github.com/asscor/asscor/internal/logger"
 	prismlib "github.com/chins-xing/prism"
 )
 
@@ -275,9 +275,9 @@ func subnetOverlap(a, b string) bool {
 
 // SRDResult holds the processed external report and its full Prism-computed analysis.
 type SRDResult struct {
-	Report      *ExternalAssessmentReport
-	PrismResult *prismlib.AssetRiskResult
-	SemanticResult *prismlib.SemanticRiskReport
+	Report          *ExternalAssessmentReport
+	PrismResult     *prismlib.AssetRiskResult
+	SemanticResult  *prismlib.SemanticRiskReport
 	InferenceResult *prismlib.FutureRiskReport
-	ProcessedAt time.Time
+	ProcessedAt     time.Time
 }

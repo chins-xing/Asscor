@@ -38,7 +38,7 @@ func TestContainsShellMetachar(t *testing.T) {
 	}{
 		{"normal command", false},
 		{"cmd arg1 arg2", false},
-		{"cmd | other", true},    // pipe
+		{"cmd | other", true},   // pipe
 		{"cmd; rm -rf /", true}, // semicolon
 		{"cmd && other", true},  // double ampersand
 		{"cmd `id`", true},      // backtick
@@ -82,7 +82,7 @@ func TestParseCommand(t *testing.T) {
 		{"ss -tlnp", "ss", true},
 		{"uname -r", "uname", true},
 		{"ps aux", "ps", true},
-		{"rm -rf /", "", false},    // not in allowlist
+		{"rm -rf /", "", false},      // not in allowlist
 		{"curl evil.com", "", false}, // not in allowlist
 		{"", "", false},
 	}

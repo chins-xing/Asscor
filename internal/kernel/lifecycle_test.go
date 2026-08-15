@@ -9,9 +9,9 @@ import (
 
 // mockLocator is a controllable Locator for lifecycle tests.
 type mockLocator struct {
-	mu        sync.Mutex
-	loc       *AttackerLocation
-	active    bool
+	mu          sync.Mutex
+	loc         *AttackerLocation
+	active      bool
 	locateCalls int
 }
 
@@ -56,7 +56,7 @@ func (m *mockBlocker) Block(ctx context.Context, loc *AttackerLocation) (*BlockR
 	return &BlockResult{Blocked: true, RuleID: "mock"}, nil
 }
 func (m *mockBlocker) Unblock(ctx context.Context, loc *AttackerLocation) error { return nil }
-func (m *mockBlocker) IsBlocked(ctx context.Context, hostID string) bool       { return false }
+func (m *mockBlocker) IsBlocked(ctx context.Context, hostID string) bool        { return false }
 
 func TestLifecycleEngineGuideSkipsBlock(t *testing.T) {
 	e := NewLifecycleEngine(nil)

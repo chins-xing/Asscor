@@ -33,14 +33,14 @@ type BusMetrics struct {
 }
 
 type Bus struct {
-	mu          sync.RWMutex
-	subscribers map[string][]subscriber
-	queueSize   int
-	dispatchSem chan struct{}
+	mu            sync.RWMutex
+	subscribers   map[string][]subscriber
+	queueSize     int
+	dispatchSem   chan struct{}
 	maxGoroutines chan struct{}
-	metrics     BusMetrics
-	stopped     int32
-	wg          sync.WaitGroup
+	metrics       BusMetrics
+	stopped       int32
+	wg            sync.WaitGroup
 }
 
 func NewBus(queueSize int) *Bus {
@@ -142,9 +142,9 @@ func (b *Bus) Publish(ctx context.Context, msg Message) {
 			select {
 			case b.dispatchSem <- struct{}{}:
 				acquired = true
-		default:
-			atomic.AddInt64(&b.metrics.DroppedCount, 1)
-			logger.WithComponent("bus").Warn("dispatch semaphore full, dropping message",
+			default:
+				atomic.AddInt64(&b.metrics.DroppedCount, 1)
+				logger.WithComponent("bus").Warn("dispatch semaphore full, dropping message",
 					"subscriber", s.id, "topic", msg.Topic,
 					"queue_size", b.queueSize)
 				return

@@ -14,11 +14,11 @@ const DefaultKEVCatalogURL = "https://www.cisa.gov/sites/default/files/feeds/kno
 type MatchType int
 
 const (
-	MatchNone       MatchType = iota
-	MatchCPEVendor            = 1
-	MatchCPEProduct           = 2
-	MatchVersionRange         = 3
-	MatchExactVersion         = 4
+	MatchNone         MatchType = iota
+	MatchCPEVendor              = 1
+	MatchCPEProduct             = 2
+	MatchVersionRange           = 3
+	MatchExactVersion           = 4
 )
 
 func (m MatchType) Factor() float64 {
@@ -78,9 +78,9 @@ func (e ExposureLevel) String() string {
 type ControlLevel int
 
 const (
-	ControlNone       ControlLevel = 0
-	ControlPartial                 = 1
-	ControlEffective               = 2
+	ControlNone      ControlLevel = 0
+	ControlPartial                = 1
+	ControlEffective              = 2
 )
 
 func (c ControlLevel) Factor() float64 {
@@ -99,7 +99,7 @@ func (c ControlLevel) Factor() float64 {
 type SPCAction int
 
 const (
-	ActionNone     SPCAction = iota
+	ActionNone SPCAction = iota
 	ActionWarn
 	ActionPatch
 	ActionPriority
@@ -168,55 +168,55 @@ func (s CVESource) Priority() int {
 }
 
 type SPCCVEScore struct {
-	CVEID         string       `json:"cve_id"`
-	Description   string       `json:"description"`
-	CVSS          float64      `json:"cvss_score"`
-	CVSSVector    string       `json:"cvss_vector"`
-	EPSS          float64      `json:"epss_score"`
-	EPSSPercent   float64      `json:"epss_percentile"`
-	InKEV         bool         `json:"in_kev"`
-	HasPublicPoC  bool         `json:"has_public_poc"`
-	DatePublished time.Time    `json:"date_published"`
-	DateModified  time.Time    `json:"date_modified"`
-	AffectedCPEs  []string     `json:"affected_cpes"`
-	AttckTechniques []string   `json:"attck_techniques"`
-	MISPGalaxyTags  []string   `json:"misp_galaxy_tags"`
-	OSCALFindingUUID string    `json:"oscal_finding_uuid,omitempty"`
-	APTGroupAssoc   []string   `json:"apt_group_assoc,omitempty"`
-	CWEs           []string    `json:"cwes,omitempty"`
-	Source         CVESource   `json:"source,omitempty"`
-	Matched       bool         `json:"matched"`
-	MatchType     MatchType    `json:"match_type"`
-	Exposure      ExposureLevel `json:"exposure"`
-	ControlLevel  ControlLevel  `json:"control_level"`
+	CVEID            string        `json:"cve_id"`
+	Description      string        `json:"description"`
+	CVSS             float64       `json:"cvss_score"`
+	CVSSVector       string        `json:"cvss_vector"`
+	EPSS             float64       `json:"epss_score"`
+	EPSSPercent      float64       `json:"epss_percentile"`
+	InKEV            bool          `json:"in_kev"`
+	HasPublicPoC     bool          `json:"has_public_poc"`
+	DatePublished    time.Time     `json:"date_published"`
+	DateModified     time.Time     `json:"date_modified"`
+	AffectedCPEs     []string      `json:"affected_cpes"`
+	AttckTechniques  []string      `json:"attck_techniques"`
+	MISPGalaxyTags   []string      `json:"misp_galaxy_tags"`
+	OSCALFindingUUID string        `json:"oscal_finding_uuid,omitempty"`
+	APTGroupAssoc    []string      `json:"apt_group_assoc,omitempty"`
+	CWEs             []string      `json:"cwes,omitempty"`
+	Source           CVESource     `json:"source,omitempty"`
+	Matched          bool          `json:"matched"`
+	MatchType        MatchType     `json:"match_type"`
+	Exposure         ExposureLevel `json:"exposure"`
+	ControlLevel     ControlLevel  `json:"control_level"`
 }
 
 type SPCVulnerabilityRecord struct {
-	CVEID        string   `json:"cve_id"`
-	Description  string   `json:"description"`
-	CVSSScore    float64  `json:"cvss_score"`
-	CVSSVector   string   `json:"cvss_vector"`
-	EPSSScore    float64  `json:"epss_score"`
-	EPSSPercent  float64  `json:"epss_percentile"`
-	InKEV        bool     `json:"in_kev"`
-	DatePublished string  `json:"date_published"`
-	DateModified  string  `json:"date_modified"`
-	AffectedCPEs []string `json:"affected_cpes"`
-	AttckTechniques []string `json:"attck_techniques"`
-	MISPGalaxyTags  []string `json:"misp_galaxy_tags"`
-	OSCALFindingUUID string `json:"oscal_finding_uuid,omitempty"`
-	APTGroupAssoc   []string `json:"apt_group_assoc,omitempty"`
+	CVEID            string   `json:"cve_id"`
+	Description      string   `json:"description"`
+	CVSSScore        float64  `json:"cvss_score"`
+	CVSSVector       string   `json:"cvss_vector"`
+	EPSSScore        float64  `json:"epss_score"`
+	EPSSPercent      float64  `json:"epss_percentile"`
+	InKEV            bool     `json:"in_kev"`
+	DatePublished    string   `json:"date_published"`
+	DateModified     string   `json:"date_modified"`
+	AffectedCPEs     []string `json:"affected_cpes"`
+	AttckTechniques  []string `json:"attck_techniques"`
+	MISPGalaxyTags   []string `json:"misp_galaxy_tags"`
+	OSCALFindingUUID string   `json:"oscal_finding_uuid,omitempty"`
+	APTGroupAssoc    []string `json:"apt_group_assoc,omitempty"`
 }
 
 type SPCCorrection struct {
-	Score           float64            `json:"p_score"`
-	Weights         map[string]float64 `json:"p_weight"`
-	Action          string             `json:"p_action"`
-	AffectedCVE     []string           `json:"affected_cve"`
-	TopCVEImpact    string             `json:"top_cve_impact"`
-	TotalPenalty    float64            `json:"total_penalty"`
-	PenaltyBreakdown []CVEPenalty      `json:"penalty_breakdown,omitempty"`
-	KillChainScore  float64            `json:"kill_chain_score,omitempty"`
+	Score            float64            `json:"p_score"`
+	Weights          map[string]float64 `json:"p_weight"`
+	Action           string             `json:"p_action"`
+	AffectedCVE      []string           `json:"affected_cve"`
+	TopCVEImpact     string             `json:"top_cve_impact"`
+	TotalPenalty     float64            `json:"total_penalty"`
+	PenaltyBreakdown []CVEPenalty       `json:"penalty_breakdown,omitempty"`
+	KillChainScore   float64            `json:"kill_chain_score,omitempty"`
 }
 
 type CVEPenalty struct {
@@ -253,12 +253,12 @@ type LocalAsset struct {
 }
 
 type SPCFetchResult struct {
-	Source    string        `json:"source"`
-	CVEAdded  int           `json:"cve_added"`
-	CVEUpdated int          `json:"cve_updated"`
-	Duration  time.Duration `json:"duration_ms"`
-	Error     string        `json:"error,omitempty"`
-	Timestamp time.Time     `json:"timestamp"`
+	Source     string        `json:"source"`
+	CVEAdded   int           `json:"cve_added"`
+	CVEUpdated int           `json:"cve_updated"`
+	Duration   time.Duration `json:"duration_ms"`
+	Error      string        `json:"error,omitempty"`
+	Timestamp  time.Time     `json:"timestamp"`
 }
 
 type SPCMISPConfig struct {

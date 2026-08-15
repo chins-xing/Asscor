@@ -13,12 +13,12 @@ import (
 // and reporting. Assists the observability module by providing structured
 // health data that can be queried via CLI (`diag`) or API.
 type ModuleHealth struct {
-	Name       string
-	Healthy    bool
-	LastCheck  time.Time
-	Message    string
-	Panics     int
-	Restarts   int
+	Name      string
+	Healthy   bool
+	LastCheck time.Time
+	Message   string
+	Panics    int
+	Restarts  int
 }
 
 var (

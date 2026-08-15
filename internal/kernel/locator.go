@@ -1,8 +1,8 @@
 package kernel
 
 import (
-	"github.com/asscor/asscor/internal/topology"
 	"context"
+	"github.com/asscor/asscor/internal/topology"
 
 	"github.com/asscor/asscor/internal/logger"
 )
@@ -92,7 +92,9 @@ func (l *KernelLocator) hostStatus(hostID string) (HostStatus, bool) {
 	if !ok {
 		return HostOK, false
 	}
-	p, ok := plugin.(interface{ GetHostStatus(hostID string) HostStatus })
+	p, ok := plugin.(interface {
+		GetHostStatus(hostID string) HostStatus
+	})
 	if !ok {
 		return HostOK, false
 	}

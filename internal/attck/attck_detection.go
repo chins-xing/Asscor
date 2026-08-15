@@ -3,8 +3,8 @@
 package attck
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"math"
 	"regexp"
 	"sort"
@@ -223,12 +223,12 @@ func (m *Module) RecordAnomaly(event AnomalyEvent) {
 		m.kc.Bus().Publish(m.kc.Context(), kernel.Message{
 			Topic:   "attck.detection.anomaly",
 			Payload: event,
-				Source:  "attck.detection",
-			})
-			if m.kc != nil {
-				m.kc.Extensions().Execute(m.kc.Context(), "attck.detection.anomaly", event)
-			}
+			Source:  "attck.detection",
+		})
+		if m.kc != nil {
+			m.kc.Extensions().Execute(m.kc.Context(), "attck.detection.anomaly", event)
 		}
+	}
 
 	logger.WithComponent("attck.detection").Info("anomaly recorded",
 		"anomaly_id", event.ID, "type", event.EventType, "score", event.Score, "technique", event.TechniqueID)
@@ -397,9 +397,9 @@ func (m *Module) GetDetectionSummary() DetectionSummary {
 	defer m.mu.RUnlock()
 
 	summary := DetectionSummary{
-		TotalRules:       len(m.detectionRules),
-		AlertsBySeverity: make(map[string]int),
-		AlertsByTactic:   make(map[string]int),
+		TotalRules:        len(m.detectionRules),
+		AlertsBySeverity:  make(map[string]int),
+		AlertsByTactic:    make(map[string]int),
 		AlertsByTechnique: make(map[string]int),
 	}
 

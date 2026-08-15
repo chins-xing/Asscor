@@ -3,8 +3,8 @@
 package attck
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"math"
 	"sort"
 	"time"
@@ -45,15 +45,15 @@ func (m *Module) performAttribution(stages []AttackStage, iocs []IOCEntry) *Attr
 	}
 
 	type actorScore struct {
-		id              string
-		name            string
-		techniqueScore  float64
-		iocScore        float64
-		combinedScore   float64
-		overlapTechs    []string
-		evidence        []AttributionEvidence
-		country         string
-		motivation      string
+		id             string
+		name           string
+		techniqueScore float64
+		iocScore       float64
+		combinedScore  float64
+		overlapTechs   []string
+		evidence       []AttributionEvidence
+		country        string
+		motivation     string
 	}
 
 	var candidates []actorScore
@@ -217,14 +217,14 @@ func (m *Module) performAttribution(stages []AttackStage, iocs []IOCEntry) *Attr
 	}
 
 	result := &AttributionResult{
-		PrimaryActor:     primary.name,
-		PrimaryGroupID:   primary.id,
-		Confidence:       math.Round(confidence*1000) / 1000,
-		Evidence:         primary.evidence,
+		PrimaryActor:      primary.name,
+		PrimaryGroupID:    primary.id,
+		Confidence:        math.Round(confidence*1000) / 1000,
+		Evidence:          primary.evidence,
 		AlternativeActors: alternativeActors,
-		Methodology:      "multi_source_fusion",
-		Country:          primary.country,
-		Motivation:       primary.motivation,
+		Methodology:       "multi_source_fusion",
+		Country:           primary.country,
+		Motivation:        primary.motivation,
 	}
 
 	logger.WithComponent("attck.apt.attribution").Info("attribution performed",

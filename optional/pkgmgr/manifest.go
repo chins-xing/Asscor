@@ -62,10 +62,10 @@ type ConflictEntry struct {
 
 // Compatibility defines version/platform constraints.
 type Compatibility struct {
-	ASSCORVer  string   `json:"asscor_version"`
-	GoVer      string   `json:"go_version"`
-	SSAMVer    string   `json:"ssam_version"`
-	Platform   []string `json:"platform"`
+	ASSCORVer string   `json:"asscor_version"`
+	GoVer     string   `json:"go_version"`
+	SSAMVer   string   `json:"ssam_version"`
+	Platform  []string `json:"platform"`
 }
 
 // BuildConfig for compilation.
@@ -157,9 +157,9 @@ type DependencyGraph struct {
 
 // DepEdge is a directed dependency edge.
 type DepEdge struct {
-	From    string
-	To      string
-	Version string
+	From     string
+	To       string
+	Version  string
 	Optional bool
 }
 

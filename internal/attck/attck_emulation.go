@@ -3,8 +3,8 @@
 package attck
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"fmt"
+	"github.com/asscor/asscor/internal/kernel"
 	"sort"
 	"time"
 
@@ -151,14 +151,14 @@ func (m *Module) GenerateScenarioFromActor(actorID string) (*EmulationScenario, 
 		topTech := techsInTactic[0]
 
 		phase := EmulationPhase{
-			Order:       order,
-			Name:        fmt.Sprintf("%s via %s", tacticName, topTech.id),
-			TacticID:    tacticID,
-			TechniqueID: topTech.id,
-			Description: fmt.Sprintf("Simulate %s technique %s (weight: %.2f)", tacticName, topTech.id, topTech.weight),
-			Commands:    m.generateSafeCommands(topTech.id),
+			Order:              order,
+			Name:               fmt.Sprintf("%s via %s", tacticName, topTech.id),
+			TacticID:           tacticID,
+			TechniqueID:        topTech.id,
+			Description:        fmt.Sprintf("Simulate %s technique %s (weight: %.2f)", tacticName, topTech.id, topTech.weight),
+			Commands:           m.generateSafeCommands(topTech.id),
 			ExpectedDetections: m.getExpectedDetectionRules(topTech.id),
-			RiskLevel:   m.weightToRiskLevel(topTech.weight),
+			RiskLevel:          m.weightToRiskLevel(topTech.weight),
 		}
 
 		phases = append(phases, phase)
@@ -418,7 +418,7 @@ func (m *Module) loadDefaultScenarios() {
 		{
 			ID: "EMU-DEFAULT-001", Name: "Standard Network Intrusion",
 			Description: "Simulates a standard network intrusion following the kill chain from initial access to exfiltration",
-			Objective: "Assess detection coverage across the full kill chain",
+			Objective:   "Assess detection coverage across the full kill chain",
 			Phases: []EmulationPhase{
 				{
 					Order: 1, Name: "Spear Phishing", TacticID: "TA0001", TechniqueID: "T1566",

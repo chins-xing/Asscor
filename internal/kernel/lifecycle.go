@@ -232,9 +232,9 @@ func (e *LifecycleEngine) State() PluginState {
 
 // ── Configuration ──
 
-func (e *LifecycleEngine) SetLocator(l Locator)            { e.locator = l }
-func (e *LifecycleEngine) SetGuider(g Guider)              { e.guider = g }
-func (e *LifecycleEngine) SetBlocker(b Blocker)            { e.blocker = b }
+func (e *LifecycleEngine) SetLocator(l Locator)                   { e.locator = l }
+func (e *LifecycleEngine) SetGuider(g Guider)                     { e.guider = g }
+func (e *LifecycleEngine) SetBlocker(b Blocker)                   { e.blocker = b }
 func (e *LifecycleEngine) SetActivityStore(s ThreatActivityStore) { e.activity = s }
 
 func (e *LifecycleEngine) enterPhase(p LifecyclePhase) {

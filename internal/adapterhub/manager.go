@@ -14,14 +14,14 @@ import (
 
 // Manager manages the lifecycle of all unified adapters.
 type Manager struct {
-	mu            sync.RWMutex
-	adapters      map[string]*adapterEntry
-	ruleEngine    *RuleEngine
-	globalConfig  map[string]string
-	state         ManagerState
-	syncInterval  time.Duration
-	healthCh      chan healthReport
-	bus           BusPublisher
+	mu           sync.RWMutex
+	adapters     map[string]*adapterEntry
+	ruleEngine   *RuleEngine
+	globalConfig map[string]string
+	state        ManagerState
+	syncInterval time.Duration
+	healthCh     chan healthReport
+	bus          BusPublisher
 }
 
 // BusPublisher is the interface for publishing events.
@@ -290,11 +290,11 @@ func (m *Manager) ListAdapters() []AdapterInfo {
 	var adapters []AdapterInfo
 	for _, entry := range m.adapters {
 		adapters = append(adapters, AdapterInfo{
-			Metadata:  entry.Metadata,
-			State:     entry.State,
-			Health:    entry.Health,
-			LastRun:   entry.LastRun,
-			Enabled:   m.isAdapterEnabled(entry),
+			Metadata: entry.Metadata,
+			State:    entry.State,
+			Health:   entry.Health,
+			LastRun:  entry.LastRun,
+			Enabled:  m.isAdapterEnabled(entry),
 		})
 	}
 
@@ -504,7 +504,7 @@ func (m *Manager) runSync(ctx context.Context) {
 			m.bus.Publish(ctx, "adapterhub.findings", map[string]interface{}{
 				"adapter_id": entry.Metadata.ID,
 				"findings":   output.Findings,
-				"timestamp":   time.Now(),
+				"timestamp":  time.Now(),
 			})
 		}
 	}

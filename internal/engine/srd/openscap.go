@@ -34,26 +34,26 @@ type xccdfResults struct {
 }
 
 type xccdfTestResult struct {
-	StartTime  string         `xml:"start-time,attr"`
-	EndTime    string         `xml:"end-time,attr"`
-	HostName   string         `xml:"target,attr"`
-	Benchmark  string         `xml:"benchmark,attr"`
+	StartTime  string            `xml:"start-time,attr"`
+	EndTime    string            `xml:"end-time,attr"`
+	HostName   string            `xml:"target,attr"`
+	Benchmark  string            `xml:"benchmark,attr"`
 	RuleResult []xccdfRuleResult `xml:"xccdf:rule-result"`
 }
 
 type xccdfRuleResult struct {
-	ID        string `xml:"idref,attr"`
-	Time      string `xml:"time,attr"`
-	Version   string `xml:"version,attr,omitempty"`
-	Result    string `xml:"xccdf:result"`
-	ScoreHigh float64 `xml:"xccdf:score,omitempty"`
-	Messages  []xccdfMessage `xml:"xccdf:message,omitempty"`
+	ID        string          `xml:"idref,attr"`
+	Time      string          `xml:"time,attr"`
+	Version   string          `xml:"version,attr,omitempty"`
+	Result    string          `xml:"xccdf:result"`
+	ScoreHigh float64         `xml:"xccdf:score,omitempty"`
+	Messages  []xccdfMessage  `xml:"xccdf:message,omitempty"`
 	Metadata  []xccdfMetadata `xml:"xccdf:metadata,omitempty"`
 }
 
 type xccdfMessage struct {
-	Text   string `xml:",chardata"`
-	Level  string `xml:"level,attr,omitempty"`
+	Text  string `xml:",chardata"`
+	Level string `xml:"level,attr,omitempty"`
 }
 
 type xccdfMetadata struct {
@@ -64,7 +64,7 @@ type xccdfMetadata struct {
 // --- OVAL 5.11 types ---
 
 type ovalResults struct {
-	XMLName    xml.Name        `xml:"oval-res:oval_results"`
+	XMLName    xml.Name       `xml:"oval-res:oval_results"`
 	Generator  ovalGenerator  `xml:"generator"`
 	TestResult ovalTestResult `xml:"results>test_result"`
 }
@@ -75,7 +75,7 @@ type ovalGenerator struct {
 }
 
 type ovalTestResult struct {
-	Generator    ovalGenerator    `xml:"generator"`
+	Generator     ovalGenerator   `xml:"generator"`
 	TestedConfigs []ovalTestRef   `xml:"tested_item>tested_config"`
 	Definitions   []ovalDefResult `xml:"results>definition"`
 }
@@ -86,9 +86,9 @@ type ovalTestRef struct {
 }
 
 type ovalDefResult struct {
-	ID       string            `xml:"id,attr"`
-	Result   string            `xml:"result"`
-	Criteria []ovalCritResult  `xml:"criteria>criterion"`
+	ID       string           `xml:"id,attr"`
+	Result   string           `xml:"result"`
+	Criteria []ovalCritResult `xml:"criteria>criterion"`
 }
 
 type ovalCritResult struct {
@@ -98,8 +98,8 @@ type ovalCritResult struct {
 
 // --- Adapter implementation ---
 
-func (a *openscapAdapter) ToolID()     string { return "openscap" }
-func (a *openscapAdapter) ToolName()   string { return "OpenSCAP (XCCDF/OVAL)" }
+func (a *openscapAdapter) ToolID() string   { return "openscap" }
+func (a *openscapAdapter) ToolName() string { return "OpenSCAP (XCCDF/OVAL)" }
 func (a *openscapAdapter) IsEnabled(cfg Config) bool {
 	if enabled, ok := cfg.EnabledAdapters["openscap"]; ok {
 		return enabled
@@ -192,14 +192,14 @@ func (a *openscapAdapter) parseXCCDF(input []byte) (*ExternalAssessmentReport, e
 
 		report.Items = append(report.Items, ExternalCheckResult{
 			CheckID:  checkID,
-			RuleID:  rr.ID,
-			Title:   rr.ID,
-			Result:  result,
+			RuleID:   rr.ID,
+			Title:    rr.ID,
+			Result:   result,
 			Severity: severity,
-			Delta:   delta,
-			FailAt:  failAt,
+			Delta:    delta,
+			FailAt:   failAt,
 			Category: "XCCDF",
-			Refs:    []string{tr.Benchmark},
+			Refs:     []string{tr.Benchmark},
 		})
 
 		totalScore += delta
@@ -256,12 +256,12 @@ func (a *openscapAdapter) parseOVAL(input []byte) (*ExternalAssessmentReport, er
 
 		report.Items = append(report.Items, ExternalCheckResult{
 			CheckID:  sanitizeID(def.ID),
-			RuleID:  def.ID,
-			Title:   def.ID,
-			Result:  result,
+			RuleID:   def.ID,
+			Title:    def.ID,
+			Result:   result,
 			Severity: "medium",
-			Delta:   delta,
-			FailAt:  scanTime.Unix(),
+			Delta:    delta,
+			FailAt:   scanTime.Unix(),
 			Category: "OVAL",
 		})
 	}

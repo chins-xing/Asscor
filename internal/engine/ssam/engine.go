@@ -8,15 +8,15 @@ import (
 	"sort"
 	"sync"
 
-	ssam "github.com/chins-xing/ssam"
 	"github.com/asscor/asscor/internal/logger"
+	ssam "github.com/chins-xing/ssam"
 )
 
 type Engine struct {
-	mu              sync.RWMutex
-	cfg             ssam.ScoringConfig
-	customFormulas  map[string]ssam.ScoringFormula
-	hooks           map[HookPhase][]hookEntry
+	mu             sync.RWMutex
+	cfg            ssam.ScoringConfig
+	customFormulas map[string]ssam.ScoringFormula
+	hooks          map[HookPhase][]hookEntry
 }
 
 type hookEntry struct {
