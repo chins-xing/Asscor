@@ -258,6 +258,43 @@ func TestParseUserChecks_CommandAllowlist(t *testing.T) {
 	}
 }
 
+// TestRequireMTLS verifies the [comms] require_mtls policy: default true,
+// explicit false values disable enforcement, other values keep it enabled.
+func TestRequireMTLS(t *testing.T) {
+	if !RequireMTLS(nil) {
+		t.Error("nil config must default to require_mtls=true")
+	}
+	if !RequireMTLS(map[string]string{}) {
+		t.Error("empty config must default to require_mtls=true")
+	}
+	if !RequireMTLS(map[string]string{"comms.require_mtls": "true"}) {
+		t.Error("require_mtls=true must enforce mTLS")
+	}
+	for _, v := range []string{"false", "no", "0", "off"} {
+		if RequireMTLS(map[string]string{"comms.require_mtls": v}) {
+			t.Errorf("require_mtls=%q must disable enforcement", v)
+		}
+	}
+	if !RequireMTLS(map[string]string{"comms.require_mtls": "yes"}) {
+		t.Error("require_mtls=yes must enforce mTLS (unknown values default to true)")
+	}
+}
+
+// TestParse_CommsSection verifies [comms] is collected into AdapterConfig so
+// RequireMTLS can read it from a real config file.
+func TestParse_CommsSection(t *testing.T) {
+	cfg, err := Parse("[comms]\nrequire_mtls = true\n[agent]\nfoo = bar\n")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if v := cfg.AdapterConfig["comms.require_mtls"]; v != "true" {
+		t.Errorf("comms.require_mtls = %q, want true (collected from [comms] section)", v)
+	}
+	if !RequireMTLS(cfg.AdapterConfig) {
+		t.Error("parsed [comms] require_mtls=true should enforce mTLS")
+	}
+}
+
 // TestIsUserCheckCommandAllowed unit-tests the first-token matcher directly.
 func TestIsUserCheckCommandAllowed(t *testing.T) {
 	allowed := []string{

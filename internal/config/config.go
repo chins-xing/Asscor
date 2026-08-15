@@ -617,6 +617,18 @@ func Parse(content string) (*Config, error) {
 	return cfg, nil
 }
 
+// RequireMTLS reports whether mTLS is mandatory per [comms] require_mtls in
+// the config (default true). The kernel refuses to start with --no-mtls when
+// this returns true — mTLS can only be disabled explicitly for isolated
+// development environments.
+func RequireMTLS(adapterConfig map[string]string) bool {
+	requireMTLS := true
+	if v := adapterConfig["comms.require_mtls"]; v != "" {
+		requireMTLS = v != "false" && v != "no" && v != "0" && v != "off"
+	}
+	return requireMTLS
+}
+
 func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 	adapterSections := map[string]bool{
 		"adapters": true, "adapter_paths": true,
@@ -631,7 +643,7 @@ func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 		"interceptor": true, "prism": true, "integrity": true,
 		"resilience": true,
 		"user_check": true, "adapter_script": true,
-		"grpc": true, "log": true,
+		"grpc": true, "log": true, "comms": true,
 	}
 
 	for sectionName, kv := range sections {

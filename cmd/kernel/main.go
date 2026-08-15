@@ -153,6 +153,15 @@ func main() {
 	integrity.EnableAlgoVerify(ac["integrity.verify_algo"] != "false")
 	integrity.EnableAntiDebug(ac["integrity.anti_debug"] == "true")
 
+	// Production mTLS enforcement (attack-surface hardening): [comms]
+	// require_mtls (default true) forbids starting with --no-mtls. mTLS can
+	// only be disabled by explicitly setting require_mtls=false in config.ini,
+	// which is intended for isolated development environments only.
+	if *noMTLS && config.RequireMTLS(ac) {
+		log.Error("refusing to start: --no-mtls is set but config requires mTLS ([comms] require_mtls=true); set require_mtls=false only for isolated development environments")
+		os.Exit(1)
+	}
+
 	// Bridge resilience → integrity: sign incident reports for audit trail.
 	resilience.SetSignCallback(func(payload string) {
 		integrity.GetSigner().Sign(nil) // placeholder: actual signing via assessment result
