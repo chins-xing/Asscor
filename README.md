@@ -75,7 +75,7 @@ ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** �
 | **Agent** | 80 检查项并发执行，CPE 自动生成，HMAC 签名命令执行 |
 | **21 个适配器** | Trivy/Nuclei/Lynis/Suricata 等 Fetch→Parse→Map→Validate 管线 |
 | **Prism/SRD** | 三层风险引擎：Core(动态评分)→Semantic(四态模糊)→Inference(马尔可夫预测) |
-| **扩展体系** | 89 个内核扩展点 + 9 种 extmgr 类型 + 可选扩展包体系 (pkgmgr + package.json) |
+| **扩展体系** | 90 个内核扩展点 (84 平台 + 6 生命周期) + 9 种 extmgr 类型 + 可选扩展包体系 (pkgmgr + package.json) |
 | **微内核剥离** | 内核仅保留扩展框架+生命周期+接口契约；全部功能模块剥离为 build-tag 可选插件 (零膨胀默认构建) |
 | **安全防护** | HMAC 评估签名 + 算法自校准完整性校验 + SHA-256 二进制校验 + mTLS |
 | **Web 仪表盘** | 主机详情 + 历史趋势 + 边缘因子可视化 |
@@ -652,7 +652,7 @@ ATTACKModule (Plugin v1.0.0)
 - **gRPC 原生协议实现** — 基于 `google.golang.org/grpc` 实现原生 gRPC 服务端/客户端，支持 TLS/mTLS 配置，定义 `KernelService`/`AgentService` 接口及 Protobuf 消息类型，与 JSONRPC 兼容层形成双协议栈。
 - **权重热加载** — `Assessor.ReloadWeights()` 支持运行时动态更新四域权重，配合 `ConfigWatcher` 模块监控配置文件变化自动触发重载，无需重启服务。
 - **AdapterIntegrationModule 注册修复** — 将 `AdapterIntegrationModule` 加入 Kernel 插件注册列表，使后台定时同步（每6小时）、事件总线发布 `adapter.findings`、按需拉取 `CollectFindings()` 功能生效。
-- **行业配置文件体系** — 新增 `config/` 目录，提供政府(config.gov.ini)、金融(config.fin.ini)、医疗(config.med.ini)、教育(config.edu.ini)、企业通用(config.ent.ini) 五套行业专用配置模板。
+- **行业配置文件体系** — 新增 `configs/` 目录，提供政府(config.gov.ini)、金融(config.fin.ini)、医疗(config.hospital.ini)、教育(config.edu.ini)、企业(config.enterprise.ini) 等八套行业专用配置模板。
 
 #### 第二批修复（全项目代码审计 — 2026-05-22）
 

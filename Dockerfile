@@ -30,7 +30,7 @@ COPY --from=builder /out/ASSCOR-kernel /opt/asscor/
 COPY --from=builder /out/ASSCOR-agent /opt/asscor/agent/
 COPY config.ini /etc/asscor/config.ini
 COPY agent.ini /etc/asscor/agent.ini
-COPY config/ /etc/asscor/config/
+COPY configs/ /etc/asscor/config/
 
 RUN chown -R asscor:asscor /opt/asscor /etc/asscor /var/lib/asscor /var/log/asscor
 

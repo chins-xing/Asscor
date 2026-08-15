@@ -1,11 +1,20 @@
 //go:build srdwrapper
 
+// Package srdwrapper adapts the SRD pipeline (internal/engine/srd) into a
+// kernel.Plugin. It is a thin facade over the SRD implementation.
+//
+// Build-tag note: this module REQUIRES the `engine` build tag — it imports
+// internal/engine/srd (the SRD pipeline implementation) whose types
+// (KernelContext, PluginState, Manager) are defined in that package. Build it
+// with `-tags "srdwrapper,engine"`. See docs/REMAINING_ARCHITECTURE_PLAN.md
+// for the module tag dependency matrix.
+
 package srdwrapper
 
 import (
+	"context"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/topology"
-	"context"
 
 	"github.com/asscor/asscor/internal/engine/srd"
 )

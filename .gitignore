@@ -30,6 +30,10 @@ go.work.sum
 # Build output
 build/
 
+# Local Go build caches (used when system GOCACHE is restricted)
+.gocache/
+.gotmp/
+
 # data
 data/
 
@@ -42,6 +46,9 @@ Asscor/
 # Audit reports (generated documentation, not tracked)
 #docs/audits/
 
+# v0.3.0 optional research direction (not tracked)
+docs/v0.3.0/
+
 #.trae
 .trae/
 
@@ -51,3 +58,10 @@ certs/
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Nested standalone module repositories (ssam-lib & prism-lib are independent
+# Go modules vendored via go.mod replace directives). Their code files are
+# tracked by this repo; these nested .git directories hold their own history
+# and must never be committed or wiped by `git clean -fdx`.
+ssam-lib/.git/
+prism-lib/.git/

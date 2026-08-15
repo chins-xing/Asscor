@@ -21,6 +21,23 @@ type AssessorEngine interface {
 	ReloadWeights(cfg *config.Config)
 }
 
+// EngineScorer is the minimal scoring-engine surface required by the assessor
+// module. It is owned by the kernel (always compiled) so the assessor module
+// (//go:build assessor) does not depend on the gated engine implementation
+// package — enabling single-tag compilation of each optional module.
+type EngineScorer interface {
+	Assess(hostID string, hostname string) *model.AssessmentResult
+	AssessFromResults(hostID string, hostname string, checkResults []model.CheckResult) *model.AssessmentResult
+	PluginEngine() AssessorEngine
+	SetPluginEngine(engine AssessorEngine)
+	RecomputeFinalScore(result *model.AssessmentResult) float64
+	ReloadWeights(cfg *config.Config)
+	ValidateEdgeFactors(registeredChecks []model.CheckItem) []string
+	PrintReport(result *model.AssessmentResult) string
+	RegisterHook(id string, phase AssessmentPhase, hook AssessmentHook, priority int)
+	UnregisterHook(id string)
+}
+
 // SPCProvider is the Security Posture Calculation provider contract.
 type SPCProvider interface {
 	Enabled() bool

@@ -15,7 +15,9 @@ func newAssessor() kernel.AssessorInterface {
 }
 
 // newScoringEngine returns the scoring engine provider plugin, or nil when the
-// assessor build tag is disabled.
+// assessor build tag is disabled. The engine core is injected from the
+// engine-tagged wiring (newEngineScorer) so assessor itself never imports the
+// engine implementation package.
 func newScoringEngine(cfg *config.Config) kernel.ScoringEngineProvider {
-	return assessor.NewScoringEngine(cfg)
+	return assessor.NewScoringEngine(cfg, newEngineScorer(cfg))
 }

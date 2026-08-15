@@ -45,7 +45,10 @@ for entry in "${BINARIES[@]}"; do
 done
 
 cp config.ini agent.ini "${BUILD_DIR}/"
-cp -r config/ "${BUILD_DIR}/"
+# Industry config templates (configs/ directory)
+if [ -d "configs" ]; then
+    cp -r configs/ "${BUILD_DIR}/"
+fi
 
 echo ""
 echo "Build complete: ${BUILD_DIR}/"

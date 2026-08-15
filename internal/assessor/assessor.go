@@ -13,12 +13,10 @@ import (
 
 	"github.com/asscor/asscor/internal/checks"
 	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/integrity"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
-	ascorprism "github.com/asscor/asscor/internal/engine/prism"
 	prismlib "github.com/chins-xing/prism"
 )
 
@@ -31,7 +29,7 @@ type Module struct {
 	cfg            *config.Config
 	engine         kernel.ScoringEngineProvider
 	prismEngine    kernel.PrismEngineProvider
-	attackProvider engine.ATTACKProvider
+	attackProvider kernel.ATTACKProvider
 	failTracker    map[string]map[string]int64
 
 	mu      sync.RWMutex
@@ -59,7 +57,7 @@ func (m *Module) Info() kernel.PluginInfo {
 
 func (m *Module) Dependencies() []kernel.PluginDependency {
 	return []kernel.PluginDependency{
-		{Name: "config", Interface: (*config.Config)(nil)},
+		{Name: "config"},
 		{Interface: (*kernel.ScoringEngineProvider)(nil)},
 	}
 }
@@ -100,9 +98,11 @@ func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 		}
 	}
 
+	// Prism engine is injected via DI (wired by cmd/kernel when the engine
+	// build tag is enabled). Nil means Prism risk-dynamics is disabled — the
+	// module keeps working with SSAM-only scoring.
 	if m.prismEngine == nil {
-		m.prismEngine = ascorprism.NewEngine()
-		logger.WithComponent("assessor").Info("prism engine initialized (default)", "version", "v3.1")
+		logger.WithComponent("assessor").Info("prism engine not injected — Prism risk-dynamics disabled")
 	}
 
 	m.setupSIEMPusher()
@@ -120,7 +120,7 @@ func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 }
 
 // SetATTACKProvider injects the ATT&CK analysis provider (may be nil to disable).
-func (m *Module) SetATTACKProvider(provider engine.ATTACKProvider) {
+func (m *Module) SetATTACKProvider(provider kernel.ATTACKProvider) {
 	m.attackProvider = provider
 }
 
@@ -904,6 +904,10 @@ func (m *Module) extractPackagesFromChecks(checks []model.CheckResult) []string 
 }
 
 func (m *Module) applyPrismToResult(hostID string, result *model.AssessmentResult, nowUnix int64) {
+	if m.prismEngine == nil {
+		return // Prism disabled (engine build tag off or not injected)
+	}
+
 	m.updateFailTracker(hostID, result, nowUnix)
 
 	node := m.buildNodeState(hostID, result)
@@ -1066,24 +1070,33 @@ func filterIncoming(hostID string, edges []prismlib.EdgeState) []prismlib.EdgeSt
 	return result
 }
 
-// ScoringEngine wraps engine.Assessor as a ScoringEngineProvider plugin.
+// ScoringEngine wraps a kernel.EngineScorer (the engine implementation injected
+// by cmd/kernel when the engine build tag is enabled) as a ScoringEngineProvider
+// plugin. The assessor module itself never imports the engine implementation
+// package — decoupling keeps each optional module independently compilable.
 type ScoringEngine struct {
 	mu     sync.Mutex
 	kc     kernel.KernelContext
 	cfg    *config.Config
-	engine *engine.Assessor
+	engine kernel.EngineScorer
 
 	state kernel.PluginState
 }
 
-// NewScoringEngine creates a scoring engine provider plugin.
-func NewScoringEngine(cfg *config.Config) *ScoringEngine {
+// NewScoringEngine creates a scoring engine provider plugin. core is the engine
+// implementation (injected from cmd/kernel); when nil (engine build tag off)
+// the provider is disabled and nil is returned so callers can skip binding it.
+func NewScoringEngine(cfg *config.Config, core kernel.EngineScorer) *ScoringEngine {
+	if core == nil {
+		logger.WithComponent("assessor").Warn("engine core not injected — scoring engine provider disabled")
+		return nil
+	}
 	if cfg == nil {
 		cfg = config.Default()
 	}
 	return &ScoringEngine{
 		cfg:    cfg,
-		engine: engine.NewAssessor(cfg),
+		engine: core,
 		state:  kernel.PluginUnregistered,
 	}
 }
@@ -1099,7 +1112,7 @@ func (m *ScoringEngine) Info() kernel.PluginInfo {
 
 func (m *ScoringEngine) Dependencies() []kernel.PluginDependency {
 	return []kernel.PluginDependency{
-		{Name: "config", Interface: (*config.Config)(nil)},
+		{Name: "config"},
 	}
 }
 
@@ -1143,11 +1156,11 @@ func (m *ScoringEngine) AssessFromResults(hostID string, hostname string, checkR
 	return m.engine.AssessFromResults(hostID, hostname, checkResults)
 }
 
-func (m *ScoringEngine) PluginEngine() engine.AssessorEngine {
+func (m *ScoringEngine) PluginEngine() kernel.AssessorEngine {
 	return m.engine.PluginEngine()
 }
 
-func (m *ScoringEngine) SetPluginEngine(e engine.AssessorEngine) {
+func (m *ScoringEngine) SetPluginEngine(e kernel.AssessorEngine) {
 	m.engine.SetPluginEngine(e)
 }
 

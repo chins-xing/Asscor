@@ -3,8 +3,8 @@
 package attck
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
 	"context"
+	"github.com/asscor/asscor/internal/kernel"
 	"math"
 	"sort"
 	"strings"
@@ -12,168 +12,167 @@ import (
 	"time"
 
 	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/engine"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 )
 
 const (
-	maxAlerts           = 10000
-	maxAnomalies        = 5000
-	maxIOCs             = 50000
-	maxTTPTracks        = 10000
-	maxEmulationResults = 1000
+	maxAlerts            = 10000
+	maxAnomalies         = 5000
+	maxIOCs              = 50000
+	maxTTPTracks         = 10000
+	maxEmulationResults  = 1000
 	maxAssessmentReports = 500
-	maxAttackChains     = 5000
-	maxBehavioralAlerts = 10000
-	maxBeaconDetections = 5000
-	maxHuntHypotheses   = 5000
-	maxHuntResults      = 5000
+	maxAttackChains      = 5000
+	maxBehavioralAlerts  = 10000
+	maxBeaconDetections  = 5000
+	maxHuntHypotheses    = 5000
+	maxHuntResults       = 5000
 )
 
 type ATTACKTactic struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Techniques  []ATTACKTechnique `json:"techniques"`
-	Domain      string   `json:"domain"`
-	CoverageDet float64  `json:"coverage_detection"`
-	CoveragePrev float64 `json:"coverage_prevention"`
-	CoverageComp float64 `json:"coverage_composite"`
-	RiskLevel   string   `json:"risk_level"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Description  string            `json:"description"`
+	Techniques   []ATTACKTechnique `json:"techniques"`
+	Domain       string            `json:"domain"`
+	CoverageDet  float64           `json:"coverage_detection"`
+	CoveragePrev float64           `json:"coverage_prevention"`
+	CoverageComp float64           `json:"coverage_composite"`
+	RiskLevel    string            `json:"risk_level"`
 }
 
 type ATTACKTechnique struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
 	SubTechniques []string `json:"sub_techniques,omitempty"`
 	AsscorChecks  []string `json:"asscor_checks"`
-	Detected     bool     `json:"detected"`
-	Prevented    bool     `json:"prevented"`
-	Weight       float64  `json:"weight"`
+	Detected      bool     `json:"detected"`
+	Prevented     bool     `json:"prevented"`
+	Weight        float64  `json:"weight"`
 }
 
 type ATTACKCoverage struct {
-	TacticID        string  `json:"tactic_id"`
-	TacticName      string  `json:"tactic_name"`
-	TotalTechniques int     `json:"total_techniques"`
-	CoveredDet      int     `json:"covered_detection"`
-	CoveredPrev     int     `json:"covered_prevention"`
-	CoverageDet     float64 `json:"coverage_detection"`
-	CoveragePrev    float64 `json:"coverage_prevention"`
-	CoverageComp    float64 `json:"coverage_composite"`
-	RiskLevel       string  `json:"risk_level"`
+	TacticID        string   `json:"tactic_id"`
+	TacticName      string   `json:"tactic_name"`
+	TotalTechniques int      `json:"total_techniques"`
+	CoveredDet      int      `json:"covered_detection"`
+	CoveredPrev     int      `json:"covered_prevention"`
+	CoverageDet     float64  `json:"coverage_detection"`
+	CoveragePrev    float64  `json:"coverage_prevention"`
+	CoverageComp    float64  `json:"coverage_composite"`
+	RiskLevel       string   `json:"risk_level"`
 	BlindSpots      []string `json:"blind_spots,omitempty"`
 }
 
 type APTGroupProfile struct {
-	GroupID      string            `json:"group_id"`
-	Name         string            `json:"name"`
-	Aliases      []string          `json:"aliases"`
-	Description  string            `json:"description"`
-	PrimaryTargets []string        `json:"primary_targets"`
-	Techniques   map[string]float64 `json:"techniques"`
-	PreferredCVETypes []string     `json:"preferred_cve_types"`
-	MISPGalaxyID string            `json:"misp_galaxy_id"`
+	GroupID           string             `json:"group_id"`
+	Name              string             `json:"name"`
+	Aliases           []string           `json:"aliases"`
+	Description       string             `json:"description"`
+	PrimaryTargets    []string           `json:"primary_targets"`
+	Techniques        map[string]float64 `json:"techniques"`
+	PreferredCVETypes []string           `json:"preferred_cve_types"`
+	MISPGalaxyID      string             `json:"misp_galaxy_id"`
 }
 
 type APTMatchResult struct {
-	GroupID     string  `json:"group_id"`
-	GroupName   string  `json:"group_name"`
-	Similarity  float64 `json:"similarity"`
+	GroupID     string   `json:"group_id"`
+	GroupName   string   `json:"group_name"`
+	Similarity  float64  `json:"similarity"`
 	OverlapTech []string `json:"overlap_techniques"`
-	Confidence  string  `json:"confidence"`
-	MatchCount  int     `json:"match_count"`
+	Confidence  string   `json:"confidence"`
+	MatchCount  int      `json:"match_count"`
 }
 
 type TransitionMatrix map[string]map[string]float64
 
 type PredictiveRisk struct {
-	HostID          string            `json:"host_id"`
-	CurrentTech     []string          `json:"current_techniques"`
-	PredictedPaths  []PredictedPath   `json:"predicted_paths"`
-	MaxRiskScore    float64           `json:"max_risk_score"`
-	EnhancedThreat  float64           `json:"enhanced_threat_coeff"`
-	Recommendations []string          `json:"recommendations"`
-	Timestamp       time.Time         `json:"timestamp"`
+	HostID          string          `json:"host_id"`
+	CurrentTech     []string        `json:"current_techniques"`
+	PredictedPaths  []PredictedPath `json:"predicted_paths"`
+	MaxRiskScore    float64         `json:"max_risk_score"`
+	EnhancedThreat  float64         `json:"enhanced_threat_coeff"`
+	Recommendations []string        `json:"recommendations"`
+	Timestamp       time.Time       `json:"timestamp"`
 }
 
 type PredictedPath struct {
-	Path       []string `json:"path"`
-	Probability float64 `json:"probability"`
-	EndTech     string  `json:"end_technique"`
-	Risk        float64 `json:"risk"`
+	Path        []string `json:"path"`
+	Probability float64  `json:"probability"`
+	EndTech     string   `json:"end_technique"`
+	Risk        float64  `json:"risk"`
 }
 
 type KillChainStage struct {
-	Name        string  `json:"name"`
-	Tactics     []string `json:"tactics"`
-	Score       float64 `json:"score"`
-	Status      string  `json:"status"`
-	ChecksPassed int    `json:"checks_passed"`
-	ChecksTotal  int    `json:"checks_total"`
+	Name         string   `json:"name"`
+	Tactics      []string `json:"tactics"`
+	Score        float64  `json:"score"`
+	Status       string   `json:"status"`
+	ChecksPassed int      `json:"checks_passed"`
+	ChecksTotal  int      `json:"checks_total"`
 }
 
 type KillChainAssessment struct {
-	HostID      string           `json:"host_id"`
-	Stages      []KillChainStage `json:"stages"`
-	OverallScore float64         `json:"overall_score"`
-	WeakestStage string          `json:"weakest_stage"`
-	AssessmentTime time.Time     `json:"assessment_time"`
+	HostID         string           `json:"host_id"`
+	Stages         []KillChainStage `json:"stages"`
+	OverallScore   float64          `json:"overall_score"`
+	WeakestStage   string           `json:"weakest_stage"`
+	AssessmentTime time.Time        `json:"assessment_time"`
 }
 
 type Module struct {
-	kc             kernel.KernelContext
-	mu                 sync.RWMutex
-	tactics            []ATTACKTactic
-	aptGroups          map[string]*APTGroupProfile
-	transMatrix        TransitionMatrix
-	state              kernel.PluginState
-	attckVersion       string
-	beaconThreshold    float64
+	kc                   kernel.KernelContext
+	mu                   sync.RWMutex
+	tactics              []ATTACKTactic
+	aptGroups            map[string]*APTGroupProfile
+	transMatrix          TransitionMatrix
+	state                kernel.PluginState
+	attckVersion         string
+	beaconThreshold      float64
 	attributionThreshold float64
-	autoHunt           bool
-	safeEmulation      bool
-	enabled            bool
-	detectionRules     []DetectionRule
-	alerts             []DetectionAlert
-	anomalies          []AnomalyEvent
-	iocs               []IOCEntry
-	threatActors       map[string]ThreatActorProfile
-	ttpTracks          []TTPTrack
-	scenarios          []EmulationScenario
-	emulationResults   []EmulationResult
-	assessmentReports  []AssessmentReport
-	improvementTracks  map[string]ImprovementTrack
-	attackChains       []AttackChain
+	autoHunt             bool
+	safeEmulation        bool
+	enabled              bool
+	detectionRules       []DetectionRule
+	alerts               []DetectionAlert
+	anomalies            []AnomalyEvent
+	iocs                 []IOCEntry
+	threatActors         map[string]ThreatActorProfile
+	ttpTracks            []TTPTrack
+	scenarios            []EmulationScenario
+	emulationResults     []EmulationResult
+	assessmentReports    []AssessmentReport
+	improvementTracks    map[string]ImprovementTrack
+	attackChains         []AttackChain
 	behavioralIndicators []BehavioralIndicator
-	baselines          map[string]BehavioralBaseline
-	behavioralAlerts   []BehavioralAlert
-	beaconDetections   []BeaconDetection
-	huntHypotheses     []HuntHypothesis
-	huntResults        []HuntResult
-	yaraRules          []YARARule
-	sigmaRules         []SigmaRule
-	reputationDB       []ReputationEntry
-	crossHostConns     []CrossHostConnection
-	lateralEvidences   []LateralMovementEvidence
-	analysisHistory    map[string][]HostAnalysisRecord
+	baselines            map[string]BehavioralBaseline
+	behavioralAlerts     []BehavioralAlert
+	beaconDetections     []BeaconDetection
+	huntHypotheses       []HuntHypothesis
+	huntResults          []HuntResult
+	yaraRules            []YARARule
+	sigmaRules           []SigmaRule
+	reputationDB         []ReputationEntry
+	crossHostConns       []CrossHostConnection
+	lateralEvidences     []LateralMovementEvidence
+	analysisHistory      map[string][]HostAnalysisRecord
 }
 
 type HostAnalysisRecord struct {
-	HostID            string               `json:"host_id"`
-	Timestamp         time.Time            `json:"timestamp"`
-	AssessmentScore   float64              `json:"assessment_score"`
-	FailedChecks      []string             `json:"failed_checks"`
-	FailedTechniques  []string             `json:"failed_techniques"`
-	Coverages         []ATTACKCoverage     `json:"coverages"`
-	KillChain         KillChainAssessment  `json:"kill_chain"`
-	APTMatches        []APTMatchResult     `json:"apt_matches"`
-	PredictedRisk     *PredictiveRisk      `json:"predicted_risk,omitempty"`
-	AttackChainID     string               `json:"attack_chain_id,omitempty"`
-	GapAnalysisID     string               `json:"gap_analysis_id,omitempty"`
-	HuntHypothesesGen int                  `json:"hunt_hypotheses_generated"`
-	AlertsTriggered   int                  `json:"alerts_triggered"`
+	HostID            string              `json:"host_id"`
+	Timestamp         time.Time           `json:"timestamp"`
+	AssessmentScore   float64             `json:"assessment_score"`
+	FailedChecks      []string            `json:"failed_checks"`
+	FailedTechniques  []string            `json:"failed_techniques"`
+	Coverages         []ATTACKCoverage    `json:"coverages"`
+	KillChain         KillChainAssessment `json:"kill_chain"`
+	APTMatches        []APTMatchResult    `json:"apt_matches"`
+	PredictedRisk     *PredictiveRisk     `json:"predicted_risk,omitempty"`
+	AttackChainID     string              `json:"attack_chain_id,omitempty"`
+	GapAnalysisID     string              `json:"gap_analysis_id,omitempty"`
+	HuntHypothesesGen int                 `json:"hunt_hypotheses_generated"`
+	AlertsTriggered   int                 `json:"alerts_triggered"`
 }
 
 func New() *Module {
@@ -202,8 +201,8 @@ func New() *Module {
 			{Destination: "1.1.1.1", Service: "dns", Category: "dns", IsLegitimate: true, Reason: "Cloudflare DNS", Source: "builtin"},
 			{Destination: "8.8.8.8", Service: "dns", Category: "dns", IsLegitimate: true, Reason: "Google DNS", Source: "builtin"},
 		},
-		baselines:            make(map[string]BehavioralBaseline),
-		analysisHistory:      make(map[string][]HostAnalysisRecord),
+		baselines:       make(map[string]BehavioralBaseline),
+		analysisHistory: make(map[string][]HostAnalysisRecord),
 	}
 }
 
@@ -436,10 +435,10 @@ func (m *Module) onAssessmentResult(ctx context.Context, msg kernel.Message) err
 	}
 
 	record := HostAnalysisRecord{
-		HostID:          hostID,
-		Timestamp:       time.Now(),
-		AssessmentScore: result.FinalScore,
-		FailedChecks:    m.extractFailedChecks(checkResults),
+		HostID:           hostID,
+		Timestamp:        time.Now(),
+		AssessmentScore:  result.FinalScore,
+		FailedChecks:     m.extractFailedChecks(checkResults),
 		FailedTechniques: m.extractFailedTechniques(checkResults),
 	}
 
@@ -523,10 +522,10 @@ func (m *Module) onAssessmentResult(ctx context.Context, msg kernel.Message) err
 			m.kc.Bus().Publish(ctx, kernel.Message{
 				Topic: "attck.threat.enhanced",
 				Payload: map[string]interface{}{
-					"host_id":       hostID,
-					"threat_coeff":  predictedRisk.EnhancedThreat,
-					"max_risk":      predictedRisk.MaxRiskScore,
-					"techniques":    record.FailedTechniques,
+					"host_id":      hostID,
+					"threat_coeff": predictedRisk.EnhancedThreat,
+					"max_risk":     predictedRisk.MaxRiskScore,
+					"techniques":   record.FailedTechniques,
 				},
 				Source: "attck",
 			})
@@ -538,15 +537,15 @@ func (m *Module) onAssessmentResult(ctx context.Context, msg kernel.Message) err
 	m.kc.Bus().Publish(ctx, kernel.Message{
 		Topic: "attck.analysis.complete",
 		Payload: map[string]interface{}{
-			"host_id":            hostID,
-			"coverages":          coverages,
-			"kill_chain":         killChain,
-			"apt_matches":        aptMatches,
-			"failed_techniques":  record.FailedTechniques,
-			"alerts_triggered":   alertsTriggered,
-			"hunt_generated":     huntGen,
-			"attack_chain_id":    chainID,
-			"gap_analysis_id":    gapID,
+			"host_id":           hostID,
+			"coverages":         coverages,
+			"kill_chain":        killChain,
+			"apt_matches":       aptMatches,
+			"failed_techniques": record.FailedTechniques,
+			"alerts_triggered":  alertsTriggered,
+			"hunt_generated":    huntGen,
+			"attack_chain_id":   chainID,
+			"gap_analysis_id":   gapID,
 		},
 		Source: "attck",
 	})
@@ -905,10 +904,10 @@ func (m *Module) buildTechniques(tacticID string, ids []string, checks map[strin
 	techniques := make([]ATTACKTechnique, 0, len(ids))
 	for _, id := range ids {
 		t := ATTACKTechnique{
-			ID:          id,
-			Name:        "Technique " + id,
+			ID:           id,
+			Name:         "Technique " + id,
 			AsscorChecks: checks[id],
-			Weight:      1.0,
+			Weight:       1.0,
 		}
 		if len(t.AsscorChecks) > 0 {
 			t.Detected = true
@@ -923,10 +922,10 @@ func (m *Module) loadDefaultAPTProfiles() {
 	m.aptGroups = map[string]*APTGroupProfile{
 		"G0016": {
 			GroupID: "G0016", Name: "APT29", Aliases: []string{"Cozy Bear", "The Dukes"},
-			Description: "Russian threat group targeting government and diplomatic organizations.",
-			PrimaryTargets: []string{"government", "diplomatic", "think_tank"},
+			Description:       "Russian threat group targeting government and diplomatic organizations.",
+			PrimaryTargets:    []string{"government", "diplomatic", "think_tank"},
 			PreferredCVETypes: []string{"mail_client_rce", "auth_bypass"},
-			MISPGalaxyID: "misp-galaxy:threat-actor=\"APT 29\"",
+			MISPGalaxyID:      "misp-galaxy:threat-actor=\"APT 29\"",
 			Techniques: map[string]float64{
 				"T1566": 0.9, "T1071": 0.8, "T1003": 0.85, "T1059": 0.7,
 				"T1133": 0.6, "T1055": 0.5, "T1485": 0.3, "T1070": 0.6,
@@ -935,10 +934,10 @@ func (m *Module) loadDefaultAPTProfiles() {
 		},
 		"G0096": {
 			GroupID: "G0096", Name: "APT41", Aliases: []string{"Wicked Spider", "Double Dragon"},
-			Description: "Chinese threat group conducting both espionage and financially motivated operations.",
-			PrimaryTargets: []string{"multi_industry", "healthcare", "telecom"},
+			Description:       "Chinese threat group conducting both espionage and financially motivated operations.",
+			PrimaryTargets:    []string{"multi_industry", "healthcare", "telecom"},
 			PreferredCVETypes: []string{"web_server_rce", "supply_chain"},
-			MISPGalaxyID: "misp-galaxy:threat-actor=\"APT 41\"",
+			MISPGalaxyID:      "misp-galaxy:threat-actor=\"APT 41\"",
 			Techniques: map[string]float64{
 				"T1190": 0.95, "T1059": 0.8, "T1021": 0.7, "T1003": 0.6,
 				"T1566": 0.8, "T1574": 0.5, "T1505": 0.6, "T1547": 0.4,
@@ -947,10 +946,10 @@ func (m *Module) loadDefaultAPTProfiles() {
 		},
 		"G0032": {
 			GroupID: "G0032", Name: "Lazarus Group", Aliases: []string{"HIDDEN COBRA", "Zinc"},
-			Description: "North Korean threat group targeting financial institutions and cryptocurrency.",
-			PrimaryTargets: []string{"financial", "cryptocurrency", "defense"},
+			Description:       "North Korean threat group targeting financial institutions and cryptocurrency.",
+			PrimaryTargets:    []string{"financial", "cryptocurrency", "defense"},
 			PreferredCVETypes: []string{"browser_exploit", "document_exploit"},
-			MISPGalaxyID: "misp-galaxy:threat-actor=\"Lazarus Group\"",
+			MISPGalaxyID:      "misp-galaxy:threat-actor=\"Lazarus Group\"",
 			Techniques: map[string]float64{
 				"T1566": 0.9, "T1203": 0.8, "T1486": 0.85, "T1059": 0.7,
 				"T1210": 0.65, "T1021": 0.6, "T1055": 0.5, "T1547": 0.4,
@@ -959,10 +958,10 @@ func (m *Module) loadDefaultAPTProfiles() {
 		},
 		"G0007": {
 			GroupID: "G0007", Name: "APT28", Aliases: []string{"Fancy Bear", "Sofacy"},
-			Description: "Russian threat group targeting government and military organizations.",
-			PrimaryTargets: []string{"government", "military", "media"},
+			Description:       "Russian threat group targeting government and military organizations.",
+			PrimaryTargets:    []string{"government", "military", "media"},
 			PreferredCVETypes: []string{"vpn_exploit", "auth_system"},
-			MISPGalaxyID: "misp-galaxy:threat-actor=\"APT 28\"",
+			MISPGalaxyID:      "misp-galaxy:threat-actor=\"APT 28\"",
 			Techniques: map[string]float64{
 				"T1566": 0.9, "T1133": 0.85, "T1110": 0.8, "T1059": 0.7,
 				"T1021": 0.6, "T1547": 0.5, "T1003": 0.65, "T1070": 0.5,
@@ -971,10 +970,10 @@ func (m *Module) loadDefaultAPTProfiles() {
 		},
 		"G0046": {
 			GroupID: "G0046", Name: "FIN7", Aliases: []string{"Carbanak", "Anunak"},
-			Description: "Financially motivated threat group targeting retail and hospitality.",
-			PrimaryTargets: []string{"retail", "financial", "hospitality"},
+			Description:       "Financially motivated threat group targeting retail and hospitality.",
+			PrimaryTargets:    []string{"retail", "financial", "hospitality"},
 			PreferredCVETypes: []string{"office_app_exploit", "rdp_exploit"},
-			MISPGalaxyID: "misp-galaxy:threat-actor=\"FIN7\"",
+			MISPGalaxyID:      "misp-galaxy:threat-actor=\"FIN7\"",
 			Techniques: map[string]float64{
 				"T1566": 0.9, "T1055": 0.85, "T1210": 0.8, "T1021": 0.75,
 				"T1059": 0.7, "T1003": 0.65, "T1053": 0.5, "T1082": 0.55,
@@ -1138,10 +1137,10 @@ func (m *Module) GetCoverageSummary(checkResults map[string]bool) map[string]int
 	}
 
 	return map[string]interface{}{
-		"avg_detection_coverage":   math.Round(totalDC/n*1000) / 1000,
-		"avg_prevention_coverage":  math.Round(totalPC/n*1000) / 1000,
-		"avg_composite_coverage":   math.Round(totalCC/n*1000) / 1000,
-		"high_blind_tactics":       redCount + orangeCount,
+		"avg_detection_coverage":  math.Round(totalDC/n*1000) / 1000,
+		"avg_prevention_coverage": math.Round(totalPC/n*1000) / 1000,
+		"avg_composite_coverage":  math.Round(totalCC/n*1000) / 1000,
+		"high_blind_tactics":      redCount + orangeCount,
 		"total_tactics":           len(coverages),
 		"coverage_details":        coverages,
 	}
@@ -1520,14 +1519,14 @@ func (m *Module) UpsertAPTGroup(profile APTGroupProfile) {
 // ATTACKInterface is the composite DI interface for the ATT&CK module.
 // It aggregates 8 sub-interfaces organized by concern (85 total methods):
 //
-//   ATTCKCore            ~18 methods — tactics, techniques, coverage, kill chain, APT matching, risk prediction
-//   ATTCKDetection        ~8 methods — rules, alerts, anomaly detection, behavioral analysis, beacon detection
-//   ATTCKIntelligence     ~12 methods — IOC management, threat actors, TTPs, alert enrichment, summarization
-//   ATTCKEmulation        ~12 methods — scenario management, APT→scenario generation, emulation execution (test-only)
-//   ATTCKAssessment?       ~9 methods — gap analysis, control mapping, mitigation, improvement tracking (test-only)
-//   ATTCKAPTModules      ~18 methods — chain reconstruction, behavioral/beacon detection, Bayesian attribution, hunting
-//   ATTCKEnhanced         ~10 methods — YARA rules, Sigma rules, reputation, cross-host analysis (5 methods at 0 callers)
-//   ATTCKAuxiliary        ~3 methods — transition matrix (0 callers), admin utilities
+//	ATTCKCore            ~18 methods — tactics, techniques, coverage, kill chain, APT matching, risk prediction
+//	ATTCKDetection        ~8 methods — rules, alerts, anomaly detection, behavioral analysis, beacon detection
+//	ATTCKIntelligence     ~12 methods — IOC management, threat actors, TTPs, alert enrichment, summarization
+//	ATTCKEmulation        ~12 methods — scenario management, APT→scenario generation, emulation execution (test-only)
+//	ATTCKAssessment?       ~9 methods — gap analysis, control mapping, mitigation, improvement tracking (test-only)
+//	ATTCKAPTModules      ~18 methods — chain reconstruction, behavioral/beacon detection, Bayesian attribution, hunting
+//	ATTCKEnhanced         ~10 methods — YARA rules, Sigma rules, reputation, cross-host analysis (5 methods at 0 callers)
+//	ATTCKAuxiliary        ~3 methods — transition matrix (0 callers), admin utilities
 //
 // Sub-interfaces marked "test-only" have methods called only from test files behind the //go:build attck_ext tag.
 // Sub-interfaces marked "0 callers" have methods defined but never invoked in production or test code.
@@ -1651,8 +1650,8 @@ type ATTCKEnhanced interface {
 	FilterBeaconWithReputation(detections []BeaconDetection) []BeaconDetection
 	AddReputationEntry(entry ReputationEntry)
 	GetReputationEntries(category string) []ReputationEntry
-	LoadYARARules(rules []YARARule) int         // 0 callers — reserved
-	LoadSigmaRules(rules []SigmaRule) int         // 0 callers — reserved
+	LoadYARARules(rules []YARARule) int   // 0 callers — reserved
+	LoadSigmaRules(rules []SigmaRule) int // 0 callers — reserved
 	MatchYARARules(hostID string, filePaths []string, fileContents map[string]string) []RuleMatchResult
 	MatchSigmaRules(hostID string, logEntries []map[string]string) []RuleMatchResult
 	AnalyzeCrossHostConnections(connections []CrossHostConnection) []LateralMovementEvidence // 0 callers
@@ -1675,14 +1674,14 @@ type attackEngineAdapter struct {
 	m *Module
 }
 
-func (a *attackEngineAdapter) IsEnabled() bool     { return a.m.IsEnabled() }
-func (a *attackEngineAdapter) Version() string     { return a.m.Version() }
+func (a *attackEngineAdapter) IsEnabled() bool { return a.m.IsEnabled() }
+func (a *attackEngineAdapter) Version() string { return a.m.Version() }
 
-func (a *attackEngineAdapter) CalculateCoverage(checkResults map[string]bool) []engine.ATTACKCoverageResult {
+func (a *attackEngineAdapter) CalculateCoverage(checkResults map[string]bool) []kernel.ATTACKCoverageResult {
 	coverages := a.m.CalculateCoverage(checkResults)
-	result := make([]engine.ATTACKCoverageResult, len(coverages))
+	result := make([]kernel.ATTACKCoverageResult, len(coverages))
 	for i, cov := range coverages {
-		result[i] = engine.ATTACKCoverageResult{
+		result[i] = kernel.ATTACKCoverageResult{
 			TacticID: cov.TacticID, TacticName: cov.TacticName,
 			TotalTechniques: cov.TotalTechniques, CoveredDet: cov.CoveredDet,
 			CoverageDet: cov.CoverageDet, CoveragePrev: cov.CoveragePrev,
@@ -1692,12 +1691,12 @@ func (a *attackEngineAdapter) CalculateCoverage(checkResults map[string]bool) []
 	return result
 }
 
-func (a *attackEngineAdapter) AssessKillChain(hostID string, checkResults map[string]bool) engine.ATTACKKillChainResult {
+func (a *attackEngineAdapter) AssessKillChain(hostID string, checkResults map[string]bool) kernel.ATTACKKillChainResult {
 	kc := a.m.AssessKillChain(hostID, checkResults)
-	result := engine.ATTACKKillChainResult{OverallScore: kc.OverallScore, WeakestStage: kc.WeakestStage}
-	result.Stages = make([]engine.ATTACKKillChainStage, len(kc.Stages))
+	result := kernel.ATTACKKillChainResult{OverallScore: kc.OverallScore, WeakestStage: kc.WeakestStage}
+	result.Stages = make([]kernel.ATTACKKillChainStage, len(kc.Stages))
 	for i, s := range kc.Stages {
-		result.Stages[i] = engine.ATTACKKillChainStage{
+		result.Stages[i] = kernel.ATTACKKillChainStage{
 			Name: s.Name, Score: s.Score, Status: s.Status,
 			ChecksPassed: s.ChecksPassed, ChecksTotal: s.ChecksTotal,
 		}
@@ -1705,11 +1704,11 @@ func (a *attackEngineAdapter) AssessKillChain(hostID string, checkResults map[st
 	return result
 }
 
-func (a *attackEngineAdapter) MatchAPTGroup(detectedTechniques []string) []engine.ATTACKAPTMatch {
+func (a *attackEngineAdapter) MatchAPTGroup(detectedTechniques []string) []kernel.ATTACKAPTMatch {
 	matches := a.m.MatchAPTGroup(detectedTechniques)
-	result := make([]engine.ATTACKAPTMatch, len(matches))
+	result := make([]kernel.ATTACKAPTMatch, len(matches))
 	for i, m := range matches {
-		result[i] = engine.ATTACKAPTMatch{
+		result[i] = kernel.ATTACKAPTMatch{
 			GroupID: m.GroupID, GroupName: m.GroupName,
 			Similarity: m.Similarity, Confidence: m.Confidence,
 			OverlapTech: m.OverlapTech,
@@ -1718,21 +1717,21 @@ func (a *attackEngineAdapter) MatchAPTGroup(detectedTechniques []string) []engin
 	return result
 }
 
-func (a *attackEngineAdapter) PredictRisk(hostID string, detectedTechniques []string, maxDepth int) engine.ATTACKPredictedRisk {
+func (a *attackEngineAdapter) PredictRisk(hostID string, detectedTechniques []string, maxDepth int) kernel.ATTACKPredictedRisk {
 	pr := a.m.PredictRisk(hostID, detectedTechniques, maxDepth)
-	return engine.ATTACKPredictedRisk{
+	return kernel.ATTACKPredictedRisk{
 		MaxRiskScore: pr.MaxRiskScore, EnhancedThreat: pr.EnhancedThreat,
 		PredictedPaths: len(pr.PredictedPaths), Recommendations: pr.Recommendations,
 	}
 }
 
-func (a *attackEngineAdapter) GetAllTactics() []engine.ATTACKTacticInfo {
+func (a *attackEngineAdapter) GetAllTactics() []kernel.ATTACKTacticInfo {
 	tactics := a.m.GetAllTactics()
-	result := make([]engine.ATTACKTacticInfo, len(tactics))
+	result := make([]kernel.ATTACKTacticInfo, len(tactics))
 	for i, t := range tactics {
-		ti := engine.ATTACKTacticInfo{ID: t.ID, Name: t.Name}
+		ti := kernel.ATTACKTacticInfo{ID: t.ID, Name: t.Name}
 		for _, tech := range t.Techniques {
-			ti.Techniques = append(ti.Techniques, engine.ATTACKTechniqueInfo{
+			ti.Techniques = append(ti.Techniques, kernel.ATTACKTechniqueInfo{
 				ID: tech.ID, Name: tech.Name, AsscorChecks: tech.AsscorChecks,
 			})
 		}
@@ -1741,6 +1740,6 @@ func (a *attackEngineAdapter) GetAllTactics() []engine.ATTACKTacticInfo {
 	return result
 }
 
-func (m *Module) AsEngineProvider() engine.ATTACKProvider {
+func (m *Module) AsEngineProvider() kernel.ATTACKProvider {
 	return &attackEngineAdapter{m: m}
 }
