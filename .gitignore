@@ -36,6 +36,8 @@ build/
 
 # data
 data/
+# 归档例外: docs/clab-lab/data 是审计实验数据, 需入库
+!docs/clab-lab/data/
 
 #.kilo
 .kilo/
