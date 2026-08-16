@@ -125,7 +125,17 @@
 
 **验证**：全 tag 编译通过；kernel/comms/srdwrapper 测试全过（现有消费方零改动，微内核原则满足）。
 
-**下一步（M1 候选，可社区认领）**：节点超时自动注销（heartbeat 联动 `DeleteTopology`）、管理网段过滤（agent 上报侧）、拓扑视图 CLI。M1 涉及 comms/agent 改动，属"生命周期"里程碑。
+## 四-B、M1 生命周期完成记录（2026-08-16，ASSCOR-Research-Core commit `be3add1`）
+
+| 蓝图项 | 状态 | 实现 |
+|-------|:---:|------|
+| L2 注销/链路事件 → **超时自动注销**（P0-1 修复） | ✅ | heartbeat `checkTimeouts` 对超时主机调用 `topology.DeleteTopology`——下线主机传播边被清除（T17 残留缺陷修复）；身份绑定保留（拓扑活性与身份锚定分离）；agent 恢复后 comms 重新注册自愈 |
+| L3 网段过滤 → **管理网段排除**（P0-2 修复） | ✅ | `[topology] exclude_cidrs` 配置 + `topology.FilterExcludedSubnets`（overlap 语义，父网段防泄漏）+ comms NetworkInfo 处理时过滤（T4/T9 全互达假传播修复） |
+| L7 拓扑视图 → **CLI `topology` 命令** | ✅ | `topology list`（host/zone/status/subnets + `--json`），纯新增命令 |
+
+**测试**：超时注销/未知节点 no-op（heartbeat）、过滤 6 用例（topology）、config 解析（config）、全量测试通过。
+
+**下一步（M2 候选）**：L5 真实可达性判定（替代子网重叠）、L4 传播加权/衰减/方向。M2 涉及 SRD 传播引擎，属"语义"里程碑。
 
 ## 五、结论
 
