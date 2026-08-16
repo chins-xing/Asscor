@@ -631,8 +631,13 @@ var adapterSecretEnv = map[string]string{
 //
 // The values are never logged — only the source and key length.
 func (cfg *Config) resolveAdapterSecrets() {
+	// Non-secret values: expand ${VAR} placeholders here. Secret keys are
+	// expanded once inside ResolveCredential below, so an unresolved
+	// placeholder warns exactly once instead of twice.
 	for k, v := range cfg.AdapterConfig {
-		cfg.AdapterConfig[k] = common.ExpandEnv(v)
+		if !common.IsSecretKey(k) {
+			cfg.AdapterConfig[k] = common.ExpandEnv(v)
+		}
 	}
 	for k, v := range cfg.AdapterConfig {
 		if !common.IsSecretKey(k) {
