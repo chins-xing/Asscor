@@ -113,6 +113,20 @@
 
 > 上述地基四项不改变现有传播行为（子网重叠逻辑保留），只建立稳定接口与类型，供 v0.3.0 特化分支与社区在此基础上演进。
 
+## 四-A、M0 地基层完成记录（2026-08-16，v0.3.0 commit `8805c67`）
+
+| 蓝图项 | 状态 | 实现 |
+|-------|:---:|------|
+| 1 接口契约 `TopologyInterface` | ✅ | `internal/kernel/topo_types.go`（引用底层类型，kernel 现有文件零改动） |
+| 2 事件类型 + 订阅 | ✅ | `TopoEvent`/`TopoEventType` + `Subscribe`（多订阅者，返回取消函数；legacy `SetTopologyListener` 兼容） |
+| 3 图模型类型 | ✅ | `TopoNode`/`TopoEdge` 定义于 `internal/topology`（底基层，避免 kernel→topology 循环依赖） |
+| 4 测试注入器 | ✅ | `ResetForTesting` + 6 测试（记录/更新/注销/订阅取消/多订阅者/legacy 兼容） |
+| 注销原语（P0-1 地基） | ✅ | `DeleteTopology`（发布 node_removed 事件，未知节点 no-op） |
+
+**验证**：全 tag 编译通过；kernel/comms/srdwrapper 测试全过（现有消费方零改动，微内核原则满足）。
+
+**下一步（M1 候选，可社区认领）**：节点超时自动注销（heartbeat 联动 `DeleteTopology`）、管理网段过滤（agent 上报侧）、拓扑视图 CLI。M1 涉及 comms/agent 改动，属"生命周期"里程碑。
+
 ## 五、结论
 
 拓扑层修复是一个 **6 层 × 3 里程碑** 的系统工程。当前策略：**统计基础设施（本文档）→ 打地基（接口/类型/事件/注入器）→ 等待社区**（M0 任务友好化、文档化、里程碑化）。评估与状态层（E 系列验证的可靠内核）继续作为 main 分支的稳定基线。
