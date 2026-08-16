@@ -204,11 +204,23 @@ plan_dir = .
 
 ### 7.1 API Key 来源审计
 
-ASSCOR 对外部接入源的 API Key 实施来源审计，确保密钥来源可追溯：
+ASSCOR 对外部接入源的 API Key 实施来源审计，确保密钥来源可追溯。所有凭证
+（SPC/CTI 与 adapter 连接器）统一按以下优先级解析（v0.2.3 起已实现）：
 
-- **环境变量优先**：NVD API Key（`NVD_API_KEY`）、MISP API Key（`MISP_API_KEY`）、NetBox Token（`NETBOX_TOKEN`）、Wazuh Password（`WAZUH_PASSWORD`）等均优先从环境变量读取
-- **配置文件次之**：若环境变量未设置，则从 config.ini 对应段读取
-- **审计日志**：无论 Key 从哪个来源加载，系统均记录日志（如 `config: NVD API key loaded from environment variable` 或 `config: NVD API key loaded from configuration file`），便于安全审计追溯
+1. **环境变量**：`NVD_API_KEY`、`MISP_API_KEY`、`NETBOX_TOKEN`、
+   `SNIPEIT_TOKEN`、`WAZUH_PASSWORD`、`JIRA_TOKEN`、`RUNDECK_TOKEN`、
+   `FREEIPA_TOKEN`、`KEYCLOAK_TOKEN` 等优先从环境变量读取；未在表中列出的
+   凭证键按 `<SECTION>_<KEY>` 大写化约定（如 `trivy.api_token` →
+   `TRIVY_API_TOKEN`）；
+2. **密钥文件**：环境变量 `<ENV>_FILE`（如 `NETBOX_TOKEN_FILE`）或配置项
+   `api_token_file` 指向的文件，文件内容（去首尾空白）作为凭证；
+3. **配置文件**：config.ini 对应段的值，其中 `${VAR}` 占位符在加载时从环境
+   变量展开（未设置则保留原样并告警，避免静默空凭证）。
+
+- **审计日志**：无论凭证从哪个来源加载，系统均记录日志（如
+  `config: adapter credential loaded from environment variable`、
+  `config: NVD API key loaded from configuration file`），便于安全审计追溯；
+  日志只记录来源与长度，不记录凭证值。
 
 ### 7.2 适配器执行安全
 

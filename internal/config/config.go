@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/asscor/asscor/internal/common"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/model"
 )
@@ -375,14 +376,8 @@ func Parse(content string) (*Config, error) {
 				cfg.SPC.NVD.NoRejected = strings.EqualFold(v, "true") || v == "1"
 			}
 		}
-		if envKey := os.Getenv("NVD_API_KEY"); envKey != "" {
-			cfg.SPC.NVD.APIKey = envKey
-			logger.WithComponent("config").Info("NVD API key loaded from environment variable", "source", "NVD_API_KEY")
-		} else if cfg.SPC.NVD.APIKey != "" {
-			logger.WithComponent("config").Info("NVD API key loaded from configuration file", "key_length", len(cfg.SPC.NVD.APIKey))
-		}
+		cfg.resolveSPCSecret(&cfg.SPC.NVD.APIKey, "NVD_API_KEY", "NVD API key")
 	}
-
 	if sec, ok := sections["spc.epss"]; ok {
 		for k, v := range sec {
 			switch k {
@@ -430,12 +425,7 @@ func Parse(content string) (*Config, error) {
 				cfg.SPC.MISP.TLPFilter = v
 			}
 		}
-		if envKey := os.Getenv("MISP_API_KEY"); envKey != "" {
-			cfg.SPC.MISP.APIKey = envKey
-			logger.WithComponent("config").Info("MISP API key loaded from environment variable", "source", "MISP_API_KEY")
-		} else if cfg.SPC.MISP.APIKey != "" {
-			logger.WithComponent("config").Info("MISP API key loaded from configuration file", "key_length", len(cfg.SPC.MISP.APIKey))
-		}
+		cfg.resolveSPCSecret(&cfg.SPC.MISP.APIKey, "MISP_API_KEY", "MISP API key")
 	}
 
 	if sec, ok := sections["spc.oscal"]; ok {
@@ -468,12 +458,7 @@ func Parse(content string) (*Config, error) {
 				}
 			}
 		}
-		if envKey := os.Getenv("CNNVD_API_KEY"); envKey != "" {
-			cfg.SPC.CNNVD.APIKey = envKey
-			logger.WithComponent("config").Info("CNNVD API key loaded from environment variable", "source", "CNNVD_API_KEY")
-		} else if cfg.SPC.CNNVD.APIKey != "" {
-			logger.WithComponent("config").Info("CNNVD API key loaded from configuration file", "key_length", len(cfg.SPC.CNNVD.APIKey))
-		}
+		cfg.resolveSPCSecret(&cfg.SPC.CNNVD.APIKey, "CNNVD_API_KEY", "CNNVD API key")
 	}
 
 	if sec, ok := sections["spc.cnvd"]; ok {
@@ -613,8 +598,84 @@ func Parse(content string) (*Config, error) {
 	}
 
 	cfg.buildAdapterConfig(sections)
+	cfg.resolveAdapterSecrets()
 
 	return cfg, nil
+}
+
+// adapterSecretEnv maps adapter config keys to the documented environment
+// variable names (see docs/ASSCOR 外部接入源完整清单.md §7.1 and the
+// config.ini templates). Any secret key without an entry falls back to the
+// conventional name derived by common.SecretEnvName.
+var adapterSecretEnv = map[string]string{
+	"netbox.api_token":    "NETBOX_TOKEN",
+	"snipe_it.api_token":  "SNIPEIT_TOKEN",
+	"wazuh_siem.password": "WAZUH_PASSWORD",
+	"jira.api_token":      "JIRA_TOKEN",
+	"rundeck.api_token":   "RUNDECK_TOKEN",
+	"freeipa.api_token":   "FREEIPA_TOKEN",
+	"keycloak.api_token":  "KEYCLOAK_TOKEN",
+}
+
+// resolveAdapterSecrets applies the unified credential resolution (audit
+// I-04/I-05), aligning adapter connectors with the SPC/CTI env-priority
+// mechanism:
+//
+//  1. ${VAR} placeholders are expanded in every adapter config value
+//     (previously they were passed through literally — the documented
+//     "environment variable first" behavior was never implemented);
+//  2. for secret keys, the environment variable (documented name, else
+//     conventional <KEY>_upper) or a secret file (<key>_file config /
+//     <ENV>_FILE env) overrides the config value;
+//  3. every resolution logs its source for audit traceability.
+//
+// The values are never logged — only the source and key length.
+func (cfg *Config) resolveAdapterSecrets() {
+	for k, v := range cfg.AdapterConfig {
+		cfg.AdapterConfig[k] = common.ExpandEnv(v)
+	}
+	for k, v := range cfg.AdapterConfig {
+		if !common.IsSecretKey(k) {
+			continue
+		}
+		envName := adapterSecretEnv[k]
+		if envName == "" {
+			envName = common.SecretEnvName(k)
+		}
+		resolved, src := common.ResolveCredential(envName, v, cfg.AdapterConfig[k+"_file"])
+		cfg.AdapterConfig[k] = resolved
+		switch src {
+		case common.CredFromEnv:
+			logger.WithComponent("config").Info("adapter credential loaded from environment variable",
+				"key", k, "env", envName)
+		case common.CredFromFile:
+			logger.WithComponent("config").Info("adapter credential loaded from secret file",
+				"key", k, "env", envName)
+		case common.CredFromConfig:
+			if resolved != "" && resolved != v {
+				logger.WithComponent("config").Info("adapter credential placeholder expanded",
+					"key", k)
+			}
+		}
+	}
+}
+
+// resolveSPCSecret applies the unified credential resolution to an SPC
+// module key (NVD/MISP/CNNVD), preserving the documented audit log lines.
+// It also gains secret-file support (<ENV>_FILE) for free.
+func (cfg *Config) resolveSPCSecret(dst *string, envName, label string) {
+	resolved, src := common.ResolveCredential(envName, *dst, "")
+	*dst = resolved
+	switch src {
+	case common.CredFromEnv:
+		logger.WithComponent("config").Info(label+" loaded from environment variable", "source", envName)
+	case common.CredFromFile:
+		logger.WithComponent("config").Info(label+" loaded from secret file", "source", envName)
+	case common.CredFromConfig:
+		if resolved != "" {
+			logger.WithComponent("config").Info(label+" loaded from configuration file", "key_length", len(resolved))
+		}
+	}
 }
 
 // RequireMTLS reports whether mTLS is mandatory per [comms] require_mtls in

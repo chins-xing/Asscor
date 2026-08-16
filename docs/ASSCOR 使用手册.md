@@ -785,8 +785,24 @@ kill $(cat /var/run/ASSCOR-kernel.pid)
 | `NVD_API_KEY` | NVD API 密钥 | 高于 config.ini 中的 `api_key` |
 | `MISP_API_KEY` | MISP API 密钥 | 高于 config.ini 中的 `api_key` |
 | `CNNVD_API_KEY` | CNNVD API 密钥 | 高于 config.ini 中的 `api_key` |
+| `OTX_API_KEY` | OTX 威胁情报 API 密钥 | 高于 config.ini 中的 `otx_api_key` |
+| `MISP_URL` / `MISP_API_KEY` | MISP 威胁情报地址 / 密钥 | 高于 config.ini 对应项 |
+| `NETBOX_TOKEN` | NetBox API Token | 高于 `[netbox] api_token` |
+| `SNIPEIT_TOKEN` | Snipe-IT API Token | 高于 `[snipe_it] api_token` |
+| `WAZUH_PASSWORD` | Wazuh SIEM 密码 | 高于 `[wazuh_siem] password` |
+| `JIRA_TOKEN` | Jira API Token | 高于 `[jira] api_token` |
+| `RUNDECK_TOKEN` | Rundeck API Token | 高于 `[rundeck] api_token` |
+| `FREEIPA_TOKEN` | FreeIPA API Token | 高于对应 `api_token` |
+| `KEYCLOAK_TOKEN` | Keycloak API Token | 高于对应 `api_token` |
+| `<ENV>_FILE`（如 `NETBOX_TOKEN_FILE`） | 密钥文件路径（docker secrets 风格），文件内容（去空白）作为凭证 | 低于同名环境变量，高于 config.ini |
 
-> **安全提示**：API Key 应通过环境变量传递，禁止硬编码到配置文件或命令行参数中。
+> **凭证解析统一优先级（v0.2.3）**：环境变量 > 密钥文件（`<ENV>_FILE` 或
+> `api_token_file` 配置项）> config.ini 值。config.ini 值中的 `${VAR}` 占位符
+> 会在加载时展开（未设置时保留原样并告警，避免静默空凭证）。SPC/CTI 与全部
+> adapter 连接器共用同一机制；解析来源均写入审计日志（如
+> `adapter credential loaded from environment variable`）。
+
+> **安全提示**：API Key 应通过环境变量或密钥文件传递，禁止硬编码到配置文件或命令行参数中。
 
 ---
 

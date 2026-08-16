@@ -9,11 +9,11 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/asscor/asscor/internal/common"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 )
@@ -72,24 +72,30 @@ func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 	m.stopCh = make(chan struct{})
 	m.state = kernel.PluginInitialized
 
-	m.otxAPIKey = os.Getenv("OTX_API_KEY")
-	m.mispURL = os.Getenv("MISP_URL")
-	m.mispAPIKey = os.Getenv("MISP_API_KEY")
-
+	otxCfg, mispURLCfg, mispKeyCfg := "", "", ""
 	if cfg := kc.GetConfigObj(); cfg != nil {
-		if m.otxAPIKey == "" {
-			m.otxAPIKey = cfg.AdapterConfig["otx_api_key"]
-		}
-		if m.mispURL == "" {
-			m.mispURL = cfg.AdapterConfig["misp_url"]
-		}
-		if m.mispAPIKey == "" {
-			m.mispAPIKey = cfg.AdapterConfig["misp_api_key"]
-		}
+		otxCfg = cfg.AdapterConfig["otx_api_key"]
+		mispURLCfg = cfg.AdapterConfig["misp_url"]
+		mispKeyCfg = cfg.AdapterConfig["misp_api_key"]
 	}
+	// Unified credential resolution (audit I-05): env > secret file > config,
+	// aligned with SPC and the adapter connectors.
+	m.otxAPIKey = resolveCTICred("OTX_API_KEY", otxCfg)
+	m.mispURL = resolveCTICred("MISP_URL", mispURLCfg)
+	m.mispAPIKey = resolveCTICred("MISP_API_KEY", mispKeyCfg)
 
 	kc.Container().Bind((*kernel.CTIInterface)(nil), m)
 	return nil
+}
+
+// resolveCTICred resolves a CTI credential with the unified env > file >
+// config priority and logs its source for audit traceability.
+func resolveCTICred(envName, cfgVal string) string {
+	v, src := common.ResolveCredential(envName, cfgVal, "")
+	if v != "" {
+		logger.WithComponent("cti").Info("credential loaded", "env", envName, "source", src)
+	}
+	return v
 }
 
 func (m *Module) Start(ctx context.Context) error {
