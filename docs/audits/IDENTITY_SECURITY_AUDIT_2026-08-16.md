@@ -113,7 +113,7 @@ privileged → agent: SO_PEERCRED + 白名单
 1. **P0 I-01**：agent 证书携带/绑定 host_id（签发时嵌入或注册时校验 host_id ↔ 证书映射，heartbeat 维护该映射并拒绝不匹配）
 2. **P0 I-02**：身份事件统一审计——注册/心跳/命令执行统一记录（身份类型 + 标识 + 动作 + 时间），可查询单一视图
 3. **P1 I-03**：证书吊销列表（CRL）或按 host 撤销（维护 host_id → 证书序列号映射，吊销即拒绝）——**✅ 已实现（commit `35236cc`）并线上验证（见 8.3）**
-4. **P1 I-04/05**：连接器凭证统一走环境变量/密钥文件（对齐 SPC/CTI 的 env 优先机制），移除配置占位符歧义；评估独立密钥存储
+4. **P1 I-04/05**：连接器凭证统一走环境变量/密钥文件（对齐 SPC/CTI 的 env 优先机制），移除配置占位符歧义；评估独立密钥存储——**✅ 已实现（commit `6114e83`、`7d59190`）并线上验证（见 8.4）**
 5. **P2**：扩展安装来源审计 + AI 身份治理随 v0.3.0 立项
 
 ---
@@ -181,8 +181,43 @@ agent 保持下线 15s 越过监控 tick → identity.json 不变、无 prune �
 | 解除吊销后同证书重注册 | ✅ accepted，重新绑定并持久化（误吊销零损失恢复） |
 | `cert revocations` 脚本化输出 | ✅ 干净可解析（修复 CLI 客户端显示竞态，commit `e8cf692`） |
 
-**遗留（P1 I-04/05、P2 I-06/07）**：连接器凭证集中持有与机制统一、扩展来源
-审计、AI 身份治理——见第九节。
+**遗留（P2 I-06/07）**：扩展来源审计、AI 身份治理——见第九节。
+
+### 8.4 连接器凭证统一 I-04/I-05 已实现并线上验证（commit `6114e83`、`7d59190`）
+
+**根因**：配置模板与文档早已声明 `NETBOX_TOKEN`/`WAZUH_PASSWORD` 等环境
+变量优先，但代码从未实现展开——`${NETBOX_TOKEN}` 占位符被**原样**传给 API
+调用；adapter 连接器与 SPC/CTI 的凭证机制不统一（I-05），凭证集中在
+config.ini 明文（I-04）。
+
+**实现**（`internal/common/credentials.go` + `internal/config` + `internal/cti`）：
+- `ExpandEnv`：`${VAR}` 占位符展开；未解析时保留原样并告警（可见的配置
+  错误，而非静默空凭证），非标识符内容原样透传；
+- `ResolveCredential`：统一优先级 **env > 密钥文件 > 配置值**——密钥文件支持
+  `<ENV>_FILE` 环境变量或 `<key>_file` 配置项（docker secrets 风格），返回
+  来源供审计日志；
+- `IsSecretKey`/`SecretEnvName`：凭证键识别与 `<SECTION>_<KEY>` 约定命名；
+- `resolveAdapterSecrets`：加载时对所有 adapter 值展开占位符；凭证键按文档
+  短名表（`NETBOX_TOKEN`/`SNIPEIT_TOKEN`/`WAZUH_PASSWORD`/`JIRA_TOKEN`/
+  `RUNDECK_TOKEN`/`FREEIPA_TOKEN`/`KEYCLOAK_TOKEN`）或约定名做 env/文件覆盖；
+  来源写审计日志（只记来源与长度，**不记值**）；
+- SPC NVD/MISP/CNNVD 与 CTI OTX/MISP 改用同一解析器（SPC 顺带获得 `_FILE`
+  支持）；adapter 连接器代码零改动（中心化解析）。
+
+**线上验证（10.0.0.1，真机，systemd 注入 env + 临时 [netbox] 段）**：
+| 场景 | 结果 |
+|------|------|
+| `NETBOX_TOKEN` env 已设置 | ✅ `adapter credential loaded from environment variable` key=netbox.api_token |
+| `api_token_file` 指向可读文件（无 env） | ✅ `adapter credential loaded from secret file`（08:04:26） |
+| 文件存在但权限拒绝（root 0600，asscor 运行） | ✅ `credential secret file unreadable, falling back` + 回退配置值 |
+| 文件缺失 | ✅ 同上，回退 + 告警 |
+| `${NETBOX_TOKEN}` 未设置 | ✅ 占位符保留原样 + `placeholder unresolved` 告警（恰好一次，commit `7d59190`） |
+
+**测试**：`common/credentials_test.go` + `config/credentials_test.go` 共 14 个
+场景（展开/优先级/文件回退/约定命名/env 覆盖/SPC 对齐/非密钥展开）；全量
+测试通过。
+
+**遗留（P2 I-06/07）**：扩展来源审计、AI 身份治理——见第九节。
 
 ---
 
