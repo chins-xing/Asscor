@@ -1,6 +1,7 @@
 package topology
 
 import (
+	"net"
 	"sync"
 	"time"
 )
@@ -261,4 +262,47 @@ func ResetForTesting() {
 	globalTopology.listeners = make(map[uint64]func(TopoEvent))
 	globalTopology.nextID = 0
 	globalTopology.mu.Unlock()
+}
+
+// FilterExcludedSubnets returns the subnets that do not overlap any of the
+// excluded CIDRs (M1 网段过滤, audit P0-2/T4: management/virtual networks
+// must not make every host appear same-subnet reachable). Invalid entries in
+// either list are ignored (kept / not treated as exclusions).
+func FilterExcludedSubnets(subnets, excludes []string) []string {
+	if len(excludes) == 0 {
+		return subnets
+	}
+	exclNets := make([]*net.IPNet, 0, len(excludes))
+	for _, e := range excludes {
+		if _, n, err := net.ParseCIDR(e); err == nil {
+			exclNets = append(exclNets, n)
+		}
+	}
+	if len(exclNets) == 0 {
+		return subnets
+	}
+	out := make([]string, 0, len(subnets))
+	for _, s := range subnets {
+		_, sn, err := net.ParseCIDR(s)
+		if err != nil {
+			out = append(out, s) // keep invalid entries
+			continue
+		}
+		excluded := false
+		for _, en := range exclNets {
+			if subnetOverlapCIDR(sn, en) {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// subnetOverlapCIDR reports whether two parsed networks overlap.
+func subnetOverlapCIDR(a, b *net.IPNet) bool {
+	return a.Contains(b.IP) || b.Contains(a.IP)
 }

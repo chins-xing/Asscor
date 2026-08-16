@@ -292,7 +292,15 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 			}
 		}
 		if len(req.NetworkInfo.Subnets) > 0 {
-			topology.RecordTopology(req.HostId, req.NetworkInfo.Subnets)
+			subnets := req.NetworkInfo.Subnets
+			// M1 网段过滤 (audit P0-2/T4): 排除管理/虚拟网段, 避免全互达
+			// 假传播 (config.ini [topology] exclude_cidrs)。
+			if s.cfg != nil && len(s.cfg.TopologyExcludeCIDRs) > 0 {
+				subnets = topology.FilterExcludedSubnets(subnets, s.cfg.TopologyExcludeCIDRs)
+			}
+			if len(subnets) > 0 {
+				topology.RecordTopology(req.HostId, subnets)
+			}
 		}
 		logger.WithComponent("kernel").Debug("network info received", "host_id", req.HostId,
 			"zone", req.NetworkInfo.NetworkZone, "ips", len(req.NetworkInfo.LocalIPs), "subnets", len(req.NetworkInfo.Subnets))

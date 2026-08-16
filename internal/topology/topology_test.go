@@ -166,6 +166,36 @@ func TestMultipleSubscribers(t *testing.T) {
 	}
 }
 
+// TestFilterExcludedSubnets: 管理/虚拟网段过滤 (M1, audit P0-2/T4)。
+func TestFilterExcludedSubnets(t *testing.T) {
+	cases := []struct {
+		name     string
+		subnets  []string
+		excludes []string
+		want     []string
+	}{
+		{"no-excludes", []string{"10.0.0.0/24", "172.20.20.0/24"}, nil, []string{"10.0.0.0/24", "172.20.20.0/24"}},
+		{"exclude-mgmt", []string{"10.0.0.0/24", "172.20.20.0/24"}, []string{"172.20.20.0/24"}, []string{"10.0.0.0/24"}},
+		{"overlap-parent", []string{"172.20.20.0/24"}, []string{"172.16.0.0/12"}, nil},
+		{"overlap-child", []string{"172.16.0.0/12"}, []string{"172.20.20.0/24"}, nil}, // 父网段含排除网段 → 排除 (防管理网段泄漏)
+		{"invalid-exclude-ignored", []string{"10.0.0.0/24"}, []string{"not-a-cidr"}, []string{"10.0.0.0/24"}},
+		{"invalid-subnet-kept", []string{"garbage", "10.0.0.0/24"}, []string{"10.0.0.0/24"}, []string{"garbage"}},
+	}
+	for _, c := range cases {
+		got := FilterExcludedSubnets(c.subnets, c.excludes)
+		if len(got) != len(c.want) {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+				break
+			}
+		}
+	}
+}
+
 // collectEvents runs fn and returns all events observed by a subscriber.
 func collectEvents(t *testing.T, fn func()) []TopoEvent {
 	t.Helper()

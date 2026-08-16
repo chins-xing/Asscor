@@ -15,6 +15,7 @@ import (
 
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/topology"
 )
 
 // Module tracks Agent liveness and triggers alerts on timeout.
@@ -545,6 +546,12 @@ func (m *Module) checkTimeouts() {
 			}
 		}
 		logger.WithComponent("heartbeat").Warn("agent timed out", "host_id", id)
+
+		// M1 生命周期 (P0-1 修复): 超时即注销拓扑节点, 清除其传播边,
+		// 避免下线主机的风险扩散永续残留 (审计 T17)。身份绑定保留
+		// (拓扑活性与身份锚定分离); agent 恢复后由 comms 的 NetworkInfo
+		// 处理重新 RecordTopology 自愈。
+		topology.DeleteTopology(id)
 
 		m.mu.Lock()
 		if agent, ok := m.agents[id]; ok {

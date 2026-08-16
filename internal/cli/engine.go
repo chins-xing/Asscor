@@ -497,6 +497,7 @@ func (e *Engine) RegisterBuiltinCommands() {
 		{healthCmdInfo, healthCmdHandler, nil},
 		{historyCmdInfo, historyCmdHandler, historyCompletions},
 		{agentCmdInfo, agentCmdHandler, agentCompletions},
+		{topologyCmdInfo, topologyCmdHandler, nil},
 		{logCmdInfo, logCmdHandler, logCompletions},
 		{sourceCmdInfo, sourceCmdHandler, sourceCompletions},
 		{diagCmdInfo, diagCmdHandler, nil},
