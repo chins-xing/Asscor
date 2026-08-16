@@ -49,7 +49,10 @@ Asscor/
 #docs/audits/
 
 # v0.3.0 optional research direction (not tracked)
-docs/v0.3.0/
+docs/v0.3.0/*
+# 例外: 拓扑审计文档入库 (v0.3.0 特化分支规划依据)
+!docs/v0.3.0/TOPO_*.md
+!docs/v0.3.0/MULTIHOST_*.md
 
 #.trae
 .trae/
