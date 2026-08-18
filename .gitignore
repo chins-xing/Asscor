@@ -36,7 +36,7 @@ build/
 
 # data
 data/
-# 褰掓。渚嬪: docs/clab-lab/data 鏄璁″疄楠屾暟鎹? 闇€鍏ュ簱
+# 瑜版帗銆傛笟瀣樆: docs/clab-lab/data 閺勵垰顓哥拋鈥崇杽妤犲本鏆熼幑? 闂団偓閸忋儱绨?
 !docs/clab-lab/data/
 
 #.kilo
@@ -50,7 +50,7 @@ Asscor/
 
 # v0.3.0 optional research direction (not tracked)
 docs/ASSCOR-Research-Core/*
-# 渚嬪: 鎷撴墤瀹¤鏂囨。鍏ュ簱 (v0.3.0 鐗瑰寲鍒嗘敮瑙勫垝渚濇嵁)
+# 娓氬顦? 閹锋挻澧ょ€孤ゎ吀閺傚洦銆傞崗銉ョ氨 (v0.3.0 閻楃懓瀵查崚鍡樻暜鐟欏嫬鍨濇笟婵囧祦)
 !docs/ASSCOR-Research-Core/TOPO_*.md
 !docs/ASSCOR-Research-Core/MULTIHOST_*.md
 
@@ -70,3 +70,5 @@ certs/
 # and must never be committed or wiped by `git clean -fdx`.
 ssam-lib/.git/
 prism-lib/.git/
+
+!docs/ASSCOR-Research-Core/paper/
