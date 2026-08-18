@@ -171,8 +171,8 @@ interpretable rules:
   [0,1].
 - **Capability**: each TTP's required capability is added to the attacker's
   capability set.
-- **Belief state**: target-specific belief is updated by confidence-weighted
-  accumulation.
+- **Belief state**: target-specific belief is updated by
+  `+0.15 × Confidence` per observation, capped at 1 (Algorithm 1, line 11).
 
 Updates are pure: the input state is never mutated. Intent inference is
 deliberately conservative — unknown TTPs remain `unknown` rather than being
@@ -184,19 +184,24 @@ The prediction engine converts state plus target state into a normalized
 action distribution over six actions (five intents plus maintain). Raw scores
 are a sum of interpretable terms:
 
-1. **Baseline prior** — common-path prevalence.
+1. **Baseline prior** — common-path prevalence (`base[a]`, 0.5–1.2; see
+   Algorithm 2).
 2. **Intent continuity** — the current intent's action receives a strong
-   additive weight (the current stage is a strong signal).
-3. **Experience** — experienced attackers favor execution actions (lateral,
-   data theft) over reconnaissance.
-4. **Target knowledge** — higher knowledge biases toward execution.
-5. **AI dependence** — higher AI reliance biases toward common attack vectors
-   (credential, web).
+   additive weight `+3.0` (the current stage is a strong signal).
+3. **Experience** — experienced attackers favor execution actions:
+   `+Experience` for lateral and data_theft, `−0.5 × Experience` for recon.
+4. **Target knowledge** — higher knowledge biases toward execution:
+   `+TargetKnowledge` for credential, lateral, and data_theft.
+5. **AI dependence** — higher AI reliance biases toward common attack vectors:
+   `+AIDependence` for credential and web_attack, `−0.5 × AIDependence` for
+   recon.
 6. **Target vulnerability** — low SSAM score / high exposure biases toward
-   execution actions.
+   execution actions: `+0.8 × vulnerability` for credential, lateral,
+   data_theft, and web_attack, where
+   `vulnerability = (100 − SSAMScore)/100 + Exposure`.
 
-Scores are normalized by temperature-controlled softmax. The distribution is
-then projected onto the ATT&CK TTP layer:
+Scores are normalized by temperature-controlled softmax (Algorithm 2). The
+distribution is then projected onto the ATT&CK TTP layer:
 `P(TTP_i) = Σ_j P(TTP_i | Action_j) P(Action_j)`, keeping ATT&CK as the
 behavioral semantic layer rather than replacing it.
 
@@ -209,8 +214,9 @@ function:
 Utility(E) = α·IG(E) + β·DP(E) + γ·AV(E) − δ·Risk(E)
 ```
 
-- **Information Gain IG** — proportional to the predicted probability of the
-  action the decoy targets (and target coverage).
+- **Information Gain IG** — the predicted probability of the action the decoy
+  targets, scaled by a target-coverage factor
+  `coverage = 0.5 + 0.5 × ((100 − SSAMScore)/100 + Exposure)/2` (Algorithm 3).
 - **Detection Probability DP** — the decoy's intrinsic detection capability.
 - **Attribution Value AV** — the attribution information a decoy type can
   capture.
@@ -358,20 +364,61 @@ Three data paths feed the loop:
 
 ### 6.3 Model Replacement Points
 
-The loop is model-agnostic at three seams:
+The loop is model-agnostic at three narrow seams. Each seam is a single Go
+interface with one method; the graph layer and the closed-loop controller
+depend only on these interfaces, never on the internal choices of any engine.
 
-- **StateEngine** — the rule-based `Update` can be replaced by a learned
-  belief-update model or an I-POMDP² solver, as long as it exposes
-  `Update(AttackerState, []Evidence) AttackerState`.
-- **Predictor** — the rule-based scorer can be replaced by a calibrated
-  probabilistic model; the softmax distribution and the two-layer ATT&CK
-  projection (§4.3) remain.
-- **Planner** — the utility function's weights and the decoy catalog are
-  data-driven configuration; richer planner models (e.g., information-theoretic
-  optimal design) can be swapped in behind the same `Select` interface.
+**Seam 1 — StateEngine.** The rule-based belief update can be replaced by any
+model exposing:
 
-All three seams are narrow interfaces; the graph layer and the closed-loop
-controller do not depend on the internal choices of any engine.
+```go
+type StateUpdater interface {
+    Update(state attackerstate.AttackerState, evs []attackerstate.Evidence) attackerstate.AttackerState
+}
+```
+
+Replacement examples:
+- a Bayesian belief-update model (e.g., Beta-Bernoulli per technique) that
+  maintains posteriors over intent conditioned on evidence, then collapses
+  them into the same `AttackerState` fields;
+- a wrapper around an I-POMDP² solver that projects its belief tree onto the
+  `AttackerState` structure after each update.
+
+**Seam 2 — Predictor.** The rule-based scorer can be replaced by any
+calibrated probabilistic model:
+
+```go
+type ActionPredictor interface {
+    Predict(state attackerstate.AttackerState, target predictor.TargetState) predictor.ActionDistribution
+}
+```
+
+Replacement examples:
+- a logistic-regression or gradient-boosted classifier over engineered state
+  features, calibrated (e.g., Platt scaling) so the output is a genuine
+  probability distribution over the six actions;
+- a neural sequence model conditioned on the evidence history, with the
+  two-layer ATT&CK projection (§4.3) retained downstream.
+
+**Seam 3 — Planner.** The utility function and decoy catalog are
+configuration; richer planners can be swapped in behind:
+
+```go
+type EngagementSelector interface {
+    Select(dist predictor.ActionDistribution, target predictor.TargetState) []engagement.ScoredIntervention
+}
+```
+
+Replacement examples:
+- an information-theoretic optimal experimental design that selects the decoy
+  minimizing expected posterior entropy of the attacker state;
+- a reinforcement-learning planner whose reward is evidence gain minus
+  deployment cost.
+
+In every case the controller calls the same three methods
+(`Update` → `Predict` → `Select`) and the loop contract (§3.3) is preserved.
+The reference implementation ships the rule-based engines as the default
+implementations of these interfaces.
 
 ### 6.4 Open Vocabulary Integration
 
@@ -555,14 +602,27 @@ remains a testable research agenda, not a claimed result.
 
 ## References
 
-1. D. Shinde and P. Doshi. "Network security as a partially observable stochastic game with a partially observable attacker and defender." (I-POMDP², decision-theoretic planning).
-2. Q. Zhu. Tutorial on game-theoretic deceptive cyber-deception.
-3. L. Zhang and V. L. L. Thing. "Three decades of deception techniques in active cyber defense." Computers & Security (deception taxonomy, four-layer stack).
-4. "Moving Target Defense Techniques: A Survey" (MTD design principles).
-5. A. Anwar and M. Kamhoua. Attack-graph games and POSG complexity.
-6. MITRE ATT&CK — behavior standardization.
-7. 2026 Verizon Data Breach Investigations Report (DBIR) — empirical threat landscape.
-8. ASSCOR Whitepaper: *Active Defense Design* (v0.3.0 draft) — attacker model, hypotheses, and automated attack/defense chain.
+1. P. Shinde and P. Doshi. "Network Security as a Partially Observable
+   Stochastic Game with a Partially Observable Attacker and Defender."
+   *Artificial Intelligence*, 2026. ScienceDirect article PII
+   S0004370226000664. *(author to confirm volume/pages/DOI)*
+2. Q. Zhu. "Game Theoretic Deception for Cyber Defense." Tutorial,
+   arXiv:1903.01442, 2019. https://arxiv.org/abs/1903.01442
+3. L. Zhang and V. L. L. Thing. "Three Decades of Deception Techniques in
+   Active Cyber Defense." *Computers & Security*, vol. 106, 2021.
+   arXiv:2104.03594. https://arxiv.org/abs/2104.03594
+4. "Moving Target Defense Techniques: A Survey." *(author to confirm full
+   citation — survey on MTD design principles; companion material in the
+   ASSCOR whitepaper's reference pack)*
+5. A. Anwar and M. Kamhoua. "Game Theoretic Approaches to Attack Graph
+   Games." *(author to confirm full citation — companion material in the
+   ASSCOR whitepaper's reference pack)*
+6. MITRE. "MITRE ATT&CK." https://attack.mitre.org (accessed 2026)
+7. Verizon. *2026 Data Breach Investigations Report.* 2026.
+   https://www.verizon.com/business/resources/reports/dbir/
+8. ASSCOR Project. "Active Defense Design Whitepaper" (v0.3.0 draft),
+   2026. Internal document: attacker model (H1–H10), automated
+   attack/defense chain, deception taxonomy and MTD survey summaries.
 
 ---
 
