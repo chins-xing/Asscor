@@ -36,7 +36,7 @@ build/
 
 # data
 data/
-# 归档例外: docs/clab-lab/data 是审计实验数据, 需入库
+# 褰掓。渚嬪: docs/clab-lab/data 鏄璁″疄楠屾暟鎹? 闇€鍏ュ簱
 !docs/clab-lab/data/
 
 #.kilo
@@ -49,10 +49,10 @@ Asscor/
 #docs/audits/
 
 # v0.3.0 optional research direction (not tracked)
-docs/v0.3.0/*
-# 例外: 拓扑审计文档入库 (v0.3.0 特化分支规划依据)
-!docs/v0.3.0/TOPO_*.md
-!docs/v0.3.0/MULTIHOST_*.md
+docs/ASSCOR-Research-Core/*
+# 渚嬪: 鎷撴墤瀹¤鏂囨。鍏ュ簱 (v0.3.0 鐗瑰寲鍒嗘敮瑙勫垝渚濇嵁)
+!docs/ASSCOR-Research-Core/TOPO_*.md
+!docs/ASSCOR-Research-Core/MULTIHOST_*.md
 
 #.trae
 .trae/
