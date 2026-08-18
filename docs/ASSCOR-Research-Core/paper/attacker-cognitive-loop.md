@@ -176,7 +176,7 @@ interpretable rules:
 
 Updates are pure: the input state is never mutated. Intent inference is
 deliberately conservative — unknown TTPs remain `unknown` rather than being
-guessed (see §7).
+guessed (see §10).
 
 ### 4.3 Prediction Engine
 
@@ -243,8 +243,221 @@ The controller orchestrates the loop:
 This realizes the information-gain closed loop: predict → select →
 observe → update → re-predict.
 
-## 5. Hypotheses and Evidence
+## 5. Design Rationale
 
+This section documents the concrete design choices and the trade-offs they
+entail, so that the system can be evaluated and modified by others.
+
+### 5.1 Rule-Based over Learned or Game-Theoretic Models
+
+The state engine and predictor use hand-crafted rules and weights. This is a
+deliberate choice for three reasons:
+
+1. **Explainability.** In security operations, decisions must be auditable.
+   Every component emits interpretable intermediate values (rule terms,
+   confidence, utility decomposition), which an operator can inspect.
+2. **No training data.** The hypotheses H1–H10 are not yet validated; there
+   is no labeled dataset of attacker behavior from which to learn. Rules are
+   the only honest starting point.
+3. **Cost.** Full I-POMDP² or general-sum stochastic-game solution is
+   computationally prohibitive. A transparent approximation is acceptable as
+   a first implementation, and the loop architecture is deliberately
+   model-agnostic so the rule-based predictor can be replaced by a learned
+   model or a solver without touching the other layers (§6.3).
+
+### 5.2 Intent-Continuity Weight
+
+The action whose intent equals the current `AttackerState.Intent` receives a
+strong additive weight (3.0, versus baseline 0.5–1.2). Rationale: the current
+stage is the strongest single predictor of the next action — an attacker
+currently harvesting credentials tends to continue credential actions. The
+magnitude was tuned so that, under a clear intent, the distribution becomes
+sharp enough for the confidence-driven controller to switch to active
+engagement, while remaining responsive to new contradictory evidence.
+
+### 5.3 Entropy-Based Confidence
+
+Prediction confidence is defined as the normalized entropy of the action
+distribution: sharp distributions have high confidence, flat ones low. This
+is a *certainty proxy*, not calibrated accuracy — we state this explicitly in
+§10. The default threshold (0.3) separates the collect strategy (flat
+distributions: prefer intelligence gathering) from the engage strategy (sharp
+distributions: allow active guidance). Both the threshold and the temperature
+are configuration parameters.
+
+### 5.4 Utility Weights
+
+The engagement utility `U = α·IG + β·DP + γ·AV − δ·Risk` uses default weights
+α=1.0, β=0.8, γ=0.6, δ=1.2. Information gain dominates because intelligence
+acquisition is the primary objective of the loop (§3.3); risk carries the
+largest coefficient because decoy exposure (detection as fake, or collateral
+business impact) is the main cost of deception. These weights are tunable per
+deployment.
+
+### 5.5 Open Semantic Vocabulary
+
+`Layer`, `NodeType`, and `EdgeType` are plain strings. Predefined constants
+cover the common semantics (six graph layers, 23 node types, nine edge types),
+but any model can introduce new values without changing the engine. This
+decouples the graph engine from any specific domain vocabulary — the same
+engine serves network topology, identity, attacker, capability, and evidence
+layers.
+
+### 5.6 Pure-Function, Immutable Updates
+
+`Update` (state) and `Predict` (distribution) never mutate their inputs; they
+return new values. This yields three properties: components are trivially
+unit-testable; concurrent evaluation is safe; and the full state/prediction
+trajectory can be retained for audit and replay.
+
+### 5.7 Decoy Mapping Reuse
+
+The default catalog reuses the existing intent→decoy mapping of the platform:
+lateral movement → fake SSH, credential theft → fake credentials, data theft →
+fake documents, web attack → fake web, scanning → decoy ports. This follows
+the *sufficiency principle* (§1.2 of our design whitepaper): decoys need only
+present a plausible break-in appearance, not high-fidelity honeypot
+credentials, which keeps deployment cost low enough for single-host-scale
+operation.
+
+## 6. Model Integration
+
+### 6.1 Microkernel, Optional Modules
+
+ACL follows the host platform's microkernel architecture: the kernel retains
+only the extension framework and interface contracts; every ACL component is an
+optional, independently compiled module (build-tag gated). The kernel is not
+modified — the loop consumes data through existing interfaces (topology
+registry, assessment results) and publishes evidence back.
+
+### 6.2 Data-Flow Wiring
+
+```
+Evidence sources (logs, decoys, CTI, alerts)
+        │  (normalized to Evidence)
+        ▼
+State Engine ──► Prediction Engine ──► Engagement Planner
+        ▲                                   │
+        │        (decoy interactions →      │
+        └──────────── Evidence) ◄───────────┘
+        ▲
+        │  (target state: SSAM scores, exposure, topology)
+Topology Graph / Assessment pipeline
+```
+
+Three data paths feed the loop:
+
+- **Evidence in**: observations, alerts, CTI, and decoy interaction chains are
+  normalized to `Evidence{Source, TTP, Intent, Target, Outcome, Confidence}`
+  and fed to the state engine.
+- **Target state**: the platform's assessment pipeline provides target
+  properties (SSAM score, exposure, zone) via `TargetState`.
+- **Evidence out**: decoy interaction chains are recorded as
+  `DeceptionRecord` (connect → credential attempt → command → system
+  discovery → follow-up) and converted to `Evidence`, closing the loop.
+
+### 6.3 Model Replacement Points
+
+The loop is model-agnostic at three seams:
+
+- **StateEngine** — the rule-based `Update` can be replaced by a learned
+  belief-update model or an I-POMDP² solver, as long as it exposes
+  `Update(AttackerState, []Evidence) AttackerState`.
+- **Predictor** — the rule-based scorer can be replaced by a calibrated
+  probabilistic model; the softmax distribution and the two-layer ATT&CK
+  projection (§4.3) remain.
+- **Planner** — the utility function's weights and the decoy catalog are
+  data-driven configuration; richer planner models (e.g., information-theoretic
+  optimal design) can be swapped in behind the same `Select` interface.
+
+All three seams are narrow interfaces; the graph layer and the closed-loop
+controller do not depend on the internal choices of any engine.
+
+### 6.4 Open Vocabulary Integration
+
+Because the graph semantics are open strings (§5.5), a new model (e.g., an
+identity layer feeding an ID-theft detection model) can register its own
+layers and edge types and immediately participate in temporal queries and
+reachability analysis without forking the engine.
+
+## 7. Key Implementations
+
+The engine is implemented in Go as pure-function libraries. The following
+condensed pseudocode captures the core of each component.
+
+### 7.1 State Update (AttackerState → NewState)
+
+```
+Algorithm 1: Update(state, evidence list) → newState
+  for each ev in evidence:
+    if ev.TTP is known: add ev.TTP to state.TTPRepertoire
+    if ev.Target != "": state.TargetKnowledge += 0.1 × clamp01(ev.Confidence)
+    switch ev.Outcome:
+      case "success": state.Experience += 0.05
+      case "failure": state.Experience -= 0.03
+    intent := ev.Intent if set, else IntentFromTTP(ev.TTP)   // mapping table
+    if intent known and ev.Confidence ≥ bestConf:            // high-conf wins
+        state.Intent, bestConf = intent, ev.Confidence
+    if capability = CapabilityForTTP(ev.TTP): add to state.Capability
+    if ev.Target != "": state.BeliefState[ev.Target] += 0.15 × conf
+  clamp Experience, TargetKnowledge, BeliefState to [0,1]
+  return state
+```
+
+Key property: no mutation of the input — the new state is a fresh value.
+
+### 7.2 Action Distribution (Predict)
+
+```
+Algorithm 2: Predict(state, target) → distribution
+  for each action a in {recon, credential, lateral, data_theft, web, maintain}:
+    score[a] = base[a]
+             + 3.0 if intentOf(a) == state.Intent          // continuity
+             + (a in {lateral,data_theft}) × state.Experience
+             - (a == recon) × 0.5 × state.Experience
+             + (a in {credential,lateral,data_theft}) × state.TargetKnowledge
+             + (a in {credential,web}) × state.AIDependence
+             - (a == recon) × 0.5 × state.AIDependence
+             + (a in {credential,lateral,data_theft,web}) × vulnerability × 0.8
+  distribution = softmax(score, temperature)
+  mostDangerous = argmax_a distribution[a] × dangerWeight[a]
+  return distribution with multi-outputs
+```
+
+### 7.3 Engagement Utility
+
+```
+Algorithm 3: Select(distribution, target) → scored interventions
+  for each intervention E (decoy type, target action):
+    IG  = distribution[E.targetAction] × coverage(target)
+    DP  = detectionRate[E.decoy]        // intrinsic decoy capability
+    AV  = attributionValue[E.decoy]
+    Risk = E.cost × E.exposure
+    utility = α·IG + β·DP + γ·AV − δ·Risk
+  return interventions sorted by utility (descending), utility > 0
+```
+
+### 7.4 Closed-Loop Step
+
+```
+Algorithm 4: Step(state, observations, target) → result
+  newState    = StateEngine.Update(state, observations)
+  distribution = Predictor.Predict(newState, target)
+  confidence  = 1 − entropy(distribution) / log(|actions|)   // §5.3
+  strategy    = "collect" if confidence < threshold else "engage"
+  candidates  = Planner.Select(distribution, target)
+  interventions = strategy == "collect"
+                    ? [argmax_IG(candidates)]                  // intelligence first
+                    : candidates                                // active guidance
+  return {newState, distribution, confidence, strategy, interventions}
+```
+
+All four algorithms are deterministic and side-effect free; the reference
+implementation ships with unit tests covering intent inference, distribution
+normalization, utility decomposition, and multi-round convergence to a
+credential intent with the strategy switching to engage.
+
+## 8. Hypotheses and Evidence
 We state ten falsifiable hypotheses about attacker behavior. Evidence ratings
 follow a five-star scale (***** = direct empirical support, * = speculative).
 We explicitly distinguish established theory from inference requiring
@@ -277,7 +490,7 @@ We explicitly do *not* pre-commit to conclusions such as "AI always lowers
 attack entropy" or "a specific probability model is always better"; these are
 to be tested.
 
-## 6. Validation Plan
+## 9. Validation Plan
 
 Validation is planned in two phases.
 
@@ -307,7 +520,7 @@ ransomware prevalence 48%, GenAI-assisted attacks with a median of 15
 techniques), but dataset sampling/reporting biases require preserving source
 and provenance metadata rather than treating frequency as ground truth.
 
-## 7. Discussion
+## 10. Discussion
 
 **Limitations.** ACL currently uses hand-crafted rules and weights; it is a
 transparent approximation, not a full I-POMDP² solver. Confidence is defined
@@ -326,7 +539,7 @@ an opportunity: convergent strategies are easier to predict and to guide;
 diverse strategies (H8/H9) resist convergence and require broader engagement
 portfolios.
 
-## 8. Conclusion
+## 11. Conclusion
 
 We presented the Attacker Cognitive Loop, an interpretable rule-based engine
 for guided active defense that estimates attacker state, predicts action
