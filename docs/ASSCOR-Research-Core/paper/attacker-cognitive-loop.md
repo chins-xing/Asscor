@@ -2,6 +2,20 @@
 
 **Draft v0.1** — for arXiv (cs.CR)
 
+**Author**: ASSCOR Project (single maintainer)
+
+**Contact**: **chins-xing@proton.me** — feedback and collaboration welcome.
+
+> **Invitation to the community.** We explicitly invite researchers working on
+> attacker modeling, deception, game theory, decision theory (I-POMDP²),
+> and learning-based prediction to propose more principled models for any of
+> the three engine seams (state estimation, action prediction, engagement
+> selection). The loop architecture is model-agnostic (§6.3): a better model
+> can be dropped into the corresponding interface without changing the graph,
+> the controller, or the closed-loop contract. The reference implementation is
+> open source (Apache-2.0) and the lab environment is reproducible. Please
+> reach out via the contact address above.
+
 ---
 
 ## Abstract
@@ -599,6 +613,32 @@ about the boundary between implementation and unvalidated assumption. The
 central open question — whether AI, shared tooling, and individual experience
 shape attacker action distributions in ways defenders can actively reshape —
 remains a testable research agenda, not a claimed result.
+
+### 11.1 Invitation for Collaboration
+
+The rule-based engines presented here are explicitly **first approximations**,
+not claims of optimality. We believe the most valuable next step is not
+tuning our hand-crafted weights but replacing the approximations with more
+principled models — and we lack the breadth of expertise to choose the right
+ones alone. We therefore **openly invite** the research community to:
+
+- propose **more principled state-estimation models** (e.g., I-POMDP²
+  solvers, Bayesian belief updates) to replace our rule-based `StateUpdater`;
+- propose **calibrated prediction models** (e.g., learning-based action
+  distribution predictors) to replace our rule-based `ActionPredictor`;
+- propose **better engagement-selection criteria** (e.g.,
+  information-theoretic optimal experimental design, game-theoretic signal
+  models) to replace or refine our utility function;
+- challenge our hypotheses H1–H10 with data, experiments, or theory.
+
+Because every engine seam is a narrow interface (§6.3), a proposed model can
+be integrated and evaluated against the reference implementation with
+minimal effort. The reference implementation is open source under
+Apache-2.0, and the multi-host lab environment is reproducible.
+
+Contact: **chins-xing@proton.me** — we will treat every message as a
+potential collaboration, and we will credit contributors appropriately in
+revisions.
 
 ## References
 
