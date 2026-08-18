@@ -2,7 +2,7 @@
 
 **Draft v0.1** — for arXiv (cs.CR)
 
-**Author**: ASSCOR Project (single maintainer)
+**Author**: 赖嘉豪 (Jiahao Lai)
 
 **Contact**: **chins-xing@proton.me** — feedback and collaboration welcome.
 
