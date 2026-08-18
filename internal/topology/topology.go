@@ -113,7 +113,25 @@ func (r *Registry) record(hostID string, subnets []string, zone string) {
 	handlers := r.snapshotHandlers()
 	r.mu.Unlock()
 
+	// M2 全域图同步: 将 Network 层节点/边写入 MultiGraph (host + subnets,
+	// host─connects→subnet)。Identity/Attacker/Capability/Evidence 层由
+	// 后续引擎写入。消费方零改动 (comms/SRD 继续用 Registry)。
+	syncNetworkToGraph(hostID, subnets, zone)
+
 	r.fire(handlers, ev)
+}
+
+// syncNetworkToGraph mirrors a Registry node into the global MultiGraph's
+// Network layer: the host node plus one subnet node and a connects edge per
+// subnet. Never panics and never affects Registry behaviour.
+func syncNetworkToGraph(hostID string, subnets []string, zone string) {
+	g := globalMultiGraph
+	g.AddNode(hostID, LayerNetwork, NodeHost, map[string]string{"zone": zone})
+	for _, s := range subnets {
+		subnetID := "subnet:" + s
+		g.AddNode(subnetID, LayerNetwork, NodeSubnet, map[string]string{"cidr": s})
+		g.AddEdge(hostID, subnetID, EdgeConnects, LayerNetwork, 1)
+	}
 }
 
 // delete removes a node and publishes node_removed. Deleting an unknown host
@@ -136,6 +154,9 @@ func (r *Registry) delete(hostID string) {
 	}
 	handlers := r.snapshotHandlers()
 	r.mu.Unlock()
+
+	// M2 全域图同步: 注销节点从 MultiGraph 移除 (连带其 subnet 节点与边)。
+	globalMultiGraph.RemoveNode(hostID)
 
 	r.fire(handlers, ev)
 }
