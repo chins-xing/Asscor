@@ -164,3 +164,75 @@ func cleanGlobalGraph() {
 		g.RemoveNode(id)
 	}
 }
+
+// TestMultiGraphEdgeStatusAndMeta: 链路状态 (up/down, T18) 与属性 (T13/T14)。
+func TestMultiGraphEdgeStatusAndMeta(t *testing.T) {
+	g := NewMultiGraph()
+	g.AddNode("r2", LayerNetwork, NodeHost, nil)
+	g.AddNode("r3", LayerNetwork, NodeHost, nil)
+
+	g.AddEdgeDetailed("r2", "r3", EdgeConnects, LayerNetwork, 1, "up", map[string]string{"delay_ms": "200", "bandwidth": "1g"})
+
+	e := g.GetEdge("r2", "r3", EdgeConnects)
+	if e.Status != "up" {
+		t.Errorf("status = %s, want up", e.Status)
+	}
+	if e.Meta["delay_ms"] != "200" || e.Meta["bandwidth"] != "1g" {
+		t.Errorf("meta = %v", e.Meta)
+	}
+
+	// 链路 down (T18 边动态变化)
+	g.SetEdgeStatus("r2", "r3", EdgeConnects, "down")
+	if e := g.GetEdge("r2", "r3", EdgeConnects); e.Status != "down" {
+		t.Errorf("status after SetEdgeStatus = %s, want down", e.Status)
+	}
+	// 未知边 no-op
+	g.SetEdgeStatus("r2", "r3", EdgeTargets, "down")
+}
+
+// TestMultiGraphReachability: ShortestPath/Reachable (T1 多跳 / T2 多路径)。
+func TestMultiGraphReachability(t *testing.T) {
+	g := NewMultiGraph()
+	for _, n := range []string{"host-a", "r1", "r2", "r3", "host-b"} {
+		g.AddNode(n, LayerNetwork, NodeHost, nil)
+	}
+	// host-a─r1─r2─r3─host-b (多跳) + r1─r3 直连 (短路径)
+	g.AddEdge("host-a", "r1", EdgeConnects, LayerNetwork, 1)
+	g.AddEdge("r1", "r2", EdgeConnects, LayerNetwork, 1)
+	g.AddEdge("r2", "r3", EdgeConnects, LayerNetwork, 1)
+	g.AddEdge("r3", "host-b", EdgeConnects, LayerNetwork, 1)
+	g.AddEdge("r1", "r3", EdgeConnects, LayerNetwork, 1)
+
+	// 最短路径应走 host-a→r1→r3→host-b (3 跳, 非 4 跳)。
+	path := g.ShortestPath("host-a", "host-b", EdgeConnects)
+	want := []string{"host-a", "r1", "r3", "host-b"}
+	if len(path) != len(want) {
+		t.Fatalf("ShortestPath = %v, want %v", path, want)
+	}
+	for i := range want {
+		if path[i] != want[i] {
+			t.Fatalf("ShortestPath = %v, want %v", path, want)
+		}
+	}
+
+	// 不可达 → nil。
+	if p := g.ShortestPath("host-a", "nope", EdgeConnects); p != nil {
+		t.Errorf("unreachable must be nil, got %v", p)
+	}
+
+	// Reachable 2 跳: r1(1跳) + r2,r3(2跳, 经 r1-r2 与 r1-r3 直连)。
+	reach := g.Reachable("host-a", 2, EdgeConnects)
+	want2 := []string{"r1", "r2", "r3"}
+	if len(reach) != len(want2) {
+		t.Fatalf("Reachable(2 hops) = %v, want %v", reach, want2)
+	}
+	for i := range want2 {
+		if reach[i] != want2[i] {
+			t.Fatalf("Reachable(2 hops) = %v, want %v", reach, want2)
+		}
+	}
+	// 不限跳数 → 全部。
+	if len(g.Reachable("host-a", 0, EdgeConnects)) != 4 {
+		t.Errorf("Reachable(unlimited) = %v", g.Reachable("host-a", 0, EdgeConnects))
+	}
+}
