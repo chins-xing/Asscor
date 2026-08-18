@@ -112,9 +112,9 @@ func (e *Engine) Predict(state attackerstate.AttackerState, target TargetState) 
 	scores := make(map[Action]float64, len(AllActions()))
 	for _, a := range AllActions() {
 		s := actionBase[a]
-		// 规则 2: 意图延续。
+		// 规则 2: 意图延续 (当前阶段目的是强信号, 权重显著)。
 		if intentOfAction(a) == state.Intent {
-			s += 1.5
+			s += 3.0
 		}
 		// 规则 3: 经验。
 		switch a {
