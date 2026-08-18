@@ -1047,10 +1047,12 @@ func (m *Module) collectTopologySnapshot(currentHostID string, currentResult *mo
 			HostID:    id,
 			SSAMScore: res.FinalScore,
 		}
+		// M2 风险加权传播 (P1-1/T9/T10): 传播系数按源主机风险归一化 —
+		// 高风险源放大、低风险源衰减 (纯函数, prism-lib)。
 		edges = append(edges, prismlib.EdgeState{
 			Source:           id,
 			Target:           currentHostID,
-			RiskTransmission: defaultTransmission,
+			RiskTransmission: prismlib.WeightedTransmission(defaultTransmission, res.FinalScore),
 		})
 	}
 
