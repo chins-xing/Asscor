@@ -36,8 +36,10 @@ build/
 
 # data
 data/
-# 瑜版帗銆傛笟瀣樆: docs/clab-lab/data 閺勵垰顓哥拋鈥崇杽妤犲本鏆熼幑? 闂団偓閸忋儱绨?
-!docs/clab-lab/data/
+
+# Paper bundle (lunwen = "paper"): tex sources, manuscript md, references,
+# and clab-lab experiment assets are consolidated here and not tracked.
+lunwen/
 
 #.kilo
 .kilo/
@@ -48,11 +50,8 @@ Asscor/
 # Audit reports (generated documentation, not tracked)
 #docs/audits/
 
-# v0.3.0 optional research direction (not tracked)
-docs/ASSCOR-Research-Core/*
-# 娓氬顦? 閹锋挻澧ょ€孤ゎ吀閺傚洦銆傞崗銉ョ氨 (v0.3.0 閻楃懓瀵查崚鍡樻暜鐟欏嫬鍨濇笟婵囧祦)
-!docs/ASSCOR-Research-Core/TOPO_*.md
-!docs/ASSCOR-Research-Core/MULTIHOST_*.md
+# v0.3.0 optional research direction (moved to lunwen/, no longer under docs/)
+#docs/ASSCOR-Research-Core/*
 
 #.trae
 .trae/
@@ -70,5 +69,3 @@ certs/
 # and must never be committed or wiped by `git clean -fdx`.
 ssam-lib/.git/
 prism-lib/.git/
-
-!docs/ASSCOR-Research-Core/paper/
