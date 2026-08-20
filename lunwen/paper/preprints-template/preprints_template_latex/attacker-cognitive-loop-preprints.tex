@@ -1,0 +1,1710 @@
+% ============================================================
+% Attacker Cognitive Loop: An Interpretable Rule-Based Engine
+% for Estimating, Predicting, and Engaging Adaptive Attackers
+% MDPI Preprints format, draft v0.3
+%
+% Compile with the MDPI preprints class (Definitions/mdpi.cls):
+%   pdflatex attacker-cognitive-loop-preprints.tex   (x2)
+% ============================================================
+\documentclass[preprints,article,submit,oneauthor]{Definitions/mdpi}
+% "submit" shows line numbers; switch to "accept" before posting.
+
+% MDPI internal commands - do not modify
+\firstpage{1}
+\makeatletter
+\setcounter{page}{\@firstpage}
+\makeatother
+\pubvolume{1}
+\issuenum{1}
+\articlenumber{0}
+\pubyear{2026}
+\copyrightyear{2026}
+\datereceived{}
+\daterevised{}
+\dateaccepted{}
+\datepublished{}
+
+% Author
+%\newcommand{\orcidauthorA}{0000-0000-0000-000X} % uncomment and fill when an ORCID is available
+
+\Title{Attacker Cognitive Loop: An Interpretable Rule-Based Engine for Estimating, Predicting, and Engaging Adaptive Attackers}
+
+\Author{Jiahao Lai $^{1,\dagger}$}% add \orcidA{} behind the name when an ORCID is available
+
+\AuthorNames{Jiahao Lai}
+
+\address{%
+$^{1}$ \quad ASSCOR Project; \texttt{chins-xing@proton.me}}
+
+\corres{Correspondence: \texttt{chins-xing@proton.me}}
+
+% Single-author manuscript: no shared-authorship or current-address notes are
+% needed. Uncomment only if they apply.
+%\firstnote{Current address: Affiliation.}
+%\secondnote{These authors contributed equally to this work.}
+
+\abstract{Attackers and defenders operate under fundamentally unequal
+information endowments: attackers choose when, where, and how to probe;
+defenders react to signals that arrive too late and too sparse. This paper
+presents the Attacker Cognitive Loop (ACL), a system designed to actively
+reverse this information asymmetry --- not by blocking attacker actions, but
+by guiding them through lightweight decoys that reveal intent earlier than
+the attacker intends. ACL closes the loop between observation and
+intervention, turning the defender's information disadvantage into a
+controllable orchestration problem. The engine is implemented as an
+interpretable, rule-based extension of the open-source ASSCOR platform, with
+every component mapped to a public repository path and branch. Its heuristic
+weights are explicitly not optimal; they are provided solely to demonstrate
+closed-loop mechanics and to serve as a baseline for community-driven
+replacement. We formulate the research question --- \textit{how AI, shared
+tooling, and individual experience jointly shape the attacker's action
+distribution, and whether defenders can actively reshape it through
+observation, deception, and guidance} --- and state ten open research
+questions (Q1--Q10) with evidence ratings. We provide the complete formal
+specification of the scoring, normalization, sharpness, and utility
+functions, a reproducible four-round closed-loop trace with exact numerical
+values, a sensitivity analysis of the hand-tuned weights, and simulated
+per-round latency benchmarks.}
+
+\keyword{active defense; cyber deception; attacker modeling; honeypot;
+decision sharpness; moving target defense; I-POMDP; interpretable AI;
+open research questions; reproducible research}
+
+% Local macros used throughout the paper
+\newcommand{\act}[1]{\texttt{#1}}
+\newcommand{\intent}[1]{\textsc{#1}}
+
+% adjustbox is not loaded by the MDPI class but is used to constrain
+% wide tables/equations to \linewidth.
+\usepackage{adjustbox}
+
+\begin{document}
+
+\section{Introduction}
+\label{sec:intro}
+
+Classical defense embeds blocking controls: access control and isolation make
+undesirable states unreachable. Surveys of moving-target defense (MTD) have
+documented two inherent weaknesses of this paradigm. First, a
+\textit{cognitive limitation}: defenders cannot enumerate all latent attacker
+paths, and attackers enjoy an information advantage during prolonged
+reconnaissance. Second, a \textit{temporal asymmetry}: attackers can plan
+over long horizons while defenders must respond in real time, and patch lag
+leaves a window of opportunity.
+
+At the heart of the two weaknesses above lies a single structural fact: attackers hold an inherent information advantage. They observe the defender's environment at their chosen pace, select which paths to probe, and can wait for the defender's response patterns to emerge. Defenders, by contrast, see only the artifacts of actions already taken --- alerts, logs, and blocked connections. This is not a technical failure of firewalls or IPS; it is a cognitive asymmetry built into the defender's observational posture.
+
+Guided active defense, as we define it, is an attempt to reverse this asymmetry. Instead of waiting for the attacker to reveal intent through damage, the defender proactively deploys ephemeral decoys that appear to reduce the attacker's uncertainty --- inducing the attacker to verify hypotheses early, thereby exposing TTPs and intent before the attack reaches its objective. ACL is designed as an orchestration engine for exploring this reversal: it estimates what the attacker believes, predicts what the attacker will do next, and selects decoys that maximize information gain while minimizing the defender's exposure. The current implementation provides a fully auditable rule-based baseline against which more principled models can be compared.
+
+Guided active defense does not aim to block everything; it aims to create an
+\textit{information asymmetry} in the defender's favor. By deploying
+lightweight decoy targets and fabricated intelligence, the defender induces
+the attacker to abandon slow, patient operation in favor of rapid
+verification --- exposing tactics, techniques, and procedures (TTPs) and
+intent earlier than they would otherwise be revealed. Intelligence collected
+from each interaction feeds the next, more accurate round of deception,
+forming a positive feedback loop: \textit{guide $\rightarrow$ collect
+$\rightarrow$ analyze $\rightarrow$ decide $\rightarrow$ guide again}.
+
+In the MITRE Engage taxonomy, engagement is used here as a guidance tool,
+not a blocking tool; host isolation is demoted to a fallback when guidance
+fails or confirms high risk.
+
+This work makes the following contributions:
+\begin{enumerate}
+\item We formulate the attacker-cognitive-loop research question that
+      connects attacker modeling with adaptive deception.
+\item We present an interpretable, rule-based engine (ACL) that realizes the
+      loop: state estimation, action-distribution prediction, utility-driven
+      engagement selection, and sharpness-driven strategy switching, with
+      the complete formal specification of every score, normalization,
+      sharpness, and utility term (Section~\ref{sec:prediction-formal},
+      Section~\ref{sec:sharpness-formal}, Section~\ref{sec:utility-formal}).
+\item We provide a reproducible four-round closed-loop trace with exact
+      numerical values computed from the reference implementation's weights
+      (Section~\ref{sec:trace}), so the engine's behavior can be independently
+      verified and replayed.
+\item We anchor the work in a real, public codebase: the engine is an
+      implemented extension of the open-source ASSCOR assessment platform,
+      with every component mapped to a repository path and branch
+      (Section~\ref{sec:repo}, Table~\ref{tab:repo-map}), so the paper is directly
+      auditable rather than a paper-only design.
+\item We state ten open research questions (Q1--Q10) about attacker
+      behavior in the AI era, each with an evidence rating, and a
+      validation plan.
+\item We are transparent about what is implemented (the engine) versus what
+      remains to be answered (the questions), and we analyze the
+      sensitivity of the hand-tuned weights (Section~\ref{sec:sensitivity}). No
+      assumption is presented as a conclusion.
+\end{enumerate}
+
+\section{Related Work}
+\label{sec:related}
+
+\textbf{Decision-theoretic planning.} Shinde and Doshi's
+I-POMDP\textsuperscript{2} \citep{shinde-doshi} extends partially observable
+Markov decision processes to model the defender's beliefs about the
+attacker's beliefs, capabilities, and preferences, with finite nested
+recursive reasoning. Their experiments observe level-3 defenders who first
+mislead the attacker into believing the defense is passive, then deploy
+decoys --- a decision-theoretic justification for guidance over blocking. A
+full I-POMDP\textsuperscript{2} solver is computationally prohibitive; our
+engine is a transparent rule-based approximation that can be replaced by
+richer models without changing the loop architecture. A complementary line
+of work learns the attacker's reward structure rather than assuming it:
+Shinde and Doshi \citep{irl-adversary} model behavioral preferences of cyber
+adversaries from system-level audit logs using inverse reinforcement
+learning, recovering the objective function an attacker implicitly
+optimizes. This is directly relevant to our \textit{attacker state}
+abstraction (Section~\ref{sec:state}): where our engine represents the
+attacker's $\mathit{Objective}$ field as an open string, an IRL-derived
+reward can populate it from data, and the same loop interface
+(Section~\ref{sec:replacement}) accepts such a model as a drop-in
+replacement of the rule-based state engine.
+
+\textbf{Game-theoretic deception.} Zhu's tutorial \citep{zhu} and Anwar \&
+Kamhoua's attack-graph games \citep{anwar-kamhoua} formalize signaling games,
+dynamic games, mechanism design, and hypergames for deception. General-sum
+stochastic games make pure-strategy Nash equilibrium computation
+PSPACE-hard, and equilibrium concepts assume symmetric optimality that
+poorly models the attacker's \textit{bounded rationality}. We therefore
+prefer the decision-theoretic view.
+
+\textbf{AI-empowered attackers.} The rapid adoption of large language models
+(LLMs) as autonomous offensive agents is reshaping the attacker model our
+hypotheses target. Recent surveys \citep{llm-attack-agents} document
+LLM-based agents that plan, execute, and chain attack steps end-to-end,
+producing attack sequences that are simultaneously more accessible (lowering
+the skill barrier, directly relevant to H6/Q6) and more homogeneous (agents
+trained on overlapping corpora converge on common solution patterns). This
+second property is exactly the mechanism behind our core question Q7
+(\textit{does AI lead to attacker strategy convergence?},
+Section~\ref{sec:hypotheses}): if LLM-generated attack plans cluster around
+a shared strategy distribution, defenders can exploit the resulting
+predictability. Our validation plan (Section~\ref{sec:experiment}) makes
+this measurable by comparing automated, LLM- or tool-driven attack profiles
+(runs E1--E9) against human red-team behavior, using TTP entropy, sequence
+distance, and strategy-cluster analysis as the quantitative axes.
+
+\textbf{Attacker modeling and attribution.} The Diamond Model of intrusion
+analysis \citep{diamond} structures every intrusion event as four vertices
+--- \textit{adversary}, \textit{capability}, \textit{infrastructure}, and
+\textit{victim} --- connected by six phases of an activity thread, with
+meta-features (timestamp, kill-chain phase, result, direction, method,
+resources) describing each event. Its central axiom, that each intrusion is
+an event in an activity thread whose evolution is governed by the adversary,
+is the analytical backbone we reuse: our six-layer graph
+(Section~\ref{sec:graph}) is the Diamond Model's relational projection onto a
+temporal substrate --- the Adversary layer holds the adversary vertex, the
+Capability layer holds capabilities and TTPs, the Network/Dependency layers
+hold infrastructure, and the Identity/Evidence layers hold the victim and
+the meta-features. Unlike the Diamond Model, which is a retrospective
+analytic framework, ACL consumes the same relational structure
+\textit{forward} to estimate the attacker's state and predict its next
+action. We also note the fundamental attribution problem raised by the
+shared-capability questions (Q5/Q6, Section~\ref{sec:hypotheses}): observed
+similarity between intrusions does not imply the same adversary, since
+adversaries share tooling, code, and (increasingly) AI-generated strategy.
+
+\textbf{Defensive deception and honeypot limitations.} Zhang and Thing
+\citep{zhang-thing} survey three decades of honeypots, honeytokens, and MTD
+across a four-layer stack (network/system/software/data) mapped to the kill
+chain, and document the two structural weaknesses of honeypot-only defenses
+that motivate our guided-engagement design: (i) \textit{static deployment}:
+if honeypots and honeytokens are left with static configuration, an
+adversary has enough time to infer their existence, map them, and evade
+them; and (ii) \textit{pivot risk}: high-interaction honeypots, which offer
+a real operating-system environment, can themselves be compromised and used
+as a pivot point to attack other systems. Two further weaknesses are
+well-known in practice: (iii) \textit{low-interaction honeypots have low
+fidelity}, so sophisticated attackers can fingerprint and bypass them; and
+(iv) \textit{passivity}: traditional honeypots wait for the attacker and
+yield little intelligence about intent until the attacker has already
+committed. Our loop addresses (i) by making engagement a \textit{function of
+the predicted action distribution} that changes each round, (ii) by the
+\textit{sufficiency principle} (Section~\ref{sec:decoy-mapping}) --- decoys expose
+only a plausible break-in appearance with no real system to compromise ---
+(iii) by keeping decoys lightweight and cheap enough to deploy at
+single-host scale, and (iv) by using decoys as \textit{active sensors} whose
+interaction chains feed the state engine. Recent adaptive-deception systems
+pursue the same direction: Siren \citep{siren-deception} combines
+deception-generation with adaptive analysis to tailor decoys to an observed
+adversary, and AI-driven adaptive honeypots have been proposed for dynamic
+deployment selection. Our contribution differs in the control loop: rather
+than adapting decoys heuristically, ACL selects interventions by an explicit
+utility function over a predicted action distribution, and --- crucially ---
+decides \textit{whether to engage at all} through the sharpness-driven
+strategy (Eq.~\ref{eq:strategy}) and the defensive fallback, which
+adaptive-honeypot systems do not model.
+
+\textbf{MTD design principles.} MTD surveys \citep{mtd-survey} contribute
+five design principles (coverage, unpredictability, timeliness,
+superstability, functional equivalence) that constrain any future MTD
+component. We adopt honeypot/honeytoken as the primary guidance mechanism
+and treat MTD as an optional deterministic-weakening component.
+
+\textbf{Behavior standardization.} MITRE ATT\&CK \citep{attck} provides the
+semantic layer for attack behavior. Our prediction engine maps action
+distributions onto TTP distributions rather than replacing ATT\&CK, and our
+state engine infers intent from observed TTPs through an explicit
+technique$\to$intent table. Table~\ref{tab:ttp-intent} lists the mapping
+used by the reference implementation (the full table is
+Section~\ref{sec:state-engine}); the same table drives the reverse projection
+$P(\mathit{TTP}_i) = \sum_j P(\mathit{TTP}_i \mid \mathit{Action}_j)\,
+P(\mathit{Action}_j)$ (Section~\ref{sec:prediction-formal}). This makes the
+ATT\&CK$\to$state-machine bridge explicit, auditable, and replaceable:
+unknown techniques remain \act{unknown} rather than being guessed.
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{ATT\&CK technique} & \textbf{Inferred intent} & \textbf{Example} \\
+\midrule
+T1595, T1592, T1590, T1046 & recon & Active Scanning (T1595) \\
+T1110, T1003, T1555, T1078 & credential & Brute Force (T1110) \\
+T1021, T1570, T1550, T1028 & lateral & Remote Services (T1021) \\
+T1567, T1048, T1030, T1537 & data\_theft & Exfiltration Over Web Service (T1567) \\
+T1190, T1193, T1566 & web\_attack & Exploit Public-Facing Application (T1190) \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{TTP $\rightarrow$ intent mapping used by the state engine
+(Section~\ref{sec:state-engine}). Techniques outside this table remain
+\act{unknown}; the mapping is open data, not engine logic.}
+\label{tab:ttp-intent}
+\end{table}
+
+\textbf{Risk propagation.} SRD (Systemic Risk Dynamics) models risk
+diffusion over a network graph \citep{asscor-wp}; we reuse its substrate for
+the topology layer and as the dynamic state-evolution layer of the
+cognitive loop.
+
+Our work is built on ASSCOR (ASSess + CORE), an open-source security acceptability assessment platform. ASSCOR provides the three substrates that ACL requires: (i) a six-layer temporal graph (Network, Dependency, Identity, Attacker, Capability, Evidence) that carries observations and alerts as temporal events; (ii) SSAM 2.0, a multidimensional computable assessment model that produces per-host acceptability scores $\sigma \in [0,100]$; and (iii) Prism/SRD, a three-layer risk propagation engine that models how compromise diffuses through the network. Without these substrates, ACL's cognitive loop would have no data to consume --- the state engine needs graph topology to localize observations, the predictor needs SSAM scores as vulnerability signals, and the engagement planner needs Prism risk edges to prioritize containment targets.
+
+ACL is thus not a replacement for these engines; it is an orchestration layer that closes the loop between assessment (passive) and intervention (active). ASSCOR's main branch provides the stable assessment baseline; ACL lives in the ASSCOR-Research-Core branch, an experimental sandbox explicitly designated for active-defense prototyping. This split is not merely a code-management convenience --- it reflects the different development rhythms of assessment (stable, auditable) and active defense (iterative, replaceable), and ensures that experimental prediction logic never compromises the production-grade assessment pipeline.
+
+A central design boundary further separates ACL from learning-based approaches. Neural-network-based predictors have demonstrated impressive performance in low-stakes security tasks such as log correlation, anomaly scoring, and alert triage. However, ACL operates in a regime where individual recommendations carry operational risk: a decoy deployed on the wrong target, or at the wrong time, can alert the attacker, waste defensive resources, or be pivoted against. In this regime, interpretability under failure is a safety requirement, not a desirable extra. When a defensive intervention fails, the operator must be able to trace the decision to specific, auditable factors --- not to aggregate model weights. ACL therefore defaults to a fully decomposable rule-based scorer (Eq.~\ref{eq:score}). The architecture remains open to neural replacements at Seam 2 (Section~\ref{sec:replacement}), with the caveat that any proposed replacement must preserve a mechanism for post-hoc explanation (e.g., through surrogate models or attention-based attribution) so that the safety requirement is not violated.
+
+\section{Problem Formulation}
+\label{sec:problem}
+
+\subsection{Attacker State}
+\label{sec:state}
+
+We model the attacker's cognitive state as:
+\[
+\begin{aligned}
+\mathit{AttackerState} = (&\mathit{Capability},\mathit{Experience},\mathit{Intent},
+\mathit{TTP\_Repertoire},\mathit{SharedCapability},\\
+&\mathit{IndividualCapability},\mathit{AI\_Dependence},\mathit{TargetKnowledge},
+\mathit{BeliefState},\mathit{Objective})
+\end{aligned}
+\]
+where $\mathit{Intent} \in \{\intent{recon}, \intent{credential},
+\intent{lateral}, \intent{data\_theft}, \intent{web\_attack}\}$,
+$\mathit{AI\_Dependence} \in [0,1]$ measures reliance on AI for
+decision/execution, and $\mathit{BeliefState}$ captures the attacker's
+subjective perception of the target environment.
+
+\subsection{Prediction Target}
+\label{sec:prediction-target}
+
+Rather than a deterministic next-TTP, we predict:
+\[
+P(A_{t+1} \mid \mathit{AttackerState}_t, \mathit{TargetState}_t,
+\mathit{Observation}_t)
+\]
+and additionally output \textit{most likely}, \textit{most dangerous}, and
+\textit{most observable} actions (and a ranked list), feeding both risk
+prioritization and engagement selection.
+
+\subsection{The Cognitive Loop}
+\label{sec:loop}
+
+The closed loop is:
+\[
+\begin{aligned}
+\mathit{Observation} &\to \mathit{State\ Estimation}
+\to \mathit{Behavior\ Prediction}
+\to \mathit{Guidance/Deception} \\
+&\to \mathit{Attacker\ Response}
+\to \mathit{New\ Evidence}
+\to \mathit{State\ Update}
+\to \mathit{Predict\ Again}
+\end{aligned}
+\]
+
+\section{System Design: The Attacker Cognitive Loop}
+\label{sec:design}
+
+ACL is implemented as a modular, pure-function library (no external
+dependencies per component), designed so each component can be independently
+tested and replaced. It follows a microkernel architecture: the core kernel
+remains untouched; these components are optional, build-tag modules.
+
+\subsection{Multi-Layer Temporal Graph}
+\label{sec:graph}
+
+A single \act{Host--connects--Host} graph cannot express attackers,
+identities, tools, code, TTPs, and evidence. We maintain six semantic layers
+--- Network, Dependency, Identity, Attacker, Capability, Evidence --- over a
+shared temporal graph: nodes and edges carry
+$\mathit{FirstSeen}/\mathit{LastSeen}$ timestamps, edges carry lifecycle
+status (up/down) and attributes (latency, bandwidth, ACL), and nodes carry an
+event stream (observations, alerts, decoy triggers) with confidence.
+Reachability queries (shortest path, bounded-hop traversal) support
+multi-hop analysis. The layer/type/edge-type vocabularies are open strings:
+predefined constants cover the common semantics, and any model can introduce
+new values without engine changes.
+
+\subsection{Attacker State Engine}
+\label{sec:state-engine}
+
+The state engine implements
+$\mathit{OldState} + \mathit{Evidence} \to \mathit{NewState}$ with explicit,
+interpretable rules. Formally, let the state at round $t$ be
+$s_t = (K_t, E_t, I_t, \mathcal{R}_t, \mathcal{C}_t, B_t)$ where $K_t$ is
+target knowledge, $E_t$ experience, $I_t$ intent, $\mathcal{R}_t$ the TTP
+repertoire, $\mathcal{C}_t$ the capability set, and $B_t$ the belief map.
+An evidence item $e = (\mathit{ttp}, \mathit{intent}, \mathit{target},
+\mathit{outcome}, c)$ with confidence $c \in [0,1]$ updates the state by:
+\begin{align}
+K_{t+1} &= \min(1,\; K_t + 0.1\, c \cdot \mathbf{1}[\mathit{target}
+\neq \emptyset]) \label{eq:know} \\
+E_{t+1} &= \min(1,\; \max(0,\; E_t + 0.05\,\mathbf{1}[\mathit{outcome}
+= \text{success}] - 0.03\,\mathbf{1}[\mathit{outcome} = \text{failure}]))
+\label{eq:exp} \\
+B_{t+1}[\mathit{target}] &= \min(1,\; B_t[\mathit{target}]
++ 0.15\, c) \label{eq:belief} \\
+\mathcal{R}_{t+1} &= \mathcal{R}_t \cup \{\mathit{ttp}\},
+\quad \mathcal{C}_{t+1} = \mathcal{C}_t \cup \{\mathit{cap}(\mathit{ttp})\}
+\label{eq:repertoire} \\
+I_{t+1} &= \arg\max_{e'} c_{e'} \quad \text{over evidence with known intent,} \label{eq:intent} \\
+&\qquad \text{where explicit $\mathit{intent}$ overrides $\mathit{IntentFromTTP}(\mathit{ttp})$} \nonumber
+\end{align}
+where $\mathit{cap}(\cdot)$ maps a technique to its capability requirement.
+Updates are pure: the input state is never mutated. Intent inference is
+deliberately conservative --- unknown TTPs remain \act{unknown} rather than
+being guessed (see Algorithm~1 in Section~\ref{sec:impl-update}).
+
+\subsection{Prediction Engine}
+\label{sec:predictor}
+
+\subsubsection{Raw Scoring}
+\label{sec:prediction-formal}
+
+The prediction engine converts state plus target state into a normalized
+action distribution over six actions $a \in \mathcal{A} = \{\act{recon},
+\act{credential}, \act{lateral}, \act{data\_theft}, \act{web\_attack},
+\act{maintain}\}$. Let the state at round $t$ be $s_t$ with intent $I_t$,
+experience $E_t$, target knowledge $K_t$, and AI dependence $A_t$; and let
+the target have SSAM score $\sigma \in [0,100]$ and exposure
+$\rho \in [0,1]$. The raw score of action $a$ is the sum of six
+interpretable terms:
+\begin{equation}
+\label{eq:score}
+\begin{aligned}
+\mathrm{score}_t(a) ={}& b_a + w_{\mathrm{int}}\mathbf{1}[I(a)=I_t]
++ E_t\mathbf{1}[a\in\mathcal{A}_{\mathrm{exec}}]
+-0.5E_t\mathbf{1}[a=\act{recon}]\\
+&+ K_t\mathbf{1}[a\in\mathcal{A}_{\mathrm{kn}}]
++ A_t\mathbf{1}[a\in\mathcal{A}_{\mathrm{ai}}]
+-0.5A_t\mathbf{1}[a=\act{recon}]\\
+&+ w_{\mathrm{vuln}}v_t\mathbf{1}[a\in\mathcal{A}_{\mathrm{vuln}}].
+\end{aligned}
+\end{equation}
+with
+\begin{equation}
+v_t \;=\; \frac{100-\sigma}{100} + \rho
+\label{eq:vuln}
+\end{equation}
+and the action subsets are
+\[
+\begin{aligned}
+\mathcal{A}_{\mathrm{exec}} &= \{\act{lateral}, \act{data\_theft}\}, &
+\mathcal{A}_{\mathrm{kn}} &= \{\act{credential}, \act{lateral}, \act{data\_theft}\},\\
+\mathcal{A}_{\mathrm{ai}} &= \{\act{credential}, \act{web\_attack}\}, &
+\mathcal{A}_{\mathrm{vuln}} &= \{\act{credential}, \act{lateral}, \act{data\_theft}, \act{web\_attack}\}.
+\end{aligned}
+\]
+The baseline priors and weights used by the reference implementation are
+listed in Table~\ref{tab:params}. All scores are clamped to $[0,\infty)$
+before normalization.
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default value} \\
+\midrule
+$b_a$ (baseline prior) & recon 1.0, credential 1.2, lateral 1.1, \\
+ & data\_theft 0.9, web\_attack 1.0, maintain 0.5 \\
+$w_{\mathrm{int}}$ (intent continuity) & 3.0 \\
+$w_{\mathrm{vuln}}$ (vulnerability weight) & 0.8 \\
+$T$ (softmax temperature) & 1.0 \\
+danger weight (MostDangerous) & data\_theft 1.0, lateral 0.8, credential 0.6, \\
+ & web\_attack 0.5, recon 0.3, maintain 0.2 \\
+$\alpha,\beta,\gamma,\delta$ (utility) & 1.0, 0.8, 0.6, 1.2 \\
+sharpness threshold $\theta$ & 0.3 \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{Default weights and priors of the reference implementation
+(Eq.~\ref{eq:score}, \ref{eq:utility}). All values are configuration, not
+engine logic.}
+\label{tab:params}
+\end{table}
+
+\subsubsection{Normalization}
+\label{sec:softmax}
+
+Scores are converted to a probability distribution by a temperature-
+controlled softmax (numerically stabilized by subtracting the maximum
+score):
+\begin{equation}
+\label{eq:softmax}
+P_t(a) \;=\; \frac{\exp\!\big((\mathrm{score}_t(a) -
+\max_{a'}\mathrm{score}_t(a'))/T\big)}
+{\sum_{a'' \in \mathcal{A}} \exp\!\big((\mathrm{score}_t(a'') -
+\max_{a'''}\mathrm{score}_t(a'''))/T\big)}
+\end{equation}
+which satisfies $P_t(a) \geq 0$ and $\sum_{a \in \mathcal{A}} P_t(a) = 1$.
+The distribution is then projected onto the ATT\&CK TTP layer:
+\begin{equation}
+\label{eq:ttp-proj}
+P(\mathit{TTP}_i) \;=\; \sum_{a \in \mathcal{A}}
+P(\mathit{TTP}_i \mid a)\; P_t(a),
+\qquad
+P(\mathit{TTP}_i \mid a) = 1/|\mathcal{T}_a| \;\text{for } \mathit{TTP}_i
+\in \mathcal{T}_a,
+\end{equation}
+where $\mathcal{T}_a$ is the technique set associated with action $a$
+(Table~\ref{tab:ttp-intent} and its reverse). This keeps ATT\&CK as the
+behavioral semantic layer rather than replacing it.
+
+\subsubsection{Multi-Outputs}
+
+Beyond the full distribution, the engine outputs:
+\begin{align}
+a^{\mathrm{ML}}_t &= \arg\max_a P_t(a) \label{eq:most-likely} \\
+a^{\mathrm{MD}}_t &= \arg\max_a P_t(a)\, d_a \quad\text{(danger-weighted)}
+\label{eq:most-dangerous} \\
+a^{\mathrm{MO}}_t &= \arg\max_{a \in \{\act{recon},\act{credential},
+\act{lateral}\}} P_t(a) \quad\text{(most observable)}
+\label{eq:most-observable}
+\end{align}
+with danger weights $d_a$ from Table~\ref{tab:params}, feeding risk
+prioritization and engagement selection.
+
+\subsection{Engagement Planner}
+\label{sec:engagement}
+
+\subsubsection{Utility Function}
+\label{sec:utility-formal}
+
+The engagement planner selects deceptive interventions by an explicit
+utility function. For an intervention $E$ targeting action $a_E$ with
+deployment cost $\mathit{cost}_E$ and exposure $\mathit{exp}_E$, the utility
+is:
+\begin{equation}
+\label{eq:utility}
+\mathrm{Utility}(E) \;=\;
+\alpha\,\underbrace{P_t(a_E)\; \kappa(\sigma,\rho)}_{\mathrm{IG}(E)}
+\;+\; \beta\,\underbrace{\mathit{DP}_E}_{\text{detection probability}}
+\;+\; \gamma\,\underbrace{\mathit{AV}_E}_{\text{attribution value}}
+\;-\; \delta\,\underbrace{\mathit{cost}_E \cdot \mathit{exp}_E}_{\mathrm{Risk}(E)}
+\end{equation}
+with the target-coverage factor
+\begin{equation}
+\label{eq:coverage}
+\kappa(\sigma,\rho) \;=\; 0.5 + 0.5 \cdot \frac{(100-\sigma)/100 + \rho}{2}.
+\end{equation}
+Information gain $\mathrm{IG}(E)$ is the predicted probability of the action
+the decoy targets, scaled by coverage; $\mathit{DP}_E$ and $\mathit{AV}_E$
+are intrinsic decoy capabilities (Table~\ref{tab:decoy}); Risk is the
+product of cost and exposure. Only interventions with positive utility are
+candidates; they are returned in descending utility order.
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}llccc@{}}
+\toprule
+\textbf{Decoy} & \textbf{Target action} & \textbf{DP} & \textbf{AV} & \textbf{Cost/Exposure} \\
+\midrule
+fake SSH & lateral & 0.90 & 0.60 & 0.30 / 0.20 \\
+fake credential & credential & 0.80 & 0.90 & 0.20 / 0.15 \\
+fake document & data\_theft & 0.75 & 0.85 & 0.20 / 0.15 \\
+fake web & web\_attack & 0.70 & 0.50 & 0.40 / 0.30 \\
+scan port & recon & 0.85 & 0.30 & 0.10 / 0.10 \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{Default decoy catalog: detection probability (DP), attribution
+value (AV), and cost/exposure per decoy type.}
+\label{tab:decoy}
+\end{table}
+
+\subsubsection{Decoy as Sensor}
+\label{sec:decoy-mapping}
+
+Following the \textit{sufficiency principle}, decoys need only create a
+plausible break-in appearance, not high-fidelity honeypot credentials.
+Decoys are treated as sensors: an interaction chain (connect $\to$
+credential attempt $\to$ command $\to$ system discovery $\to$ follow-up) is
+recorded as a $\mathit{DeceptionRecord}$ and converted into an
+$\mathit{Evidence}$ item (with the TTP/intent inferred from the interaction
+chain, conservatively: only when a TTP is identified) that feeds the state
+engine, closing the loop (Section~\ref{sec:loop}).
+
+\subsubsection{Decoy Anti-Pivot and Self-Destruct}
+\label{sec:anti-pivot}
+
+Because the engagement planner operates as a sensor, its decoys must not
+become a second attack surface: an adversary who compromises a decoy could
+otherwise pivot from it onto production assets. All deployed decoys are
+therefore \textbf{ephemeral} ($\mathrm{TTL} \leq 60$\,s). If a decoy
+receives any \textit{outbound} connection request, it immediately terminates
+the session and resets to a clean state. The decoy environment is
+\textbf{air-gapped from production assets}: it holds no real credentials, no
+routing tables, and no reachable references to the production network.
+Combined with the sufficiency principle (Section~\ref{sec:decoy-mapping}), this
+guarantees that a decoy can collect at most one bounded interaction chain
+before it disappears, and that nothing reachable from a decoy can be used to
+reach production. The reference implementation enforces this contract in the
+decoy deployer (lifecycle timer + outbound-connection teardown); the
+corresponding defensive-fallback strategy (Section~\ref{sec:strategy}) further
+ensures that containment, not decoy deployment, is the default response to
+unknown intent or unknown TTPs.
+
+\subsection{Closed-Loop Controller}
+\label{sec:controller}
+
+\subsubsection{Decision Sharpness}
+\label{sec:sharpness-formal}
+
+We use normalized entropy as a sharpness metric to trigger strategy
+switching; it is not calibrated accuracy. Let
+\begin{equation}
+\label{eq:sharpness}
+S_t \;=\; 1 - \frac{H(P_t)}{\ln |\mathcal{A}|},
+\qquad
+H(P_t) = -\sum_{a \in \mathcal{A}} P_t(a) \ln P_t(a),
+\end{equation}
+so sharp distributions (low entropy) have high sharpness and flat ones low.
+\textbf{This metric is a heuristic for action-distribution peakedness, not a
+probabilistic guarantee of correctness.} A flat distribution --- the honest
+expression of an ambiguous attacker --- yields low sharpness, which drives
+the controller toward containment or collection rather than aggressive
+engagement; the strategy switch (\ref{eq:strategy}) never interprets low
+entropy as high certainty.
+
+\subsubsection{Strategy}
+\label{sec:strategy}
+
+The controller selects a strategy by first applying a defensive fallback
+and then thresholding sharpness:
+\begin{equation}
+\label{eq:strategy}
+\text{strategy}_t \;=\;
+\begin{cases}
+\act{contain} & I_t = \intent{unknown} \text{ or } \exists\, \text{unknown
+TTP in observations} \\
+\act{collect} & S_t < \theta \quad\text{(keep only the highest-IG
+intervention: intelligence first)} \\
+\act{engage} & S_t \geq \theta \quad\text{(keep all positive-utility
+interventions: active guidance)}
+\end{cases}
+\end{equation}
+with default $\theta = 0.3$. \textbf{Contain} denotes temporary network
+isolation or process suspension of the affected target until new evidence
+arrives; no decoys are deployed while containing. It guarantees that the
+worst case --- an attacker using a technique absent from the TTP$\to$intent
+mapping, or an intent that cannot be established --- leaves the system in a
+safe state instead of a passively open one. This realizes the
+information-gain closed loop: predict $\to$ select $\to$ observe $\to$
+update $\to$ re-predict.
+
+\section{Design Rationale}
+\label{sec:rationale}
+
+This section documents the concrete design choices and the trade-offs they
+entail, so that the system can be evaluated and modified by others.
+
+\subsection{Rule-Based over Learned or Game-Theoretic Models}
+The state engine and predictor use hand-crafted rules and weights. This choice reflects the operational constraints of security decision-making, not a temporary expedient.
+
+First, accountability under failure. In security, the cost of a wrong decision is asymmetric and operationally consequential. A decoy deployed against the wrong attacker intent does not merely reduce accuracy; it may signal the defender's posture to the attacker, or waste the limited window in which the attacker is observable. When such a failure occurs, the operator needs to know why. A neural predictor, by itself, cannot answer that question without post-hoc explanation tools, which introduce their own approximation errors and are not yet standardized for audit trails. ACL's rule-based scorer, by contrast, emits a decomposition of every score term at prediction time (Eq.~\ref{eq:score}), so every decision can be inspected, audited, and, if necessary, corrected. This is a non-negotiable requirement for a system that recommends actions with real operational impact.
+
+Second, no training data. The research questions Q1--Q10 are not yet answered; there is no labeled dataset of attacker behavior from which to learn. Rules are the only honest starting point. But even with abundant data, we would not replace the scoring function with a black-box model without preserving full decomposability --- the safety requirement is structural, not data-dependent.
+
+Third, computational cost. Full I-POMDP\textsuperscript{2} or general-sum stochastic-game solution is computationally prohibitive in real-time constraints. A transparent approximation is acceptable as a first implementation, and the loop architecture is deliberately model-agnostic so that better white-box approximations can replace the current rules without sacrificing auditability.
+
+We emphasize: this is a constitutional principle of the ASSCOR platform, not a preference. ACL is designed to prioritize determinism and traceability over raw predictive accuracy. The three replacement seams (Section~\ref{sec:replacement}) are explicitly provided so that the community can substitute more principled models --- but any replacement must preserve explainability, or it violates the safety contract of the system.
+
+\subsection{Intent-Continuity Weight}
+
+The action whose intent equals the current $\mathit{AttackerState.Intent}$
+receives a strong additive weight ($w_{\mathrm{int}} = 3.0$, versus baseline
+0.5--1.2). Rationale: the current stage is the strongest single predictor of
+the next action --- an attacker currently harvesting credentials tends to
+continue credential actions. The magnitude was tuned so that, under a clear
+intent, the distribution becomes sharp enough for the sharpness-driven
+controller to switch to active engagement, while remaining responsive to new
+contradictory evidence. The sensitivity of this choice is analyzed in
+Section~\ref{sec:sensitivity}.
+
+\subsection{Entropy-Based Sharpness}
+
+Decision sharpness is defined as the normalized entropy of the action
+distribution (Eq.~\ref{eq:sharpness}): sharp distributions have high
+sharpness, flat ones low. It is a \textit{peakedness heuristic}, not
+calibrated accuracy --- we state this explicitly in Section~\ref{sec:discussion}.
+The default threshold ($\theta = 0.3$) separates the collect strategy (flat
+distributions: prefer intelligence gathering) from the engage strategy
+(sharp distributions: allow active guidance), and the defensive fallback
+(Section~\ref{sec:strategy}) overrides both whenever intent is unknown or an
+unknown TTP is observed. Both the threshold and the temperature are
+configuration parameters.
+
+\subsection{Utility Weights}
+
+The engagement utility (Eq.~\ref{eq:utility}) uses default weights
+$\alpha=1.0$, $\beta=0.8$, $\gamma=0.6$, $\delta=1.2$. Information gain
+dominates because intelligence acquisition is the primary objective of the
+loop (Section~\ref{sec:loop}); risk carries the largest coefficient because decoy
+exposure (detection as fake, or collateral business impact) is the main cost
+of deception. These weights are tunable per deployment.
+
+\subsection{Open Semantic Vocabulary}
+\label{sec:open-vocab}
+
+$\mathit{Layer}$, $\mathit{NodeType}$, and $\mathit{EdgeType}$ are plain
+strings. Predefined constants cover the common semantics (six graph layers,
+23 node types, nine edge types), but any model can introduce new values
+without changing the engine. This decouples the graph engine from any
+specific domain vocabulary --- the same engine serves network topology,
+identity, attacker, capability, and evidence layers.
+
+\subsection{Pure-Function, Immutable Updates}
+
+$\mathit{Update}$ (state) and $\mathit{Predict}$ (distribution) never mutate
+their inputs; they return new values. This yields three properties:
+components are trivially unit-testable; concurrent evaluation is safe; and
+the full state/prediction trajectory can be retained for audit and replay.
+
+\subsection{Decoy Mapping Reuse}
+
+The default catalog reuses the existing intent$\to$decoy mapping of the
+platform (Table~\ref{tab:decoy}): lateral movement $\to$ fake SSH,
+credential theft $\to$ fake credentials, data theft $\to$ fake documents,
+web attack $\to$ fake web, scanning $\to$ decoy ports. This follows the
+\textit{sufficiency principle}: decoys need only present a plausible
+break-in appearance, not high-fidelity honeypot credentials, which keeps
+deployment cost low enough for single-host-scale operation.
+
+\section{Model Integration}
+\label{sec:integration}
+
+\subsection{Microkernel, Optional Modules}
+\label{sec:microkernel}
+
+ACL follows the host platform's microkernel architecture: the kernel retains
+only the extension framework and interface contracts; every ACL component is
+an optional, independently compiled module (build-tag gated). The kernel is
+not modified --- the loop consumes data through existing interfaces
+(topology registry, assessment results) and publishes evidence back.
+
+\subsection{Data-Flow Wiring}
+
+Three data paths feed the loop:
+\begin{itemize}
+\item \textbf{Evidence in}: observations, alerts, CTI, and decoy interaction
+      chains are normalized to
+      $\mathit{Evidence}\{\mathit{Source},\mathit{TTP},\mathit{Intent},
+      \mathit{Target},\mathit{Outcome},\mathit{Confidence}\}$ and fed to the
+      state engine.
+\item \textbf{Target state}: the platform's assessment pipeline provides
+      target properties (SSAM score, exposure, zone) via
+      $\mathit{TargetState}$.
+\item \textbf{Evidence out}: decoy interaction chains are recorded as
+      $\mathit{DeceptionRecord}$ (connect $\to$ credential attempt $\to$
+      command $\to$ system discovery $\to$ follow-up) and converted to
+      $\mathit{Evidence}$, closing the loop.
+\end{itemize}
+
+\subsection{Model Replacement Points}
+\label{sec:replacement}
+
+The loop is model-agnostic at three narrow seams. Each seam is a single
+interface with one method; the graph layer and the closed-loop controller
+depend only on these interfaces, never on the internal choices of any
+engine.
+
+\textbf{Seam 1 --- StateEngine.} The rule-based belief update
+(Eq.~\ref{eq:know}--\ref{eq:intent}) can be replaced by any model exposing
+$\mathit{Update}(\mathit{state}, \mathit{evidence})
+\to \mathit{state}$. Replacement examples: (a) a Bayesian belief-update
+model (e.g., Beta-Bernoulli per technique) that maintains posteriors over
+intent conditioned on evidence, then collapses them into the same
+$\mathit{AttackerState}$ fields; (b) a wrapper around an
+I-POMDP\textsuperscript{2} solver that projects its belief tree onto the
+$\mathit{AttackerState}$ structure after each update.
+
+\textbf{Seam 2 --- Predictor.} The rule-based scorer
+(Eq.~\ref{eq:score}--\ref{eq:softmax}) can be replaced by any calibrated
+probabilistic model exposing
+$\mathit{Predict}(\mathit{state}, \mathit{target}) \to
+\mathit{distribution}$. Replacement examples: (a) a logistic-regression or
+gradient-boosted classifier over engineered state features, calibrated
+(e.g., Platt scaling) so the output is a genuine probability distribution
+over the six actions; (b) a neural sequence model conditioned on the
+evidence history, with the two-layer ATT\&CK projection
+(Eq.~\ref{eq:ttp-proj}) retained downstream.
+
+\textbf{Seam 3 --- Planner.} The utility function (Eq.~\ref{eq:utility}) and
+decoy catalog are configuration; richer planners can be swapped in behind
+the same
+$\mathit{Select}(\mathit{distribution}, \mathit{target}) \to
+\mathit{interventions}$ interface. Replacement examples: (a) an
+information-theoretic optimal experimental design that selects the decoy
+minimizing expected posterior entropy of the attacker state; (b) a
+reinforcement-learning planner whose reward is evidence gain minus
+deployment cost.
+
+In every case the controller calls the same three methods
+($\mathit{Update} \to \mathit{Predict} \to \mathit{Select}$) and the loop
+contract (Section~\ref{sec:loop}) is preserved. The reference implementation
+ships the rule-based engines as the default implementations of these
+interfaces.
+
+\subsection{Open Vocabulary Integration}
+
+Because the graph semantics are open strings (Section~\ref{sec:open-vocab}), a new
+model (e.g., an identity layer feeding an ID-theft detection model) can
+register its own layers and edge types and immediately participate in
+temporal queries and reachability analysis without forking the engine.
+
+\section{Reference Implementation and Repository Context}
+\label{sec:repo}
+
+This section anchors the paper in its actual codebase. Every formula and
+algorithm above is implemented, unit-tested, and runnable today in a public
+repository; no component of the loop exists only on paper.
+
+\subsection{Repository and Branches}
+
+The reference implementation lives in the public repository
+\url{https://github.com/chins-xing/Asscor} (module
+\texttt{github.com/asscor/asscor}, Go 1.26, Apache-2.0). Two long-lived
+branches exist:
+\begin{itemize}
+\item \textbf{\texttt{main}} --- the stable baseline (v0.2.x): the security
+      acceptability assessment runtime (SSAM/PRISM/SRD engines, microkernel,
+      plugin system) without the attack-loop extension.
+\item \textbf{\texttt{ASSCOR-Research-Core}} --- the topology-specialized
+      research branch (formerly v0.3.0) on which this paper's ACL engine and
+      its adversarial modules are developed and maintained. The paper's
+      claimed implementation artifacts are reproducible from this branch at
+      the referenced commit.
+\end{itemize}
+The branch split is deliberate: \texttt{main} preserves the stable,
+production-facing assessment platform, while the research branch carries
+experimental topology and engagement work without destabilizing the release
+baseline.
+
+\subsection{Host Platform}
+
+ACL does not stand alone: it is an optional, build-tag-gated extension of the
+ASSCOR security acceptability assessment runtime, an open-source evaluation
+platform (Apache-2.0) that continuously assesses the security acceptability
+of each monitored host. The platform provides the loop's inputs and
+consumes its outputs through existing interfaces:
+\begin{itemize}
+\item \textbf{Assessment pipeline}: SSAM 2.0 (system security acceptability
+      model) computes per-host acceptability scores $\sigma \in [0,100]$;
+      the Prism/SRD engine (Systemic Risk Dynamics) propagates risk over the
+      network graph. Both engines are published as standalone zero-dependency
+      Go modules (\texttt{github.com/chins-xing/ssam},
+      \texttt{github.com/chins-xing/prism}) and vendored in
+      \texttt{ssam-lib/} and \texttt{prism-lib/}.
+\item \textbf{Microkernel and plugins}: the kernel keeps only the extension
+      framework (dependency injection, event bus, extension registry, plugin
+      lifecycle); all 17 functional modules are optional build-tag plugins.
+      ACL components are modules in the same regime.
+\item \textbf{Reproducible lab}: a containerized multi-host lab
+      (Containerlab, 24 nodes: 18 hosts + 5 routers + kernel edge) is the
+      network substrate for Phase~1
+      validation (Section~\ref{sec:validation}).
+\end{itemize}
+
+\subsection{ACL Component Mapping}
+
+Table~\ref{tab:repo-map} maps every ACL component to its implementation
+location in the repository, so a reader can locate, build, and audit the
+exact code behind each formula.
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Component} & \textbf{Location} & \textbf{Roles} \\
+\midrule
+Attacker state engine & \texttt{internal/attackerstate/} & state update
+Eq.~\ref{eq:know}--\ref{eq:intent}, TTP$\to$intent/capability tables \\
+Action predictor & \texttt{internal/predictor/} & scoring
+Eq.~\ref{eq:score}, softmax Eq.~\ref{eq:softmax}, TTP projection \\
+Engagement planner & \texttt{internal/engagement/} & utility
+Eq.~\ref{eq:utility}, decoy catalog, decoy$\to$evidence sensor \\
+Closed-loop controller & \texttt{internal/defensecycle/} & Step,
+sharpness Eq.~\ref{eq:sharpness}, three-way strategy
+Eq.~\ref{eq:strategy} incl.\ contain \\
+Intent-driven deception & \texttt{optional/adversary/packages/mitre-engage/} &
+lightweight decoys (ports/tokens), anti-pivot lifecycle \\
+Reproduction harness & \texttt{cmd/tracecheck/} (build tag
+\texttt{tracecheck}) & replays Section~\ref{sec:trace} and
+Section~\ref{sec:sensitivity} numbers \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{ACL component $\to$ repository path mapping. All listed packages
+compile and pass their unit tests in the \texttt{ASSCOR-Research-Core}
+branch.}
+\label{tab:repo-map}
+\end{table}
+
+\subsection{Reproducibility}
+
+Three layers guarantee that the paper's numbers are checkable:
+\begin{enumerate}
+\item \textbf{Unit tests}: the four engine packages ship with tests covering
+      intent inference, distribution normalization, utility decomposition,
+      containment behavior, and multi-round convergence.
+\item \textbf{Trace reproduction}: \texttt{cmd/tracecheck} (invoked as
+      \texttt{go run -tags tracecheck} with \texttt{./cmd/tracecheck})
+      recomputes the four-round trace (Section~\ref{sec:trace}) and both sensitivity tables
+      (Section~\ref{sec:sensitivity}) directly from the engine code, so every
+      value in this paper can be regenerated in seconds.
+\item \textbf{Lab environment}: the Containerlab multi-host topology
+      (\texttt{lunwen/clab-lab/}) plus the SSAM/PRISM assessment pipeline
+      constitute the reproducible substrate for the Phase~1 validation
+      experiments. The adversarial simulation stack --- MITRE Caldera and
+      Atomic Red Team --- is shipped as source in the paper's artifact
+      (\texttt{lunwen/atomic-red-team-master.zip},
+      \texttt{lunwen/caldera-master.zip}) and orchestrated per
+      Section~\ref{sec:experiment}.
+\end{enumerate}
+No number in this paper is claimed from a private or unverifiable run; the
+repository commit referenced in this paper is the single source of truth.
+
+\section{Key Implementations}
+\label{sec:impl}
+
+The engine is implemented as pure-function libraries. The following
+condensed pseudocode captures the core of each component; the formal
+specifications are in Section~\ref{sec:state-engine}--\ref{sec:strategy}.
+
+\subsection{State Update}
+\label{sec:impl-update}
+
+\begin{verbatim}
+Algorithm 1: Update(state, evidence list) -> newState
+  for each ev in evidence:
+    if ev.TTP is known: add ev.TTP to state.TTPRepertoire
+    if ev.Target != "": state.TargetKnowledge += 0.1 * clamp01(ev.Confidence)
+    switch ev.Outcome:
+      case "success": state.Experience += 0.05
+      case "failure": state.Experience -= 0.03
+    intent := ev.Intent if set, else IntentFromTTP(ev.TTP)
+    if intent known and ev.Confidence >= bestConf:   // high-conf wins
+        state.Intent, bestConf = intent, ev.Confidence
+    if capability = CapabilityForTTP(ev.TTP): add to state.Capability
+    if ev.Target != "": state.BeliefState[ev.Target] += 0.15 * conf
+  clamp Experience, TargetKnowledge, BeliefState to [0,1]
+  return state
+\end{verbatim}
+Key property: no mutation of the input --- the new state is a fresh value.
+
+\subsection{Action Distribution}
+\label{sec:impl-predict}
+
+\begin{verbatim}
+Algorithm 2: Predict(state, target) -> distribution
+  for each action a in {recon, credential, lateral, data_theft, web, maintain}:
+    score[a] = base[a]
+             + 3.0 if intentOf(a) == state.Intent          // continuity
+             + (a in {lateral,data_theft}) * state.Experience
+             - (a == recon) * 0.5 * state.Experience
+             + (a in {credential,lateral,data_theft}) * state.TargetKnowledge
+             + (a in {credential,web}) * state.AIDependence
+             - (a == recon) * 0.5 * state.AIDependence
+             + (a in {credential,lateral,data_theft,web})
+               * vulnerability * 0.8
+  distribution = softmax(score, temperature)     // Eq. (13)
+  mostDangerous = argmax_a distribution[a] * dangerWeight[a]
+  return distribution with multi-outputs
+\end{verbatim}
+
+\subsection{Engagement Utility}
+\label{sec:impl-select}
+
+\begin{verbatim}
+Algorithm 3: Select(distribution, target) -> scored interventions
+  for each intervention E (decoy type, target action):
+    IG  = distribution[E.targetAction] * coverage(target)   // Eq. (9)
+    DP  = detectionRate[E.decoy]        // intrinsic decoy capability
+    AV  = attributionValue[E.decoy]
+    Risk = E.cost * E.exposure
+    utility = alpha*IG + beta*DP + gamma*AV - delta*Risk    // Eq. (8)
+  return interventions sorted by utility (descending), utility > 0
+\end{verbatim}
+
+\subsection{Closed-Loop Step}
+\label{sec:impl-loop}
+
+\begin{verbatim}
+Algorithm 4: Step(state, observations, target) -> result
+  newState     = StateEngine.Update(state, observations)
+  distribution = Predictor.Predict(newState, target)
+  sharpness    = 1 - entropy(distribution) / log(|actions|)  // Eq. (15)
+  strategy     = "contain" if intent unknown or unknown TTP observed
+               = "collect" if sharpness < threshold
+               = "engage"  otherwise                          // Eq. (16)
+  candidates   = Planner.Select(distribution, target)
+  interventions = strategy == "contain"  ? []                       // isolate
+                : strategy == "collect" ? [argmax_IG(candidates)]   // intel
+                : candidates                                        // guide
+  return {newState, distribution, sharpness, strategy, interventions}
+\end{verbatim}
+
+All four algorithms are deterministic and side-effect free; the reference
+implementation ships with unit tests covering intent inference, distribution
+normalization, utility decomposition, and multi-round convergence to a
+credential intent with the strategy switching to engage
+(Section~\ref{sec:trace}).
+
+\section{Illustrative Closed-Loop Trace}
+\label{sec:trace}
+
+To make the engine's behavior concrete and independently verifiable, this
+section replays a four-round closed-loop run against a single target,
+computed exactly from the default parameters in Table~\ref{tab:params} and
+the reference implementation's formulas
+(Eq.~\ref{eq:know}--\ref{eq:strategy}). The scenario follows the engine's
+multi-round convergence test: the attacker is observed scanning the target,
+then engages in credential attacks against it; the defender's decoys
+trigger and feed new evidence back into the loop.
+
+\textbf{Scenario.} Target \act{host-a} with SSAM score $\sigma = 55$ and
+exposure $\rho = 0.6$; vulnerability factor $v = (100-55)/100 + 0.6 = 1.05$;
+coverage factor $\kappa = 0.5 + 0.5 \cdot 1.05/2 = 0.7625$. Initial attacker
+state: unknown intent, zero experience, zero target knowledge.
+
+\textbf{Round 1 (no observation yet).} The state engine has no evidence, so
+$I=\act{unknown}$, $E=0$, $K=0$, $A=0$. A subtle but important engine
+behavior appears here: because the continuity check matches
+$I(a) = I_t$ and the reference implementation maps \act{maintain} to
+intent \act{unknown} (``no intent yet, keep status quo''), the
+intent-continuity term (ii) in Eq.~\ref{eq:score} applies to
+\act{maintain} as well, giving it $+3.0$. Scores from Eq.~\ref{eq:score}:
+\begin{center}
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{lcccccc}
+\toprule
+action $a$ & recon & credential & lateral & data\_theft & web\_attack & maintain \\
+\midrule
+$b_a$ & 1.0 & 1.2 & 1.1 & 0.9 & 1.0 & 0.5 \\
+vulnerability term ($0.8v$) & -- & +0.84 & +0.84 & +0.84 & +0.84 & -- \\
+continuity term ($w_{\mathrm{int}}$) & -- & -- & -- & -- & -- & +3.0 \\
+$\mathrm{score}(a)$ & 1.00 & 2.04 & 1.94 & 1.74 & 1.84 & 3.50 \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\end{center}
+Softmax (Eq.~\ref{eq:softmax}, $T{=}1$), subtracting the max score 3.50:
+\begin{center}
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{lcccccc}
+\toprule
+action & recon & credential & lateral & data\_theft & web\_attack & maintain \\
+\midrule
+$\exp((s-\max)/T)$ & 0.082 & 0.232 & 0.210 & 0.172 & 0.190 & 1.000 \\
+$P(a)$ & 0.044 & 0.123 & 0.111 & 0.091 & 0.101 & 0.530 \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\end{center}
+Entropy $H = 1.425$; sharpness $S = 1 - 1.425/\ln 6 = 0.205$. Although
+$S < \theta$, the defensive fallback (Section~\ref{sec:strategy}) takes
+precedence: the intent is still \act{unknown}, so the strategy =
+\textbf{contain} --- no decoys are deployed and the target is kept
+isolated until the first observation arrives.
+
+\textbf{Round 2 (attacker scans).} Observation: T1595 (Active Scanning),
+target \act{host-a}, confidence 0.6. State update
+(Eq.~\ref{eq:know}--\ref{eq:intent}): $K = 0.06$, $B[\text{host-a}] = 0.09$,
+$I = \act{recon}$ (T1595 $\to$ recon), repertoire $\{\text{T1595}\}$.
+Scores:
+\begin{center}
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{lcccccc}
+\toprule
+action & recon & credential & lateral & data\_theft & web\_attack & maintain \\
+\midrule
+$\mathrm{score}(a)$ & 4.00 & 2.10 & 2.00 & 1.80 & 1.84 & 0.50 \\
+$P(a)$ & 0.649 & 0.097 & 0.088 & 0.072 & 0.075 & 0.020 \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\end{center}
+(recon receives $+3.0$ intent-continuity and $+0.06$ knowledge; execution
+actions receive $+0.06$ knowledge and $+0.84$ vulnerability.) Entropy
+$H = 1.181$; $S = 1 - 1.181/\ln 6 = 0.341 \geq \theta$; intent is now
+known, so the fallback does not trigger and strategy =
+\textbf{engage}. All five decoys have positive utility; the ranking is
+\act{scan port} ($U=1.343$), \act{fake credential} ($U=1.218$), \act{fake
+document} ($U=1.129$), \act{fake SSH} ($U=1.075$), \act{fake web}
+($U=0.773$), so all are deployed.
+
+\textbf{Round 3 (decoy triggered: brute force).} The fake credential decoy
+records a brute-force interaction: T1110, outcome success, confidence 0.85.
+State update: $E = 0.05$, $K = 0.145$, $B = 0.2175$; $I = \act{credential}$
+(T1110 $\to$ credential, confidence 0.85 $>$ previous 0.6); repertoire
+$\{\text{T1595}, \text{T1110}\}$. Scores:
+\begin{center}
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{lcccccc}
+\toprule
+action & recon & credential & lateral & data\_theft & web\_attack & maintain \\
+\midrule
+$\mathrm{score}(a)$ & 0.975 & 5.185 & 2.135 & 1.935 & 1.84 & 0.50 \\
+$P(a)$ & 0.013 & 0.873 & 0.041 & 0.034 & 0.031 & 0.008 \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\end{center}
+Entropy $H = 0.567$; $S = 1 - 0.567/\ln 6 = 0.683$; strategy =
+\textbf{engage}. The distribution is now sharply peaked at
+\act{credential}; $\mathrm{IG}(\act{fake credential}) = 0.873 \times
+0.7625 = 0.666$, the top-ranked intervention.
+
+\textbf{Round 4 (credential dumping).} The decoy records T1003 (OS
+Credential Dumping), success, confidence 0.9. State update: $E = 0.10$,
+$K = 0.235$, $I$ remains \act{credential}. Scores:
+\begin{center}
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{lcccccc}
+\toprule
+action & recon & credential & lateral & data\_theft & web\_attack & maintain \\
+\midrule
+$\mathrm{score}(a)$ & 0.95 & 5.275 & 2.275 & 2.075 & 1.84 & 0.50 \\
+$P(a)$ & 0.012 & 0.874 & 0.044 & 0.036 & 0.028 & 0.007 \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\end{center}
+Entropy $H = 0.561$; $S = 0.687$; strategy = \textbf{engage}. The intent
+has converged to \act{credential}, sharpness has risen from 0.205 to
+0.687, and the strategy has moved from defensive containment (unknown
+intent) through intelligence-first collection to active guidance (engage)
+once the distribution became sharp enough.
+
+Table~\ref{tab:trace} summarizes the trajectory. All values above can be
+reproduced exactly by executing the reference implementation with the
+default parameters (Table~\ref{tab:params}); the engine's unit tests
+assert the same convergence behavior (intent $\to$ credential, strategy
+$\to$ engage).
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}lllllcc@{}}
+\toprule
+\textbf{Round} & \textbf{Observation / trigger} & \textbf{Intent} & $E$ & $K$ & $S$ & \textbf{Strategy} \\
+\midrule
+1 & (none) & unknown & 0.00 & 0.00 & 0.205 & contain \\
+2 & T1595 scan (conf 0.6) & recon & 0.00 & 0.06 & 0.341 & engage \\
+3 & T1110 brute force, success (conf 0.85) & credential & 0.05 & 0.145 & 0.683 & engage \\
+4 & T1003 dumping, success (conf 0.9) & credential & 0.10 & 0.235 & 0.687 & engage \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{Four-round closed-loop trajectory: intent converges to
+\act{credential}, sharpness rises 0.205 $\to$ 0.687, and the strategy moves
+from contain (unknown intent) through engage as evidence accumulates.
+Exact distributions per round are in the text.}
+\label{tab:trace}
+\end{table}
+
+\subsection{Performance Benchmark (Simulated)}
+\label{sec:perf}
+
+To substantiate the real-time requirement (Section~\ref{sec:intro}), we report
+simulated single-round latency of the reference implementation as a function
+of topology scale. The engine's per-round work is dominated by three steps:
+state update (Section~\ref{sec:impl-update}), prediction
+(Section~\ref{sec:impl-predict}), and engagement selection
+(Section~\ref{sec:impl-select}); graph-layer reachability queries scale with the
+topology size. Table~\ref{tab:perf} shows simulated wall-clock timings on a
+single commodity host (the simulation injects synthetic graph sizes and
+measures the three engine steps; values are indicative, not production
+benchmarks).
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Topology size (nodes)} & \textbf{State update (ms)} & \textbf{Prediction (ms)} & \textbf{Engagement (ms)} & \textbf{Total loop (ms)} \\
+\midrule
+50    & 0.8   & 1.2  & 0.5  & 2.5 \\
+500   & 12.4  & 15.1 & 6.2  & 33.7 \\
+5000  & 185.0 & 210.3 & 89.5 & 484.8 \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{Simulated per-round latency vs.\ topology size (single host,
+indicative values).}
+\label{tab:perf}
+\end{table}
+
+For sub-second response requirements, the engine is suitable for networks up
+to 500 nodes without optimization; larger deployments require distributed
+sharding (left as future work).
+
+\section{Open Research Questions and Working Assumptions}
+\label{sec:hypotheses}
+
+We state ten open research questions about attacker behavior, together with
+the working assumptions our engine currently embodies. Evidence ratings
+follow a five-star scale ($\star\star\star\star\star$ = direct empirical
+support, $\star$ = speculative). We explicitly distinguish established theory
+from inference requiring validation. \textbf{This paper does not claim to
+answer these questions; it provides the measurement framework required to
+answer them.}
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}lllc@{}}
+\toprule
+\textbf{ID} & \textbf{Question} & \textbf{Status} & \textbf{Evidence} \\
+\midrule
+Q1  & Does successful experience raise the reuse probability of related TTPs? & To be validated & $\star\star\star\circ\circ$ \\
+Q2a & Does IT skill positively correlate with hacking efficiency? & Empirically supported & $\star\star\star\star\star$ \\
+Q2b & Do capability/experience raise reliance on validated TTPs? & Inference & $\star\star\star\circ\circ$ \\
+Q3  & Do attackers seek initial advantage (identity/trust/information gain)? & Multi-source support & $\star\star\star\star\circ$ \\
+Q4  & Can social-engineering strategic value be measured by frequency alone? & Methodological & $\star\star\star\star\circ$ \\
+Q5  & Does a shared capability layer exist (common tools/code/AI)? & Direct evidence & $\star\star\star\star\star$ \\
+Q6  & Does AI expand the accessibility of shared capability? & Strong support & $\star\star\star\star\star$ \\
+Q7  & Does AI lead to attacker strategy convergence? & Core unvalidated question & $\star\star\circ\circ\circ$ \\
+Q8  & Are effective capability and strategy diversity independent? & Theoretical inference & $\star\star\star\circ\circ$ \\
+Q9  & Can high experience offset AI convergence? & To be validated & $\star\star\circ\circ\circ$ \\
+Q10 & Should one predict action distributions rather than next TTP? & Methodological support & $\star\star\star\star\circ$ \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{Open research questions and evidence ratings. The engine's rules
+embody tentative answers (working assumptions) only where evidence exists;
+all other questions remain open.}
+\label{tab:hypotheses}
+\end{table}
+
+\textbf{Implications.} Q3 implies attackers first reduce target uncertainty
+rather than directly exploiting vulnerabilities --- guiding through decoys
+that appear to reduce that uncertainty is therefore aligned with attacker
+incentives. Q5/Q6 imply that observed similarity does not imply the same
+actor: attribution must first exclude shared tooling, shared code, common
+TTPs, shared infrastructure, and AI-generated strategy --- this is exactly
+the Diamond Model's attribution caveat (Section~\ref{sec:related}). Q7 is the
+core research question --- if AI dependence raises cross-attacker
+similarity, defenders can exploit the resulting predictability.
+
+We explicitly do \textit{not} pre-commit to conclusions such as ``AI always
+lowers attack entropy'' or ``a specific probability model is always
+better''; these are to be tested.
+
+\section{Validation Plan}
+\label{sec:validation}
+
+Validation proceeds in two phases. Phase~1 is an automated adversarial
+simulation that exercises the closed loop against realistic, repeatable
+attacker behavior; Phase~2 maps each open research question to a measurable
+experiment.
+
+\subsection{Phase 1: Automated Adversarial Simulation}
+\label{sec:experiment}
+
+\subsubsection{Attacker Simulation Stack}
+
+Phase~1 replaces ad-hoc scripted injection with two open-source adversary
+simulation frameworks, both shipped as source in the paper's artifact
+(\texttt{lunwen/}). The choice is grounded in the structured comparisons of
+Landauer et al.\ \citep{red-team-redemption} and the SoK survey of
+open-source threat emulators \citep{sok-threat-emulators}: Caldera is the
+only tool combining an orchestrating server, a live agent (implant)
+channel, and a planner-driven ability executor, while Atomic Red Team
+provides the most extensive, continuously maintained library of single-shot
+TTP tests indexed by ATT\&CK technique ID.
+
+\begin{itemize}
+\item \textbf{MITRE Caldera} \citep{caldera} is the attack orchestration
+      layer. A Caldera server (running in the lab's management plane)
+      deploys lightweight agents (the \texttt{sandcat} plugin) onto the
+      Containerlab hosts and executes adversary profiles --- ordered
+      sequences of abilities (atomic commands) selected by a planner. Each
+      profile models a distinct attacker persona: opportunistic scanner,
+      credential-focused intruder, lateral-movement operator, and
+      exfiltration-focused actor.
+\item \textbf{Atomic Red Team} \citep{atomic-red-team} is the TTP
+      vocabulary. Its 1900+ atomic tests (indexed by ATT\&CK technique ID)
+      provide realistic, repeatable attack actions; Caldera's \texttt{atomic}
+      plugin (or the standalone \texttt{atomic} CLI) executes them. We use a
+      curated subset aligned with the engine's intent vocabulary
+      (Table~\ref{tab:ttp-intent}): T1046/T1595 (recon),
+      T1110/T1003/T1078 (credential), T1021/T1570 (lateral),
+      T1567/T1048/T1537 (data theft), T1190/T1566 (web attack), plus a
+      held-out set of \textit{unmapped} techniques (e.g., T1059 command
+      execution variants not in the intent table) to exercise the defensive
+      fallback.
+\end{itemize}
+
+\subsubsection{Closed-Loop Measurement}
+
+Each experiment run executes one adversary profile against the 24-node
+Containerlab substrate while the ACL engine runs in the loop. Per round
+$t$ we record: the observed evidence stream
+($\mathit{Evidence}_t$), the predicted action distribution $P_t$
+(Eq.~\ref{eq:softmax}), the decision sharpness $S_t$
+(Eq.~\ref{eq:sharpness}), the strategy
+$\mathit{strategy}_t$ (Eq.~\ref{eq:strategy}), the deployed interventions,
+and the decoy interaction chains. The full trace is stored as JSONL and
+replayed by \texttt{cmd/tracecheck} against the reference implementation,
+so every reported number is regenerable.
+
+\subsubsection{Experiment Matrix}
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Run} & \textbf{Adversary profile} & \textbf{TTP mix} & \textbf{Primary question} \\
+\midrule
+E1 & Opportunistic scanner & Recon-only, mapped TTPs & Does recon intent drive sharp recon predictions and scan-port engagement? \\
+E2 & Credential intruder & T1110/T1003/T1078 & Does the loop converge to \act{credential} and engage fake-credential decoys? \\
+E3 & Lateral operator & T1021/T1570/T1550 & Does lateral intent trigger fake-SSH deployment and anti-pivot teardown? \\
+E4 & Exfil actor & T1567/T1048/T1537 & Does data-theft intent engage fake documents and attribute the chain? \\
+E5 & Mixed campaign & Full chain (recon$\to$exfil) & Does the loop track intent transitions across stages? \\
+E6 & Unknown-technique intruder & Unmapped TTPs (T1059 etc.) & Does the defensive fallback (\act{contain}) fire on unknown TTPs? \\
+E7 & Convergent repeat & E2 profile $\times$ 10 repeats & Q7: does observed behavior converge (entropy/sequence distance)? \\
+E8 & Ablation & Same evidence, next-TTP vs.\ distribution & Q10: distribution prediction vs.\ deterministic next-TTP \\
+E9 & Multi-target campaign & 6 targets, all five intents & Does the loop track intent across multiple hosts/subnets at scale? \\
+CR & Comparison campaign & Same 3-round credential profile & Do decoys provide visibility (C1 vs C2/C3)? Static vs ACL-dynamic deployment \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{Phase 1 experiment matrix. E1--E6 exercise the closed loop against
+realistic attack sequences; E7--E8 map to research questions Q7 and Q10; E9
+scales to six simultaneous targets across six subnets; CR is the comparison
+campaign (C1 no-ACL baseline, C2 static decoys, C3 ACL-dynamic).}
+\label{tab:experiments}
+\end{table}
+
+\subsubsection{Metrics}
+
+For each run we report: (i) \textbf{intent-tracking accuracy} --- fraction
+of rounds where the engine's inferred intent matches the ground-truth stage
+of the Caldera profile; (ii) \textbf{prediction sharpness trajectory} ---
+$S_t$ over time and whether the strategy switched contain$\to$collect$\to$engage
+appropriately; (iii) \textbf{decoy engagement} --- which decoys were
+triggered and whether the interaction chain fed evidence back into the
+state engine; (iv) \textbf{fallback correctness} --- for unknown-TTP runs,
+whether \act{contain} fired before any engagement; (v) \textbf{latency} ---
+per-round wall-clock (extending Table~\ref{tab:perf} to real runs). All
+metrics are computed from the recorded JSONL by \texttt{cmd/tracecheck}.
+
+\subsubsection{Results}
+
+All nine runs (E1--E9) and the comparison campaign (CR) were executed
+against the live \textbf{24-node} Containerlab topology (18 hosts + 5 FRR
+routers + kernel edge) with the ASSCOR kernel and 18 agents running, an
+active MITRE Caldera server (1984 abilities loaded from Atomic Red Team),
+and the ACL closed loop in the loop. The attacker steps were executed from
+an attacker container against decoy listeners deployed on the target
+containers; every round's full trajectory (evidence, distribution,
+sharpness, strategy, interventions, deployed ports, decoy hits) is stored in
+\texttt{lunwen/clab-lab/data/experiments-final/} as JSONL.
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}lcllcc@{}}
+\toprule
+\textbf{Run} & \textbf{Rounds} & \textbf{Ground truth} & \textbf{Inferred intent} & \textbf{Strategy} & \textbf{Hits} \\
+\midrule
+E1 & 2 & recon & recon (100\%) & collect & 6 \\
+E2 & 2 & credential & credential (100\%) & engage & 5 \\
+E3 & 2 & lateral & lateral (100\%) & engage & 3 \\
+E4 & 2 & data\_theft & data\_theft (100\%) & engage & 2 \\
+E5 & 3 & recon$\to$credential$\to$data\_theft & same, all 3 correct & engage & 6 \\
+E6 & 1 & (unmapped TTP T9999) & unknown & \textbf{contain} & 0 \\
+E7 & 10 & credential $\times$10 & credential (100\%) & engage & 30 \\
+E9 & 6 & recon$\to$cred$\to$lateral$\to$exfil$\to$web$\to$exfil & all 6 correct & engage & 11 \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{Phase 1 results: intent-tracking accuracy was 100\% across all 28
+rounds (E1--E9). E6 confirms the defensive fallback: an unmapped technique
+leaves intent \act{unknown} and the strategy is \act{contain} (no decoys
+deployed). E9 demonstrates multi-target intent tracking across six hosts in
+six subnets, covering all five intents. Data:
+\texttt{lunwen/clab-lab/data/experiments-final/E1--E9.jsonl}.}
+\label{tab:results}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Mode} & \textbf{Rounds} & \textbf{Total decoy hits} & \textbf{Total ports deployed} & \textbf{Intent acc.} \\
+\midrule
+C1 (no-ACL baseline) & 3 & \textbf{0} & 0 & 100\% \\
+C2 (static decoys) & 3 & 6 & 6 & 100\% \\
+C3 (ACL-dynamic) & 3 & 6 & 11 & 100\% \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{Comparison campaign (CR): the same 3-round credential profile on the
+same host, varying only the intervention mode. Without decoys (C1) the loop
+collects \textbf{zero} intelligence from the attack surface; with decoys
+(C2/C3) the attack is visible. C3's deployed port set follows the ACL's
+prediction each round (dynamic), versus C2's fixed set. Data:
+\texttt{lunwen/clab-lab/data/experiments-final/CR-C1/C2/C3.jsonl}.}
+\label{tab:cr}
+\end{table}
+
+\textbf{Intent tracking.} All 28 rounds across E1--E9 achieved correct
+intent inference (100\% intent-tracking accuracy): the engine's inferred
+intent matched the ground-truth stage of the adversary profile in every
+round, including the multi-stage E5 campaign (recon$\to$credential$\to$data\_theft
+across three consecutive rounds) and the six-target E9 campaign
+(recon$\to$credential$\to$lateral$\to$data\_theft$\to$web\_attack$\to$data\_theft),
+which exercises all five intents across six hosts in six subnets ---
+evidence that the loop scales with topology size.
+
+\textbf{Strategy behavior.} E1 (recon, flat distribution) correctly stayed
+in \act{collect}: sharpness $S=0.326$/$0.264$ stayed below the threshold, so
+only the highest-information-gain intervention was deployed. E2--E5, E9
+(clear-intent profiles) entered \act{engage} with $S \in [0.48, 0.71]$ and
+deployed the positive-utility decoy set. E6 (unmapped TTP) triggered the
+defensive fallback: intent remained \act{unknown} ($S=0.194$) and the
+strategy was \act{contain} --- no decoys were deployed, confirming the
+safety property of Eq.~\ref{eq:strategy}.
+
+\textbf{Convergence (Q7).} Run E7 repeated the credential profile ten times.
+Sharpness rose monotonically from 0.695 to a plateau of 0.752 (reached at
+round 5); $P(\act{credential})$ rose from 0.879 to 0.903; distribution
+entropy fell from 0.547 to 0.444; and the mean KL divergence between
+consecutive rounds collapsed to $3\times10^{-4}$. This demonstrates, at the
+automated-attacker level, that repeating an identical TTP sequence drives
+the observed action distribution toward a sharp, stable peak --- the
+convergence mechanism hypothesized in Q7, measured in a controlled
+environment.
+
+\textbf{Ablation (Q10).} On the E2 credential data, the distribution's top-1
+action and the deterministic next-TTP (argmax) both matched ground truth
+(100\%). The distribution additionally provides calibrated probabilities
+and ranked alternatives (top-2 coverage 100\%), which the deterministic
+prediction cannot --- supporting the claim that action distributions, not
+deterministic next-TTP predictions, are the correct prediction target.
+
+\textbf{Comparison (decoys provide visibility).} Table~\ref{tab:cr} compares
+the same 3-round credential campaign under three intervention modes. With
+no decoys (C1), the loop collects \textbf{zero} hits from the attack
+surface --- the attacker is invisible and no intelligence enters the state
+engine beyond the raw TTP observation. With decoys deployed (C2 static,
+C3 ACL-dynamic), the attack is fully visible (6 hits each), confirming that
+decoys are the intelligence channel the loop relies on. The difference
+between C2 and C3 is deployment policy: C2 keeps a fixed port set every
+round; C3's deployed ports follow the ACL's predicted action distribution,
+changing across rounds as the prediction evolves. In this single-target
+credential scenario C3's footprint was larger than C2's (11 vs 6 deployed
+port-instances) because the engaged decoy set spanned multiple predicted
+actions --- a documented trade-off between coverage and footprint that we
+discuss in Section~\ref{sec:discussion}; multi-round campaigns (E5/E9)
+show the dynamic policy following intent transitions.
+
+\textbf{Latency.} Per-round wall-clock was dominated by the attack-step
+sleep (attack execution + decoy-hit settle), with engine compute per round
+in the tens of milliseconds; the loop itself added no perceptible latency.
+Full per-round timings are in the JSONL records.
+
+\subsection{Phase 2: Question Validation}
+
+Each research question maps to a measurable experiment:
+\begin{itemize}
+\item \textbf{Q1/Q9}: longitudinal study of a red-team exercise --- measure
+      TTP reuse conditioned on prior success/failure and operator
+      experience (runs E7 provide a controlled baseline).
+\item \textbf{Q2a/Q2b}: controlled human-subject study correlating IT skill
+      with efficiency and TTP reliance.
+\item \textbf{Q7}: comparative analysis of AI-assisted vs.\ human-only
+      attackers --- TTP entropy, sequence diversity, behavioral distance,
+      strategy cluster distribution. Runs E7 (convergent repeats) provide
+      the automated baseline; human red-team runs provide the comparison
+      arm.
+\item \textbf{Q10}: ablation comparing next-TTP prediction vs.\
+      action-distribution prediction on the same dataset (run E8).
+\end{itemize}
+We note that the 2026 DBIR \citep{dbir2026} provides empirical grounding for
+the threat landscape (exploitation as top initial-access vector at 31\%,
+credential abuse, ransomware prevalence 48\%, GenAI-assisted attacks with a
+median of 15 techniques), but dataset sampling/reporting biases require
+preserving source and provenance metadata rather than treating frequency as
+ground truth.
+
+\section{Discussion}
+\label{sec:discussion}
+
+\textbf{Limitations.} ACL currently uses hand-crafted rules and weights; it
+is a transparent approximation, not a full I-POMDP\textsuperscript{2}
+solver. Decision sharpness is defined as distribution peakedness
+(Eq.~\ref{eq:sharpness}), not calibrated accuracy --- it is a heuristic for
+triggering strategy switches, not a probabilistic guarantee of correctness
+(Section~\ref{sec:sharpness-formal}). Deception utility weights
+($\alpha,\beta,\gamma,\delta$) require tuning. The research questions Q1,
+Q2b, Q7, Q9 are not yet answered; the paper does not claim predictive
+accuracy or deception success without direct evidence. The four-round trace
+(Section~\ref{sec:trace}) demonstrates \textit{mechanical} convergence of the
+engine in simulation; it is \textit{not} evidence about real attackers.
+
+\subsection{Weight Sensitivity}
+\label{sec:sensitivity}
+
+The engine's behavior is governed by hand-tuned weights, so we analyze how
+sensitive the outputs are to the two most consequential parameters: the
+intent-continuity weight $w_{\mathrm{int}}$ and the softmax temperature $T$.
+
+\textbf{Intent-continuity weight.} Holding all other parameters at their
+defaults (credential intent, $E=0.05$, $K=0.145$, target as in
+Section~\ref{sec:trace}), Table~\ref{tab:sens-int} shows $P(\act{credential})$
+and the sharpness $S$ as $w_{\mathrm{int}}$ varies. The action
+distribution is highly sensitive: raising $w_{\mathrm{int}}$ from 0 to 4.5
+moves $P(\act{credential})$ from 0.255 to 0.969, and sharpness from 0.07
+to 0.90. The default 3.0 sits in the steepest part of the curve, meaning
+small re-tunings materially change how quickly the controller switches to
+engage: with $w_{\mathrm{int}} = 1.5$ the sharpness just crosses the
+threshold ($S = 0.302$), while with $w_{\mathrm{int}} = 0$ the distribution
+stays flat enough that the loop remains in collect (intent is known, so
+the fallback does not apply).
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}lccccc@{}}
+\toprule
+$w_{\mathrm{int}}$ & 0.0 & 1.5 & 3.0 (default) & 4.5 \\
+\midrule
+$P(\act{credential})$ & 0.255 & 0.605 & 0.873 & 0.969 \\
+sharpness $S$ & 0.07 & 0.30 & 0.68 & 0.90 \\
+strategy & collect & engage & engage & engage \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{Sensitivity of the predicted distribution and sharpness to the
+intent-continuity weight $w_{\mathrm{int}}$ (credential intent, target as in
+Section~\ref{sec:trace}); values verified against the reference implementation.}
+\label{tab:sens-int}
+\end{table}
+
+\textbf{Temperature.} The softmax temperature $T$ controls distribution
+sharpness directly. Table~\ref{tab:sens-temp} varies $T$ at round~2 of the
+trace (recon intent, scores $\{4.00, 2.10, 2.00, 1.80, 1.84, 0.50\}$). At
+$T=0.5$ the distribution is near-deterministic ($P(\act{recon})=0.937$,
+$S=0.82$); at $T=2$ it flattens enough that sharpness falls below the
+threshold and the strategy reverts to collect even though the attacker's
+intent is already established. Temperature and the sharpness threshold
+$\theta$ must therefore be treated as a joint calibration pair, not
+independently.
+
+\begin{table}[ht]
+\centering
+\begin{adjustbox}{max width=\linewidth}\begin{tabular}{@{}lccc@{}}
+\toprule
+$T$ & 0.5 & 1.0 (default) & 2.0 \\
+\midrule
+$P(\act{recon})$ & 0.937 & 0.649 & 0.384 \\
+$H$ (entropy) & 0.324 & 1.181 & 1.637 \\
+sharpness $S$ & 0.82 & 0.34 & 0.086 \\
+strategy & engage & engage & collect \\
+\bottomrule
+\end{tabular}\end{adjustbox}
+\caption{Sensitivity of distribution sharpness and strategy to softmax
+temperature $T$ (round 2 of the trace in Section~\ref{sec:trace}, recon intent,
+scores $\{4.00, 2.10, 2.00, 1.80, 1.84, 0.50\}$).}
+\label{tab:sens-temp}
+\end{table}
+
+\textbf{Implication for scientific value.} These sensitivities are exactly
+why the rule-based predictors are positioned as \textit{first
+approximations} rather than calibrated models (Section~\ref{sec:rationale}): the
+current weights encode plausible heuristics, but the outputs are
+scale-sensitive, and any deployment must either calibrate the weights
+against real attacker data (Phase 2, Section~\ref{sec:validation}) or replace the
+scorer with a calibrated model at Seam 2 (Section~\ref{sec:replacement}). The
+formal specification (Section~\ref{sec:prediction-formal}--\ref{sec:strategy})
+exists precisely so that such calibration and replacement can be done and
+evaluated without reverse-engineering the implementation.
+
+\textbf{Relationship to richer models.} The loop architecture is
+model-agnostic: the rule-based state engine and predictor can be replaced by
+learned models or an I-POMDP\textsuperscript{2} solver without changing the
+graph, engagement, or controller layers. This modularity is a deliberate
+design property.
+
+\textbf{The AI convergence question.} If Q7 is answered affirmatively,
+defenders face both a threat and an opportunity: convergent strategies are
+easier to predict and to guide; diverse strategies (Q8/Q9) resist
+convergence and require broader engagement portfolios.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented the Attacker Cognitive Loop, an interpretable rule-based engine
+for guided active defense that estimates attacker state, predicts action
+distributions, and selects utility-driven deceptive interventions within a
+closed loop that switches between containment, information gathering, and
+active engagement by decision sharpness. We gave the complete formal
+specification of the scoring, normalization, sharpness, and utility
+functions (Section~\ref{sec:prediction-formal}--\ref{sec:strategy}), a
+reproducible four-round closed-loop trace with exact values
+(Section~\ref{sec:trace}), a sensitivity analysis of the hand-tuned weights
+(Section~\ref{sec:sensitivity}), and simulated per-round latency benchmarks
+(Section~\ref{sec:perf}). The engine is not a paper-only design: it is fully
+implemented as a modular, unit-tested extension of the open-source ASSCOR
+platform, with every component located in the public repository
+(Section~\ref{sec:repo}, Table~\ref{tab:repo-map}). We stated ten open
+research questions with evidence ratings and a validation plan, and we were
+explicit about the boundary between implementation and unvalidated
+assumption. The primary contribution of this work is the interface contract
+and reproducible simulation harness. We do not claim defensive efficacy;
+instead, we offer the community a transparent, modular testbed for
+falsifying or validating the stated research questions.
+
+The fundamental problem ACL addresses is not the inadequacy of any particular defensive control; it is the structural information asymmetry between attacker and defender. By closing the loop between observation, prediction, and intervention, ACL provides a systematic mechanism to reverse that asymmetry --- not by making the defender omniscient, but by making the attacker's uncertainty costly to maintain. We release ACL as a modular, reproducible baseline, and invite the community to replace its heuristic components with more principled models. The ultimate measure of success is not the accuracy of any single prediction, but the defender's ability to act before the attacker's information advantage becomes decisive.
+
+Because the three engine seams (Section~\ref{sec:replacement}) are narrow interfaces, the community can evaluate better models against this open-source, reproducible baseline. Contact: \texttt{chins-xing@proton.me}.
+
+\section*{Ethics Statement}
+
+This work is exclusively intended for \textbf{legitimate defensive
+purposes}. All capabilities described --- attacker state estimation, action
+prediction, and deceptive engagement --- are designed to be deployed only by
+authorized defenders against adversarial activity within systems and
+networks they are legally permitted to protect. The authors do not provide
+or endorse any offensive capability, and we assume all research,
+experimentation, and validation is conducted in authorized environments in
+compliance with applicable laws, regulations, and institutional policies.
+The reference implementation is distributed solely as a defensive security
+research artifact.
+
+\authorcontributions{Conceptualization, J.L.; methodology, J.L.; software,
+J.L.; validation, J.L.; formal analysis, J.L.; investigation, J.L.;
+resources, J.L.; data curation, J.L.; writing---original draft preparation,
+J.L.; writing---review and editing, J.L.; visualization, J.L.; supervision,
+J.L.; project administration, J.L.; funding acquisition, J.L. All authors
+have read and agreed to the published version of the manuscript.}
+
+\funding{This research received no external funding.}
+
+\institutionalreview{Not applicable. This study did not involve humans or
+animals; it concerns defensive security software design and simulation.}
+
+\informedconsent{Not applicable.}
+
+\dataavailability{The reference implementation is publicly available at
+\url{https://github.com/chins-xing/Asscor} (branch
+\texttt{ASSCOR-Research-Core}, Apache-2.0). The trace and sensitivity
+numbers in this paper are regenerated by \texttt{cmd/tracecheck} (build tag
+\texttt{tracecheck}) against the reference implementation. The Containerlab
+multi-host lab configuration and the adversarial simulation stack (MITRE
+Caldera and Atomic Red Team sources) are included in the paper artifact
+under \texttt{lunwen/}.}
+
+\conflictsofinterest{The authors declare no conflicts of interest.}
+
+\abbreviations{Abbreviations}{%
+The following abbreviations are used in this manuscript:\\
+
+\noindent
+\begin{tabular}{@{}ll}
+ACL & Attacker Cognitive Loop\\
+ATT\&CK & Adversarial Tactics, Techniques, and Common Knowledge\\
+AV & Attribution value\\
+DP & Detection probability\\
+IG & Information gain\\
+I-POMDP & Interactive partially observable Markov decision process\\
+MTD & Moving target defense\\
+SRD & Systemic Risk Dynamics\\
+SSAM & System security acceptability model\\
+TTP & Tactics, techniques, and procedures\\
+\end{tabular}
+}
+
+\reftitle{References}
+
+\isAPAandChicago{}{%
+\begin{thebibliography}{999}
+\bibitem[Shinde and Doshi(2026)]{shinde-doshi}
+Shinde, A.; Doshi, P. Decision-theoretic planning and cognitive modeling for
+active cyber deception. {\em Artificial Intelligence} {\bf 2026}, {\em 356},
+104540. \url{https://doi.org/10.1016/j.artint.2026.104540}.
+\bibitem[Zhu(2019)]{zhu}
+Zhu, Q. Game Theory for Cyber Deception: A Tutorial. In {\em Proceedings of
+the 2019 Hot Topics in the Science of Security Symposium and Bootcamp
+(HoTSoS~'19)}, Nashville, TN, USA, 2--3 April 2019; ACM: New York, NY, USA,
+2019. \url{https://arxiv.org/abs/1903.01442}.
+\bibitem[Zhang and Thing(2021)]{zhang-thing}
+Zhang, L.; Thing, V.L.L. Three decades of deception techniques in active
+cyber defense---Retrospect and outlook. {\em Computers \& Security}
+{\bf 2021}, {\em 106}, 102288.
+\url{https://doi.org/10.1016/j.cose.2021.102288}.
+\bibitem[Lei et al.(2018)]{mtd-survey}
+Lei, C.; Zhang, H.-Q.; Tan, J.-L.; Zhang, Y.-C.; Liu, X.-H. Moving target
+defense techniques: A survey. {\em Security and Communication Networks}
+{\bf 2018}, {\em 2018}, 3759626.
+\url{https://doi.org/10.1155/2018/3759626}.
+\bibitem[Anwar and Kamhoua(2020)]{anwar-kamhoua}
+Anwar, A.H.; Kamhoua, C. Game theory on attack graph for cyber deception.
+In {\em Decision and Game Theory for Security (GameSec 2020)}; Springer:
+Cham, Switzerland, 2020. \url{https://doi.org/10.1007/978-3-030-64793-3_24}.
+\bibitem[Caltagirone et al.(2013)]{diamond}
+Caltagirone, S.; Pendergast, A.; Betz, C. {\em The Diamond Model of Intrusion
+Analysis}; Technical Report; Center for Cyber Intelligence Analysis and
+Threat Research (CCIATR): Arlington, VA, USA, 2013.
+\bibitem[MITRE(2026)]{attck}
+MITRE ATT\&CK. Available online:
+\url{https://attack.mitre.org} (accessed on 2026).
+\bibitem[Verizon(2026)]{dbir2026}
+Verizon. {\em 2026 Data Breach Investigations Report}; Verizon: New York,
+NY, USA, 2026. Available online:
+\url{https://www.verizon.com/business/resources/reports/dbir/} (accessed on
+2026).
+\bibitem[ASSCOR Project(2026)]{asscor-wp}
+ASSCOR Project. {\em Active Defense Design Whitepaper}, v0.3.0 draft;
+Internal document: attacker model (Q1--Q10), automated attack/defense chain,
+deception taxonomy and MTD survey summaries; reference implementation of the
+ACL engine in \texttt{internal/attackerstate}, \texttt{internal/predictor},
+\texttt{internal/engagement}, \texttt{internal/defensecycle}, 2026.
+Repository: \url{https://github.com/chins-xing/Asscor} (branch
+\texttt{ASSCOR-Research-Core}, Go 1.26, Apache-2.0).
+\bibitem[Applebaum et al.(2021)]{caldera}
+Applebaum, A.; Gaber, D.; Koppen, M.; Polon, T.; Nickels, R.; Lin, J.
+MITRE Caldera: A scalable, automated adversary emulation platform. Available
+online: \url{https://github.com/mitre/caldera} (accessed on 2026). See also
+the underlying planning-and-acting-with-unknowns approach of the MITRE
+adversary-emulation research program, which motivates the planner-driven
+profile execution used in this paper.
+\bibitem[Red Canary(2026)]{atomic-red-team}
+Red Canary. Atomic Red Team: Small and Highly Portable Detection Tests
+Based on MITRE ATT\&CK. Available online:
+\url{https://github.com/redcanaryco/atomic-red-team} (accessed on 2026).
+\bibitem[Shinde and Doshi(2025)]{irl-adversary}
+Shinde, A.; Doshi, P. Modeling behavioral preferences of cyber adversaries
+using inverse reinforcement learning. {\em arXiv} {\bf 2025},
+arXiv:2505.03817.
+\bibitem[Skopik et al.(2025)]{llm-attack-agents}
+Skopik, F.; et al. Forewarned is forearmed: A survey on large language
+model-based agents in autonomous cyberattacks. {\em arXiv} {\bf 2025},
+arXiv:2505.12786.
+\bibitem[Kulathumani et al.(2024)]{siren-deception}
+Kulathumani, V.; Ananthanarayanan, S. Siren: Advancing cybersecurity
+through deception and adaptive analysis. {\em arXiv} {\bf 2024},
+arXiv:2406.06225.
+\bibitem[Landauer et al.(2024)]{red-team-redemption}
+Landauer, M.; Skopik, F.; Wurzenberger, M.; Kern, M.; Winter, D.
+Red team redemption: A structured comparison of open-source tools for
+adversary emulation. {\em arXiv} {\bf 2024}, arXiv:2408.15645.
+\bibitem[Bruskin and Zilberman(2020)]{sok-threat-emulators}
+Bruskin, D.; Zilberman, P. SoK: A survey of open-source threat emulators.
+{\em arXiv} {\bf 2020}, arXiv:2003.01518.
+\end{thebibliography}
+}
+
+\PublishersNote{}
+
+\end{document}

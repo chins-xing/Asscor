@@ -1,0 +1,11 @@
+#!/bin/bash
+echo "=== 1. 心跳带网络信息记录 ==="
+docker exec asc-asscor-edge0 bash -c "grep -E 'network info|heartbeat received' /var/log/asscor-kernel.log | grep 'network' | tail -3"
+echo "=== 2. 心跳 network 字段 (最近) ==="
+docker exec asc-asscor-edge0 bash -c "grep 'network' /var/log/asscor-kernel.log | tail -8"
+echo "=== 3. 评估记录数 ==="
+docker exec asc-asscor-edge0 bash -c "grep -c 'assessment score computed' /var/log/asscor-kernel.log"
+echo "=== 4. 按主机的评估分数 (最近) ==="
+docker exec asc-asscor-edge0 bash -c "grep 'assessment score computed' /var/log/asscor-kernel.log | grep -oE 'host_id[^,]*|score[^,]*' | paste - - | tail -12"
+echo "=== 5. 评估持久化文件 ==="
+docker exec asc-asscor-edge0 bash -c "ls -la /var/lib/asscor/assessments-*.jsonl 2>/dev/null | tail -3"
