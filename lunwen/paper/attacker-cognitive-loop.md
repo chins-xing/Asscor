@@ -911,7 +911,12 @@ static decoys, C3 ACL-dynamic).
 
 For each run we report: (i) **intent-tracking accuracy** — fraction of rounds
 where the engine's inferred intent matches the ground-truth stage of the
-Caldera profile; (ii) **prediction sharpness trajectory** — S_t over time and
+Caldera profile. This ground truth is derived from the preset Caldera
+playbook executed in each run, i.e. the attacker stage (and hence its
+intent) is known a priori; the 100% accuracy reported below is therefore an
+**upper bound under the ideal test environment**, not a claim about
+unconstrained real-world attackers (§12); (ii) **prediction sharpness
+trajectory** — S_t over time and
 whether the strategy switched contain→collect→engage appropriately; (iii)
 **decoy engagement** — which decoys were triggered and whether the interaction
 chain fed evidence back into the state engine; (iv) **fallback correctness**
@@ -943,6 +948,16 @@ deployed ports, decoy hits) is stored in
 | E7 | 10 | credential ×10 | credential (100%) | engage | 30 |
 | E9 | 6 | recon→cred→lateral→exfil→web→exfil | all 6 correct | engage | 11 |
 
+**Phase 1 results.** Intent-tracking accuracy was 100% across all 28 rounds
+(E1–E9). This is an **upper bound under the ideal test environment**: ground
+truth is labeled from the preset Caldera playbook of each run, so the
+attacker's intended stage is known a priori and the engine's mapping is
+measured against exactly the techniques the playbook emits. E6 confirms the
+defensive fallback: an unmapped technique leaves intent unknown and the
+strategy is contain (no decoys deployed). E9 demonstrates multi-target
+intent tracking across six hosts in six subnets, covering all five intents.
+Data: `lunwen/clab-lab/data/experiments-final/E1–E9.jsonl`.
+
 **Intent tracking.** All 28 rounds across E1–E9 achieved correct intent
 inference (100% intent-tracking accuracy): the engine's inferred intent
 matched the ground-truth stage of the adversary profile in every round,
@@ -950,7 +965,15 @@ including the multi-stage E5 campaign (recon→credential→data_theft across
 three consecutive rounds) and the six-target E9 campaign
 (recon→credential→lateral→data_theft→web_attack→data_theft), which exercises
 all five intents across six hosts in six subnets — evidence that the loop
-scales with topology size.
+scales with topology size. We stress that this 100% is the **upper bound
+under the ideal test environment** in which the experiments were conducted:
+the ground-truth label is derived from the preset Caldera playbook of each
+run, and the observed techniques are the very techniques the playbook
+emits, so the engine's technique→intent mapping is evaluated under
+conditions that maximize its agreement with the label. It validates the
+mechanics of the closed loop (evidence ingestion, intent inference, and
+strategy selection wired together end to end), not the accuracy of the
+mapping against an adaptive or unseen attacker.
 
 **Strategy behavior.** E1 (recon, flat distribution) correctly stayed in
 collect: sharpness S=0.326/0.264 stayed below the threshold, so only the
@@ -1039,6 +1062,21 @@ yet answered; the paper does not claim predictive accuracy or deception
 success without direct evidence. The four-round trace (§8) demonstrates
 *mechanical* convergence of the engine in simulation; it is *not* evidence
 about real attackers.
+
+**Upper bound of the reported accuracy.** The 100% intent-tracking accuracy
+in §11.1 is an upper bound specific to the ideal test environment of this
+experiment: every run executes a preset Caldera playbook whose stages (and
+therefore ground-truth intents) are labeled in advance, and the engine
+observes exactly the techniques that playbook emits. Under these conditions
+the technique→intent mapping is guaranteed to see only the
+technique-to-intent pairs it was designed for, which is what makes perfect
+agreement achievable. The result validates the closed-loop *mechanics*
+(observation → inference → strategy → intervention) against an
+instrumented, scripted adversary; it is not evidence of inference accuracy
+against an unconstrained, adaptive, or novel-technique attacker, for which
+the unmapped-TTP path (E6) and the defensive fallback (contain) are the
+intended behavior. Measuring degradation under adversarial-evidence noise
+and partially observable playbooks is left to future work.
 
 ### 12.1 Weight Sensitivity
 

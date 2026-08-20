@@ -1174,6 +1174,22 @@ accuracy or deception success without direct evidence. The four-round trace
 (\S\ref{sec:trace}) demonstrates \textit{mechanical} convergence of the
 engine in simulation; it is \textit{not} evidence about real attackers.
 
+\textbf{Upper bound of reported intent-tracking accuracy.} Wherever
+100\% intent-tracking accuracy is reported for the Phase 1 campaigns, it is
+an upper bound specific to the ideal test environment of those runs: each
+run executes a preset Caldera playbook whose stages (and therefore
+ground-truth intents) are labeled in advance, and the engine observes
+exactly the techniques that playbook emits. Under these conditions the
+technique$\to$intent mapping is evaluated only against the technique-to-intent
+pairs it was designed for, which is what makes perfect agreement
+achievable. The result validates the closed-loop \textit{mechanics}
+(observation $\to$ inference $\to$ strategy $\to$ intervention) against an
+instrumented, scripted adversary; it is not evidence of inference accuracy
+against an unconstrained, adaptive, or novel-technique attacker, for which
+the unmapped-TTP path and the defensive fallback (\act{contain}) are the
+intended behavior. Measuring degradation under adversarial-evidence noise
+and partially observable playbooks is left to future work.
+
 \subsection{Weight Sensitivity}
 \label{sec:sensitivity}
 
