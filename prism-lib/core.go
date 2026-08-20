@@ -4,6 +4,36 @@ import "math"
 
 const secondsPerDay = 86400.0
 
+// TransmissionFloor is the minimum fraction of the base transmission kept for
+// any source host (residual risk): even a fully compliant host can carry
+// residual risk, so propagation never drops to zero.
+const TransmissionFloor = 0.1
+
+// WeightedTransmission scales the base risk-transmission coefficient by the
+// source host's risk level (M2, audit P1-1/T9/T10):
+//
+//	riskFactor = (100 − sourceSSAM) / 100   ∈ [0,1]
+//	transmission = base × (floor + (1−floor) × riskFactor)
+//
+// A high-risk source (low SSAM) propagates close to the full base coefficient;
+// a low-risk source is attenuated toward the floor. This gives risk-focused
+// propagation (critical nodes amplify) while suppressing noise from
+// low-risk nodes. It is a pure function so the algorithm library stays
+// independently testable.
+func WeightedTransmission(base, sourceSSAM float64) float64 {
+	if base <= 0 {
+		return 0
+	}
+	riskFactor := externalRisk(sourceSSAM)
+	if riskFactor < 0 {
+		riskFactor = 0
+	}
+	if riskFactor > 1 {
+		riskFactor = 1
+	}
+	return base * (TransmissionFloor + (1.0-TransmissionFloor)*riskFactor)
+}
+
 // ----------------------------------------------------------
 // Core Layer — Deterministic Evaluation
 // ----------------------------------------------------------

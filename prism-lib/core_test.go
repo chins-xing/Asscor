@@ -252,3 +252,35 @@ func TestScoreFloorDefaultDoesNotFloorHealthyNode(t *testing.T) {
 		t.Errorf("healthy node PrismScore = %.2f, expected >= %.2f", result.PrismScore, 0.85*result.SsamScore)
 	}
 }
+
+// TestWeightedTransmission: 传播系数按源风险加权 (M2, P1-1/T9/T10)。
+func TestWeightedTransmission(t *testing.T) {
+	base := 0.3
+	cases := []struct {
+		name  string
+		ssam  float64
+		want  float64
+	}{
+		{"full-risk", 0, base},                      // 最高风险 → 满传播
+		{"mid-risk", 58.27, base * (0.1 + 0.9*0.4173)}, // 中等 → 按风险缩放
+		{"low-risk", 90, base * (0.1 + 0.9*0.1)},    // 低风险 → 衰减到近保底
+		{"no-risk", 100, base * 0.1},                // 无风险 → 保底传播 (残余风险)
+		{"clamp-over", 120, base * 0.1},                   // ssam>100 → 视为无风险 → 保底
+		{"clamp-under", -10, base},                        // ssam<0 → 视为最高风险 → 满传播
+		{"zero-base", 50, 0},                              // base=0 → 0 (调用时 base 传 0)
+	}
+	for _, c := range cases {
+		got := WeightedTransmission(base, c.ssam)
+		if c.name == "zero-base" {
+			got = WeightedTransmission(0, c.ssam)
+		}
+		if math.Abs(got-c.want) > 0.0001 {
+			t.Errorf("%s: WeightedTransmission(base, %.2f) = %.4f, want %.4f", c.name, c.ssam, got, c.want)
+		}
+	}
+
+	// 单调性: 风险越高 (SSAM 越低) 传播越大。
+	if WeightedTransmission(base, 30) <= WeightedTransmission(base, 90) {
+		t.Error("higher-risk source must propagate at least as much as lower-risk source")
+	}
+}
