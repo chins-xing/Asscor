@@ -66,23 +66,27 @@ This feeds the risk view consumed by the assessment pipeline.
 ## 2. Repository structure
 
 ```
-F:\Argus
-├── ssam-lib/      # SSAM 2.0 standalone engine (zero external deps)
-├── prism-lib/     # Prism/SRD standalone engine (zero external deps)
-├── internal/      # kernel + core modules
-│   ├── attackerstate/   # ACL: attacker state engine
-│   ├── predictor/       # ACL: action distribution predictor
-│   ├── engagement/      # ACL: engagement planner (utility + decoy catalog)
-│   └── defensecycle/    # ACL: closed-loop controller (contain/collect/engage)
-├── optional/      # build-tag plugins (17 modules)
-├── cmd/           # binaries (kernel, agent, exprunner, decoyd, tracecheck)
-├── docs/          # project development docs (kept in-repo)
-└── lunwen/        # PAPER ASSETS — not tracked by git
-    ├── paper/           # LaTeX/MDPI manuscript + markdown source
-    ├── attachment/      # experiment data, manual, whitepaper EN, README_EN
-    ├── clab-lab/        # 24-node Containerlab topology + experiment JSONL
-    ├── references/      # cited papers (TXT/PDF)
-    └── research-core/   # research-core markdown material
+.                       # repository root
+├── ssam-lib/           # SSAM 2.0 standalone engine (zero external deps)
+├── prism-lib/          # Prism/SRD standalone engine (zero external deps)
+├── internal/           # kernel + core modules
+│   ├── attackerstate/  # ACL: attacker state engine
+│   ├── predictor/      # ACL: action distribution predictor
+│   ├── engagement/     # ACL: engagement planner (utility + decoy catalog)
+│   └── defensecycle/   # ACL: closed-loop controller (contain/collect/engage)
+├── optional/           # build-tag plugins (17 modules)
+│   └── adversary/packages/
+│       ├── acl/            # ACL extension package manifest + README
+│       └── mitre-engage/   # lightweight decoy plugin (honeypot/honeytoken)
+├── cmd/                # binaries (kernel, agent, exprunner, decoyd, tracecheck)
+├── scripts/            # build/packaging helpers (e.g. acl-pack.sh)
+├── docs/               # project development docs (kept in-repo)
+└── lunwen/             # PAPER ASSETS — not tracked by git
+    ├── paper/              # LaTeX/MDPI manuscript + markdown source
+    ├── attachment/         # experiment data, manual, whitepaper EN, README_EN
+    ├── clab-lab/           # 24-node Containerlab topology + experiment JSONL
+    ├── references/         # cited papers (TXT/PDF)
+    └── research-core/      # research-core markdown material
 ```
 
 ---
