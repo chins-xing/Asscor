@@ -53,7 +53,8 @@ agent 启动（磁盘 agent.ini 为明文 .ini + 引导段）
   ├─ 连接内核（mTLS）
   ├─ 自生成随机密码（每次重启重新生成，不落盘，仅内存）
   ├─ 加密 agent.ini → agent.ini.enc（三段式原子转换），删除明文
-  ├─ 通过 mTLS 上报密码给内核（内核侧登记 agent_id → 密码）
+  ├─ 通过 mTLS 上报密码给内核（内核以**请求证书指纹**为主键登记
+  │    agent_id → 密码；指纹不一致的伪造登记在传输层被拒）
   └─ 自动进入运行模式（配置驻留内存，只读快照 + 校验和基线）
 ```
 
@@ -171,11 +172,15 @@ config set <key> <value>
 
 ## 10.1 内核侧密码登记（agent 托管）
 
-内核维护 `agent_id → 密码` 登记表（运行内存 + 可选加密持久化）：
+内核维护 **`证书指纹 → agent_id → 密码`** 三元组登记表（运行内存 + 可选加密持久化）：
 
-- 来源：agent 启动时经 mTLS 上报；agent 轮换时更新。
-- 使用：agent 重启时下发解锁；`mode agent <id> exit` 时下发解密指令。
-- 保护：登记表仅内核进程内存持有；若需持久化（跨内核重启保留），用内核自身运行模式密钥加密落盘。
+- **键结构**：以 mTLS 客户端证书指纹（SHA-256，hex）为主键，agent_id 与密码挂在其下——而非仅 `agent_id → 密码`。
+- **来源**：agent 启动时经 mTLS 上报；agent 轮换时更新。
+- **传输层校验（安全防线下压到传输层）**：登记/解锁/切换请求的证书指纹取自 `kernel.PeerCertFingerprintFromContext(ctx)`（与现有 Register/Heartbeat 的 identity 硬化 I-01/I-03 同一机制）。内核**先校验请求携带的证书指纹是否已登记**——若攻击者伪造 agent_id 上报密码，但其证书指纹与登记表不一致，内核在传输层直接拒绝该"非法登记"请求，不进入应用层逻辑。
+- **使用**：agent 重启时下发解锁；`mode agent <id> exit` 时下发解密指令。
+- **保护**：登记表仅内核进程内存持有；若需持久化（跨内核重启保留），用内核自身运行模式密钥加密落盘。
+
+> 设计理由（用户 2026-08-21）：以证书指纹为主键把防线从应用层压到传输层。伪造的 agent_id 无法通过指纹校验，非法登记在底层即被拒绝；也保证一个证书只能登记一个 agent 身份，与现有 BindAgentCert 的"一证书一身份"约束一致。
 
 ## 11. 错误处理
 
@@ -191,6 +196,7 @@ config set <key> <value>
 - `vault_test.go`：流式加密 OOM 安全（大文件分块）、内存基线校验和、篡改检测、只读快照。
 - `cli_test.go`：CLI 命令注册与解析、`config set --temp/--persist` 两段式持久化、密码提示流程（mock stdin）。
 - `agent_test.go`：agent 自生成密码流程、mTLS 上报、重启后内核下发密码解锁、内核 CLI 指令 agent 切换（mock mTLS 通道）。
+- `registry_test.go`：密码登记表——指纹为主键；伪造 agent_id（指纹未登记/不匹配）在传输层被拒；指纹已登记但 agent_id 不同被拒；一证书一身份约束；轮换更新；吊销证书后登记失效。
 - 集成：build-tag `securemode` 开/关编译均通过；`go vet` 通过。
 
 ## 13. 非目标（YAGNI）
