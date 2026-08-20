@@ -41,26 +41,48 @@ func (c *Client) Connect() error {
 
 	dialer := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 5 * time.Minute}
 
+	// Dial into a local variable first: tls.DialWithDialer can return a
+	// partially-initialized (non-nil) *tls.Conn together with an error when
+	// the underlying TCP dial fails. Assigning it straight to c.conn would
+	// leave the client in a dirty state where a later Close() panics on the
+	// broken conn, so the client only adopts the connection on success.
+	var conn net.Conn
 	var err error
 	if c.tlsConfig != nil {
-		c.conn, err = tls.DialWithDialer(dialer, "tcp", c.addr, c.tlsConfig)
+		conn, err = tls.DialWithDialer(dialer, "tcp", c.addr, c.tlsConfig)
 	} else {
-		c.conn, err = dialer.Dial("tcp", c.addr)
+		conn, err = dialer.Dial("tcp", c.addr)
 	}
 
 	if err != nil {
+		// Free any partially-initialized conn returned alongside the error
+		// (its Close may panic on a nil internal conn, so swallow that).
+		if conn != nil {
+			func() {
+				defer func() { recover() }()
+				conn.Close()
+			}()
+		}
 		return fmt.Errorf("connect to %s: %w", c.addr, err)
 	}
 
+	c.conn = conn
 	c.br = bufio.NewReaderSize(c.conn, 256*1024)
 	return nil
 }
 
-func (c *Client) Close() error {
+func (c *Client) Close() (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.conn != nil {
-		err := c.conn.Close()
+		// Defensive: a partially-initialized conn (e.g. from a failed TLS
+		// dial) may panic on Close; never let Close crash the agent.
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("conn close panicked: %v", r)
+			}
+		}()
+		err = c.conn.Close()
 		c.conn = nil
 		c.br = nil
 		return err
