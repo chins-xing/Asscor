@@ -37,6 +37,13 @@ build/
 # data
 data/
 
+# TeX build artifacts (pdflatex: aux/log/toc/bbl/blg; kept local)
+*.aux
+*.log
+*.toc
+*.bbl
+*.blg
+
 # Paper bundle (lunwen): track only what reviewers need; ignore the rest.
 # Large/external assets (zips, third-party references, binaries) stay local.
 # NOTE: ignore direct children (lunwen/*), NOT the dir itself (lunwen/), so the
