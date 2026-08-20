@@ -39,6 +39,12 @@ data/
 # 归档例外: docs/clab-lab/data 是审计实验数据, 需入库
 !docs/clab-lab/data/
 
+# Paper bundle (lunwen): local-only assets on main. Selective tracking
+# (whitelist) lives on the ASSCOR-Research-Core branch; main ignores the
+# whole bundle including the "lunwen - 副本" backup (lunwen*/ matches both).
+lunwen/
+lunwen*/
+
 #.kilo
 .kilo/
 
