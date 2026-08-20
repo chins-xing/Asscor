@@ -135,6 +135,80 @@ Red Team as the adversarial simulation stack:
 Full data, the experiment manual, and the reproduction scripts are in
 `lunwen/attachment/`.
 
+### ACL extension package
+
+ACL is packaged as a distributable extension bundle
+(`optional/adversary/packages/acl/` + `scripts/acl-pack.sh` → `build/acl-0.8.0.zip`).
+The bundle contains the four engine packages, the experiment tools
+(`exprunner`, `decoyd`, `tracecheck`), the decoy plugin, the 24-node
+topology, configs, scripts, and the raw experiment JSONL.
+
+#### Install
+
+```bash
+git checkout ASSCOR-Research-Core
+
+# build the engine (internal packages compile with the main repo)
+go build ./...
+
+# build the experiment/reproduction tools (build-tag gated)
+GOOS=linux go build -tags tracecheck -o tracecheck ./cmd/tracecheck
+GOOS=linux go build -tags expr   -o exprunner   ./cmd/exprunner
+GOOS=linux go build -tags decoyd -o decoyd      ./cmd/decoyd
+
+# self-check
+go test ./internal/attackerstate/ ./internal/predictor/ \
+  ./internal/engagement/ ./internal/defensecycle/
+```
+
+#### Configure
+
+Engine defaults (editable in `internal/predictor/predictor.go` and
+`internal/engagement/engagement.go`): intent-continuity weight `w_int=3.0`,
+softmax temperature `T=1.0`, sharpness threshold `θ=0.3`, utility weights
+`α,β,γ,δ = 1.0, 0.8, 0.6, 1.2`, and the 5-type decoy catalog
+(fake SSH/credential/document/web/scan port).
+
+To deploy the 24-node lab and kernel+18 agents, follow
+`lunwen/attachment/manual/EXPERIMENT_MANUAL.md` (scripts under
+`lunwen/clab-lab/scripts/`).
+
+#### Reproduce
+
+```bash
+# 1. paper trace + sensitivity tables
+go run -tags tracecheck ./cmd/tracecheck
+
+# 2. full experiment campaign (E1-E9 + comparison C1/C2/C3) on the lab
+cp build/exprunner-linux-amd64 /tmp/exprunner
+cp build/decoyd-linux-amd64    /tmp/decoyd
+bash lunwen/clab-lab/scripts/exp_rerun_all.sh   # E1-E9, ACL dynamic
+bash lunwen/clab-lab/scripts/exp_cr_final.sh    # C1/C2/C3 comparison
+python3 lunwen/clab-lab/scripts/exp_final_summary.py
+
+# raw data regenerated in lunwen/clab-lab/data/experiments-final/
+```
+
+#### Remove
+
+```bash
+# stop lab processes
+docker exec <target> pkill -9 -x decoyd     # -x, not -f (avoid killing exprunner)
+pkill -f exprunner
+
+# drop the ACL sources from the tree
+git rm -r internal/attackerstate internal/predictor \
+  internal/engagement internal/defensecycle \
+  cmd/exprunner cmd/decoyd cmd/tracecheck \
+  optional/adversary/packages/acl optional/adversary/packages/mitre-engage
+
+# drop untracked experiment assets
+rm -rf lunwen
+
+# verify clean build
+go build ./... && go test ./...
+```
+
 ---
 
 ## 4. Branches

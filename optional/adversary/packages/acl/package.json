@@ -1,0 +1,28 @@
+{
+  "name": "acl",
+  "version": "0.8.0",
+  "description": "Attacker Cognitive Loop 扩展包 — 攻击者状态估计/动作分布预测/效用驱动诱饵选择/闭环控制器 (contain/collect/engage), 含实验复现工具",
+  "author": "ASSCOR Project",
+  "license": "Apache-2.0",
+  "modules": [
+    { "id": "acl-state",       "path": "internal/attackerstate", "type": "library" },
+    { "id": "acl-predict",     "path": "internal/predictor",     "type": "library" },
+    { "id": "acl-engage",      "path": "internal/engagement",    "type": "library" },
+    { "id": "acl-cycle",       "path": "internal/defensecycle",  "type": "library" },
+    { "id": "acl-decoys",      "path": "../mitre-engage",        "type": "plugin" },
+    { "id": "acl-exprunner",   "path": "cmd/exprunner",          "type": "tool", "build_tag": "expr" },
+    { "id": "acl-decoyd",      "path": "cmd/decoyd",             "type": "tool", "build_tag": "decoyd" },
+    { "id": "acl-tracecheck",  "path": "cmd/tracecheck",         "type": "tool", "build_tag": "tracecheck" }
+  ],
+  "hooks": {
+    "evidence.new": "acl-state",
+    "predict.action": "acl-predict",
+    "engage.select": "acl-engage",
+    "cycle.step": "acl-cycle"
+  },
+  "compatibility": {
+    "asscor_version": ">=0.2.3",
+    "go_version": ">=1.26",
+    "platform": ["linux", "windows"]
+  }
+}
