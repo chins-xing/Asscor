@@ -37,10 +37,33 @@ build/
 # data
 data/
 
-# Paper bundle (lunwen = "paper"): tex sources, manuscript md, references,
-# and clab-lab experiment assets are consolidated here and not tracked.
-lunwen/
-lunwen*/
+# Paper bundle (lunwen): track only what reviewers need; ignore the rest.
+# Large/external assets (zips, third-party references, binaries) stay local.
+# NOTE: ignore direct children (lunwen/*), NOT the dir itself (lunwen/), so the
+# ! negations below can re-include subdirectories for tracking.
+lunwen/*
+!lunwen/paper/
+!lunwen/research-core/
+!lunwen/clab-lab/
+!lunwen/attachment/
+# within attachment/: keep docs, configs, experiment JSONL, exp scripts; drop big items
+lunwen/attachment/bin/
+lunwen/attachment/*.zip
+lunwen/attachment/paper/
+# within clab-lab/: keep topology, config, README, frr, scripts, experiments-final;
+# drop the old bulk jsonl under data/ (kept locally).
+# NB: the global "data/" rule above excludes the whole dir; re-include the dir
+# itself first, then ignore its children except experiments-final.
+!lunwen/clab-lab/data/
+lunwen/clab-lab/data/*
+!lunwen/clab-lab/data/experiments-final/
+# top-level zips (atomic-red-team, caldera) are large external assets: local only
+lunwen/atomic-red-team-master.zip
+lunwen/caldera-master.zip
+# third-party reference papers: not part of the repo
+lunwen/references/
+# local backup of the paper bundle created by the author (lunwen - 副本)
+lunwen?*/
 
 #.kilo
 .kilo/
