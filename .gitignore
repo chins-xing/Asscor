@@ -40,6 +40,7 @@ data/
 # Paper bundle (lunwen = "paper"): tex sources, manuscript md, references,
 # and clab-lab experiment assets are consolidated here and not tracked.
 lunwen/
+lunwen*/
 
 #.kilo
 .kilo/
@@ -70,4 +71,3 @@ certs/
 ssam-lib/.git/
 prism-lib/.git/
 
-lunwen - ¸±±¾/
