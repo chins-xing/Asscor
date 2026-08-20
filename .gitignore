@@ -64,6 +64,8 @@ lunwen/attachment/paper/
 !lunwen/clab-lab/data/
 lunwen/clab-lab/data/*
 !lunwen/clab-lab/data/experiments-final/
+# redundant zip copy of the final JSONL (the JSONL themselves are tracked)
+lunwen/clab-lab/data/experiments-final/*.zip
 # top-level zips (atomic-red-team, caldera) are large external assets: local only
 lunwen/atomic-red-team-master.zip
 lunwen/caldera-master.zip
