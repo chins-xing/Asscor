@@ -81,11 +81,11 @@ This feeds the risk view consumed by the assessment pipeline.
 ├── cmd/                # binaries (kernel, agent, exprunner, decoyd, tracecheck)
 ├── scripts/            # build/packaging helpers (e.g. acl-pack.sh)
 ├── docs/               # project development docs (kept in-repo)
-└── lunwen/             # PAPER ASSETS — not tracked by git
-    ├── paper/              # LaTeX/MDPI manuscript + markdown source
+└── lunwen/             # PAPER ASSETS — reviewer-facing parts tracked by git
+    ├── paper/              # LaTeX/MDPI manuscript + markdown source (+ PDFs)
     ├── attachment/         # experiment data, manual, whitepaper EN, README_EN
     ├── clab-lab/           # 24-node Containerlab topology + experiment JSONL
-    ├── references/         # cited papers (TXT/PDF)
+    ├── references/         # cited papers (TXT/PDF) — local only, not tracked
     └── research-core/      # research-core markdown material
 ```
 
@@ -138,6 +138,13 @@ Red Team as the adversarial simulation stack:
 
 Full data, the experiment manual, and the reproduction scripts are in
 `lunwen/attachment/`.
+
+**One-file reviewer bundle.** Everything a reviewer needs — manuscript
+(tex + md + compiled PDFs), experiment JSONL (E1–E9 + C1/C2/C3), topology,
+configs, scripts, manuals, and binaries — is also packaged as a single
+download: `lunwen/attachment/ACL-experiment-attachment.zip` (87 files,
+~15 MB). The bundle is rebuilt from `lunwen/attachment/`; the ACL engine
+bundle is separate: `build/acl-0.8.0.zip` (see below).
 
 ### ACL extension package
 
