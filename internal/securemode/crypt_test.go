@@ -2,6 +2,7 @@ package securemode
 
 import (
 	"bytes"
+	"encoding/binary"
 	"strings"
 	"testing"
 )
@@ -169,5 +170,101 @@ func TestMarshalParseHeaderRoundTrip(t *testing.T) {
 	}
 	if !bytes.Equal(got.Envelope, h.Envelope) || !bytes.Equal(got.Nonce, h.Nonce) {
 		t.Error("envelope/nonce mismatch after parse")
+	}
+}
+
+// headerLayout walks a freshly produced .enc buffer (mirroring parseHeader's
+// field order) and returns the KDF block offset, the nonceLen field offset,
+// and the end offsets of the salt/envelope/nonce regions.
+func headerLayout(enc []byte) (kdfOff, nonceLenOff, saltEnd, envEnd, nonceEnd int) {
+	off := 4 + 1
+	saltEnd = off + 2 + int(binary.BigEndian.Uint16(enc[off:]))
+	kdfOff = saltEnd
+	off = saltEnd + 16
+	envEnd = off + 4 + int(binary.BigEndian.Uint32(enc[off:]))
+	off = envEnd
+	nonceLenOff = off
+	nonceEnd = off + 2 + int(binary.BigEndian.Uint16(enc[off:]))
+	return
+}
+
+func TestDecryptBadNonceLen(t *testing.T) {
+	enc, err := Encrypt([]byte("data"), "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, nonceLenOff, _, _, _ := headerLayout(enc)
+	binary.BigEndian.PutUint16(enc[nonceLenOff:], 4) // 4 != GCM nonce size (12)
+	if _, err := Decrypt(enc, "pw"); err == nil {
+		t.Fatal("nonce length != 12 must be rejected, not panic")
+	}
+}
+
+func TestDecryptBadKDFParams(t *testing.T) {
+	enc, err := Encrypt([]byte("data"), "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kdfOff, _, _, _, _ := headerLayout(enc)
+	cases := []struct {
+		name string
+		mut  func(buf []byte)
+	}{
+		{"argonP=256 (uint8 narrowing to 0)", func(b []byte) {
+			serializeUint32(b[kdfOff+8:], 256)
+		}},
+		{"keyLen=33 (invalid AES key size)", func(b []byte) {
+			serializeUint32(b[kdfOff+12:], 33)
+		}},
+		{"argonN=2 (non-default)", func(b []byte) {
+			serializeUint32(b[kdfOff:], 2)
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := append([]byte(nil), enc...)
+			tc.mut(buf)
+			if _, err := Decrypt(buf, "pw"); err == nil {
+				t.Fatal("non-default KDF parameters must be rejected, not panic")
+			}
+		})
+	}
+}
+
+func TestDecryptTruncatedSections(t *testing.T) {
+	enc, err := Encrypt([]byte("data"), "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, saltEnd, envEnd, nonceEnd := headerLayout(enc)
+	cases := []struct {
+		name string
+		cut  int
+	}{
+		{"salt truncated", saltEnd - 2},
+		{"envelope truncated", envEnd - 3},
+		{"nonce truncated", nonceEnd - 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Decrypt(enc[:tc.cut], "pw"); err == nil {
+				t.Fatal("truncated sections must be rejected")
+			}
+		})
+	}
+}
+
+func TestEncryptNonceFreshness(t *testing.T) {
+	plain := []byte("same plaintext and password")
+	a, err := Encrypt(plain, "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := Encrypt(plain, "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(a, b) {
+		t.Fatal("same plaintext+password must produce different ciphertexts (fresh salt/nonce)")
 	}
 }

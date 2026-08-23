@@ -58,8 +58,10 @@ func zeroize(b []byte) {
 }
 
 // Encrypt envelope-encrypts plaintext with password:
-//   DEK (random 32B) encrypts plaintext via AES-256-GCM;
-//   KEK = argon2id(password, salt) encrypts DEK.
+//
+//	DEK (random 32B) encrypts plaintext via AES-256-GCM;
+//	KEK = argon2id(password, salt) encrypts DEK.
+//
 // Returns the complete .enc file content (header + ciphertext).
 func Encrypt(plaintext []byte, password string) ([]byte, error) {
 	n, r, p, keyLen := DefaultKDFParams()
@@ -138,10 +140,16 @@ func Decrypt(data []byte, password string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if h.KeyLen > 64 || h.ArgonN == 0 || h.ArgonR == 0 || h.ArgonP == 0 {
-		return nil, errors.New("invalid KDF parameters in header")
+	// v1 files are written only by Encrypt, which always records the default
+	// KDF parameters. Any other values are attacker-controlled header input
+	// that could panic argon2 (threads<1 after uint8 narrowing) or trigger an
+	// OOM/CPU DoS from unbounded memory/time costs, so reject them before any
+	// derivation.
+	n, r, p, kl := DefaultKDFParams()
+	if h.ArgonN != n || h.ArgonR != r || h.ArgonP != p || h.KeyLen != kl {
+		return nil, errors.New("unsupported KDF parameters in header")
 	}
-	kek := deriveKey(password, h.Salt, h.ArgonN, h.ArgonR, h.ArgonP, h.KeyLen)
+	kek := deriveKey(password, h.Salt, n, r, p, kl)
 	defer zeroize(kek)
 
 	block, err := aes.NewCipher(kek)
@@ -151,6 +159,9 @@ func Decrypt(data []byte, password string) ([]byte, error) {
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, err
+	}
+	if len(h.Nonce) != gcm.NonceSize() {
+		return nil, errors.New("invalid nonce length in header")
 	}
 	dek, err := gcm.Open(nil, h.Nonce, h.Envelope, nil)
 	if err != nil {
