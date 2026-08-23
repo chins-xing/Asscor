@@ -7,6 +7,19 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
+// Header is the serialized .enc file header.
+type Header struct {
+	Magic    [4]byte
+	Version  byte
+	Salt     []byte
+	ArgonN   uint32
+	ArgonR   uint32
+	ArgonP   uint32
+	KeyLen   uint32
+	Envelope []byte // DEK encrypted with KEK (AES-GCM)
+	Nonce    []byte // GCM nonce for envelope
+}
+
 // DefaultKDFParams returns argon2id parameters (time, memory KiB, threads, keyLen).
 func DefaultKDFParams() (n, r, p, keyLen uint32) {
 	return 1, 64 * 1024, 4, 32
