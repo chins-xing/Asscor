@@ -80,6 +80,9 @@ func (pv *PasswordVerifier) Verify(password string) bool {
 	if len(data) < 1+1+16+16+32 {
 		return false
 	}
+	if data[0] != 1 {
+		return false
+	}
 	saltLen := int(data[1])
 	if 1+1+saltLen+16+32 > len(data) {
 		return false
@@ -94,9 +97,12 @@ func (pv *PasswordVerifier) Verify(password string) bool {
 	off += 4
 	keyLen := getU32(data[off:])
 	off += 4
-	// keyLen is untrusted file content: guard the slice below against a
-	// truncated/crafted file before any derivation work.
-	if off+int(keyLen) > len(data) {
+	// n/r/p/keyLen are attacker-controlled file content: feeding non-default
+	// values to argon2 can panic (keyLen=0 nil deref, N=0 rounds, p>=256
+	// truncated to 0 threads) or cause OOM/CPU DoS, so reject them before any
+	// derivation work — same defense as Decrypt's header checks in crypt.go.
+	dN, dR, dP, dKL := DefaultKDFParams()
+	if n != dN || r != dR || p != dP || keyLen != dKL {
 		return false
 	}
 	expected := data[off : off+int(keyLen)]

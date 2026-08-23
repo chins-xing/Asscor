@@ -1,6 +1,7 @@
 package securemode
 
 import (
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,5 +74,60 @@ func TestPasswordVerifierFilePersists(t *testing.T) {
 	st, _ := os.Stat(path)
 	if st.Size() == 0 {
 		t.Error("verifier file must contain salt+hash")
+	}
+}
+
+// TestPasswordVerifierRejectsCraftedFile proves Verify refuses attacker-
+// controlled KDF parameters / versions in the verifier file (panic/OOM/DoS
+// family, same defense as Decrypt's header checks) instead of feeding them
+// to argon2.
+func TestPasswordVerifierRejectsCraftedFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".asscor-pw")
+	if err := (&PasswordVerifier{File: path}).Set("pw"); err != nil {
+		t.Fatal(err)
+	}
+	base, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(base) < 1+1+16+16+32 {
+		t.Fatalf("unexpected verifier file size: %d", len(base))
+	}
+	// Layout: version(1) + saltLen(1) + salt(16) + N(4) + r(4) + p(4) + keyLen(4) + hash.
+	saltLen := int(base[1])
+	nOff := 2 + saltLen
+	pOff := nOff + 8
+	klOff := pOff + 4
+	writeU32 := func(d []byte, off int, v uint32) {
+		binary.BigEndian.PutUint32(d[off:off+4], v)
+	}
+
+	cases := []struct {
+		name string
+		mut  func(d []byte) []byte
+	}{
+		{"keyLen=0", func(d []byte) []byte { writeU32(d, klOff, 0); return d }},
+		{"N=0", func(d []byte) []byte { writeU32(d, nOff, 0); return d }},
+		{"p=256 (uint8 truncates to 0)", func(d []byte) []byte { writeU32(d, pOff, 256); return d }},
+		{"truncated below minimum", func(d []byte) []byte { return d[:10] }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			crafted := tc.mut(append([]byte(nil), base...))
+			if err := os.WriteFile(path, crafted, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if (&PasswordVerifier{File: path}).Verify("pw") {
+				t.Error("crafted verifier file must not verify")
+			}
+		})
+	}
+	// Control: restore the valid file, must still verify.
+	if err := os.WriteFile(path, base, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !(&PasswordVerifier{File: path}).Verify("pw") {
+		t.Error("valid verifier file must verify")
 	}
 }
