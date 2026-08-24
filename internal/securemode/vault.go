@@ -51,28 +51,11 @@ func (v *Vault) EncryptFile(password string) error {
 		return fmt.Errorf("read plaintext config: %w", err)
 	}
 	content := string(plain)
-	bootstrap, rest, ok := v.splitBootstrap(content)
 
 	// Stage 1: encrypt (bootstrap kept plaintext if configured).
-	var payload []byte
-	if ok && v.BootstrapHeader != "" {
-		encRest, err := Encrypt([]byte(rest), password)
-		if err != nil {
-			return err
-		}
-		// Layout: [bootstrap plaintext]["\n\n"][encrypted rest]. splitBootstrap
-		// guarantees the bootstrap block contains no "\n\n" after the header,
-		// so the first blank line is always the boundary for decryptPayload.
-		payload = make([]byte, 0, len(bootstrap)+2+len(encRest))
-		payload = append(payload, bootstrap...)
-		payload = append(payload, '\n', '\n')
-		payload = append(payload, encRest...)
-	} else {
-		enc, err := Encrypt(plain, password)
-		if err != nil {
-			return err
-		}
-		payload = enc
+	payload, err := v.EncryptContent(password, plain)
+	if err != nil {
+		return err
 	}
 
 	tmp := v.encPath() + ".tmp"
@@ -108,6 +91,31 @@ func (v *Vault) EncryptFile(password string) error {
 		return fmt.Errorf(".enc committed but plaintext removal failed: %w", err)
 	}
 	return syncDir(filepath.Dir(v.ConfigPath))
+}
+
+// EncryptContent builds the encrypted .enc payload for content entirely in
+// memory (no disk access), honoring the bootstrap section layout:
+// [bootstrap plaintext]["\n\n"][encrypted rest] or pure ciphertext. The
+// caller writes the payload atomically. Used by EncryptFile and by the
+// Controller's password rotation, which must never let plaintext touch disk.
+func (v *Vault) EncryptContent(password string, content []byte) ([]byte, error) {
+	c := string(content)
+	bootstrap, rest, ok := v.splitBootstrap(c)
+	if ok && v.BootstrapHeader != "" {
+		encRest, err := Encrypt([]byte(rest), password)
+		if err != nil {
+			return nil, err
+		}
+		// splitBootstrap guarantees the bootstrap block contains no "\n\n"
+		// after the header, so the first blank line is always the boundary for
+		// decryptPayload (symmetric with splitBootstrap).
+		payload := make([]byte, 0, len(bootstrap)+2+len(encRest))
+		payload = append(payload, bootstrap...)
+		payload = append(payload, '\n', '\n')
+		payload = append(payload, encRest...)
+		return payload, nil
+	}
+	return Encrypt(content, password)
 }
 
 // DecryptFile reverses EncryptFile: .enc -> plaintext, removing .enc. On any

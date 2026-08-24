@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -96,8 +97,13 @@ func (c *Controller) ExitRun(password string) error {
 	return nil
 }
 
-// SetPassword rotates the password after verifying the old one. Re-encrypts
-// all vaults with the new password.
+// SetPassword rotates the password after verifying the old one. Two-phase to
+// stay safe under crashes and write failures (review I-1): phase 1 decrypts
+// every vault with the old password into memory with NO state change; phase 2
+// writes the new verifier first, then re-encrypts each vault from memory (no
+// plaintext ever touches disk); a mid-loop failure rolls everything back to
+// the old password. The old verifier can never be left stale against
+// new-password vaults.
 func (c *Controller) SetPassword(oldPassword, newPassword string) error {
 	c.Mu.Lock()
 	defer c.Mu.Unlock()
@@ -107,21 +113,87 @@ func (c *Controller) SetPassword(oldPassword, newPassword string) error {
 	if !c.Password.Verify(oldPassword) {
 		return errors.New("set password: incorrect current password")
 	}
-	// Decrypt each vault with old password, re-encrypt with new.
-	for _, v := range c.Vaults {
-		plain, err := v.LoadCiphertext(oldPassword)
+	// Phase 1 — preflight: the old password must decrypt every vault before
+	// any state changes, so a partial/bad rotation can never be started.
+	plains := make([]string, len(c.Vaults))
+	for i, v := range c.Vaults {
+		p, err := v.LoadCiphertext(oldPassword)
 		if err != nil {
 			return fmt.Errorf("set password: decrypt %s: %w", v.ConfigPath, err)
 		}
-		// Temporarily restore plaintext, then encrypt with new password.
-		if err := osWriteFileAll(v.ConfigPath, []byte(plain), 0o600); err != nil {
-			return err
-		}
-		if err := v.EncryptFile(newPassword); err != nil {
-			return fmt.Errorf("set password: re-encrypt %s: %w", v.ConfigPath, err)
+		plains[i] = p
+	}
+	// Phase 2 — commit: verifier first, then re-encrypt each vault; roll back
+	// on failure.
+	if err := c.Password.Set(newPassword); err != nil {
+		return err
+	}
+	for i, v := range c.Vaults {
+		if err := c.reencryptVault(v, plains[i], newPassword); err != nil {
+			rollbackErr := c.rollbackSetPassword(oldPassword, newPassword)
+			return fmt.Errorf("set password: re-encrypt %s: %w (rollback: %v)", v.ConfigPath, err, rollbackErr)
 		}
 	}
-	return c.Password.Set(newPassword)
+	return nil
+}
+
+// reencryptVault atomically replaces v's .enc with a new encryption of plain
+// built purely in memory (no plaintext touches disk during rotation). A
+// leftover plaintext file is deliberately NOT removed: in run mode none should
+// exist, and if one does it is recovery evidence, not something to delete
+// silently.
+func (c *Controller) reencryptVault(v *Vault, plain, password string) error {
+	payload, err := v.EncryptContent(password, []byte(plain))
+	if err != nil {
+		return err
+	}
+	tmp := v.encPath() + ".tmp"
+	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+		return err
+	}
+	if err := syncFile(tmp); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, v.encPath()); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return syncDir(filepath.Dir(v.ConfigPath))
+}
+
+// rollbackSetPassword restores old-password encryption after a failed
+// SetPassword commit. Vaults still decryptable with the old password are left
+// untouched; vaults already switched to the new password are decrypted with
+// the new password and re-encrypted with the old one; the verifier is reset
+// to the old password. Both passwords remain known to the operator, so even a
+// partial rollback keeps the state recoverable — the first error is returned,
+// not swallowed.
+func (c *Controller) rollbackSetPassword(oldPassword, newPassword string) error {
+	var firstErr error
+	for _, v := range c.Vaults {
+		if _, err := v.LoadCiphertext(oldPassword); err == nil {
+			continue // still under the old password
+		}
+		plain, err := v.LoadCiphertext(newPassword)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("rollback: vault %s under unknown password: %w", v.ConfigPath, err)
+			}
+			continue
+		}
+		if err := c.reencryptVault(v, plain, oldPassword); err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("rollback: re-encrypt %s with old password: %w", v.ConfigPath, err)
+			}
+		}
+	}
+	if err := c.Password.Set(oldPassword); err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 // Startup recovers state from the marker. Corrupt marker => fail-closed
@@ -141,6 +213,22 @@ func (c *Controller) Startup() error {
 		st := v.State()
 		if st.hasPlain && st.hasEnc {
 			return fmt.Errorf("startup: %w (%s)", ErrResidue, v.ConfigPath)
+		}
+	}
+	// Half-state detection (interrupted EnterRun / tampering) — fail-closed
+	// (review I-2): an enc-only vault is only legitimate paired with a run
+	// marker AND a live verifier. Any other combination means a transition
+	// crashed between stages; starting normally would silently orphan the
+	// encrypted config.
+	for _, v := range c.Vaults {
+		st := v.State()
+		if !st.hasPlain && st.hasEnc {
+			switch {
+			case mode == ModeDefault && c.Password.Exists():
+				return fmt.Errorf("startup: enc-only vault %s with verifier present while marker=default — crash residue of interrupted EnterRun, manual recovery required", v.ConfigPath)
+			case mode == ModeRun && !c.Password.Exists():
+				return fmt.Errorf("startup: run marker but no password verifier (vault %s) — interrupted EnterRun or tampering, fail-closed", v.ConfigPath)
+			}
 		}
 	}
 	c.Mode = mode
@@ -164,9 +252,4 @@ func (c *Controller) Unlock(password string) error {
 	}
 	c.Guard = NewMemoryGuard([]byte(plain))
 	return nil
-}
-
-// osWriteFileAll wraps os.WriteFile for the controller's internal rewrites.
-func osWriteFileAll(path string, data []byte, perm os.FileMode) error {
-	return os.WriteFile(path, data, perm)
 }
