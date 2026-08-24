@@ -20,6 +20,7 @@ import (
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/resilience"
+	"github.com/asscor/asscor/internal/securemode"
 	"github.com/asscor/asscor/internal/version"
 
 	_ "github.com/asscor/asscor/internal/checks"
@@ -256,6 +257,21 @@ func main() {
 	sourceManager := newSourceManager()
 	cliModule := cli.NewCLIModule()
 
+	// Secure Mode: optional build-tag module. Off by default (initSecureMode
+	// returns a nil controller); enable with -tags securemode. Startup is
+	// fail-closed (spec §8.1): a corrupt marker, crash residue or half-state
+	// refuses kernel startup instead of silently degrading to plaintext.
+	secureCtrl, err := initSecureMode(k, cfg.DataDir, resolvedConfigPath)
+	if err != nil {
+		log.Error("secure mode init failed (fail-closed)", "error", err)
+		os.Exit(1)
+	}
+	if secureCtrl != nil {
+		// Bind early so plugins (heartbeat secret reporting, later task) can
+		// resolve the controller during their own Init/Start.
+		k.Container().BindNamed("securemode", (*securemode.Controller)(nil), secureCtrl)
+	}
+
 	if assessor != nil {
 		k.Container().Bind((*kernel.AssessorInterface)(nil), assessor)
 	}
@@ -352,6 +368,19 @@ func main() {
 		fmt.Fprintf(os.Stderr, "FATAL: kernel bootstrap failed: %v\n", err)
 		log.Error("kernel bootstrap failed", "error", err)
 		os.Exit(1)
+	}
+
+	// Secure Mode CLI registration happens after Bootstrap because the CLI
+	// module only initializes its engine during plugin Init; before that
+	// RegisterCommand would fail with "CLI engine not initialized". It is a
+	// no-op when the securemode tag is off (secureCtrl == nil) or when the
+	// CLI is disabled.
+	if secureCtrl != nil {
+		mcli := securemode.NewModeCLI(secureCtrl)
+		if err := registerSecureModeCLI(cliModule, mcli); err != nil {
+			log.Error("secure mode CLI registration failed", "error", err)
+			os.Exit(1)
+		}
 	}
 
 	fmt.Fprintf(os.Stderr, "\nASSCOR \u00b5Kernel\n")

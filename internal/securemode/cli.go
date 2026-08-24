@@ -14,6 +14,16 @@ type ModeCLI struct {
 	Ctrl *Controller
 }
 
+// NewModeCLI creates the kernel-side CLI adapter for a controller. A nil
+// controller yields a nil adapter, which the kernel wiring treats as a no-op
+// (the securemode build tag is off).
+func NewModeCLI(ctrl *Controller) *ModeCLI {
+	if ctrl == nil {
+		return nil
+	}
+	return &ModeCLI{Ctrl: ctrl}
+}
+
 // HandleMode implements the `mode` command family:
 //
 //	mode status
