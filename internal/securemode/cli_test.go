@@ -84,3 +84,50 @@ func TestModeCLIConfigSetPersist(t *testing.T) {
 		t.Errorf("persist output should mention reload, got %q", out)
 	}
 }
+
+// TestModeCLIConfigSetPersistDefaultMode: spec §9 — --persist in default mode
+// (no guard, no password) rewrites the plaintext config on disk.
+func TestModeCLIConfigSetPersistDefaultMode(t *testing.T) {
+	c := newTestController(t) // default mode: no guard
+	m := &ModeCLI{Ctrl: c}
+	out, err := m.HandleConfigSet([]string{"addr", "66"}, map[string]string{"persist": "true"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "plaintext") {
+		t.Errorf("persist output should mention plaintext, got %q", out)
+	}
+	content, err := c.Vaults[0].LoadPlaintext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(content, "addr = 66") {
+		t.Errorf("plaintext config must contain the new value, got %q", content)
+	}
+}
+
+// TestModeCLIConfigSetUnlockedRunFails: mode=run without a guard (run marker
+// present but not yet unlocked) must fail closed before any mutation.
+func TestModeCLIConfigSetUnlockedRunFails(t *testing.T) {
+	m := newModeCLI(t)
+	// Simulate the run-marker-not-yet-unlocked state: mode=run, no guard.
+	m.Ctrl.Guard = nil
+	_, err := m.HandleConfigSet([]string{"addr", "66"}, map[string]string{"password": "pw"})
+	if err == nil {
+		t.Fatal("config set with mode=run but no guard must fail (unlock required)")
+	}
+	if !strings.Contains(err.Error(), "unlock") {
+		t.Errorf("error should mention unlock, got %v", err)
+	}
+	if m.Ctrl.Guard != nil {
+		t.Error("guard must stay nil after the failed config set")
+	}
+	// Nothing may have been written: the .enc still decrypts to the original.
+	content, err := m.Ctrl.Vaults[0].LoadCiphertext("pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(content, "addr = 66") {
+		t.Errorf("config must not have been modified, got %q", content)
+	}
+}

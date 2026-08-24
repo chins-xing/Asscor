@@ -133,10 +133,21 @@ func (m *ModeCLI) HandleConfigSet(args []string, flags map[string]string) (strin
 	password := flags["password"]
 	persist := flags["persist"] == "true" || flags["persist"] == "1"
 
+	// Hold the controller read lock for the WHOLE operation (review I-1). A
+	// concurrent mode transition (EnterRun/ExitRun/SetPassword/Startup/Unlock,
+	// all write-locked) can no longer interleave with the password check,
+	// guard snapshot and persist decision — previously that window could end
+	// in a plaintext+.enc residue (ErrResidue) or silently drop updates.
+	// None of the work below re-enters c.Mu: Password.Verify only reads a
+	// file, the guard methods take the guard's own mutex, and writePersisted
+	// (reencryptVault / osWriteFileAll) touches only files — so holding RLock
+	// here is deadlock-free, and the lock order stays c.Mu -> guard.mu,
+	// consistent with ExitRun's IntegrityOK call.
 	m.Ctrl.Mu.RLock()
+	defer m.Ctrl.Mu.RUnlock()
+
 	runMode := m.Ctrl.Mode == ModeRun
 	guard := m.Ctrl.Guard
-	m.Ctrl.Mu.RUnlock()
 
 	if runMode {
 		if password == "" {
