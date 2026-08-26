@@ -34,6 +34,14 @@ func (v *Vault) State() vaultState {
 	return st
 }
 
+// HasPlaintext reports whether the plaintext config file currently exists.
+// Exported so external packages (the agent) can classify startup state.
+func (v *Vault) HasPlaintext() bool { return v.State().hasPlain }
+
+// IsEncrypted reports whether the .enc file currently exists (run-mode disk
+// state). Exported so external packages (the agent) can classify startup state.
+func (v *Vault) IsEncrypted() bool { return v.State().hasEnc }
+
 func (v *Vault) encPath() string { return v.ConfigPath + ".enc" }
 
 // EncryptFile converts the plaintext config to .enc with three-stage atomic
@@ -230,4 +238,61 @@ func (v *Vault) LoadCiphertext(password string) (string, error) {
 		return "", err
 	}
 	return v.decryptPayload(enc, password)
+}
+
+// ReadBootstrap returns the plaintext bootstrap section from the .enc payload
+// (the part after the header up to the first blank line) WITHOUT the password.
+// The agent uses it on a run-mode restart to recover connectivity essentials
+// (kernel address, cert paths) when the plaintext config file no longer
+// exists (spec §3.1 / §8.2). No header configured => empty result; a payload
+// without a header/blank line yields whatever plaintext prefix exists (never
+// an error).
+func (v *Vault) ReadBootstrap() (string, error) {
+	if v.BootstrapHeader == "" {
+		return "", nil
+	}
+	enc, err := os.ReadFile(v.encPath())
+	if err != nil {
+		return "", err
+	}
+	idx := bytes.Index(enc, []byte(v.BootstrapHeader))
+	if idx < 0 {
+		return "", nil
+	}
+	if blank := bytes.Index(enc[idx:], []byte("\n\n")); blank >= 0 {
+		return string(enc[idx : idx+blank]), nil
+	}
+	return string(enc[idx:]), nil
+}
+
+// RotatePassword re-encrypts the .enc with a new password, decrypting with the
+// old one purely in memory (no plaintext touches disk). Used by the agent's
+// securemode_rotate instruction and mirroring EncryptFile's atomic commit: on
+// any failure the existing .enc is left untouched.
+func (v *Vault) RotatePassword(oldPassword, newPassword string) error {
+	enc, err := os.ReadFile(v.encPath())
+	if err != nil {
+		return fmt.Errorf("rotate: read .enc: %w", err)
+	}
+	plain, err := v.decryptPayload(enc, oldPassword)
+	if err != nil {
+		return fmt.Errorf("rotate: decrypt with old password: %w", err)
+	}
+	payload, err := v.EncryptContent(newPassword, []byte(plain))
+	if err != nil {
+		return fmt.Errorf("rotate: encrypt with new password: %w", err)
+	}
+	tmp := v.encPath() + ".tmp"
+	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+		return err
+	}
+	if err := syncFile(tmp); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, v.encPath()); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return syncDir(filepath.Dir(v.ConfigPath))
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -44,6 +45,17 @@ func randomBytes(n int) ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+// NewEphemeralPassword returns a hex-encoded ephemeral unlock secret (32
+// random bytes). Agents self-generate it at startup and on rotation; it is a
+// TEMPORARY per-run secret (spec §3.1/P1-1) that must never be persisted.
+func NewEphemeralPassword() (string, error) {
+	b, err := randomBytes(32)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 // serializeUint32 / readUint32 helpers keep header encoding explicit.

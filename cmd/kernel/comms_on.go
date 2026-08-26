@@ -12,6 +12,7 @@ import (
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/kernel"
 	"github.com/asscor/asscor/internal/logger"
+	"github.com/asscor/asscor/internal/securemode"
 )
 
 // commsRuntime owns the JSONRPC and gRPC servers. It is compiled only when the
@@ -45,6 +46,14 @@ func newCommsRuntime(
 	// Sync check-item configuration (user checks + delta overrides) to agents
 	// via heartbeat so config.ini is the single source of truth.
 	kernelSvc.SetConfig(cfg)
+	// Secure Mode: wire the controller (registered by initSecureMode under
+	// the "securemode" name) so heartbeat responses can register agent
+	// ephemeral passwords. No-op when the securemode build tag is off.
+	if ctrlVal, ok := k.Container().ResolveNamed("securemode"); ok {
+		if ctrl, ok := ctrlVal.(*securemode.Controller); ok {
+			kernelSvc.SetSecureMode(ctrl)
+		}
+	}
 	agentSvc := comms.NewAgentServiceImpl(assessor, commander, logCollector)
 
 	serverCfg := comms.DefaultServerConfig()

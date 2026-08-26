@@ -30,6 +30,7 @@ func NewModeCLI(ctrl *Controller) *ModeCLI {
 //	mode enter
 //	mode exit --password <pw>
 //	mode set-password --old <pw> --new <pw>
+//	mode unlock --password <pw>
 //	mode agent <id> status|enter|exit|rotate-password
 func (m *ModeCLI) HandleMode(sub string, args []string, params map[string]string) (string, error) {
 	switch sub {
@@ -39,6 +40,8 @@ func (m *ModeCLI) HandleMode(sub string, args []string, params map[string]string
 		return m.enter(params)
 	case "exit":
 		return m.exit(params)
+	case "unlock":
+		return m.unlock(params)
 	case "set-password":
 		return m.setPassword(params)
 	case "agent":
@@ -83,6 +86,20 @@ func (m *ModeCLI) exit(params map[string]string) (string, error) {
 		return "", err
 	}
 	return "Exited to default mode — configuration restored to plaintext.\n", nil
+}
+
+func (m *ModeCLI) unlock(params map[string]string) (string, error) {
+	// Kernel restart in run mode (Ruling 3): the marker says run but the
+	// config is not in memory yet. `mode unlock --password <pw>` loads the
+	// protected config into the memory guard before serving continues.
+	password := params["password"]
+	if password == "" {
+		return "", fmt.Errorf("mode unlock: --password is required")
+	}
+	if err := m.Ctrl.Unlock(password); err != nil {
+		return "", err
+	}
+	return "Unlocked — run-mode config loaded into memory.\n", nil
 }
 
 func (m *ModeCLI) setPassword(params map[string]string) (string, error) {

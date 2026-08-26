@@ -29,14 +29,14 @@ func registerSecureModeCLI(cliModule *cli.CLIModule, mcli *securemode.ModeCLI) e
 	modeCmd := cli.NewBaseCommand(cli.CommandInfo{
 		Name:        "mode",
 		Short:       "Secure mode control",
-		Description: "Secure mode control (status/enter/exit/set-password/agent)",
-		Usage:       "mode <status|enter|exit|set-password|agent> [options]",
+		Description: "Secure mode control (status/enter/exit/unlock/set-password/agent)",
+		Usage:       "mode <status|enter|exit|unlock|set-password|agent> [options]",
 		Category:    cli.CategorySystem,
 		Params: []cli.CommandParam{
-			{Name: "subcommand", Description: "status, enter, exit, set-password, agent", Required: true},
+			{Name: "subcommand", Description: "status, enter, exit, unlock, set-password, agent", Required: true},
 		},
 		Options: []cli.CommandOption{
-			{Name: "password", Description: "Run-mode password (required for enter/exit)"},
+			{Name: "password", Description: "Run-mode password (required for enter/exit/unlock)"},
 			{Name: "old", Description: "Current password (set-password)"},
 			{Name: "new", Description: "New password (set-password)"},
 		},
@@ -44,6 +44,7 @@ func registerSecureModeCLI(cliModule *cli.CLIModule, mcli *securemode.ModeCLI) e
 			"mode status",
 			"mode enter --password=secret",
 			"mode exit --password=secret",
+			"mode unlock --password=secret",
 			"mode set-password --old=secret --new=newsecret",
 			"mode agent web01 status",
 			"mode agent web01 exit",
@@ -53,7 +54,7 @@ func registerSecureModeCLI(cliModule *cli.CLIModule, mcli *securemode.ModeCLI) e
 			return &cli.CommandResult{
 				ExitCode: cli.ExitUsage,
 				Err:      fmt.Errorf("mode: subcommand required"),
-				Output:   "Usage: mode <status|enter|exit|set-password|agent>\n",
+				Output:   "Usage: mode <status|enter|exit|unlock|set-password|agent>\n",
 			}
 		}
 		out, err := mcli.HandleMode(ctx.Args[0], ctx.Args[1:], ctx.Options)
@@ -62,7 +63,7 @@ func registerSecureModeCLI(cliModule *cli.CLIModule, mcli *securemode.ModeCLI) e
 		}
 		return &cli.CommandResult{ExitCode: cli.ExitOK, Output: out}
 	}).WithCompletions(func(ctx *cli.CommandContext, partial string) []string {
-		return []string{"status", "enter", "exit", "set-password", "agent"}
+		return []string{"status", "enter", "exit", "unlock", "set-password", "agent"}
 	})
 
 	if err := cliModule.RegisterCommand(modeCmd); err != nil {

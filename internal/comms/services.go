@@ -14,6 +14,7 @@ import (
 
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/kernel"
+	"github.com/asscor/asscor/internal/securemode"
 	"github.com/asscor/asscor/internal/topology"
 	"regexp"
 
@@ -42,6 +43,10 @@ type KernelServiceImpl struct {
 	// sections are synced to agents via heartbeat (check_config). Nil disables
 	// syncing (agent keeps its local bootstrap config).
 	cfg *config.Config
+	// secureMode is the secure-mode controller; its SecretRegistry records
+	// agent ephemeral passwords keyed on the mTLS certificate fingerprint
+	// (spec §10.1). Nil when the securemode build tag is off.
+	secureMode *securemode.Controller
 }
 
 func NewKernelServiceImpl(
@@ -67,6 +72,13 @@ func NewKernelServiceImpl(
 // to agents. Call before serving; nil disables syncing.
 func (s *KernelServiceImpl) SetConfig(cfg *config.Config) {
 	s.cfg = cfg
+}
+
+// SetSecureMode wires the secure-mode controller into the service so heartbeat
+// responses can register agent ephemeral passwords (spec §10.1). Call before
+// serving; nil disables registration (the securemode build tag is off).
+func (s *KernelServiceImpl) SetSecureMode(ctrl *securemode.Controller) {
+	s.secureMode = ctrl
 }
 
 // buildAgentCheckConfig extracts the check-item configuration to sync to
@@ -237,6 +249,23 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 			return &apiv1.HeartbeatResponse{Ok: false}, fmt.Errorf("certificate identity mismatch for host %q", req.HostId)
 		}
 		s.heartbeat.RecordHeartbeat(req.HostId)
+	}
+
+	// Secure Mode: agent ephemeral-password reporting (kernel-managed, spec
+	// §10.1). The fingerprint comes from the mTLS transport layer — a forged
+	// agent_id with an unknown/mismatched fingerprint was already rejected by
+	// VerifyAgentCert above. An EMPTY fingerprint (no mTLS, development) cannot
+	// be keyed, so the report is skipped with a warning instead of failing the
+	// heartbeat (the agent would otherwise retry forever).
+	if s.secureMode != nil && req.SecureMode != nil && req.SecureMode.Password != "" {
+		fp := kernel.PeerCertFingerprintFromContext(ctx)
+		if fp == "" {
+			logger.WithComponent("identity").Warn("secure-mode registration skipped: no mTLS fingerprint (development mode)")
+		} else if err := s.secureMode.Secrets.Register(fp, req.HostId, req.SecureMode.Password); err != nil {
+			logger.WithComponent("identity").Warn("secure-mode registration rejected",
+				"host_id", req.HostId, "error", err.Error())
+			return &apiv1.HeartbeatResponse{Ok: false}, fmt.Errorf("secure mode registration rejected: %v", err)
+		}
 	}
 
 	if s.spc != nil && s.spc.Enabled() && len(req.Packages) > 0 {

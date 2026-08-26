@@ -53,6 +53,9 @@ type AgentConfig struct {
 	LogFormat        string
 	LogLevel         string
 	LogOutput        string
+	// ConfigPath is the agent config file path (the -config flag value). The
+	// securemode build tag uses it to locate agent.ini for encryption.
+	ConfigPath string
 	// PrivilegedSocket is the Unix socket path of the privileged agent
 	// process. When empty, root checks/commands are reported as skipped.
 	PrivilegedSocket string
@@ -113,6 +116,10 @@ type Agent struct {
 	syncedChecks     []model.CheckItem
 	syncedCfgVersion string
 	cfgMu            sync.Mutex
+	// secure is the agent's secure-mode state (nil when the securemode build
+	// tag is off). It manages agent.ini encryption, the ephemeral unlock
+	// password (memory only) and kernel-issued mode instructions.
+	secure *secureState
 }
 
 // buildAgentCheckers assembles the agent's check set: compiled-in normal
@@ -494,6 +501,14 @@ func (a *Agent) register() error {
 func (a *Agent) heartbeatCycle() error {
 	a.executePendingCommands()
 
+	// Secure mode first-start bootstrap: self-generate the ephemeral password
+	// and encrypt agent.ini exactly once, so this heartbeat can report the
+	// password to the kernel (spec §8.2). Delayed from startup so an
+	// unreachable kernel never locks the config with an unregistered password.
+	if err := a.secureMaybeBootstrap(); err != nil {
+		return err
+	}
+
 	interval := time.Duration(a.cfg.CheckIntervalSec) * time.Second
 	elapsed := time.Since(a.lastCheckTime)
 	shouldCheck := a.lastCheckTime.IsZero() || elapsed >= interval
@@ -537,6 +552,9 @@ func (a *Agent) heartbeatCycle() error {
 		SessionId: a.sessionID,
 		Result:    snapshot,
 	}
+	// Secure mode: report the ephemeral unlock password to the kernel until
+	// accepted (registration is keyed on the mTLS certificate fingerprint).
+	a.attachSecureModeReport(heartbeatReq)
 	heartbeatReq.NetworkInfo = a.collectNetworkInfo()
 	if pkgs := a.collectPackages(); pkgs != nil {
 		h := sha256.Sum256([]byte(strings.Join(pkgs, ",")))
@@ -564,6 +582,13 @@ func (a *Agent) heartbeatCycle() error {
 		logger.WithComponent("agent").Warn("heartbeat not ok, re-registering")
 		a.sessionID = ""
 		return fmt.Errorf("heartbeat rejected by kernel")
+	}
+
+	// Secure mode: the kernel accepted this heartbeat, so the ephemeral
+	// password (if any) is now registered — stop re-reporting it until the
+	// next rotation.
+	if a.secure != nil && a.secure.password != "" && !a.secure.locked {
+		a.secure.reported = true
 	}
 
 	a.pendingCmd = heartbeatResp.PendingCommands
@@ -1471,6 +1496,12 @@ func (a *Agent) runCommand(cmd *apiv1.Command) {
 	switch cmd.Command {
 	case "isolate_host", "deisolate_host":
 		a.delegateRootCommand(cmd)
+		return
+	case "securemode_exit", "securemode_rotate", "securemode_unlock":
+		// Kernel-issued secure-mode instructions (spec §8.2). The password
+		// travels in Params and the command is HMAC-authenticated before this
+		// dispatch; these never touch the shell allowlist.
+		a.executeSecureModeCommand(cmd)
 		return
 	}
 

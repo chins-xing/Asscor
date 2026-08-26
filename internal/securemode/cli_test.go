@@ -131,3 +131,66 @@ func TestModeCLIConfigSetUnlockedRunFails(t *testing.T) {
 		t.Errorf("config must not have been modified, got %q", content)
 	}
 }
+
+// TestModeCLIUnlock: after a kernel restart with a run marker, the controller
+// is in run mode with no guard (not yet unlocked); `mode unlock --password`
+// loads the protected config into memory (Ruling 3).
+func TestModeCLIUnlock(t *testing.T) {
+	c := newTestController(t)
+	if err := c.EnterRun("pw"); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate kernel restart: a fresh controller on the same data dir starts
+	// in run mode (marker) but without the config in memory.
+	c2 := NewController(c.DataDir, c.Vaults)
+	if err := c2.Startup(); err != nil {
+		t.Fatal(err)
+	}
+	if c2.Mode != ModeRun {
+		t.Fatalf("restart mode = %q, want run", c2.Mode)
+	}
+	if c2.Guard != nil {
+		t.Fatal("restarted controller must not have the config in memory yet")
+	}
+	m := &ModeCLI{Ctrl: c2}
+	out, err := m.HandleMode("unlock", nil, map[string]string{"password": "pw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.ToLower(out), "unlock") {
+		t.Errorf("unlock output should mention unlock, got %q", out)
+	}
+	if c2.Guard == nil || !c2.Guard.IntegrityOK() {
+		t.Error("unlock must load the protected config into the guard")
+	}
+}
+
+// TestModeCLIUnlockWrongPassword: a wrong password must fail without loading
+// the config (guard stays nil).
+func TestModeCLIUnlockWrongPassword(t *testing.T) {
+	c := newTestController(t)
+	if err := c.EnterRun("pw"); err != nil {
+		t.Fatal(err)
+	}
+	c2 := NewController(c.DataDir, c.Vaults)
+	if err := c2.Startup(); err != nil {
+		t.Fatal(err)
+	}
+	m := &ModeCLI{Ctrl: c2}
+	_, err := m.HandleMode("unlock", nil, map[string]string{"password": "wrong"})
+	if err == nil {
+		t.Fatal("unlock with wrong password must fail")
+	}
+	if c2.Guard != nil {
+		t.Error("guard must stay nil after a failed unlock")
+	}
+}
+
+// TestModeCLIUnlockDefaultMode: unlock is only meaningful in run mode.
+func TestModeCLIUnlockDefaultMode(t *testing.T) {
+	c := newTestController(t) // default mode
+	m := &ModeCLI{Ctrl: c}
+	if _, err := m.HandleMode("unlock", nil, map[string]string{"password": "pw"}); err == nil {
+		t.Fatal("unlock in default mode must be rejected")
+	}
+}

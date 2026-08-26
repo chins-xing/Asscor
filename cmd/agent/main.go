@@ -69,6 +69,7 @@ func main() {
 	}
 
 	cfg := agent.DefaultConfig()
+	cfg.ConfigPath = *configPath
 
 	if err := loadConfigFile(*configPath, &cfg); err != nil {
 		if !os.IsNotExist(err) {
@@ -124,6 +125,14 @@ func main() {
 	log.Info("starting agent", "version", version.ASSCORVersion, "ssam_version", version.SSAMVersion, "host_id", cfg.HostID, "kernel_addr", cfg.KernelAddr)
 
 	agt := agent.NewAgent(cfg)
+	// Secure Mode: optional build-tag module. Off by default (agentSecureVault
+	// returns nil); enable with -tags securemode. First-start encryption is
+	// deferred to the first heartbeat; run-mode restarts start locked and
+	// await the kernel-issued password.
+	if err := agt.InitSecureMode(agentSecureVault(cfg)); err != nil {
+		fmt.Fprintf(os.Stderr, "agent: secure mode init failed (fail-closed): %v\n", err)
+		os.Exit(1)
+	}
 	if err := agt.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "agent: fatal: %v\n", err)
 		os.Exit(1)

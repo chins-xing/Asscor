@@ -202,3 +202,92 @@ func TestVaultEncryptNoProtectedSectionFailsSafe(t *testing.T) {
 		t.Errorf("plaintext modified by failed encrypt: %q", got)
 	}
 }
+
+// TestVaultReadBootstrap verifies the run-mode restart path: connectivity
+// essentials stay readable from the .enc payload WITHOUT the password (the
+// agent reads them before the kernel issues the registered unlock secret).
+func TestVaultReadBootstrap(t *testing.T) {
+	v := newTestVault(t)
+	if err := v.EncryptFile("pw"); err != nil {
+		t.Fatal(err)
+	}
+	boot, err := v.ReadBootstrap()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(boot, "[bootstrap]") || !strings.Contains(boot, "kernel_addr = 127.0.0.1:50051") {
+		t.Errorf("ReadBootstrap = %q, want readable bootstrap section", boot)
+	}
+	if strings.Contains(boot, "attack_surface") {
+		t.Errorf("ReadBootstrap must not leak the protected section, got %q", boot)
+	}
+}
+
+// TestVaultReadBootstrapNoHeader: without a configured bootstrap header the
+// whole payload is encrypted, so nothing can be read back — a safe empty
+// result, never an error.
+func TestVaultReadBootstrapNoHeader(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.ini")
+	if err := os.WriteFile(path, []byte("[weights]\na = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	v := &Vault{DataDir: dir, ConfigPath: path} // no BootstrapHeader
+	if err := v.EncryptFile("pw"); err != nil {
+		t.Fatal(err)
+	}
+	boot, err := v.ReadBootstrap()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if boot != "" {
+		t.Errorf("ReadBootstrap without header = %q, want empty", boot)
+	}
+}
+
+// TestVaultRotatePassword: re-encrypt the .enc with a new password, decrypting
+// with the old one purely in memory (agent securemode_rotate instruction). The
+// old password stops working, the new one round-trips, and no plaintext file
+// ever appears on disk.
+func TestVaultRotatePassword(t *testing.T) {
+	v := newTestVault(t)
+	if err := v.EncryptFile("old-pw"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.RotatePassword("old-pw", "new-pw"); err != nil {
+		t.Fatal(err)
+	}
+	if st := v.State(); st.hasPlain || !st.hasEnc {
+		t.Fatalf("after rotate state = %+v, want enc-only", st)
+	}
+	if _, err := v.LoadCiphertext("old-pw"); err == nil {
+		t.Error("old password must not decrypt after rotation")
+	}
+	plain, err := v.LoadCiphertext("new-pw")
+	if err != nil {
+		t.Fatalf("new password must decrypt after rotation: %v", err)
+	}
+	if !strings.Contains(plain, "attack_surface = 35") {
+		t.Errorf("rotated config lost protected content: %q", plain)
+	}
+}
+
+// TestVaultRotatePasswordWrongOld: rotating with a wrong old password must
+// fail WITHOUT touching the .enc (the old password keeps working).
+func TestVaultRotatePasswordWrongOld(t *testing.T) {
+	v := newTestVault(t)
+	if err := v.EncryptFile("old-pw"); err != nil {
+		t.Fatal(err)
+	}
+	encBefore, _ := os.ReadFile(v.encPath())
+	if err := v.RotatePassword("wrong-pw", "new-pw"); err == nil {
+		t.Fatal("rotate with wrong old password must fail")
+	}
+	encAfter, _ := os.ReadFile(v.encPath())
+	if string(encBefore) != string(encAfter) {
+		t.Error(".enc must be untouched after failed rotate")
+	}
+	if _, err := v.LoadCiphertext("old-pw"); err != nil {
+		t.Errorf("old password must keep working after failed rotate: %v", err)
+	}
+}

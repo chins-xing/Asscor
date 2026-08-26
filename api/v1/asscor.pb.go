@@ -29,6 +29,17 @@ type HeartbeatRequest struct {
 	Packages      []string          `json:"packages,omitempty"`
 	InstalledCPEs []string          `json:"installed_cpes,omitempty"`
 	NetworkInfo   *NetworkInfo      `json:"network_info,omitempty"`
+	// SecureMode carries the agent's ephemeral unlock secret (spec §10.1) on
+	// its first heartbeat after entering run mode. The kernel registers it
+	// under the mTLS certificate fingerprint taken from the transport layer.
+	SecureMode *SecureModeReport `json:"secure_mode,omitempty"`
+}
+
+// SecureModeReport is the agent → kernel secure-mode report. The password is
+// a TEMPORARY per-run unlock secret (spec §3.1/P1-1) — the agent never claims
+// an identity here; the kernel keys the registration on the mTLS fingerprint.
+type SecureModeReport struct {
+	Password string `json:"password"`
 }
 
 // NetworkInfo carries the agent's network topology data for real-edge risk diffusion.
