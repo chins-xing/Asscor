@@ -14,7 +14,8 @@ var ErrResidue = errors.New("plaintext and .enc both present — crash residue, 
 
 // Controller orchestrates the default<->run state machine for the kernel:
 // mode transitions, password verification, memory guard lifecycle, and
-// startup recovery. Agent secrets are tracked separately (SecretRegistry).
+// startup recovery. Agent secrets are tracked separately (SecretRegistry) and
+// persisted encrypted (spec §10.1 P0-1) so a kernel restart can recover them.
 type Controller struct {
 	Mu       sync.RWMutex
 	DataDir  string
@@ -23,6 +24,13 @@ type Controller struct {
 	Guard    *MemoryGuard
 	Mode     Mode
 	Secrets  *SecretRegistry
+	// runPassword is the kernel run-mode password retained in memory while in
+	// run mode, used to re-encrypt the persisted registry after every
+	// registration/rotation without operator input (spec §10.1). Set by
+	// EnterRun/Unlock, refreshed by SetPassword, cleared by ExitRun. It is the
+	// same secret the operator already supplies to enter/unlock — retaining it
+	// in-process is the only way the heartbeat registration path can persist.
+	runPassword string
 }
 
 // NewController creates a controller in default mode with no guard.
@@ -64,6 +72,15 @@ func (c *Controller) EnterRun(password string) error {
 		return err
 	}
 	c.Mode = ModeRun
+	c.runPassword = password
+	// Persist whatever the registry holds at entry time (may include agents
+	// that registered while the kernel was still in default mode). A failure
+	// does not undo run-mode entry — the in-memory registry is authoritative
+	// and the next registration/set-password re-persists — but the operator
+	// must see it (a restart before then would start with an empty registry).
+	if err := c.persistSecretsLocked(); err != nil {
+		return fmt.Errorf("enter run: persist registry: %w", err)
+	}
 	return nil
 }
 
@@ -80,6 +97,15 @@ func (c *Controller) ExitRun(password string) error {
 	}
 	if c.Guard != nil && !c.Guard.IntegrityOK() {
 		return errors.New("exit run: in-memory config integrity check failed — suspected tampering")
+	}
+	// Drop the retained password and the persisted registry BEFORE any state
+	// change: in default mode no agent should be in run mode (spec §10.1), so
+	// the encrypted registry file is removed. If removal fails, nothing has
+	// been modified yet and a retry is clean. The stale-file edge (removal
+	// succeeds, a later step fails) self-heals: registrations re-persist it.
+	c.runPassword = ""
+	if err := os.Remove(SecretsFilePath(c.DataDir)); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("exit run: remove persisted registry: %w", err)
 	}
 	for _, v := range c.Vaults {
 		if err := v.DecryptFile(password); err != nil {
@@ -133,6 +159,17 @@ func (c *Controller) SetPassword(oldPassword, newPassword string) error {
 			rollbackErr := c.rollbackSetPassword(oldPassword, newPassword)
 			return fmt.Errorf("set password: re-encrypt %s: %w (rollback: %v)", v.ConfigPath, err, rollbackErr)
 		}
+	}
+	// Re-encrypt the persisted registry under the new password too; otherwise
+	// a later kernel restart could never recover it (unlock would fail closed
+	// against the old-password registry). The persist is atomic, so a failure
+	// leaves the file under the OLD password — consistent with the rollback,
+	// which restores verifier and vaults to the old password as well.
+	c.runPassword = newPassword
+	if err := c.persistSecretsLocked(); err != nil {
+		c.runPassword = oldPassword
+		rollbackErr := c.rollbackSetPassword(oldPassword, newPassword)
+		return fmt.Errorf("set password: persist registry: %w (rollback: %v)", err, rollbackErr)
 	}
 	return nil
 }
@@ -236,7 +273,11 @@ func (c *Controller) Startup() error {
 }
 
 // Unlock loads the ciphertext configs into memory after password verification
-// (kernel restart with a run marker).
+// (kernel restart with a run marker). It also recovers the persisted agent
+// registry (spec §10.1 P0-1 recovery flow: unlock, then restore the
+// fingerprint->agent->password tuples) — a registry that cannot be decrypted
+// fails closed, because serving run mode without the registry would leave
+// every locked agent permanently unable to unlock.
 func (c *Controller) Unlock(password string) error {
 	c.Mu.Lock()
 	defer c.Mu.Unlock()
@@ -250,6 +291,10 @@ func (c *Controller) Unlock(password string) error {
 	if err != nil {
 		return err
 	}
+	if err := c.loadSecretsLocked(password); err != nil {
+		return err
+	}
 	c.Guard = NewMemoryGuard([]byte(plain))
+	c.runPassword = password
 	return nil
 }

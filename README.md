@@ -272,6 +272,35 @@ threshold = 80.0
 compliance_framework = GB/T 22239-2019 Level 3
 ```
 
+## Secure Mode（实验性，build-tag：securemode）
+
+默认/运行双模式保护 `config.ini` 与 `agent.ini`：
+
+- **默认模式**：配置文件明文，行为与现状一致。
+- **运行模式**：源文件加密为 `.enc`（AES-256-GCM 信封加密 + argon2id），配置驻留内存（只读快照 + SHA-256 校验和基线 + mprotect hardening）；CLI 修改配置/退出运行模式需密码；进入运行模式免密。
+- **agent 托管**：agent 启动自生成临时密码（每次重启重新生成，不落盘），经 mTLS 心跳上报内核（以证书指纹为主键登记），自动进入运行模式；模式切换仅内核 CLI 发起（`mode agent <id> enter|exit|rotate-password`）。
+- **登记表持久化**：内核把 `指纹 → agent_id → 密码` 登记表以运行模式密钥加密落盘（`.asscor-secrets.enc`），kernel 重启（run 模式解锁）时自动解密恢复；锁定 agent 重启后仍可用注册密码解锁。kernel 密码轮换时登记表同步重加密；kernel 退出运行模式时登记表移除。
+- **崩溃安全**：三段式原子转换（写 `.enc.tmp` → 验证回读 → rename → 删明文），任何一步崩溃不丢配置；启动时自动检测崩溃残留（明文 + `.enc` 共存 → fail-closed，人工校验 `.enc` 后恢复）。
+- **模式标记损坏 fail-closed**：标记文件缺失 ≠ 损坏；损坏拒绝静默降级为明文模式（疑似篡改）。
+
+构建（默认构建不含 securemode，行为与旧版一致）：
+
+```bash
+go build -tags securemode ./cmd/kernel ./cmd/agent
+```
+
+内核 CLI：
+
+```
+mode status                                  # 当前模式 + 各配置状态 + 已登记 agent
+mode enter --password <pw>                   # 进入运行模式（免密校验，需设置运行密码）
+mode exit --password <pw>                    # 退出到默认模式（还原明文）
+mode unlock --password <pw>                  # kernel 重启后（run 标记）解锁并载入配置
+mode set-password --old <pw> --new <pw>      # 轮换运行密码（config.ini 与登记表同步重加密）
+mode agent <id> status|enter|exit|rotate-password   # agent 托管：状态 / 指令
+config-set <key> <value> --temp|--persist --password <pw>   # 修改配置：--temp 内存即时生效 / --persist 落盘（需 reload）
+```
+
 ## 11. 项目结构
 
 ```
@@ -338,6 +367,7 @@ ASSCOR/
 │   ├── semver/        # SemVer 版本约束共享包
 │   ├── extmgr/        # 扩展管理器（安装/卸载/生命周期/安全执行）
 │   ├── agent/         # Agent 核心模块
+│   ├── securemode/    # 安全模式（build-tag: securemode）— 默认/运行双模式配置保护、登记表持久化
 │   ├── model/         # 数据模型定义
 │   ├── config/        # 配置解析器（INI 格式，支持行业模板覆盖）
 │   └── version/       # 版本信息

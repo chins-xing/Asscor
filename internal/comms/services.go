@@ -284,6 +284,16 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 				logger.WithComponent("identity").Warn("secure-mode registration rejected",
 					"host_id", req.HostId, "error", err.Error())
 				return &apiv1.HeartbeatResponse{Ok: false}, fmt.Errorf("secure mode registration rejected: %v", err)
+			} else if err := s.secureMode.PersistSecrets(); err != nil {
+				// P0-1 durability (spec §10.1): the registry is written
+				// encrypted under the kernel run-mode password after every
+				// registration/rotation so a later kernel restart can recover
+				// it. In default mode PersistSecrets is a no-op (nothing to
+				// persist); in run mode a failure only degrades crash-recovery
+				// durability — the in-memory registration stays correct and
+				// the next registration retries the persist.
+				logger.WithComponent("identity").Warn("secure-mode registry persist failed (in-memory registration kept; will retry on next registration)",
+					"host_id", req.HostId, "error", err.Error())
 			}
 		}
 	}
