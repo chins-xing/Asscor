@@ -377,6 +377,10 @@ func main() {
 	// CLI is disabled.
 	if secureCtrl != nil {
 		mcli := securemode.NewModeCLI(secureCtrl)
+		// Review I-1: `mode agent <id> enter|exit|rotate-password` enqueues
+		// real instructions through the commander channel. Nil when the
+		// commander build tag is off — the CLI then fails loudly.
+		mcli.SetCommander(commander)
 		if err := registerSecureModeCLI(cliModule, mcli); err != nil {
 			log.Error("secure mode CLI registration failed", "error", err)
 			os.Exit(1)

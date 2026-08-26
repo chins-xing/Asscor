@@ -152,3 +152,72 @@ func TestHeartbeatSecureModeFingerprintIsMandatory(t *testing.T) {
 		t.Error("fp-a must not be registered by a fingerprint-less report")
 	}
 }
+
+// TestHeartbeatIssuesSecureModeUnlockToLockedAgent (review I-1/I-2): a
+// run-mode-restart agent declares itself locked on the heartbeat; the kernel
+// looks up the registered password under the presenting mTLS fingerprint and
+// hands it back in the response. Unlock rides the already-authenticated
+// heartbeat channel because a locked agent has no hmac_key to verify a
+// pending command with.
+func TestHeartbeatIssuesSecureModeUnlockToLockedAgent(t *testing.T) {
+	svc := newSecureIdentityService(t)
+	if _, err := svc.Register(ctxWithFP("fp-a"), &apiv1.RegisterRequest{HostId: "host-a", Hostname: "h-a", Version: "v0.2.3"}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	// The password was registered during the previous run (first-heartbeat
+	// report before the restart).
+	if err := svc.secureMode.Secrets.Register("fp-a", "host-a", "registered-pw"); err != nil {
+		t.Fatalf("pre-register: %v", err)
+	}
+
+	resp, err := svc.Heartbeat(ctxWithFP("fp-a"), &apiv1.HeartbeatRequest{
+		HostId:     "host-a",
+		SecureMode: &apiv1.SecureModeReport{Locked: true},
+	})
+	if err != nil || !resp.Ok {
+		t.Fatalf("locked heartbeat must succeed (err=%v, ok=%v)", err, resp != nil && resp.Ok)
+	}
+	if resp.SecureModeUnlock == nil || resp.SecureModeUnlock.Password != "registered-pw" {
+		t.Fatalf("locked agent must receive the registered password, got %+v", resp.SecureModeUnlock)
+	}
+}
+
+// TestHeartbeatLockedNoRegisteredSecret: a locked agent whose fingerprint has
+// no registered secret gets a successful heartbeat but no unlock — the kernel
+// cannot fabricate a password. The agent keeps polling on later heartbeats.
+func TestHeartbeatLockedNoRegisteredSecret(t *testing.T) {
+	svc := newSecureIdentityService(t)
+	if _, err := svc.Register(ctxWithFP("fp-a"), &apiv1.RegisterRequest{HostId: "host-a", Hostname: "h-a", Version: "v0.2.3"}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	resp, err := svc.Heartbeat(ctxWithFP("fp-a"), &apiv1.HeartbeatRequest{
+		HostId:     "host-a",
+		SecureMode: &apiv1.SecureModeReport{Locked: true},
+	})
+	if err != nil || !resp.Ok {
+		t.Fatalf("locked heartbeat without a secret must stay ok (err=%v, ok=%v)", err, resp != nil && resp.Ok)
+	}
+	if resp.SecureModeUnlock != nil {
+		t.Fatalf("no unlock may be issued without a registered secret, got %+v", resp.SecureModeUnlock)
+	}
+}
+
+// TestHeartbeatLockedWithoutFingerprint: without mTLS there is no fingerprint
+// to look the secret up under — the heartbeat stays ok but no unlock is
+// issued (same development-mode semantics as password reporting).
+func TestHeartbeatLockedWithoutFingerprint(t *testing.T) {
+	svc := newSecureIdentityService(t)
+	if _, err := svc.Register(context.Background(), &apiv1.RegisterRequest{HostId: "host-dev", Hostname: "h", Version: "v0.2.3"}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	resp, err := svc.Heartbeat(context.Background(), &apiv1.HeartbeatRequest{
+		HostId:     "host-dev",
+		SecureMode: &apiv1.SecureModeReport{Locked: true},
+	})
+	if err != nil || !resp.Ok {
+		t.Fatalf("fingerprint-less locked heartbeat must stay ok (err=%v, ok=%v)", err, resp != nil && resp.Ok)
+	}
+	if resp.SecureModeUnlock != nil {
+		t.Fatal("no unlock may be issued without a fingerprint")
+	}
+}

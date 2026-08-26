@@ -194,3 +194,120 @@ func TestModeCLIUnlockDefaultMode(t *testing.T) {
 		t.Fatal("unlock in default mode must be rejected")
 	}
 }
+
+// fakeAgentCommander records enqueued instructions (AgentCommander contract,
+// review I-1 — the kernel CLI dispatches agent mode actions via the
+// commander instead of the old placeholder text).
+type fakeAgentCommander struct {
+	enqueued []fakeCommand
+}
+
+type fakeCommand struct {
+	hostID string
+	action string
+	params map[string]string
+}
+
+func (f *fakeAgentCommander) EnqueueCommand(hostID, action string, params map[string]string) string {
+	f.enqueued = append(f.enqueued, fakeCommand{hostID: hostID, action: action, params: params})
+	return "cmd-" + action
+}
+
+func newAgentModeCLI(t *testing.T) (*ModeCLI, *fakeAgentCommander) {
+	t.Helper()
+	c := newTestController(t)
+	if err := c.Secrets.Register("fp-a", "host-a", "registered-pw"); err != nil {
+		t.Fatal(err)
+	}
+	commander := &fakeAgentCommander{}
+	return &ModeCLI{Ctrl: c, Commander: commander}, commander
+}
+
+// TestModeCLIAgentExitEnqueues (review I-1): `mode agent <id> exit` must
+// enqueue a real securemode_exit command carrying the registered password.
+func TestModeCLIAgentExitEnqueues(t *testing.T) {
+	m, commander := newAgentModeCLI(t)
+	out, err := m.HandleMode("agent", []string{"host-a", "exit"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "securemode_exit") {
+		t.Errorf("output should name the command, got %q", out)
+	}
+	if len(commander.enqueued) != 1 {
+		t.Fatalf("exactly one command must be enqueued, got %d", len(commander.enqueued))
+	}
+	cmd := commander.enqueued[0]
+	if cmd.hostID != "host-a" || cmd.action != "securemode_exit" {
+		t.Errorf("enqueued = %+v, want host-a securemode_exit", cmd)
+	}
+	if cmd.params["password"] != "registered-pw" {
+		t.Errorf("exit must carry the registered password, got %v", cmd.params)
+	}
+}
+
+// TestModeCLIAgentRotateEnqueues: rotate-password enqueues securemode_rotate
+// with the registered password.
+func TestModeCLIAgentRotateEnqueues(t *testing.T) {
+	m, commander := newAgentModeCLI(t)
+	out, err := m.HandleMode("agent", []string{"host-a", "rotate-password"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "securemode_rotate") {
+		t.Errorf("output should name the command, got %q", out)
+	}
+	if len(commander.enqueued) != 1 {
+		t.Fatalf("exactly one command must be enqueued, got %d", len(commander.enqueued))
+	}
+	cmd := commander.enqueued[0]
+	if cmd.action != "securemode_rotate" || cmd.params["password"] != "registered-pw" {
+		t.Errorf("rotate enqueue = %+v, want securemode_rotate with registered-pw", cmd)
+	}
+}
+
+// TestModeCLIAgentEnterEnqueues: enter enqueues securemode_enter WITHOUT a
+// password (the agent self-generates its ephemeral password on entry).
+func TestModeCLIAgentEnterEnqueues(t *testing.T) {
+	m, commander := newAgentModeCLI(t)
+	out, err := m.HandleMode("agent", []string{"host-a", "enter"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "securemode_enter") {
+		t.Errorf("output should name the command, got %q", out)
+	}
+	if len(commander.enqueued) != 1 {
+		t.Fatalf("exactly one command must be enqueued, got %d", len(commander.enqueued))
+	}
+	cmd := commander.enqueued[0]
+	if cmd.hostID != "host-a" || cmd.action != "securemode_enter" {
+		t.Errorf("enqueued = %+v, want host-a securemode_enter", cmd)
+	}
+	if len(cmd.params) != 0 {
+		t.Errorf("enter must not carry params (agent generates its own password), got %v", cmd.params)
+	}
+}
+
+// TestModeCLIAgentActionUnregistered: exit/rotate on an agent without a
+// registered secret must fail — the kernel has no password to hand the agent.
+func TestModeCLIAgentActionUnregistered(t *testing.T) {
+	c := newTestController(t) // no registered secret
+	m := &ModeCLI{Ctrl: c, Commander: &fakeAgentCommander{}}
+	if _, err := m.HandleMode("agent", []string{"ghost", "exit"}, nil); err == nil {
+		t.Fatal("exit for an unregistered agent must fail")
+	}
+}
+
+// TestModeCLIAgentNoCommander: without a wired commander (commander build tag
+// off) the CLI must fail loudly instead of printing a fake success.
+func TestModeCLIAgentNoCommander(t *testing.T) {
+	c := newTestController(t)
+	if err := c.Secrets.Register("fp-a", "host-a", "pw"); err != nil {
+		t.Fatal(err)
+	}
+	m := &ModeCLI{Ctrl: c} // Commander nil
+	if _, err := m.HandleMode("agent", []string{"host-a", "exit"}, nil); err == nil {
+		t.Fatal("agent action without a commander must fail")
+	}
+}

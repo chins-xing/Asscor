@@ -32,6 +32,14 @@ func main() {
 	privPeerUser := flag.String("priv-peer-user", "asscor", "unix account allowed to connect to the privileged agent (peer credential check)")
 	flag.Parse()
 
+	// Record which flags the operator actually set (flag.Visit only reports
+	// explicitly-set flags). Secure-mode bootstrap recovery uses this to
+	// decide whether a .enc bootstrap value may override a flag (review I-3):
+	// flag defaults are applied unconditionally below, so comparing against
+	// default VALUES cannot distinguish "default" from "explicitly set".
+	explicitFlags := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) { explicitFlags[f.Name] = true })
+
 	if *showVersion {
 		fmt.Printf("ASSCOR Agent %s (SSAM %s)\n", version.ASSCORVersion, version.SSAMVersion)
 		os.Exit(0)
@@ -70,6 +78,7 @@ func main() {
 
 	cfg := agent.DefaultConfig()
 	cfg.ConfigPath = *configPath
+	cfg.ExplicitFlags = explicitFlags
 
 	if err := loadConfigFile(*configPath, &cfg); err != nil {
 		if !os.IsNotExist(err) {

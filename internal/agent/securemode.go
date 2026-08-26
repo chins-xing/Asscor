@@ -55,8 +55,12 @@ func (a *Agent) InitSecureMode(vault *securemode.Vault) error {
 
 // applyBootstrapFromVault recovers connectivity essentials (kernel address,
 // cert paths) from the .enc bootstrap section on a run-mode restart, when the
-// plaintext agent.ini no longer exists. Values are applied only when the flag
-// defaults are still in place (an explicit --kernel/--cert-dir flag wins).
+// plaintext agent.ini no longer exists. Values are applied only for keys
+// whose flag was NOT explicitly set on the command line (review I-3): the old
+// default-value sentinels (CertDir == "" / !TLSEnabled) were dead code
+// because main.go applies the flag defaults unconditionally, and a magic
+// default string for kernel_addr was fragile — explicit-flag tracking is the
+// only reliable "operator did not override this" signal.
 func (a *Agent) applyBootstrapFromVault() error {
 	boot, err := a.secure.vault.ReadBootstrap()
 	if err != nil {
@@ -72,20 +76,27 @@ func (a *Agent) applyBootstrapFromVault() error {
 			vals[strings.TrimSpace(line[:eq])] = strings.TrimSpace(line[eq+1:])
 		}
 	}
-	if v := vals["kernel_addr"]; v != "" && a.cfg.KernelAddr == "127.0.0.1:50051" {
+	if v := vals["kernel_addr"]; v != "" && !a.flagExplicit("kernel") {
 		a.cfg.KernelAddr = v
 	}
-	if v := vals["cert_dir"]; v != "" && a.cfg.CertDir == "" {
+	if v := vals["cert_dir"]; v != "" && !a.flagExplicit("cert-dir") {
 		a.cfg.CertDir = v
 	}
-	if v := vals["tls_enabled"]; v != "" && !a.cfg.TLSEnabled {
+	if v := vals["tls_enabled"]; v != "" && !a.flagExplicit("tls") {
 		a.cfg.TLSEnabled = v == "true" || v == "yes" || v == "1"
 	}
-	if v := vals["tls_skip_verify"]; v != "" && !a.cfg.TLSSkipVerify {
+	if v := vals["tls_skip_verify"]; v != "" && !a.flagExplicit("tls-skip-verify") {
 		a.cfg.TLSSkipVerify = v == "true" || v == "yes" || v == "1"
 	}
 	logger.WithComponent("agent").Info("secure mode: bootstrap connectivity restored from .enc", "kernel_addr", a.cfg.KernelAddr)
 	return nil
+}
+
+// flagExplicit reports whether the operator passed the flag explicitly
+// (recorded by cmd/agent/main.go via flag.Visit). A nil map (library/test
+// use) means nothing was explicit, so bootstrap values apply.
+func (a *Agent) flagExplicit(name string) bool {
+	return a.cfg.ExplicitFlags != nil && a.cfg.ExplicitFlags[name]
 }
 
 // secureMaybeBootstrap performs the first-start secure-mode bootstrap exactly
@@ -119,15 +130,26 @@ func (a *Agent) secureMaybeBootstrap() error {
 	return nil
 }
 
-// attachSecureModeReport fills the heartbeat's SecureMode field with the
-// ephemeral password until the kernel has accepted it. Locked agents (run-mode
-// restart) and agents without mTLS (no certificate fingerprint to key the
-// registration on) never report.
+// attachSecureModeReport fills the heartbeat's SecureMode field: locked
+// agents (run-mode restart) declare Locked so the kernel can issue the
+// registered password back in the response (review I-1); first-run agents
+// report the ephemeral password until the kernel has accepted it. Agents
+// without mTLS (no certificate fingerprint to key the registration on) never
+// report.
 func (a *Agent) attachSecureModeReport(req *apiv1.HeartbeatRequest) {
-	if a.secure == nil || a.secure.locked || a.secure.password == "" || a.secure.reported {
+	if a.secure == nil {
 		return
 	}
 	if !a.cfg.TLSEnabled {
+		return
+	}
+	if a.secure.locked {
+		// Run-mode restart: no password to report; ask the kernel for the
+		// registered one (delivered as SecureModeUnlock in the response).
+		req.SecureMode = &apiv1.SecureModeReport{Locked: true}
+		return
+	}
+	if a.secure.password == "" || a.secure.reported {
 		return
 	}
 	req.SecureMode = &apiv1.SecureModeReport{Password: a.secure.password}
@@ -135,68 +157,105 @@ func (a *Agent) attachSecureModeReport(req *apiv1.HeartbeatRequest) {
 
 // executeSecureModeCommand handles kernel-issued secure-mode instructions. The
 // kernel supplies the agent's current (or registered) ephemeral password in
-// Params["password"]; the command itself is HMAC-authenticated by
-// executePendingCommands before it reaches this dispatch.
+// Params["password"] for exit/rotate/unlock; the command itself is
+// HMAC-authenticated by executePendingCommands before it reaches this
+// dispatch. Unlock normally arrives via the heartbeat response instead
+// (unlockWithPassword) because a locked agent cannot verify a command yet.
 func (a *Agent) executeSecureModeCommand(cmd *apiv1.Command) {
 	if a.secure == nil || a.secure.vault == nil {
 		logger.WithComponent("agent").Warn("securemode command ignored: secure mode not active", "command_id", cmd.CommandId)
 		return
 	}
-	pw := cmd.Params["password"]
-	if pw == "" {
-		logger.WithComponent("agent").Warn("securemode command missing password", "command_id", cmd.CommandId)
-		return
-	}
 	switch cmd.Command {
-	case "securemode_exit":
-		// Decrypt .enc back to plaintext (kernel-requested mode exit) and
-		// clear the ephemeral secret — the agent is back in default mode.
-		if err := a.secure.vault.DecryptFile(pw); err != nil {
-			logger.WithComponent("agent").Error("securemode exit failed", "command_id", cmd.CommandId, "error", err)
+	case "securemode_enter":
+		// Kernel-requested entry into run mode (spec §8.2): force the
+		// first-start bootstrap (self-generate password + encrypt + report on
+		// the next heartbeat). Normally the agent self-enters on its first
+		// heartbeat; this lets the operator trigger it immediately and is a
+		// no-op once entered. No password is involved — the agent generates
+		// its own ephemeral secret.
+		if err := a.secureMaybeBootstrap(); err != nil {
+			logger.WithComponent("agent").Error("securemode enter failed", "command_id", cmd.CommandId, "error", err)
 			return
 		}
-		a.secure.password = ""
-		a.secure.reported = false
-		a.secure.locked = false
-		logger.WithComponent("agent").Info("secure mode exited — agent config restored to plaintext", "command_id", cmd.CommandId)
-	case "securemode_rotate":
-		// Re-encrypt with a fresh self-generated password and report it on the
-		// next heartbeat (spec §8.2 password rotation).
-		newPW, err := securemode.NewEphemeralPassword()
-		if err != nil {
-			logger.WithComponent("agent").Error("securemode rotate: generate new password failed", "command_id", cmd.CommandId, "error", err)
+		logger.WithComponent("agent").Info("secure mode entered (kernel-requested)", "command_id", cmd.CommandId)
+	case "securemode_exit", "securemode_rotate", "securemode_unlock":
+		pw := cmd.Params["password"]
+		if pw == "" {
+			logger.WithComponent("agent").Warn("securemode command missing password", "command_id", cmd.CommandId)
 			return
 		}
-		if err := a.secure.vault.RotatePassword(pw, newPW); err != nil {
-			logger.WithComponent("agent").Error("securemode rotate failed", "command_id", cmd.CommandId, "error", err)
-			return
+		switch cmd.Command {
+		case "securemode_exit":
+			// Decrypt .enc back to plaintext (kernel-requested mode exit) and
+			// clear the ephemeral secret — the agent is back in default mode.
+			if err := a.secure.vault.DecryptFile(pw); err != nil {
+				logger.WithComponent("agent").Error("securemode exit failed", "command_id", cmd.CommandId, "error", err)
+				return
+			}
+			a.secure.password = ""
+			a.secure.reported = false
+			a.secure.locked = false
+			logger.WithComponent("agent").Info("secure mode exited — agent config restored to plaintext", "command_id", cmd.CommandId)
+		case "securemode_rotate":
+			// Re-encrypt with a fresh self-generated password and report it on
+			// the next heartbeat (spec §8.2 password rotation).
+			newPW, err := securemode.NewEphemeralPassword()
+			if err != nil {
+				logger.WithComponent("agent").Error("securemode rotate: generate new password failed", "command_id", cmd.CommandId, "error", err)
+				return
+			}
+			if err := a.secure.vault.RotatePassword(pw, newPW); err != nil {
+				logger.WithComponent("agent").Error("securemode rotate failed", "command_id", cmd.CommandId, "error", err)
+				return
+			}
+			a.secure.password = newPW
+			a.secure.reported = false
+			logger.WithComponent("agent").Info("secure mode password rotated — new ephemeral password will be reported on the next heartbeat", "command_id", cmd.CommandId)
+		case "securemode_unlock":
+			// Legacy/pending-command path; the primary unlock channel is the
+			// heartbeat response (unlockWithPassword), which works even when
+			// the agent has no hmac_key yet.
+			if err := a.unlockWithPassword(pw); err != nil {
+				logger.WithComponent("agent").Error("securemode unlock failed", "command_id", cmd.CommandId, "error", err)
+				return
+			}
+			logger.WithComponent("agent").Info("secure mode unlocked — protected config reloaded", "command_id", cmd.CommandId)
 		}
-		a.secure.password = newPW
-		a.secure.reported = false
-		logger.WithComponent("agent").Info("secure mode password rotated — new ephemeral password will be reported on the next heartbeat", "command_id", cmd.CommandId)
-	case "securemode_unlock":
-		// Run-mode restart: the kernel issues the registered password; the
-		// agent decrypts in memory and RELOADS the protected config so
-		// subsequent heartbeats carry the correct check set (Ruling 2).
-		plain, err := a.secure.vault.LoadCiphertext(pw)
-		if err != nil {
-			logger.WithComponent("agent").Error("securemode unlock failed", "command_id", cmd.CommandId, "error", err)
-			return
-		}
-		a.secure.password = pw
-		a.secure.locked = false
-		a.secure.reported = false
-		a.reloadProtectedConfig(plain)
-		logger.WithComponent("agent").Info("secure mode unlocked — protected config reloaded", "command_id", cmd.CommandId)
 	default:
 		logger.WithComponent("agent").Warn("unknown securemode command", "command_id", cmd.CommandId, "command", cmd.Command)
 	}
 }
 
+// unlockWithPassword unlocks the agent with the kernel-issued registered
+// password (received over the authenticated mTLS heartbeat channel, review
+// I-1) and reloads the protected config — including hmac_key — so subsequent
+// pending commands (exit/rotate) pass HMAC verification (review I-2). A
+// no-op when the agent is not locked.
+func (a *Agent) unlockWithPassword(pw string) error {
+	if a.secure == nil || !a.secure.locked {
+		return nil
+	}
+	plain, err := a.secure.vault.LoadCiphertext(pw)
+	if err != nil {
+		return fmt.Errorf("secure mode unlock: %w", err)
+	}
+	a.secure.password = pw
+	a.secure.locked = false
+	a.secure.reported = false
+	a.reloadProtectedConfig(plain)
+	logger.WithComponent("agent").Info("secure mode unlocked — protected config reloaded")
+	return nil
+}
+
 // reloadProtectedConfig re-derives check-affecting configuration (user checks
 // + delta overrides) from agent.ini content after an unlock, so subsequent
-// heartbeats carry the correct check set. Timing/address fields are NOT
-// re-applied mid-run — they take effect on the next restart.
+// heartbeats carry the correct check set. It also restores hmac_key from the
+// protected [agent] section (review I-2): a locked restart has no plaintext,
+// so without this every pending command — including exit/rotate — would be
+// rejected by verifyCommandSignature and the agent would stay locked.
+// Timing/address fields are NOT re-applied mid-run — they take effect on the
+// next restart.
 func (a *Agent) reloadProtectedConfig(plain string) {
 	if plain == "" {
 		return
@@ -210,7 +269,39 @@ func (a *Agent) reloadProtectedConfig(plain string) {
 	defer a.cfgMu.Unlock()
 	a.cfg.UserCheckItems = config.ParseUserChecks(full.AdapterConfig)
 	a.cfg.CheckDeltas = full.CheckDeltas
+	// The [agent] section is not part of AdapterConfig; parse it directly for
+	// hmac_key (mirrors cmd/agent main.go loadConfigFile). Restoring it makes
+	// the post-unlock agent behave exactly like a plaintext startup, where
+	// the config value wins over the ASSCOR_HMAC_KEY env fallback.
+	if hk := parseAgentSectionValue(plain, "hmac_key"); hk != "" {
+		a.cfg.HMACKey = hk
+		a.hmacKeyConfigured = true
+	}
 	a.checkers = buildAgentCheckers(a.cfg, a.syncedChecks)
 	logger.WithComponent("agent").Info("securemode config reloaded",
 		"user_checks", len(a.cfg.UserCheckItems), "delta_overrides", len(a.cfg.CheckDeltas))
+}
+
+// parseAgentSectionValue extracts a key's value from the [agent] section of
+// an agent.ini-style text (mirrors cmd/agent main.go loadConfigFile's section
+// parser). Returns "" when the key is absent.
+func parseAgentSectionValue(plain, key string) string {
+	section := ""
+	for _, line := range strings.Split(plain, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section = strings.TrimSpace(line[1 : len(line)-1])
+			continue
+		}
+		if section != "agent" {
+			continue
+		}
+		if eq := strings.IndexByte(line, '='); eq > 0 && strings.TrimSpace(line[:eq]) == key {
+			return strings.TrimSpace(line[eq+1:])
+		}
+	}
+	return ""
 }

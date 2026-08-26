@@ -251,20 +251,40 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		s.heartbeat.RecordHeartbeat(req.HostId)
 	}
 
-	// Secure Mode: agent ephemeral-password reporting (kernel-managed, spec
-	// §10.1). The fingerprint comes from the mTLS transport layer — a forged
-	// agent_id with an unknown/mismatched fingerprint was already rejected by
-	// VerifyAgentCert above. An EMPTY fingerprint (no mTLS, development) cannot
-	// be keyed, so the report is skipped with a warning instead of failing the
-	// heartbeat (the agent would otherwise retry forever).
-	if s.secureMode != nil && req.SecureMode != nil && req.SecureMode.Password != "" {
+	// Secure Mode: agent ephemeral-password reporting AND locked-agent unlock
+	// (kernel-managed, spec §10.1). The fingerprint comes from the mTLS
+	// transport layer — a forged agent_id with an unknown/mismatched
+	// fingerprint was already rejected by VerifyAgentCert above. An EMPTY
+	// fingerprint (no mTLS, development) cannot be keyed, so both paths are
+	// skipped with a warning instead of failing the heartbeat (the agent
+	// would otherwise retry forever).
+	var secureModeUnlock *apiv1.SecureModeUnlock
+	if s.secureMode != nil && req.SecureMode != nil {
 		fp := kernel.PeerCertFingerprintFromContext(ctx)
-		if fp == "" {
-			logger.WithComponent("identity").Warn("secure-mode registration skipped: no mTLS fingerprint (development mode)")
-		} else if err := s.secureMode.Secrets.Register(fp, req.HostId, req.SecureMode.Password); err != nil {
-			logger.WithComponent("identity").Warn("secure-mode registration rejected",
-				"host_id", req.HostId, "error", err.Error())
-			return &apiv1.HeartbeatResponse{Ok: false}, fmt.Errorf("secure mode registration rejected: %v", err)
+		switch {
+		case req.SecureMode.Locked:
+			// Run-mode restart: the agent declares itself locked (it has no
+			// password to report and no hmac_key to verify a pending command
+			// with — review I-1/I-2). Hand the registered password back over
+			// the already-authenticated mTLS heartbeat channel.
+			if fp == "" {
+				logger.WithComponent("identity").Warn("secure-mode unlock skipped: no mTLS fingerprint (development mode)")
+				break
+			}
+			if sec, ok := s.secureMode.Secrets.Lookup(fp); ok && sec.Password != "" {
+				secureModeUnlock = &apiv1.SecureModeUnlock{Password: sec.Password}
+				logger.WithComponent("identity").Info("secure-mode unlock issued to locked agent", "host_id", req.HostId)
+			} else {
+				logger.WithComponent("identity").Warn("secure-mode unlock skipped: no registered secret for this fingerprint", "host_id", req.HostId)
+			}
+		case req.SecureMode.Password != "":
+			if fp == "" {
+				logger.WithComponent("identity").Warn("secure-mode registration skipped: no mTLS fingerprint (development mode)")
+			} else if err := s.secureMode.Secrets.Register(fp, req.HostId, req.SecureMode.Password); err != nil {
+				logger.WithComponent("identity").Warn("secure-mode registration rejected",
+					"host_id", req.HostId, "error", err.Error())
+				return &apiv1.HeartbeatResponse{Ok: false}, fmt.Errorf("secure mode registration rejected: %v", err)
+			}
 		}
 	}
 
@@ -380,6 +400,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		ThreatCoefficient: threatCoeff,
 		PendingCommands:   pendingCmds,
 		CheckConfig:       s.buildAgentCheckConfig(),
+		SecureModeUnlock:  secureModeUnlock,
 	}, nil
 }
 

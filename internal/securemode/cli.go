@@ -7,11 +7,20 @@ import (
 	"strings"
 )
 
+// AgentCommander is the kernel-side interface for enqueueing instructions to
+// agents. It is satisfied by kernel.CommanderInterface and wired by
+// cmd/kernel; defined here so ModeCLI stays free of internal/cli and
+// internal/kernel imports (no dependency cycle, review I-1).
+type AgentCommander interface {
+	EnqueueCommand(hostID, action string, params map[string]string) string
+}
+
 // ModeCLI is the kernel-side CLI adapter for mode/config commands. It stays
 // free of any internal/cli import to avoid a dependency cycle; internal/cli
 // wires it via handler functions (Task 10).
 type ModeCLI struct {
-	Ctrl *Controller
+	Ctrl      *Controller
+	Commander AgentCommander
 }
 
 // NewModeCLI creates the kernel-side CLI adapter for a controller. A nil
@@ -22,6 +31,13 @@ func NewModeCLI(ctrl *Controller) *ModeCLI {
 		return nil
 	}
 	return &ModeCLI{Ctrl: ctrl}
+}
+
+// SetCommander wires the commander channel used by `mode agent <id>
+// enter|exit|rotate-password` to enqueue real instructions (review I-1).
+// Without it those actions fail loudly instead of pretending to dispatch.
+func (m *ModeCLI) SetCommander(c AgentCommander) {
+	m.Commander = c
 }
 
 // HandleMode implements the `mode` command family:
@@ -132,10 +148,30 @@ func (m *ModeCLI) agent(args []string, params map[string]string) (string, error)
 		}
 		return fmt.Sprintf("agent %s: not registered\n", agentID), nil
 	case "enter", "exit", "rotate-password":
-		// Actual agent instruction dispatch happens via CommanderInterface
-		// (Task 11). This CLI surface returns the intended action for the
-		// wiring layer to enqueue.
-		return fmt.Sprintf("agent %s: %s instruction prepared (dispatch via commander)\n", agentID, action), nil
+		// Real instruction dispatch (review I-1): enqueue the agent action via
+		// the commander channel. exit/rotate need the registered password (the
+		// agent decrypts/re-encrypts with it); enter is self-driven (the agent
+		// generates its own ephemeral password) so no params are attached.
+		if m.Commander == nil {
+			return "", fmt.Errorf("mode agent: commander not available (commander build tag off?)")
+		}
+		// CLI action vocabulary (enter/exit/rotate-password) maps to the
+		// agent-side command names (securemode_enter/exit/rotate).
+		cmdName := map[string]string{
+			"enter":           "securemode_enter",
+			"exit":            "securemode_exit",
+			"rotate-password": "securemode_rotate",
+		}[action]
+		if action == "enter" {
+			cmdID := m.Commander.EnqueueCommand(agentID, cmdName, nil)
+			return fmt.Sprintf("agent %s: %s enqueued (command_id=%s)\n", agentID, cmdName, cmdID), nil
+		}
+		sec, ok := m.Ctrl.Secrets.LookupByAgent(agentID)
+		if !ok || sec.Password == "" {
+			return "", fmt.Errorf("mode agent: agent %q has no registered unlock secret", agentID)
+		}
+		cmdID := m.Commander.EnqueueCommand(agentID, cmdName, map[string]string{"password": sec.Password})
+		return fmt.Sprintf("agent %s: %s enqueued (command_id=%s)\n", agentID, cmdName, cmdID), nil
 	default:
 		return "", fmt.Errorf("mode agent: unknown action %q", action)
 	}

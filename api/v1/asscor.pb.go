@@ -40,6 +40,21 @@ type HeartbeatRequest struct {
 // an identity here; the kernel keys the registration on the mTLS fingerprint.
 type SecureModeReport struct {
 	Password string `json:"password"`
+	// Locked declares a run-mode restart: the agent has no password (its
+	// config is .enc-protected and unreadable) and asks the kernel to hand
+	// back the registered unlock secret. Locked agents carry no Password; the
+	// kernel replies with SecureModeUnlock (review I-1/I-2 — a locked agent
+	// has no hmac_key, so unlock cannot ride the HMAC-protected command
+	// channel).
+	Locked bool `json:"locked,omitempty"`
+}
+
+// SecureModeUnlock is the kernel → agent unlock delivery. The password is the
+// agent's registered ephemeral unlock secret, returned over the already
+// authenticated mTLS heartbeat channel (spec §10.1) — the same secret the
+// agent reported on its first run (review I-1).
+type SecureModeUnlock struct {
+	Password string `json:"password"`
 }
 
 // NetworkInfo carries the agent's network topology data for real-edge risk diffusion.
@@ -61,6 +76,11 @@ type HeartbeatResponse struct {
 	// in-memory, making the kernel config file the single source of truth for
 	// check definitions; the local agent.ini stays a minimal bootstrap file.
 	CheckConfig *AgentCheckConfig `json:"check_config,omitempty"`
+	// SecureModeUnlock carries the registered ephemeral password to a locked
+	// agent (run-mode restart) so it can unlock over the authenticated mTLS
+	// heartbeat channel without pending-command HMAC (review I-1/I-2). Nil
+	// when the agent is not locked or has no registered secret.
+	SecureModeUnlock *SecureModeUnlock `json:"secure_mode_unlock,omitempty"`
 }
 
 // AgentCheckConfig is the check-item configuration the kernel syncs to agents.

@@ -69,6 +69,13 @@ type AgentConfig struct {
 	// builtin and user checkers at construction (kernel-side equivalent:
 	// config.ini [check_deltas]).
 	CheckDeltas map[string]float64
+	// ExplicitFlags records which command-line flags were explicitly set
+	// (flag.Visit), so secure-mode bootstrap recovery can distinguish "flag
+	// default applied by main.go" from "operator really set this" (review
+	// I-3: default-value sentinels like "" or false are ambiguous because
+	// main.go applies flag defaults unconditionally). Populated by
+	// cmd/agent/main.go; nil in tests/library use.
+	ExplicitFlags map[string]bool
 }
 
 func DefaultConfig() AgentConfig {
@@ -582,6 +589,17 @@ func (a *Agent) heartbeatCycle() error {
 		logger.WithComponent("agent").Warn("heartbeat not ok, re-registering")
 		a.sessionID = ""
 		return fmt.Errorf("heartbeat rejected by kernel")
+	}
+
+	// Secure mode (review I-1): a locked agent (run-mode restart) receives
+	// the kernel-issued registered password over the authenticated mTLS
+	// heartbeat channel. It has no hmac_key yet, so unlock cannot ride the
+	// HMAC-protected pending-command path. A failure leaves the agent locked
+	// and the next heartbeat retries.
+	if a.secure != nil && a.secure.locked && heartbeatResp.SecureModeUnlock != nil && heartbeatResp.SecureModeUnlock.Password != "" {
+		if err := a.unlockWithPassword(heartbeatResp.SecureModeUnlock.Password); err != nil {
+			logger.WithComponent("agent").Error("secure mode unlock via heartbeat failed — staying locked", "error", err)
+		}
 	}
 
 	// Secure mode: the kernel accepted this heartbeat, so the ephemeral
@@ -1497,10 +1515,11 @@ func (a *Agent) runCommand(cmd *apiv1.Command) {
 	case "isolate_host", "deisolate_host":
 		a.delegateRootCommand(cmd)
 		return
-	case "securemode_exit", "securemode_rotate", "securemode_unlock":
+	case "securemode_exit", "securemode_rotate", "securemode_unlock", "securemode_enter":
 		// Kernel-issued secure-mode instructions (spec §8.2). The password
-		// travels in Params and the command is HMAC-authenticated before this
-		// dispatch; these never touch the shell allowlist.
+		// travels in Params (exit/rotate/unlock) and the command is
+		// HMAC-authenticated before this dispatch; these never touch the
+		// shell allowlist.
 		a.executeSecureModeCommand(cmd)
 		return
 	}

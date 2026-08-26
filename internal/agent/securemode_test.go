@@ -146,12 +146,14 @@ func TestAttachSecureModeReport(t *testing.T) {
 	if req2.SecureMode != nil {
 		t.Error("password must not be re-reported after success")
 	}
-	// Locked restart: no report until unlocked.
+	// Locked restart: declares the locked state with NO password so the
+	// kernel can issue the registered password back in the response (review
+	// I-1 — a locked agent has no hmac_key for the command channel).
 	a.secure = &secureState{vault: v, locked: true, password: pw}
 	req3 := &apiv1.HeartbeatRequest{}
 	a.attachSecureModeReport(req3)
-	if req3.SecureMode != nil {
-		t.Error("locked agent must not report a password")
+	if req3.SecureMode == nil || !req3.SecureMode.Locked || req3.SecureMode.Password != "" {
+		t.Errorf("locked agent must declare Locked with no password, got %+v", req3.SecureMode)
 	}
 	// No password (post-exit): no report.
 	a.secure = &secureState{vault: v}
@@ -361,4 +363,178 @@ func TestExecuteSecureModeCommandNoSecureState(t *testing.T) {
 		Command:   "securemode_exit",
 		Params:    map[string]string{"password": "pw"},
 	})
+}
+
+// TestUnlockWithPasswordViaHeartbeat (review I-1): the kernel delivers the
+// registered password in the heartbeat response; the agent unlocks and
+// reloads the protected config (Ruling 2) — the same reload the pending-
+// command unlock path performs.
+func TestUnlockWithPasswordViaHeartbeat(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	if err := v.EncryptFile("registered-pw"); err != nil {
+		t.Fatal(err)
+	}
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if !a.secure.locked {
+		t.Fatal("restart agent must start locked")
+	}
+	baseline := len(a.checkers)
+	if err := a.unlockWithPassword("registered-pw"); err != nil {
+		t.Fatalf("unlockWithPassword: %v", err)
+	}
+	if a.secure.locked || a.secure.password != "registered-pw" {
+		t.Errorf("after unlock: locked=%v password=%q, want unlocked with registered-pw", a.secure.locked, a.secure.password)
+	}
+	found := false
+	for _, c := range a.checkers {
+		if c.ID == "CU-MYSQL-001" {
+			found = true
+		}
+	}
+	if len(a.checkers) != baseline+1 || !found {
+		t.Errorf("protected user check must be reloaded after unlock (checkers=%d found=%v)", len(a.checkers), found)
+	}
+}
+
+// TestUnlockWithPasswordWrongFails: a wrong kernel-issued password leaves the
+// agent locked so the next heartbeat retries.
+func TestUnlockWithPasswordWrongFails(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	if err := v.EncryptFile("registered-pw"); err != nil {
+		t.Fatal(err)
+	}
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.unlockWithPassword("wrong"); err == nil {
+		t.Fatal("wrong password must fail")
+	}
+	if !a.secure.locked {
+		t.Error("agent must stay locked after a failed unlock")
+	}
+}
+
+// TestUnlockWithPasswordIdempotentNoop: calling the unlock path on an
+// already-unlocked agent is a no-op (no reload, no error).
+func TestUnlockWithPasswordIdempotentNoop(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.secureMaybeBootstrap(); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.unlockWithPassword("whatever"); err != nil {
+		t.Errorf("unlock on a non-locked agent must be a no-op, got %v", err)
+	}
+}
+
+// TestReloadProtectedConfigRestoresHMACKey (review I-2): the [agent] hmac_key
+// lives in the PROTECTED section — a locked restart has no plaintext, so
+// every pending command (including unlock) was rejected by verifyCommandSignature.
+// After unlock the reload must restore hmac_key so subsequent securemode_exit /
+// securemode_rotate commands pass HMAC verification.
+func TestReloadProtectedConfigRestoresHMACKey(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "agent.ini")
+	content := "[bootstrap]\nkernel_addr = 10.0.0.1:50051\n\n[agent]\nheartbeat_sec = 30\nhmac_key = shared-secret-abc\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	v := &securemode.Vault{DataDir: dir, ConfigPath: path, BootstrapHeader: "[bootstrap]"}
+	if err := v.EncryptFile("registered-pw"); err != nil {
+		t.Fatal(err)
+	}
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if a.cfg.HMACKey != "" {
+		t.Fatalf("locked agent must start with no hmac_key, got %q", a.cfg.HMACKey)
+	}
+	if err := a.unlockWithPassword("registered-pw"); err != nil {
+		t.Fatal(err)
+	}
+	if a.cfg.HMACKey != "shared-secret-abc" {
+		t.Errorf("hmac_key must be restored from the protected config, got %q", a.cfg.HMACKey)
+	}
+}
+
+// TestApplyBootstrapExplicitFlagsWin (review I-3): bootstrap recovery only
+// fills values whose flag was NOT explicitly set. The old default-value
+// sentinel guards (CertDir == "" / !TLSEnabled) were dead code because
+// main.go applies the flag defaults unconditionally — explicit-flag tracking
+// is the only reliable "was it really set" signal.
+func TestApplyBootstrapExplicitFlagsWin(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "agent.ini")
+	content := "[bootstrap]\nkernel_addr = 10.0.0.9:50051\ncert_dir = /etc/asscor/certs\ntls_enabled = false\ntls_skip_verify = true\n\n[agent]\nheartbeat_sec = 30\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	v := &securemode.Vault{DataDir: dir, ConfigPath: path, BootstrapHeader: "[bootstrap]"}
+	if err := v.EncryptFile("pw"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate main.go: flag defaults applied, operator explicitly passed
+	// -cert-dir and -tls.
+	cfg := DefaultConfig()
+	cfg.KernelAddr = "127.0.0.1:50051" // flag default, NOT explicitly set
+	cfg.CertDir = "certs"              // flag default, explicitly overridden
+	cfg.TLSEnabled = true              // DefaultConfig, explicitly overridden
+	cfg.ExplicitFlags = map[string]bool{"cert-dir": true, "tls": true}
+	a := NewAgent(cfg)
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if a.cfg.CertDir != "certs" {
+		t.Errorf("explicit -cert-dir must win over the bootstrap cert_dir, got %q", a.cfg.CertDir)
+	}
+	if !a.cfg.TLSEnabled {
+		t.Error("explicit -tls must win over bootstrap tls_enabled=false")
+	}
+	if a.cfg.KernelAddr != "10.0.0.9:50051" {
+		t.Errorf("kernel_addr (flag not set) must be restored from bootstrap, got %q", a.cfg.KernelAddr)
+	}
+	if !a.cfg.TLSSkipVerify {
+		t.Error("tls_skip_verify (flag not set) must be restored from bootstrap")
+	}
+}
+
+// TestExecuteSecureModeEnter (spec §8.2 / CLI): a kernel-issued enter forces
+// the first-start bootstrap (self-generate password + encrypt) immediately;
+// idempotent when the agent already entered run mode.
+func TestExecuteSecureModeEnter(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	a.executeSecureModeCommand(&apiv1.Command{
+		CommandId: "cmd-enter",
+		Command:   "securemode_enter",
+		Params:    map[string]string{},
+	})
+	if len(a.secure.password) != 64 {
+		t.Errorf("enter must bootstrap a fresh ephemeral password, got %q", a.secure.password)
+	}
+	if v.HasPlaintext() || !v.IsEncrypted() {
+		t.Fatalf("enter must encrypt the config: plaintext=%v enc=%v", v.HasPlaintext(), v.IsEncrypted())
+	}
+	// Idempotent second enter.
+	pw := a.secure.password
+	a.executeSecureModeCommand(&apiv1.Command{
+		CommandId: "cmd-enter-2",
+		Command:   "securemode_enter",
+		Params:    map[string]string{},
+	})
+	if a.secure.password != pw {
+		t.Error("second enter must be a no-op")
+	}
 }
