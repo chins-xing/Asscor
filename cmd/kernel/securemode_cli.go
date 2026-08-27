@@ -36,9 +36,9 @@ func registerSecureModeCLI(cliModule *cli.CLIModule, mcli *securemode.ModeCLI) e
 			{Name: "subcommand", Description: "status, enter, exit, unlock, set-password, agent", Required: true},
 		},
 		Options: []cli.CommandOption{
-			{Name: "password", Description: "Run-mode password (required for enter/exit/unlock)"},
-			{Name: "old", Description: "Current password (set-password)"},
-			{Name: "new", Description: "New password (set-password)"},
+			{Name: "password", Description: "Run-mode password (required for enter/exit/unlock; when omitted, asscor-cli prompts interactively without echo)"},
+			{Name: "old", Description: "Current password (set-password; prompted interactively when omitted)"},
+			{Name: "new", Description: "New password (set-password; prompted interactively when omitted)"},
 		},
 		Examples: []string{
 			"mode status",

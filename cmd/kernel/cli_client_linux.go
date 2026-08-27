@@ -47,6 +47,35 @@ func restoreTerm(fd uintptr, state *termios) {
 	syscall.Syscall(syscall.SYS_IOCTL, fd, tcsets, uintptr(unsafe.Pointer(state)))
 }
 
+// readSecretLine reads a line from a raw-mode TTY without echoing it back
+// (deferred minor #9). makeRaw already cleared the terminal's ECHO bit, so
+// nothing is echoed automatically; this function additionally never writes
+// the typed characters to stdout (unlike the main prompt loop, which echoes
+// printable input). Backspace is honored for typing corrections.
+func readSecretLine(tty *os.File) (string, error) {
+	var line []byte
+	buf := make([]byte, 1)
+	for {
+		n, err := tty.Read(buf)
+		if err != nil {
+			return "", err
+		}
+		if n == 0 {
+			continue
+		}
+		switch buf[0] {
+		case 0x0d, 0x0a:
+			return strings.TrimSpace(string(line)), nil
+		case 0x7f, 0x08:
+			if len(line) > 0 {
+				line = line[:len(line)-1]
+			}
+		default:
+			line = append(line, buf[0])
+		}
+	}
+}
+
 func runCLIClient(sockPath string) {
 	conn, err := net.Dial("unix", sockPath)
 	if err != nil {
@@ -137,6 +166,25 @@ func runCLIClient(sockPath string) {
 			}
 			if cmd == "" {
 				continue
+			}
+			// Deferred minor #9: the kernel side cannot prompt for a password
+			// (its stdin is the daemon's and socket sessions execute inside
+			// the kernel process), so the interactive no-echo prompt lives
+			// HERE, where the operator's TTY is. Raw mode already suppresses
+			// echo; readSecretLine simply never writes the typed characters
+			// back. Scripted (non-TTY) sessions are untouched: echoInput is
+			// false there, so the command is sent as typed and the kernel
+			// reports the missing --password itself.
+			if echoInput {
+				for _, flag := range needsSecretPrompt(cmd) {
+					fmt.Fprintf(os.Stdout, "\r\n%s: ", secretPromptLabel(flag))
+					pw, err := readSecretLine(tty)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "\r\npassword prompt failed: %v\r\n", err)
+						continue
+					}
+					cmd = spliceSecret(cmd, flag, pw)
+				}
 			}
 			if err := encoder.Encode(cmd); err != nil {
 				fmt.Fprintf(os.Stderr, "connection lost: %v\n", err)
