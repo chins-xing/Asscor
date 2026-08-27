@@ -383,6 +383,12 @@ func TestVaultClassify(t *testing.T) {
 // plaintext is left untouched, instead of proceeding to delete it without a
 // durable prior state.
 func TestVaultEncryptFileSyncsPlaintextFirst(t *testing.T) {
+	// The test relies on 0444 blocking the plaintext fsync — root bypasses
+	// file permission checks and can still sync a read-only file, so this
+	// scenario is only reproducible as a non-root user.
+	if os.Geteuid() == 0 {
+		t.Skip("plaintext fsync failure is not reproducible as root (root bypasses 0444)")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.ini")
 	if err := os.WriteFile(path, []byte("[bootstrap]\naddr = x\n"), 0o600); err != nil {
