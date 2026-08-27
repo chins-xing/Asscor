@@ -96,6 +96,34 @@ func TestDecryptTamperedCiphertext(t *testing.T) {
 	}
 }
 
+// TestDecryptUnifiedErrorMessage (deferred minor #1): wrong password and
+// tampered ciphertext must yield the SAME error message so an attacker cannot
+// distinguish "wrong password" from "correct password, corrupted data" — a
+// password oracle. Format/header errors are unaffected: they never depend on
+// the password.
+func TestDecryptUnifiedErrorMessage(t *testing.T) {
+	enc, err := Encrypt([]byte("data"), "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, errWrong := Decrypt(enc, "wrong-password")
+	if errWrong == nil {
+		t.Fatal("wrong password must fail")
+	}
+	tampered := append([]byte(nil), enc...)
+	tampered[len(tampered)-1] ^= 0xFF
+	_, errTampered := Decrypt(tampered, "pw")
+	if errTampered == nil {
+		t.Fatal("tampered ciphertext must fail")
+	}
+	if errWrong.Error() != errTampered.Error() {
+		t.Errorf("messages must not differentiate wrong password vs corrupted data:\nwrong-password: %v\ntampered:      %v", errWrong, errTampered)
+	}
+	if !strings.Contains(errWrong.Error(), "wrong password or corrupted data") {
+		t.Errorf("unified message should be generic, got: %v", errWrong)
+	}
+}
+
 func TestDecryptBadMagic(t *testing.T) {
 	enc, err := Encrypt([]byte("data"), "pw")
 	if err != nil {

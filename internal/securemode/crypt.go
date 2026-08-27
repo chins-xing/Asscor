@@ -177,7 +177,12 @@ func Decrypt(data []byte, password string) ([]byte, error) {
 	}
 	dek, err := gcm.Open(nil, h.Nonce, h.Envelope, nil)
 	if err != nil {
-		return nil, errors.New("password incorrect or envelope corrupted")
+		// Deferred minor #1: a generic message for every password-dependent
+		// failure — wrong password and corrupted data must be
+		// indistinguishable, or an attacker could use the difference as a
+		// password oracle. Format/header errors above stay specific: they
+		// never depend on the password.
+		return nil, errors.New("decryption failed: wrong password or corrupted data")
 	}
 	defer zeroize(dek)
 
@@ -197,7 +202,9 @@ func Decrypt(data []byte, password string) ([]byte, error) {
 	ct := payload[gcm2.NonceSize():]
 	plain, err := gcm2.Open(nil, nonce, ct, nil)
 	if err != nil {
-		return nil, errors.New("ciphertext authentication failed (tampered?)")
+		// Deferred minor #1: same generic message as the wrong-password path —
+		// see the comment above the envelope decryption failure.
+		return nil, errors.New("decryption failed: wrong password or corrupted data")
 	}
 	return plain, nil
 }
