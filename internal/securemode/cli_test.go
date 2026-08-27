@@ -1,6 +1,8 @@
 package securemode
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -436,5 +438,84 @@ func TestModeCLIAgentNoCommander(t *testing.T) {
 	m := &ModeCLI{Ctrl: c} // Commander nil
 	if _, err := m.HandleMode("agent", []string{"host-a", "exit"}, nil); err == nil {
 		t.Fatal("agent action without a commander must fail")
+	}
+}
+
+// TestApplyKeyValueSectionScope (review M6): a key that appears in multiple
+// sections must only be modified inside the requested section; without a
+// section only the FIRST match is modified (the review ruling — no more
+// rewriting every occurrence across all sections).
+func TestApplyKeyValueSectionScope(t *testing.T) {
+	content := "[bootstrap]\naddr = x\n\n[weights]\naddr = y\n"
+
+	// No section: first match (bootstrap) changes, weights untouched.
+	out, err := applyKeyValue(content, "addr", "1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "[bootstrap]\naddr = 1") {
+		t.Errorf("no-section must change the first match in bootstrap, got:\n%s", out)
+	}
+	if !strings.Contains(out, "[weights]\naddr = y") {
+		t.Errorf("no-section must leave the weights addr untouched, got:\n%s", out)
+	}
+
+	// --section weights: only the weights key changes.
+	out, err = applyKeyValue(content, "addr", "2", "weights")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "[bootstrap]\naddr = x") {
+		t.Errorf("--section weights must leave bootstrap untouched, got:\n%s", out)
+	}
+	if !strings.Contains(out, "[weights]\naddr = 2") {
+		t.Errorf("--section weights must change the weights addr, got:\n%s", out)
+	}
+
+	// --section bootstrap: only bootstrap changes.
+	out, err = applyKeyValue(content, "addr", "3", "bootstrap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "[bootstrap]\naddr = 3") || !strings.Contains(out, "[weights]\naddr = y") {
+		t.Errorf("--section bootstrap mismatch, got:\n%s", out)
+	}
+
+	// Key absent from the requested section: error.
+	if _, err := applyKeyValue(content, "addr", "4", "comms"); err == nil {
+		t.Error("key absent from the requested section must error")
+	}
+	// Key absent everywhere: error.
+	if _, err := applyKeyValue(content, "nope", "4", ""); err == nil {
+		t.Error("unknown key must error")
+	}
+}
+
+// TestModeCLIConfigSetSectionScope: `config-set key value --section X` only
+// modifies the key inside section X of the run-mode guard.
+func TestModeCLIConfigSetSectionScope(t *testing.T) {
+	dir := t.TempDir()
+	v := &Vault{
+		DataDir:         dir,
+		ConfigPath:      filepath.Join(dir, "config.ini"),
+		BootstrapHeader: "[bootstrap]",
+	}
+	if err := os.WriteFile(v.ConfigPath, []byte("[bootstrap]\naddr = x\n\n[weights]\naddr = y\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := NewController(dir, []*Vault{v})
+	if err := c.EnterRun("pw"); err != nil {
+		t.Fatal(err)
+	}
+	m := &ModeCLI{Ctrl: c}
+	if _, err := m.HandleConfigSet([]string{"addr", "85"}, map[string]string{"password": "pw", "temp": "true", "section": "weights"}); err != nil {
+		t.Fatal(err)
+	}
+	snap := string(m.Ctrl.Guard.Snapshot())
+	if !strings.Contains(snap, "[weights]\naddr = 85") {
+		t.Errorf("guard must have weights addr=85, got:\n%s", snap)
+	}
+	if !strings.Contains(snap, "[bootstrap]\naddr = x") {
+		t.Errorf("guard bootstrap addr must stay x, got:\n%s", snap)
 	}
 }

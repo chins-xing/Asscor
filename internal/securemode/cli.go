@@ -271,7 +271,7 @@ func (m *ModeCLI) HandleConfigSet(args []string, flags map[string]string) (strin
 		}
 		snap = []byte(plain)
 	}
-	updated, err := applyKeyValue(string(snap), key, value)
+	updated, err := applyKeyValue(string(snap), key, value, flags["section"])
 	if err != nil {
 		return "", err
 	}
@@ -352,27 +352,45 @@ func osWriteFileAll(path string, content []byte, perm os.FileMode) error {
 }
 
 // applyKeyValue replaces `key = <old>` in an INI-like text with the new value.
-// Only existing keys are rewritten; an unknown key is an error (never silently
-// appended into an arbitrary section).
-func applyKeyValue(content, key, value string) (string, error) {
+// Only existing keys are rewritten; an unknown key (or a key absent from the
+// requested section) is an error — never silently appended. section scopes the
+// search to one [section] header (config-set --section, review M6): a key that
+// appears in multiple sections is then only modified inside that section, and
+// without a section only the FIRST match anywhere is modified (the review
+// ruling — the old behavior rewrote every occurrence across all sections,
+// which could corrupt unrelated [bootstrap]/[weights] keys with the same name).
+func applyKeyValue(content, key, value, section string) (string, error) {
 	lines := strings.Split(content, "\n")
+	curSection := ""
 	found := false
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "[") {
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			curSection = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+			continue
+		}
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
 		eq := strings.Index(trimmed, "=")
 		if eq < 0 {
 			continue
 		}
-		if strings.TrimSpace(trimmed[:eq]) == key {
-			indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-			lines[i] = indent + key + " = " + value
-			found = true
+		if strings.TrimSpace(trimmed[:eq]) != key {
+			continue
 		}
+		if section != "" && curSection != section {
+			continue
+		}
+		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+		lines[i] = indent + key + " = " + value
+		found = true
+		break
 	}
 	if !found {
+		if section != "" {
+			return "", fmt.Errorf("config set: key %q not found in section %q", key, section)
+		}
 		return "", fmt.Errorf("config set: key %q not found", key)
 	}
 	return strings.Join(lines, "\n"), nil

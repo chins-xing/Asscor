@@ -86,12 +86,14 @@ func registerSecureModeCLI(cliModule *cli.CLIModule, mcli *securemode.ModeCLI) e
 		},
 		Options: []cli.CommandOption{
 			{Name: "password", Description: "Run-mode password (required when in run mode)"},
+			{Name: "section", Description: "Only modify the key inside this [section] (default: first match anywhere)"},
 			{Name: "temp", Description: "Apply to in-memory config only (default)", IsBool: true},
 			{Name: "persist", Description: "Write to disk in the current mode's format", IsBool: true},
 		},
 		Examples: []string{
 			"config-set threshold 80 --persist",
 			"config-set interceptor.rate_limit_per_sec 100 --temp",
+			"config-set addr 10.0.0.5 --persist --section bootstrap",
 		},
 	}, func(ctx *cli.CommandContext) *cli.CommandResult {
 		// --persist / --temp may arrive as a bare switch (Flags) or as
@@ -106,6 +108,9 @@ func registerSecureModeCLI(cliModule *cli.CLIModule, mcli *securemode.ModeCLI) e
 		}
 		if pw := ctx.Options["password"]; pw != "" {
 			flags["password"] = pw
+		}
+		if s := ctx.Options["section"]; s != "" {
+			flags["section"] = s
 		}
 		out, err := mcli.HandleConfigSet(ctx.Args, flags)
 		if err != nil {
