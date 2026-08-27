@@ -54,6 +54,13 @@ func (v *Vault) encPath() string { return v.ConfigPath + ".enc" }
 // The payload layout is [bootstrap plaintext]["\n\n"][encrypted rest] when a
 // bootstrap section is configured, or pure ciphertext otherwise.
 func (v *Vault) EncryptFile(password string) error {
+	// spec §6: fsync the plaintext BEFORE encrypting+deleting it (review M2),
+	// so a crash cannot lose both the plaintext and the .enc (the plaintext is
+	// removed in stage 3 below). If the plaintext cannot be synced — e.g. it
+	// is not writable — fail closed before anything is encrypted or deleted.
+	if err := syncFile(v.ConfigPath); err != nil {
+		return fmt.Errorf("sync plaintext config: %w", err)
+	}
 	plain, err := os.ReadFile(v.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("read plaintext config: %w", err)

@@ -348,3 +348,36 @@ func TestVaultReencryptOverwriteFailureLeavesEnc(t *testing.T) {
 		t.Errorf("old password must keep working after failed overwrite: %v", err)
 	}
 }
+
+// TestVaultEncryptFileSyncsPlaintextFirst (review M2, spec §6): EncryptFile
+// must fsync the plaintext BEFORE encrypting+deleting it, so a crash cannot
+// lose both the plaintext and the .enc. Observable contract: a plaintext that
+// cannot be synced (read-only) fails CLOSED — no .enc appears and the
+// plaintext is left untouched, instead of proceeding to delete it without a
+// durable prior state.
+func TestVaultEncryptFileSyncsPlaintextFirst(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.ini")
+	if err := os.WriteFile(path, []byte("[bootstrap]\naddr = x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	// Restore write access so TempDir cleanup can remove the file.
+	t.Cleanup(func() { os.Chmod(path, 0o600) })
+	v := &Vault{ConfigPath: path}
+	err := v.EncryptFile("pw")
+	if err == nil {
+		t.Fatal("EncryptFile must fail when the plaintext cannot be fsynced")
+	}
+	if !strings.Contains(err.Error(), "sync") {
+		t.Errorf("error should mention the plaintext sync, got: %v", err)
+	}
+	if _, statErr := os.Stat(path); statErr != nil {
+		t.Error("plaintext must be left untouched on sync failure")
+	}
+	if _, statErr := os.Stat(path + ".enc"); statErr == nil {
+		t.Error(".enc must not be created when the plaintext sync fails")
+	}
+}
