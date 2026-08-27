@@ -122,6 +122,35 @@ func TestModeCLIStatus(t *testing.T) {
 	}
 }
 
+// TestModeCLIStatusShowsFingerprint (review M5): `mode status` must display
+// the truncated certificate fingerprint (the registry's PRIMARY KEY) with the
+// FULL agent_id — previously it truncated the agent_id and never showed the
+// fingerprint. The registered secret must never appear in the output.
+func TestModeCLIStatusShowsFingerprint(t *testing.T) {
+	c := newTestController(t)
+	if err := c.EnterRun("pw"); err != nil {
+		t.Fatal(err)
+	}
+	fp := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	if err := c.Secrets.Register(fp, "host-a", "super-secret-pw"); err != nil {
+		t.Fatal(err)
+	}
+	m := &ModeCLI{Ctrl: c}
+	out, err := m.HandleMode("status", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, truncateFP(fp)) {
+		t.Errorf("status must show the truncated fingerprint %q, got:\n%s", truncateFP(fp), out)
+	}
+	if !strings.Contains(out, "host-a") {
+		t.Errorf("status must show the full agent_id, got:\n%s", out)
+	}
+	if strings.Contains(out, "super-secret-pw") {
+		t.Errorf("status must never show the registered secret, got:\n%s", out)
+	}
+}
+
 func TestModeCLIExitWrongPassword(t *testing.T) {
 	m := newModeCLI(t)
 	_, err := m.HandleMode("exit", nil, map[string]string{"password": "wrong"})

@@ -105,6 +105,29 @@ func (r *SecretRegistry) List() []AgentSecret {
 	return out
 }
 
+// AgentSecretEntry is the display-only view of a registered agent: the
+// certificate-fingerprint PRIMARY KEY plus identity and timestamp — never the
+// secret itself (review M5: `mode status` must show the fingerprint the
+// registry is keyed on instead of a truncated agent_id).
+type AgentSecretEntry struct {
+	Fingerprint string
+	AgentID     string
+	UpdatedAt   time.Time
+}
+
+// ListEntries returns display entries (fingerprint + agent identity) without
+// exposing the secrets. Used by `mode status` (review M5). List() remains for
+// callers that need the full records.
+func (r *SecretRegistry) ListEntries() []AgentSecretEntry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]AgentSecretEntry, 0, len(r.entries))
+	for fp, s := range r.entries {
+		out = append(out, AgentSecretEntry{Fingerprint: fp, AgentID: s.AgentID, UpdatedAt: s.UpdatedAt})
+	}
+	return out
+}
+
 // Marshal serializes the registry (plaintext; callers encrypt with the
 // kernel run-mode key before persisting — spec §10.1).
 func (r *SecretRegistry) Marshal() ([]byte, error) {

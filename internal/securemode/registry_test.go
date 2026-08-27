@@ -148,3 +148,40 @@ func TestRegistryUpdatedAt(t *testing.T) {
 		t.Error("rotate must bump UpdatedAt")
 	}
 }
+
+// TestRegistryListEntries (review M5): the status display must be able to
+// show the fingerprint PRIMARY KEY of each registration — ListEntries returns
+// display-only entries (fingerprint + identity + timestamp) that structurally
+// cannot carry the secret.
+func TestRegistryListEntries(t *testing.T) {
+	r := NewSecretRegistry()
+	longFP := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	if err := r.Register(longFP, "host-a", "secret-pw-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Register("fp2", "host-b", "secret-pw-b"); err != nil {
+		t.Fatal(err)
+	}
+	entries := r.ListEntries()
+	if len(entries) != 2 {
+		t.Fatalf("ListEntries len = %d, want 2", len(entries))
+	}
+	byFP := make(map[string]AgentSecretEntry, len(entries))
+	for _, e := range entries {
+		byFP[e.Fingerprint] = e
+	}
+	e1, ok := byFP[longFP]
+	if !ok {
+		t.Fatalf("ListEntries must carry the fingerprint primary key, got %+v", entries)
+	}
+	if e1.AgentID != "host-a" || e1.UpdatedAt.IsZero() {
+		t.Errorf("longFP entry = %+v, want host-a with UpdatedAt", e1)
+	}
+	if e2 := byFP["fp2"]; e2.AgentID != "host-b" {
+		t.Errorf("fp2 entry = %+v, want host-b", e2)
+	}
+	// List() must stay available for callers that need the full records.
+	if list := r.List(); len(list) != 2 {
+		t.Errorf("List() len = %d, want 2", len(list))
+	}
+}

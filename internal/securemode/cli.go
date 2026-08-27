@@ -87,8 +87,9 @@ func (m *ModeCLI) status() (string, error) {
 	}
 	if m.Ctrl.Secrets.Size() > 0 {
 		b.WriteString("Registered agents (cert-fingerprint keyed):\n")
-		for _, s := range m.Ctrl.Secrets.List() {
-			b.WriteString(fmt.Sprintf("  %s (agent %s, updated %s)\n", truncateFP(s.AgentID), s.AgentID, s.UpdatedAt.Format("15:04:05")))
+		b.WriteString("  fingerprint                           agent_id                 updated\n")
+		for _, e := range m.Ctrl.Secrets.ListEntries() {
+			b.WriteString(fmt.Sprintf("  %-38s %-24s %s\n", truncateFP(e.Fingerprint), e.AgentID, e.UpdatedAt.Format("15:04:05")))
 		}
 	}
 	return b.String(), nil
