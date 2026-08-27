@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -595,9 +596,30 @@ func (e *Engine) Execute(input string) *CommandResult {
 	result := entry.handler(cmdCtx)
 	result.Duration = time.Since(start)
 
-	e.history.Add(input, result.ExitCode, result.Duration)
+	e.history.Add(redactSecrets(input), result.ExitCode, result.Duration)
 
 	return result
+}
+
+// secretEqRe / secretSpaceRe match password-bearing options in both CLI forms
+// (`--flag=value` and `--flag value`; quoted values redacted as one unit).
+// redactSecrets is applied to the raw input line before History.Add so secret
+// material never survives in the CLI history (deferred minor #9): it covers
+// every Execute channel (local terminal AND unix-socket sessions) regardless
+// of whether the operator used the interactive password prompt — a socket
+// client that cannot prompt must not leak via `history` either. Redaction is
+// deliberately conservative (a token that merely LOOKS like a value is masked)
+// — over-redaction is safe, under-redaction leaks.
+var (
+	secretEqRe   = regexp.MustCompile(`(--(?:password|old|new))=("[^"]*"|'[^']*'|\S+)`)
+	secretSpaceRe = regexp.MustCompile(`(--(?:password|old|new))\s+("[^"]*"|'[^']*'|\S+)`)
+)
+
+// redactSecrets replaces password-bearing option values with a fixed marker.
+func redactSecrets(input string) string {
+	input = secretEqRe.ReplaceAllString(input, `$1=***`)
+	input = secretSpaceRe.ReplaceAllString(input, `$1 ***`)
+	return input
 }
 
 func (e *Engine) Completions(partial string) []string {

@@ -909,6 +909,82 @@ func TestHistoryClearMethod(t *testing.T) {
 	}
 }
 
+// TestHistoryRedactsSecrets (deferred minor #9): password-bearing options
+// (--password/--old/--new) must never land in the CLI history verbatim —
+// Execute redacts the raw line BEFORE History.Add, covering local-terminal
+// and unix-socket sessions alike (the socket client cannot always prompt for
+// an interactive password, so the history backstop is the last line of
+// defense against plaintext passwords in `history` output).
+func TestHistoryRedactsSecrets(t *testing.T) {
+	mk := newMockKernel()
+	e := newTestEngine(mk)
+
+	cases := []struct {
+		name     string
+		cmd      string
+		contains []string
+		absent   []string
+	}{
+		{
+			name:     "equals form",
+			cmd:      "status --password=supersecret123",
+			contains: []string{"--password=***"},
+			absent:   []string{"supersecret123"},
+		},
+		{
+			name:     "space form",
+			cmd:      "status --password supersecret456",
+			contains: []string{"--password ***"},
+			absent:   []string{"supersecret456"},
+		},
+		{
+			name:     "quoted value",
+			cmd:      `status --password="quoted secret 789"`,
+			contains: []string{"--password=***"},
+			absent:   []string{"quoted secret 789"},
+		},
+		{
+			name:     "old and new",
+			cmd:      "status --old=oldsec999 --new=newsec000",
+			contains: []string{"--old=***", "--new=***"},
+			absent:   []string{"oldsec999", "newsec000"},
+		},
+		{
+			name:     "space form old",
+			cmd:      "status --old oldsec888",
+			contains: []string{"--old ***"},
+			absent:   []string{"oldsec888"},
+		},
+		{
+			name:     "no secrets untouched",
+			cmd:      "status --json",
+			contains: []string{"status --json"},
+			absent:   []string{"--password"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e.Execute(tc.cmd)
+			rec := e.History().Recent(1)
+			if len(rec) != 1 {
+				t.Fatalf("no history entry recorded for %q", tc.cmd)
+			}
+			got := rec[0].Command
+			for _, want := range tc.contains {
+				if !strings.Contains(got, want) {
+					t.Errorf("history command %q must contain %q", got, want)
+				}
+			}
+			for _, nope := range tc.absent {
+				if strings.Contains(got, nope) {
+					t.Errorf("history command %q must NOT contain %q", got, nope)
+				}
+			}
+		})
+	}
+}
+
 func TestFormatDuration(t *testing.T) {
 	tests := []struct {
 		d   time.Duration
