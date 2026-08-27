@@ -81,6 +81,13 @@ type HeartbeatResponse struct {
 	// heartbeat channel without pending-command HMAC (review I-1/I-2). Nil
 	// when the agent is not locked or has no registered secret.
 	SecureModeUnlock *SecureModeUnlock `json:"secure_mode_unlock,omitempty"`
+	// SecureModeNoSecret tells the agent the kernel has NO registered secret
+	// for its certificate fingerprint (registry lost/unrecoverable, review
+	// I-2): a locked agent triggers the spec §8.2 self-recovery immediately
+	// instead of waiting N heartbeats, and an already-unlocked agent re-arms
+	// its password report so the next heartbeat re-registers it. It is also
+	// set for ordinary agents without a registration — they ignore it.
+	SecureModeNoSecret bool `json:"secure_mode_no_secret,omitempty"`
 }
 
 // AgentCheckConfig is the check-item configuration the kernel syncs to agents.

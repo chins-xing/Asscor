@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 )
 
@@ -178,25 +177,9 @@ func (c *Controller) SetPassword(oldPassword, newPassword string) error {
 // built purely in memory (no plaintext touches disk during rotation). A
 // leftover plaintext file is deliberately NOT removed: in run mode none should
 // exist, and if one does it is recovery evidence, not something to delete
-// silently.
+// silently. Delegates to Vault.ReencryptOverwrite (same atomic commit).
 func (c *Controller) reencryptVault(v *Vault, plain, password string) error {
-	payload, err := v.EncryptContent(password, []byte(plain))
-	if err != nil {
-		return err
-	}
-	tmp := v.encPath() + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
-		return err
-	}
-	if err := syncFile(tmp); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, v.encPath()); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return syncDir(filepath.Dir(v.ConfigPath))
+	return v.ReencryptOverwrite(password, []byte(plain))
 }
 
 // rollbackSetPassword restores old-password encryption after a failed
@@ -263,6 +246,14 @@ func (c *Controller) Startup() error {
 			switch {
 			case mode == ModeDefault && c.Password.Exists():
 				return fmt.Errorf("startup: enc-only vault %s with verifier present while marker=default — crash residue of interrupted EnterRun, manual recovery required", v.ConfigPath)
+			case mode == ModeDefault && !c.Password.Exists():
+				// M1 (final review): default marker + enc-only vault + NO
+				// verifier is the crash window between EncryptFile (plaintext
+				// deleted) and Password.Set — the same interrupted-EnterRun
+				// half-state as the verifier-present variant, so it must fail
+				// closed too (spec §11: damage/half-states never silently
+				// degrade to default).
+				return fmt.Errorf("startup: enc-only vault %s with no verifier while marker=default — interrupted EnterRun (plaintext deleted before verifier written), manual recovery required", v.ConfigPath)
 			case mode == ModeRun && !c.Password.Exists():
 				return fmt.Errorf("startup: run marker but no password verifier (vault %s) — interrupted EnterRun or tampering, fail-closed", v.ConfigPath)
 			}

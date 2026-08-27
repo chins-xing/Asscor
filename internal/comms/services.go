@@ -255,14 +255,15 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 	// (kernel-managed, spec §10.1). The fingerprint comes from the mTLS
 	// transport layer — a forged agent_id with an unknown/mismatched
 	// fingerprint was already rejected by VerifyAgentCert above. An EMPTY
-	// fingerprint (no mTLS, development) cannot be keyed, so both paths are
-	// skipped with a warning instead of failing the heartbeat (the agent
-	// would otherwise retry forever).
+	// fingerprint (no mTLS, development) cannot be keyed, so the unlock and
+	// registration paths are skipped with a warning instead of failing the
+	// heartbeat (the agent would otherwise retry forever).
 	var secureModeUnlock *apiv1.SecureModeUnlock
-	if s.secureMode != nil && req.SecureMode != nil {
+	var secureModeNoSecret bool
+	if s.secureMode != nil {
 		fp := kernel.PeerCertFingerprintFromContext(ctx)
 		switch {
-		case req.SecureMode.Locked:
+		case req.SecureMode != nil && req.SecureMode.Locked:
 			// Run-mode restart: the agent declares itself locked (it has no
 			// password to report and no hmac_key to verify a pending command
 			// with — review I-1/I-2). Hand the registered password back over
@@ -276,8 +277,12 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 				logger.WithComponent("identity").Info("secure-mode unlock issued to locked agent", "host_id", req.HostId)
 			} else {
 				logger.WithComponent("identity").Warn("secure-mode unlock skipped: no registered secret for this fingerprint", "host_id", req.HostId)
+				// I-2 (spec §8.2): tell the locked agent there is NO
+				// registration so it self-recovers immediately (fresh password
+				// + re-encrypt + re-report) instead of polling forever.
+				secureModeNoSecret = true
 			}
-		case req.SecureMode.Password != "":
+		case req.SecureMode != nil && req.SecureMode.Password != "":
 			if fp == "" {
 				logger.WithComponent("identity").Warn("secure-mode registration skipped: no mTLS fingerprint (development mode)")
 			} else if err := s.secureMode.Secrets.Register(fp, req.HostId, req.SecureMode.Password); err != nil {
@@ -294,6 +299,18 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 				// the next registration retries the persist.
 				logger.WithComponent("identity").Warn("secure-mode registry persist failed (in-memory registration kept; will retry on next registration)",
 					"host_id", req.HostId, "error", err.Error())
+			}
+		case req.SecureMode == nil:
+			// I-2 derived (review reason 3): any heartbeat whose certificate
+			// fingerprint has NO secure-mode registration carries the signal —
+			// an already-unlocked run-mode agent whose registration was lost
+			// (kernel restarted with an unrecoverable registry) then re-arms
+			// its password report and re-registers on the next heartbeat.
+			// Ordinary agents ignore it (they have no password to re-report).
+			if fp != "" {
+				if _, ok := s.secureMode.Secrets.Lookup(fp); !ok {
+					secureModeNoSecret = true
+				}
 			}
 		}
 	}
@@ -406,11 +423,12 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 	}
 
 	return &apiv1.HeartbeatResponse{
-		Ok:                true,
-		ThreatCoefficient: threatCoeff,
-		PendingCommands:   pendingCmds,
-		CheckConfig:       s.buildAgentCheckConfig(),
-		SecureModeUnlock:  secureModeUnlock,
+		Ok:                 true,
+		ThreatCoefficient:  threatCoeff,
+		PendingCommands:    pendingCmds,
+		CheckConfig:        s.buildAgentCheckConfig(),
+		SecureModeUnlock:   secureModeUnlock,
+		SecureModeNoSecret: secureModeNoSecret,
 	}, nil
 }
 

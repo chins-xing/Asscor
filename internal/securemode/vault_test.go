@@ -291,3 +291,60 @@ func TestVaultRotatePasswordWrongOld(t *testing.T) {
 		t.Errorf("old password must keep working after failed rotate: %v", err)
 	}
 }
+
+// TestVaultReencryptOverwrite (I-2): atomically replace the .enc with a NEW
+// encryption of in-memory content WITHOUT decrypting the current .enc — the
+// spec §8.2 agent self-recovery path, where the old password is unrecoverable.
+// The old password must stop working, the new one round-trips the fresh
+// content, and no plaintext file ever touches disk.
+func TestVaultReencryptOverwrite(t *testing.T) {
+	v := newTestVault(t)
+	if err := v.EncryptFile("lost-pw"); err != nil {
+		t.Fatal(err)
+	}
+	fresh := "[bootstrap]\nkernel_addr = 127.0.0.1:50051\n\n[agent]\n"
+	if err := v.ReencryptOverwrite("fresh-pw", []byte(fresh)); err != nil {
+		t.Fatal(err)
+	}
+	if st := v.State(); st.hasPlain || !st.hasEnc {
+		t.Fatalf("after re-encrypt state = %+v, want enc-only", st)
+	}
+	// The old password is gone (it never was used to read the .enc) — and the
+	// old CONTENT is gone too: the .enc now holds the fresh content only.
+	if _, err := v.LoadCiphertext("lost-pw"); err == nil {
+		t.Error("old password must not decrypt after overwrite")
+	}
+	plain, err := v.LoadCiphertext("fresh-pw")
+	if err != nil {
+		t.Fatalf("new password must decrypt after overwrite: %v", err)
+	}
+	if plain != fresh {
+		t.Errorf("overwritten content mismatch:\ngot  %q\nwant %q", plain, fresh)
+	}
+	if v.HasPlaintext() {
+		t.Error("re-encrypt must never create a plaintext file")
+	}
+}
+
+// TestVaultReencryptOverwriteFailureLeavesEnc: a write failure mid-way (a
+// directory blocking the .enc.tmp path) must leave the OLD .enc untouched —
+// the recovery must be crash-safe like every other conversion.
+func TestVaultReencryptOverwriteFailureLeavesEnc(t *testing.T) {
+	v := newTestVault(t)
+	if err := v.EncryptFile("old-pw"); err != nil {
+		t.Fatal(err)
+	}
+	encBefore, _ := os.ReadFile(v.encPath())
+	// A directory at the .enc.tmp path makes the atomic write fail.
+	os.MkdirAll(v.encPath()+".tmp", 0o700)
+	if err := v.ReencryptOverwrite("new-pw", []byte("fresh")); err == nil {
+		t.Fatal("ReencryptOverwrite must fail when the tmp write fails")
+	}
+	encAfter, _ := os.ReadFile(v.encPath())
+	if string(encBefore) != string(encAfter) {
+		t.Error(".enc must be untouched after a failed overwrite")
+	}
+	if _, err := v.LoadCiphertext("old-pw"); err != nil {
+		t.Errorf("old password must keep working after failed overwrite: %v", err)
+	}
+}

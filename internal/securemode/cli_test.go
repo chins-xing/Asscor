@@ -5,6 +5,104 @@ import (
 	"testing"
 )
 
+// TestModeCLIUnlockTriggersOnConfigChanged (I-1): after a successful unlock
+// the run-mode config is in the guard — the OnConfigChanged hook must fire
+// with immediate=true so the kernel wiring can feed it into the kernel
+// runtime (the kernel started on defaults in run mode).
+func TestModeCLIUnlockTriggersOnConfigChanged(t *testing.T) {
+	c := newTestController(t)
+	if err := c.EnterRun("pw"); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate restart: fresh controller over the same dir (run marker).
+	c2 := NewController(c.DataDir, c.Vaults)
+	if err := c2.Startup(); err != nil {
+		t.Fatal(err)
+	}
+	m := &ModeCLI{Ctrl: c2}
+	var gotPlain string
+	var gotImmediate *bool
+	m.OnConfigChanged = func(plain string, immediate bool) error {
+		gotPlain = plain
+		gotImmediate = &immediate
+		return nil
+	}
+	if _, err := m.HandleMode("unlock", nil, map[string]string{"password": "pw"}); err != nil {
+		t.Fatal(err)
+	}
+	if gotImmediate == nil || !*gotImmediate {
+		t.Fatalf("unlock must trigger OnConfigChanged with immediate=true, got immediate=%v", gotImmediate)
+	}
+	if !strings.Contains(gotPlain, "addr = x") {
+		t.Errorf("unlock callback must receive the decrypted config content, got %q", gotPlain)
+	}
+	// The content must round-trip through config.Parse (I-1 kernel feed path).
+	if _, err := parseConfigForTest(gotPlain); err != nil {
+		t.Errorf("unlocked config must be parseable: %v", err)
+	}
+}
+
+// TestModeCLIConfigSetTriggersOnConfigChanged (I-1): config-set --temp fires
+// the hook with immediate=true (spec §9: temp applies immediately) and the
+// UPDATED content; --persist fires it with immediate=false (applies only on
+// 'config reload').
+func TestModeCLIConfigSetTriggersOnConfigChanged(t *testing.T) {
+	m := newModeCLI(t)
+	var calls []struct {
+		plain     string
+		immediate bool
+	}
+	m.OnConfigChanged = func(plain string, immediate bool) error {
+		calls = append(calls, struct {
+			plain     string
+			immediate bool
+		}{plain, immediate})
+		return nil
+	}
+
+	if _, err := m.HandleConfigSet([]string{"addr", "85"}, map[string]string{"password": "pw", "temp": "true"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 || calls[0].immediate != true {
+		t.Fatalf("--temp must fire once with immediate=true, got %+v", calls)
+	}
+	if !strings.Contains(calls[0].plain, "addr = 85") {
+		t.Errorf("--temp callback must carry the updated content, got %q", calls[0].plain)
+	}
+
+	if _, err := m.HandleConfigSet([]string{"addr", "77"}, map[string]string{"password": "pw", "persist": "true"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 || calls[1].immediate != false {
+		t.Fatalf("--persist must fire once with immediate=false, got %+v", calls)
+	}
+	if !strings.Contains(calls[1].plain, "addr = 77") {
+		t.Errorf("--persist callback must carry the updated content, got %q", calls[1].plain)
+	}
+}
+
+// TestModeCLIConfigSetHookErrorPropagates: a failing hook aborts config-set
+// BEFORE the guard is mutated, so the in-memory config stays consistent with
+// the kernel runtime (I-1).
+func TestModeCLIConfigSetHookErrorPropagates(t *testing.T) {
+	m := newModeCLI(t)
+	m.OnConfigChanged = func(plain string, immediate bool) error {
+		return errTestHook
+	}
+	if _, err := m.HandleConfigSet([]string{"addr", "85"}, map[string]string{"password": "pw", "temp": "true"}); err == nil {
+		t.Fatal("config-set must fail when the runtime apply hook fails")
+	}
+	snap := string(m.Ctrl.Guard.Snapshot())
+	if strings.Contains(snap, "addr = 85") {
+		t.Error("guard must NOT be mutated when the runtime apply hook fails")
+	}
+}
+
+var errTestHook = &testHookError{}
+
+type testHookError struct{}
+
+func (e *testHookError) Error() string { return "test hook error" }
 func newModeCLI(t *testing.T) *ModeCLI {
 	c := newTestController(t)
 	if err := c.EnterRun("pw"); err != nil {

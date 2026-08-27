@@ -184,7 +184,9 @@ func TestHeartbeatIssuesSecureModeUnlockToLockedAgent(t *testing.T) {
 
 // TestHeartbeatLockedNoRegisteredSecret: a locked agent whose fingerprint has
 // no registered secret gets a successful heartbeat but no unlock — the kernel
-// cannot fabricate a password. The agent keeps polling on later heartbeats.
+// cannot fabricate a password. The response MUST carry SecureModeNoSecret so
+// the agent triggers the spec §8.2 self-recovery immediately (review I-2)
+// instead of polling forever.
 func TestHeartbeatLockedNoRegisteredSecret(t *testing.T) {
 	svc := newSecureIdentityService(t)
 	if _, err := svc.Register(ctxWithFP("fp-a"), &apiv1.RegisterRequest{HostId: "host-a", Hostname: "h-a", Version: "v0.2.3"}); err != nil {
@@ -199,6 +201,9 @@ func TestHeartbeatLockedNoRegisteredSecret(t *testing.T) {
 	}
 	if resp.SecureModeUnlock != nil {
 		t.Fatalf("no unlock may be issued without a registered secret, got %+v", resp.SecureModeUnlock)
+	}
+	if !resp.SecureModeNoSecret {
+		t.Error("locked agent must receive SecureModeNoSecret=true (spec §8.2 self-recovery trigger)")
 	}
 }
 
@@ -219,5 +224,51 @@ func TestHeartbeatLockedWithoutFingerprint(t *testing.T) {
 	}
 	if resp.SecureModeUnlock != nil {
 		t.Fatal("no unlock may be issued without a fingerprint")
+	}
+}
+
+// TestHeartbeatSecureModeNoSecretForUnregisteredAgent (I-2 derived): ANY
+// heartbeat whose certificate fingerprint has no secure-mode registration
+// carries SecureModeNoSecret — an already-unlocked run-mode agent whose
+// registration was lost (kernel restart with an unrecoverable registry) then
+// re-arms its password report and re-registers on the next heartbeat.
+func TestHeartbeatSecureModeNoSecretForUnregisteredAgent(t *testing.T) {
+	svc := newSecureIdentityService(t)
+	if _, err := svc.Register(ctxWithFP("fp-a"), &apiv1.RegisterRequest{HostId: "host-a", Hostname: "h-a", Version: "v0.2.3"}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	// No SecureMode field at all (unlocked agent not reporting; or any
+	// ordinary agent) and no registration for fp-a.
+	resp, err := svc.Heartbeat(ctxWithFP("fp-a"), &apiv1.HeartbeatRequest{HostId: "host-a"})
+	if err != nil || !resp.Ok {
+		t.Fatalf("plain heartbeat must stay ok (err=%v, ok=%v)", err, resp != nil && resp.Ok)
+	}
+	if !resp.SecureModeNoSecret {
+		t.Error("an unregistered fingerprint must receive SecureModeNoSecret=true")
+	}
+}
+
+// TestHeartbeatSecureModeNoSecretClearedAfterRegistration (I-2): once the
+// fingerprint IS registered, the signal disappears — no perpetual re-arming.
+func TestHeartbeatSecureModeNoSecretClearedAfterRegistration(t *testing.T) {
+	svc := newSecureIdentityService(t)
+	if _, err := svc.Register(ctxWithFP("fp-a"), &apiv1.RegisterRequest{HostId: "host-a", Hostname: "h-a", Version: "v0.2.3"}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	// Report the password: registers fp-a.
+	resp, err := svc.Heartbeat(ctxWithFP("fp-a"), &apiv1.HeartbeatRequest{
+		HostId:     "host-a",
+		SecureMode: &apiv1.SecureModeReport{Password: "ephemeral-pw"},
+	})
+	if err != nil || !resp.Ok {
+		t.Fatalf("registration heartbeat must stay ok (err=%v, ok=%v)", err, resp != nil && resp.Ok)
+	}
+	// Next heartbeat (no report): fp-a is registered now — no signal.
+	resp2, err := svc.Heartbeat(ctxWithFP("fp-a"), &apiv1.HeartbeatRequest{HostId: "host-a"})
+	if err != nil || !resp2.Ok {
+		t.Fatalf("follow-up heartbeat must stay ok (err=%v, ok=%v)", err, resp2 != nil && resp2.Ok)
+	}
+	if resp2.SecureModeNoSecret {
+		t.Error("a registered fingerprint must NOT receive SecureModeNoSecret")
 	}
 }

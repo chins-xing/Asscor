@@ -270,6 +270,11 @@ func main() {
 		// Bind early so plugins (heartbeat secret reporting, later task) can
 		// resolve the controller during their own Init/Start.
 		k.Container().BindNamed("securemode", (*securemode.Controller)(nil), secureCtrl)
+		// I-1: make `config reload` (SIGHUP / polling watcher) run-mode aware —
+		// the reload source becomes the controller's decrypted guard instead of
+		// the missing plaintext config.ini. Set BEFORE plugin Init so the
+		// watcher records the correct watched file's mtime.
+		wireSecureModeConfigLoader(configWatcher, secureCtrl, resolvedConfigPath)
 	}
 
 	if assessor != nil {
@@ -385,6 +390,10 @@ func main() {
 			log.Error("secure mode CLI registration failed", "error", err)
 			os.Exit(1)
 		}
+		// I-1: after `mode unlock` / `config-set`, feed the run-mode config
+		// back into the kernel runtime (SetConfigObj + assessor.ReloadConfig),
+		// closing the gap where unlock only filled the memory guard.
+		wireSecureModeConfigApply(k, assessor, mcli)
 	}
 
 	fmt.Fprintf(os.Stderr, "\nASSCOR \u00b5Kernel\n")

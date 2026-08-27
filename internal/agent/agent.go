@@ -562,6 +562,11 @@ func (a *Agent) heartbeatCycle() error {
 	// Secure mode: report the ephemeral unlock password to the kernel until
 	// accepted (registration is keyed on the mTLS certificate fingerprint).
 	a.attachSecureModeReport(heartbeatReq)
+	// Remember whether THIS cycle carried the password: after a successful
+	// heartbeat it is registered, so the report is re-armed only then — a
+	// self-recovered password armed for the NEXT cycle must not be consumed
+	// by this cycle's "accepted" bookkeeping.
+	secureReported := heartbeatReq.SecureMode != nil && heartbeatReq.SecureMode.Password != ""
 	heartbeatReq.NetworkInfo = a.collectNetworkInfo()
 	if pkgs := a.collectPackages(); pkgs != nil {
 		h := sha256.Sum256([]byte(strings.Join(pkgs, ",")))
@@ -591,22 +596,31 @@ func (a *Agent) heartbeatCycle() error {
 		return fmt.Errorf("heartbeat rejected by kernel")
 	}
 
-	// Secure mode (review I-1): a locked agent (run-mode restart) receives
+	// Secure mode (review I-1/I-2): a locked agent (run-mode restart) receives
 	// the kernel-issued registered password over the authenticated mTLS
 	// heartbeat channel. It has no hmac_key yet, so unlock cannot ride the
-	// HMAC-protected pending-command path. A failure leaves the agent locked
-	// and the next heartbeat retries.
-	if a.secure != nil && a.secure.locked && heartbeatResp.SecureModeUnlock != nil && heartbeatResp.SecureModeUnlock.Password != "" {
-		if err := a.unlockWithPassword(heartbeatResp.SecureModeUnlock.Password); err != nil {
-			logger.WithComponent("agent").Error("secure mode unlock via heartbeat failed — staying locked", "error", err)
+	// HMAC-protected pending-command path. When the kernel has no registration
+	// (registry lost), the SecureModeNoSecret signal — or N consecutive
+	// unlock-less heartbeats — triggers the spec §8.2 self-recovery
+	// (secureSelfRecover: fresh password, re-encrypt .enc, re-report).
+	if a.secure != nil && a.secure.locked {
+		if err := a.handleSecureModeResponse(heartbeatResp); err != nil {
+			logger.WithComponent("agent").Error("secure mode heartbeat response failed", "error", err)
 		}
 	}
 
 	// Secure mode: the kernel accepted this heartbeat, so the ephemeral
-	// password (if any) is now registered — stop re-reporting it until the
-	// next rotation.
-	if a.secure != nil && a.secure.password != "" && !a.secure.locked {
+	// password (if this cycle carried one) is now registered — stop
+	// re-reporting it until the next rotation.
+	if a.secure != nil && a.secure.password != "" && !a.secure.locked && secureReported {
 		a.secure.reported = true
+	}
+
+	// I-2 derived (review reason 3): the kernel has no registration for this
+	// agent (it restarted and lost the registry) — re-arm the report so the
+	// next heartbeat re-registers the password.
+	if a.secure != nil {
+		a.secureReArmReport(heartbeatResp)
 	}
 
 	a.pendingCmd = heartbeatResp.PendingCommands

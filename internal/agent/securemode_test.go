@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	apiv1 "github.com/asscor/asscor/api/v1"
@@ -536,5 +537,236 @@ func TestExecuteSecureModeEnter(t *testing.T) {
 	})
 	if a.secure.password != pw {
 		t.Error("second enter must be a no-op")
+	}
+}
+
+// TestSecureSelfRecover (I-2, spec §8.2): a locked agent whose kernel can no
+// longer provide the unlock password self-generates a fresh ephemeral
+// password, re-encrypts its OWN .enc with it (the old protected content is
+// unrecoverable and lost by design), and re-arms the report so the next
+// heartbeat registers it as a fresh registration. The bootstrap section
+// (connectivity essentials) is preserved.
+func TestSecureSelfRecover(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	if err := v.EncryptFile("lost-ephemeral-pw"); err != nil {
+		t.Fatal(err)
+	}
+	a := NewAgent(DefaultConfig())
+	a.cfg.TLSEnabled = true
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if !a.secure.locked {
+		t.Fatal("restart agent must start locked")
+	}
+	oldLocked := a.secure
+
+	if err := a.secureSelfRecover(); err != nil {
+		t.Fatal(err)
+	}
+	// New password: 64 hex chars, memory only, .enc re-encrypted under it.
+	if len(a.secure.password) != 64 {
+		t.Errorf("self-recovery must generate a fresh 64-char password, got %q", a.secure.password)
+	}
+	if a.secure.locked {
+		t.Error("self-recovery must clear the locked state")
+	}
+	if a.secure.reported {
+		t.Error("self-recovery must re-arm the report (reported=false)")
+	}
+	plain, err := v.LoadCiphertext(a.secure.password)
+	if err != nil {
+		t.Fatalf("new password must decrypt the re-encrypted .enc: %v", err)
+	}
+	// Bootstrap preserved; protected content (user check) lost by design.
+	if !strings.Contains(plain, "kernel_addr = 127.0.0.1:50051") {
+		t.Errorf("bootstrap section must be preserved after self-recovery, got %q", plain)
+	}
+	if strings.Contains(plain, "CU-MYSQL-001") {
+		t.Error("unrecoverable protected content must be dropped (spec §8.2 fresh registration)")
+	}
+	// The next heartbeat reports the new password for re-registration.
+	req := &apiv1.HeartbeatRequest{}
+	a.attachSecureModeReport(req)
+	if req.SecureMode == nil || req.SecureMode.Password != a.secure.password {
+		t.Errorf("next report must carry the new password, got %+v", req.SecureMode)
+	}
+	_ = oldLocked
+}
+
+// TestSecureSelfRecoverNoopWhenNotLocked: self-recovery must be a no-op for
+// non-locked agents (defensive).
+func TestSecureSelfRecoverNoopWhenNotLocked(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.secureSelfRecover(); err != nil {
+		t.Fatalf("self-recovery on an unlocked agent must be a no-op, got %v", err)
+	}
+	if !v.HasPlaintext() {
+		t.Error("self-recovery must not encrypt a plaintext config")
+	}
+}
+
+// TestHandleSecureModeResponseNoSecretTriggersImmediateRecovery (I-2): the
+// kernel's SecureModeNoSecret signal (no registration) must trigger the
+// spec §8.2 self-recovery IMMEDIATELY, without waiting N heartbeats.
+func TestHandleSecureModeResponseNoSecretTriggersImmediateRecovery(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	if err := v.EncryptFile("lost-pw"); err != nil {
+		t.Fatal(err)
+	}
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{SecureModeNoSecret: true}); err != nil {
+		t.Fatal(err)
+	}
+	if a.secure.locked {
+		t.Fatal("SecureModeNoSecret must trigger immediate self-recovery")
+	}
+	if len(a.secure.password) != 64 {
+		t.Errorf("self-recovered password missing, got %q", a.secure.password)
+	}
+}
+
+// TestHandleSecureModeResponseCountsMissesUntilThreshold (I-2): without any
+// signal (e.g. a kernel with the securemode tag off never sets
+// SecureModeNoSecret), N consecutive unlock-less heartbeats trigger the
+// self-recovery; the first N-1 keep the agent locked.
+func TestHandleSecureModeResponseCountsMissesUntilThreshold(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	if err := v.EncryptFile("lost-pw"); err != nil {
+		t.Fatal(err)
+	}
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < secureModeMaxNoUnlock-1; i++ {
+		if err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{}); err != nil {
+			t.Fatal(err)
+		}
+		if !a.secure.locked {
+			t.Fatalf("agent must stay locked after %d misses (max %d)", i+1, secureModeMaxNoUnlock)
+		}
+	}
+	// The Nth miss triggers recovery.
+	if err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{}); err != nil {
+		t.Fatal(err)
+	}
+	if a.secure.locked {
+		t.Fatal("agent must self-recover after N consecutive unlock-less heartbeats")
+	}
+}
+
+// TestHandleSecureModeResponseUnlockResetsCounter (I-2): a successful unlock
+// resets the miss counter — a partial wait does not carry over.
+func TestHandleSecureModeResponseUnlockResetsCounter(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	if err := v.EncryptFile("registered-pw"); err != nil {
+		t.Fatal(err)
+	}
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	// Two misses, then the kernel finally issues the registered password.
+	for i := 0; i < 2; i++ {
+		if err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if a.secure.noUnlockCount != 2 {
+		t.Fatalf("noUnlockCount = %d, want 2", a.secure.noUnlockCount)
+	}
+	if err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{
+		SecureModeUnlock: &apiv1.SecureModeUnlock{Password: "registered-pw"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if a.secure.locked || a.secure.noUnlockCount != 0 {
+		t.Errorf("after unlock: locked=%v count=%d, want unlocked with count 0", a.secure.locked, a.secure.noUnlockCount)
+	}
+}
+
+// TestHandleSecureModeResponseWrongPasswordCounts (I-2): an issued unlock that
+// fails (stale/wrong registered password) counts as a miss and keeps the agent
+// locked — the counter eventually triggers self-recovery, which self-heals the
+// stale registration.
+func TestHandleSecureModeResponseWrongPasswordCounts(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	if err := v.EncryptFile("real-pw"); err != nil {
+		t.Fatal(err)
+	}
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{
+		SecureModeUnlock: &apiv1.SecureModeUnlock{Password: "stale-wrong-pw"},
+	}); err == nil {
+		t.Fatal("a wrong issued password must surface an error")
+	}
+	if !a.secure.locked {
+		t.Fatal("agent must stay locked after a failed unlock")
+	}
+	if a.secure.noUnlockCount != 1 {
+		t.Errorf("noUnlockCount = %d, want 1 after a failed unlock", a.secure.noUnlockCount)
+	}
+}
+
+// TestHandleSecureModeResponseUnlockedNoop: the response handler is a no-op
+// for an unlocked agent (defensive; the heartbeat cycle calls it only while
+// locked).
+func TestHandleSecureModeResponseUnlockedNoop(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{SecureModeNoSecret: true}); err != nil {
+		t.Fatalf("unlocked agent must ignore the response, got %v", err)
+	}
+	if a.secure.locked || a.secure.password != "" {
+		t.Errorf("unlocked agent state must be untouched, got %+v", a.secure)
+	}
+}
+
+// TestSecureReArmReportOnNoSecret (I-2 derived, review reason 3): an UNLOCKED
+// agent whose registration was lost (kernel restarted with an unrecoverable
+// registry) re-arms its password report when the heartbeat response carries
+// SecureModeNoSecret, so the next heartbeat re-registers it.
+func TestSecureReArmReportOnNoSecret(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.secureMaybeBootstrap(); err != nil {
+		t.Fatal(err)
+	}
+	a.secure.reported = true // was accepted before the kernel restart
+	a.secure.locked = false
+
+	a.secureReArmReport(&apiv1.HeartbeatResponse{SecureModeNoSecret: true})
+	if a.secure.reported {
+		t.Error("SecureModeNoSecret must re-arm the report for an unlocked agent")
+	}
+	// Without the signal the flag stays as-is.
+	a.secure.reported = true
+	a.secureReArmReport(&apiv1.HeartbeatResponse{})
+	if !a.secure.reported {
+		t.Error("an empty response must not re-arm the report")
+	}
+	// Locked agents are handled by handleSecureModeResponse, not re-arm.
+	a.secure.locked = true
+	a.secure.reported = true
+	a.secureReArmReport(&apiv1.HeartbeatResponse{SecureModeNoSecret: true})
+	if !a.secure.reported {
+		t.Error("locked agents must not be re-armed by secureReArmReport")
 	}
 }

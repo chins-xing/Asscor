@@ -21,6 +21,15 @@ type AgentCommander interface {
 type ModeCLI struct {
 	Ctrl      *Controller
 	Commander AgentCommander
+	// OnConfigChanged, when set, is invoked after the run-mode in-memory
+	// config is updated (unlock or config-set) so the kernel wiring can feed
+	// it back into the kernel runtime — config.Parse -> SetConfigObj +
+	// assessor.ReloadConfig, mirroring the agent-side reloadProtectedConfig
+	// (review I-1). immediate=true for unlock and config-set --temp (spec §9:
+	// applies immediately); false for config-set --persist (applies only on
+	// 'config reload'). The hook runs BEFORE the guard mutation on config-set,
+	// so a failure leaves both the guard and the kernel runtime unchanged.
+	OnConfigChanged func(plain string, immediate bool) error
 }
 
 // NewModeCLI creates the kernel-side CLI adapter for a controller. A nil
@@ -114,6 +123,22 @@ func (m *ModeCLI) unlock(params map[string]string) (string, error) {
 	}
 	if err := m.Ctrl.Unlock(password); err != nil {
 		return "", err
+	}
+	// I-1: the protected config is now in memory — feed it into the kernel
+	// runtime immediately. The kernel started on config.Default() in run mode
+	// (the plaintext was encrypted at shutdown), so this is the moment its
+	// real protected settings (weights, threshold, interceptor keys, ...)
+	// become active again.
+	if m.OnConfigChanged != nil {
+		m.Ctrl.Mu.RLock()
+		guard := m.Ctrl.Guard
+		m.Ctrl.Mu.RUnlock()
+		if guard == nil {
+			return "", fmt.Errorf("mode unlock: guard not populated after unlock")
+		}
+		if err := m.OnConfigChanged(string(guard.Snapshot()), true); err != nil {
+			return "", fmt.Errorf("mode unlock: apply config to kernel runtime: %w", err)
+		}
 	}
 	return "Unlocked — run-mode config loaded into memory.\n", nil
 }
@@ -248,6 +273,15 @@ func (m *ModeCLI) HandleConfigSet(args []string, flags map[string]string) (strin
 	updated, err := applyKeyValue(string(snap), key, value)
 	if err != nil {
 		return "", err
+	}
+	// I-1: feed the updated in-memory config into the kernel runtime — --temp
+	// applies immediately (spec §9), --persist only on 'config reload'. Runs
+	// BEFORE the guard mutation so a failing hook leaves both the guard and
+	// the kernel runtime unchanged (no split state).
+	if guard != nil && m.OnConfigChanged != nil {
+		if err := m.OnConfigChanged(updated, !persist); err != nil {
+			return "", fmt.Errorf("config set: apply to runtime: %w", err)
+		}
 	}
 	if guard != nil {
 		guard.Replace([]byte(updated))

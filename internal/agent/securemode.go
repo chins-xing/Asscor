@@ -10,6 +10,14 @@ import (
 	"github.com/asscor/asscor/internal/securemode"
 )
 
+// secureModeMaxNoUnlock is the number of consecutive heartbeats without a
+// successful unlock that a locked agent tolerates before triggering the
+// spec §8.2 self-recovery (self-generate a new password, re-encrypt its .enc,
+// re-report). The kernel's SecureModeNoSecret signal short-circuits this wait
+// (review I-2) — the counter is the fallback for kernels that never signal
+// (e.g. the securemode build tag off).
+const secureModeMaxNoUnlock = 3
+
 // secureState is the agent's secure-mode runtime state. It is nil when the
 // securemode build tag is off (cmd/agent agentSecureVault returns nil), so
 // default builds behave exactly as before.
@@ -18,6 +26,10 @@ type secureState struct {
 	password string // ephemeral unlock secret; memory only, never persisted (spec §3.1/P1-1)
 	reported bool   // password already accepted by the kernel
 	locked   bool   // run-mode restart: awaiting the kernel-issued password
+	// noUnlockCount counts consecutive heartbeats without a successful unlock
+	// while locked (review I-2). Reaching secureModeMaxNoUnlock triggers
+	// secureSelfRecover.
+	noUnlockCount int
 }
 
 // InitSecureMode records the agent's secure-mode vault and classifies the
@@ -246,6 +258,99 @@ func (a *Agent) unlockWithPassword(pw string) error {
 	a.reloadProtectedConfig(plain)
 	logger.WithComponent("agent").Info("secure mode unlocked — protected config reloaded")
 	return nil
+}
+
+// handleSecureModeResponse processes the kernel's secure-mode response after
+// a heartbeat (review I-2). While locked (run-mode restart):
+//
+//   - an issued unlock password is applied; a success resets the miss counter,
+//     a failure counts as a miss and keeps the agent locked (stale/wrong
+//     registration self-heals via the counter → self-recovery);
+//   - otherwise the miss counter grows — the kernel's SecureModeNoSecret
+//     signal (no registration for this fingerprint) jumps straight to the
+//     spec §8.2 self-recovery threshold, and N consecutive misses do the same
+//     (covers kernels that never signal, e.g. the securemode tag off).
+//
+// It is a no-op for unlocked agents.
+func (a *Agent) handleSecureModeResponse(resp *apiv1.HeartbeatResponse) error {
+	if a.secure == nil || !a.secure.locked {
+		return nil
+	}
+	if resp.SecureModeUnlock != nil && resp.SecureModeUnlock.Password != "" {
+		if err := a.unlockWithPassword(resp.SecureModeUnlock.Password); err != nil {
+			a.secure.noUnlockCount++
+			return fmt.Errorf("secure mode unlock failed: %w", err)
+		}
+		a.secure.noUnlockCount = 0
+		return nil
+	}
+	// No unlock issued this cycle.
+	if resp.SecureModeNoSecret {
+		a.secure.noUnlockCount = secureModeMaxNoUnlock
+	} else {
+		a.secure.noUnlockCount++
+	}
+	if a.secure.noUnlockCount >= secureModeMaxNoUnlock {
+		if err := a.secureSelfRecover(); err != nil {
+			// Keep the counter at the threshold: the next heartbeat retries
+			// the recovery immediately instead of re-waiting N cycles.
+			return fmt.Errorf("secure mode self-recovery failed: %w", err)
+		}
+	}
+	return nil
+}
+
+// secureSelfRecover implements spec §8.2's last-resort path: when the kernel
+// can no longer provide this agent's registered unlock secret (registry lost
+// or unrecoverable), the agent self-generates a fresh ephemeral password and
+// re-encrypts its OWN .enc with it (overwriting the old encryption — the old
+// protected content is unrecoverable without the old password, so it is lost
+// by design in this recovery; only the still-readable bootstrap section
+// survives). The report is re-armed so the next heartbeat registers the new
+// password as a fresh registration (reported=false). This is a LOCAL agent
+// action: the kernel only signals (SecureModeNoSecret) and never supplies the
+// new password — a malicious kernel cannot force a specific password on the
+// agent (review I-2 security note).
+func (a *Agent) secureSelfRecover() error {
+	if a.secure == nil || !a.secure.locked || a.secure.vault == nil {
+		return nil
+	}
+	newPW, err := securemode.NewEphemeralPassword()
+	if err != nil {
+		return fmt.Errorf("self-recover: generate new password: %w", err)
+	}
+	// Rebuild a minimal config: the still-readable bootstrap section plus an
+	// empty protected section (old settings lost — the documented cost of
+	// this recovery).
+	boot, err := a.secure.vault.ReadBootstrap()
+	if err != nil {
+		return fmt.Errorf("self-recover: read bootstrap: %w", err)
+	}
+	fresh := strings.TrimRight(boot, "\n") + "\n\n[agent]\n"
+	if err := a.secure.vault.ReencryptOverwrite(newPW, []byte(fresh)); err != nil {
+		return fmt.Errorf("self-recover: re-encrypt: %w", err)
+	}
+	a.secure.password = newPW
+	a.secure.locked = false
+	a.secure.reported = false
+	a.secure.noUnlockCount = 0
+	logger.WithComponent("agent").Warn("secure mode: kernel did not provide the unlock password — self-recovered with a fresh ephemeral password; previous protected settings were lost (spec §8.2)")
+	return nil
+}
+
+// secureReArmReport re-arms the password report when the kernel signals it has
+// no registration for this agent (review I-2 derived case): an UNLOCKED agent
+// whose registration was lost (kernel restarted with an unrecoverable
+// registry) must re-report its password on the next heartbeat so the kernel
+// re-registers it — otherwise its next restart would lock with no way back.
+func (a *Agent) secureReArmReport(resp *apiv1.HeartbeatResponse) {
+	if a.secure == nil || a.secure.locked || a.secure.password == "" {
+		return
+	}
+	if resp.SecureModeNoSecret {
+		a.secure.reported = false
+		logger.WithComponent("agent").Warn("secure mode: kernel has no registration for this agent — re-reporting the ephemeral password on the next heartbeat")
+	}
 }
 
 // reloadProtectedConfig re-derives check-affecting configuration (user checks

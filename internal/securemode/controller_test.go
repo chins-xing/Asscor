@@ -5,7 +5,18 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/asscor/asscor/internal/config"
 )
+
+// parseConfigForTest is the I-1 kernel feed path: the run-mode guard content
+// (decrypted .enc) is re-parsed with config.Parse and pushed into the kernel
+// runtime (SetConfigObj + assessor.ReloadConfig). The controller-level tests
+// verify the guard content is ALWAYS parseable so the kernel wiring stays a
+// thin glue layer.
+func parseConfigForTest(plain string) (*config.Config, error) {
+	return config.Parse(plain)
+}
 
 func newTestController(t *testing.T) *Controller {
 	t.Helper()
@@ -251,4 +262,82 @@ func TestControllerStartupInterruptedEnterRun(t *testing.T) {
 			t.Errorf("error = %v, want verifier mention", err)
 		}
 	})
+	t.Run("default marker enc-only without verifier", func(t *testing.T) {
+		c := newTestController(t)
+		if err := c.EnterRun("pw"); err != nil {
+			t.Fatal(err)
+		}
+		// Simulate the crash window between EncryptFile (plaintext deleted) and
+		// Password.Set (verifier written): marker back to default, vault
+		// enc-only, verifier never written (M1 — review: this combination is
+		// the same interrupted-EnterRun half-state as the other two and must
+		// fail closed, not silently start in default mode).
+		if err := os.Remove(PasswordVerifierPath(c.DataDir)); err != nil {
+			t.Fatal(err)
+		}
+		if err := WriteMarker(MarkerPath(c.DataDir), ModeDefault); err != nil {
+			t.Fatal(err)
+		}
+		c2 := NewController(c.DataDir, c.Vaults)
+		err := c2.Startup()
+		if err == nil {
+			t.Fatal("default marker + enc-only vault without verifier must fail closed on startup")
+		}
+		if !strings.Contains(err.Error(), "verifier") {
+			t.Errorf("error = %v, want verifier mention", err)
+		}
+	})
+}
+
+// TestControllerUnlockGuardContentParsesAsConfig (I-1): after a run-mode
+// restart + unlock, the guard content — the decrypted .enc — must parse with
+// config.Parse so the kernel wiring can feed it back into the kernel runtime
+// (SetConfigObj + assessor.ReloadConfig, mirroring the agent-side
+// reloadProtectedConfig). A kernel restart in run mode currently starts on
+// config.Default(); unlock is what restores the real protected config.
+func TestControllerUnlockGuardContentParsesAsConfig(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.ini")
+	content := "[bootstrap]\nlisten = :50051\n\n[acceptability]\nthreshold = 70\n\n[integrity]\nanti_debug = true\n\n[topology]\nexclude_cidrs = 10.0.0.0/8,172.16.0.0/12\n"
+	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := NewController(dir, []*Vault{{DataDir: dir, ConfigPath: configPath, BootstrapHeader: "[bootstrap]"}})
+	if err := c.EnterRun("pw"); err != nil {
+		t.Fatal(err)
+	}
+	c2 := NewController(c.DataDir, c.Vaults)
+	if err := c2.Startup(); err != nil {
+		t.Fatal(err)
+	}
+	if c2.Guard != nil {
+		t.Fatal("guard must be nil before unlock (kernel runs on defaults)")
+	}
+	if err := c2.Unlock("pw"); err != nil {
+		t.Fatal(err)
+	}
+	if c2.Guard == nil {
+		t.Fatal("guard must be populated after unlock")
+	}
+	cfg, err := config.Parse(string(c2.Guard.Snapshot()))
+	if err != nil {
+		t.Fatalf("guard content must parse as a kernel config: %v", err)
+	}
+	// The protected settings (threshold, integrity keys, topology exclusions)
+	// are exactly what was lost on a run-mode restart — they must round-trip
+	// after unlock. (Weights are renormalized by config.Parse, so they are not
+	// asserted here.)
+	if cfg.Threshold != 70 {
+		t.Errorf("parsed threshold = %v, want 70 (protected content lost?)", cfg.Threshold)
+	}
+	if cfg.AdapterConfig["integrity.anti_debug"] != "true" {
+		t.Errorf("parsed integrity.anti_debug = %q, want true", cfg.AdapterConfig["integrity.anti_debug"])
+	}
+	if len(cfg.TopologyExcludeCIDRs) != 2 || cfg.TopologyExcludeCIDRs[0] != "10.0.0.0/8" {
+		t.Errorf("parsed exclude_cidrs = %v, want [10.0.0.0/8 172.16.0.0/12]", cfg.TopologyExcludeCIDRs)
+	}
+	// Integrity baseline must hold on the guard (hardening, spec §7).
+	if !c2.Guard.IntegrityOK() {
+		t.Error("guard integrity check must pass right after unlock")
+	}
 }

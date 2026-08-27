@@ -296,3 +296,30 @@ func (v *Vault) RotatePassword(oldPassword, newPassword string) error {
 	}
 	return syncDir(filepath.Dir(v.ConfigPath))
 }
+
+// ReencryptOverwrite atomically replaces the .enc with a NEW encryption of
+// in-memory content WITHOUT reading the current .enc (the old password is not
+// needed). Used by the agent's spec §8.2 self-recovery path, where the old
+// unlock secret is unrecoverable: the old protected content is lost by design
+// and the .enc is overwritten with a fresh encryption under the new password.
+// The commit is atomic (tmp + fsync + rename + dir sync) — on any failure the
+// existing .enc is left untouched, exactly like RotatePassword.
+func (v *Vault) ReencryptOverwrite(password string, content []byte) error {
+	payload, err := v.EncryptContent(password, content)
+	if err != nil {
+		return fmt.Errorf("re-encrypt overwrite: %w", err)
+	}
+	tmp := v.encPath() + ".tmp"
+	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+		return err
+	}
+	if err := syncFile(tmp); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, v.encPath()); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return syncDir(filepath.Dir(v.ConfigPath))
+}

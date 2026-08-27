@@ -24,6 +24,12 @@ type ConfigWatcherModule struct {
 	assessor AssessorInterface
 	stopCh   chan struct{}
 	stopped  bool
+	// loadConfig, when set, replaces config.Load as the reload source (I-1).
+	// Run-mode secure mode installs it: the plaintext config.ini no longer
+	// exists and the reload source is the controller's decrypted in-memory
+	// guard. Must be set before Start (the watcher goroutines read it without
+	// a lock).
+	loadConfig func() (*config.Config, error)
 }
 
 func NewConfigWatcherModule(configPath string) *ConfigWatcherModule {
@@ -31,6 +37,17 @@ func NewConfigWatcherModule(configPath string) *ConfigWatcherModule {
 		configPath: configPath,
 		interval:   30 * time.Second,
 	}
+}
+
+// SetConfigLoader installs an alternate reload source (I-1): when set, every
+// reload (SIGHUP and polling) calls the loader instead of config.Load on the
+// watched path. Used by run-mode secure mode, where the plaintext config no
+// longer exists and the source is the controller's decrypted in-memory guard.
+// A nil loader disables it (default behavior). Call before Start.
+func (m *ConfigWatcherModule) SetConfigLoader(loader func() (*config.Config, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.loadConfig = loader
 }
 
 func (m *ConfigWatcherModule) Info() PluginInfo {
@@ -65,6 +82,15 @@ func (m *ConfigWatcherModule) Init(ctx context.Context, kc KernelContext) error 
 	info, err := os.Stat(m.configPath)
 	if err == nil {
 		m.lastMod = info.ModTime()
+	} else if m.loadConfig != nil {
+		// I-1: run mode — the plaintext was encrypted away at shutdown; watch
+		// the .enc file's mtime instead so persisted config changes still
+		// trigger a reload.
+		if encInfo, encErr := os.Stat(m.configPath + ".enc"); encErr == nil {
+			m.lastMod = encInfo.ModTime()
+		} else {
+			logger.WithComponent("config_watcher").Warn("config file not found at resolved path", "path", m.configPath, "error", err)
+		}
 	} else {
 		logger.WithComponent("config_watcher").Warn("config file not found at resolved path", "path", m.configPath, "error", err)
 	}
@@ -168,9 +194,17 @@ func (m *ConfigWatcherModule) sighupLoop() {
 }
 
 func (m *ConfigWatcherModule) checkAndReload() {
-	info, err := os.Stat(m.configPath)
+	path := m.configPath
+	if m.loadConfig != nil {
+		// I-1: in run mode the plaintext is gone — watch the .enc file's
+		// mtime so a persisted (--persist) change still triggers a reload.
+		if _, err := os.Stat(m.configPath); err != nil {
+			path = m.configPath + ".enc"
+		}
+	}
+	info, err := os.Stat(path)
 	if err != nil {
-		logger.WithComponent("config_watcher").Warn("cannot stat config file", "path", m.configPath, "error", err)
+		logger.WithComponent("config_watcher").Warn("cannot stat config file", "path", path, "error", err)
 		return
 	}
 
@@ -218,7 +252,15 @@ func (m *ConfigWatcherModule) forceReload() {
 		m.kernel.Extensions().Execute(m.kernel.Context(), "config.pre_reload", map[string]interface{}{"path": m.configPath})
 	}
 
-	cfg, err := config.Load(m.configPath)
+	var cfg *config.Config
+	var err error
+	if m.loadConfig != nil {
+		// I-1: run-mode secure mode reloads from the controller's decrypted
+		// guard (or refuses before unlock — fail-safe, never defaults).
+		cfg, err = m.loadConfig()
+	} else {
+		cfg, err = config.Load(m.configPath)
+	}
 	if err != nil {
 		logger.WithComponent("config_watcher").Error("failed to reload config", "path", m.configPath, "error", err)
 		if m.kernel.Extensions() != nil {
