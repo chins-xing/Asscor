@@ -26,6 +26,7 @@ func main() {
 	install := flag.Bool("install", false, "install agent as systemd service (requires root)")
 	uninstall := flag.Bool("uninstall", false, "remove agent systemd service")
 	showVersion := flag.Bool("version", false, "display version and exit")
+	modeStatus := flag.Bool("mode-status", false, "print the agent's secure-mode state from disk and exit (ops query; the kernel 'mode agent <id> status' remains the richer operational view)")
 	upgrade := flag.Bool("upgrade", false, "upgrade existing agent installation in-place (requires root)")
 	privileged := flag.Bool("privileged", false, "run as the privileged agent worker process (systemd socket-activated, root-required business only)")
 	privSocket := flag.String("priv-socket", "/run/asscor/agent-priv.sock", "privileged agent unix socket path")
@@ -84,6 +85,32 @@ func main() {
 		if !os.IsNotExist(err) {
 			fmt.Fprintf(os.Stderr, "agent: warning: cannot load config %s: %v\n", *configPath, err)
 		}
+	}
+
+	// Review M4 (spec §9.2): the agent is a flag-driven daemon with no
+	// interactive CLI, so `mode status` is exposed as a one-shot --mode-status
+	// query that classifies the on-disk state and exits — suitable for ops
+	// scripts without inventing an interactive CLI. The kernel-side
+	// `mode agent <id> status` remains the authoritative live view (it knows
+	// the registration state, not just the disk layout).
+	if *modeStatus {
+		v := agentSecureVault(cfg)
+		if v == nil {
+			fmt.Println("mode: default (secure mode disabled — build with -tags securemode)")
+			os.Exit(0)
+		}
+		switch v.Classify() {
+		case "default":
+			fmt.Println("mode: default (config plaintext)")
+		case "run":
+			fmt.Println("mode: run (config encrypted — awaiting kernel-issued unlock password)")
+		case "residue":
+			fmt.Fprintf(os.Stderr, "mode: error: crash residue on %s (plaintext and .enc both present) — manual recovery required\n", v.ConfigPath)
+			os.Exit(1)
+		default: // "none"
+			fmt.Println("mode: none (no config file present)")
+		}
+		os.Exit(0)
 	}
 
 	cfg.KernelAddr = *kernelAddr

@@ -42,6 +42,29 @@ func (v *Vault) HasPlaintext() bool { return v.State().hasPlain }
 // state). Exported so external packages (the agent) can classify startup state.
 func (v *Vault) IsEncrypted() bool { return v.State().hasEnc }
 
+// Classify reports the on-disk mode classification used by status displays
+// (review M4 — the agent's --mode-status flag):
+//
+//	"default" — plaintext config present (default mode);
+//	"run"     — only the .enc exists (run mode; locked until the kernel
+//	             issues the registered password);
+//	"residue" — plaintext AND .enc present (interrupted conversion, manual
+//	             recovery required);
+//	"none"    — neither file present (nothing protected).
+func (v *Vault) Classify() string {
+	st := v.State()
+	switch {
+	case st.hasPlain && st.hasEnc:
+		return "residue"
+	case st.hasPlain:
+		return "default"
+	case st.hasEnc:
+		return "run"
+	default:
+		return "none"
+	}
+}
+
 func (v *Vault) encPath() string { return v.ConfigPath + ".enc" }
 
 // EncryptFile converts the plaintext config to .enc with three-stage atomic

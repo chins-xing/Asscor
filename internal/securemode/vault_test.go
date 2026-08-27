@@ -349,6 +349,33 @@ func TestVaultReencryptOverwriteFailureLeavesEnc(t *testing.T) {
 	}
 }
 
+// TestVaultClassify (review M4): the on-disk mode classification that powers
+// the agent's --mode-status flag and status displays.
+func TestVaultClassify(t *testing.T) {
+	v := newTestVault(t)
+	if got := v.Classify(); got != "default" {
+		t.Errorf("plaintext-only = %q, want default", got)
+	}
+	if err := v.EncryptFile("pw"); err != nil {
+		t.Fatal(err)
+	}
+	if got := v.Classify(); got != "run" {
+		t.Errorf(".enc-only = %q, want run", got)
+	}
+	// residue: plaintext reappears alongside the .enc (crash window).
+	if err := os.WriteFile(v.ConfigPath, []byte("[bootstrap]\naddr = x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := v.Classify(); got != "residue" {
+		t.Errorf("plaintext+.enc = %q, want residue", got)
+	}
+	// none: a fresh vault with neither file present.
+	empty := &Vault{ConfigPath: filepath.Join(t.TempDir(), "ghost.ini")}
+	if got := empty.Classify(); got != "none" {
+		t.Errorf("neither = %q, want none", got)
+	}
+}
+
 // TestVaultEncryptFileSyncsPlaintextFirst (review M2, spec §6): EncryptFile
 // must fsync the plaintext BEFORE encrypting+deleting it, so a crash cannot
 // lose both the plaintext and the .enc. Observable contract: a plaintext that
