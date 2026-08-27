@@ -611,7 +611,7 @@ func (e *Engine) Execute(input string) *CommandResult {
 // deliberately conservative (a token that merely LOOKS like a value is masked)
 // — over-redaction is safe, under-redaction leaks.
 var (
-	secretEqRe   = regexp.MustCompile(`(--(?:password|old|new))=("[^"]*"|'[^']*'|\S+)`)
+	secretEqRe    = regexp.MustCompile(`(--(?:password|old|new))=("[^"]*"|'[^']*'|\S+)`)
 	secretSpaceRe = regexp.MustCompile(`(--(?:password|old|new))\s+("[^"]*"|'[^']*'|\S+)`)
 )
 
