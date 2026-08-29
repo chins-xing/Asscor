@@ -25,6 +25,8 @@
 13. [离线评估模式](#13-离线评估模式)
 14. [环境变量参考](#14-环境变量参考)
 15. [故障排查](#15-故障排查)
+16. [CLI 命令参考](#16-cli-命令参考)
+17. [Secure Mode 安全模式](#17-secure-mode-安全模式实验性build-tagsecuremode)
 
 ---
 
@@ -1130,6 +1132,131 @@ anti_debug = false        # Linux 反调试检测（需显式开启）
 | `sign=false, verify=false` | 单二进制轻量部署 |
 | `sign=true, verify=true` | 防护评估报告伪造 + 算法校验（推荐） |
 | `anti_debug=true` | 敏感环境附加反调试 |
+
+---
+
+## 17. Secure Mode 安全模式（实验性，build-tag：securemode）
+
+> Secure Mode（安全模式）是 ASSCOR-Research-Core 分支独有的实验性模块（`internal/securemode/`），为内核 `config.ini` 与 agent `agent.ini` 提供**默认/运行双模式**的静态配置保护。设计原理与安全模型详见《Secure Mode 安全模式白皮书》；本章为操作手册视角，聚焦命令用法与典型流程。
+
+### 17.1 概念速览
+
+| 模式 | 磁盘文件 | 内存 | 修改配置 | 切换 |
+|------|----------|------|----------|------|
+| **默认 (default)** | `config.ini` / `agent.ini` 明文 | 正常加载 | 直接改明文，立即生效 | `mode enter`（免密） |
+| **运行 (run)** | `.enc` 密文（明文已删除） | 明文配置驻留内存（只读快照） | 需密码；可选临时/落盘 | `mode exit`（需密码） |
+
+- 模式是持久化状态（标记文件 `data_dir/.asscor-mode`），跨重启保持；上次处于运行模式时，重启后需 `mode unlock` 输入密码解锁启动。
+- 进入运行模式**免密**（但需已设置运行密码）；CLI 修改配置、退出运行模式需密码。
+- 默认构建（无 `securemode` tag）不包含本模块，行为与旧版一致。
+
+### 17.2 启用与构建
+
+启用 Secure Mode 能力（内核与 agent 均需带 tag 编译）：
+
+```bash
+go build -tags securemode ./cmd/kernel ./cmd/agent
+```
+
+如需与全部产品模块联合构建：
+
+```bash
+go build -tags "securemode,heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine" -o ASSCOR-kernel ./cmd/kernel/
+```
+
+### 17.3 内核 CLI：mode / config-set 命令族
+
+| 命令 | 说明 | 密码 |
+|------|------|------|
+| `mode status` | 查看当前模式、受保护文件、校验状态、已登记 agent | — |
+| `mode enter --password <pw>` | 默认→运行：加密源文件，配置载入内存 | 免密（需已设置运行密码） |
+| `mode exit --password <pw>` | 运行→默认：解密恢复明文 | **需密码** |
+| `mode unlock --password <pw>` | kernel 重启后（run 标记）解锁并载入配置 | **需密码** |
+| `mode set-password --old <pw> --new <pw>` | 设置/轮换运行密码（config.ini 与登记表同步重加密） | 需旧密码 |
+| `mode agent <id> status` | 查看指定 agent 当前模式/登记状态 | —（内核权限） |
+| `mode agent <id> enter` | 指令 agent 加密进入运行模式（已自动进入时幂等） | —（内核权限） |
+| `mode agent <id> exit` | 指令 agent 解密回默认模式 | —（内核权限） |
+| `mode agent <id> rotate-password` | 指令 agent 轮换密码并重新加密 | —（内核权限） |
+| `config-set <key> <value> --temp\|--persist [--password <pw>]` | 修改配置（见 17.4） | 运行模式需密码 |
+
+> agent 本地 CLI 只提供只读的 `mode status`（及一次性查询 flag `--mode-status`），**不提供** `mode enter/exit/set-password` 与 `config-set`——agent 的模式切换与配置修改一律由内核 CLI 下发（内核托管）。
+
+### 17.4 config-set 两段式持久化
+
+```
+config-set <key> <value>
+  ├── --temp    （默认）：修改内存 + 立即生效，不落盘；重启后还原为磁盘值
+  └── --persist：修改内存 + 写盘（默认模式写明文 / 运行模式写加密），
+                  不立即生效——需 config reload 手动重新载入
+```
+
+- 运行模式修改配置必须携带正确 `--password`；默认模式下修改内存无意义，需用 `--persist` 直接编辑明文文件。
+
+### 17.5 典型操作流程
+
+**首次进入运行模式（内核）：**
+
+```
+ASSCOR> mode enter --password <pw>    # 免密进入；加密 config.ini → config.ini.enc，删除明文
+ASSCOR> mode status                    # 确认模式 = run、受保护文件已加密
+```
+
+**日常修改配置（运行模式，临时生效）：**
+
+```
+ASSCOR> config-set spc.epss_enabled false --temp --password <pw>
+```
+
+**修改配置并落盘（需手动重载）：**
+
+```
+ASSCOR> config-set spc.epss_enabled false --persist --password <pw>
+ASSCOR> config reload
+```
+
+**退出运行模式（恢复明文）：**
+
+```
+ASSCOR> mode exit --password <pw>     # 解密 .enc 恢复明文，删除 .enc
+```
+
+**重启后解锁（上次处于运行模式）：**
+
+```
+# kernel 启动后提示 run 标记，需解锁后才继续服务
+ASSCOR> mode unlock --password <pw>
+```
+
+**轮换运行密码：**
+
+```
+ASSCOR> mode set-password --old <pw> --new <新密码>
+```
+
+**指令 agent 切换模式（内核 CLI）：**
+
+```
+ASSCOR> mode agent <id> status
+ASSCOR> mode agent <id> exit          # 让 agent 解密回默认模式
+ASSCOR> mode agent <id> rotate-password
+```
+
+### 17.6 agent 托管说明
+
+- agent 启动时**自生成临时密码**（每次重启重新生成，不落盘），加密自身 `agent.ini`（保留 `[bootstrap]` 明文引导段）后经 mTLS 心跳上报内核，自动进入运行模式；agent 磁盘上不落任何密码材料。
+- agent 重启解锁：读明文引导段连接内核 → 内核经心跳响应通道下发登记的密码 → 解密受保护段 → 进入运行模式。
+- 若内核侧登记不可用（如 kernel 重启后登记表不可恢复），agent 走**自恢复**路径：自生成新密码并重新上报（旧受保护内容按设计丢弃）。
+
+### 17.7 故障恢复提示
+
+| 现象 | 处理 |
+|------|------|
+| 启动提示"明文 + `.enc` 共存"（崩溃残留） | 按提示人工校验 `.enc` 有效性：有效则删除明文；无效则回滚用明文。不要自动删除任何文件 |
+| 启动提示"模式标记损坏，疑似篡改" | **fail-closed**：拒绝静默降级为明文模式；核对 `data_dir/.asscor-mode` 是否被外部修改，必要时按白皮书人工处置 |
+| 忘记运行密码 | 无恢复通道（单密码即解锁唯一途径）；只能按安全流程人工处置受保护文件 |
+| `mode unlock` 失败 | 确认密码正确、`.enc` 未被篡改；若登记表损坏 kernel 会拒绝启动 run 模式，需用内核密码人工恢复 |
+
+> 详细设计、加密格式与安全模型见《Secure Mode 安全模式白皮书》与 [Secure Mode 模块设计（SDD）](superpowers/specs/2026-08-21-secure-mode-design.md)。
 
 ---
 
