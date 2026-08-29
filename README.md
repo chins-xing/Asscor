@@ -1,5 +1,13 @@
 # ASSCOR — 安全可接受性评估运行时
 
+> 🧪 **分支：`ASSCOR-Research-Core`（研究特化分支，不并入 main）**
+>
+> 本分支在 main 稳定基线（v0.2.x）之上承载两个研究方向：
+> - **拓扑/传播层研究**：M0–M2 里程碑（图模型地基 → 生命周期 → 语义传播），见 [docs/ASSCOR-Research-Core.md](docs/ASSCOR-Research-Core.md) 与 `lunwen/research-core/`
+> - **Secure Mode 实验模块**：build-tag `securemode`（见下文 Secure Mode 章节）
+>
+> 与 main 的区别：本分支含 `securemode` 实验模块与拓扑研究资产，main 不含；研究成熟后以文档/独立模块形式回流 main。
+
 > **ASSCOR**（**ASS**ess + **COR**e）是一个开源的、面向生产的安全可接受性评估平台。
 > 它不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系统的**"安全可接受性"聚合判断层**，
 > 提供面向业务风险的统一视图。
@@ -274,32 +282,48 @@ compliance_framework = GB/T 22239-2019 Level 3
 
 ## Secure Mode（实验性，build-tag：securemode）
 
-默认/运行双模式保护 `config.ini` 与 `agent.ini`：
+> 本分支独有的实验性模块（`internal/securemode/`），保护 `config.ini` 与 `agent.ini` 的静态安全。设计与实现记录见 [docs/superpowers/specs/2026-08-21-secure-mode-design.md](docs/superpowers/specs/2026-08-21-secure-mode-design.md)；以下为总览。
 
-- **默认模式**：配置文件明文，行为与现状一致。
-- **运行模式**：源文件加密为 `.enc`（AES-256-GCM 信封加密 + argon2id），配置驻留内存（只读快照 + SHA-256 校验和基线 + mprotect hardening）；CLI 修改配置/退出运行模式需密码；进入运行模式免密。
-- **agent 托管**：agent 启动自生成临时密码（每次重启重新生成，不落盘），经 mTLS 心跳上报内核（以证书指纹为主键登记），自动进入运行模式；模式切换仅内核 CLI 发起（`mode agent <id> enter|exit|rotate-password`）。
-- **登记表持久化**：内核把 `指纹 → agent_id → 密码` 登记表以运行模式密钥加密落盘（`.asscor-secrets.enc`），kernel 重启（run 模式解锁）时自动解密恢复；锁定 agent 重启后仍可用注册密码解锁。kernel 密码轮换时登记表同步重加密；kernel 退出运行模式时登记表移除。
-- **崩溃安全**：三段式原子转换（写 `.enc.tmp` → 验证回读 → rename → 删明文），任何一步崩溃不丢配置；启动时自动检测崩溃残留（明文 + `.enc` 共存 → fail-closed，人工校验 `.enc` 后恢复）。
-- **模式标记损坏 fail-closed**：标记文件缺失 ≠ 损坏；损坏拒绝静默降级为明文模式（疑似篡改）。
+### 功能
 
-构建（默认构建不含 securemode，行为与旧版一致）：
+- **双模式**：默认模式（配置文件明文，行为与现状一致）/ 运行模式（源文件加密为 `.enc`）。
+- **信封加密**：AES-256-GCM 信封加密 + argon2id 口令派生；进入运行模式免密，CLI 修改配置/退出运行模式需密码。
+- **agent 托管**：agent 启动自生成临时密码（每次重启重新生成，不落盘），经 mTLS 心跳上报内核，自动进入运行模式；模式切换仅内核 CLI 发起（`mode agent <id> enter|exit|rotate-password`）。
+
+### 构建
+
+默认构建不含 securemode（无 tag 编译行为与旧版一致）：
 
 ```bash
 go build -tags securemode ./cmd/kernel ./cmd/agent
 ```
 
-内核 CLI：
+### CLI 用法
 
-```
-mode status                                  # 当前模式 + 各配置状态 + 已登记 agent
-mode enter --password <pw>                   # 进入运行模式（免密校验，需设置运行密码）
-mode exit --password <pw>                    # 退出到默认模式（还原明文）
-mode unlock --password <pw>                  # kernel 重启后（run 标记）解锁并载入配置
-mode set-password --old <pw> --new <pw>      # 轮换运行密码（config.ini 与登记表同步重加密）
-mode agent <id> status|enter|exit|rotate-password   # agent 托管：状态 / 指令
-config-set <key> <value> --temp|--persist --password <pw>   # 修改配置：--temp 内存即时生效 / --persist 落盘（需 reload）
-```
+内核 CLI 命令表：
+
+| 命令 | 说明 |
+|------|------|
+| `mode status` | 当前模式 + 各配置状态 + 已登记 agent |
+| `mode enter --password <pw>` | 进入运行模式（免密校验，需设置运行密码） |
+| `mode exit --password <pw>` | 退出到默认模式（还原明文） |
+| `mode unlock --password <pw>` | kernel 重启后（run 标记）解锁并载入配置 |
+| `mode set-password --old <pw> --new <pw>` | 轮换运行密码（config.ini 与登记表同步重加密） |
+| `mode agent <id> status\|enter\|exit\|rotate-password` | agent 托管：状态 / 指令 |
+| `config-set <key> <value> --temp\|--persist --password <pw>` | 修改配置：`--temp` 内存即时生效 / `--persist` 落盘（需 reload） |
+
+### 安全设计要点
+
+- **崩溃安全**：三段式原子转换（写 `.enc.tmp` → 验证回读 → rename → 删明文），任何一步崩溃不丢配置；启动时自动检测崩溃残留（明文 + `.enc` 共存 → fail-closed，人工校验 `.enc` 后恢复）。
+- **内存硬化**：运行模式配置驻留内存（只读快照 + SHA-256 校验和基线 + mprotect hardening）；加固防篡改（非防篡改保证）。
+- **指纹主键登记**：agent 以 mTLS 证书指纹为主键登记，锁定 agent 重启后仍可用注册密码解锁。
+- **登记表持久化**：内核把 `指纹 → agent_id → 密码` 登记表以运行模式密钥加密落盘（`.asscor-secrets.enc`），kernel 重启（run 模式解锁）时自动解密恢复；kernel 密码轮换时同步重加密，退出运行模式时移除。
+- **fail-closed**：模式标记缺失 ≠ 损坏；标记损坏拒绝静默降级为明文模式（疑似篡改）。
+
+### 与 main 的区别
+
+- **本分支**：含 `securemode` build-tag 模块（main 无）与拓扑研究资产（`docs/ASSCOR-Research-Core.md`、`lunwen/research-core/`）。
+- **main**：稳定基线 v0.2.x，不编译 securemode，行为与旧版一致；本分支实验成熟后以文档/独立模块形式回流。
 
 ## 11. 项目结构
 
@@ -805,4 +829,4 @@ ASSCOR 采用 **[Apache License 2.0](LICENSE)** —— 宽松许可证，允许�
 | **独立开发者** | 直接 Fork 后自由分支发展，可独立分发/商业化，无需等待上游合入 |
 | **维护者** | 保持 `main` 分支稳定，控制上游演进节奏 |
 
-`main` 分支始终为可构建、可测试、可发布状态（CI 全绿）；任何实验性方向（如 `docs/v0.3.0/` 研究提案）不进 `main`，以可选模块/扩展包形式存在。
+`main` 分支始终为可构建、可测试、可发布状态（CI 全绿）；任何实验性方向（如 `ASSCOR-Research-Core` 研究分支的拓扑/传播层研究，研究资产见 `lunwen/research-core/`）不进 `main`，以可选模块/扩展包形式存在。
