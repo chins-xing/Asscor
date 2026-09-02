@@ -49,6 +49,17 @@ func (p *WorkerPool) Submit(task func() error) {
 }
 
 func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration) {
+	// Refuse to schedule after Shutdown: once the pool context is cancelled
+	// every queued worker exits via ctx.Done without running, so a task
+	// submitted now would either be silently dropped (ctx branch wins) or
+	// still execute (semaphore branch wins) — a nondeterministic race. Check
+	// up front so Submit-after-Shutdown deterministically does not run the
+	// task. The select below keeps the ctx branch as a second guard for tasks
+	// that were queued but not yet started when Shutdown ran.
+	if p.ctx.Err() != nil {
+		return
+	}
+
 	p.metrics.mu.Lock()
 	p.metrics.totalSubmitted++
 	p.metrics.mu.Unlock()
@@ -65,9 +76,28 @@ func (p *WorkerPool) SubmitWithTimeout(task func() error, timeout time.Duration)
 			}
 		}()
 
+		// Guard 2: if the pool was shut down between the submit-time check and
+		// this point, do not run the task. Checking ctx before competing for
+		// the semaphore makes Submit-after-Shutdown deterministic in the
+		// common case; the select below remains for tasks already queued when
+		// Shutdown fired.
+		if p.ctx.Err() != nil {
+			return
+		}
 		select {
 		case p.semaphore <- struct{}{}:
 			defer func() { <-p.semaphore }()
+
+			// Track the peak concurrent workers (defect fix: the field was
+			// declared and read but never updated). Update under the metrics
+			// lock right after acquiring the slot, so the peak reflects the
+			// true high-water mark of active tasks.
+			active := len(p.semaphore)
+			p.metrics.mu.Lock()
+			if active > p.metrics.peakActiveWorkers {
+				p.metrics.peakActiveWorkers = active
+			}
+			p.metrics.mu.Unlock()
 
 			taskCtx, taskCancel := context.WithTimeout(context.Background(), timeout)
 			defer taskCancel()

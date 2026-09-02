@@ -47,6 +47,13 @@ func Parse(v string) (SemVer, error) {
 			return sv, fmt.Errorf("invalid patch version in %s: %w", v, err)
 		}
 	}
+	// SemVer core is exactly major[.minor[.patch]]: more dot-separated numeric
+	// segments ("1.2.3.4") are not a valid semver and must be rejected rather
+	// than silently ignored (build metadata after '+' is out of scope here and
+	// currently folded into Pre, which this parser historically allows).
+	if len(parts) > 3 {
+		return sv, fmt.Errorf("invalid semver %s: too many version segments", v)
+	}
 	return sv, nil
 }
 
@@ -76,10 +83,52 @@ func (s SemVer) Compare(other SemVer) int {
 	if other.Pre == "" {
 		return -1
 	}
-	if s.Pre < other.Pre {
-		return -1
+	return comparePre(s.Pre, other.Pre)
+}
+
+// comparePre compares two semver pre-release identifiers field by field
+// (semver §11 precedence rules):
+//   - identifiers split on "."; the shorter field list sorts first when it is
+//     a prefix of the longer ("alpha" < "alpha.1");
+//   - numeric identifiers compare numerically (alpha.10 > alpha.2);
+//   - numeric identifiers sort BEFORE alphanumeric ones (alpha.1 < alpha.a);
+//   - alphanumeric identifiers compare lexicographically in ASCII sort order.
+func comparePre(a, b string) int {
+	fa := strings.Split(a, ".")
+	fb := strings.Split(b, ".")
+	n := len(fa)
+	if len(fb) < n {
+		n = len(fb)
 	}
-	if s.Pre > other.Pre {
+	for i := 0; i < n; i++ {
+		na, ea := strconv.Atoi(fa[i])
+		nb, eb := strconv.Atoi(fb[i])
+		switch {
+		case ea == nil && eb == nil: // both numeric
+			if na != nb {
+				if na < nb {
+					return -1
+				}
+				return 1
+			}
+		case ea == nil: // numeric < alphanumeric
+			return -1
+		case eb == nil: // alphanumeric > numeric
+			return 1
+		default: // both alphanumeric, ASCII lexical
+			if fa[i] != fb[i] {
+				if fa[i] < fb[i] {
+					return -1
+				}
+				return 1
+			}
+		}
+	}
+	// All shared fields equal: shorter list sorts first.
+	if len(fa) != len(fb) {
+		if len(fa) < len(fb) {
+			return -1
+		}
 		return 1
 	}
 	return 0
