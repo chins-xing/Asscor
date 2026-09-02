@@ -167,3 +167,93 @@ func TestVerifyAgentCertRevokedUnboundHost(t *testing.T) {
 		t.Error("revoked fingerprint must not bind to a new host")
 	}
 }
+
+// TestResetIdentityBindingsClearsAllAnchors: after a certificate-fleet rebuild
+// (CA replacement / mass rotation), every stale host↔certificate binding must
+// be clearable so agents can re-register with freshly issued certificates
+// (A-1 cluster incident recovery). Revocations survive the reset.
+func TestResetIdentityBindingsClearsAllAnchors(t *testing.T) {
+	dir := t.TempDir()
+	m := New()
+	m.identityPath = filepath.Join(dir, "heartbeat_identity.json")
+	m.agents = make(map[string]*kernel.AgentRecord)
+	m.BindAgentCert("host-a", "fp-old-a")
+	m.BindAgentCert("host-b", "fp-old-b")
+	if err := m.RevokeCert("fp-stolen", "compromised"); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+
+	n, err := m.ResetIdentityBindings()
+	if err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("cleared = %d, want 2", n)
+	}
+
+	// Bindings gone: agents can re-register first-contact with new certs.
+	if rec := m.agents["host-a"]; rec == nil || rec.CertFingerprint != "" {
+		t.Errorf("host-a binding must be cleared, got %+v", rec)
+	}
+	if !m.BindAgentCert("host-a", "fp-new-a") {
+		t.Error("host-a must re-bind with a fresh cert after reset")
+	}
+	if !m.BindAgentCert("host-b", "fp-new-b") {
+		t.Error("host-b must re-bind with a fresh cert after reset")
+	}
+
+	// Revocations are an independent security ledger — they survive.
+	if !m.IsCertRevoked("fp-stolen") {
+		t.Error("revocation list must survive a binding reset")
+	}
+	if m.VerifyAgentCert("host-new", "fp-stolen") {
+		t.Error("revoked fingerprint must stay rejected after a binding reset")
+	}
+}
+
+// TestResetIdentityBindingsPersistsAndReloads: the cleared state is written
+// to disk; a kernel restart reloads an empty binding set, and only fresh
+// certificates can bind afterwards.
+func TestResetIdentityBindingsPersistsAndReloads(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "heartbeat_identity.json")
+
+	m1 := New()
+	m1.identityPath = path
+	m1.agents = make(map[string]*kernel.AgentRecord)
+	m1.BindAgentCert("host-a", "fp-old")
+	if _, err := m1.ResetIdentityBindings(); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+
+	// Disk must reflect the cleared state (no stale fp-old binding).
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("identity file must exist after reset: %v", err)
+	}
+	if got := string(data); got == `{"host-a":"fp-old"}` {
+		t.Error("reset must persist the cleared bindings, not the stale ones")
+	}
+
+	// Run 2 (kernel restart): reload — no binding may come back.
+	m2 := New()
+	m2.identityPath = path
+	m2.agents = make(map[string]*kernel.AgentRecord)
+	m2.loadIdentityLocked()
+	if rec := m2.agents["host-a"]; rec != nil && rec.CertFingerprint != "" {
+		t.Errorf("stale binding restored after restart, got %+v", rec)
+	}
+	if !m2.BindAgentCert("host-a", "fp-fresh") {
+		t.Error("fresh cert must bind after restart with cleared bindings")
+	}
+}
+
+// TestResetIdentityBindingsNoDataDir: without an initialized data dir there
+// is nothing to reset — the call must fail loudly rather than silently no-op.
+func TestResetIdentityBindingsNoDataDir(t *testing.T) {
+	m := New()
+	m.agents = make(map[string]*kernel.AgentRecord)
+	if _, err := m.ResetIdentityBindings(); err == nil {
+		t.Error("reset without a data dir must error")
+	}
+}

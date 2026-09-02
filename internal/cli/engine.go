@@ -192,13 +192,18 @@ type SourceAccess interface {
 	GetAuditLog(sourceID string, limit int) []kernel.AuditLogEntry
 }
 
-// RevocationAccess exposes certificate revocation management (audit I-03):
-// revoke a compromised certificate fingerprint, list revocations, and restore
-// a mistakenly revoked one.
+// RevocationAccess exposes certificate revocation and identity-binding
+// management (audit I-03): revoke a compromised certificate fingerprint, list
+// revocations, restore a mistakenly revoked one, and — after a
+// certificate-fleet rebuild — clear every host↔certificate binding so agents
+// can re-register with freshly issued certificates.
 type RevocationAccess interface {
 	Revoke(fingerprint, reason string) error
 	Unrevoke(fingerprint string) error
 	ListRevoked() []kernel.RevokedCertInfo
+	// ResetBindings clears all host↔certificate-fingerprint bindings
+	// (revocations are kept). Returns the number of bindings cleared.
+	ResetBindings() (int, error)
 }
 
 type BusAccess = kernel.BusAccess

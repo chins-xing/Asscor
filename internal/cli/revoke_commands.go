@@ -7,18 +7,19 @@ import (
 	"time"
 )
 
-// certCmdInfo manages certificate revocations (audit I-03): revoke a
-// compromised certificate fingerprint, list revocations, and restore a
-// mistakenly revoked one.
+// certCmdInfo manages certificate revocations (audit I-03) and identity
+// bindings: revoke a compromised certificate fingerprint, list revocations,
+// restore a mistakenly revoked one, and reset all host↔certificate bindings
+// after a certificate-fleet rebuild.
 var certCmdInfo = CommandInfo{
-	Name:         "cert",
-	Short:        "Manage certificate revocations",
-	Description:  "Revoke compromised certificate fingerprints, list revocations, and restore mistakenly revoked certificates (audit I-03)",
-	Usage:        "cert <revoke|unrevoke|revocations> <fingerprint> [--reason ...]",
+	Name:        "cert",
+	Short:       "Manage certificate revocations and identity bindings",
+	Description: "Revoke compromised certificate fingerprints, list revocations, restore mistakenly revoked certificates, and reset all host↔certificate bindings after a CA/certificate rebuild (audit I-03)",
+	Usage:        "cert <revoke|unrevoke|revocations|reset> [fingerprint] [--reason ...]",
 	Category:     CategorySystem,
 	RequiredPerm: PermRead,
 	Params: []CommandParam{
-		{Name: "action", Description: "Action: revoke, unrevoke, revocations", Required: true, EnumValues: []string{"revoke", "unrevoke", "revocations"}},
+		{Name: "action", Description: "Action: revoke, unrevoke, revocations, reset", Required: true, EnumValues: []string{"revoke", "unrevoke", "revocations", "reset"}},
 		{Name: "fingerprint", Description: "SHA-256 fingerprint of the certificate (hex, no colons)", Required: false},
 	},
 	Options: []CommandOption{
@@ -28,6 +29,7 @@ var certCmdInfo = CommandInfo{
 		"cert revoke 8936cf10c6354dfa529ab2f3a6160cc98f4860e541a94dfcf2b0afc978be269e --reason=compromised",
 		"cert revocations",
 		"cert unrevoke 8936cf10c6354dfa529ab2f3a6160cc98f4860e541a94dfcf2b0afc978be269e",
+		"cert reset",
 	},
 }
 
@@ -56,17 +58,63 @@ func certCmdHandler(ctx *CommandContext) *CommandResult {
 		return certUnrevokeHandler(ctx, revocations)
 	case "revocations":
 		return certListHandler(ctx, revocations)
+	case "reset":
+		if !ctx.Kernel.CheckPermission(PermAdmin) {
+			return &CommandResult{ExitCode: ExitError, Err: fmt.Errorf("permission denied: cert reset requires admin level access"), Output: "Permission denied: cert reset requires admin level access\n"}
+		}
+		return certResetHandler(ctx, revocations)
 	default:
 		return &CommandResult{
 			ExitCode: ExitUsage,
 			Err:      fmt.Errorf("unknown cert action: %s", action),
-			Output:   fmt.Sprintf("Unknown action '%s'. Use: revoke, unrevoke, revocations\n", action),
+			Output:   fmt.Sprintf("Unknown action '%s'. Use: revoke, unrevoke, revocations, reset\n", action),
 		}
 	}
 }
 
 func certCompletions(ctx *CommandContext, partial string) []string {
-	return []string{"revoke", "unrevoke", "revocations"}
+	return []string{"revoke", "unrevoke", "revocations", "reset"}
+}
+
+// certResetHandler clears every host↔certificate-fingerprint binding so
+// agents can re-register with freshly issued certificates. It is the recovery
+// path after a CA replacement / mass certificate rotation, where stale
+// bindings would otherwise anchor each host to an obsolete certificate and
+// block registration (A-1 cluster incident). Revocations are deliberately
+// kept: a revoked certificate stays rejected.
+func certResetHandler(ctx *CommandContext, revocations RevocationAccess) *CommandResult {
+	// Require an explicit confirmation flag so a typo cannot wipe every
+	// identity anchor: --yes or --force both count.
+	if !ctx.Flags["yes"] && !ctx.Flags["force"] {
+		return &CommandResult{
+			ExitCode: ExitUsage,
+			Err:      fmt.Errorf("cert reset requires --yes (or --force) to confirm"),
+			Output:   "Usage: cert reset --yes\n  Clears ALL host↔certificate bindings so agents re-register with their current certificates.\n  Revocations are NOT cleared. Only use this after a CA/certificate rebuild.\n",
+		}
+	}
+
+	n, err := revocations.ResetBindings()
+	if err != nil {
+		return &CommandResult{
+			ExitCode: ExitError,
+			Err:      err,
+			Output:   fmt.Sprintf("Identity binding reset failed: %v\n", err),
+		}
+	}
+
+	if ctx.JSON {
+		data, _ := json.MarshalIndent(map[string]interface{}{
+			"status":           "reset",
+			"bindings_cleared": n,
+		}, "", "  ")
+		return &CommandResult{ExitCode: ExitOK, Output: string(data) + "\n"}
+	}
+
+	return &CommandResult{
+		ExitCode: ExitOK,
+		Output: fmt.Sprintf("Cleared %d identity binding(s). Agents will re-register with their current certificates on next contact.\n"+
+			"Revocations were kept — revoke obsolete certificates explicitly if they must stay rejected.\n", n),
+	}
 }
 
 // normalizeFingerprint strips colons/whitespace and lowercases, so the

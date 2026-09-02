@@ -131,6 +131,7 @@ func (m *mockKernel) Sources() SourceAccess {
 
 type mockRevocationAccess struct {
 	revoked map[string]string // fingerprint → reason
+	cleared int
 }
 
 func (r *mockRevocationAccess) Revoke(fingerprint, reason string) error {
@@ -158,6 +159,11 @@ func (r *mockRevocationAccess) ListRevoked() []kernel.RevokedCertInfo {
 		out = append(out, kernel.RevokedCertInfo{Fingerprint: fp, Reason: reason})
 	}
 	return out
+}
+
+func (r *mockRevocationAccess) ResetBindings() (int, error) {
+	r.cleared++
+	return r.cleared, nil
 }
 
 func (m *mockKernel) Revocations() RevocationAccess {
@@ -1104,5 +1110,54 @@ func TestOutput_ColorToggle(t *testing.T) {
 	}
 	if o.colors.Reset != "" {
 		t.Error("Colors should be empty when disabled")
+	}
+}
+
+// TestCertResetRequiresConfirmation: `cert reset` wipes every identity anchor,
+// so it must refuse to run without an explicit --yes/--force.
+func TestCertResetRequiresConfirmation(t *testing.T) {
+	mk := newMockKernel()
+	e := newTestEngine(mk)
+
+	result := e.Execute("cert reset")
+	if result.ExitCode != ExitUsage {
+		t.Fatalf("ExitCode = %d, want %d (confirmation required), output: %s", result.ExitCode, ExitUsage, result.Output)
+	}
+	if !strings.Contains(result.Output, "--yes") {
+		t.Errorf("usage should mention --yes, got: %s", result.Output)
+	}
+}
+
+// TestCertResetClearsBindings: with --yes the reset runs and reports how many
+// bindings were cleared.
+func TestCertResetClearsBindings(t *testing.T) {
+	mk := newMockKernel()
+	mk.revocations = &mockRevocationAccess{}
+	e := newTestEngine(mk)
+
+	result := e.Execute("cert reset --yes")
+	if result.ExitCode != ExitOK {
+		t.Fatalf("ExitCode = %d, want %d, output: %s", result.ExitCode, ExitOK, result.Output)
+	}
+	if !strings.Contains(result.Output, "Cleared") {
+		t.Errorf("output should report cleared bindings, got: %s", result.Output)
+	}
+	if !strings.Contains(result.Output, "Revocations were kept") {
+		t.Errorf("output should note revocations are kept, got: %s", result.Output)
+	}
+}
+
+// TestCertResetDeniedWithoutAdmin: identity reset is an admin-level operation.
+func TestCertResetDeniedWithoutAdmin(t *testing.T) {
+	mk := newMockKernel()
+	mk.permLevel = PermRead
+	e := newTestEngine(mk)
+
+	result := e.Execute("cert reset --yes")
+	if result.ExitCode != ExitError {
+		t.Fatalf("ExitCode = %d, want %d (permission denied), output: %s", result.ExitCode, ExitError, result.Output)
+	}
+	if !strings.Contains(strings.ToLower(result.Output), "permission denied") {
+		t.Errorf("output should mention permission denied, got: %s", result.Output)
 	}
 }

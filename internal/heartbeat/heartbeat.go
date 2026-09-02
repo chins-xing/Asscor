@@ -400,8 +400,7 @@ func (m *Module) IsCertRevoked(fingerprint string) bool {
 // host currently bound to it, so the host can re-register with a freshly
 // issued certificate. The revocation is persisted and enforced at every
 // identity checkpoint (Register / Heartbeat / VerifyAgentCert).
-func (m *Module) RevokeCert(fingerprint, reason string) error {
-	if fingerprint == "" {
+func (m *Module) RevokeCert(fingerprint, reason string) error {	if fingerprint == "" {
 		return fmt.Errorf("cannot revoke an empty fingerprint (mTLS disabled)")
 	}
 	m.mu.Lock()
@@ -463,6 +462,42 @@ func (m *Module) ListRevokedCerts() []kernel.RevokedCertInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.sortedRevokedLocked()
+}
+
+// ResetIdentityBindings clears every host↔certificate-fingerprint binding and
+// persists the empty state. This is the recovery path for a certificate-fleet
+// rebuild (CA replacement / mass cert rotation): the old bindings would
+// otherwise anchor each host to an obsolete certificate and block
+// re-registration with freshly issued ones (A-1 cluster incident). After the
+// reset, every agent's next registration re-binds first-contact style.
+//
+// The revocation list is deliberately NOT touched: revocations are an
+// independent security ledger (audit I-03) and must survive a binding reset —
+// a revoked certificate stays rejected even when all bindings are cleared.
+// Operators who rotate the whole CA and want old certs rejected should revoke
+// them explicitly (RevokeCert / `cert revoke`) either before or after this
+// reset.
+//
+// Returns the number of bindings cleared.
+func (m *Module) ResetIdentityBindings() (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.identityPath == "" {
+		return 0, fmt.Errorf("identity bindings not initialized (no data dir)")
+	}
+	cleared := 0
+	for id, rec := range m.agents {
+		if rec.CertFingerprint != "" {
+			rec.CertFingerprint = ""
+			cleared++
+			logger.WithComponent("heartbeat").Info("identity binding cleared",
+				"host_id", id)
+		}
+	}
+	m.saveIdentityLocked()
+	logger.WithComponent("heartbeat").Info("identity bindings reset",
+		"cleared", cleared, "path", m.identityPath)
+	return cleared, nil
 }
 
 func (m *Module) GetAgent(hostID string) *kernel.AgentRecord {

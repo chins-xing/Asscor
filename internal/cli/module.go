@@ -279,6 +279,14 @@ func (r *revocationBridge) ListRevoked() []kernel.RevokedCertInfo {
 	return hb.ListRevokedCerts()
 }
 
+func (r *revocationBridge) ResetBindings() (int, error) {
+	hb, ok := r.heartbeat()
+	if !ok {
+		return 0, fmt.Errorf("heartbeat module not available")
+	}
+	return hb.ResetIdentityBindings()
+}
+
 type logBridge struct {
 	kernel kernel.KernelContext
 }
