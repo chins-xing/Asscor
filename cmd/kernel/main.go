@@ -162,6 +162,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	// gRPC plaintext refusal (attack-surface hardening, mirrors --no-mtls):
+	// enabling the gRPC server without TLS while mTLS is required would expose
+	// an unauthenticated management API (Register/ExecuteCommand) on the
+	// configured listen address. Refuse to start instead of silently serving
+	// plaintext — set grpc.tls_enabled=true (or require_mtls=false in isolated
+	// dev only). The gRPC server is off by default, so this only fires when an
+	// operator explicitly enables it without TLS.
+	if grpcEnabled(ac) && !grpcTLSEnabled(ac) && config.RequireMTLS(ac) {
+		log.Error("refusing to start: grpc.enabled requires grpc.tls_enabled when [comms] require_mtls=true; enable gRPC TLS or leave gRPC disabled (isolated dev may set require_mtls=false)")
+		os.Exit(1)
+	}
+
 	// Bridge resilience → integrity: sign incident reports for audit trail.
 	resilience.SetSignCallback(func(payload string) {
 		integrity.GetSigner().Sign(nil) // placeholder: actual signing via assessment result
@@ -713,4 +725,19 @@ func verifyCertificates(certDir string) bool {
 	}
 
 	return allOK
+}
+
+
+// grpcEnabled reports whether the optional gRPC server is enabled via
+// config.ini [grpc] enabled=true/on/1 (default off).
+func grpcEnabled(ac map[string]string) bool {
+	v := ac["grpc.enabled"]
+	return v == "on" || v == "true" || v == "1"
+}
+
+// grpcTLSEnabled reports whether the optional gRPC server requires TLS via
+// config.ini [grpc] tls_enabled=true/on/1 (default false).
+func grpcTLSEnabled(ac map[string]string) bool {
+	v := ac["grpc.tls_enabled"]
+	return v == "on" || v == "true" || v == "1"
 }
