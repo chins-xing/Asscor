@@ -1302,11 +1302,12 @@ Shutdown (`Shutdown()`) stops plugins in reverse order of descending priority.
 | `log_collector` | LogCollectorModule | 70 | Agent log collection, append-only writes to local files | `collector` | `internal/collector/` |
 | `cli` | CLIModule | 90 | Interactive CLI terminal + Unix-socket remote connection | Always compiled | `internal/cli/` |
 | `srd_adapters` | SRDAdapterModule | 110 | SRD external-result adapter pipeline | `srdwrapper` | `internal/srdwrapper/` |
+| `securemode` | SecureModeModule | — | Secure mode: default/run dual-mode config protection (AES-256-GCM envelope encryption + argon2id), CLI `mode`/`config-set` command family, kernel-managed agents with encrypted registry persistence; registered via the DI container (`BindNamed("securemode")`) and wired by `cmd/kernel/main.go` — not a standard Plugin-lifecycle module | `securemode` | `internal/securemode/` (off by default: no-tag builds omit it, behavior unchanged) |
 
 **Full build command (all optional module build-tags):**
 
 ```bash
-go build -tags "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine" -o ASSCOR-kernel ./cmd/kernel/
+go build -tags "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine,securemode" -o ASSCOR-kernel ./cmd/kernel/
 ```
 
 The default `go build ./cmd/kernel/` (no tags) compiles the zero-bloat minimal kernel — the extension framework + lifecycle + core infrastructure only. `scripts/build.sh` and `deploy/Makefile` carry the synchronized `MODULE_TAGS`.
