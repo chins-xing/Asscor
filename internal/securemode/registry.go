@@ -150,6 +150,17 @@ func (r *SecretRegistry) Unmarshal(data []byte) error {
 	if entries == nil {
 		return fmt.Errorf("registry unmarshal: null payload is not a registry")
 	}
+	// Entry-level validation: a crafted/corrupt payload may contain entries
+	// with empty keys, empty agent IDs, or empty passwords (e.g. {"fp1":null}
+	// yields a zero-value AgentSecret). Accepting them would leave unusable
+	// zero-value registrations that shadow legitimate unlock lookups. Reject
+	// the whole payload so the caller's fail-closed path (spec §11) keeps the
+	// previous registry intact.
+	for fp, s := range entries {
+		if fp == "" || s.AgentID == "" || s.Password == "" {
+			return fmt.Errorf("registry unmarshal: invalid entry for fingerprint %q (empty fingerprint/agent_id/password)", fp)
+		}
+	}
 	r.entries = entries
 	return nil
 }

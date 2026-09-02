@@ -15,9 +15,11 @@ func TestMemoryGuardBaseline(t *testing.T) {
 
 func TestMemoryGuardDetectsMutation(t *testing.T) {
 	g := NewMemoryGuard([]byte("original"))
-	// Simulate an attacker (or bug) mutating the internal buffer.
+	// Simulate an attacker (or bug) mutating the internal buffer. On Linux the
+	// storage is mprotect(PROT_READ); the test helper lifts protection first
+	// (as a real attacker with write access must), then re-hardens.
 	g.mu.Lock()
-	g.data[0] = 'X'
+	mutateGuardData(g)
 	g.mu.Unlock()
 	if g.IntegrityOK() {
 		t.Error("mutation must be detected by baseline hash")

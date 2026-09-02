@@ -341,3 +341,101 @@ func TestControllerUnlockGuardContentParsesAsConfig(t *testing.T) {
 		t.Error("guard integrity check must pass right after unlock")
 	}
 }
+
+// TestControllerEmptyVaults: EnterRun/Unlock must fail cleanly (no panic) when
+// no vault is configured — a controller constructed with an empty vault list
+// (e.g. a mis-wired kernel) must not index Vaults[0].
+func TestControllerEmptyVaults(t *testing.T) {
+	dir := t.TempDir()
+	c := NewController(dir, nil) // no vaults
+
+	if err := c.EnterRun("pw"); err == nil {
+		t.Error("EnterRun with no vaults must fail")
+	}
+	if err := c.Unlock("pw"); err == nil {
+		t.Error("Unlock with no vaults must fail")
+	}
+	if c.Mode != ModeDefault {
+		t.Errorf("mode after failed EnterRun = %q, want default", c.Mode)
+	}
+	if c.Guard != nil {
+		t.Error("guard must remain nil with no vaults")
+	}
+}
+
+// TestControllerRefusesSensitiveOpsUnderDebugger (spec §7.3 hardening): mode
+// transitions that touch the plaintext/password must be refused while a
+// debugger/tracer is attached. The probe is injected so the refusal path is
+// exercised without a real tracer.
+func TestControllerRefusesSensitiveOpsUnderDebugger(t *testing.T) {
+	orig := debuggerDetected
+	debuggerDetected = func() bool { return true }
+	defer func() { debuggerDetected = orig }()
+
+	c := newTestController(t)
+	// default -> run refused under debugger
+	if err := c.EnterRun("pw"); err == nil {
+		t.Fatal("EnterRun under debugger must be refused")
+	} else if !strings.Contains(err.Error(), "debugger/tracer") {
+		t.Errorf("refusal message should mention debugger, got: %v", err)
+	}
+	if c.Mode != ModeDefault {
+		t.Error("mode must stay default after refused EnterRun")
+	}
+
+	// Get into run mode with the probe off, then each sensitive op refused.
+	debuggerDetected = func() bool { return false }
+	if err := c.EnterRun("pw"); err != nil {
+		t.Fatalf("EnterRun (no debugger) failed: %v", err)
+	}
+	debuggerDetected = func() bool { return true }
+	if err := c.ExitRun("pw"); err == nil {
+		t.Fatal("ExitRun under debugger must be refused")
+	}
+	if err := c.Unlock("pw"); err == nil {
+		t.Fatal("Unlock under debugger must be refused")
+	}
+	if err := c.SetPassword("pw", "newpw"); err == nil {
+		t.Fatal("SetPassword under debugger must be refused")
+	}
+	if c.Mode != ModeRun {
+		t.Error("mode must stay run after refused ops")
+	}
+	// The guard must still be intact (refusals happen before any mutation).
+	if !c.Guard.IntegrityOK() {
+		t.Error("guard integrity must hold after refused ops")
+	}
+}
+
+// TestControllerGuardReleasedOnExit: leaving run mode must release the guard's
+// backing allocation (mmap on Linux) so repeated enter/exit cycles do not leak
+// mappings; the guard pointer is nil after exit and a fresh guard is created on
+// re-entry.
+func TestControllerGuardReleasedOnExit(t *testing.T) {
+	c := newTestController(t)
+	if err := c.EnterRun("pw"); err != nil {
+		t.Fatal(err)
+	}
+	if c.Guard == nil {
+		t.Fatal("guard must exist in run mode")
+	}
+	// Hold a reference to the pre-exit guard; after ExitRun it must be released
+	// (data nil) and the controller's pointer cleared.
+	old := c.Guard
+	if err := c.ExitRun("pw"); err != nil {
+		t.Fatal(err)
+	}
+	if c.Guard != nil {
+		t.Error("controller must drop the guard on exit")
+	}
+	if old.data != nil {
+		t.Error("guard backing must be released (data nil) after exit")
+	}
+	// Re-enter creates a fresh guard that is usable.
+	if err := c.EnterRun("pw"); err != nil {
+		t.Fatal(err)
+	}
+	if c.Guard == nil || !c.Guard.IntegrityOK() {
+		t.Error("re-entered guard must be usable")
+	}
+}

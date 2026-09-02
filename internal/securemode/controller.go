@@ -43,12 +43,41 @@ func NewController(dataDir string, vaults []*Vault) *Controller {
 	}
 }
 
+// debuggerDetected is the injectable probe used by checkNotDebugged. It
+// defaults to the platform implementation (debuggerAttached) and can be
+// overridden in tests to exercise the refusal path without a real tracer.
+var debuggerDetected = debuggerAttached
+
+// checkNotDebugged refuses mode transitions while a debugger/tracer is
+// attached (spec §7.3 hardening: anti-debug detection). Hardening only — a
+// tracer under kernel-level privileges cannot be stopped by this check, but
+// the common gdb/strace attach is caught and the sensitive transition is
+// refused. Returns nil when no tracer is present.
+func (c *Controller) checkNotDebugged(op string) error {
+	if debuggerDetected() {
+		return fmt.Errorf("%s refused: debugger/tracer detected (hardening, spec §7.3)", op)
+	}
+	return nil
+}
+
+// releaseGuard frees the current memory guard's backing allocation (mmap on
+// Linux). Callers hold c.Mu. Safe with a nil guard.
+func (c *Controller) releaseGuard() {
+	if c.Guard != nil {
+		c.Guard.Release()
+		c.Guard = nil
+	}
+}
+
 // EnterRun transitions default -> run (NO password required). Encrypts all
 // vaults, stores the password verifier, writes the run marker, and builds the
 // memory guard from the plaintext config.
 func (c *Controller) EnterRun(password string) error {
 	c.Mu.Lock()
 	defer c.Mu.Unlock()
+	if err := c.checkNotDebugged("mode enter"); err != nil {
+		return err
+	}
 	if c.Mode == ModeRun {
 		return nil // idempotent
 	}
@@ -60,12 +89,16 @@ func (c *Controller) EnterRun(password string) error {
 	if err := c.Password.Set(password); err != nil {
 		return err
 	}
+	if len(c.Vaults) == 0 {
+		return errors.New("enter run: no vault configured")
+	}
 	// Build the guard from the first vault's plaintext view (decrypt from
 	// freshly-written .enc to exercise the round trip).
 	plain, err := c.Vaults[0].LoadCiphertext(password)
 	if err != nil {
 		return fmt.Errorf("enter run: verify plaintext: %w", err)
 	}
+	c.releaseGuard() // defensive: never leak a previous guard's mmap
 	c.Guard = NewMemoryGuard([]byte(plain))
 	if err := WriteMarker(MarkerPath(c.DataDir), ModeRun); err != nil {
 		return err
@@ -88,6 +121,9 @@ func (c *Controller) EnterRun(password string) error {
 func (c *Controller) ExitRun(password string) error {
 	c.Mu.Lock()
 	defer c.Mu.Unlock()
+	if err := c.checkNotDebugged("mode exit"); err != nil {
+		return err
+	}
 	if c.Mode == ModeDefault {
 		return nil
 	}
@@ -118,7 +154,7 @@ func (c *Controller) ExitRun(password string) error {
 		return err
 	}
 	c.Mode = ModeDefault
-	c.Guard = nil
+	c.releaseGuard()
 	return nil
 }
 
@@ -132,6 +168,9 @@ func (c *Controller) ExitRun(password string) error {
 func (c *Controller) SetPassword(oldPassword, newPassword string) error {
 	c.Mu.Lock()
 	defer c.Mu.Unlock()
+	if err := c.checkNotDebugged("mode set-password"); err != nil {
+		return err
+	}
 	if c.Mode != ModeRun {
 		return errors.New("set password: only allowed in run mode")
 	}
@@ -272,11 +311,17 @@ func (c *Controller) Startup() error {
 func (c *Controller) Unlock(password string) error {
 	c.Mu.Lock()
 	defer c.Mu.Unlock()
+	if err := c.checkNotDebugged("mode unlock"); err != nil {
+		return err
+	}
 	if c.Mode != ModeRun {
 		return errors.New("unlock: only needed in run mode")
 	}
 	if !c.Password.Verify(password) {
 		return errors.New("unlock: incorrect password")
+	}
+	if len(c.Vaults) == 0 {
+		return errors.New("unlock: no vault configured")
 	}
 	plain, err := c.Vaults[0].LoadCiphertext(password)
 	if err != nil {
@@ -285,6 +330,7 @@ func (c *Controller) Unlock(password string) error {
 	if err := c.loadSecretsLocked(password); err != nil {
 		return err
 	}
+	c.releaseGuard() // defensive: never leak a previous guard's mmap
 	c.Guard = NewMemoryGuard([]byte(plain))
 	c.runPassword = password
 	return nil

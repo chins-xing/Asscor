@@ -107,6 +107,34 @@ func TestRegistryMarshalRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRegistryUnmarshalRejectsEmptyEntry(t *testing.T) {
+	r := NewSecretRegistry()
+	r.Register("fp-valid", "host-a", "pw-a")
+	before := r.Size()
+
+	// {"fp1":null} decodes into a zero-value AgentSecret (empty agent_id and
+	// password). It must be rejected, not silently accepted as a useless
+	// registration that shadows the real unlock lookup.
+	if err := r.Unmarshal([]byte(`{"fp1":null}`)); err == nil {
+		t.Error("entry with null value must fail Unmarshal")
+	}
+	// Explicit empty fields must also be rejected.
+	if err := r.Unmarshal([]byte(`{"fp1":{"agent_id":"","password":""}}`)); err == nil {
+		t.Error("entry with empty agent_id/password must fail Unmarshal")
+	}
+	// Empty fingerprint key must be rejected.
+	if err := r.Unmarshal([]byte(`{"":{"agent_id":"h","password":"p"}}`)); err == nil {
+		t.Error("entry with empty fingerprint key must fail Unmarshal")
+	}
+	// Failed Unmarshal must not clobber existing entries (fail-closed, spec §11).
+	if r.Size() != before {
+		t.Errorf("failed Unmarshal clobbered registry: size %d -> %d", before, r.Size())
+	}
+	if s, ok := r.Lookup("fp-valid"); !ok || s.Password != "pw-a" {
+		t.Error("existing registration must survive failed Unmarshal")
+	}
+}
+
 func TestRegistryPersistenceEncrypted(t *testing.T) {
 	// Persistence contract (spec §10.1): this layer serializes the registry as
 	// PLAINTEXT JSON; the CALLER encrypts the blob with the kernel run-mode key
