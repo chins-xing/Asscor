@@ -1,6 +1,11 @@
 //go:build linux
 
-package cli
+// Package agentinstall provides single-binary agent installation as a Linux
+// systemd service. It is deliberately a leaf package with NO dependency on
+// internal/kernel or internal/cli, so the agent binary (cmd/agent) can use it
+// without dragging the whole kernel contract surface into a thin managed host
+// (coupling audit 2026-09-03, finding C1).
+package agentinstall
 
 import (
 	"fmt"
@@ -95,7 +100,59 @@ func writeAgentPrivUnits() {
 	os.WriteFile(agentPrivServiceFile, []byte(agentPrivUnitContent(agentBinDir)), 0644)
 }
 
-func InstallAgent() error {
+func requireRoot() error {
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("this operation requires root privileges")
+	}
+	return nil
+}
+
+func copySelfTo(targetPath string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("get executable path: %w", err)
+	}
+	data, err := os.ReadFile(exe)
+	if err != nil {
+		return fmt.Errorf("read self: %w", err)
+	}
+	if err := os.WriteFile(targetPath, data, 0755); err != nil {
+		return fmt.Errorf("write binary to %s: %w", targetPath, err)
+	}
+	return nil
+}
+
+func systemctlReload() {
+	exec.Command("systemctl", "daemon-reload").Run()
+}
+
+func systemctlStopDisable(serviceName string) {
+	exec.Command("systemctl", "stop", serviceName).Run()
+	exec.Command("systemctl", "disable", serviceName).Run()
+}
+
+func chownAsscor(paths ...string) {
+	for _, p := range paths {
+		exec.Command("chown", "-R", "asscor:asscor", p).Run()
+	}
+}
+
+func waitForServiceHealthy(name string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		out, _ := exec.Command("systemctl", "is-active", name).Output()
+		status := string(out)
+		if status == "active\n" {
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("service %s did not become active within %v", name, timeout)
+}
+
+// Install installs the agent as systemd services (main + socket-activated
+// privileged worker). Requires root.
+func Install() error {
 	if err := requireRoot(); err != nil {
 		return err
 	}
@@ -137,7 +194,8 @@ func InstallAgent() error {
 	return nil
 }
 
-func UninstallAgent() error {
+// Uninstall stops and removes the agent systemd units. Requires root.
+func Uninstall() error {
 	if err := requireRoot(); err != nil {
 		return err
 	}
@@ -151,7 +209,9 @@ func UninstallAgent() error {
 	return nil
 }
 
-func UpgradeAgent() error {
+// Upgrade replaces the installed agent binary in place and restarts the
+// service, rolling back on failure. Requires root.
+func Upgrade() error {
 	if err := requireRoot(); err != nil {
 		return err
 	}

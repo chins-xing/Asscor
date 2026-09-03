@@ -277,6 +277,19 @@ func main() {
 		wireSecureModeConfigLoader(configWatcher, secureCtrl, resolvedConfigPath)
 	}
 
+	// Module-composition consistency (coupling audit 2026-09-03, F3): modules
+	// may depend on hardening features implemented behind other build tags.
+	// Enabling such a module without its dependency silently degrades to a
+	// no-op stub (e.g. assessor without integrity -> unsigned results; comms
+	// without resilience -> no circuit breaking). Warn loudly at startup so a
+	// mis-configured build is visible instead of silent.
+	if assessor != nil && !integrityFeatureEnabled() {
+		log.Warn("assessor enabled but integrity build tag is OFF — assessment results will NOT be HMAC-signed (add -tags integrity for a hardened build)")
+	}
+	if assessor != nil && !resilienceFeatureEnabled() {
+		log.Warn("assessor enabled but resilience build tag is OFF — check execution is not fault-isolated (add -tags resilience for a hardened build)")
+	}
+
 	if assessor != nil {
 		k.Container().Bind((*kernel.AssessorInterface)(nil), assessor)
 	}
@@ -365,6 +378,13 @@ func main() {
 	var tlsCfgForServer *tls.Config
 	if !*noMTLS {
 		tlsCfgForServer = setupTLS(*certDir)
+	}
+
+	// comms without resilience: the server-side handler execution (GuardGo,
+	// error rate limiting) silently degrades to unprotected pass-throughs when
+	// the resilience build tag is off (coupling audit 2026-09-03, F3).
+	if commsFeatureEnabled() && !resilienceFeatureEnabled() {
+		log.Warn("comms enabled but resilience build tag is OFF — handler execution is not fault-isolated (add -tags resilience for a hardened build)")
 	}
 
 	kernelSvcRuntime := newCommsRuntime(k, cfg, *listenAddr, tlsCfgForServer, *certDir, heartbeat, commander, cti, assessor, persistence, spc, logCollector, sourceManager)

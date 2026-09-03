@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/asscor/asscor/internal/agent"
-	"github.com/asscor/asscor/internal/cli"
+	"github.com/asscor/asscor/internal/agentinstall"
 	"github.com/asscor/asscor/internal/config"
 	"github.com/asscor/asscor/internal/logger"
 	"github.com/asscor/asscor/internal/version"
@@ -53,7 +53,7 @@ func main() {
 		return
 	}
 	if *install {
-		if err := cli.InstallAgent(); err != nil {
+		if err := agentinstall.Install(); err != nil {
 			fmt.Fprintf(os.Stderr, "agent: install failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -61,7 +61,7 @@ func main() {
 		os.Exit(0)
 	}
 	if *uninstall {
-		if err := cli.UninstallAgent(); err != nil {
+		if err := agentinstall.Uninstall(); err != nil {
 			fmt.Fprintf(os.Stderr, "agent: uninstall failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -69,7 +69,7 @@ func main() {
 		os.Exit(0)
 	}
 	if *upgrade {
-		if err := cli.UpgradeAgent(); err != nil {
+		if err := agentinstall.Upgrade(); err != nil {
 			fmt.Fprintf(os.Stderr, "agent: upgrade failed: %v\n", err)
 			os.Exit(1)
 		}

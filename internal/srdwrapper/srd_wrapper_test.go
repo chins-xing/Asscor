@@ -1,4 +1,4 @@
-//go:build srdwrapper
+//go:build srdwrapper && engine
 
 package srdwrapper
 
