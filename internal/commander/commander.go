@@ -80,8 +80,18 @@ func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 	m.pendingCmds = make(map[string]map[string]*pendingCommand)
 	m.cmdTTL = 30 * time.Minute
 
-	keyPath := filepath.Join("certs", "ASSCOR-hmac-key")
-	metaPath := filepath.Join("certs", "ASSCOR-hmac-key-meta.json")
+	// Audit M-3: resolve the key directory from the kernel's configured
+	// cert_dir (set by cmd/kernel from --cert-dir) instead of a cwd-relative
+	// "certs" path — under systemd the working directory differs and a
+	// relative path silently generates a fresh key every start, breaking the
+	// agent-side HMAC verification. Falling back to "certs" preserves the
+	// default-mode behavior when the kernel never published cert_dir.
+	keyDir := kc.Config()["cert_dir"]
+	if keyDir == "" {
+		keyDir = "certs"
+	}
+	keyPath := filepath.Join(keyDir, "ASSCOR-hmac-key")
+	metaPath := filepath.Join(keyDir, "ASSCOR-hmac-key-meta.json")
 
 	key := kc.Config()["hmac_key"]
 	if key == "" {

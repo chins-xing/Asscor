@@ -153,6 +153,9 @@ func main() {
 	integrity.EnableSigning(ac["integrity.sign_assessment"] != "false")
 	integrity.EnableAlgoVerify(ac["integrity.verify_algo"] != "false")
 	integrity.EnableAntiDebug(ac["integrity.anti_debug"] == "true")
+	// Audit M-3: persist the assessment signing key under the configured cert
+	// dir (not a cwd-relative "certs") so systemd restarts reuse the same key.
+	integrity.SetKeyDir(*certDir)
 
 	// Production mTLS enforcement (attack-surface hardening): [comms]
 	// require_mtls (default true) forbids starting with --no-mtls. mTLS can

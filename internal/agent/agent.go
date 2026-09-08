@@ -1580,24 +1580,17 @@ func (a *Agent) runCommand(cmd *apiv1.Command) {
 
 	timeout := 30 * time.Second
 
-	if !common.IsShellCommandAllowed(cmd.Command) {
-		name, args, ok := common.ParseCommand(cmd.Command)
-		if !ok {
-			logger.WithComponent("agent").Warn("command rejected: not in allowlist", "command_id", cmd.CommandId, "command", cmd.Command)
-			return
-		}
-		output, err := common.RunCmdTimeout(timeout, name, args...)
-		if err != nil && output == "" {
-			logger.WithComponent("agent").Error("command failed", "command_id", cmd.CommandId, "error", err)
-		} else if output != "" {
-			logger.WithComponent("agent").Info("command output", "command_id", cmd.CommandId, "output", truncateCommandOutput(output))
-		}
-		return
-	}
-
+	// Audit M-2: the previous implementation branched on
+	// IsShellCommandAllowed(cmd.Command) but BOTH branches executed the
+	// identical ParseCommand + RunCmdTimeout path — the shell-command check
+	// was dead logic (the allowlist it queried never influenced execution)
+	// and invited future divergence. ParseCommand is the single authority:
+	// it splits argv, verifies the first token against the exec allowlist,
+	// and rejects shell metacharacters / unlisted commands. RunCmdTimeout
+	// re-checks the allowlist at the point of exec as the final gate.
 	name, args, ok := common.ParseCommand(cmd.Command)
 	if !ok {
-		logger.WithComponent("agent").Warn("command rejected: failed to parse", "command_id", cmd.CommandId, "command", cmd.Command)
+		logger.WithComponent("agent").Warn("command rejected: not in allowlist or failed to parse", "command_id", cmd.CommandId, "command", cmd.Command)
 		return
 	}
 	output, err := common.RunCmdTimeout(timeout, name, args...)
