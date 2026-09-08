@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 安全审计 Critical | 3（C-1/C-2/C-3） | **3** ✅ | 0 |
 | 安全审计 High（main H-1..H-5 + ARC RC-H1/RC-H3） | 8 | **8** ✅ | 0 |
-| 安全审计 Medium/Low（main M/L + ARC RC-M/RC-L） | 23 | M-1/M-5/RC-L2 + RC-M1/RC-M2 + RC-H2(High 并入上) | **19** |
+| 安全审计 Medium/Low（main M/L + ARC RC-M/RC-L） | 23 | M-1/M-2/M-3/M-5/L-3/L-4/L-5/RC-L2 + RC-M1/RC-M2 + RC-H2(High 并入上) | **14** |
 | 耦合审计（COUPLING 2026-09-03） | 8（C1/C2/F1..F8） | C1/C2/F2/F3 | **F4/F5/F6/F7**（4） |
 | Secure Mode deferred minors | 12+ | 全部（23ca6cd..d9c23d9） | **0** ✅ |
 | 研究方向 | 2 | ①（可信度原生变量） | **②**（边缘因子向量图变量化） |
@@ -20,21 +20,23 @@
 
 **Secure Mode 与安全审计 Critical/High 已全闭合**；剩余集中于 Medium/Low、耦合 Minor、研究方向② 与工程债。
 
+> 更新记录：2026-09-08 推进批次（ARC f2edcb0 / main 8840dbf）关闭 L-3/L-4/L-5 + M-2 + M-3（Dockerfile HEALTHCHECK kill -0 1、去 wget、config.ini v0.2.3、runCommand 去冗余分支、HMAC/签名密钥目录注入 cert_dir）。
+
 ---
 
 ## 一、安全审计 Medium/Low 剩余（SECURITY_ISSUES_AUDIT_2026-09-08，main 通用）
 
 | 编号 | 项 | 位置 | 修复方向 | 备注 |
 |---|---|---|---|---|
-| M-2 | runCommand 冗余分支 | `internal/agent/agent.go` | `IsShellCommandAllowed` 与 `ParseCommand` 两分支同逻辑，删冗余统一走 ParseCommand+RunCmdTimeout | 已核实属实 |
-| M-3 | HMAC 密钥相对路径 | `internal/commander/commander.go`、`internal/integrity/sign.go`（`certs/ASSCOR-*-key`） | 用配置 `cert_dir` 或绝对路径 | systemd WorkingDirectory 不同会生成新密钥 |
+| ~~M-2~~ | runCommand 冗余分支 | `internal/agent/agent.go` | ✅ 已闭（f2edcb0） | 统一 ParseCommand 单路径 |
+| ~~M-3~~ | HMAC 密钥相对路径 | `internal/commander/commander.go`、`internal/integrity/sign.go` | ✅ 已闭（f2edcb0） | 密钥目录注入 cert_dir |
 | M-4 | agent.ini 明文 hmac_key | `cmd/agent/main.go loadConfigFile` | 废弃配置字段，强制环境变量/密钥文件 | |
 | M-6 | 配置数值无范围校验 | `internal/config/config.go` | Parse 阶段权重/阈值/因子范围校验+告警 | |
 | L-1 | 安全关键包零测试 | `internal/integrity`/`resilience`/`topology`/`version`/`api/v1` | 补单元测试 | C-1 已补 algo 测试，其余待 |
 | L-2 | 大包拆包 | `internal/attck`(8.3k行)/`kernel`(7.7k)/`engine`(6k)/`cli`(5.9k)/`adapter`(5.6k) | 按子领域拆分 | 长期 |
-| L-3 | Docker HEALTHCHECK 误匹配 | Dockerfile `pgrep -f ASSCOR-kernel` | PID 文件/端口探测 | |
-| L-4 | Dockerfile 未用 wget | Dockerfile | 移除 | |
-| L-5 | config.ini 版本号滞后 | config.ini（标注 v0.2.1） | 统一 v0.2.3 | |
+| ~~L-3~~ | Docker HEALTHCHECK 误匹配 | Dockerfile | ✅ 已闭（f2edcb0） | kill -0 1 |
+| ~~L-4~~ | Dockerfile 未用 wget | Dockerfile | ✅ 已闭（f2edcb0） | 移除 |
+| ~~L-5~~ | config.ini 版本号滞后 | config.ini（标注 v0.2.1） | ✅ 已闭（f2edcb0） | v0.2.3 |
 | L-6 | 扩展安装权限未最小化 | `internal/extmgr/extension_installer.go` | 统一 0755/0644 清特殊位 | |
 
 ## 二、安全审计 RC 剩余（ARC securemode/研究专属）
