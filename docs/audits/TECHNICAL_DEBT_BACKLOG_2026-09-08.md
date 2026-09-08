@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 安全审计 Critical | 3（C-1/C-2/C-3） | **3** ✅ | 0 |
 | 安全审计 High（main H-1..H-5 + ARC RC-H1/RC-H3） | 8 | **8** ✅ | 0 |
-| 安全审计 Medium/Low（main M/L + ARC RC-M/RC-L） | 23 | M-1..M-6/L-1/L-3/L-4/L-5/RC-L1/RC-L2/RC-L3/RC-L5 + RC-M1/RC-M2/RC-M5 + RC-H2(High 并入上) | **3**（RC-M3/M4/L4；L-2 长期另计） |
+| 安全审计 Medium/Low（main M/L + ARC RC-M/RC-L） | 23 | M-1..M-6/L-1/L-3/L-4/L-5/RC-L1/RC-L2/RC-L3/RC-L5/RC-M1/RC-M2/RC-M3/RC-M5 + RC-H2(High 并入上) | **0 需修**（RC-M4 并入②、RC-L4 研究期接受；L-2 长期另计） |
 | 耦合审计（COUPLING 2026-09-03） | 8（C1/C2/F1..F8） | C1/C2/F2/F3 | **F4/F5/F6/F7**（4） |
 | Secure Mode deferred minors | 12+ | 全部（23ca6cd..d9c23d9） | **0** ✅ |
 | 研究方向 | 2 | ①（可信度原生变量） | **②**（边缘因子向量图变量化） |
@@ -20,7 +20,7 @@
 
 **Secure Mode 与安全审计 Critical/High 已全闭合**；剩余集中于 Medium/Low、耦合 Minor、研究方向② 与工程债。
 
-> 更新记录：2026-09-08 推进批次1（ARC f2edcb0 / main 8840dbf）关闭 L-3/L-4/L-5 + M-2 + M-3；批次2（main c621df2 / ARC ea52d73）关闭 M-4/M-6/L-1(version)/L-6（hmac_key_file、config 范围校验+OT-015 笔误修正、sanitizeMode 权限净化、version 测试）；批次3（ARC b6c3161）关闭 RC-L3（argon2id t1→t2 + supportedKDFParams 兼容旧 N=1 文件）；批次4（main 664165d / ARC a8d17ed，双分支同步）关闭 RC-M5（exprunner shellSafe）、RC-L1（decoyd hits 上限+accept 错误分类）、RC-L5（agentinstall unit 内容测试；decoyd/exprunner 已随上补）。剩余 = RC-M3（设计权衡可调参）、RC-M4（并入方向②）、RC-L4（研究期接受）+ L-2 长期 + 耦合 F4-F7 + 方向②。
+> 更新记录：2026-09-08 推进批次1（ARC f2edcb0 / main 8840dbf）关闭 L-3/L-4/L-5 + M-2 + M-3；批次2（main c621df2 / ARC ea52d73）关闭 M-4/M-6/L-1(version)/L-6；批次3（ARC b6c3161）关闭 RC-L3；批次4（main 664165d / ARC a8d17ed）关闭 RC-M5/RC-L1/RC-L5；批次5（ARC 0a462df / main 同步）关闭 RC-M3（SecureMaxNoUnlock 可配 + 预告告警）。安全审计 Medium/Low 23 项全部处理完毕（RC-M4 并入方向②、RC-L4 研究期接受、L-2 长期）。剩余 = 耦合 F4-F7 + 方向②。
 
 ---
 
@@ -43,7 +43,7 @@
 
 | 编号 | 项 | 位置 | 修复方向 | 备注 |
 |---|---|---|---|---|
-| RC-M3 | 自恢复阈值短+静默丢配置 | `internal/agent/securemode.go secureSelfRecover` | 延长阈值/仅显式信号触发+告警 | **设计权衡**：spec §8.2 语义，SecureModeNoSecret 已可立即短路；列为可选调参 |
+| ~~RC-M3~~ | 自恢复阈值短+静默丢配置 | `internal/agent/securemode.go` | ✅ 已闭（0a462df） | SecureMaxNoUnlock 可配(agent.ini secure_max_no_unlock) + threshold-1 预告告警 + 恢复指引; SecureModeNoSecret 仍立即短路 |
 | RC-M4 | 研究引擎权重全硬编码 | `internal/predictor`/`engagement`/`attackerstate` | 权重参数化+实验配置注入 | 与方向②耦合，可并入 |
 | ~~RC-M5~~ | exprunner 命令注入风险 | `cmd/exprunner/main.go dockerExec` | ✅ 已闭（664165d） | shellSafe 插值元字符校验 + 端口范围 |
 | ~~RC-L1~~ | decoyd 无访问控制 | `cmd/decoyd/main.go` | ✅ 已闭（664165d） | hits 上限 100k + accept 错误分类 |
