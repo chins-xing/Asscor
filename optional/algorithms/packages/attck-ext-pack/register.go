@@ -3,8 +3,8 @@
 package attckext
 
 import (
-	"github.com/asscor/asscor/internal/attck"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/attck"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // Register activates the ATT&CK V19 module and injects it into the assessor.

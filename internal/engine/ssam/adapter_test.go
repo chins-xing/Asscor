@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 func TestConfigToWeights(t *testing.T) {

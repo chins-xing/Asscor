@@ -3,11 +3,11 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/engine"
-	ascorprism "github.com/asscor/asscor/internal/engine/prism"
-	"github.com/asscor/asscor/internal/engine/ssam"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/engine"
+	ascorprism "github.com/chins-xing/asscor/internal/engine/prism"
+	"github.com/chins-xing/asscor/internal/engine/ssam"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // newSSAMEngineAdapter returns the SSAM algorithm engine adapter, or nil when

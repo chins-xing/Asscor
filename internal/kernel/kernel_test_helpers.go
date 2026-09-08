@@ -3,7 +3,7 @@ package kernel
 import (
 	"context"
 
-	"github.com/asscor/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/config"
 )
 
 type mockKernelContext struct{}

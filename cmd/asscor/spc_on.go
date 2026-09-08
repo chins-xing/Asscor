@@ -3,11 +3,11 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/engine"
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/spc"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/engine"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/spc"
 )
 
 type spcAdapter struct {

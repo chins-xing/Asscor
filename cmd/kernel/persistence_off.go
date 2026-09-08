@@ -2,6 +2,6 @@
 
 package main
 
-import "github.com/asscor/asscor/internal/kernel"
+import "github.com/chins-xing/asscor/internal/kernel"
 
 func newPersistence(dataDir string) kernel.PersistenceInterface { return nil }

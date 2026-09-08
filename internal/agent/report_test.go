@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
 )
 
 // captureStdout runs fn with os.Stdout redirected to a pipe and returns

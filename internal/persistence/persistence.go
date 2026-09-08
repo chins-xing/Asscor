@@ -9,8 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/asscor/asscor/internal/historicalstore"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/historicalstore"
+	"github.com/chins-xing/asscor/internal/kernel"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,10 +18,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/model"
-	"github.com/asscor/asscor/internal/version"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/version"
 )
 
 type jsonlWriter struct {

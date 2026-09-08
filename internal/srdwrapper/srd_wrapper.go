@@ -13,10 +13,10 @@ package srdwrapper
 
 import (
 	"context"
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/topology"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/topology"
 
-	"github.com/asscor/asscor/internal/engine/srd"
+	"github.com/chins-xing/asscor/internal/engine/srd"
 )
 
 // Module wraps srd.Manager to implement kernel.Plugin.

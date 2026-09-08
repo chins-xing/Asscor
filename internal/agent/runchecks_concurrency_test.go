@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // TestRunChecksConcurrencyLimit: with more than checkConcurrency (10) blocking

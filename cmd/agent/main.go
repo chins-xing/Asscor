@@ -6,11 +6,11 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/asscor/asscor/internal/agent"
-	"github.com/asscor/asscor/internal/cli"
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/version"
+	"github.com/chins-xing/asscor/internal/agent"
+	"github.com/chins-xing/asscor/internal/cli"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/version"
 )
 
 func main() {

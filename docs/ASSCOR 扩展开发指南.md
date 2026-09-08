@@ -164,8 +164,8 @@ package mychecks
 
 import (
     "os"
-    "github.com/asscor/asscor/internal/checks"
-    "github.com/asscor/asscor/internal/model"
+    "github.com/chins-xing/asscor/internal/checks"
+    "github.com/chins-xing/asscor/internal/model"
 )
 
 func init() {
@@ -276,7 +276,7 @@ package myadapters
 import (
     "context"
     "encoding/json"
-    "github.com/asscor/asscor/internal/adapter"
+    "github.com/chins-xing/asscor/internal/adapter"
 )
 
 type MyScanner struct {
@@ -689,8 +689,8 @@ package containersec
 
 import (
     "os"
-    "github.com/asscor/asscor/internal/checks"
-    "github.com/asscor/asscor/internal/model"
+    "github.com/chins-xing/asscor/internal/checks"
+    "github.com/chins-xing/asscor/internal/model"
 )
 
 func init() {
@@ -803,7 +803,7 @@ cd optional/pkgmgr && go build -o asscor-pkg .
 
 ```go
 // 在 optional/algorithms/modules/my-algo/orchestrator.go
-import "github.com/asscor/asscor/internal/kernel"
+import "github.com/chins-xing/asscor/internal/kernel"
 
 type MyOrchestrator struct { ... }
 
@@ -820,7 +820,7 @@ func (o *MyOrchestrator) Register(ext kernel.ModuleExtensions) {
 
 ```go
 // 在 cmd/kernel/main.go 中启用
-import myalgo "github.com/asscor/asscor-optional-my-algo"
+import myalgo "github.com/chins-xing/asscor-optional-my-algo"
 
 orch := myalgo.NewOrchestrator(cfg)
 orch.Register(k.PlatformExtensionRegistry())

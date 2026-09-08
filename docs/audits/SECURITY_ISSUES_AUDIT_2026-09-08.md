@@ -25,7 +25,7 @@
 - **修复**：`LookupUID` 失败返回错误；`AllowedPeerUID <= 0` 时拒绝连接。
 
 ### C-3 Go module 路径与仓库地址不匹配
-- **位置**：`go.mod`（module `github.com/asscor/asscor`）
+- **位置**：`go.mod`（module `github.com/chins-xing/asscor`）
 - **问题**：module 路径与实际仓库 `github.com/chins-xing/Asscor` 不一致，`ssam`/`prism` 依赖通过 replace 指向本地目录。
 - **影响**：外部用户无法 `go get` 导入，社区生态为零；CI 中 `pluginsdk` 独立模块存在同样问题。
 - **修复**：module 改为 `github.com/chins-xing/asscor` 并同步 import 路径。

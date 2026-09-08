@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // Module evaluates host scores against thresholds and triggers automated

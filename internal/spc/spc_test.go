@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 func TestParseOSCALYAML(t *testing.T) {

@@ -3,9 +3,9 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/attck"
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/engine"
+	"github.com/chins-xing/asscor/internal/attck"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/engine"
 )
 
 func init() {

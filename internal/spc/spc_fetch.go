@@ -3,11 +3,11 @@
 package spc
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 	"sort"
 	"time"
 
-	"github.com/asscor/asscor/internal/common"
+	"github.com/chins-xing/asscor/internal/common"
 )
 
 func (m *Module) FetchFromAllSources() []kernel.SPCFetchResult {

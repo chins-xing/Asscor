@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/sourcemanager"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/sourcemanager"
 )
 
 // newSourceManager returns the source manager module, or nil when the

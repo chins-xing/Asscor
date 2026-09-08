@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 var sourceCmdInfo = CommandInfo{

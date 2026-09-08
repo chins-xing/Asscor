@@ -636,7 +636,7 @@ hmac_key =              # 从环境变量 ASSCOR_HMAC_KEY 读取
 
 ```bash
 # 克隆项目
-git clone https://github.com/asscor/asscor.git
+git clone https://github.com/chins-xing/asscor.git
 cd ASSCOR
 
 # 编译所有组件

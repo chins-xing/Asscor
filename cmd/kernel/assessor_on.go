@@ -3,9 +3,9 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/assessor"
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/assessor"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // newAssessor returns the assessor module, or nil when the assessor build tag

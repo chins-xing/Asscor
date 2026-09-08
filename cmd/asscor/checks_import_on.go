@@ -3,5 +3,5 @@
 package main
 
 import (
-	_ "github.com/asscor/asscor/internal/checks"
+	_ "github.com/chins-xing/asscor/internal/checks"
 )

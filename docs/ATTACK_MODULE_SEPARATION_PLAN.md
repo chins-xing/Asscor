@@ -13,7 +13,7 @@
 ## 策略
 
 采用**同模块 + build tag** 策略：
-- ATT&CK 文件保留在 `github.com/asscor/asscor` 模块下（无独立 go.mod）
+- ATT&CK 文件保留在 `github.com/chins-xing/asscor` 模块下（无独立 go.mod）
 - 通过 `//go:build attck_ext` 编译标签控制是否包含
 - `package.json` 声明扩展包元信息
 - 核心框架通过 `engine.ATTACKProvider` 接口注入（已存在，需补齐）
@@ -152,7 +152,7 @@ package attckext
 在 `cmd/kernel/main.go` 中:
 ```go
 //go:build attck_ext
-import "github.com/asscor/asscor/optional/algorithms/packages/attck-ext-pack"
+import "github.com/chins-xing/asscor/optional/algorithms/packages/attck-ext-pack"
 
 func registerATTACK(plugins []kernel.Plugin) []kernel.Plugin {
     attck := attckext.NewATTACKModule()

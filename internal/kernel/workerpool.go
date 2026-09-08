@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 type WorkerPool struct {

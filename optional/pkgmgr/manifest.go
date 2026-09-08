@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/asscor/asscor/internal/semver"
+	"github.com/chins-xing/asscor/internal/semver"
 )
 
 // PackageManifest represents a package.json file.

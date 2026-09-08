@@ -5,8 +5,8 @@ package policy
 import (
 	"testing"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 func TestPolicyEvaluateOK(t *testing.T) {

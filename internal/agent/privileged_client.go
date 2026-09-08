@@ -7,8 +7,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // PrivilegedClient is the main agent's client for the privileged agent

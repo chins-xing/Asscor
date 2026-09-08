@@ -2,9 +2,9 @@ package kernel
 
 import (
 	"context"
-	"github.com/asscor/asscor/internal/topology"
+	"github.com/chins-xing/asscor/internal/topology"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // KernelLocator is a white-box deterministic implementation of the Locator

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // Privileged request types. The main (non-root) agent sends one of these to

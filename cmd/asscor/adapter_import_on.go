@@ -3,6 +3,6 @@
 package main
 
 import (
-	_ "github.com/asscor/asscor/internal/adapter/management"
-	_ "github.com/asscor/asscor/internal/adapter/scanner"
+	_ "github.com/chins-xing/asscor/internal/adapter/management"
+	_ "github.com/chins-xing/asscor/internal/adapter/scanner"
 )

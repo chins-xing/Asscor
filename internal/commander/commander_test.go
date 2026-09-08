@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
 )
 
 func TestCommanderEnqueueDequeue(t *testing.T) {

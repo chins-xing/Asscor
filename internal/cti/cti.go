@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/common"
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/common"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // Module fetches OTX pulses and MISP events and computes the global threat

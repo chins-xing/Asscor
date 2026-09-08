@@ -1,6 +1,6 @@
 // ASSCOR — Security Acceptability Assessment Runtime
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
-module github.com/asscor/asscor
+module github.com/chins-xing/asscor
 
 go 1.26
 

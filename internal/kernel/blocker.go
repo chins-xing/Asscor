@@ -3,7 +3,7 @@ package kernel
 import (
 	"context"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // KernelBlocker is a white-box deterministic Blocker that dispatches isolation

@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // incidentReport is a structured record of a panic or fatal error captured

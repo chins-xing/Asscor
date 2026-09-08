@@ -3,12 +3,12 @@ package oscal
 import (
 	"encoding/json"
 	"encoding/xml"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 func TestOSCALExport_JSON(t *testing.T) {

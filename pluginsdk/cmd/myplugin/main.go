@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/asscor/pluginsdk"
+	"github.com/chins-xing/pluginsdk"
 )
 
 type MyPlugin struct {

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 func (m *Module) RegisterBehavioralIndicator(indicator BehavioralIndicator) error {

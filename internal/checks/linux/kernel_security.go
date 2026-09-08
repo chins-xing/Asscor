@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/asscor/asscor/internal/common"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/common"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 func ksAll() []model.CheckItem {

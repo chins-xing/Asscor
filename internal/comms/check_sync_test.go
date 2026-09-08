@@ -5,7 +5,7 @@ package comms
 import (
 	"testing"
 
-	"github.com/asscor/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/config"
 )
 
 func TestBuildAgentCheckConfig(t *testing.T) {

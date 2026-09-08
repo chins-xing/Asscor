@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // TestPruneKeepsIdentityAnchor reproduces the remote impersonation bug found

@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/persistence"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/persistence"
 )
 
 // newPersistence returns the persistence module, or nil when the persistence

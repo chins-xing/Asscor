@@ -148,8 +148,8 @@ engine.HookRegistry (8 phases)        kernel.ExtensionRegistry
 
 ```bash
 # 下载二进制
-wget https://github.com/asscor/asscor/releases/download/v0.2.2/ASSCOR-kernel-linux
-wget https://github.com/asscor/asscor/releases/download/v0.2.2/ASSCOR-agent-linux
+wget https://github.com/chins-xing/asscor/releases/download/v0.2.2/ASSCOR-kernel-linux
+wget https://github.com/chins-xing/asscor/releases/download/v0.2.2/ASSCOR-agent-linux
 
 # 安装
 sudo ./ASSCOR-kernel-linux --install
