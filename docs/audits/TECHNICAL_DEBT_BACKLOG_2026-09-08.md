@@ -13,14 +13,14 @@
 | 安全审计 Critical | 3（C-1/C-2/C-3） | **3** ✅ | 0 |
 | 安全审计 High（main H-1..H-5 + ARC RC-H1/RC-H3） | 8 | **8** ✅ | 0 |
 | 安全审计 Medium/Low（main M/L + ARC RC-M/RC-L） | 23 | M-1..M-6/L-1/L-3/L-4/L-5/RC-L1/RC-L2/RC-L3/RC-L5/RC-M1/RC-M2/RC-M3/RC-M5 + RC-H2(High 并入上) | **0 需修**（RC-M4 并入②、RC-L4 研究期接受；L-2 长期另计） |
-| 耦合审计（COUPLING 2026-09-03） | 8（C1/C2/F1..F8） | C1/C2/F2/F3 | **F4/F5/F6/F7**（4） |
+| 耦合审计（COUPLING 2026-09-03） | 8（C1/C2/F2..F7） | **8** ✅（268cca9、0eb456e、429539e、d64e4e8、6b3bd0a） | 0 |
 | Secure Mode deferred minors | 12+ | 全部（23ca6cd..d9c23d9） | **0** ✅ |
 | 研究方向 | 2 | ①（可信度原生变量） | **②**（边缘因子向量图变量化） |
 | 工程债（论文/拆包/超时等） | — | — | 见 §五 |
 
-**Secure Mode 与安全审计 Critical/High 已全闭合**；剩余集中于 Medium/Low、耦合 Minor、研究方向② 与工程债。
+**Secure Mode、安全审计与耦合审计（C1/C2/F2–F7）已全闭合**；剩余集中于研究方向② 与工程债。
 
-> 更新记录：2026-09-08 推进批次1（ARC f2edcb0 / main 8840dbf）关闭 L-3/L-4/L-5 + M-2 + M-3；批次2（main c621df2 / ARC ea52d73）关闭 M-4/M-6/L-1(version)/L-6；批次3（ARC b6c3161）关闭 RC-L3；批次4（main 664165d / ARC a8d17ed）关闭 RC-M5/RC-L1/RC-L5；批次5（ARC 0a462df / main 同步）关闭 RC-M3（SecureMaxNoUnlock 可配 + 预告告警）。安全审计 Medium/Low 23 项全部处理完毕（RC-M4 并入方向②、RC-L4 研究期接受、L-2 长期）。剩余 = 耦合 F4-F7 + 方向②。
+> 更新记录：2026-09-08 推进批次1（ARC f2edcb0 / main 8840dbf）关闭 L-3/L-4/L-5 + M-2 + M-3；批次2（main c621df2 / ARC ea52d73）关闭 M-4/M-6/L-1(version)/L-6；批次3（ARC b6c3161）关闭 RC-L3；批次4（main 664165d / ARC a8d17ed）关闭 RC-M5/RC-L1/RC-L5；批次5（ARC 0a462df / main 同步）关闭 RC-M3（SecureMaxNoUnlock 可配 + 预告告警）。安全审计 Medium/Low 23 项全部处理完毕（RC-M4 并入方向②、RC-L4 研究期接受、L-2 长期）。批次6（ARC 0eb456e/429539e/d64e4e8/6b3bd0a）关闭耦合 F4–F7（孤儿/tag 归属、ACL 引擎 tag 门控、config 纯解析化、comms SPI 注入）。耦合审计 8 项全部处理完毕。剩余 = 方向② + 工程债。
 
 ---
 
@@ -53,14 +53,14 @@
 
 > 不采纳：RC-M6（仓库内容分离——lunwen 白名单跟踪为用户明确决策）。
 
-## 三、耦合审计 Minor 剩余（COUPLING_AUDIT_2026-09-03；C1/C2/F2/F3 已修 268cca9）
+## 三、耦合审计 Minor 剩余（COUPLING_AUDIT_2026-09-03；C1/C2/F2/F3 已修 268cca9，F4–F7 已闭 0eb456e/429539e/d64e4e8/6b3bd0a —— 全部关闭）
 
 | 编号 | 项 | 方向 |
 |---|---|---|
-| F4 | comms 消费方式不统一（直接函数调用 vs kernel SPI） | 统一经 kernel 声明接口 |
-| F5 | 孤儿包 `internal/oscal`/`semver`/`adapterhub`（0 import）；`historicalstore` 默认-on 无 tag | 下沉并入调用方 / 加 tag / 移 optional |
-| F6 | config→checks 反向依赖（地基层向上依赖检查注册表） | 依赖显式化/解耦 |
-| F7 | ACL 四包默认-on 无 tag（attackerstate/predictor/engagement/defensecycle） | 加 tag 与 optional 叙述对齐 |
+| ~~F4~~ | comms 消费方式不统一（直接函数调用 vs kernel SPI） | ✅ 已闭（6b3bd0a）：securemode 经新增 kernel.SecureModeAgentSecrets 接口注入；topology/resilience 判定为 kernel 直调地基库保留直调（就地注释） |
+| ~~F5~~ | 孤儿包 `internal/oscal`/`semver`/`adapterhub`（0 import）；`historicalstore` 默认-on 无 tag | ✅ 已闭（0eb456e）：oscal 加 tag `oscal`、historicalstore 加 tag `persistence`（均入 MODULE_TAGS 保 CI 覆盖）；adapterhub 自 b29d502 已 tag `adapter` 维持；semver 已被 optional/pkgmgr 引用非孤儿 |
+| ~~F6~~ | config→checks 反向依赖（地基层向上依赖检查注册表） | ✅ 已闭（d64e4e8）：config 纯解析化（RegisterUserChecks 移除）、CU- 前缀下沉 model、注册显式于 kernel 装配根 |
+| ~~F7~~ | ACL 四包默认-on 无 tag（attackerstate/predictor/engagement/defensecycle） | ✅ 已闭（429539e）：四包加 `//go:build tracecheck||expr`（实验工具 tag 门控，论文/文档命令零改动），MODULE_TAGS 增 expr 保覆盖 |
 
 ## 四、研究方向
 
@@ -82,5 +82,5 @@
 
 1. **快清项**（1-2 行级）：L-3/L-4/L-5、RC-L5 部分
 2. **中等**：M-2、M-3、M-4、RC-L3
-3. **设计类**：方向②（大）、RC-M4（并入方向②）、F4–F7（架构）
+3. **设计类**：方向②（大）、RC-M4（并入方向②）
 4. **不采纳/可延**：RC-M6（用户决策）、RC-L4、L-2
