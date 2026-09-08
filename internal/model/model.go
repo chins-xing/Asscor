@@ -63,6 +63,13 @@ const (
 	CheckSourceExtension CheckSource = "extension"
 )
 
+// UserCheckIDPrefix is the reserved ID prefix for configuration-defined user
+// checks ([user_check.*]). Parsing rejects any other prefix so a user check
+// can never collide with the compiled-in platform checks (AS-/OT-/RS-/BC-/EF-/
+// KS-…). internal/checks re-exports it under the same name; internal/config
+// enforces it while building check items from configuration.
+const UserCheckIDPrefix = "CU-"
+
 type CheckItem struct {
 	ID            string
 	Domain        string

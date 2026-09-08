@@ -16,8 +16,10 @@ var (
 // UserCheckIDPrefix is the reserved ID prefix for configuration-defined user
 // checks. ParseUserChecks enforces it; built-in checks never use it. Keeping
 // the two namespaces disjoint guarantees a user check can never shadow or
-// overwrite a compiled-in platform check.
-const UserCheckIDPrefix = "CU-"
+// overwrite a compiled-in platform check. The canonical constant lives in
+// internal/model (the check-item contract); this alias keeps the exported
+// checks.UserCheckIDPrefix API stable.
+const UserCheckIDPrefix = model.UserCheckIDPrefix
 
 // Register adds check items to the registry, skipping items whose platform
 // does not match. It refuses to overwrite an already-registered ID: a

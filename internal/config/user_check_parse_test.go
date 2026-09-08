@@ -49,18 +49,24 @@ delta = -3
 		t.Fatalf("bare [user_check] section not flattened as user_check.default.*: %v", cfg.AdapterConfig)
 	}
 
-	// Register and verify both checks are actually registered.
-	RegisterUserChecks(cfg)
+	// Parse the flattened keys into check items. Registration into the checks
+	// registry happens at the kernel assembly root (cmd/kernel/main.go), so
+	// here we only assert the parse step yields both checks with metadata.
+	items := ParseUserChecks(cfg.AdapterConfig)
+	byID := make(map[string]model.CheckItem, len(items))
+	for _, it := range items {
+		byID[it.ID] = it
+	}
 
-	if item, ok := checks.GetByID("CU-MYSQL-001"); !ok {
-		t.Error("CU-MYSQL-001 was not registered from [user_check.mysql] section")
+	if it, ok := byID["CU-MYSQL-001"]; !ok {
+		t.Error("CU-MYSQL-001 was not parsed from [user_check.mysql] section")
 	} else {
-		if item.Domain != "business_continuity" || item.Delta != -8 {
-			t.Errorf("CU-MYSQL-001 metadata wrong: %+v", item)
+		if it.Domain != "business_continuity" || it.Delta != -8 {
+			t.Errorf("CU-MYSQL-001 metadata wrong: %+v", it)
 		}
 	}
-	if _, ok := checks.GetByID("CU-SINGLE-001"); !ok {
-		t.Error("CU-SINGLE-001 was not registered from bare [user_check] section")
+	if _, ok := byID["CU-SINGLE-001"]; !ok {
+		t.Error("CU-SINGLE-001 was not parsed from bare [user_check] section")
 	}
 }
 

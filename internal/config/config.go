@@ -754,7 +754,7 @@ func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 		}
 		// user_check sections: support both `[user_check]` (single check) and
 		// `[user_check.<name>]` (multiple named checks). Flatten to
-		// "user_check.<name>.<field>" keys consumed by RegisterUserChecks.
+		// "user_check.<name>.<field>" keys consumed by ParseUserChecks.
 		if sectionName == "user_check" || strings.HasPrefix(sectionName, "user_check.") {
 			checkName := "default"
 			if rest := strings.TrimPrefix(sectionName, "user_check"); rest != "" {

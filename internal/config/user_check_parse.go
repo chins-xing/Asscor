@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chins-xing/asscor/internal/checks"
 	"github.com/chins-xing/asscor/internal/common"
 	"github.com/chins-xing/asscor/internal/logger"
 	"github.com/chins-xing/asscor/internal/model"
@@ -116,35 +115,18 @@ func splitUserCheckArgs(s string) (parts []string, ok bool) {
 	return parts, true
 }
 
-var registered = make(map[string]bool)
-
-// RegisterUserChecks registers user-defined checks from the configuration's
-// flattened user_check.* keys into the checks registry. It is a no-op for a
-// nil config or when no valid user_check entries exist.
-func RegisterUserChecks(cfg *Config) {
-	if cfg == nil {
-		return
-	}
-	for _, item := range ParseUserChecks(cfg.AdapterConfig) {
-		if registered[item.ID] {
-			continue
-		}
-		checks.Register(item)
-		registered[item.ID] = true
-	}
-}
-
 // ParseUserChecks builds model.CheckItem values from flattened configuration
 // keys of the form "user_check.<name>.<field>" (see buildAdapterConfig). It is
-// a pure function with no registry side effects, shared by the kernel
-// (RegisterUserChecks) and the agent (which appends the items to its checkers).
+// a pure function with no registry side effects, used by the kernel
+// (which registers the items into internal/checks at assembly) and by the
+// agent (which appends the items to its own checkers).
 //
 // Supported fields: id, domain, name, description, delta, command,
 // output_match, file_path, file_regex. An entry is skipped when it lacks
 // id/domain/name or has neither command nor file_path.
 //
 // Enforced separation from builtin checks:
-//   - ID must use the reserved prefix checks.UserCheckIDPrefix ("CU-"); any
+//   - ID must use the reserved prefix model.UserCheckIDPrefix ("CU-"); any
 //     other prefix is rejected with a warning so a user check can never
 //     collide with the compiled-in platform checks (AS-/OT-/RS-/BC-/EF-/KS-…).
 //   - Every returned item carries Source=model.CheckSourceUser, letting
@@ -205,7 +187,7 @@ func ParseUserChecks(adapterConfig map[string]string) []model.CheckItem {
 		if e.command == "" && e.filePath == "" {
 			continue
 		}
-		if !strings.HasPrefix(e.id, checks.UserCheckIDPrefix) {
+		if !strings.HasPrefix(e.id, model.UserCheckIDPrefix) {
 			logger.WithComponent("config").Warn("user check ID must use reserved prefix CU-, check skipped",
 				"check_id", e.id)
 			continue

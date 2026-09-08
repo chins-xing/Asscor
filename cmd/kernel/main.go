@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/chins-xing/asscor/internal/adapter"
+	"github.com/chins-xing/asscor/internal/checks"
 	"github.com/chins-xing/asscor/internal/cli"
 	"github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/extmgr"
@@ -22,8 +23,6 @@ import (
 	"github.com/chins-xing/asscor/internal/resilience"
 	"github.com/chins-xing/asscor/internal/securemode"
 	"github.com/chins-xing/asscor/internal/version"
-
-	_ "github.com/chins-xing/asscor/internal/checks"
 )
 
 func main() {
@@ -186,7 +185,11 @@ func main() {
 
 	// Register user-defined checks from config.ini (no Go code needed).
 	// Example: [user_check.mysql] id=CU-001 command="systemctl is-active mysqld"
-	config.RegisterUserChecks(cfg)
+	// Registration is assembled here at the composition root (internal/config
+	// stays a pure parser; checks.Register is idempotent per ID).
+	for _, item := range config.ParseUserChecks(cfg.AdapterConfig) {
+		checks.Register(item)
+	}
 	adapter.RegisterScriptAdapters(cfg.AdapterConfig)
 
 	log.Info("ASSCOR kernel starting",
