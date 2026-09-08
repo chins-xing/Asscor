@@ -55,11 +55,11 @@ type AgentConfig struct {
 	// or IP MUST set this so the SNI check matches instead of failing and
 	// tempting operators to enable --tls-skip-verify (audit H-4).
 	TLSServerName string
-	CertDir        string
-	HMACKey          string
-	LogFormat        string
-	LogLevel         string
-	LogOutput        string
+	CertDir       string
+	HMACKey       string
+	LogFormat     string
+	LogLevel      string
+	LogOutput     string
 	// PrivilegedSocket is the Unix socket path of the privileged agent
 	// process. When empty, root checks/commands are reported as skipped.
 	PrivilegedSocket string

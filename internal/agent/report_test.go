@@ -193,9 +193,9 @@ func TestPrintAssessmentReportEdgeFactors(t *testing.T) {
 		ThreatCoeff:  1.0,
 		SpcScore:     0.5,
 		EdgeFactors: map[string]float64{
-			"two_factor_failure":  0.8,  // < 1.0 → shown
-			"no_siem":             1.0,  // == 1.0 → hidden
-			"no_ids":              1.25, // > 1.0 → hidden
+			"two_factor_failure": 0.8,  // < 1.0 → shown
+			"no_siem":            1.0,  // == 1.0 → hidden
+			"no_ids":             1.25, // > 1.0 → hidden
 		},
 		Checks: []*apiv1.CheckResult{},
 	}

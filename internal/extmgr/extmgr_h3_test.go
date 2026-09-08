@@ -8,11 +8,11 @@ import "testing"
 // artifact.
 func TestValidateRequiresChecksumForRemoteSources(t *testing.T) {
 	cases := []struct {
-		name    string
-		url     string
-		typ     string
+		name     string
+		url      string
+		typ      string
 		checksum string
-		wantErr bool
+		wantErr  bool
 	}{
 		{"http without checksum must fail", "https://example.com/ext.zip", "http", "", true},
 		{"http with checksum ok", "https://example.com/ext.zip", "http", "sha256:abcdef", false},

@@ -73,11 +73,11 @@ func isEnvName(s string) bool {
 // ResolveCredential resolves a credential with the unified priority used
 // across SPC/CTI/adapters (audit I-04/I-05):
 //
-//	1. the environment variable envName, when set and non-empty;
-//	2. a secret file — the env var envName+"_FILE" or, when fileConfig is
-//	   non-empty, that config-provided path; the file's trimmed content is
-//	   used (a missing/empty/unreadable file falls through with a warning);
-//	3. configValue, with ${VAR} placeholders expanded.
+//  1. the environment variable envName, when set and non-empty;
+//  2. a secret file — the env var envName+"_FILE" or, when fileConfig is
+//     non-empty, that config-provided path; the file's trimmed content is
+//     used (a missing/empty/unreadable file falls through with a warning);
+//  3. configValue, with ${VAR} placeholders expanded.
 //
 // It returns the resolved value and its source so callers can emit audit
 // logs in their own component/format.

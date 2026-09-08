@@ -727,7 +727,6 @@ func verifyCertificates(certDir string) bool {
 	return allOK
 }
 
-
 // grpcEnabled reports whether the optional gRPC server is enabled via
 // config.ini [grpc] enabled=true/on/1 (default off).
 func grpcEnabled(ac map[string]string) bool {
