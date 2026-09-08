@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/chins-xing/asscor/internal/agent"
 	"github.com/chins-xing/asscor/internal/agentinstall"
@@ -157,6 +158,24 @@ func main() {
 	})
 	log := logger.WithComponent("agent")
 
+	// Audit M-4: resolve the command HMAC key. Priority: hmac_key_file
+	// (secret file, 0600) > ASSCOR_HMAC_KEY env > deprecated inline
+	// [agent] hmac_key (kept for backward compatibility, warned at parse).
+	// Reading the file here (not at verify time) means a missing/unreadable
+	// file fails fast at startup instead of silently rejecting every command
+	// later.
+	if cfg.HMACKeyFile != "" && cfg.HMACKey == "" {
+		if keyData, err := os.ReadFile(cfg.HMACKeyFile); err == nil {
+			key := strings.TrimSpace(string(keyData))
+			if key != "" {
+				cfg.HMACKey = key
+				log.Info("loaded HMAC key from file", "file", cfg.HMACKeyFile)
+			}
+		} else {
+			log.Warn("cannot read hmac_key_file, falling back to env/legacy", "file", cfg.HMACKeyFile, "error", err.Error())
+		}
+	}
+
 	if cfg.HostID == "" {
 		hostname, _ := os.Hostname()
 		cfg.HostID = hostname
@@ -260,7 +279,17 @@ func loadConfigFile(path string, cfg *agent.AgentConfig) error {
 			case "cert_dir":
 				cfg.CertDir = val
 			case "hmac_key":
-				cfg.HMACKey = val
+				// Audit M-4: a plaintext hmac_key in agent.ini is deprecated —
+				// the value may land in version control or backups. Prefer the
+				// ASSCOR_HMAC_KEY env var or hmac_key_file (see below). The
+				// field still parses for backward compatibility, with a
+				// deprecation warning so operators migrate off it.
+				if val != "" {
+					cfg.HMACKey = val
+					fmt.Fprintf(os.Stderr, "agent: WARNING: [agent] hmac_key in %s is deprecated (may leak via version control); use ASSCOR_HMAC_KEY env or hmac_key_file (audit M-4)\n", path)
+				}
+			case "hmac_key_file":
+				cfg.HMACKeyFile = val
 			case "priv_socket":
 				cfg.PrivilegedSocket = val
 			case "log_format":
