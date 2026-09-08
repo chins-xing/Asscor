@@ -48,8 +48,10 @@ lunwen*/
 #.kilo
 .kilo/
 
-#Asscor
-Asscor/
+# (removed "Asscor/": git 对目录名大小写不敏感, 该规则误忽略 cmd/asscor/ 下
+# 全部未跟踪 .go 文件(spc_on/off、attck_ext、checks_import_on、adapter_import_on),
+# 导致 38fab56 的 attachSPC 门控文件从未入库 → main `-tags engine` 构建 cmd/asscor
+# 报 undefined: attachSPC。2026-09-08 修复: 删除规则并补提交这些文件。)
 
 # Audit reports (generated documentation, not tracked)
 #docs/audits/
