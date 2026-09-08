@@ -68,6 +68,26 @@ func (r *SecretRegistry) Lookup(fingerprint string) (AgentSecret, bool) {
 	return s, ok
 }
 
+// Lookup 是 Controller 对 kernel SPI（kernel.SecureModeAgentSecrets）的委托：
+// 按证书指纹取回登记的 agent 临时口令。comms 经该接口消费，不直接触碰
+// SecretRegistry（耦合审计 F4 — comms 消费经 kernel 声明接口统一）。
+func (c *Controller) Lookup(fingerprint string) (password string, ok bool) {
+	if c.Secrets == nil {
+		return "", false
+	}
+	s, ok := c.Secrets.Lookup(fingerprint)
+	return s.Password, ok
+}
+
+// Register 是 Controller 对 kernel SPI 的委托：登记/轮换指纹对应的 agent
+// 临时口令（约束同 SecretRegistry.Register：一证书一身份）。
+func (c *Controller) Register(fingerprint, agentID, password string) error {
+	if c.Secrets == nil {
+		return fmt.Errorf("secret registry not initialized")
+	}
+	return c.Secrets.Register(fingerprint, agentID, password)
+}
+
 // LookupByAgent returns the first entry matching agentID (CLI display).
 func (r *SecretRegistry) LookupByAgent(agentID string) (AgentSecret, bool) {
 	r.mu.RLock()

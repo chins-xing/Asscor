@@ -14,7 +14,6 @@ import (
 
 	"github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/kernel"
-	"github.com/chins-xing/asscor/internal/securemode"
 	"github.com/chins-xing/asscor/internal/topology"
 	"regexp"
 
@@ -43,10 +42,11 @@ type KernelServiceImpl struct {
 	// sections are synced to agents via heartbeat (check_config). Nil disables
 	// syncing (agent keeps its local bootstrap config).
 	cfg *config.Config
-	// secureMode is the secure-mode controller; its SecretRegistry records
-	// agent ephemeral passwords keyed on the mTLS certificate fingerprint
-	// (spec §10.1). Nil when the securemode build tag is off.
-	secureMode *securemode.Controller
+	// secureMode is the secure-mode controller consumed through the kernel SPI
+	// (kernel.SecureModeAgentSecrets); its registry records agent ephemeral
+	// passwords keyed on the mTLS certificate fingerprint (spec §10.1). Nil
+	// when the securemode build tag is off.
+	secureMode kernel.SecureModeAgentSecrets
 }
 
 func NewKernelServiceImpl(
@@ -77,7 +77,9 @@ func (s *KernelServiceImpl) SetConfig(cfg *config.Config) {
 // SetSecureMode wires the secure-mode controller into the service so heartbeat
 // responses can register agent ephemeral passwords (spec §10.1). Call before
 // serving; nil disables registration (the securemode build tag is off).
-func (s *KernelServiceImpl) SetSecureMode(ctrl *securemode.Controller) {
+// Consumption goes through the kernel-declared SPI (SecureModeAgentSecrets) —
+// coupling audit F4: module capabilities enter comms via kernel interfaces.
+func (s *KernelServiceImpl) SetSecureMode(ctrl kernel.SecureModeAgentSecrets) {
 	s.secureMode = ctrl
 }
 
@@ -272,8 +274,8 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 				logger.WithComponent("identity").Warn("secure-mode unlock skipped: no mTLS fingerprint (development mode)")
 				break
 			}
-			if sec, ok := s.secureMode.Secrets.Lookup(fp); ok && sec.Password != "" {
-				secureModeUnlock = &apiv1.SecureModeUnlock{Password: sec.Password}
+			if pw, ok := s.secureMode.Lookup(fp); ok && pw != "" {
+				secureModeUnlock = &apiv1.SecureModeUnlock{Password: pw}
 				logger.WithComponent("identity").Info("secure-mode unlock issued to locked agent", "host_id", req.HostId)
 			} else {
 				logger.WithComponent("identity").Warn("secure-mode unlock skipped: no registered secret for this fingerprint", "host_id", req.HostId)
@@ -285,7 +287,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		case req.SecureMode != nil && req.SecureMode.Password != "":
 			if fp == "" {
 				logger.WithComponent("identity").Warn("secure-mode registration skipped: no mTLS fingerprint (development mode)")
-			} else if err := s.secureMode.Secrets.Register(fp, req.HostId, req.SecureMode.Password); err != nil {
+			} else if err := s.secureMode.Register(fp, req.HostId, req.SecureMode.Password); err != nil {
 				logger.WithComponent("identity").Warn("secure-mode registration rejected",
 					"host_id", req.HostId, "error", err.Error())
 				return &apiv1.HeartbeatResponse{Ok: false}, fmt.Errorf("secure mode registration rejected: %v", err)
@@ -308,7 +310,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 			// its password report and re-registers on the next heartbeat.
 			// Ordinary agents ignore it (they have no password to re-report).
 			if fp != "" {
-				if _, ok := s.secureMode.Secrets.Lookup(fp); !ok {
+				if _, ok := s.secureMode.Lookup(fp); !ok {
 					secureModeNoSecret = true
 				}
 			}
@@ -375,6 +377,10 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 				subnets = topology.FilterExcludedSubnets(subnets, s.cfg.TopologyExcludeCIDRs)
 			}
 			if len(subnets) > 0 {
+				// topology 是 kernel 直调的地基库(M0, kernel 自身同款直调),
+				// 非 kernel SPI 模块 —— comms 直调与 kernel 消费方式一致
+				// (耦合审计 F4); TopologyInterface 契约(kernel/topo_types.go)
+				// 落地前不引入 SPI 包装层。
 				topology.RecordTopology(req.HostId, subnets)
 			}
 		}
@@ -406,6 +412,8 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 			}
 		}
 
+		// resilience.GuardGo 直调同 topology(F4 判定): 地基库 API 与 kernel
+		// 消费一致; comms→resilience 半启用的静默降级由 F3 启动告警兜底。
 		resilience.GuardGo("kernel.heartbeat", "evaluate", func() {
 			result := s.assessor.EvaluateFromResults(req.HostId, hostname, checkResults)
 			logger.WithComponent("kernel").Info("assessment result", "host_id", req.HostId, "score", result.FinalScore, "acceptable", result.Acceptable, "checks", len(result.Checks))
