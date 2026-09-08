@@ -289,6 +289,24 @@ func (i *ExtensionInstaller) extractTo(srcPath string, destDir string) error {
 	}
 }
 
+// sanitizeMode clamps an archive-provided permission to a safe installed
+// mode (audit L-6): setuid/setgid/sticky bits from the archive are stripped
+// (they would otherwise let an extension bundle ship a privileged helper),
+// and group/world-write bits are removed so a compromised extension cannot be
+// rewritten by another local user. Executable archives keep their owner x bit
+// and gain 0755 (owner rwx, group/other rx); everything else lands 0644.
+func sanitizeMode(m os.FileMode, isExec bool) os.FileMode {
+	// Drop special bits (setuid 0o4000, setgid 0o2000, sticky 0o1000).
+	m &= 0o777
+	// Remove group/world write.
+	m &^= 0o022
+	if isExec {
+		// Executables install as 0755 (owner rwx, group/other rx).
+		return 0o755
+	}
+	return 0o644
+}
+
 func (i *ExtensionInstaller) extractZip(src, dest string) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
@@ -314,7 +332,8 @@ func (i *ExtensionInstaller) extractZip(src, dest string) error {
 			return err
 		}
 
-		outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		mode := sanitizeMode(f.Mode(), f.Mode()&0o111 != 0)
+		outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 		if err != nil {
 			rc.Close()
 			return err
@@ -376,7 +395,10 @@ func (i *ExtensionInstaller) extractTarReader(tr *tar.Reader, dest string) error
 			os.MkdirAll(targetPath, 0755)
 		case tar.TypeReg:
 			os.MkdirAll(filepath.Dir(targetPath), 0755)
-			outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode))
+			// Audit L-6: never honour setuid/setgid/sticky or group/world
+			// write bits from the archive header.
+			mode := sanitizeMode(os.FileMode(header.Mode), header.Mode&0o111 != 0)
+			outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 			if err != nil {
 				return err
 			}
@@ -407,7 +429,8 @@ func (i *ExtensionInstaller) copyDir(src, dest string) error {
 			return err
 		}
 		os.MkdirAll(filepath.Dir(targetPath), 0755)
-		return os.WriteFile(targetPath, data, info.Mode())
+		// Audit L-6: clamp the copied mode (strip special + group/world write).
+		return os.WriteFile(targetPath, data, sanitizeMode(info.Mode(), info.Mode()&0o111 != 0))
 	})
 }
 

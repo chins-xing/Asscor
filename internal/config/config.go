@@ -615,6 +615,11 @@ func Parse(content string) (*Config, error) {
 	if err := cfg.parseConfidenceSections(sections); err != nil {
 		return nil, err
 	}
+	// Audit M-6: range-check parsed numerics so misconfiguration fails fast
+	// instead of poisoning the scoring formulas.
+	if err := cfg.validateRanges(); err != nil {
+		return nil, err
+	}
 
 	return cfg, nil
 }

@@ -57,9 +57,13 @@ type AgentConfig struct {
 	TLSServerName string
 	CertDir       string
 	HMACKey       string
-	LogFormat     string
-	LogLevel      string
-	LogOutput     string
+	// HMACKeyFile names a file (mode 0600 recommended) containing the command
+	// HMAC key. Preferring a secret file over an inline hmac_key keeps the key
+	// out of agent.ini where it could reach version control (audit M-4).
+	HMACKeyFile string
+	LogFormat   string
+	LogLevel    string
+	LogOutput   string
 	// ConfigPath is the agent config file path (the -config flag value). The
 	// securemode build tag uses it to locate agent.ini for encryption.
 	ConfigPath string

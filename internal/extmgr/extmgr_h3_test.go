@@ -1,6 +1,9 @@
 package extmgr
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 // TestValidateRequiresChecksumForRemoteSources covers audit H-3: http(s)
 // single-file sources must carry an explicit sha256 checksum; refusing them
@@ -71,5 +74,33 @@ func TestSpecCheckItemCarriesExtensionSource(t *testing.T) {
 	}
 	if item.ID != "EXT-001" {
 		t.Errorf("item ID = %q, want EXT-001", item.ID)
+	}
+}
+
+// TestSanitizeMode (audit L-6): archive-provided modes must never carry
+// setuid/setgid/sticky or group/world-write bits into the installed tree.
+func TestSanitizeMode(t *testing.T) {
+	cases := []struct {
+		name   string
+		mode   os.FileMode
+		isExec bool
+		want   os.FileMode
+	}{
+		{"plain 0644 stays", 0o644, false, 0o644},
+		{"executable 0755 stays", 0o755, true, 0o755},
+		{"setuid stripped", 0o4755, true, 0o755},
+		{"setgid stripped", 0o2755, true, 0o755},
+		{"sticky stripped", 0o1755, true, 0o755},
+		{"world-write stripped", 0o666, false, 0o644},
+		{"group-write stripped", 0o664, false, 0o644},
+		{"combined special+write cleaned", 0o7777, true, 0o755},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizeMode(tc.mode, tc.isExec)
+			if got != tc.want {
+				t.Errorf("sanitizeMode(%04o, %v) = %04o, want %04o", tc.mode, tc.isExec, got, tc.want)
+			}
+		})
 	}
 }
