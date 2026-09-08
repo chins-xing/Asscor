@@ -72,8 +72,12 @@ func validateScriptPath(path string) bool {
 		return false
 	}
 
-	// Must be a regular file.
-	info, err := os.Stat(abs)
+	// Must be a regular file. os.Lstat (not os.Stat) so a symlink is detected:
+	// os.Stat follows the link, so ModeSymlink is always 0 and a link planted
+	// in an allowed directory could point the executor at an arbitrary binary
+	// (audit M-1). The dir-allowlist + root-owner checks are a second layer;
+	// the symlink itself must be rejected outright.
+	info, err := os.Lstat(abs)
 	if err != nil {
 		return false
 	}
