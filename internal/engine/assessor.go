@@ -490,8 +490,16 @@ func (a *Assessor) computeDynamicDomainScores(result *model.AssessmentResult) *m
 		if delta == 0 {
 			delta = check.Delta
 		}
+		// Confidence-native expected deduction (design
+		// CONFIDENCE_MODEL_DESIGN_2026-09-08 §2.1): scale the delta by the
+		// observation confidence. Under the disabled policy every
+		// confidence is 1.0 → identical to the legacy accumulation.
+		conf := check.Confidence
+		if conf <= 0 || conf > 1 {
+			conf = 1.0
+		}
 		current := scores.Get(check.Domain)
-		scores.Set(check.Domain, math.Max(0, current+delta))
+		scores.Set(check.Domain, math.Max(0, current+delta*conf))
 	}
 
 	return scores
@@ -519,25 +527,41 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		if check.Passed {
 			continue
 		}
+		// Confidence-aware trigger attenuation (design §2.4), matching the
+		// plugin path ApplyEdgeFactorsToChecksPolicy: a low-confidence trigger
+		// applies a milder penalty (effective = 1 − (1−factor)·c_trigger).
+		conf := check.Confidence
+		if conf <= 0 || conf > 1 {
+			conf = 1.0
+		}
+		attenuate := func(f float64) float64 {
+			if f <= 0 || f >= 1.0 {
+				return f
+			}
+			return 1.0 - (1.0-f)*conf
+		}
 		switch check.CheckID {
 		case "EF-001":
 			if v, ok := customFactors["EF-002FA"]; ok {
-				localFactors["EF-002FA"] = v.Factor
+				localFactors["EF-002FA"] = attenuate(v.Factor)
 			} else {
-				localFactors["EF-002FA"] = a.cfg.EdgeFactors.TwoFactorFailure
+				localFactors["EF-002FA"] = attenuate(a.cfg.EdgeFactors.TwoFactorFailure)
 			}
 		case "EF-002":
 			if v, ok := customFactors["EF-3FA"]; ok {
-				localFactors["EF-3FA"] = v.Factor
+				localFactors["EF-3FA"] = attenuate(v.Factor)
 			} else {
-				localFactors["EF-3FA"] = 0.82
+				localFactors["EF-3FA"] = attenuate(0.82)
 			}
+			// EF-3FA cascades a FIXED config penalty onto EF-002FA; cascade
+			// values are not confidence-attenuated (design §2.4 — their
+			// provenance is the config, not this trigger observation).
 			if v, ok := localFactors["EF-002FA"]; !ok || v > 0.82 {
 				localFactors["EF-002FA"] = 0.82
 			}
 		default:
 			if penalty, ok := customFactors[check.CheckID]; ok && penalty.Factor < 1.0 {
-				localFactors[check.CheckID] = penalty.Factor
+				localFactors[check.CheckID] = attenuate(penalty.Factor)
 			}
 		}
 	}
@@ -699,6 +723,7 @@ func (a *Assessor) tryPluginScore(ctx context.Context, result *model.AssessmentR
 }
 
 func (a *Assessor) runLegacyScoring(result *model.AssessmentResult) {
+	a.resolveChecksConfidence(result)
 	dynScores := a.computeDynamicDomainScores(result)
 	for domain, score := range dynScores.GetAll() {
 		result.DomainScores.Set(domain, score)
@@ -1010,11 +1035,24 @@ func (a *Assessor) RecomputeFinalScore(result *model.AssessmentResult) float64 {
 		}
 	}
 
+	// Legacy path: resolve per-check confidences before the expected
+	// deduction so confidence-aware scoring works identically here and in the
+	// plugin engine.
+	a.resolveChecksConfidence(result)
 	dynScores := model.NewDynamicDomainScores()
 	dynScores.FillFromLegacy(result.DomainScores)
 	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
 	result.Acceptable = result.FinalScore >= result.Threshold
 	return result.FinalScore
+}
+
+// resolveChecksConfidence applies the [confidence] rule table to the result's
+// checks (no-op when disabled or plugin engine already resolved them).
+func (a *Assessor) resolveChecksConfidence(result *model.AssessmentResult) {
+	if a.cfg == nil || result == nil {
+		return
+	}
+	a.cfg.ResolveChecks(result.Checks)
 }
 
 func hashCheckResults(results []model.CheckResult) string {

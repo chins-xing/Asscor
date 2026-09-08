@@ -3,6 +3,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"github.com/asscor/asscor/internal/model"
 )
 
 const confidenceIni = `
@@ -128,5 +130,38 @@ func TestConfidenceValueClamping(t *testing.T) {
 	}
 	if _, ok := cfg.Confidence.BySource["user"]; ok {
 		t.Error("non-positive user confidence must be dropped")
+	}
+}
+
+// TestConfigResolveChecks: the shared per-result resolver (used by both the
+// ssam plugin engine and the legacy DynamicScoringEngine) fills confidences
+// from the rule table and preserves upstream-set ones.
+func TestConfigResolveChecks(t *testing.T) {
+	cfg, err := Parse(confidenceIni)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	checks := []model.CheckResult{
+		{CheckID: "AS-001", Domain: "attack_surface", Source: model.CheckSourceBuiltin}, // exact rule 0.99
+		{CheckID: "CU-1", Domain: "operation_trust", Source: model.CheckSourceUser},     // source user 0.9
+		{CheckID: "XY-9", Domain: "resilience", Source: model.CheckSourceUser},          // source user 0.9 (no exact/regex hit)
+		{CheckID: "NOPE-1", Domain: "resilience", Source: model.CheckSourceBuiltin},     // domain miss → default 0.85
+		{CheckID: "Y-9", Domain: "attack_surface", Confidence: 0.77},                    // upstream preserved
+	}
+	cfg.ResolveChecks(checks)
+
+	want := []float64{0.99, 0.9, 0.9, 0.85, 0.77}
+	for i := range checks {
+		if checks[i].Confidence != want[i] {
+			t.Errorf("check %s confidence = %v, want %v", checks[i].CheckID, checks[i].Confidence, want[i])
+		}
+	}
+
+	// Disabled config is a no-op.
+	disabled, _ := Parse("[weights]\nattack_surface = 35\n")
+	checks2 := []model.CheckResult{{CheckID: "AS-001", Domain: "attack_surface"}}
+	disabled.ResolveChecks(checks2)
+	if checks2[0].Confidence != 0 {
+		t.Error("disabled config must not touch confidences")
 	}
 }

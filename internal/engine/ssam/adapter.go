@@ -189,23 +189,13 @@ func ConfigToConfidencePolicy(cfg *config.Config) ConfidencePolicy {
 }
 
 // ResolveCheckConfidence fills result.Checks[].Confidence from the kernel's
-// confidence rule table (design §3). It is idempotent: results that already
-// carry an explicit confidence (e.g. agent-set) are preserved. sourceKey is
-// derived from CheckResult.Source (builtin/user/...), falling back to
-// "builtin" for the empty legacy value.
+// confidence rule table (design §3). It is a thin wrapper over the shared
+// resolver in internal/config so both the plugin (ssam) engine and the legacy
+// DynamicScoringEngine consume the same rules. Results that already carry an
+// explicit confidence (e.g. agent-set) are preserved.
 func ResolveCheckConfidence(cfg *config.Config, result *model.AssessmentResult) {
-	if cfg == nil || result == nil || !cfg.Confidence.Enabled {
+	if cfg == nil || result == nil {
 		return
 	}
-	for i := range result.Checks {
-		c := &result.Checks[i]
-		if c.Confidence > 0 {
-			continue // already resolved upstream
-		}
-		src := string(c.Source)
-		if src == "" {
-			src = "builtin"
-		}
-		c.Confidence = cfg.Confidence.Resolve(c.CheckID, src, c.Domain)
-	}
+	cfg.ResolveChecks(result.Checks)
 }

@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/asscor/asscor/internal/model"
 )
 
 // ConfidenceConfig is the kernel-side configuration of the intelligence
@@ -166,18 +168,8 @@ func parseConfidenceValue(v string) (float64, error) {
 	return f, nil
 }
 
-// Resolve returns the configured confidence for a check/result identified by
-// (checkID, sourceKey, domain), following the rule priority:
-//
-//  1. exact [confidence.check] checkID match (case-insensitive — config keys
-//     are lower-cased by parseSections, check ids are compared folded)
-//  2. [confidence.checkrx] first-matching pattern (declaration order,
-//     matched against the folded id)
-//  3. [confidence.source] source key (folded)
-//  4. [confidence.domain] domain fallback (folded)
-//  5. Default
-//
-// When the whole model is disabled it always returns 1.0 (legacy).
+// Resolve applies the configured rule table to one check identified by
+// (checkID, sourceKey, domain).
 func (cc ConfidenceConfig) Resolve(checkID, sourceKey, domain string) float64 {
 	if !cc.Enabled {
 		return 1.0
@@ -202,4 +194,25 @@ func (cc ConfidenceConfig) Resolve(checkID, sourceKey, domain string) float64 {
 		d = 1.0
 	}
 	return d
+}
+
+// ResolveChecks fills Checks[].Confidence from the rule table (design §3).
+// Results that already carry an explicit confidence (e.g. agent-set or SRD
+// upstream) are preserved. sourceKey comes from CheckResult.Source, with the
+// empty legacy value mapped to "builtin".
+func (cfg *Config) ResolveChecks(checks []model.CheckResult) {
+	if cfg == nil || !cfg.Confidence.Enabled {
+		return
+	}
+	for i := range checks {
+		c := &checks[i]
+		if c.Confidence > 0 {
+			continue // already resolved upstream
+		}
+		src := string(c.Source)
+		if src == "" {
+			src = "builtin"
+		}
+		c.Confidence = cfg.Confidence.Resolve(c.CheckID, src, c.Domain)
+	}
 }
