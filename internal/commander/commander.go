@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/logger"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // Module signs and distributes commands to Agents via gRPC, managing retry

@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 	"time"
 
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // OSCALExport generates OSCAL-compliant assessment results from an ASSCOR AssessmentResult.

@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 func TestSigner_SignVerifies(t *testing.T) {

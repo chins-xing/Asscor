@@ -12,16 +12,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/securemode"
-	"github.com/asscor/asscor/internal/topology"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/topology"
 	"regexp"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/model"
-	"github.com/asscor/asscor/internal/resilience"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/resilience"
 )
 
 var (

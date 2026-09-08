@@ -3,7 +3,7 @@ package checks
 import (
 	"testing"
 
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // TestUserCheckIDPrefix locks the reserved prefix separating configuration-

@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/collector"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/collector"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // newLogCollector returns the log collector module, or nil when the collector

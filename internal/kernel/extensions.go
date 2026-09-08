@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // ModuleExtensions is the extension surface exposed to plugins.

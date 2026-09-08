@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asscor/asscor/internal/model"
-	"github.com/asscor/asscor/internal/resilience"
+	"github.com/chins-xing/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/resilience"
 )
 
 // ScriptAdapter runs user-defined external scripts (any language) and converts

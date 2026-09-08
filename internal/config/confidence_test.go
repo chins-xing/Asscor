@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 const confidenceIni = `

@@ -75,7 +75,7 @@
 
 | 策略 | Go module 边界 | 复杂度 | 说明 |
 |------|:---:|:---:|------|
-| **同模块** | 无独立 go.mod | 低 | 文件移至 `optional/` 但保留在 `github.com/asscor/asscor` 模块下 — `internal/*` 可正常 import |
+| **同模块** | 无独立 go.mod | 低 | 文件移至 `optional/` 但保留在 `github.com/chins-xing/asscor` 模块下 — `internal/*` 可正常 import |
 | **独立模块** | 独立 go.mod | 高 | 需创建 `pkg/sdk/` 公共层导出 `KernelContext`/`Bus`/`Message`/`ModuleExtensions`/`Plugin`/`PluginState` + logger facade + config 类型 (~400-600 LOC 新代码) |
 
 **推荐同模块策略**: 与现有 `multi-algo-orchestrator` 一样保留在同一个 Go module 中，通过 build tag 或运行时注册控制启用。

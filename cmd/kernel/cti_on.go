@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/cti"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/cti"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // newCTI returns the CTI module, or nil when the cti build tag is disabled

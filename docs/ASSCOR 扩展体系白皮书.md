@@ -813,7 +813,7 @@ cd optional/pkgmgr && go build -o asscor-pkg .
 不修改内核代码，通过 Extension Point 系统挂载：
 
 ```go
-import multialgo "github.com/asscor/asscor-optional-multi-algo"
+import multialgo "github.com/chins-xing/asscor-optional-multi-algo"
 
 cfg := multialgo.OrchestrationConfig{
     Mode:  multialgo.ModeCascade,

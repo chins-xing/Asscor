@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/commander"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/commander"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // newCommander returns the commander module, or nil when the commander build

@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/agent"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/agent"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // agentSecureVault returns the agent's protected-config vault. When the

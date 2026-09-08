@@ -8,7 +8,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 	ssam "github.com/chins-xing/ssam"
 )
 

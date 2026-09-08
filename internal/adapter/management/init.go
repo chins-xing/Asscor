@@ -2,7 +2,7 @@
 
 package management
 
-import "github.com/asscor/asscor/internal/adapter"
+import "github.com/chins-xing/asscor/internal/adapter"
 
 func init() {
 	adapter.Register(NewAnsibleAdapter())

@@ -5,7 +5,7 @@ package comms
 import (
 	"testing"
 
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 func TestConvertAssessmentResultNil(t *testing.T) {

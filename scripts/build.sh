@@ -38,7 +38,7 @@ for entry in "${BINARIES[@]}"; do
     esac
     go build \
         -tags "${TAGS}" \
-        -ldflags="-s -w -X github.com/asscor/asscor/internal/version.ASSCORVersion=${VERSION}" \
+        -ldflags="-s -w -X github.com/chins-xing/asscor/internal/version.ASSCORVersion=${VERSION}" \
         -o "${BUILD_DIR}/${name}" \
         "./${src}"
     echo "  $(du -h "${BUILD_DIR}/${name}" | cut -f1)  ${name}"

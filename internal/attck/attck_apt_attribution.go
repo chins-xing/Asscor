@@ -4,12 +4,12 @@ package attck
 
 import (
 	"fmt"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 	"math"
 	"sort"
 	"time"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 func (m *Module) performAttribution(stages []AttackStage, iocs []IOCEntry) *AttributionResult {

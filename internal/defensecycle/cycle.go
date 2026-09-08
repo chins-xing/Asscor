@@ -3,9 +3,9 @@ package defensecycle
 import (
 	"math"
 
-	"github.com/asscor/asscor/internal/attackerstate"
-	"github.com/asscor/asscor/internal/engagement"
-	"github.com/asscor/asscor/internal/predictor"
+	"github.com/chins-xing/asscor/internal/attackerstate"
+	"github.com/chins-xing/asscor/internal/engagement"
+	"github.com/chins-xing/asscor/internal/predictor"
 )
 
 // 自适应攻防闭环 — 主动防御白皮书 Phase 5（§5.1 攻击者认知闭环 + §5.8

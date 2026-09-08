@@ -5,7 +5,7 @@ package spc
 import (
 	"testing"
 
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 func TestTruncateString(t *testing.T) {

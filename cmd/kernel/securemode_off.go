@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // initSecureMode returns a nil controller when the securemode build tag is

@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/engine"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/engine"
 )
 
 func attachSPC(cfg *config.Config, assessor *engine.Assessor) {}

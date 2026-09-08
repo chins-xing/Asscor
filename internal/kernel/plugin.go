@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/asscor/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/config"
 )
 
 type PluginState int

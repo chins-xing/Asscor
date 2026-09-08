@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/spc"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/spc"
 )
 
 // newSPC returns the SPC module, or nil when the spc build tag is disabled

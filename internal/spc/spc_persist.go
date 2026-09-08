@@ -4,13 +4,13 @@ package spc
 
 import (
 	"encoding/json"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 	"os"
 	"path/filepath"
 	"regexp"
 	"time"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 var cveIDPattern = regexp.MustCompile(`^CVE-\d{4}-\d{4,}$`)

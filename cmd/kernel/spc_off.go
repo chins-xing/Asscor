@@ -2,6 +2,6 @@
 
 package main
 
-import "github.com/asscor/asscor/internal/kernel"
+import "github.com/chins-xing/asscor/internal/kernel"
 
 func newSPC() kernel.SPCInterface { return nil }

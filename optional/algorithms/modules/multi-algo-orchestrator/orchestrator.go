@@ -8,7 +8,7 @@
 //
 // Usage (in cmd/kernel/main.go):
 //
-//	import multialgo "github.com/asscor/asscor-optional-multi-algo"
+//	import multialgo "github.com/chins-xing/asscor-optional-multi-algo"
 //
 //	// After kernel bootstrap:
 //	cfg := multialgo.OrchestrationConfig{
@@ -34,8 +34,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // AlgorithmRole labels an algorithm's position in the orchestration.

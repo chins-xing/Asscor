@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // ModuleHealth tracks the health status of a named module for aggregation

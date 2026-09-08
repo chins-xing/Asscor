@@ -9,11 +9,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/engine"
-	ascorprism "github.com/asscor/asscor/internal/engine/prism"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/engine"
+	ascorprism "github.com/chins-xing/asscor/internal/engine/prism"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/model"
 	prismlib "github.com/chins-xing/prism"
 )
 

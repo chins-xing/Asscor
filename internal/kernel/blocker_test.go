@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
 )
 
 // mockCommander implements CommanderInterface for blocker tests.

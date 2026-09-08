@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/common"
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/common"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 type HandlerFunc func(ctx context.Context, service, method string, payload []byte) ([]byte, error)

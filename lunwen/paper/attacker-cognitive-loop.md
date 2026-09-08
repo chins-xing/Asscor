@@ -562,7 +562,7 @@ repository; no component of the loop exists only on paper.
 ### 7.1 Repository and Branches
 
 The reference implementation lives in the public repository
-https://github.com/chins-xing/Asscor (module `github.com/asscor/asscor`, Go
+https://github.com/chins-xing/Asscor (module `github.com/chins-xing/asscor`, Go
 1.26, Apache-2.0). Two long-lived branches exist:
 
 - **`main`** — the stable baseline (v0.2.x): the security acceptability

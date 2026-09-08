@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asscor/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/config"
 )
 
 // parseConfigForTest is the I-1 kernel feed path: the run-mode guard content

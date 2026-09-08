@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
-	"github.com/asscor/asscor/internal/model"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // ---------------------------------------------------------------------------

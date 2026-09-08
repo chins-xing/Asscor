@@ -3,8 +3,8 @@ package kernel
 import (
 	"context"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // This file holds the assessor engine CONTRACT types (interfaces + shared data

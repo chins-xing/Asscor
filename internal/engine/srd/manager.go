@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/common"
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/common"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // TopicSRDResult is the Bus topic published when an external tool report is processed.

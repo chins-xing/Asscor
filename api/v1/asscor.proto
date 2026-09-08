@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package asscor.v1;
 
-option go_package = "github.com/asscor/asscor/api/v1;apiv1";
+option go_package = "github.com/chins-xing/asscor/api/v1;apiv1";
 
 service KernelService {
   rpc Register(RegisterRequest) returns (RegisterResponse);

@@ -7,7 +7,7 @@
 ```bash
 # 1. 将本模块克隆到 ASSCOR 仓库的 optional/ 目录
 cd ASSCOR/optional/algorithms/modules/
-git clone https://github.com/asscor/asscor-optional-multi-algo.git
+git clone https://github.com/chins-xing/asscor-optional-multi-algo.git
 
 # 2. 在 cmd/kernel/main.go 中添加导入和注册
 ```
@@ -17,7 +17,7 @@ git clone https://github.com/asscor/asscor-optional-multi-algo.git
 在 `cmd/kernel/main.go` 中：
 
 ```go
-import multialgo "github.com/asscor/asscor-optional-multi-algo"
+import multialgo "github.com/chins-xing/asscor-optional-multi-algo"
 
 // 在 Bootstrap 之后:
 cfg := multialgo.OrchestrationConfig{

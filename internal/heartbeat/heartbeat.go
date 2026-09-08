@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/topology"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/topology"
 )
 
 // Module tracks Agent liveness and triggers alerts on timeout.

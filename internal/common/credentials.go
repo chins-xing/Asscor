@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // CredentialSource describes where a resolved credential came from.

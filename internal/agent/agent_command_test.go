@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
-	"github.com/asscor/asscor/internal/checks"
-	"github.com/asscor/asscor/internal/common"
-	"github.com/asscor/asscor/internal/model"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/checks"
+	"github.com/chins-xing/asscor/internal/common"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // ---------------------------------------------------------------------------

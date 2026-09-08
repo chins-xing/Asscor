@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
 )
 
 // TestInitSecureModeRefusesSkipVerify covers audit RC-H3: the secure-mode

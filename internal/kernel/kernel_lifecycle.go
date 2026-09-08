@@ -9,7 +9,7 @@ import (
 	"sort"
 	"syscall"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 func (k *Kernel) Bootstrap() error {

@@ -1,6 +1,6 @@
 package kernel
 
-import apiv1 "github.com/asscor/asscor/api/v1"
+import apiv1 "github.com/chins-xing/asscor/api/v1"
 
 type CommanderInterface interface {
 	EnqueueCommand(hostID string, action string, params map[string]string) string

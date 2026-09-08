@@ -7,8 +7,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // confPolicyCfg builds a kernel config with confidence enabled and a rule

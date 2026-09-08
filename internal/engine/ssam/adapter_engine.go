@@ -5,9 +5,9 @@ package ssam
 import (
 	"context"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/engine"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/engine"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // EngineAdapter wraps ssam.Engine to implement engine.AssessorEngine.

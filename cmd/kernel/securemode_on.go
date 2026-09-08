@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // initSecureMode assembles the kernel-side secure-mode controller. The

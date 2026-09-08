@@ -1,6 +1,6 @@
 package kernel
 
-import "github.com/asscor/asscor/internal/topology"
+import "github.com/chins-xing/asscor/internal/topology"
 
 // 拓扑与传播层基础设施 — 微内核契约（M0 地基层）
 //

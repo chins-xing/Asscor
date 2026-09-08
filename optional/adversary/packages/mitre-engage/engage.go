@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // EngageBlocker is a lightweight MITRE Engage active-defense extension.

@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/adapter"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/adapter"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 type AdapterIntegrationModule struct {

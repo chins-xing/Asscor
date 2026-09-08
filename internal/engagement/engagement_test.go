@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asscor/asscor/internal/attackerstate"
-	"github.com/asscor/asscor/internal/predictor"
+	"github.com/chins-xing/asscor/internal/attackerstate"
+	"github.com/chins-xing/asscor/internal/predictor"
 )
 
 // TestSelectUtilityRanking: 高概率动作对应的诱饵效用最高（§5.5）。

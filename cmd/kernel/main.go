@@ -12,18 +12,18 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/asscor/asscor/internal/adapter"
-	"github.com/asscor/asscor/internal/cli"
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/extmgr"
-	"github.com/asscor/asscor/internal/integrity"
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/resilience"
-	"github.com/asscor/asscor/internal/securemode"
-	"github.com/asscor/asscor/internal/version"
+	"github.com/chins-xing/asscor/internal/adapter"
+	"github.com/chins-xing/asscor/internal/cli"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/extmgr"
+	"github.com/chins-xing/asscor/internal/integrity"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/resilience"
+	"github.com/chins-xing/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/version"
 
-	_ "github.com/asscor/asscor/internal/checks"
+	_ "github.com/chins-xing/asscor/internal/checks"
 )
 
 func main() {

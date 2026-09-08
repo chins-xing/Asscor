@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asscor/asscor/internal/attackerstate"
-	"github.com/asscor/asscor/internal/engagement"
-	"github.com/asscor/asscor/internal/predictor"
+	"github.com/chins-xing/asscor/internal/attackerstate"
+	"github.com/chins-xing/asscor/internal/engagement"
+	"github.com/chins-xing/asscor/internal/predictor"
 )
 
 func newTestController() *Controller {

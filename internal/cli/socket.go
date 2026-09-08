@@ -7,7 +7,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 const defaultSocketPath = "/opt/asscor/asscor-cli.sock"

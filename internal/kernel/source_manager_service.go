@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
-	"github.com/asscor/asscor/internal/logger"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 type SourceManagerServiceImpl struct {

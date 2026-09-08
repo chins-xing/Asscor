@@ -3,7 +3,7 @@
 package integrity
 
 import (
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // Signer is a no-op signer used when the integrity module is disabled.

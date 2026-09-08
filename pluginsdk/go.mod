@@ -1,3 +1,3 @@
-module github.com/asscor/pluginsdk
+module github.com/chins-xing/pluginsdk
 
 go 1.26

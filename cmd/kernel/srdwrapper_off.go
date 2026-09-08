@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/asscor/asscor/internal/kernel"
+import "github.com/chins-xing/asscor/internal/kernel"
 
 // newSRDPlugin returns nil when the srdwrapper module (which requires the
 // engine tag) is not fully enabled.

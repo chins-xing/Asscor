@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // writeTestConfig creates a realistic config with a [bootstrap] section so

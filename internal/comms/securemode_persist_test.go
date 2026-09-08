@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
-	"github.com/asscor/asscor/internal/heartbeat"
-	"github.com/asscor/asscor/internal/securemode"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/heartbeat"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // TestHeartbeatSecureModeRegistrationPersists (spec §10.1 P0-1): a heartbeat

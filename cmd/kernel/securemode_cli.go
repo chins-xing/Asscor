@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/asscor/asscor/internal/cli"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/cli"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // registerSecureModeCLI wires the mode/config-set handlers into the kernel

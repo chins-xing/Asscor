@@ -14,7 +14,7 @@
 //
 // Public API:
 //
-//	import attckext "github.com/asscor/asscor/optional/algorithms/packages/attck-ext-pack"
+//	import attckext "github.com/chins-xing/asscor/optional/algorithms/packages/attck-ext-pack"
 //	attckext.Register(assessor)
 //
 // See package.json for extension point hooks and register.go for the registration implementation.

@@ -6,9 +6,9 @@ import (
 	"context"
 	"testing"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
-	"github.com/asscor/asscor/internal/heartbeat"
-	"github.com/asscor/asscor/internal/kernel"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/heartbeat"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 func newIdentityService() *KernelServiceImpl {

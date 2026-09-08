@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // TestIdentityBindingPersistsAcrossRestart verifies host_id ↔ cert-fingerprint

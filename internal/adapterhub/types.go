@@ -5,7 +5,7 @@ package adapterhub
 import (
 	"time"
 
-	"github.com/asscor/asscor/internal/adapter"
+	"github.com/chins-xing/asscor/internal/adapter"
 )
 
 // Severity is a type alias for adapter.Severity, unifying the two packages.

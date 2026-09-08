@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 func TestPrivilegedProtocolRoundTrip(t *testing.T) {

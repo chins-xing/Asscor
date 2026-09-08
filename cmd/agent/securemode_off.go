@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/agent"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/agent"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // agentSecureVault returns a nil vault when the securemode build tag is

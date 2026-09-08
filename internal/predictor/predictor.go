@@ -4,7 +4,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/asscor/asscor/internal/attackerstate"
+	"github.com/chins-xing/asscor/internal/attackerstate"
 )
 
 // 行动预测引擎 — 主动防御白皮书 Phase 3（§4 Prediction: Action Distribution）

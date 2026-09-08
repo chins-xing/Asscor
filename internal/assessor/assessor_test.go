@@ -7,8 +7,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/asscor/asscor/internal/checks"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/checks"
+	"github.com/chins-xing/asscor/internal/model"
 	prismlib "github.com/chins-xing/prism"
 )
 

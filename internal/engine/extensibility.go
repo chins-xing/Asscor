@@ -8,9 +8,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // Contract type aliases (canonical in internal/kernel/engine_types.go).

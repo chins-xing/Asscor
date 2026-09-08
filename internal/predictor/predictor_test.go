@@ -3,7 +3,7 @@ package predictor
 import (
 	"testing"
 
-	"github.com/asscor/asscor/internal/attackerstate"
+	"github.com/chins-xing/asscor/internal/attackerstate"
 )
 
 // TestPredictDistribution: 概率归一化 + 输出结构完整。

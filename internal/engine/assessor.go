@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asscor/asscor/internal/adapter"
-	"github.com/asscor/asscor/internal/checks"
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/adapter"
+	"github.com/chins-xing/asscor/internal/checks"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // Contract type aliases. The canonical definitions live in the microkernel

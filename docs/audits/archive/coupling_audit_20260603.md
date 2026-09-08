@@ -105,8 +105,8 @@ kernel 包承担了过多职责：
 **问题描述**：
 ```go
 import (
-    _ "github.com/asscor/asscor/internal/adapter/management"
-    _ "github.com/asscor/asscor/internal/adapter/scanner"
+    _ "github.com/chins-xing/asscor/internal/adapter/management"
+    _ "github.com/chins-xing/asscor/internal/adapter/scanner"
 )
 ```
 使用空白导入触发 `init()` 函数注册适配器，但 engine 包对 adapter 包的注册机制没有控制权。

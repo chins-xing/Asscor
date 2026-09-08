@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/heartbeat"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/heartbeat"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // newHeartbeat returns the heartbeat module, or nil when the heartbeat build

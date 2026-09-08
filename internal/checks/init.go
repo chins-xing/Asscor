@@ -3,7 +3,7 @@
 package checks
 
 import (
-	"github.com/asscor/asscor/internal/checks/linux"
+	"github.com/chins-xing/asscor/internal/checks/linux"
 )
 
 func init() {

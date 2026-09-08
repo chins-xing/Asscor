@@ -2603,8 +2603,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // initSecureMode assembles the kernel-side secure-mode controller. The
@@ -2640,8 +2640,8 @@ func initSecureMode(k kernel.KernelContext, dataDir, configPath string) (*secure
 package main
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // initSecureMode returns a nil controller when the securemode build tag is
@@ -2681,8 +2681,8 @@ if secureCtrl != nil {
 package main
 
 import (
-	"github.com/asscor/asscor/internal/cli"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/cli"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // registerSecureModeCLI wires the mode/config handlers into the kernel CLI.
@@ -2813,8 +2813,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/asscor/asscor/internal/agent"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/agent"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // agentSecureVault returns the agent's protected-config vault. When the
@@ -2835,8 +2835,8 @@ func agentSecureVault(cfg agent.AgentConfig) *securemode.Vault {
 package main
 
 import (
-	"github.com/asscor/asscor/internal/agent"
-	"github.com/asscor/asscor/internal/securemode"
+	"github.com/chins-xing/asscor/internal/agent"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 func agentSecureVault(cfg agent.AgentConfig) *securemode.Vault {

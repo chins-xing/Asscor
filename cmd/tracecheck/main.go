@@ -11,10 +11,10 @@ import (
 	"math"
 	"time"
 
-	"github.com/asscor/asscor/internal/attackerstate"
-	"github.com/asscor/asscor/internal/defensecycle"
-	"github.com/asscor/asscor/internal/engagement"
-	"github.com/asscor/asscor/internal/predictor"
+	"github.com/chins-xing/asscor/internal/attackerstate"
+	"github.com/chins-xing/asscor/internal/defensecycle"
+	"github.com/chins-xing/asscor/internal/engagement"
+	"github.com/chins-xing/asscor/internal/predictor"
 )
 
 func mk(ttp, intent, target, outcome string, conf float64) attackerstate.Evidence {

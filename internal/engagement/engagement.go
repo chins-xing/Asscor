@@ -4,8 +4,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/asscor/asscor/internal/attackerstate"
-	"github.com/asscor/asscor/internal/predictor"
+	"github.com/chins-xing/asscor/internal/attackerstate"
+	"github.com/chins-xing/asscor/internal/predictor"
 )
 
 // 引导/欺骗干预引擎 — 主动防御白皮书 Phase 4（§5.5 Engagement Planner +

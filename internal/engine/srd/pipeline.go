@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	ascorprism "github.com/asscor/asscor/internal/engine/prism"
-	"github.com/asscor/asscor/internal/logger"
+	ascorprism "github.com/chins-xing/asscor/internal/engine/prism"
+	"github.com/chins-xing/asscor/internal/logger"
 	prismlib "github.com/chins-xing/prism"
 )
 

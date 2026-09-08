@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asscor/asscor/internal/adapter"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/adapter"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 func TestSuricataEVEParsing(t *testing.T) {

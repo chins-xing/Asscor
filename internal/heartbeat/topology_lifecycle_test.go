@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/topology"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/topology"
 )
 
 // TestTimeoutDeletesTopology: M1 生命周期 (P0-1 修复) — 心跳超时注销拓扑

@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/asscor/asscor/internal/checks/linux"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/checks/linux"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 func TestGetAll_ContainsEFChecks(t *testing.T) {

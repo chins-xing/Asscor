@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 func TestParseSemVer(t *testing.T) {

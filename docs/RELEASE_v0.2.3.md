@@ -96,8 +96,8 @@ ASSCOR v0.2.3 是一次**安全加固与可加入性发布**：完成攻击面�
 
 ```bash
 # 下载二进制
-wget https://github.com/asscor/asscor/releases/download/v0.2.3/ASSCOR-kernel-linux-amd64
-wget https://github.com/asscor/asscor/releases/download/v0.2.3/ASSCOR-agent-linux-amd64
+wget https://github.com/chins-xing/asscor/releases/download/v0.2.3/ASSCOR-kernel-linux-amd64
+wget https://github.com/chins-xing/asscor/releases/download/v0.2.3/ASSCOR-agent-linux-amd64
 
 # 安装
 sudo ./ASSCOR-kernel-linux-amd64 --install

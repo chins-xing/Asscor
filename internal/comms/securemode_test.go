@@ -6,9 +6,9 @@ import (
 	"context"
 	"testing"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
-	"github.com/asscor/asscor/internal/heartbeat"
-	"github.com/asscor/asscor/internal/securemode"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/heartbeat"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // newSecureIdentityService builds a KernelServiceImpl with the heartbeat

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/securemode"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/securemode"
 )
 
 // secureModeMaxNoUnlock is the number of consecutive heartbeats without a

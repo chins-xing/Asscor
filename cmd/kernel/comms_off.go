@@ -5,8 +5,8 @@ package main
 import (
 	"crypto/tls"
 
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // commsRuntime is a no-op when the comms build tag is disabled.

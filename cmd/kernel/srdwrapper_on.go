@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/asscor/asscor/internal/kernel"
-	"github.com/asscor/asscor/internal/srdwrapper"
+	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/srdwrapper"
 )
 
 // newSRDPlugin returns the SRD wrapper plugin. The srdwrapper implementation

@@ -5,7 +5,7 @@ package agent
 import (
 	"fmt"
 
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // PrivilegedClient is a stub on non-Linux platforms.

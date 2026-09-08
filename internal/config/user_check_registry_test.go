@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/asscor/asscor/internal/checks"
+	"github.com/chins-xing/asscor/internal/checks"
 )
 
 func TestRegisterUserChecks_Command(t *testing.T) {

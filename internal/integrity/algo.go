@@ -10,7 +10,7 @@ import (
 	prismlib "github.com/chins-xing/prism"
 	ssam "github.com/chins-xing/ssam"
 
-	"github.com/asscor/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // expectedAlgoDigest is the SHA-256 of the canonical SSAM/Prism algorithm

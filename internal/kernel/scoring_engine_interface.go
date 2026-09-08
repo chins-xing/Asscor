@@ -1,8 +1,8 @@
 package kernel
 
 import (
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/model"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/model"
 	prismlib "github.com/chins-xing/prism"
 )
 

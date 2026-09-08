@@ -20,16 +20,16 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/asscor/asscor/internal/logger"
-	"github.com/asscor/asscor/internal/version"
+	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/version"
 	"syscall"
 	"time"
 
-	apiv1 "github.com/asscor/asscor/api/v1"
-	"github.com/asscor/asscor/internal/checks"
-	"github.com/asscor/asscor/internal/common"
-	"github.com/asscor/asscor/internal/config"
-	"github.com/asscor/asscor/internal/model"
+	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/checks"
+	"github.com/chins-xing/asscor/internal/common"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/model"
 )
 
 // ErrKernelUnreachable is returned when the agent fails to contact the kernel

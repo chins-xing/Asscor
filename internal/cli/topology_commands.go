@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/asscor/asscor/internal/topology"
+	"github.com/chins-xing/asscor/internal/topology"
 )
 
 // topologyCmdInfo exposes the topology awareness state (M1, L7 观测):
