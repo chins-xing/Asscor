@@ -35,6 +35,34 @@ func dockerExec(container, cmd string) (string, error) {
 	return string(out), err
 }
 
+// shellSafe rejects values that would inject shell syntax when interpolated
+// into the attacker/decoy command templates (audit RC-M5). The templates are
+// bash -c strings by necessity (they run shell loops / /dev/tcp probes), so
+// interpolated values — target IPs, port lists, log paths — must be confined
+// to their intended character classes. A metacharacter is fatal: this is an
+// experiment harness, so a bad value should abort loudly rather than ship a
+// mutated command into a container.
+func shellSafe(v string) error {
+	for _, r := range v {
+		switch r {
+		case ';', '&', '|', '`', '$', '(', ')', '<', '>', '{', '}', '\n', '\r', '\'', '"', '\\', ' ', '\t':
+			return fmt.Errorf("value %q contains shell metacharacter %q", v, string(r))
+		}
+	}
+	if v == "" {
+		return fmt.Errorf("empty value not allowed in command template")
+	}
+	return nil
+}
+
+// mustShellSafe panics via log.Fatal when a template value is unsafe — the
+// harness cannot proceed with an injection-capable command.
+func mustShellSafe(v string) {
+	if err := shellSafe(v); err != nil {
+		log.Fatalf("exprunner: unsafe command template value: %v", err)
+	}
+}
+
 func dockerCP(src, container, dst string) error {
 	c := exec.Command("docker", "cp", src, container+":"+dst)
 	out, err := c.CombinedOutput()
@@ -299,6 +327,14 @@ func main() {
 
 		// 1. deploy decoyd in target container (mode-dependent)
 		decoyLog := fmt.Sprintf("/tmp/decoyd-%d.log", round)
+		// Validate every value that will be interpolated into a bash -c
+		// template (audit RC-M5): containers/IPs/ports are fixed in the
+		// experiment matrix, but checking keeps a future externalized value
+		// from injecting shell syntax into the docker exec.
+		mustShellSafe(s.Target)
+		mustShellSafe(s.Attacker)
+		mustShellSafe(s.TargetIP)
+		mustShellSafe(decoyLog)
 		// Always stop any leftover decoyd first (C1 must have NO decoy listening)
 		dockerExec(s.Target, "pkill -f decoyd 2>/dev/null; rm -f "+decoyLog)
 		var deployedPorts []int
@@ -318,6 +354,9 @@ func main() {
 			}
 			portList := []string{}
 			for _, p := range deploySet {
+				if p < 1 || p > 65535 {
+					log.Fatalf("exprunner: decoy port out of range: %d", p)
+				}
 				portList = append(portList, fmt.Sprintf("%d", p))
 			}
 			deployedPorts = append([]int(nil), deploySet...)
@@ -334,6 +373,9 @@ func main() {
 		if len(s.Ports) > 0 {
 			ps := []string{}
 			for _, p := range s.Ports {
+				if p < 1 || p > 65535 {
+					log.Fatalf("exprunner: attacker port out of range: %d", p)
+				}
 				ps = append(ps, fmt.Sprintf("%d", p))
 			}
 			portArgs = strings.Join(ps, " ")
