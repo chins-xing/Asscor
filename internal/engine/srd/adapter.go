@@ -74,6 +74,9 @@ type GenericCheckItem struct {
 	Category    string   `json:"category"`
 	FailAt      int64    `json:"fail_at_unix,omitempty"`
 	Refs        []string `json:"refs,omitempty"`
+	// Confidence is the tool's own confidence/score for this finding in
+	// [0,1] (0 = unspecified → treated as 1.0 downstream, legacy).
+	Confidence float64 `json:"confidence,omitempty"`
 }
 
 // BuildReportFromGeneric constructs an ExternalAssessmentReport from GenericJSONReport.
@@ -129,6 +132,7 @@ func BuildReportFromGeneric(raw GenericJSONReport, profile SeverityProfile) (*Ex
 			FailAt:      failAt,
 			Category:    item.Category,
 			Refs:        item.Refs,
+			Confidence:  item.Confidence,
 		})
 	}
 

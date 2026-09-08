@@ -165,6 +165,12 @@ type CheckResult struct {
 	// builtin; user-defined checks carry CheckSourceUser so reports and
 	// auditing can distinguish configuration-injected checks.
 	Source CheckSource `json:"source,omitempty"`
+	// Confidence is the intelligence confidence of this observation in
+	// [0,1]. It is model-native (design CONFIDENCE_MODEL_DESIGN_2026-09-08):
+	// filled by the confidence resolver from the check's source/check-id
+	// before scoring. 0/unspecified means the scorer's default applies (1.0
+	// under the disabled policy — legacy behavior).
+	Confidence float64 `json:"confidence,omitempty"`
 }
 
 type DomainScores struct {
@@ -315,6 +321,13 @@ type AssessmentResult struct {
 	Signature                  string                   `json:"signature,omitempty"`
 	UncertaintyNote            string                   `json:"uncertainty_note,omitempty"`
 	ModelCoverageRatio         float64                  `json:"model_coverage_ratio,omitempty"`
+	// Confidence-aware posterior statistics (model-native, design
+	// CONFIDENCE_MODEL_DESIGN_2026-09-08 §2.3). Zero when confidence-aware
+	// scoring is disabled.
+	FinalSigma         float64 `json:"final_sigma,omitempty"`
+	ScoreLower95       float64 `json:"score_lower95,omitempty"`
+	ScoreUpper95       float64 `json:"score_upper95,omitempty"`
+	EvidenceConfidence float64 `json:"evidence_confidence,omitempty"`
 }
 
 type Weights struct {

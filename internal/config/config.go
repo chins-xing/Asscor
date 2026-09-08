@@ -62,6 +62,10 @@ type Config struct {
 
 	ScoringEngine string
 	Zones         map[string]string // hostID → network zone mapping
+
+	// Confidence carries the [confidence] model configuration (design
+	// CONFIDENCE_MODEL_DESIGN_2026-09-08 §3). Disabled by default.
+	Confidence ConfidenceConfig
 }
 
 type ExtMgrConfig struct {
@@ -168,6 +172,7 @@ func Default() *Config {
 		HotloadEnabled:           false,
 		HotloadIntervalS:         30,
 		PrismDefaultTransmission: 0.3,
+		Confidence:               DefaultConfidenceConfig(),
 		ATTACK: model.ATTACKConfig{
 			Enabled:              true,
 			Version:              "v19",
@@ -607,6 +612,9 @@ func Parse(content string) (*Config, error) {
 	cfg.buildAdapterConfig(sections)
 	cfg.resolveAdapterSecrets()
 	cfg.parseTopologySection(sections)
+	if err := cfg.parseConfidenceSections(sections); err != nil {
+		return nil, err
+	}
 
 	return cfg, nil
 }

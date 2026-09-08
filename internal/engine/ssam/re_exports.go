@@ -24,6 +24,7 @@ type (
 	AssessmentInputV2  = ssam.AssessmentInputV2
 	AssessmentOutputV2 = ssam.AssessmentOutputV2
 	ScoringFormulaV2   = ssam.ScoringFormulaV2
+	ConfidencePolicy   = ssam.ConfidencePolicy
 	SSAMIR             = ssam.SSAMIR
 	IRMeta             = ssam.IRMeta
 	IRInput            = ssam.IRInput
@@ -43,6 +44,14 @@ var (
 	DefaultWeights       = ssam.DefaultWeights
 	DefaultEdgeFactors   = ssam.DefaultEdgeFactors
 	DefaultScoringConfig = ssam.DefaultScoringConfig
+)
+
+var (
+	DefaultConfidencePolicy      = ssam.DefaultConfidencePolicy
+	NormalizeConfidence          = ssam.NormalizeConfidence
+	ComputeDomainScoresBayes     = ssam.ComputeDomainScoresBayes
+	FinalBayesStats              = ssam.FinalBayesStats
+	AggregateNodeConfidence      = ssam.AggregateNodeConfidence
 )
 
 var (

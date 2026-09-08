@@ -72,12 +72,13 @@ func CheckResultsToInputs(checks []model.CheckResult) []CheckInput {
 	result := make([]CheckInput, len(checks))
 	for i, c := range checks {
 		result[i] = CheckInput{
-			CheckID: c.CheckID,
-			Domain:  c.Domain,
-			Name:    c.Name,
-			Passed:  c.Passed,
-			Delta:   c.Delta,
-			Detail:  c.Detail,
+			CheckID:    c.CheckID,
+			Domain:     c.Domain,
+			Name:       c.Name,
+			Passed:     c.Passed,
+			Delta:      c.Delta,
+			Detail:     c.Detail,
+			Confidence: c.Confidence,
 		}
 	}
 	return result
@@ -152,6 +153,11 @@ func OutputToModel(output *AssessmentOutput, result *model.AssessmentResult) {
 	result.EdgeFactors = EdgeFactorsToModel(output.EdgeFactors)
 	result.ThreatCoeff = output.ThreatCoeff
 	result.SPCScore = output.SPCScore
+	// Posterior statistics (model-native; zeros when confidence disabled).
+	result.FinalSigma = output.FinalSigma
+	result.ScoreLower95 = output.Lower95
+	result.ScoreUpper95 = output.Upper95
+	result.EvidenceConfidence = output.EvidenceConfidence
 }
 
 func OutputV2ToModel(output *AssessmentOutputV2, result *model.AssessmentResult) {
@@ -164,4 +170,42 @@ func OutputV2ToModel(output *AssessmentOutputV2, result *model.AssessmentResult)
 	result.EdgeFactors = EdgeFactorsToModel(output.EdgeFactors)
 	result.ThreatCoeff = output.FinalScore.Layers.Threat.Coeff
 	result.SPCScore = output.FinalScore.Layers.Exposure.Coeff
+}
+
+// ConfigToConfidencePolicy converts the kernel's [confidence] configuration
+// into the ssam-library policy. A disabled config yields the library's
+// default (disabled) policy — identical legacy behavior.
+func ConfigToConfidencePolicy(cfg *config.Config) ConfidencePolicy {
+	if cfg == nil || !cfg.Confidence.Enabled {
+		return DefaultConfidencePolicy()
+	}
+	cc := cfg.Confidence
+	return ConfidencePolicy{
+		Enabled:       true,
+		Default:       cc.Default,
+		Floor:         cc.Floor,
+		PriorStrength: cc.PriorStrength,
+	}
+}
+
+// ResolveCheckConfidence fills result.Checks[].Confidence from the kernel's
+// confidence rule table (design §3). It is idempotent: results that already
+// carry an explicit confidence (e.g. agent-set) are preserved. sourceKey is
+// derived from CheckResult.Source (builtin/user/...), falling back to
+// "builtin" for the empty legacy value.
+func ResolveCheckConfidence(cfg *config.Config, result *model.AssessmentResult) {
+	if cfg == nil || result == nil || !cfg.Confidence.Enabled {
+		return
+	}
+	for i := range result.Checks {
+		c := &result.Checks[i]
+		if c.Confidence > 0 {
+			continue // already resolved upstream
+		}
+		src := string(c.Source)
+		if src == "" {
+			src = "builtin"
+		}
+		c.Confidence = cfg.Confidence.Resolve(c.CheckID, src, c.Domain)
+	}
 }

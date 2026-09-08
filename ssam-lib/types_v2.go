@@ -42,6 +42,11 @@ type AssessmentOutputV2 struct {
 	EdgeFactors  []EdgeFactorResult `json:"edge_factors"`
 	FormulaID    string             `json:"formula_id"`
 	Metadata     map[string]string  `json:"metadata,omitempty"`
+	// Confidence-aware posterior statistics (model-native, design §2.3).
+	FinalSigma         float64 `json:"final_sigma,omitempty"`
+	Lower95            float64 `json:"score_lower95,omitempty"`
+	Upper95            float64 `json:"score_upper95,omitempty"`
+	EvidenceConfidence float64 `json:"evidence_confidence,omitempty"`
 }
 
 type ScoringFormulaV2 func(domainScores []DomainScore, weights []WeightConfig, riskCtx RiskContext, edgeFactors []EdgeFactorResult) FinalScore

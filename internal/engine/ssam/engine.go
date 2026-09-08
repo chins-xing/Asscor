@@ -78,7 +78,10 @@ func (e *Engine) ComputeScore(ctx context.Context, input *ssam.AssessmentInput) 
 	cfg := e.cfg
 	e.mu.RUnlock()
 
-	domainScores := ssam.ComputeDomainScores(cfg.Weights, input.Checks)
+	// Confidence-native domain scoring (design CONFIDENCE_MODEL_DESIGN_2026-09-08):
+	// with the default disabled policy this is numerically identical to the
+	// legacy ComputeDomainScores.
+	domainScores := ssam.ComputeDomainScoresBayes(cfg.Weights, input.Checks, cfg.ConfidencePolicy)
 	output.DomainScores = domainScores
 
 	select {
@@ -92,7 +95,7 @@ func (e *Engine) ComputeScore(ctx context.Context, input *ssam.AssessmentInput) 
 	e.ExecuteHooks(ctx, HookPreEdge, input, output)
 
 	customFactors := e.buildCustomFactorMap()
-	edgeFactors := ssam.ApplyEdgeFactorsToChecks(cfg.EdgeFactors, input.Checks, customFactors)
+	edgeFactors := ssam.ApplyEdgeFactorsToChecksPolicy(cfg.EdgeFactors, input.Checks, customFactors, cfg.ConfidencePolicy)
 	output.EdgeFactors = edgeFactors
 
 	select {
@@ -121,6 +124,15 @@ func (e *Engine) ComputeScore(ctx context.Context, input *ssam.AssessmentInput) 
 	output.FinalScore = math.Round(finalScore*100) / 100
 	output.FormulaID = cfg.FormulaID
 	output.Acceptable = output.FinalScore >= output.Threshold
+
+	// Posterior statistics (model-native; degenerate [score,score] and
+	// evidence confidence 1.0 under the disabled policy). The interval is
+	// centered on the actual final score.
+	sigma, _, _ := ssam.FinalBayesStats(cfg.Weights, domainScores)
+	output.FinalSigma = sigma
+	output.Lower95 = math.Max(0, math.Min(100, output.FinalScore-1.96*sigma))
+	output.Upper95 = math.Max(0, math.Min(100, output.FinalScore+1.96*sigma))
+	output.EvidenceConfidence = ssam.AggregateNodeConfidence(cfg.Weights, domainScores)
 
 	return output, nil
 }
@@ -246,6 +258,21 @@ func (e *Engine) SetEdgeFactors(factors []EdgeFactorConfig) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.cfg.EdgeFactors = append([]EdgeFactorConfig{}, factors...)
+}
+
+// SetConfidencePolicy installs the kernel's confidence policy. The default
+// (disabled) policy keeps scoring identical to the legacy engine.
+func (e *Engine) SetConfidencePolicy(policy ConfidencePolicy) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.cfg.ConfidencePolicy = policy
+}
+
+// GetConfidencePolicy returns the active confidence policy.
+func (e *Engine) GetConfidencePolicy() ConfidencePolicy {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.cfg.ConfidencePolicy
 }
 
 func (e *Engine) ListDomains() []string {

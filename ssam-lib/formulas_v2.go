@@ -106,10 +106,10 @@ func ComputeScoreV2(config ScoringConfig, input AssessmentInputV2) (AssessmentOu
 
 	normalizeRiskContext(&input.RiskContext)
 
-	domainScores := ComputeDomainScores(config.Weights, input.Checks)
+	domainScores := ComputeDomainScoresBayes(config.Weights, input.Checks, config.ConfidencePolicy)
 
 	customFactors := BuildCustomFactorMap(config.EdgeFactors)
-	edgeFactors := ApplyEdgeFactorsToChecks(config.EdgeFactors, input.Checks, customFactors)
+	edgeFactors := ApplyEdgeFactorsToChecksPolicy(config.EdgeFactors, input.Checks, customFactors, config.ConfidencePolicy)
 
 	formulas := RegisterBuiltinFormulasV2()
 	formula, ok := formulas[config.FormulaID]
@@ -129,8 +129,21 @@ func ComputeScoreV2(config ScoringConfig, input AssessmentInputV2) (AssessmentOu
 		FormulaID:    config.FormulaID,
 		Metadata:     make(map[string]string),
 	}
+	fillPosteriorV2(&output, config, domainScores)
 
 	return output, nil
+}
+
+// fillPosteriorV2 attaches confidence-aware posterior statistics to a V2
+// output (same semantics as fillPosterior for the legacy output: interval
+// centered on the actual final score).
+func fillPosteriorV2(output *AssessmentOutputV2, config ScoringConfig, domainScores []DomainScore) {
+	sigma, _, _ := FinalBayesStats(config.Weights, domainScores)
+	total := output.FinalScore.Total
+	output.FinalSigma = sigma
+	output.Lower95 = clamp95(total - 1.96*sigma)
+	output.Upper95 = clamp95(total + 1.96*sigma)
+	output.EvidenceConfidence = AggregateNodeConfidence(config.Weights, domainScores)
 }
 
 func ValidateInputV2(input AssessmentInputV2) error {

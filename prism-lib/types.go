@@ -9,12 +9,22 @@ type NodeState struct {
 	SSAMScore    float64
 	FailedChecks []CheckFailure
 	Criticality  float64 // 0.0–1.0, 节点重要性权重 (默认 0.5); 被攻陷的关键节点传播更高风险
+	// Confidence is the node-level intelligence confidence of the SSAM
+	// evidence in [0,1] (design CONFIDENCE_MODEL_DESIGN_2026-09-08 §2.5).
+	// 1.0 means the score rests on fully trusted observations; values < 1
+	// attenuate the debt each failure accumulates. Zero/unspecified behaves
+	// as 1.0 (legacy).
+	Confidence float64
 }
 
 type CheckFailure struct {
 	CheckID  string
 	Delta    float64
 	FailUnix int64
+	// Confidence is this failure observation's intelligence confidence in
+	// [0,1] (model-native input). Zero/unspecified → 1.0 (legacy behavior:
+	// the failure counts in full).
+	Confidence float64
 }
 
 type EdgeState struct {
@@ -61,10 +71,17 @@ type AssetRiskResult struct {
 	ExternalRisk     float64 // 本节点外部风险 E(v) ∈ [0,1]
 	PropagatedRisk   float64 // 入边传播风险 R_prop ∈ [0,1]
 	PropPenalty      float64 // 实际传播惩罚 ∈ [0, Cap_prop]
-	DebtRaw          float64 // 未归一化的债务总值
+	DebtRaw          float64 // 未归一化的债务总值 (置信加权)
 	DebtPenalty      float64 // 归一化后的债务惩罚 ∈ [0, Cap_debt]
 	CollapseModifier float64 // 塌缩修正值 ∈ [0,1]
 	RiskVelocity     float64 // 风险变化速度（评分/天，负值表示恶化）
+	// Confidence is the input evidence confidence carried through (node
+	// level). Model-native (design §2.5).
+	Confidence float64
+	// EffectiveFailures is the count of failed checks weighted by confidence
+	// (used for collapse); a fully trusted failure counts 1, a half-trusted
+	// one counts 0.5.
+	EffectiveFailures float64
 }
 
 // RiskSnapshot stores a timestamped score for velocity computation.

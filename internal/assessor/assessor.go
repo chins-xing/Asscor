@@ -1003,8 +1003,9 @@ func (m *Module) buildNodeState(hostID string, result *model.AssessmentResult) *
 	m.mu.RUnlock()
 
 	node := &prismlib.NodeState{
-		HostID:    hostID,
-		SSAMScore: result.FinalScore,
+		HostID:     hostID,
+		SSAMScore:  result.FinalScore,
+		Confidence: result.EvidenceConfidence, // 0 → prism treats as 1.0 (legacy)
 	}
 
 	for _, c := range result.Checks {
@@ -1016,9 +1017,10 @@ func (m *Module) buildNodeState(hostID string, result *model.AssessmentResult) *
 				}
 			}
 			node.FailedChecks = append(node.FailedChecks, prismlib.CheckFailure{
-				CheckID:  c.CheckID,
-				Delta:    c.Delta,
-				FailUnix: failAt,
+				CheckID:    c.CheckID,
+				Delta:      c.Delta,
+				FailUnix:   failAt,
+				Confidence: c.Confidence, // 0 → prism treats as 1.0 (legacy)
 			})
 		}
 	}
@@ -1031,8 +1033,9 @@ func (m *Module) collectTopologySnapshot(currentHostID string, currentResult *mo
 	edges := make([]prismlib.EdgeState, 0)
 
 	nodes[currentHostID] = &prismlib.NodeState{
-		HostID:    currentHostID,
-		SSAMScore: currentResult.FinalScore,
+		HostID:     currentHostID,
+		SSAMScore:  currentResult.FinalScore,
+		Confidence: currentResult.EvidenceConfidence,
 	}
 
 	defaultTransmission := m.cfg.GetPrismDefaultTransmission()
@@ -1044,8 +1047,9 @@ func (m *Module) collectTopologySnapshot(currentHostID string, currentResult *mo
 			continue
 		}
 		nodes[id] = &prismlib.NodeState{
-			HostID:    id,
-			SSAMScore: res.FinalScore,
+			HostID:     id,
+			SSAMScore:  res.FinalScore,
+			Confidence: res.EvidenceConfidence,
 		}
 		// M2 风险加权传播 (P1-1/T9/T10): 传播系数按源主机风险归一化 —
 		// 高风险源放大、低风险源衰减 (纯函数, prism-lib)。

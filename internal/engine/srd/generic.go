@@ -142,6 +142,7 @@ func (a *genericAdapter) buildFromItems(items []GenericCheckItem, profile Severi
 			FailAt:      failAt,
 			Category:    item.Category,
 			Refs:        item.Refs,
+			Confidence:  item.Confidence,
 		})
 	}
 

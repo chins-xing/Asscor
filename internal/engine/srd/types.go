@@ -30,6 +30,11 @@ type ExternalCheckResult struct {
 	FailAt      int64    `json:"fail_at_unix"`
 	Category    string   `json:"category"`
 	Refs        []string `json:"refs,omitempty"`
+	// Confidence is the intelligence confidence of this external finding in
+	// [0,1] (model-native, design CONFIDENCE_MODEL_DESIGN_2026-09-08 §2.5).
+	// Adapters map it from the tool's own confidence/source signals; 0 means
+	// unspecified → prism treats as 1.0 (legacy).
+	Confidence float64 `json:"confidence,omitempty"`
 }
 
 // SeverityProfile defines how an external tool's severity levels map to SSAM delta values.
