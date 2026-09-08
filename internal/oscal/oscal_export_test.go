@@ -1,3 +1,5 @@
+//go:build oscal
+
 package oscal
 
 import (

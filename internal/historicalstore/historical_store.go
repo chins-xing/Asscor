@@ -1,3 +1,5 @@
+//go:build persistence
+
 package historicalstore
 
 import (
