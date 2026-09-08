@@ -60,6 +60,9 @@ type AgentConfig struct {
 	LogFormat     string
 	LogLevel      string
 	LogOutput     string
+	// ConfigPath is the agent config file path (the -config flag value). The
+	// securemode build tag uses it to locate agent.ini for encryption.
+	ConfigPath string
 	// PrivilegedSocket is the Unix socket path of the privileged agent
 	// process. When empty, root checks/commands are reported as skipped.
 	PrivilegedSocket string
@@ -73,6 +76,13 @@ type AgentConfig struct {
 	// builtin and user checkers at construction (kernel-side equivalent:
 	// config.ini [check_deltas]).
 	CheckDeltas map[string]float64
+	// ExplicitFlags records which command-line flags were explicitly set
+	// (flag.Visit), so secure-mode bootstrap recovery can distinguish "flag
+	// default applied by main.go" from "operator really set this" (review
+	// I-3: default-value sentinels like "" or false are ambiguous because
+	// main.go applies flag defaults unconditionally). Populated by
+	// cmd/agent/main.go; nil in tests/library use.
+	ExplicitFlags map[string]bool
 }
 
 func DefaultConfig() AgentConfig {
@@ -120,6 +130,10 @@ type Agent struct {
 	syncedChecks     []model.CheckItem
 	syncedCfgVersion string
 	cfgMu            sync.Mutex
+	// secure is the agent's secure-mode state (nil when the securemode build
+	// tag is off). It manages agent.ini encryption, the ephemeral unlock
+	// password (memory only) and kernel-issued mode instructions.
+	secure *secureState
 }
 
 // buildAgentCheckers assembles the agent's check set: compiled-in normal
@@ -518,6 +532,14 @@ func (a *Agent) register() error {
 func (a *Agent) heartbeatCycle() error {
 	a.executePendingCommands()
 
+	// Secure mode first-start bootstrap: self-generate the ephemeral password
+	// and encrypt agent.ini exactly once, so this heartbeat can report the
+	// password to the kernel (spec §8.2). Delayed from startup so an
+	// unreachable kernel never locks the config with an unregistered password.
+	if err := a.secureMaybeBootstrap(); err != nil {
+		return err
+	}
+
 	interval := time.Duration(a.cfg.CheckIntervalSec) * time.Second
 	elapsed := time.Since(a.lastCheckTime)
 	shouldCheck := a.lastCheckTime.IsZero() || elapsed >= interval
@@ -561,6 +583,14 @@ func (a *Agent) heartbeatCycle() error {
 		SessionId: a.sessionID,
 		Result:    snapshot,
 	}
+	// Secure mode: report the ephemeral unlock password to the kernel until
+	// accepted (registration is keyed on the mTLS certificate fingerprint).
+	a.attachSecureModeReport(heartbeatReq)
+	// Remember whether THIS cycle carried the password: after a successful
+	// heartbeat it is registered, so the report is re-armed only then — a
+	// self-recovered password armed for the NEXT cycle must not be consumed
+	// by this cycle's "accepted" bookkeeping.
+	secureReported := heartbeatReq.SecureMode != nil && heartbeatReq.SecureMode.Password != ""
 	heartbeatReq.NetworkInfo = a.collectNetworkInfo()
 	if pkgs := a.collectPackages(); pkgs != nil {
 		h := sha256.Sum256([]byte(strings.Join(pkgs, ",")))
@@ -588,6 +618,33 @@ func (a *Agent) heartbeatCycle() error {
 		logger.WithComponent("agent").Warn("heartbeat not ok, re-registering")
 		a.sessionID = ""
 		return fmt.Errorf("heartbeat rejected by kernel")
+	}
+
+	// Secure mode (review I-1/I-2): a locked agent (run-mode restart) receives
+	// the kernel-issued registered password over the authenticated mTLS
+	// heartbeat channel. It has no hmac_key yet, so unlock cannot ride the
+	// HMAC-protected pending-command path. When the kernel has no registration
+	// (registry lost), the SecureModeNoSecret signal — or N consecutive
+	// unlock-less heartbeats — triggers the spec §8.2 self-recovery
+	// (secureSelfRecover: fresh password, re-encrypt .enc, re-report).
+	if a.secure != nil && a.secure.locked {
+		if err := a.handleSecureModeResponse(heartbeatResp); err != nil {
+			logger.WithComponent("agent").Error("secure mode heartbeat response failed", "error", err)
+		}
+	}
+
+	// Secure mode: the kernel accepted this heartbeat, so the ephemeral
+	// password (if this cycle carried one) is now registered — stop
+	// re-reporting it until the next rotation.
+	if a.secure != nil && a.secure.password != "" && !a.secure.locked && secureReported {
+		a.secure.reported = true
+	}
+
+	// I-2 derived (review reason 3): the kernel has no registration for this
+	// agent (it restarted and lost the registry) — re-arm the report so the
+	// next heartbeat re-registers the password.
+	if a.secure != nil {
+		a.secureReArmReport(heartbeatResp)
 	}
 
 	a.pendingCmd = heartbeatResp.PendingCommands
@@ -1512,28 +1569,28 @@ func (a *Agent) runCommand(cmd *apiv1.Command) {
 	case "isolate_host", "deisolate_host":
 		a.delegateRootCommand(cmd)
 		return
+	case "securemode_exit", "securemode_rotate", "securemode_unlock", "securemode_enter":
+		// Kernel-issued secure-mode instructions (spec §8.2). The password
+		// travels in Params (exit/rotate/unlock) and the command is
+		// HMAC-authenticated before this dispatch; these never touch the
+		// shell allowlist.
+		a.executeSecureModeCommand(cmd)
+		return
 	}
 
 	timeout := 30 * time.Second
 
-	if !common.IsShellCommandAllowed(cmd.Command) {
-		name, args, ok := common.ParseCommand(cmd.Command)
-		if !ok {
-			logger.WithComponent("agent").Warn("command rejected: not in allowlist", "command_id", cmd.CommandId, "command", cmd.Command)
-			return
-		}
-		output, err := common.RunCmdTimeout(timeout, name, args...)
-		if err != nil && output == "" {
-			logger.WithComponent("agent").Error("command failed", "command_id", cmd.CommandId, "error", err)
-		} else if output != "" {
-			logger.WithComponent("agent").Info("command output", "command_id", cmd.CommandId, "output", truncateCommandOutput(output))
-		}
-		return
-	}
-
+	// Audit M-2: the previous implementation branched on
+	// IsShellCommandAllowed(cmd.Command) but BOTH branches executed the
+	// identical ParseCommand + RunCmdTimeout path — the shell-command check
+	// was dead logic (the allowlist it queried never influenced execution)
+	// and invited future divergence. ParseCommand is the single authority:
+	// it splits argv, verifies the first token against the exec allowlist,
+	// and rejects shell metacharacters / unlisted commands. RunCmdTimeout
+	// re-checks the allowlist at the point of exec as the final gate.
 	name, args, ok := common.ParseCommand(cmd.Command)
 	if !ok {
-		logger.WithComponent("agent").Warn("command rejected: failed to parse", "command_id", cmd.CommandId, "command", cmd.Command)
+		logger.WithComponent("agent").Warn("command rejected: not in allowlist or failed to parse", "command_id", cmd.CommandId, "command", cmd.Command)
 		return
 	}
 	output, err := common.RunCmdTimeout(timeout, name, args...)

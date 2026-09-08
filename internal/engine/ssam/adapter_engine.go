@@ -15,6 +15,10 @@ import (
 // Dependency direction: ssam → ASSCOR (not ASSCOR → ssam).
 type EngineAdapter struct {
 	engine *Engine
+	// confCfg retains the kernel config used for confidence resolution
+	// (per-check rule lookup happens right before each ComputeScore, so it
+	// reflects hot-reloaded [confidence] rules via ReloadWeights).
+	confCfg *config.Config
 }
 
 // NewEngineAdapter creates a new SSAM adapter that satisfies engine.AssessorEngine.
@@ -24,12 +28,21 @@ func NewEngineAdapter(cfg *config.Config) *EngineAdapter {
 	if cfg != nil {
 		e.SetWeights(ConfigToWeights(cfg))
 		e.SetEdgeFactors(ConfigToEdgeFactors(cfg))
+		e.SetConfidencePolicy(ConfigToConfidencePolicy(cfg))
 	}
 	e.InitializeDefaults(nil, nil)
-	return &EngineAdapter{engine: e}
+	return &EngineAdapter{engine: e, confCfg: cfg}
 }
 
+// confCfgPtr returns the retained config (may be nil).
+func (a *EngineAdapter) confCfgPtr() *config.Config { return a.confCfg }
+
 func (a *EngineAdapter) ComputeScore(ctx context.Context, result *model.AssessmentResult) error {
+	// Confidence-native: fill per-check confidences from the kernel rule
+	// table before mapping into the library input (design §3). Results that
+	// already carry an explicit upstream confidence are preserved.
+	ResolveCheckConfidence(a.confCfgPtr(), result)
+
 	input := &AssessmentInput{
 		HostID:      result.HostID,
 		Hostname:    result.Hostname,
@@ -54,8 +67,10 @@ func (a *EngineAdapter) ReloadWeights(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
+	a.confCfg = cfg
 	a.engine.SetWeights(ConfigToWeights(cfg))
 	a.engine.SetEdgeFactors(ConfigToEdgeFactors(cfg))
+	a.engine.SetConfidencePolicy(ConfigToConfidencePolicy(cfg))
 }
 
 var _ engine.AssessorEngine = (*EngineAdapter)(nil)

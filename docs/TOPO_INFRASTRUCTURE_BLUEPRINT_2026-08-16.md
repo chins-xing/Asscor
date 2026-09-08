@@ -80,7 +80,7 @@
 | 基础设施 | 需求说明 |
 |---------|---------|
 | 拓扑注入器 | 测试中直接注入拓扑图（单元测试 + 集成测试） |
-| 网络模拟 | 基于现有 clab 环境（`docs/clab-lab/`）回归 T1-T21 实验 |
+| 网络模拟 | 基于现有 clab 环境（`lunwen/clab-lab/`）回归 T1-T21 实验 |
 | 事件重放 | 录制/重放拓扑事件序列验证状态机 |
 | 基准 | 图规模（100/1000 节点）下的传播计算性能基准 |
 
@@ -112,6 +112,30 @@
 4. **测试注入器**：拓扑图注入测试辅助（单元测试即可用）。
 
 > 上述地基四项不改变现有传播行为（子网重叠逻辑保留），只建立稳定接口与类型，供 v0.3.0 特化分支与社区在此基础上演进。
+
+## 四-A、M0 地基层完成记录（2026-08-16，v0.3.0 commit `8805c67`）
+
+| 蓝图项 | 状态 | 实现 |
+|-------|:---:|------|
+| 1 接口契约 `TopologyInterface` | ✅ | `internal/kernel/topo_types.go`（引用底层类型，kernel 现有文件零改动） |
+| 2 事件类型 + 订阅 | ✅ | `TopoEvent`/`TopoEventType` + `Subscribe`（多订阅者，返回取消函数；legacy `SetTopologyListener` 兼容） |
+| 3 图模型类型 | ✅ | `TopoNode`/`TopoEdge` 定义于 `internal/topology`（底基层，避免 kernel→topology 循环依赖） |
+| 4 测试注入器 | ✅ | `ResetForTesting` + 6 测试（记录/更新/注销/订阅取消/多订阅者/legacy 兼容） |
+| 注销原语（P0-1 地基） | ✅ | `DeleteTopology`（发布 node_removed 事件，未知节点 no-op） |
+
+**验证**：全 tag 编译通过；kernel/comms/srdwrapper 测试全过（现有消费方零改动，微内核原则满足）。
+
+## 四-B、M1 生命周期完成记录（2026-08-16，ASSCOR-Research-Core commit `be3add1`）
+
+| 蓝图项 | 状态 | 实现 |
+|-------|:---:|------|
+| L2 注销/链路事件 → **超时自动注销**（P0-1 修复） | ✅ | heartbeat `checkTimeouts` 对超时主机调用 `topology.DeleteTopology`——下线主机传播边被清除（T17 残留缺陷修复）；身份绑定保留（拓扑活性与身份锚定分离）；agent 恢复后 comms 重新注册自愈 |
+| L3 网段过滤 → **管理网段排除**（P0-2 修复） | ✅ | `[topology] exclude_cidrs` 配置 + `topology.FilterExcludedSubnets`（overlap 语义，父网段防泄漏）+ comms NetworkInfo 处理时过滤（T4/T9 全互达假传播修复） |
+| L7 拓扑视图 → **CLI `topology` 命令** | ✅ | `topology list`（host/zone/status/subnets + `--json`），纯新增命令 |
+
+**测试**：超时注销/未知节点 no-op（heartbeat）、过滤 6 用例（topology）、config 解析（config）、全量测试通过。
+
+**下一步（M2 候选）**：L5 真实可达性判定（替代子网重叠）、L4 传播加权/衰减/方向。M2 涉及 SRD 传播引擎，属"语义"里程碑。
 
 ## 五、结论
 

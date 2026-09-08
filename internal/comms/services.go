@@ -14,6 +14,7 @@ import (
 
 	"github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/kernel"
+	"github.com/chins-xing/asscor/internal/securemode"
 	"github.com/chins-xing/asscor/internal/topology"
 	"regexp"
 
@@ -42,6 +43,10 @@ type KernelServiceImpl struct {
 	// sections are synced to agents via heartbeat (check_config). Nil disables
 	// syncing (agent keeps its local bootstrap config).
 	cfg *config.Config
+	// secureMode is the secure-mode controller; its SecretRegistry records
+	// agent ephemeral passwords keyed on the mTLS certificate fingerprint
+	// (spec §10.1). Nil when the securemode build tag is off.
+	secureMode *securemode.Controller
 }
 
 func NewKernelServiceImpl(
@@ -67,6 +72,13 @@ func NewKernelServiceImpl(
 // to agents. Call before serving; nil disables syncing.
 func (s *KernelServiceImpl) SetConfig(cfg *config.Config) {
 	s.cfg = cfg
+}
+
+// SetSecureMode wires the secure-mode controller into the service so heartbeat
+// responses can register agent ephemeral passwords (spec §10.1). Call before
+// serving; nil disables registration (the securemode build tag is off).
+func (s *KernelServiceImpl) SetSecureMode(ctrl *securemode.Controller) {
+	s.secureMode = ctrl
 }
 
 // buildAgentCheckConfig extracts the check-item configuration to sync to
@@ -239,6 +251,70 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 		s.heartbeat.RecordHeartbeat(req.HostId)
 	}
 
+	// Secure Mode: agent ephemeral-password reporting AND locked-agent unlock
+	// (kernel-managed, spec §10.1). The fingerprint comes from the mTLS
+	// transport layer — a forged agent_id with an unknown/mismatched
+	// fingerprint was already rejected by VerifyAgentCert above. An EMPTY
+	// fingerprint (no mTLS, development) cannot be keyed, so the unlock and
+	// registration paths are skipped with a warning instead of failing the
+	// heartbeat (the agent would otherwise retry forever).
+	var secureModeUnlock *apiv1.SecureModeUnlock
+	var secureModeNoSecret bool
+	if s.secureMode != nil {
+		fp := kernel.PeerCertFingerprintFromContext(ctx)
+		switch {
+		case req.SecureMode != nil && req.SecureMode.Locked:
+			// Run-mode restart: the agent declares itself locked (it has no
+			// password to report and no hmac_key to verify a pending command
+			// with — review I-1/I-2). Hand the registered password back over
+			// the already-authenticated mTLS heartbeat channel.
+			if fp == "" {
+				logger.WithComponent("identity").Warn("secure-mode unlock skipped: no mTLS fingerprint (development mode)")
+				break
+			}
+			if sec, ok := s.secureMode.Secrets.Lookup(fp); ok && sec.Password != "" {
+				secureModeUnlock = &apiv1.SecureModeUnlock{Password: sec.Password}
+				logger.WithComponent("identity").Info("secure-mode unlock issued to locked agent", "host_id", req.HostId)
+			} else {
+				logger.WithComponent("identity").Warn("secure-mode unlock skipped: no registered secret for this fingerprint", "host_id", req.HostId)
+				// I-2 (spec §8.2): tell the locked agent there is NO
+				// registration so it self-recovers immediately (fresh password
+				// + re-encrypt + re-report) instead of polling forever.
+				secureModeNoSecret = true
+			}
+		case req.SecureMode != nil && req.SecureMode.Password != "":
+			if fp == "" {
+				logger.WithComponent("identity").Warn("secure-mode registration skipped: no mTLS fingerprint (development mode)")
+			} else if err := s.secureMode.Secrets.Register(fp, req.HostId, req.SecureMode.Password); err != nil {
+				logger.WithComponent("identity").Warn("secure-mode registration rejected",
+					"host_id", req.HostId, "error", err.Error())
+				return &apiv1.HeartbeatResponse{Ok: false}, fmt.Errorf("secure mode registration rejected: %v", err)
+			} else if err := s.secureMode.PersistSecrets(); err != nil {
+				// P0-1 durability (spec §10.1): the registry is written
+				// encrypted under the kernel run-mode password after every
+				// registration/rotation so a later kernel restart can recover
+				// it. In default mode PersistSecrets is a no-op (nothing to
+				// persist); in run mode a failure only degrades crash-recovery
+				// durability — the in-memory registration stays correct and
+				// the next registration retries the persist.
+				logger.WithComponent("identity").Warn("secure-mode registry persist failed (in-memory registration kept; will retry on next registration)",
+					"host_id", req.HostId, "error", err.Error())
+			}
+		case req.SecureMode == nil:
+			// I-2 derived (review reason 3): any heartbeat whose certificate
+			// fingerprint has NO secure-mode registration carries the signal —
+			// an already-unlocked run-mode agent whose registration was lost
+			// (kernel restarted with an unrecoverable registry) then re-arms
+			// its password report and re-registers on the next heartbeat.
+			// Ordinary agents ignore it (they have no password to re-report).
+			if fp != "" {
+				if _, ok := s.secureMode.Secrets.Lookup(fp); !ok {
+					secureModeNoSecret = true
+				}
+			}
+		}
+	}
+
 	if s.spc != nil && s.spc.Enabled() && len(req.Packages) > 0 {
 		if len(req.Packages) > maxPackages {
 			logger.WithComponent("kernel").Warn("heartbeat packages exceed limit, truncating", "host_id", req.HostId, "count", len(req.Packages), "max", maxPackages)
@@ -292,7 +368,15 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 			}
 		}
 		if len(req.NetworkInfo.Subnets) > 0 {
-			topology.RecordTopology(req.HostId, req.NetworkInfo.Subnets)
+			subnets := req.NetworkInfo.Subnets
+			// M1 网段过滤 (audit P0-2/T4): 排除管理/虚拟网段, 避免全互达
+			// 假传播 (config.ini [topology] exclude_cidrs)。
+			if s.cfg != nil && len(s.cfg.TopologyExcludeCIDRs) > 0 {
+				subnets = topology.FilterExcludedSubnets(subnets, s.cfg.TopologyExcludeCIDRs)
+			}
+			if len(subnets) > 0 {
+				topology.RecordTopology(req.HostId, subnets)
+			}
 		}
 		logger.WithComponent("kernel").Debug("network info received", "host_id", req.HostId,
 			"zone", req.NetworkInfo.NetworkZone, "ips", len(req.NetworkInfo.LocalIPs), "subnets", len(req.NetworkInfo.Subnets))
@@ -339,10 +423,12 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 	}
 
 	return &apiv1.HeartbeatResponse{
-		Ok:                true,
-		ThreatCoefficient: threatCoeff,
-		PendingCommands:   pendingCmds,
-		CheckConfig:       s.buildAgentCheckConfig(),
+		Ok:                 true,
+		ThreatCoefficient:  threatCoeff,
+		PendingCommands:    pendingCmds,
+		CheckConfig:        s.buildAgentCheckConfig(),
+		SecureModeUnlock:   secureModeUnlock,
+		SecureModeNoSecret: secureModeNoSecret,
 	}, nil
 }
 

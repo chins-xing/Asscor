@@ -1,0 +1,11 @@
+#!/bin/bash
+echo "=== jsonl 中是否有 CU- ==="
+docker exec asc-asscor-edge0 bash -c "grep -c 'CU-' /var/lib/asscor/assessments-20260816.jsonl 2>/dev/null || echo 0"
+echo "=== host1 agent 日志 (check 同步/执行) ==="
+docker exec asc-asscor-host1 bash -c "grep -iE 'check|user|CU-' /var/log/asscor-agent.log | tail -6"
+echo "=== host1 评估上报的 check 数量 ==="
+docker exec asc-asscor-host1 bash -c "grep -c 'checks' /var/log/asscor-agent.log 2>/dev/null || true"
+echo "=== kernel 日志 user_check 相关 ==="
+docker exec asc-asscor-edge0 bash -c "grep -iE 'user.check|CU-|check config|CheckConfig' /var/log/asscor-kernel.log | tail -6"
+echo "=== host1 当前检查项 (agent 侧注册) ==="
+docker exec asc-asscor-host1 bash -c "tail -20 /var/log/asscor-agent.log | grep -iE 'register|check' | tail -5"

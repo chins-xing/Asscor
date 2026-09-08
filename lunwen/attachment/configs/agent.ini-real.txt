@@ -1,0 +1,17 @@
+[agent]
+kernel_addr = 10.10.0.10:50051
+host_id = host1
+hostname = host1
+version = v0.2.3
+heartbeat_sec = 30
+check_interval_sec = 300
+check_timeout_sec = 10
+max_retries = 3
+reconnect_sec = 5
+tls_enabled = true
+tls_skip_verify = false
+cert_dir = /etc/asscor/certs
+hmac_key =
+log_format = text
+log_level = info
+log_output = stderr

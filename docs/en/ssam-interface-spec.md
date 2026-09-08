@@ -281,10 +281,10 @@ type RiskContext struct {
 
 ```go
 type RiskLayerDetail struct {
-    Score       float64            `json:"score"`
-    Weight      float64            `json:"weight"`
-    Description string             `json:"description"`
-    Factors     []string           `json:"factors"`
+    Score       float64           `json:"score"`
+    Weight      float64           `json:"weight"`
+    Description string            `json:"description"`
+    Factors     []string          `json:"factors"`
     Details     map[string]float64 `json:"details,omitempty"`
 }
 
@@ -305,12 +305,12 @@ type RiskLayers struct {
 
 ```go
 type FinalScore struct {
-    Value      float64            `json:"value"`
-    Acceptable bool               `json:"acceptable"`
-    Threshold  float64            `json:"threshold"`
-    Layers     RiskLayers         `json:"layers"`
-    FormulaID  string             `json:"formula_id"`
-    Metadata   map[string]string  `json:"metadata,omitempty"`
+    Value      float64             `json:"value"`
+    Acceptable bool                `json:"acceptable"`
+    Threshold  float64             `json:"threshold"`
+    Layers     RiskLayers          `json:"layers"`
+    FormulaID  string              `json:"formula_id"`
+    Metadata   map[string]string   `json:"metadata,omitempty"`
 }
 ```
 
@@ -674,9 +674,9 @@ engine.RegisterHook(ssam.HookPostEdge, "enrich-metadata", func(
 }, 20)
 ```
 
-### 8.5 Method 5: Integration Through the ASSCOR DI Container (v0.2.2 Dependency-Inversion Architecture)
+### 8.5 Method 5: Integration Through the ASSCOR DI Container (v0.2.2 dependency-inversion architecture, still current in v0.2.3)
 
-ASSCOR v0.2.2 defines a unified `kernel.AssessorEngine` interface (specified in `internal/kernel/engine_types.go`). SSAM implements this interface via `ssam.EngineAdapter` and is injected as a plugin:
+ASSCOR v0.2.3 defines a unified `kernel.AssessorEngine` interface (specified in `internal/kernel/engine_types.go`; the v0.2.2 dependency-inversion architecture continues into v0.2.3, which stays compatible). SSAM implements this interface via `ssam.EngineAdapter` and is injected as a plugin:
 
 **Registration side (platform layer in cmd/kernel/main.go):**
 

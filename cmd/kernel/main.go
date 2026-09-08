@@ -20,6 +20,7 @@ import (
 	"github.com/chins-xing/asscor/internal/kernel"
 	"github.com/chins-xing/asscor/internal/logger"
 	"github.com/chins-xing/asscor/internal/resilience"
+	"github.com/chins-xing/asscor/internal/securemode"
 	"github.com/chins-xing/asscor/internal/version"
 
 	_ "github.com/chins-xing/asscor/internal/checks"
@@ -152,6 +153,9 @@ func main() {
 	integrity.EnableSigning(ac["integrity.sign_assessment"] != "false")
 	integrity.EnableAlgoVerify(ac["integrity.verify_algo"] != "false")
 	integrity.EnableAntiDebug(ac["integrity.anti_debug"] == "true")
+	// Audit M-3: persist the assessment signing key under the configured cert
+	// dir (not a cwd-relative "certs") so systemd restarts reuse the same key.
+	integrity.SetKeyDir(*certDir)
 
 	// Production mTLS enforcement (attack-surface hardening): [comms]
 	// require_mtls (default true) forbids starting with --no-mtls. mTLS can
@@ -268,6 +272,39 @@ func main() {
 	sourceManager := newSourceManager()
 	cliModule := cli.NewCLIModule()
 
+	// Secure Mode: optional build-tag module. Off by default (initSecureMode
+	// returns a nil controller); enable with -tags securemode. Startup is
+	// fail-closed (spec §8.1): a corrupt marker, crash residue or half-state
+	// refuses kernel startup instead of silently degrading to plaintext.
+	secureCtrl, err := initSecureMode(k, cfg.DataDir, resolvedConfigPath)
+	if err != nil {
+		log.Error("secure mode init failed (fail-closed)", "error", err)
+		os.Exit(1)
+	}
+	if secureCtrl != nil {
+		// Bind early so plugins (heartbeat secret reporting, later task) can
+		// resolve the controller during their own Init/Start.
+		k.Container().BindNamed("securemode", (*securemode.Controller)(nil), secureCtrl)
+		// I-1: make `config reload` (SIGHUP / polling watcher) run-mode aware —
+		// the reload source becomes the controller's decrypted guard instead of
+		// the missing plaintext config.ini. Set BEFORE plugin Init so the
+		// watcher records the correct watched file's mtime.
+		wireSecureModeConfigLoader(configWatcher, secureCtrl, resolvedConfigPath)
+	}
+
+	// Module-composition consistency (coupling audit 2026-09-03, F3): modules
+	// may depend on hardening features implemented behind other build tags.
+	// Enabling such a module without its dependency silently degrades to a
+	// no-op stub (e.g. assessor without integrity -> unsigned results; comms
+	// without resilience -> no circuit breaking). Warn loudly at startup so a
+	// mis-configured build is visible instead of silent.
+	if assessor != nil && !integrityFeatureEnabled() {
+		log.Warn("assessor enabled but integrity build tag is OFF — assessment results will NOT be HMAC-signed (add -tags integrity for a hardened build)")
+	}
+	if assessor != nil && !resilienceFeatureEnabled() {
+		log.Warn("assessor enabled but resilience build tag is OFF — check execution is not fault-isolated (add -tags resilience for a hardened build)")
+	}
+
 	if assessor != nil {
 		k.Container().Bind((*kernel.AssessorInterface)(nil), assessor)
 	}
@@ -358,12 +395,40 @@ func main() {
 		tlsCfgForServer = setupTLS(*certDir)
 	}
 
+	// comms without resilience: the server-side handler execution (GuardGo,
+	// error rate limiting) silently degrades to unprotected pass-throughs when
+	// the resilience build tag is off (coupling audit 2026-09-03, F3).
+	if commsFeatureEnabled() && !resilienceFeatureEnabled() {
+		log.Warn("comms enabled but resilience build tag is OFF — handler execution is not fault-isolated (add -tags resilience for a hardened build)")
+	}
+
 	kernelSvcRuntime := newCommsRuntime(k, cfg, *listenAddr, tlsCfgForServer, *certDir, heartbeat, commander, cti, assessor, persistence, spc, logCollector, sourceManager)
 
 	if err := k.Bootstrap(); err != nil {
 		fmt.Fprintf(os.Stderr, "FATAL: kernel bootstrap failed: %v\n", err)
 		log.Error("kernel bootstrap failed", "error", err)
 		os.Exit(1)
+	}
+
+	// Secure Mode CLI registration happens after Bootstrap because the CLI
+	// module only initializes its engine during plugin Init; before that
+	// RegisterCommand would fail with "CLI engine not initialized". It is a
+	// no-op when the securemode tag is off (secureCtrl == nil) or when the
+	// CLI is disabled.
+	if secureCtrl != nil {
+		mcli := securemode.NewModeCLI(secureCtrl)
+		// Review I-1: `mode agent <id> enter|exit|rotate-password` enqueues
+		// real instructions through the commander channel. Nil when the
+		// commander build tag is off — the CLI then fails loudly.
+		mcli.SetCommander(commander)
+		if err := registerSecureModeCLI(cliModule, mcli); err != nil {
+			log.Error("secure mode CLI registration failed", "error", err)
+			os.Exit(1)
+		}
+		// I-1: after `mode unlock` / `config-set`, feed the run-mode config
+		// back into the kernel runtime (SetConfigObj + assessor.ReloadConfig),
+		// closing the gap where unlock only filled the memory guard.
+		wireSecureModeConfigApply(k, assessor, mcli)
 	}
 
 	fmt.Fprintf(os.Stderr, "\nASSCOR \u00b5Kernel\n")

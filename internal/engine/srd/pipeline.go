@@ -181,8 +181,9 @@ func (p *Pipeline) ProcessFromBytes(ctx context.Context, toolID string, data []b
 
 func (p *Pipeline) reportToNodeState(report *ExternalAssessmentReport) *prismlib.NodeState {
 	node := &prismlib.NodeState{
-		HostID:    report.HostID,
-		SSAMScore: report.RawScore,
+		HostID:     report.HostID,
+		SSAMScore:  report.RawScore,
+		Confidence: reportConfidence(report),
 	}
 
 	for _, item := range report.Items {
@@ -192,14 +193,43 @@ func (p *Pipeline) reportToNodeState(report *ExternalAssessmentReport) *prismlib
 				failAt = report.ScanTime.Unix()
 			}
 			node.FailedChecks = append(node.FailedChecks, prismlib.CheckFailure{
-				CheckID:  item.CheckID,
-				Delta:    item.Delta,
-				FailUnix: failAt,
+				CheckID:    item.CheckID,
+				Delta:      item.Delta,
+				FailUnix:   failAt,
+				Confidence: item.Confidence, // 0 → prism treats as 1.0 (legacy)
 			})
 		}
 	}
 
 	return node
+}
+
+// reportConfidence aggregates per-item confidences into a report-level signal
+// for NodeState.Confidence (mean of the failed items' confidences, clamped to
+// [0,1]; 1 when there are no failed items or all are unspecified).
+func reportConfidence(report *ExternalAssessmentReport) float64 {
+	if report == nil {
+		return 1.0
+	}
+	sum := 0.0
+	n := 0.0
+	for _, item := range report.Items {
+		if item.Result != "fail" {
+			continue
+		}
+		if item.Confidence > 0 {
+			sum += item.Confidence
+			n++
+		}
+	}
+	if n == 0 {
+		return 1.0
+	}
+	avg := sum / n
+	if avg > 1 {
+		return 1.0
+	}
+	return avg
 }
 
 func (p *Pipeline) buildIncomingEdges(hostID string, allNodes map[string]*prismlib.NodeState) []prismlib.EdgeState {
@@ -208,15 +238,18 @@ func (p *Pipeline) buildIncomingEdges(hostID string, allNodes map[string]*prisml
 		transmission = 0.1
 	}
 	edges := make([]prismlib.EdgeState, 0, len(allNodes))
-	for id := range allNodes {
+	for id, node := range allNodes {
 		if id != hostID {
 			// Real-edge construction: only create an edge if both hosts share a subnet.
 			// Falls back to complete-graph when topology data is unavailable.
 			if p.areConnected(hostID, id) {
+				// M2 风险加权传播 (P1-1/T9/T10): 按源主机 SSAM 分数加权 —
+				// 高风险源放大、低风险源衰减。
+				weighted := prismlib.WeightedTransmission(transmission, node.SSAMScore)
 				edges = append(edges, prismlib.EdgeState{
 					Source:           id,
 					Target:           hostID,
-					RiskTransmission: transmission,
+					RiskTransmission: weighted,
 				})
 			}
 		}

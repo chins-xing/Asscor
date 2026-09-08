@@ -27,6 +27,13 @@ type Config struct {
 	DataDir             string
 	HeartbeatTimeoutSec int
 
+	// TopologyExcludeCIDRs lists CIDRs excluded from topology awareness
+	// ([topology] exclude_cidrs, comma-separated). Management/virtual
+	// networks (e.g. docker 172.17.0.0/16, containerlab mgmt 172.20.20.0/24,
+	// link-local 169.254.0.0/16) should be excluded so the SRD diffusion
+	// graph does not see every host as same-subnet reachable (audit P0-2/T4).
+	TopologyExcludeCIDRs []string
+
 	ACINetworkSegmentation float64
 	ACILAPSEnabled         float64
 	ACIOfflineBackup       float64
@@ -55,6 +62,10 @@ type Config struct {
 
 	ScoringEngine string
 	Zones         map[string]string // hostID → network zone mapping
+
+	// Confidence carries the [confidence] model configuration (design
+	// CONFIDENCE_MODEL_DESIGN_2026-09-08 §3). Disabled by default.
+	Confidence ConfidenceConfig
 }
 
 type ExtMgrConfig struct {
@@ -161,6 +172,7 @@ func Default() *Config {
 		HotloadEnabled:           false,
 		HotloadIntervalS:         30,
 		PrismDefaultTransmission: 0.3,
+		Confidence:               DefaultConfidenceConfig(),
 		ATTACK: model.ATTACKConfig{
 			Enabled:              true,
 			Version:              "v19",
@@ -599,8 +611,27 @@ func Parse(content string) (*Config, error) {
 
 	cfg.buildAdapterConfig(sections)
 	cfg.resolveAdapterSecrets()
+	cfg.parseTopologySection(sections)
+	if err := cfg.parseConfidenceSections(sections); err != nil {
+		return nil, err
+	}
 
 	return cfg, nil
+}
+
+// parseTopologySection reads [topology] exclude_cidrs (comma-separated CIDRs
+// excluded from topology awareness — management/virtual networks).
+func (cfg *Config) parseTopologySection(sections map[string]map[string]string) {
+	if sec, ok := sections["topology"]; ok {
+		if v, ok := sec["exclude_cidrs"]; ok {
+			for _, c := range strings.Split(v, ",") {
+				c = strings.TrimSpace(c)
+				if c != "" {
+					cfg.TopologyExcludeCIDRs = append(cfg.TopologyExcludeCIDRs, c)
+				}
+			}
+		}
+	}
 }
 
 // adapterSecretEnv maps adapter config keys to the documented environment

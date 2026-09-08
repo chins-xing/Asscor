@@ -20,3 +20,6 @@ func (s *Signer) Verify(r *model.AssessmentResult) bool { return false }
 
 // VerifyAlgo always returns true (no algorithm integrity check when disabled).
 func VerifyAlgo() bool { return true }
+
+// SetKeyDir is a no-op when the integrity module is disabled.
+func SetKeyDir(dir string) {}

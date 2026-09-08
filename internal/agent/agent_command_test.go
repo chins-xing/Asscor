@@ -225,6 +225,54 @@ func TestRunChecksAppendsRootResults(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// runCommand — securemode_* routing (RC-specific: these branches do not exist
+// in main's agent_command_test.go, gap report ① tail)
+// ---------------------------------------------------------------------------
+
+// TestRunCommandRoutesSecureModeCommands: securemode_exit/rotate/unlock/enter
+// are dispatched to executeSecureModeCommand, never to the shell allowlist —
+// they are not shell commands, so they must not be rejected as non-allowlisted.
+func TestRunCommandRoutesSecureModeCommands(t *testing.T) {
+	a := &Agent{}
+	for _, name := range []string{"securemode_exit", "securemode_rotate", "securemode_unlock", "securemode_enter"} {
+		cmd := &apiv1.Command{CommandId: "c-" + name, Command: name, Params: map[string]string{"password": "x"}}
+		a.runCommand(cmd) // no secure state → ignored via executeSecureModeCommand, must not panic
+	}
+}
+
+// TestRunCommandSecureModeExitDecrypts: a signed securemode_exit routed through
+// runCommand reaches executeSecureModeCommand and actually decrypts the .enc —
+// proving the routing lands in the secure handler (not the shell path).
+func TestRunCommandSecureModeExitDecrypts(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	a := NewAgent(DefaultConfig())
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.secureMaybeBootstrap(); err != nil {
+		t.Fatal(err)
+	}
+	pw := a.secure.password
+	if !v.IsEncrypted() {
+		t.Fatal("test setup must leave the config encrypted")
+	}
+
+	cmd := &apiv1.Command{
+		CommandId: "c-sec-exit",
+		Command:   "securemode_exit",
+		Params:    map[string]string{"password": pw},
+	}
+	a.runCommand(cmd)
+
+	if !v.HasPlaintext() || v.IsEncrypted() {
+		t.Errorf("securemode_exit via runCommand must decrypt: plain=%v enc=%v", v.HasPlaintext(), v.IsEncrypted())
+	}
+	if a.secure.password != "" {
+		t.Errorf("ephemeral password must be cleared after exit, got %q", a.secure.password)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // verifyCommandSignature — timestamp edge case through executePendingCommands
 // ---------------------------------------------------------------------------
 

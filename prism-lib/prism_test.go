@@ -1,4 +1,4 @@
-package prism
+﻿package prism
 
 import (
 	"math"
@@ -6,14 +6,14 @@ import (
 )
 
 // ============================================================
-// Core Layer — Collapse + RiskVelocity
+// Core Layer 鈥?Collapse + RiskVelocity
 // ============================================================
 
 func TestCollapseModifier_SingleFailure(t *testing.T) {
 	cfg := DefaultConfig()
 
 	// Single failure should NOT produce collapse
-	mod := computeCollapseModifier(800.0, 1, cfg)
+	mod := computeCollapseModifier(800.0, 1.0, cfg)
 	if mod != 0.0 {
 		t.Errorf("single-failure collapse = %.4f, want 0.0", mod)
 	}
@@ -23,11 +23,11 @@ func TestCollapseModifier_MultiFailure(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.CollapseBeta = 1.5
 
-	// 3 concurrent failures with moderate debt → should collapse
+	// 3 concurrent failures with moderate debt 鈫?should collapse
 	nFailures := 3
 
 	debtRaw := 800.0 // ~30 days with 3 Delta=-15 checks
-	mod := computeCollapseModifier(debtRaw, nFailures, cfg)
+	mod := computeCollapseModifier(debtRaw, float64(nFailures), cfg)
 
 	if mod <= 0.0 {
 		t.Errorf("multi-failure collapse = %.4f, want > 0", mod)
@@ -41,10 +41,10 @@ func TestCollapseModifier_Extreme(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.CollapseBeta = 1.5
 
-	// 10 failures with very high debt → should saturate at 1.0
+	// 10 failures with very high debt 鈫?should saturate at 1.0
 	nFailures := 10
 	debtRaw := 5000.0
-	mod := computeCollapseModifier(debtRaw, nFailures, cfg)
+	mod := computeCollapseModifier(debtRaw, float64(nFailures), cfg)
 
 	if mod != 1.0 {
 		t.Errorf("extreme collapse = %.4f, want 1.0", mod)
@@ -53,7 +53,7 @@ func TestCollapseModifier_Extreme(t *testing.T) {
 
 func TestCollapseModifier_ZeroFailures(t *testing.T) {
 	cfg := DefaultConfig()
-	mod := computeCollapseModifier(1000.0, 0, cfg)
+	mod := computeCollapseModifier(1000.0, 0.0, cfg)
 	if mod != 0.0 {
 		t.Errorf("zero-failure collapse = %.4f, want 0.0", mod)
 	}
@@ -61,7 +61,7 @@ func TestCollapseModifier_ZeroFailures(t *testing.T) {
 
 func TestCollapseModifier_ZeroDebt(t *testing.T) {
 	cfg := DefaultConfig()
-	mod := computeCollapseModifier(0.0, 5, cfg)
+	mod := computeCollapseModifier(0.0, 5.0, cfg)
 	if mod != 0.0 {
 		t.Errorf("zero-debt collapse = %.4f, want 0.0", mod)
 	}
@@ -108,7 +108,7 @@ func TestComputeRiskVelocity_StaleTimestamp(t *testing.T) {
 		PrismScore: 90.0,
 		Timestamp:  86400,
 	}
-	// current time is before prior → return 0
+	// current time is before prior 鈫?return 0
 	v := ComputeRiskVelocity(80.0, prior, 0)
 	if v != 0.0 {
 		t.Errorf("stale velocity = %.4f, want 0.0", v)
@@ -170,7 +170,7 @@ func TestSemanticState_ZeroScore(t *testing.T) {
 func TestSemanticState_DegradedTransition(t *testing.T) {
 	cfg := DefaultConfig()
 
-	// Score at threshold boundary: 70% → 70/100=0.70 → exactly at T_degraded
+	// Score at threshold boundary: 70% 鈫?70/100=0.70 鈫?exactly at T_degraded
 	core := &AssetRiskResult{
 		HostID:    "degrading",
 		PrismScore: 70.0,
@@ -263,7 +263,7 @@ func TestSemanticState_DominantStateIsHighest(t *testing.T) {
 		core := &AssetRiskResult{HostID: "test-host", PrismScore: tc.score}
 		report := ComputeSemanticState(core, cfg)
 		if report.CurrentState != tc.expected {
-			t.Errorf("score=%.0f → state=%s, want %s (vector=%v)",
+			t.Errorf("score=%.0f 鈫?state=%s, want %s (vector=%v)",
 				tc.score, report.CurrentState, tc.expected, report.StateVector)
 		}
 	}
@@ -279,7 +279,7 @@ func TestMarkovChain_Stationary(t *testing.T) {
 		t.Errorf("model name = %s, want MarkovChain", model.Name())
 	}
 
-	// Start from pure Stable → should stay mostly Stable
+	// Start from pure Stable 鈫?should stay mostly Stable
 	current := [4]float64{1.0, 0.0, 0.0, 0.0}
 	future, conf := model.Predict(current, 7)
 
@@ -300,7 +300,7 @@ func TestMarkovChain_Stationary(t *testing.T) {
 func TestMarkovChain_CollapseTrap(t *testing.T) {
 	model := DefaultInferenceModel()
 
-	// From pure Collapse → should remain mostly Collapse (absorbing state)
+	// From pure Collapse 鈫?should remain mostly Collapse (absorbing state)
 	current := [4]float64{0.0, 0.0, 0.0, 1.0}
 	future, _ := model.Predict(current, 7)
 
@@ -315,7 +315,7 @@ func TestMarkovChain_ZeroSteps(t *testing.T) {
 	future, conf := model.Predict(current, 0)
 
 	if future != current {
-		t.Errorf("0-step prediction changed state: %v → %v", current, future)
+		t.Errorf("0-step prediction changed state: %v 鈫?%v", current, future)
 	}
 	if conf != 1.0 {
 		t.Errorf("0-step confidence = %.4f, want 1.0", conf)
@@ -469,7 +469,7 @@ func TestMatPow_One(t *testing.T) {
 }
 
 // ============================================================
-// Full Pipeline (Core → Semantic → Inference)
+// Full Pipeline (Core 鈫?Semantic 鈫?Inference)
 // ============================================================
 
 func TestFullPipeline_HealthyNode(t *testing.T) {

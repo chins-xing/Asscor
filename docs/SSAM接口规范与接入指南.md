@@ -671,9 +671,9 @@ engine.RegisterHook(ssam.HookPostEdge, "enrich-metadata", func(
 }, 20)
 ```
 
-### 8.5 方式五：通过 ASSCOR DI 容器集成（v0.2.2 依赖倒置架构）
+### 8.5 方式五：通过 ASSCOR DI 容器集成（v0.2.2 依赖倒置架构，现状 v0.2.3 兼容）
 
-ASSCOR v0.2.2 定义了统一的 `kernel.AssessorEngine` 接口（规范定义于 `internal/kernel/engine_types.go`）。SSAM 通过 `ssam.EngineAdapter` 实现该接口，以插件形式注入：
+ASSCOR v0.2.3 定义了统一的 `kernel.AssessorEngine` 接口（规范定义于 `internal/kernel/engine_types.go`，v0.2.2 依赖倒置架构延续至今，v0.2.3 兼容）。SSAM 通过 `ssam.EngineAdapter` 实现该接口，以插件形式注入：
 
 **注册端（cmd/kernel/main.go 平台层）：**
 

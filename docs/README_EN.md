@@ -12,6 +12,7 @@
 | [user-manual.md](en/user-manual.md) | User manual — installation, configuration, CLI, deployment |
 | [ssam-interface-spec.md](en/ssam-interface-spec.md) | SSAM V2.0 provider interface specification & integration guide |
 | [srd-whitepaper.md](en/srd-whitepaper.md) | Systemic Risk Dynamics (SRD) / Prism whitepaper — risk semantics, state evolution, collapse theory |
+| [secure-mode-whitepaper.md](en/secure-mode-whitepaper.md) | Secure Mode whitepaper — default/run dual-mode config protection (this branch) |
 
 ## Chinese originals (authoritative)
 

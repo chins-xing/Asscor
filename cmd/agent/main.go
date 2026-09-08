@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/chins-xing/asscor/internal/agent"
-	"github.com/chins-xing/asscor/internal/cli"
+	"github.com/chins-xing/asscor/internal/agentinstall"
 	"github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/logger"
 	"github.com/chins-xing/asscor/internal/version"
@@ -27,11 +27,20 @@ func main() {
 	install := flag.Bool("install", false, "install agent as systemd service (requires root)")
 	uninstall := flag.Bool("uninstall", false, "remove agent systemd service")
 	showVersion := flag.Bool("version", false, "display version and exit")
+	modeStatus := flag.Bool("mode-status", false, "print the agent's secure-mode state from disk and exit (ops query; the kernel 'mode agent <id> status' remains the richer operational view)")
 	upgrade := flag.Bool("upgrade", false, "upgrade existing agent installation in-place (requires root)")
 	privileged := flag.Bool("privileged", false, "run as the privileged agent worker process (systemd socket-activated, root-required business only)")
 	privSocket := flag.String("priv-socket", "/run/asscor/agent-priv.sock", "privileged agent unix socket path")
 	privPeerUser := flag.String("priv-peer-user", "asscor", "unix account allowed to connect to the privileged agent (peer credential check)")
 	flag.Parse()
+
+	// Record which flags the operator actually set (flag.Visit only reports
+	// explicitly-set flags). Secure-mode bootstrap recovery uses this to
+	// decide whether a .enc bootstrap value may override a flag (review I-3):
+	// flag defaults are applied unconditionally below, so comparing against
+	// default VALUES cannot distinguish "default" from "explicitly set".
+	explicitFlags := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) { explicitFlags[f.Name] = true })
 
 	if *showVersion {
 		fmt.Printf("ASSCOR Agent %s (SSAM %s)\n", version.ASSCORVersion, version.SSAMVersion)
@@ -45,7 +54,7 @@ func main() {
 		return
 	}
 	if *install {
-		if err := cli.InstallAgent(); err != nil {
+		if err := agentinstall.Install(); err != nil {
 			fmt.Fprintf(os.Stderr, "agent: install failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -53,7 +62,7 @@ func main() {
 		os.Exit(0)
 	}
 	if *uninstall {
-		if err := cli.UninstallAgent(); err != nil {
+		if err := agentinstall.Uninstall(); err != nil {
 			fmt.Fprintf(os.Stderr, "agent: uninstall failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -61,7 +70,7 @@ func main() {
 		os.Exit(0)
 	}
 	if *upgrade {
-		if err := cli.UpgradeAgent(); err != nil {
+		if err := agentinstall.Upgrade(); err != nil {
 			fmt.Fprintf(os.Stderr, "agent: upgrade failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -70,11 +79,39 @@ func main() {
 	}
 
 	cfg := agent.DefaultConfig()
+	cfg.ConfigPath = *configPath
+	cfg.ExplicitFlags = explicitFlags
 
 	if err := loadConfigFile(*configPath, &cfg); err != nil {
 		if !os.IsNotExist(err) {
 			fmt.Fprintf(os.Stderr, "agent: warning: cannot load config %s: %v\n", *configPath, err)
 		}
+	}
+
+	// Review M4 (spec §9.2): the agent is a flag-driven daemon with no
+	// interactive CLI, so `mode status` is exposed as a one-shot --mode-status
+	// query that classifies the on-disk state and exits — suitable for ops
+	// scripts without inventing an interactive CLI. The kernel-side
+	// `mode agent <id> status` remains the authoritative live view (it knows
+	// the registration state, not just the disk layout).
+	if *modeStatus {
+		v := agentSecureVault(cfg)
+		if v == nil {
+			fmt.Println("mode: default (secure mode disabled — build with -tags securemode)")
+			os.Exit(0)
+		}
+		switch v.Classify() {
+		case "default":
+			fmt.Println("mode: default (config plaintext)")
+		case "run":
+			fmt.Println("mode: run (config encrypted — awaiting kernel-issued unlock password)")
+		case "residue":
+			fmt.Fprintf(os.Stderr, "mode: error: crash residue on %s (plaintext and .enc both present) — manual recovery required\n", v.ConfigPath)
+			os.Exit(1)
+		default: // "none"
+			fmt.Println("mode: none (no config file present)")
+		}
+		os.Exit(0)
 	}
 
 	cfg.KernelAddr = *kernelAddr
@@ -129,6 +166,14 @@ func main() {
 	log.Info("starting agent", "version", version.ASSCORVersion, "ssam_version", version.SSAMVersion, "host_id", cfg.HostID, "kernel_addr", cfg.KernelAddr)
 
 	agt := agent.NewAgent(cfg)
+	// Secure Mode: optional build-tag module. Off by default (agentSecureVault
+	// returns nil); enable with -tags securemode. First-start encryption is
+	// deferred to the first heartbeat; run-mode restarts start locked and
+	// await the kernel-issued password.
+	if err := agt.InitSecureMode(agentSecureVault(cfg)); err != nil {
+		fmt.Fprintf(os.Stderr, "agent: secure mode init failed (fail-closed): %v\n", err)
+		os.Exit(1)
+	}
 	if err := agt.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "agent: fatal: %v\n", err)
 		os.Exit(1)

@@ -136,3 +136,34 @@ api_url = ${NETBOX_URL}
 		t.Errorf("netbox.api_url = %q, want https://netbox.example", got)
 	}
 }
+
+// TestParseTopologyExcludeCIDRs: [topology] exclude_cidrs 解析 (M1 网段过滤)。
+func TestParseTopologyExcludeCIDRs(t *testing.T) {
+	cfg, err := Parse(`
+[topology]
+exclude_cidrs = 172.17.0.0/16, 172.20.20.0/24, 169.254.0.0/16
+`)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	want := []string{"172.17.0.0/16", "172.20.20.0/24", "169.254.0.0/16"}
+	if len(cfg.TopologyExcludeCIDRs) != len(want) {
+		t.Fatalf("TopologyExcludeCIDRs = %v, want %v", cfg.TopologyExcludeCIDRs, want)
+	}
+	for i := range want {
+		if cfg.TopologyExcludeCIDRs[i] != want[i] {
+			t.Errorf("TopologyExcludeCIDRs[%d] = %q, want %q", i, cfg.TopologyExcludeCIDRs[i], want[i])
+		}
+	}
+
+	// 无 [topology] 段 → 空。
+	cfg2, err := Parse(`[weights]
+attack_surface = 40
+`)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(cfg2.TopologyExcludeCIDRs) != 0 {
+		t.Errorf("default TopologyExcludeCIDRs must be empty, got %v", cfg2.TopologyExcludeCIDRs)
+	}
+}

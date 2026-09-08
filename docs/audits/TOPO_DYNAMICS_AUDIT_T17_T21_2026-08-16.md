@@ -35,4 +35,4 @@
 
 结合第一批（T12-T16）：ASSCOR 的拓扑感知 = 静态子网重叠快照，无方向/链路/边界/域/路径语义，且不随节点与边变化。动态性实验进一步确认：**传播边在 T17-T21 全部操作期间始终 11（全互达），一个字节都没变**。
 
-*数据：`docs/clab-lab/data/assessments-t12t16.jsonl` 及同批评估轮次。*
+*数据：`lunwen/clab-lab/data/assessments-t12t16.jsonl` 及同批评估轮次。*

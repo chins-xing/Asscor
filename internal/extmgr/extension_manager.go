@@ -463,17 +463,7 @@ func (m *ExtensionManager) registerCheckModule(spec ExtensionSpec) {
 		return
 	}
 
-	var checkDefs []struct {
-		ID          string  `json:"id"`
-		Domain      string  `json:"domain"`
-		Name        string  `json:"name"`
-		Description string  `json:"description"`
-		Delta       float64 `json:"delta"`
-		Command     string  `json:"command"`
-		FilePath    string  `json:"file_path"`
-		FileRegex   string  `json:"file_regex"`
-		OutputMatch string  `json:"output_match"`
-	}
+	var checkDefs []CheckSpecDef
 	if err := json.Unmarshal(data, &checkDefs); err != nil {
 		logger.WithComponent("extmgr").Error("invalid checks.json", "extension_id", spec.ID, "error", err)
 		return
@@ -493,7 +483,10 @@ func (m *ExtensionManager) registerCheckModule(spec ExtensionSpec) {
 		"extension_id", spec.ID, "count", len(items))
 }
 
-func specCheckItem(def struct {
+// CheckSpecDef is the JSON-check definition carried by an extension spec's
+// checks.json entry. Named (not anonymous) so tests and callers can construct
+// it directly.
+type CheckSpecDef struct {
 	ID          string  `json:"id"`
 	Domain      string  `json:"domain"`
 	Name        string  `json:"name"`
@@ -503,7 +496,9 @@ func specCheckItem(def struct {
 	FilePath    string  `json:"file_path"`
 	FileRegex   string  `json:"file_regex"`
 	OutputMatch string  `json:"output_match"`
-}) model.CheckItem {
+}
+
+func specCheckItem(def CheckSpecDef) model.CheckItem {
 	return model.CheckItem{
 		ID:          def.ID,
 		Domain:      def.Domain,
@@ -511,6 +506,7 @@ func specCheckItem(def struct {
 		Description: def.Description,
 		Delta:       def.Delta,
 		Check:       buildExtCheckFunc(def.Command, def.FilePath, def.FileRegex, def.OutputMatch),
+		Source:      model.CheckSourceExtension,
 	}
 }
 

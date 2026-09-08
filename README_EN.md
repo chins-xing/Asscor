@@ -1,5 +1,21 @@
 # ASSCOR — Security Acceptability Assessment Runtime
 
+> **Branch:** `ASSCOR-Research-Core` (research-specialized branch; not merged
+> into `main`).
+>
+> This branch carries two research directions on top of the stable main
+> baseline (v0.2.x):
+> - **Topology / propagation research** — M0–M2 milestones (graph-model
+>   foundation → lifecycle → semantic propagation); see
+>   [docs/ASSCOR-Research-Core.md](docs/ASSCOR-Research-Core.md) and
+>   `lunwen/research-core/`;
+> - **Secure Mode** — an experimental module behind the `securemode` build
+>   tag (see the Secure Mode chapter below).
+>
+> Difference from `main`: this branch contains the `securemode` experimental
+> module and topology-research assets; `main` does not. When the research
+> matures it flows back to `main` as documentation / a standalone module.
+
 > **ASSCOR** (**ASS**ess + **COR**e) is an open-source, production-oriented
 > security acceptability assessment platform. It does **not** replace
 > vulnerability scanners, SIEMs, or penetration testing. Instead, it sits
@@ -42,11 +58,12 @@
 7. [Prism / SRD risk-dynamics engine](#7-prism--srd-risk-dynamics-engine)
 8. [Adapting to graded protection frameworks](#8-adapting-to-graded-protection-frameworks)
 9. [Dynamic extensions](#9-dynamic-extensions)
-10. [Build & quick start](#10-build--quick-start)
-11. [Repository structure](#11-repository-structure)
-12. [Documentation](#12-documentation)
-13. [Known limitations](#13-known-limitations)
-14. [License & community](#14-license--community)
+10. [Secure Mode (experimental, build-tag: securemode)](#10-secure-mode-experimental-build-tag-securemode)
+11. [Build & quick start](#11-build--quick-start)
+12. [Repository structure](#12-repository-structure)
+13. [Documentation](#13-documentation)
+14. [Known limitations](#14-known-limitations)
+15. [License & community](#15-license--community)
 
 ---
 
@@ -92,8 +109,8 @@ local checks and reports state.
 All functional modules are compiled in only when their build tag is enabled
 (`heartbeat`, `commander`, `policy`, `cti`, `assessor`, `attck_ext`, `spc`,
 `collector`, `sourcemanager`, `persistence`, `srdwrapper`, `integrity`,
-`resilience`, `comms`, `checks`, `adapter`, `engine`, …). The default kernel
-build carries only the core runtime.
+`resilience`, `comms`, `checks`, `adapter`, `engine`, `securemode`, …).
+The default kernel build carries only the core runtime.
 
 ## 3. The SSAM 2.0 engine
 
@@ -235,7 +252,74 @@ execution policy (with command allowlists, SHA-256 checksums, timeouts, and
 path protections). Extension *packages* (pkgmgr) can be distributed and
 installed as self-contained bundles with a `package.json` manifest.
 
-## 10. Build & quick start
+## 10. Secure Mode (experimental, build-tag: securemode)
+
+> This branch-only experimental module (`internal/securemode/`) protects the
+> static security of `config.ini` and `agent.ini`. Design & implementation
+> records: [docs/superpowers/specs/2026-08-21-secure-mode-design.md](docs/superpowers/specs/2026-08-21-secure-mode-design.md);
+> summary below.
+
+### Features
+
+- **Dual modes:** default (plaintext config files, behavior unchanged) / run
+  (source files encrypted to `.enc`).
+- **Envelope encryption:** AES-256-GCM envelope encryption + argon2id
+  password derivation; entering run mode needs no password, modifying config
+  via CLI or exiting run mode requires the password.
+- **Agent managed by kernel:** on startup the agent self-generates an
+  ephemeral password (regenerated each restart, never persisted), reports it
+  to the kernel over the mTLS heartbeat, and automatically enters run mode;
+  mode switches are kernel-initiated only
+  (`mode agent <id> enter|exit|rotate-password`).
+
+### Build
+
+Default builds exclude securemode (no-tag builds behave exactly as before):
+
+```bash
+go build -tags securemode ./cmd/kernel ./cmd/agent
+```
+
+### CLI usage
+
+| Command | Description |
+|---------|-------------|
+| `mode status` | current mode + per-config state + registered agents |
+| `mode enter --password <pw>` | enter run mode (no password check; run password must be set) |
+| `mode exit --password <pw>` | exit to default mode (restore plaintext) |
+| `mode unlock --password <pw>` | after a kernel restart (run marker), unlock and load the config |
+| `mode set-password --old <pw> --new <pw>` | rotate the run password (config.ini + registry re-encrypted) |
+| `mode agent <id> status\|enter\|exit\|rotate-password` | agent management: status / instructions |
+| `config-set <key> <value> --temp\|--persist --password <pw>` | modify config: `--temp` in-memory immediate / `--persist` to disk (needs reload) |
+
+### Security design
+
+- **Crash safety:** three-stage atomic conversion (write `.enc.tmp` → verify
+  round-trip → rename → delete plaintext); a crash at any step loses no
+  config; startup auto-detects crash residue (plaintext + `.enc` coexist →
+  fail-closed, manual `.enc` validation then recovery).
+- **Memory hardening:** run-mode config lives in memory (read-only snapshot +
+  SHA-256 baseline + mprotect hardening) — hardening, not a tamper-proof
+  guarantee.
+- **Fingerprint-keyed registry:** agents register under their mTLS
+  certificate fingerprint; a locked agent can still be unlocked after
+  restart with its registered password.
+- **Registry persistence:** the kernel persists the
+  `fingerprint → agent_id → password` registry encrypted with the run-mode
+  key (`.asscor-secrets.enc`), auto-decrypts it on run-mode restart, re-
+  encrypts on password rotation, and removes it when leaving run mode.
+- **Fail-closed:** a missing mode marker ≠ a corrupt one; a corrupt marker
+  refuses to silently degrade to plaintext mode (possible tampering).
+
+### Research paper
+
+This branch also hosts the manuscript **"Attacker Cognitive Loop: An
+Interpretable Rule-Based Engine for Estimating, Predicting, and Engaging
+Adaptive Attackers"** (Jiahao Lai) in `lunwen/paper/`, together with the
+24-node Containerlab experiment campaign (E1–E9) and its reviewer
+attachment bundle. See the paper's own documentation for details.
+
+## 11. Build & quick start
 
 Requirements: Go ≥ 1.26. Builds are fully cross-compilable (`GOOS=linux`,
 CGO_ENABLED=0).
@@ -244,8 +328,8 @@ CGO_ENABLED=0).
 # build the default kernel + agent
 go build ./cmd/kernel ./cmd/agent
 
-# build with all functional modules (see deploy/Makefile for the tag list)
-go build -tags "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine" ./cmd/kernel ./cmd/agent
+# build with all functional modules (incl. securemode on this branch)
+go build -tags "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine,securemode" ./cmd/kernel ./cmd/agent
 
 # run the test suite
 go test ./...
@@ -260,10 +344,9 @@ asscor-cli                                             # connect to the kernel C
 ```
 
 See the [User Manual](docs/ASSCOR%20%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
-(Chinese) for the full operational guide (installation, mTLS certificate
-management, configuration reference, CLI command catalog, adapter setup).
+(Chinese) for the full operational guide.
 
-## 11. Repository structure
+## 12. Repository structure
 
 ```
 .
@@ -271,6 +354,7 @@ management, configuration reference, CLI command catalog, adapter setup).
 ├── internal/            # kernel + core modules (build-tag gated)
 │   ├── kernel/          # microkernel core (DI, bus, lifecycle, contracts)
 │   ├── engine/          # SSAM + SRD adapters
+│   ├── securemode/      # Secure Mode module (tag: securemode, this branch)
 │   ├── comms/           # gRPC + JSONRPC servers (tag: comms)
 │   ├── agent/           # agent runtime (checks, CPE, heartbeat)
 │   ├── cli/             # interactive + socket CLI
@@ -281,27 +365,30 @@ management, configuration reference, CLI command catalog, adapter setup).
 ├── api/v1/              # protocol messages (pure PB; gRPC bindings are tag-gated)
 ├── configs/             # industry configuration templates
 ├── deploy/              # Makefile, docker compose, deployment scripts
-├── docs/                # documentation (see §12)
+├── docs/                # documentation (see §13)
+├── lunwen/              # paper assets (this branch; reviewer-facing parts tracked)
 └── build/               # local build output (git-ignored)
 ```
 
-## 12. Documentation
+## 13. Documentation
 
 | Document | Language | Content |
 |----------|----------|---------|
 | [README_EN.md](README_EN.md) | English | this overview |
 | [README.md](README.md) | Chinese | full Chinese overview |
+| [docs/README_EN.md](docs/README_EN.md) | English | documentation index |
 | [docs/README.md](docs/README.md) | Chinese | documentation index |
-| User Manual (`docs/ASSCOR 使用手册.md`) | Chinese | installation, config, CLI |
-| SSAM 2.0 engineering whitepaper (`docs/工程实现白皮书.md`) | Chinese | architecture & implementation |
-| SRD whitepaper (`docs/Systemic Risk Dynamics（SRD）白皮书.md`) | Chinese | risk-dynamics theory |
-| SSAM interface spec (`docs/SSAM接口规范与接入指南.md`) | Chinese | provider API & integration |
-| Extension-system whitepapers | Chinese | plug-in / adapter / SDK guides |
+| [docs/en/engineering-whitepaper.md](docs/en/engineering-whitepaper.md) | English | engineering implementation whitepaper |
+| [docs/en/user-manual.md](docs/en/user-manual.md) | English | user manual |
+| [docs/en/ssam-interface-spec.md](docs/en/ssam-interface-spec.md) | English | SSAM interface specification |
+| [docs/en/srd-whitepaper.md](docs/en/srd-whitepaper.md) | English | SRD risk-dynamics whitepaper |
+| [docs/en/secure-mode-whitepaper.md](docs/en/secure-mode-whitepaper.md) | English | Secure Mode whitepaper |
+| Secure Mode design spec (`docs/superpowers/specs/2026-08-21-secure-mode-design.md`) | Chinese | module design & security model |
 
-Chinese is the primary documentation language; English documentation is
-being added incrementally.
+Chinese remains the primary documentation language for the in-depth
+originals; English versions are maintained alongside.
 
-## 13. Known limitations
+## 14. Known limitations
 
 - 0.x breaking changes are possible (see disclaimer above).
 - SSAM scores are model outputs, not objective security truth — always treat
@@ -309,10 +396,12 @@ being added incrementally.
 - Adapters requiring external tools (Trivy, OpenSCAP, …) need those binaries
   installed on the target host.
 - The default build intentionally disables optional modules (integrity
-  algorithm verification, HMAC signing, resilience guards, …): enable the
-  corresponding build tags for a hardened deployment.
+  algorithm verification, HMAC signing, resilience guards, securemode, …):
+  enable the corresponding build tags for a hardened deployment.
+- Research-branch artifacts (Secure Mode, topology research, the ACL paper)
+  are experimental and may change without notice.
 
-## 14. License & community
+## 15. License & community
 
 Apache License 2.0 — see [LICENSE](LICENSE).
 

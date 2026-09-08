@@ -287,6 +287,15 @@ func (a *atomicRedAdapter) buildCheckResult(techID, testName, testNumber, status
 		desc = fmt.Sprintf("[%s] %s", tactic, testName)
 	}
 
+	// Atomic tests that succeeded are direct execution evidence on the host —
+	// high but not absolute confidence (tooling/env variance), so default 0.9.
+	// 0.9 keeps the debt nearly full while avoiding treating a flaky exec as
+	// a hard fact (design §2.5 source table: scan_external/atomic ≈ high).
+	confidence := 0.0
+	if assessmentResult == "fail" {
+		confidence = 0.9
+	}
+
 	return ExternalCheckResult{
 		CheckID:     checkID,
 		RuleID:      techID,
@@ -298,6 +307,7 @@ func (a *atomicRedAdapter) buildCheckResult(techID, testName, testNumber, status
 		FailAt:      failAt,
 		Category:    "AtomicRedTeam",
 		Refs:        []string{fmt.Sprintf("https://attack.mitre.org/techniques/%s/", techID)},
+		Confidence:  confidence,
 	}
 }
 

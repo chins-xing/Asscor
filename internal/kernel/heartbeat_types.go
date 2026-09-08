@@ -57,4 +57,10 @@ type HeartbeatInterface interface {
 	UnrevokeCert(fingerprint string) error
 	// ListRevokedCerts returns all revoked fingerprints, oldest first.
 	ListRevokedCerts() []RevokedCertInfo
+	// ResetIdentityBindings clears every host↔certificate-fingerprint binding
+	// and persists the empty state — the recovery path for a certificate-fleet
+	// rebuild (CA replacement / mass rotation) where stale bindings block
+	// re-registration with freshly issued certificates. Revocations are kept.
+	// Returns the number of bindings cleared.
+	ResetIdentityBindings() (int, error)
 }

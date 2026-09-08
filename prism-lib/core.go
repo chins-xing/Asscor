@@ -95,7 +95,24 @@ func computePropagatedRiskRSS(incomingEdges []EdgeState, allNodes map[string]*No
 	return math.Min(1.0, math.Sqrt(sumSquares))
 }
 
-// computeDebtRaw returns the un-normalized total security debt across all failures.
+// failureConfidence maps a CheckFailure's confidence to its effective weight:
+// 0/unspecified → 1.0 (legacy: counts in full); otherwise clamped to [0,1].
+func failureConfidence(f CheckFailure) float64 {
+	c := f.Confidence
+	if c <= 0 {
+		return 1.0
+	}
+	if c > 1 {
+		return 1.0
+	}
+	return c
+}
+
+// computeDebtRaw returns the un-normalized total security debt across all
+// failures, with each failure's contribution scaled by its intelligence
+// confidence (design §2.5): a half-trusted failure accumulates half the debt
+// of a fully trusted one, so low-confidence noise cannot drive the collapse
+// detector. With all confidences 1 (or 0/unspecified) this is the legacy sum.
 func computeDebtRaw(failures []CheckFailure, alpha float64, nowUnix int64) float64 {
 	if len(failures) == 0 {
 		return 0.0
@@ -106,25 +123,36 @@ func computeDebtRaw(failures []CheckFailure, alpha float64, nowUnix int64) float
 		if elapsedDays < 0 {
 			elapsedDays = 0
 		}
-		delta := math.Abs(f.Delta)
+		delta := math.Abs(f.Delta) * failureConfidence(f)
 		total += delta * math.Pow(elapsedDays, alpha)
 	}
 	return total
 }
 
+// effectiveFailureCount is the confidence-weighted failure count used for the
+// collapse detector: Σ failureConfidence over all failures. Only failures with
+// meaningful confidence count toward the 2+ concurrency threshold.
+func effectiveFailureCount(failures []CheckFailure) float64 {
+	n := 0.0
+	for _, f := range failures {
+		n += failureConfidence(f)
+	}
+	return n
+}
+
 // computeCollapseModifier captures multi-debt collapse: when several key checks
 // fail concurrently, the trust collapse is super-linear.
 // Single-failure debt is already handled by the debt penalty; collapse only
-// activates when 2+ failures exist concurrently.
+// activates when the confidence-weighted failure count is >= 2.
 // Formula: min(1, (sum_debt / (norm * cap * sqrt(n)))^beta) where beta > 1, n >= 2.
-func computeCollapseModifier(debtRaw float64, nFailures int, cfg PrismConfig) float64 {
+func computeCollapseModifier(debtRaw float64, nFailures float64, cfg PrismConfig) float64 {
 	if nFailures < 2 || debtRaw <= 0 {
 		return 0.0
 	}
 	// Scale denominator by sqrt(n) so multi-failure collapse effect grows
 	// naturally: the same total debt from 4 concurrent failures is more
 	// dangerous than from 1 failure.
-	nFactor := math.Sqrt(float64(nFailures))
+	nFactor := math.Sqrt(nFailures)
 	denom := cfg.DebtNormDays * cfg.DebtCap * nFactor
 	if denom <= 0 {
 		return 0.0
@@ -162,12 +190,14 @@ func ComputeDynamicScore(
 	propRiskRaw := computePropagatedRisk(incomingEdges, allNodes, cfg.AggregationMode)
 	propPenalty := math.Min(cfg.PropCap, propRiskRaw)
 
-	// Debt (orthogonal — depends only on time × delta)
+	// Debt (orthogonal — depends only on time × delta, confidence-weighted)
 	debtRaw := computeDebtRaw(node.FailedChecks, cfg.DebtAlpha, nowUnix)
 	debtPenalty := math.Min(cfg.DebtCap, debtRaw/cfg.DebtNormDays)
 
-	// Collapse modifier (orthogonal — depends only on multi-debt concurrency)
-	collapseMod := computeCollapseModifier(debtRaw, len(node.FailedChecks), cfg)
+	// Collapse modifier (orthogonal — depends only on multi-debt concurrency,
+	// counted on confidence-weighted failures)
+	effFailures := effectiveFailureCount(node.FailedChecks)
+	collapseMod := computeCollapseModifier(debtRaw, effFailures, cfg)
 
 	// Orthogonal dynamic score with collapse correction
 	prismScore := node.SSAMScore * (1.0 - propPenalty) * (1.0 - debtPenalty) * (1.0 - collapseMod)
@@ -188,5 +218,22 @@ func ComputeDynamicScore(
 		DebtPenalty:      math.Round(debtPenalty*10000) / 10000,
 		CollapseModifier: math.Round(collapseMod*10000) / 10000,
 		RiskVelocity:     0.0, // caller fills via ComputeRiskVelocity
+		Confidence:       nodeConfidence(node),
+		EffectiveFailures: math.Round(effFailures*1000) / 1000,
 	}
+}
+
+// nodeConfidence normalizes NodeState.Confidence: 0/unspecified → 1.0.
+func nodeConfidence(node *NodeState) float64 {
+	if node == nil {
+		return 1.0
+	}
+	c := node.Confidence
+	if c <= 0 {
+		return 1.0
+	}
+	if c > 1 {
+		return 1.0
+	}
+	return c
 }
