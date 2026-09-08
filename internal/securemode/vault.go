@@ -122,7 +122,7 @@ func (v *Vault) EncryptFile(password string) error {
 	}
 
 	tmp := v.encPath() + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+	if err := writeFile0600(tmp, payload); err != nil {
 		return err
 	}
 	if err := syncFile(tmp); err != nil {
@@ -338,7 +338,7 @@ func (v *Vault) RotatePassword(oldPassword, newPassword string) error {
 		return fmt.Errorf("rotate: encrypt with new password: %w", err)
 	}
 	tmp := v.encPath() + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+	if err := writeFile0600(tmp, payload); err != nil {
 		return err
 	}
 	if err := syncFile(tmp); err != nil {
@@ -365,7 +365,7 @@ func (v *Vault) ReencryptOverwrite(password string, content []byte) error {
 		return fmt.Errorf("re-encrypt overwrite: %w", err)
 	}
 	tmp := v.encPath() + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+	if err := writeFile0600(tmp, payload); err != nil {
 		return err
 	}
 	if err := syncFile(tmp); err != nil {

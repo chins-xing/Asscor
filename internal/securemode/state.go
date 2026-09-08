@@ -35,6 +35,20 @@ func MarkerPath(dataDir string) string {
 	return filepath.Join(dataDir, ".asscor-mode")
 }
 
+// writeFile0600 writes data to path with mode 0600 and then explicitly
+// chmods it. The explicit chmod is required because os.WriteFile's mode is
+// masked by the process umask: under umask 0000 a naive WriteFile(0600)
+// would land as 0666, leaving the password verifier / encrypted payload /
+// marker world readable (audit RC-L2). Callers that write a temp file should
+// use this, then fsync+rename as usual.
+func writeFile0600(path string, data []byte) error {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return err
+	}
+	// Chmod after the write so a permissive umask cannot widen the mode.
+	return os.Chmod(path, 0o600)
+}
+
 // WriteMarker atomically writes the mode marker (tmp + rename).
 func WriteMarker(path string, mode Mode) error {
 	if mode != ModeDefault && mode != ModeRun {
@@ -53,7 +67,7 @@ func WriteMarker(path string, mode Mode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+	if err := writeFile0600(tmp, payload); err != nil {
 		return err
 	}
 	if err := syncFile(tmp); err != nil {

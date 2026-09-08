@@ -106,7 +106,9 @@ func (pv *PasswordVerifier) Set(password string) error {
 		return err
 	}
 	tmp := pv.File + ".tmp"
-	if err := os.WriteFile(tmp, buf, 0o600); err != nil {
+	// writeFile0600: explicit chmod after write so a permissive umask cannot
+	// widen the verifier beyond 0600 (audit RC-L2).
+	if err := writeFile0600(tmp, buf); err != nil {
 		return err
 	}
 	if err := syncFile(tmp); err != nil {

@@ -66,7 +66,9 @@ func (c *Controller) persistSecretsLocked() error {
 	}
 	path := SecretsFilePath(c.DataDir)
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+	// writeFile0600: explicit chmod so umask cannot widen the encrypted
+	// registry beyond 0600 (audit RC-L2).
+	if err := writeFile0600(tmp, payload); err != nil {
 		return fmt.Errorf("persist secrets: %w", err)
 	}
 	if err := syncFile(tmp); err != nil {
