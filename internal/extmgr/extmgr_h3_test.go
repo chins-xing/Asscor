@@ -54,3 +54,22 @@ func TestVerifyGitHead(t *testing.T) {
 		t.Error("too-short pin must fail verification")
 	}
 }
+
+// TestSpecCheckItemCarriesExtensionSource: check items built from an
+// extension spec must carry CheckSourceExtension so the confidence source
+// table can assign extension checks their own default (design §3.1) instead
+// of conflating them with compiled-in builtin checks.
+func TestSpecCheckItemCarriesExtensionSource(t *testing.T) {
+	item := specCheckItem(CheckSpecDef{
+		ID:     "EXT-001",
+		Domain: "attack_surface",
+		Name:   "ext",
+		Delta:  -5,
+	})
+	if item.Source != "extension" {
+		t.Errorf("spec check item Source = %q, want %q (CheckSourceExtension)", item.Source, "extension")
+	}
+	if item.ID != "EXT-001" {
+		t.Errorf("item ID = %q, want EXT-001", item.ID)
+	}
+}

@@ -56,6 +56,11 @@ const (
 	CheckSourceBuiltin CheckSource = "builtin"
 	// CheckSourceUser marks configuration-defined checks ([user_check.*]).
 	CheckSourceUser CheckSource = "user"
+	// CheckSourceExtension marks checks injected by the extension manager
+	// (third-party check modules). Distinguished from builtin so the
+	// confidence source table can assign them a separate default
+	// (design CONFIDENCE_MODEL_DESIGN_2026-09-08 §3.1).
+	CheckSourceExtension CheckSource = "extension"
 )
 
 type CheckItem struct {
