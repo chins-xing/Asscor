@@ -36,7 +36,7 @@ var userCheckAllowedCommands = map[string]bool{
 	"free": true, "uptime": true, "hostname": true, "id": true, "whoami": true,
 	"basename": true, "dirname": true, "uniq": true, "sort": true, "tr": true,
 	"md5sum": true, "sha256sum": true, "pgrep": true, "pidof": true,
-	"readlink": true, "du": true, "find": true, "env": true, "printenv": true,
+	"readlink": true, "du": true, "printenv": true,
 	"journalctl": true, "loginctl": true,
 }
 

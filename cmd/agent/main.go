@@ -19,6 +19,7 @@ func main() {
 	hostID := flag.String("host-id", "", "agent host identifier (default: hostname)")
 	tlsEnabled := flag.Bool("tls", false, "enable mTLS connection")
 	tlsSkipVerify := flag.Bool("tls-skip-verify", false, "skip TLS certificate verification (DEVELOPMENT ONLY)")
+	tlsServerName := flag.String("tls-server-name", "", "TLS ServerName (SNI) for kernel cert verification; default: derived from --kernel host")
 	certDir := flag.String("cert-dir", "certs", "TLS certificate directory")
 	logFormat := flag.String("log-format", "", "log format: json, text")
 	logLevel := flag.String("log-level", "", "log level: debug, info, warn, error")
@@ -127,6 +128,10 @@ func main() {
 		cfg.TLSSkipVerify = true
 	}
 
+	if *tlsServerName != "" {
+		cfg.TLSServerName = *tlsServerName
+	}
+
 	if *certDir != "" {
 		cfg.CertDir = *certDir
 	}
@@ -181,8 +186,14 @@ func main() {
 // when started by systemd socket activation (the kernel side); it never
 // self-starts and cannot be started by the main agent.
 func runPrivileged(socketPath, peerUser string) error {
+	peerUID, err := agent.LookupUID(peerUser)
+	if err != nil {
+		// Fail-closed: never start with an unverifiable peer UID, which would
+		// make verifyPeer admit every local process (audit C-2).
+		return fmt.Errorf("resolve privileged peer user %q: %w", peerUser, err)
+	}
 	priv, err := agent.NewPrivilegedAgent(agent.PrivilegedConfig{
-		AllowedPeerUID: agent.LookupUID(peerUser),
+		AllowedPeerUID: peerUID,
 		SocketPath:     socketPath,
 	})
 	if err != nil {
@@ -244,6 +255,8 @@ func loadConfigFile(path string, cfg *agent.AgentConfig) error {
 				cfg.TLSEnabled = val == "true" || val == "yes" || val == "1"
 			case "tls_skip_verify":
 				cfg.TLSSkipVerify = val == "true" || val == "yes" || val == "1"
+			case "tls_server_name":
+				cfg.TLSServerName = val
 			case "cert_dir":
 				cfg.CertDir = val
 			case "hmac_key":

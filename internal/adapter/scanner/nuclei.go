@@ -62,9 +62,9 @@ func NewNucleiAdapter() *NucleiAdapter {
 }
 
 func (n *NucleiAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	nucleiPath := config["adapter_paths.nuclei"]
-	if nucleiPath == "" {
-		nucleiPath = "nuclei"
+	nucleiPath, err := adapter.ResolveToolBinary(config, "adapter_paths.nuclei", "nuclei")
+	if err != nil {
+		return nil, err
 	}
 
 	args := []string{"-jsonl", "-silent", "-severity", "critical,high,medium,low,info"}

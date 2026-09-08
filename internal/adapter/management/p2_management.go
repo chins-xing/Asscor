@@ -138,9 +138,9 @@ func NewTerraformAdapter() *TerraformAdapter {
 }
 
 func (t *TerraformAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	tfPath := config["adapter_paths.terraform"]
-	if tfPath == "" {
-		tfPath = "terraform"
+	tfPath, err := adapter.ResolveToolBinary(config, "adapter_paths.terraform", "terraform")
+	if err != nil {
+		return nil, err
 	}
 
 	planDir := config["terraform.plan_dir"]
@@ -234,9 +234,9 @@ func NewOpenTofuAdapter() *OpenTofuAdapter {
 }
 
 func (o *OpenTofuAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	tofuPath := config["adapter_paths.opentofu"]
-	if tofuPath == "" {
-		tofuPath = "tofu"
+	tofuPath, err := adapter.ResolveToolBinary(config, "adapter_paths.opentofu", "tofu")
+	if err != nil {
+		return nil, err
 	}
 
 	planDir := config["opentofu.plan_dir"]

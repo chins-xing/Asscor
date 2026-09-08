@@ -48,7 +48,14 @@ type AgentConfig struct {
 	ReconnectSec     int
 	TLSEnabled       bool
 	TLSSkipVerify    bool
-	CertDir          string
+	// TLSServerName overrides the TLS ServerName (SNI) used when verifying
+	// the kernel's certificate. When empty the agent derives it from
+	// KernelAddr's host part, falling back to "localhost". Remote
+	// deployments whose kernel certificate is issued for a specific DNS name
+	// or IP MUST set this so the SNI check matches instead of failing and
+	// tempting operators to enable --tls-skip-verify (audit H-4).
+	TLSServerName string
+	CertDir        string
 	HMACKey          string
 	LogFormat        string
 	LogLevel         string
@@ -304,6 +311,23 @@ func (a *Agent) runOnce(ctx context.Context) error {
 	}
 }
 
+// tlsServerName returns the TLS ServerName (SNI) to verify against the
+// kernel's server certificate. Resolution order: an explicit
+// cfg.TLSServerName (audit H-4 — the only reliable choice for remote
+// deployments); otherwise the host part of KernelAddr (which itself defaults
+// to localhost). An empty result degrades to "localhost" exactly as the
+// pre-fix constant did, so local default-mode setups are unaffected.
+func (a *Agent) tlsServerName() string {
+	if a.cfg.TLSServerName != "" {
+		return a.cfg.TLSServerName
+	}
+	addr := a.cfg.KernelAddr
+	if host, _, err := net.SplitHostPort(addr); err == nil && host != "" {
+		return host
+	}
+	return "localhost"
+}
+
 func (a *Agent) connect() error {
 	var tlsConfig *tls.Config
 	if a.cfg.TLSEnabled {
@@ -347,7 +371,7 @@ func (a *Agent) connect() error {
 		tlsConfig = &tls.Config{
 			Certificates: []tls.Certificate{agentCert},
 			RootCAs:      caPool,
-			ServerName:   "localhost",
+			ServerName:   a.tlsServerName(),
 			MinVersion:   tls.VersionTLS12,
 		}
 
@@ -394,7 +418,7 @@ func (a *Agent) connect() error {
 			retryTLSConfig := &tls.Config{
 				Certificates: []tls.Certificate{agentCert},
 				RootCAs:      caPool,
-				ServerName:   "localhost",
+				ServerName:   a.tlsServerName(),
 				MinVersion:   tls.VersionTLS12,
 			}
 			if a.cfg.TLSSkipVerify {
@@ -1468,15 +1492,31 @@ func (a *Agent) checkTimeout() time.Duration {
 // fully-populated result. On timeout the result retains the check's
 // Domain/Delta/Name/ComplianceRef so the kernel still receives complete
 // scoring metadata instead of a bare failure with no domain attribution.
+//
+// Leak containment (audit H-1): the worker goroutine cannot be forcibly
+// killed in Go, so its residual lifetime is bounded by the check itself. Every
+// check source is self-limiting — builtin checks are bounded file reads, user
+// checks run under their own exec context timeout (userCheckCommandTimeout),
+// kernel-synced checks go through the same bounded exec path — and the caller
+// (runChecks) bounds the number of concurrent workers with a semaphore, so a
+// timed-out check can never accumulate unbounded goroutines across rounds.
+// The result channel is buffered (size 1) so a late-finishing check never
+// blocks on the send; only a check that internally blocks forever would leave
+// one goroutine behind, which the bounded-exec design above prevents.
 func (a *Agent) runCheckWithTimeout(c model.CheckItem, timeout time.Duration) model.CheckResult {
 	done := make(chan model.CheckResult, 1)
 	go func() {
 		done <- c.Run()
 	}()
+	// time.NewTimer + Stop instead of time.After: an unconsumed time.After
+	// timer stays armed until it fires and can accumulate across many
+	// timeouts; NewTimer lets us release it immediately on the fast path.
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	select {
 	case r := <-done:
 		return r
-	case <-time.After(timeout):
+	case <-timer.C:
 		logger.WithComponent("agent").Warn("check timed out", "check_id", c.ID, "timeout", timeout.String())
 		return model.CheckResult{
 			CheckID:       c.ID,

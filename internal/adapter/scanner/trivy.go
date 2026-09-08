@@ -69,9 +69,9 @@ func NewTrivyAdapter() *TrivyAdapter {
 }
 
 func (t *TrivyAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	trivyPath := config["adapter_paths.trivy"]
-	if trivyPath == "" {
-		trivyPath = "trivy"
+	trivyPath, err := adapter.ResolveToolBinary(config, "adapter_paths.trivy", "trivy")
+	if err != nil {
+		return nil, err
 	}
 
 	args := []string{"image", "--format", "json", "--severity", "CRITICAL,HIGH,MEDIUM,LOW"}

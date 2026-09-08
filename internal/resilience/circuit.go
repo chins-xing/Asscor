@@ -101,8 +101,9 @@ func getBreaker(module string) *breaker {
 }
 
 // RecordFailure registers a failure for the given module. If the failure
-// count exceeds the threshold within the window, the circuit opens and
-// the error is signed and logged via the integrity module.
+// count exceeds the threshold within the window, the circuit opens (or
+// re-opens from half-open after a failed trial) and the error is signed and
+// logged via the integrity module.
 func RecordFailure(module string, err error) {
 	b := getBreaker(module)
 	b.mu.Lock()
@@ -112,7 +113,13 @@ func RecordFailure(module string, err error) {
 	b.lastFailure = time.Now()
 	b.successes = 0
 
-	if b.failures >= b.threshold && b.state == StateClosed {
+	// Open from closed (threshold exceeded) AND re-open from half-open (a
+	// failed trial must put the circuit straight back to open — otherwise a
+	// persistently failing module would get unlimited trial calls, defeating
+	// the breaker). state==StateClosed covers both because the first failure
+	// in a half-open trial increments to >= threshold while state is already
+	// HalfOpen — so the condition must accept HalfOpen too.
+	if b.failures >= b.threshold && (b.state == StateClosed || b.state == StateHalfOpen) {
 		b.state = StateOpen
 		b.openedAt = time.Now()
 		b.totalTrips++

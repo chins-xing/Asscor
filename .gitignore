@@ -74,6 +74,12 @@ lunwen/references/
 # local backup of the paper bundle created by the author (lunwen - 副本)
 lunwen?*/
 
+# Paper bundle (lunwen): local-only assets on main. Selective tracking
+# (whitelist) lives on the ASSCOR-Research-Core branch; main ignores the
+# whole bundle including the "lunwen - 副本" backup (lunwen*/ matches both).
+lunwen/
+lunwen*/
+
 #.kilo
 .kilo/
 

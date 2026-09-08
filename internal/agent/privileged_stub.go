@@ -26,7 +26,10 @@ func (p *PrivilegedAgent) Run() error {
 	return fmt.Errorf("privileged agent is only supported on linux")
 }
 
-// LookupUID is a no-op stub on non-Linux platforms.
-func LookupUID(name string) int {
-	return 0
+// LookupUID is a stub on non-Linux platforms (privileged agent unsupported).
+func LookupUID(name string) (int, error) {
+	if name == "" {
+		return 0, fmt.Errorf("empty user name")
+	}
+	return 0, fmt.Errorf("privileged agent is only supported on linux")
 }

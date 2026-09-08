@@ -28,9 +28,9 @@ func NewOpenSCAPAdapter() *OpenSCAPAdapter {
 }
 
 func (o *OpenSCAPAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	oscapPath := config["adapter_paths.openscap"]
-	if oscapPath == "" {
-		oscapPath = "oscap"
+	oscapPath, err := adapter.ResolveToolBinary(config, "adapter_paths.openscap", "oscap")
+	if err != nil {
+		return nil, err
 	}
 
 	profile := config["openscap.profile"]
@@ -149,7 +149,13 @@ type wazuhAgentInfo struct {
 }
 
 func (w *WazuhAgentAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	wazuhPath := config["adapter_paths.wazuh_agent"]
+	// Explicit adapter_paths entries are validated (absolute, regular file);
+	// when unset, fall back to the agent's fixed install path (never a PATH
+	// lookup — audit H-2).
+	wazuhPath, err := adapter.ResolveConfiguredTool(config, "adapter_paths.wazuh_agent")
+	if err != nil {
+		return nil, err
+	}
 	if wazuhPath == "" {
 		wazuhPath = "/var/ossec/bin/wazuh-control"
 	}
@@ -216,9 +222,9 @@ type suricataAlert struct {
 }
 
 func (s *SuricataAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	suricataPath := config["adapter_paths.suricata"]
-	if suricataPath == "" {
-		suricataPath = "suricata"
+	suricataPath, err := adapter.ResolveToolBinary(config, "adapter_paths.suricata", "suricata")
+	if err != nil {
+		return nil, err
 	}
 	eveFile := config["suricata.eve_json_path"]
 	if eveFile == "" {
@@ -390,9 +396,9 @@ func NewFalcoAdapter() *FalcoAdapter {
 }
 
 func (f *FalcoAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	falcoPath := config["adapter_paths.falco"]
-	if falcoPath == "" {
-		falcoPath = "falco"
+	falcoPath, err := adapter.ResolveToolBinary(config, "adapter_paths.falco", "falco")
+	if err != nil {
+		return nil, err
 	}
 
 	cmd := exec.CommandContext(ctx, falcoPath, "--version")
@@ -623,9 +629,9 @@ func NewClamAVAdapter() *ClamAVAdapter {
 }
 
 func (c *ClamAVAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	clamavPath := config["adapter_paths.clamav"]
-	if clamavPath == "" {
-		clamavPath = "clamscan"
+	clamavPath, err := adapter.ResolveToolBinary(config, "adapter_paths.clamav", "clamscan")
+	if err != nil {
+		return nil, err
 	}
 
 	cmd := exec.CommandContext(ctx, clamavPath, "--version")
