@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 安全审计 Critical | 3（C-1/C-2/C-3） | **3** ✅ | 0 |
 | 安全审计 High（main H-1..H-5 + ARC RC-H1/RC-H3） | 8 | **8** ✅ | 0 |
-| 安全审计 Medium/Low（main M/L + ARC RC-M/RC-L） | 23 | M-1/M-2/M-3/M-5/L-3/L-4/L-5/RC-L2 + RC-M1/RC-M2 + RC-H2(High 并入上) | **14** |
+| 安全审计 Medium/Low（main M/L + ARC RC-M/RC-L） | 23 | M-1..M-6/L-1/L-3/L-4/L-5/RC-L2 + RC-M1/RC-M2 + RC-H2(High 并入上) | **9** |
 | 耦合审计（COUPLING 2026-09-03） | 8（C1/C2/F1..F8） | C1/C2/F2/F3 | **F4/F5/F6/F7**（4） |
 | Secure Mode deferred minors | 12+ | 全部（23ca6cd..d9c23d9） | **0** ✅ |
 | 研究方向 | 2 | ①（可信度原生变量） | **②**（边缘因子向量图变量化） |
@@ -20,7 +20,7 @@
 
 **Secure Mode 与安全审计 Critical/High 已全闭合**；剩余集中于 Medium/Low、耦合 Minor、研究方向② 与工程债。
 
-> 更新记录：2026-09-08 推进批次（ARC f2edcb0 / main 8840dbf）关闭 L-3/L-4/L-5 + M-2 + M-3（Dockerfile HEALTHCHECK kill -0 1、去 wget、config.ini v0.2.3、runCommand 去冗余分支、HMAC/签名密钥目录注入 cert_dir）。
+> 更新记录：2026-09-08 推进批次1（ARC f2edcb0 / main 8840dbf）关闭 L-3/L-4/L-5 + M-2 + M-3；批次2（main c621df2 / ARC ea52d73）关闭 M-4/M-6/L-1(version)/L-6（hmac_key_file、config 范围校验+OT-015 笔误修正、sanitizeMode 权限净化、version 测试）。剩余 = 9 项 Medium/Low（M 系 0、L-2 长期、RC-M3/M4/M5/L1/L3/L4/L5）+ 耦合 F4-F7 + 方向②。
 
 ---
 
