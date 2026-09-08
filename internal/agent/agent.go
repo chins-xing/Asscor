@@ -67,6 +67,12 @@ type AgentConfig struct {
 	// ConfigPath is the agent config file path (the -config flag value). The
 	// securemode build tag uses it to locate agent.ini for encryption.
 	ConfigPath string
+	// SecureMaxNoUnlock bounds the consecutive unlock-less heartbeats a
+	// LOCKED agent tolerates before spec §8.2 self-recovery wipes its
+	// protected config (audit RC-M3). 0 = the built-in default (3). Operators
+	// who accept a longer kernel-outage window can raise it; the kernel's
+	// SecureModeNoSecret signal still short-circuits immediately regardless.
+	SecureMaxNoUnlock int
 	// PrivilegedSocket is the Unix socket path of the privileged agent
 	// process. When empty, root checks/commands are reported as skipped.
 	PrivilegedSocket string

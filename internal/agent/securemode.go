@@ -10,13 +10,23 @@ import (
 	"github.com/chins-xing/asscor/internal/securemode"
 )
 
-// secureModeMaxNoUnlock is the number of consecutive heartbeats without a
-// successful unlock that a locked agent tolerates before triggering the
-// spec §8.2 self-recovery (self-generate a new password, re-encrypt its .enc,
-// re-report). The kernel's SecureModeNoSecret signal short-circuits this wait
-// (review I-2) — the counter is the fallback for kernels that never signal
-// (e.g. the securemode build tag off).
-const secureModeMaxNoUnlock = 3
+// secureModeMaxNoUnlockDefault is the default number of consecutive
+// heartbeats without a successful unlock that a locked agent tolerates before
+// triggering the spec §8.2 self-recovery (self-generate a new password,
+// re-encrypt its .enc, re-report). The kernel's SecureModeNoSecret signal
+// short-circuits this wait (review I-2) — the counter is the fallback for
+// kernels that never signal (e.g. the securemode build tag off). Operators
+// may raise it via AgentConfig.SecureMaxNoUnlock (audit RC-M3) to tolerate
+// longer kernel-outage windows without wiping protected config.
+const secureModeMaxNoUnlockDefault = 3
+
+// secureModeMaxNoUnlock resolves the configured threshold (0 = default).
+func (a *Agent) secureModeMaxNoUnlock() int {
+	if a.cfg.SecureMaxNoUnlock > 0 {
+		return a.cfg.SecureMaxNoUnlock
+	}
+	return secureModeMaxNoUnlockDefault
+}
 
 // secureState is the agent's secure-mode runtime state. It is nil when the
 // securemode build tag is off (cmd/agent agentSecureVault returns nil), so
@@ -308,12 +318,24 @@ func (a *Agent) handleSecureModeResponse(resp *apiv1.HeartbeatResponse) error {
 		return nil
 	}
 	// No unlock issued this cycle.
+	maxMisses := a.secureModeMaxNoUnlock()
 	if resp.SecureModeNoSecret {
-		a.secure.noUnlockCount = secureModeMaxNoUnlock
+		// Kernel explicitly has no registration for this agent — jump
+		// straight to self-recovery (review I-2): waiting N cycles adds
+		// nothing once the kernel has told us the registry is gone.
+		a.secure.noUnlockCount = maxMisses
 	} else {
 		a.secure.noUnlockCount++
+		// Audit RC-M3: warn BEFORE the destructive recovery so an operator
+		// watching logs sees the locked agent nearing the wipe threshold —
+		// the recovery itself also warns, but a head-start message turns a
+		// silent "config vanished" into an actionable incident.
+		if a.secure.noUnlockCount >= maxMisses-1 && a.secure.noUnlockCount < maxMisses {
+			logger.WithComponent("agent").Warn("secure mode: locked agent has not received an unlock; self-recovery (protected config wipe) triggers on the next miss — verify the kernel can still issue the registered password",
+				"misses", a.secure.noUnlockCount, "threshold", maxMisses)
+		}
 	}
-	if a.secure.noUnlockCount >= secureModeMaxNoUnlock {
+	if a.secure.noUnlockCount >= maxMisses {
 		if err := a.secureSelfRecover(); err != nil {
 			// Keep the counter at the threshold: the next heartbeat retries
 			// the recovery immediately instead of re-waiting N cycles.
@@ -357,7 +379,7 @@ func (a *Agent) secureSelfRecover() error {
 	a.secure.locked = false
 	a.secure.reported = false
 	a.secure.noUnlockCount = 0
-	logger.WithComponent("agent").Warn("secure mode: kernel did not provide the unlock password — self-recovered with a fresh ephemeral password; previous protected settings were lost (spec §8.2)")
+	logger.WithComponent("agent").Warn("secure mode: kernel did not provide the unlock password — self-recovered with a fresh ephemeral password; previous protected settings (user checks / hmac_key / deltas) were lost (spec §8.2) — operator must re-issue them via the kernel after re-registration")
 	return nil
 }
 

@@ -290,6 +290,10 @@ func loadConfigFile(path string, cfg *agent.AgentConfig) error {
 				}
 			case "hmac_key_file":
 				cfg.HMACKeyFile = val
+			case "secure_max_no_unlock":
+				if n := atoi(val, 0); n > 0 {
+					cfg.SecureMaxNoUnlock = n
+				}
 			case "priv_socket":
 				cfg.PrivilegedSocket = val
 			case "log_format":

@@ -646,12 +646,12 @@ func TestHandleSecureModeResponseCountsMissesUntilThreshold(t *testing.T) {
 	if err := a.InitSecureMode(v); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < secureModeMaxNoUnlock-1; i++ {
+	for i := 0; i < secureModeMaxNoUnlockDefault-1; i++ {
 		if err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{}); err != nil {
 			t.Fatal(err)
 		}
 		if !a.secure.locked {
-			t.Fatalf("agent must stay locked after %d misses (max %d)", i+1, secureModeMaxNoUnlock)
+			t.Fatalf("agent must stay locked after %d misses (max %d)", i+1, secureModeMaxNoUnlockDefault)
 		}
 	}
 	// The Nth miss triggers recovery.
@@ -660,6 +660,51 @@ func TestHandleSecureModeResponseCountsMissesUntilThreshold(t *testing.T) {
 	}
 	if a.secure.locked {
 		t.Fatal("agent must self-recover after N consecutive unlock-less heartbeats")
+	}
+}
+
+// TestSecureMaxNoUnlockConfigurable (audit RC-M3): raising the threshold via
+// AgentConfig lets an operator tolerate a longer kernel-outage window before
+// the destructive spec §8.2 self-recovery wipes protected config.
+func TestSecureMaxNoUnlockConfigurable(t *testing.T) {
+	v, _ := newSecureTestVault(t)
+	if err := v.EncryptFile("lost-pw"); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	cfg.SecureMaxNoUnlock = 5
+	a := NewAgent(cfg)
+	if err := a.InitSecureMode(v); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.secureModeMaxNoUnlock(); got != 5 {
+		t.Fatalf("secureModeMaxNoUnlock() = %d, want 5", got)
+	}
+	// 4 misses keep it locked under the raised threshold (default 3 would
+	// already have recovered by now).
+	for i := 0; i < 4; i++ {
+		if err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{}); err != nil {
+			t.Fatal(err)
+		}
+		if !a.secure.locked {
+			t.Fatalf("agent must stay locked after %d misses (configured max 5)", i+1)
+		}
+	}
+	// The 5th miss recovers.
+	if err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{}); err != nil {
+		t.Fatal(err)
+	}
+	if a.secure.locked {
+		t.Fatal("agent must self-recover after the configured 5 misses")
+	}
+}
+
+// TestSecureMaxNoUnlockZeroUsesDefault: a zero/unspecified threshold falls
+// back to the built-in default.
+func TestSecureMaxNoUnlockZeroUsesDefault(t *testing.T) {
+	a := NewAgent(DefaultConfig()) // SecureMaxNoUnlock = 0
+	if got := a.secureModeMaxNoUnlock(); got != secureModeMaxNoUnlockDefault {
+		t.Fatalf("zero threshold must fall back to default %d, got %d", secureModeMaxNoUnlockDefault, got)
 	}
 }
 

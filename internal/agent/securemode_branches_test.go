@@ -126,7 +126,7 @@ func TestHandleSecureModeResponseSelfRecoverFailure(t *testing.T) {
 		ConfigPath:      filepath.Join(t.TempDir(), "missing.ini"),
 		BootstrapHeader: "[bootstrap]",
 	}
-	a := &Agent{secure: &secureState{vault: v, locked: true, noUnlockCount: secureModeMaxNoUnlock - 1}}
+	a := &Agent{secure: &secureState{vault: v, locked: true, noUnlockCount: secureModeMaxNoUnlockDefault - 1}}
 
 	err := a.handleSecureModeResponse(&apiv1.HeartbeatResponse{SecureModeNoSecret: true})
 	if err == nil {
@@ -135,7 +135,7 @@ func TestHandleSecureModeResponseSelfRecoverFailure(t *testing.T) {
 	if !strings.Contains(err.Error(), "self-recovery failed") {
 		t.Errorf("error = %v, want self-recovery failure text", err)
 	}
-	if a.secure.noUnlockCount < secureModeMaxNoUnlock {
+	if a.secure.noUnlockCount < secureModeMaxNoUnlockDefault {
 		t.Errorf("counter must stay at/above the threshold, got %d", a.secure.noUnlockCount)
 	}
 	if !a.secure.locked {
