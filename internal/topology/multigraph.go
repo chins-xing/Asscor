@@ -48,11 +48,11 @@ type NodeType string
 
 const (
 	// Network 层
-	NodeHost      NodeType = "host"
-	NodeService   NodeType = "service"
-	NodeSubnet    NodeType = "subnet"
-	NodeGateway   NodeType = "gateway"
-	NodeInternet  NodeType = "internet"
+	NodeHost     NodeType = "host"
+	NodeService  NodeType = "service"
+	NodeSubnet   NodeType = "subnet"
+	NodeGateway  NodeType = "gateway"
+	NodeInternet NodeType = "internet"
 	// Dependency 层
 	NodeDependency NodeType = "dependency"
 	// Identity 层
@@ -67,10 +67,10 @@ const (
 	NodeCampaign     NodeType = "campaign"
 	NodeInfra        NodeType = "infrastructure"
 	// Capability 层
-	NodeTool        NodeType = "tool"
-	NodeCode        NodeType = "code"
-	NodeTTP         NodeType = "ttp"
-	NodeExploit     NodeType = "exploit"
+	NodeTool         NodeType = "tool"
+	NodeCode         NodeType = "code"
+	NodeTTP          NodeType = "ttp"
+	NodeExploit      NodeType = "exploit"
 	NodeAICapability NodeType = "ai_capability"
 	// Evidence 层
 	NodeObservation  NodeType = "observation"

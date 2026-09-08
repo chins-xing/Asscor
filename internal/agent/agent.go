@@ -55,11 +55,11 @@ type AgentConfig struct {
 	// or IP MUST set this so the SNI check matches instead of failing and
 	// tempting operators to enable --tls-skip-verify (audit H-4).
 	TLSServerName string
-	CertDir        string
-	HMACKey          string
-	LogFormat        string
-	LogLevel         string
-	LogOutput        string
+	CertDir       string
+	HMACKey       string
+	LogFormat     string
+	LogLevel      string
+	LogOutput     string
 	// ConfigPath is the agent config file path (the -config flag value). The
 	// securemode build tag uses it to locate agent.ini for encryption.
 	ConfigPath string

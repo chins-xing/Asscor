@@ -47,11 +47,11 @@ var (
 )
 
 var (
-	DefaultConfidencePolicy      = ssam.DefaultConfidencePolicy
-	NormalizeConfidence          = ssam.NormalizeConfidence
-	ComputeDomainScoresBayes     = ssam.ComputeDomainScoresBayes
-	FinalBayesStats              = ssam.FinalBayesStats
-	AggregateNodeConfidence      = ssam.AggregateNodeConfidence
+	DefaultConfidencePolicy  = ssam.DefaultConfidencePolicy
+	NormalizeConfidence      = ssam.NormalizeConfidence
+	ComputeDomainScoresBayes = ssam.ComputeDomainScoresBayes
+	FinalBayesStats          = ssam.FinalBayesStats
+	AggregateNodeConfidence  = ssam.AggregateNodeConfidence
 )
 
 var (

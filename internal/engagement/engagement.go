@@ -29,11 +29,11 @@ import (
 type DecoyType string
 
 const (
-	DecoyFakeSSH       DecoyType = "fake_ssh"        // 横向移动诱饵
+	DecoyFakeSSH        DecoyType = "fake_ssh"        // 横向移动诱饵
 	DecoyFakeCredential DecoyType = "fake_credential" // 凭据窃取诱饵
-	DecoyFakeDocument  DecoyType = "fake_document"   // 数据窃取诱饵
-	DecoyFakeWeb       DecoyType = "fake_web"        // Web 攻击诱饵
-	DecoyScanPort      DecoyType = "scan_port"       // 扫描探测诱饵
+	DecoyFakeDocument   DecoyType = "fake_document"   // 数据窃取诱饵
+	DecoyFakeWeb        DecoyType = "fake_web"        // Web 攻击诱饵
+	DecoyScanPort       DecoyType = "scan_port"       // 扫描探测诱饵
 )
 
 // Intervention 是一次引导干预（§5.6 Deception Object = Sensor + Control
@@ -63,11 +63,11 @@ func DefaultParams() PlannerParams {
 // ScoredIntervention 是排序后的干预（含效用分解）。
 type ScoredIntervention struct {
 	Intervention
-	Utility  float64
-	IG       float64 // Information Gain
-	DP       float64 // Detection Probability
-	AV       float64 // Attribution Value
-	Risk     float64 // 暴露风险
+	Utility float64
+	IG      float64 // Information Gain
+	DP      float64 // Detection Probability
+	AV      float64 // Attribution Value
+	Risk    float64 // 暴露风险
 }
 
 // Planner 选择最大化情报获取的干预。
@@ -132,20 +132,20 @@ func (p *Planner) Select(dist predictor.ActionDistribution, target predictor.Tar
 
 // decoyDetection 是各诱饵的固有检测概率 (DP)。
 var decoyDetection = map[DecoyType]float64{
-	DecoyFakeSSH:       0.9, // 假 SSH 交互链完整, 检测率高
+	DecoyFakeSSH:        0.9, // 假 SSH 交互链完整, 检测率高
 	DecoyFakeCredential: 0.8,
-	DecoyFakeDocument:  0.75,
-	DecoyFakeWeb:       0.7,
-	DecoyScanPort:      0.85,
+	DecoyFakeDocument:   0.75,
+	DecoyFakeWeb:        0.7,
+	DecoyScanPort:       0.85,
 }
 
 // decoyAttribution 是各诱饵的归因价值 (AV, [0,1])。
 var decoyAttribution = map[DecoyType]float64{
-	DecoyFakeSSH:       0.6, // 命令交互捕获归因
-	DecoyFakeCredential: 0.9, // 账号/凭据尝试 → 高归因
-	DecoyFakeDocument:  0.85, // 数据窃取意图 → 高归因
-	DecoyFakeWeb:       0.5,
-	DecoyScanPort:      0.3, // 扫描仅探测 → 低归因
+	DecoyFakeSSH:        0.6,  // 命令交互捕获归因
+	DecoyFakeCredential: 0.9,  // 账号/凭据尝试 → 高归因
+	DecoyFakeDocument:   0.85, // 数据窃取意图 → 高归因
+	DecoyFakeWeb:        0.5,
+	DecoyScanPort:       0.3, // 扫描仅探测 → 低归因
 }
 
 // DeceptionRecord 是诱饵交互链记录（§5.6 诱饵传感器化：连接→尝试账号→

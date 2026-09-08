@@ -400,7 +400,8 @@ func (m *Module) IsCertRevoked(fingerprint string) bool {
 // host currently bound to it, so the host can re-register with a freshly
 // issued certificate. The revocation is persisted and enforced at every
 // identity checkpoint (Register / Heartbeat / VerifyAgentCert).
-func (m *Module) RevokeCert(fingerprint, reason string) error {	if fingerprint == "" {
+func (m *Module) RevokeCert(fingerprint, reason string) error {
+	if fingerprint == "" {
 		return fmt.Errorf("cannot revoke an empty fingerprint (mTLS disabled)")
 	}
 	m.mu.Lock()

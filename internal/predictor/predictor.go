@@ -24,12 +24,12 @@ import (
 type Action string
 
 const (
-	ActionRecon      Action = "recon"       // 侦察
-	ActionCredential Action = "credential"  // 凭据获取
-	ActionLateral    Action = "lateral"     // 横向移动
-	ActionDataTheft  Action = "data_theft"  // 数据窃取
-	ActionWebAttack  Action = "web_attack"  // Web 攻击
-	ActionMaintain   Action = "maintain"    // 状态维持/潜伏
+	ActionRecon      Action = "recon"      // 侦察
+	ActionCredential Action = "credential" // 凭据获取
+	ActionLateral    Action = "lateral"    // 横向移动
+	ActionDataTheft  Action = "data_theft" // 数据窃取
+	ActionWebAttack  Action = "web_attack" // Web 攻击
+	ActionMaintain   Action = "maintain"   // 状态维持/潜伏
 )
 
 // AllActions returns the candidate action space (stable order).
@@ -56,7 +56,7 @@ type ActionDistribution struct {
 
 // Engine 是预测引擎（规则 + 权重 + softmax）。
 type Engine struct {
-	Temperature  float64           // softmax 温度 (低=尖锐, 高=平滑)
+	Temperature  float64            // softmax 温度 (低=尖锐, 高=平滑)
 	DangerWeight map[Action]float64 // 危险度权重 (MostDangerous)
 }
 

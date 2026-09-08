@@ -133,7 +133,7 @@ func TestMultiRoundConvergence(t *testing.T) {
 
 	var lastRes CycleResult
 	evidence := []attackerstate.Evidence{
-		mkObs("T1595", "", "host-a", "", 0.6),     // 轮1: 侦察
+		mkObs("T1595", "", "host-a", "", 0.6),         // 轮1: 侦察
 		mkObs("T1110", "", "host-a", "success", 0.85), // 轮2: 凭据攻击成功
 		mkObs("T1003", "", "host-a", "success", 0.9),  // 轮3: 凭据转储
 	}

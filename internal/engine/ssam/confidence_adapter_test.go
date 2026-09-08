@@ -35,10 +35,10 @@ func confPolicyCfg() *config.Config {
 
 func assessmentWithChecks(checks []model.CheckResult) *model.AssessmentResult {
 	return &model.AssessmentResult{
-		HostID:    "h1",
-		Threshold: 80,
-		Checks:    checks,
-		SPCScore:  1.0,
+		HostID:      "h1",
+		Threshold:   80,
+		Checks:      checks,
+		SPCScore:    1.0,
 		ThreatCoeff: 1.0,
 	}
 }

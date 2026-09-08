@@ -24,9 +24,9 @@ import (
 // only in process memory while in run mode"; these measures make
 // reading/rewriting that plaintext harder and more detectable, not impossible.
 type MemoryGuard struct {
-	mu       sync.RWMutex
-	data     []byte // hardened view (len == plaintext len)
-	block    []byte // backing allocation for release (mmap region, or heap copy)
+	mu    sync.RWMutex
+	data  []byte // hardened view (len == plaintext len)
+	block []byte // backing allocation for release (mmap region, or heap copy)
 	// baseline is the SHA-256 of the protected plaintext, held in the SAME
 	// hardened storage class as data (audit RC-M2): on Linux it lives in a
 	// separate read-only mmap region, so mutating it to defeat IntegrityOK

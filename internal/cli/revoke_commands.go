@@ -12,9 +12,9 @@ import (
 // restore a mistakenly revoked one, and reset all host↔certificate bindings
 // after a certificate-fleet rebuild.
 var certCmdInfo = CommandInfo{
-	Name:        "cert",
-	Short:       "Manage certificate revocations and identity bindings",
-	Description: "Revoke compromised certificate fingerprints, list revocations, restore mistakenly revoked certificates, and reset all host↔certificate bindings after a CA/certificate rebuild (audit I-03)",
+	Name:         "cert",
+	Short:        "Manage certificate revocations and identity bindings",
+	Description:  "Revoke compromised certificate fingerprints, list revocations, restore mistakenly revoked certificates, and reset all host↔certificate bindings after a CA/certificate rebuild (audit I-03)",
 	Usage:        "cert <revoke|unrevoke|revocations|reset> [fingerprint] [--reason ...]",
 	Category:     CategorySystem,
 	RequiredPerm: PermRead,

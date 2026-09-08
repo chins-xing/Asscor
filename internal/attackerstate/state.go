@@ -19,11 +19,11 @@ import (
 type Intent string
 
 const (
-	IntentRecon      Intent = "recon"       // 侦察/信息收集
-	IntentCredential Intent = "credential"  // 凭据获取
-	IntentLateral    Intent = "lateral"     // 横向移动
-	IntentDataTheft  Intent = "data_theft"  // 数据窃取
-	IntentWebAttack  Intent = "web_attack"  // Web 攻击
+	IntentRecon      Intent = "recon"      // 侦察/信息收集
+	IntentCredential Intent = "credential" // 凭据获取
+	IntentLateral    Intent = "lateral"    // 横向移动
+	IntentDataTheft  Intent = "data_theft" // 数据窃取
+	IntentWebAttack  Intent = "web_attack" // Web 攻击
 	IntentUnknown    Intent = "unknown"
 )
 
@@ -47,8 +47,8 @@ type AttackerState struct {
 // Evidence 是状态更新的输入（白皮书 §5.2 简化：来源/时间/意图/TTP/目标/
 // 置信度/结果）。
 type Evidence struct {
-	Source     string  // 来源（日志/诱饵/告警/CTI...）
-	SourceType string  // source type
+	Source     string // 来源（日志/诱饵/告警/CTI...）
+	SourceType string // source type
 	At         time.Time
 	Actor      string  // 归属攻击者
 	Intent     Intent  // 观测意图（可空 → 由 TTP 推断）

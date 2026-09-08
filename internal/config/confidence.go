@@ -55,15 +55,15 @@ type ConfidencePatternRule struct {
 // DefaultConfidenceConfig returns the disabled (legacy) configuration.
 func DefaultConfidenceConfig() ConfidenceConfig {
 	return ConfidenceConfig{
-		Enabled:       false,
-		Algorithm:     "weighted_evidence",
+		Enabled:            false,
+		Algorithm:          "weighted_evidence",
 		AcceptByLowerBound: false,
-		Default:       1.0,
-		Floor:         0.05,
-		PriorStrength: 2.0,
-		ByCheckID:     map[string]float64{},
-		BySource:      map[string]float64{},
-		ByDomain:      map[string]float64{},
+		Default:            1.0,
+		Floor:              0.05,
+		PriorStrength:      2.0,
+		ByCheckID:          map[string]float64{},
+		BySource:           map[string]float64{},
+		ByDomain:           map[string]float64{},
 	}
 }
 

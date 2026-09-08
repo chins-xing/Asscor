@@ -52,161 +52,161 @@ type decoyHit struct {
 }
 
 type RoundRecord struct {
-	Round       int                      `json:"round"`
-	Timestamp   time.Time                `json:"timestamp"`
-	Mode        string                   `json:"mode"`
-	Evidence    []attackerstate.Evidence `json:"evidence"`
-	Intent      string                   `json:"intent"`
-	Exp         float64                  `json:"experience"`
-	Knowledge   float64                  `json:"target_knowledge"`
-	Dist        map[string]float64       `json:"distribution"`
-	Sharpness   float64                  `json:"sharpness"`
-	Strategy    string                   `json:"strategy"`
-	Intervents  []engagement.Intervention `json:"interventions"`
-	DeployedPorts []int                  `json:"deployed_ports"`
-	DecoyHits   []decoyHit               `json:"decoy_hits"`
-	GroundTruth string                   `json:"ground_truth"`
-	LatencyMs   int64                    `json:"latency_ms"`
+	Round         int                       `json:"round"`
+	Timestamp     time.Time                 `json:"timestamp"`
+	Mode          string                    `json:"mode"`
+	Evidence      []attackerstate.Evidence  `json:"evidence"`
+	Intent        string                    `json:"intent"`
+	Exp           float64                   `json:"experience"`
+	Knowledge     float64                   `json:"target_knowledge"`
+	Dist          map[string]float64        `json:"distribution"`
+	Sharpness     float64                   `json:"sharpness"`
+	Strategy      string                    `json:"strategy"`
+	Intervents    []engagement.Intervention `json:"interventions"`
+	DeployedPorts []int                     `json:"deployed_ports"`
+	DecoyHits     []decoyHit                `json:"decoy_hits"`
+	GroundTruth   string                    `json:"ground_truth"`
+	LatencyMs     int64                     `json:"latency_ms"`
 }
 
 type ttpStep struct {
-	Name   string
-	Intent string
-	TTP    string
-	Target string // target container (decoy host), e.g. asc-asscor-host2
+	Name     string
+	Intent   string
+	TTP      string
+	Target   string // target container (decoy host), e.g. asc-asscor-host2
 	Attacker string // attacker container, e.g. asc-asscor-host1
 	TargetIP string // target IP as seen from attacker
-	Cmd    string // attacker command; %DECOYPORT% replaced per decoy port
-	Ports  []int
+	Cmd      string // attacker command; %DECOYPORT% replaced per decoy port
+	Ports    []int
 }
 
 var experimentMatrix = map[string][]ttpStep{
 	"E1": {
 		{Name: "recon-port-scan", Intent: "recon", TTP: "T1046",
 			Target: "asc-asscor-host13", Attacker: "asc-asscor-host1", TargetIP: "10.10.13.10",
-			Cmd: "for p in %DECOYPORT%; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/$p\" 2>/dev/null; done; echo SCAN-DONE",
+			Cmd:   "for p in %DECOYPORT%; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/$p\" 2>/dev/null; done; echo SCAN-DONE",
 			Ports: []int{22221, 22222, 22223, 22280, 22292, 26379}},
 		{Name: "recon-active-scan", Intent: "recon", TTP: "T1595",
 			Target: "asc-asscor-host14", Attacker: "asc-asscor-host1", TargetIP: "10.10.14.10",
-			Cmd: "for p in %DECOYPORT%; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/$p\" 2>/dev/null; done; echo SCAN2-DONE",
+			Cmd:   "for p in %DECOYPORT%; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/$p\" 2>/dev/null; done; echo SCAN2-DONE",
 			Ports: []int{22222, 22280, 23306, 25432, 227017}},
 	},
 	"E2": {
 		{Name: "cred-bruteforce", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host2", Attacker: "asc-asscor-host1", TargetIP: "10.10.2.10",
-			Cmd: "for i in 1 2 3 4 5; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo BRUTE-DONE",
+			Cmd:   "for i in 1 2 3 4 5; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo BRUTE-DONE",
 			Ports: []int{22222}},
 		{Name: "cred-dump", Intent: "credential", TTP: "T1003",
 			Target: "asc-asscor-host2", Attacker: "asc-asscor-host1", TargetIP: "10.10.2.10",
-			Cmd: "echo 'root:x:0:0:root:/root:/bin/bash' >> /tmp/fake-passwd; head -1 /tmp/fake-passwd; echo DUMP-DONE",
+			Cmd:   "echo 'root:x:0:0:root:/root:/bin/bash' >> /tmp/fake-passwd; head -1 /tmp/fake-passwd; echo DUMP-DONE",
 			Ports: nil},
 	},
 	"E3": {
 		{Name: "lateral-ssh", Intent: "lateral", TTP: "T1021",
 			Target: "asc-asscor-host15", Attacker: "asc-asscor-host1", TargetIP: "10.10.15.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo LAT-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo LAT-DONE",
 			Ports: []int{22222}},
 		{Name: "lateral-transfer", Intent: "lateral", TTP: "T1570",
 			Target: "asc-asscor-host16", Attacker: "asc-asscor-host1", TargetIP: "10.10.16.10",
-			Cmd: "echo 'payload' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/23389\" 2>/dev/null; echo XFER-DONE",
+			Cmd:   "echo 'payload' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/23389\" 2>/dev/null; echo XFER-DONE",
 			Ports: []int{23389}},
 	},
 	"E4": {
 		{Name: "exfil-web", Intent: "data_theft", TTP: "T1567",
 			Target: "asc-asscor-host17", Attacker: "asc-asscor-host1", TargetIP: "10.10.17.10",
-			Cmd: "echo 'secret' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/24443\" 2>/dev/null; echo EXFIL-DONE",
+			Cmd:   "echo 'secret' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/24443\" 2>/dev/null; echo EXFIL-DONE",
 			Ports: []int{24443}},
 		{Name: "exfil-alt", Intent: "data_theft", TTP: "T1048",
 			Target: "asc-asscor-host18", Attacker: "asc-asscor-host1", TargetIP: "10.10.18.10",
-			Cmd: "echo 'data' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/28080\" 2>/dev/null; echo EXFIL2-DONE",
+			Cmd:   "echo 'data' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/28080\" 2>/dev/null; echo EXFIL2-DONE",
 			Ports: []int{28080}},
 	},
 	"E5": {
 		{Name: "recon-first", Intent: "recon", TTP: "T1595",
 			Target: "asc-asscor-host5", Attacker: "asc-asscor-host1", TargetIP: "10.10.5.10",
-			Cmd: "for p in %DECOYPORT%; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/$p\" 2>/dev/null; done; echo R-DONE",
+			Cmd:   "for p in %DECOYPORT%; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/$p\" 2>/dev/null; done; echo R-DONE",
 			Ports: []int{22221, 22222}},
 		{Name: "cred-mid", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host5", Attacker: "asc-asscor-host1", TargetIP: "10.10.5.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 		{Name: "exfil-last", Intent: "data_theft", TTP: "T1048",
 			Target: "asc-asscor-host5", Attacker: "asc-asscor-host1", TargetIP: "10.10.5.10",
-			Cmd: "echo 'data' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/28080\" 2>/dev/null; echo X-DONE",
+			Cmd:   "echo 'data' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/28080\" 2>/dev/null; echo X-DONE",
 			Ports: []int{28080}},
 	},
 	"E6": {
 		{Name: "unknown-ttp", Intent: "", TTP: "T9999",
 			Target: "asc-asscor-host6", Attacker: "asc-asscor-host1", TargetIP: "10.10.6.10",
-			Cmd: "echo 'unknown-exec'; echo UNKNOWN-DONE",
+			Cmd:   "echo 'unknown-exec'; echo UNKNOWN-DONE",
 			Ports: nil},
 	},
 	"E7": {
 		{Name: "conv-1", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host7", Attacker: "asc-asscor-host1", TargetIP: "10.10.7.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 		{Name: "conv-2", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host7", Attacker: "asc-asscor-host1", TargetIP: "10.10.7.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 		{Name: "conv-3", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host7", Attacker: "asc-asscor-host1", TargetIP: "10.10.7.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 		{Name: "conv-4", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host7", Attacker: "asc-asscor-host1", TargetIP: "10.10.7.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 		{Name: "conv-5", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host7", Attacker: "asc-asscor-host1", TargetIP: "10.10.7.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 		{Name: "conv-6", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host7", Attacker: "asc-asscor-host1", TargetIP: "10.10.7.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 		{Name: "conv-7", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host7", Attacker: "asc-asscor-host1", TargetIP: "10.10.7.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 		{Name: "conv-8", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host7", Attacker: "asc-asscor-host1", TargetIP: "10.10.7.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 		{Name: "conv-9", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host7", Attacker: "asc-asscor-host1", TargetIP: "10.10.7.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 		{Name: "conv-10", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host7", Attacker: "asc-asscor-host1", TargetIP: "10.10.7.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo C-DONE",
 			Ports: []int{22222}},
 	},
 	"E9": {
 		{Name: "multi-target-recon", Intent: "recon", TTP: "T1046",
 			Target: "asc-asscor-host13", Attacker: "asc-asscor-host1", TargetIP: "10.10.13.10",
-			Cmd: "for p in %DECOYPORT%; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/$p\" 2>/dev/null; done; echo M1-DONE",
+			Cmd:   "for p in %DECOYPORT%; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/$p\" 2>/dev/null; done; echo M1-DONE",
 			Ports: []int{22221, 22222}},
 		{Name: "multi-target-cred", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host14", Attacker: "asc-asscor-host1", TargetIP: "10.10.14.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo M2-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo M2-DONE",
 			Ports: []int{22222}},
 		{Name: "multi-target-lateral", Intent: "lateral", TTP: "T1021",
 			Target: "asc-asscor-host15", Attacker: "asc-asscor-host1", TargetIP: "10.10.15.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo M3-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo M3-DONE",
 			Ports: []int{22222}},
 		{Name: "multi-target-exfil", Intent: "data_theft", TTP: "T1567",
 			Target: "asc-asscor-host17", Attacker: "asc-asscor-host1", TargetIP: "10.10.17.10",
-			Cmd: "echo 's' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/24443\" 2>/dev/null; echo M4-DONE",
+			Cmd:   "echo 's' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/24443\" 2>/dev/null; echo M4-DONE",
 			Ports: []int{24443}},
 		{Name: "multi-target-web", Intent: "web_attack", TTP: "T1190",
 			Target: "asc-asscor-host18", Attacker: "asc-asscor-host1", TargetIP: "10.10.18.10",
-			Cmd: "echo 'GET /' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/28080\" 2>/dev/null; echo M5-DONE",
+			Cmd:   "echo 'GET /' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/28080\" 2>/dev/null; echo M5-DONE",
 			Ports: []int{28080}},
 		{Name: "multi-target-exfil2", Intent: "data_theft", TTP: "T1048",
 			Target: "asc-asscor-host16", Attacker: "asc-asscor-host1", TargetIP: "10.10.16.10",
-			Cmd: "echo 'd' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/28080\" 2>/dev/null; echo M6-DONE",
+			Cmd:   "echo 'd' | timeout 2 bash -c \"cat > /dev/tcp/%TARGETIP%/28080\" 2>/dev/null; echo M6-DONE",
 			Ports: []int{28080}},
 	},
 	// Comparison matrix: same 3-round credential campaign on three identical
@@ -217,15 +217,15 @@ var experimentMatrix = map[string][]ttpStep{
 	"CR": {
 		{Name: "cmp-cred-1", Intent: "credential", TTP: "T1110",
 			Target: "asc-asscor-host9", Attacker: "asc-asscor-host1", TargetIP: "10.10.9.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo CR1-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo CR1-DONE",
 			Ports: []int{22222}},
 		{Name: "cmp-cred-2", Intent: "credential", TTP: "T1003",
 			Target: "asc-asscor-host9", Attacker: "asc-asscor-host1", TargetIP: "10.10.9.10",
-			Cmd: "echo 'root:x:0:0:root:/root:/bin/bash' >> /tmp/fake-passwd; head -1 /tmp/fake-passwd; echo CR2-DONE",
+			Cmd:   "echo 'root:x:0:0:root:/root:/bin/bash' >> /tmp/fake-passwd; head -1 /tmp/fake-passwd; echo CR2-DONE",
 			Ports: nil},
 		{Name: "cmp-cred-3", Intent: "credential", TTP: "T1078",
 			Target: "asc-asscor-host9", Attacker: "asc-asscor-host1", TargetIP: "10.10.9.10",
-			Cmd: "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo CR3-DONE",
+			Cmd:   "for i in 1 2 3; do timeout 1 bash -c \"echo > /dev/tcp/%TARGETIP%/22222\" 2>/dev/null; done; echo CR3-DONE",
 			Ports: []int{22222}},
 	},
 }
@@ -411,13 +411,13 @@ func main() {
 		}
 		rec := RoundRecord{
 			Round: round, Timestamp: time.Now(),
-			Mode: mode,
+			Mode:     mode,
 			Evidence: evs, Intent: string(res.State.Intent),
 			Exp: res.State.Experience, Knowledge: res.State.TargetKnowledge,
 			Dist: distStr, Sharpness: res.Sharpness, Strategy: string(res.Strategy),
 			DeployedPorts: deployedPorts,
-			GroundTruth: s.Intent,
-			LatencyMs:   time.Since(start).Milliseconds(),
+			GroundTruth:   s.Intent,
+			LatencyMs:     time.Since(start).Milliseconds(),
 		}
 		for _, inv := range res.Interventions {
 			rec.Intervents = append(rec.Intervents, inv.Intervention)
