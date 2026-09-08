@@ -161,7 +161,10 @@ func TestWorkerPoolMetricsResetRoundTrip(t *testing.T) {
 	p.ResetMetrics()
 	m2 := p.Metrics()
 	if m2.totalFailed != 0 || m2.totalCompleted != 0 || m2.totalTimeout != 0 {
-		t.Errorf("post-reset counters not zero: %+v", m2)
+		// Pass &m2 (not m2): WorkerPoolMetrics contains a sync.Mutex, and
+		// copying it into t.Errorf's interface argument trips go vet's
+		// copylocks check (audit M-5).
+		t.Errorf("post-reset counters not zero: %+v", &m2)
 	}
 
 	// Pool still functional after reset.
