@@ -4,8 +4,10 @@ import (
 	"crypto/hmac"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"unicode"
 )
 
 // PasswordVerifier stores an argon2id hash of the secure-mode password for
@@ -18,6 +20,53 @@ type PasswordVerifier struct {
 // PasswordVerifierPath returns the verifier path under dataDir.
 func PasswordVerifierPath(dataDir string) string {
 	return filepath.Join(dataDir, ".asscor-pw")
+}
+
+// minPasswordLen and minPasswordClasses implement the audit RC-H1 strength
+// gate for NEWLY SET operator passwords (mode enter / mode set-password). The
+// gate deliberately lives at the "operator chooses a fresh secret" boundary —
+// NOT inside Set — because Set is also the rollback/exit path that must accept
+// whatever password the operator already set in the past (fail-closed: never
+// strand a run-mode installation behind a verifier it can no longer rewrite).
+const (
+	minPasswordLen      = 12
+	minPasswordClasses  = 3 // lower, upper, digit, symbol
+	passwordClassGroups = 4
+)
+
+// ValidatePasswordStrength rejects operator-chosen secure-mode passwords that
+// are too short or too uniform to resist brute force under argon2id with the
+// default (modest) KDF cost (audit RC-H1). It returns nil for acceptable
+// passwords. It must NOT be applied to the self-generated ephemeral agent
+// secret (64 hex chars — always strong) nor to the exit/rollback rewrite path.
+func ValidatePasswordStrength(password string) error {
+	if len(password) < minPasswordLen {
+		return fmt.Errorf("secure-mode password too short: need at least %d characters, got %d", minPasswordLen, len(password))
+	}
+	classes := 0
+	var hasLower, hasUpper, hasDigit, hasSymbol bool
+	for _, r := range password {
+		switch {
+		case unicode.IsLower(r):
+			hasLower = true
+		case unicode.IsUpper(r):
+			hasUpper = true
+		case unicode.IsDigit(r):
+			hasDigit = true
+		default:
+			hasSymbol = true
+		}
+	}
+	for _, b := range []bool{hasLower, hasUpper, hasDigit, hasSymbol} {
+		if b {
+			classes++
+		}
+	}
+	if classes < minPasswordClasses {
+		return fmt.Errorf("secure-mode password too weak: need characters from at least %d of %d classes (lower, upper, digit, symbol)",
+			minPasswordClasses, passwordClassGroups)
+	}
+	return nil
 }
 
 // Exists reports whether the verifier file is present.

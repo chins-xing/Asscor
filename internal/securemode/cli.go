@@ -100,6 +100,11 @@ func (m *ModeCLI) enter(params map[string]string) (string, error) {
 	if password == "" {
 		return "", fmt.Errorf("mode enter: --password is required to establish the run-mode secret")
 	}
+	// Audit RC-H1: the operator-chosen run-mode secret must clear the
+	// strength gate before it protects any configuration.
+	if err := ValidatePasswordStrength(password); err != nil {
+		return "", fmt.Errorf("mode enter: %w", err)
+	}
 	if err := m.Ctrl.EnterRun(password); err != nil {
 		return "", err
 	}
@@ -149,6 +154,11 @@ func (m *ModeCLI) setPassword(params map[string]string) (string, error) {
 	newPw := params["new"]
 	if oldPw == "" || newPw == "" {
 		return "", fmt.Errorf("mode set-password: --old and --new are required")
+	}
+	// Audit RC-H1: a rotated run-mode secret is a fresh operator choice and
+	// must clear the strength gate too.
+	if err := ValidatePasswordStrength(newPw); err != nil {
+		return "", fmt.Errorf("mode set-password: %w", err)
 	}
 	if err := m.Ctrl.SetPassword(oldPw, newPw); err != nil {
 		return "", err

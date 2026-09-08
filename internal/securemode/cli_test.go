@@ -177,10 +177,15 @@ func TestModeCLIExitOK(t *testing.T) {
 
 func TestModeCLISetPassword(t *testing.T) {
 	m := newModeCLI(t)
-	if _, err := m.HandleMode("set-password", nil, map[string]string{"old": "pw", "new": "newpw"}); err != nil {
-		t.Fatal(err)
+	// Audit RC-H1: the operator-chosen rotation password must clear the
+	// strength gate; a short weak replacement is refused.
+	if _, err := m.HandleMode("set-password", nil, map[string]string{"old": "pw", "new": "newpw"}); err == nil {
+		t.Fatal("weak new password must be refused")
 	}
-	if _, err := m.HandleMode("exit", nil, map[string]string{"password": "newpw"}); err != nil {
+	if _, err := m.HandleMode("set-password", nil, map[string]string{"old": "pw", "new": "Kernel-Run-Pw-2026!"}); err != nil {
+		t.Fatalf("strong new password accepted? %v", err)
+	}
+	if _, err := m.HandleMode("exit", nil, map[string]string{"password": "Kernel-Run-Pw-2026!"}); err != nil {
 		t.Fatalf("new password should work: %v", err)
 	}
 }

@@ -41,6 +41,15 @@ func (a *Agent) InitSecureMode(vault *securemode.Vault) error {
 	if vault == nil {
 		return nil
 	}
+	// Audit RC-H3 fail-closed: secure mode's whole trust model is the mTLS
+	// certificate fingerprint the kernel keys registrations on. With
+	// --tls-skip-verify an on-path attacker can impersonate the kernel, so
+	// the ephemeral unlock secret could be captured in transit. Refuse to
+	// run the secure state machine on an unverifiable channel instead of
+	// silently degrading to plaintext or reporting the password anyway.
+	if a.cfg.TLSSkipVerify {
+		return fmt.Errorf("secure mode requires verified mTLS: --tls-skip-verify is set, which would expose the ephemeral unlock secret to an impersonated kernel; remove --tls-skip-verify and configure proper certificates")
+	}
 	switch {
 	case vault.HasPlaintext() && vault.IsEncrypted():
 		// Crash residue: plaintext + .enc both present. Manual recovery
@@ -148,6 +157,16 @@ func (a *Agent) secureMaybeBootstrap() error {
 // report the ephemeral password until the kernel has accepted it. Agents
 // without mTLS (no certificate fingerprint to key the registration on) never
 // report.
+//
+// Audit RC-H3 hardening: the ephemeral password is a secret whose exposure
+// window must stay minimal. It is only ever sent on a VERIFIED mTLS channel —
+// never when the operator disabled certificate verification. Under
+// --tls-skip-verify a network attacker can impersonate the kernel and capture
+// the password in transit (the audit's exact concern), so the agent refuses
+// to report it there (fail-closed: no secret on an unverifiable channel).
+// Such agents stay unregistered; the kernel's SecureModeNoSecret signal then
+// drives them to the local spec §8.2 self-recovery instead. The Locked
+// declaration carries no secret and is therefore unaffected.
 func (a *Agent) attachSecureModeReport(req *apiv1.HeartbeatRequest) {
 	if a.secure == nil {
 		return
@@ -162,6 +181,10 @@ func (a *Agent) attachSecureModeReport(req *apiv1.HeartbeatRequest) {
 		return
 	}
 	if a.secure.password == "" || a.secure.reported {
+		return
+	}
+	if a.cfg.TLSSkipVerify {
+		logger.WithComponent("agent").Warn("secure mode: not reporting the ephemeral password — TLS certificate verification is disabled (--tls-skip-verify); an unverified channel cannot carry the unlock secret")
 		return
 	}
 	req.SecureMode = &apiv1.SecureModeReport{Password: a.secure.password}
