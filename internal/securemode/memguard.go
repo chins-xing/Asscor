@@ -27,7 +27,14 @@ type MemoryGuard struct {
 	mu       sync.RWMutex
 	data     []byte // hardened view (len == plaintext len)
 	block    []byte // backing allocation for release (mmap region, or heap copy)
-	baseline [sha256.Size]byte
+	// baseline is the SHA-256 of the protected plaintext, held in the SAME
+	// hardened storage class as data (audit RC-M2): on Linux it lives in a
+	// separate read-only mmap region, so mutating it to defeat IntegrityOK
+	// requires the same deliberate mprotect-lift as rewriting the data. On
+	// platforms without mprotect both degrade to heap copies and the hash is
+	// the remaining backstop.
+	baseline      []byte // hardened view of the 32-byte digest
+	baselineBlock []byte // backing allocation for release
 }
 
 // NewMemoryGuard snapshots the baseline of plaintext and stores it in
@@ -35,27 +42,51 @@ type MemoryGuard struct {
 func NewMemoryGuard(plaintext []byte) *MemoryGuard {
 	view, block := newROStorage(plaintext)
 	g := &MemoryGuard{data: view, block: block}
-	g.baseline = sha256.Sum256(g.data)
+	g.rebaselineLocked()
 	return g
 }
 
-// Release frees the backing allocation (munmap on Linux). The guard must not
+// rebaselineLocked computes the digest of the current data and installs it
+// into hardened storage. Callers hold g.mu.
+func (g *MemoryGuard) rebaselineLocked() {
+	digest := sha256.Sum256(g.data)
+	if g.baselineBlock != nil {
+		releaseROStorage(g.baselineBlock)
+	}
+	bv, bb := newROStorage(digest[:])
+	g.baseline = bv
+	g.baselineBlock = bb
+}
+
+// Release frees the backing allocations (munmap on Linux). The guard must not
 // be used after Release. Controller calls it when a guard is replaced or when
 // leaving run mode so repeated enter/exit cycles do not leak mappings.
 func (g *MemoryGuard) Release() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	releaseROStorage(g.block)
+	releaseROStorage(g.baselineBlock)
 	g.block = nil
 	g.data = nil
+	g.baselineBlock = nil
+	g.baseline = nil
 }
 
 // IntegrityOK recomputes the hash of the current data and compares with the
-// baseline. Call before every config read / mode exit.
+// hardened baseline. Call before every config read / mode exit.
 func (g *MemoryGuard) IntegrityOK() bool {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
-	return sha256.Sum256(g.data) == g.baseline
+	digest := sha256.Sum256(g.data)
+	if len(g.baseline) != len(digest) {
+		return false
+	}
+	for i := range digest {
+		if digest[i] != g.baseline[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // Snapshot returns an immutable copy of the current config.
@@ -75,5 +106,5 @@ func (g *MemoryGuard) Replace(newPlaintext []byte) {
 	releaseROStorage(g.block)
 	g.data = view
 	g.block = block
-	g.baseline = sha256.Sum256(g.data)
+	g.rebaselineLocked()
 }

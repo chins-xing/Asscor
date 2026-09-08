@@ -7,6 +7,20 @@ import (
 	"sync"
 )
 
+// armSecretProtection disables core dumps / /proc/pid/mem while a run-mode
+// password is retained in this process (audit RC-H2). Best-effort hardening:
+// failure does not fail the mode transition (P1-3) — callers ignore the error
+// by design.
+func armSecretProtection() {
+	_ = disableCoreDumps()
+}
+
+// disarmSecretProtection re-enables core dumps once the retained password has
+// been cleared (exit run / default mode). Best-effort.
+func disarmSecretProtection() {
+	_ = enableCoreDumps()
+}
+
 // ErrResidue reports a crash residue (plaintext + .enc both present) that
 // needs manual recovery — see spec §6.
 var ErrResidue = errors.New("plaintext and .enc both present — crash residue, manual recovery required")
@@ -105,6 +119,9 @@ func (c *Controller) EnterRun(password string) error {
 	}
 	c.Mode = ModeRun
 	c.runPassword = password
+	// RC-H2: from here a run-mode password is retained in process memory;
+	// disable coredumps and /proc/pid/mem reads until it is cleared.
+	armSecretProtection()
 	// Persist whatever the registry holds at entry time (may include agents
 	// that registered while the kernel was still in default mode). A failure
 	// does not undo run-mode entry — the in-memory registry is authoritative
@@ -155,6 +172,8 @@ func (c *Controller) ExitRun(password string) error {
 	}
 	c.Mode = ModeDefault
 	c.releaseGuard()
+	// RC-H2: no run-mode password is retained anymore — restore coredumps.
+	disarmSecretProtection()
 	return nil
 }
 
@@ -333,5 +352,7 @@ func (c *Controller) Unlock(password string) error {
 	c.releaseGuard() // defensive: never leak a previous guard's mmap
 	c.Guard = NewMemoryGuard([]byte(plain))
 	c.runPassword = password
+	// RC-H2: password retained again after a kernel restart in run mode.
+	armSecretProtection()
 	return nil
 }

@@ -23,13 +23,38 @@ type vaultState struct {
 }
 
 // State reports which files currently exist (used for startup recovery).
+//
+// Audit RC-M1: the previous implementation did two independent os.Stat calls
+// (plaintext, then .enc), leaving a TOCTOU window in which a concurrent
+// converter could create/delete a file between the two checks and produce an
+// inconsistent snapshot (e.g. reporting "default" while the .enc of a half-run
+// transition exists). This version takes ONE directory snapshot
+// (os.ReadDir of the ConfigPath's directory) and derives both flags from that
+// single view, so the returned state reflects one point in time. The
+// directory is derived from ConfigPath (not the DataDir field) because the
+// agent constructs a Vault with DataDir="" and a bare agent.ini path.
 func (v *Vault) State() vaultState {
 	st := vaultState{}
-	if _, err := os.Stat(v.ConfigPath); err == nil {
-		st.hasPlain = true
+	dir := filepath.Dir(v.ConfigPath)
+	if dir == "" {
+		dir = "."
 	}
-	if _, err := os.Stat(v.encPath()); err == nil {
-		st.hasEnc = true
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		// A missing/unreadable directory means neither file can exist.
+		return st
+	}
+	base := filepath.Base(v.ConfigPath)
+	enc := filepath.Base(v.encPath())
+	for _, e := range entries {
+		if e.Name() == base {
+			st.hasPlain = true
+		} else if e.Name() == enc {
+			st.hasEnc = true
+		}
+		if st.hasPlain && st.hasEnc {
+			break
+		}
 	}
 	return st
 }
