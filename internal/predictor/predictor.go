@@ -1,3 +1,5 @@
+//go:build tracecheck || expr
+
 package predictor
 
 import (

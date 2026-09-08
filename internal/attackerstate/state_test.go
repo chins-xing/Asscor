@@ -1,3 +1,5 @@
+//go:build tracecheck || expr
+
 package attackerstate
 
 import (

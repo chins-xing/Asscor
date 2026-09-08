@@ -1,3 +1,5 @@
+//go:build tracecheck || expr
+
 package attackerstate
 
 // TTP → Intent 映射表（白皮书 §3.1 Intent 五类）。

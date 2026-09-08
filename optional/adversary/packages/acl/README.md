@@ -32,14 +32,14 @@
 # 1. 进入分支
 git checkout ASSCOR-Research-Core
 
-# 2. 构建（引擎是 internal 包，随主仓库编译；工具用 build tag 独立构建）
-go build ./...                          # 引擎 + 内核
+# 2. 构建（ACL 引擎四包由实验工具 tag expr/tracecheck 门控：构建工具时引擎自动纳入；默认构建不含研究引擎）
+go build ./...                          # 内核（默认不含 ACL 研究引擎）
 GOOS=linux go build -tags tracecheck -o tracecheck ./cmd/tracecheck   # 复现校验工具
 GOOS=linux go build -tags expr   -o exprunner ./cmd/exprrunner        # 实验编排器
 GOOS=linux go build -tags decoyd -o decoyd   ./cmd/decoyd             # 诱饵守护
 
 # 3. 运行单元测试（引擎自检）
-go test ./internal/attackerstate/ ./internal/predictor/ ./internal/engagement/ ./internal/defensecycle/
+go test -tags expr ./internal/attackerstate/ ./internal/predictor/ ./internal/engagement/ ./internal/defensecycle/
 ```
 
 ## 配置

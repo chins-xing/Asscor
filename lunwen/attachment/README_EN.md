@@ -240,8 +240,9 @@ engagement work without destabilizing the release baseline.
 ## 5. Building and testing
 
 ```bash
-go build ./...          # kernel + modules (expr/decoyd are tag-gated)
-go test ./internal/...  # unit tests
+go build ./...          # kernel + modules (expr/decoyd and the ACL engine are tag-gated)
+go test ./internal/...  # unit tests (ACL engine tests need -tags expr/tracecheck):
+go test -tags expr ./internal/attackerstate/ ./internal/predictor/ ./internal/engagement/ ./internal/defensecycle/
 # experiment harness (Linux, for the lab):
 GOOS=linux go build -tags expr   -o exprunner cmd/exprunner/
 GOOS=linux go build -tags decoyd -o decoyd   cmd/decoyd/
