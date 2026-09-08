@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/asscor/asscor/internal/logger"
 )
 
 type ExtensionType string
@@ -233,6 +235,13 @@ type SourceSpec struct {
 	Type     string
 	Checksum string
 	Branch   string
+	// Commit pins a git source to an exact commit SHA. When set, the git
+	// downloader clones the repository and verifies the checked-out HEAD
+	// equals this value before the extension is accepted; a mismatch or an
+	// unfetchable commit refuses the install (audit H-3). When empty, a git
+	// source tracks the default branch HEAD — recorded in the install log
+	// with a warning — so operators should pin production installs.
+	Commit string
 }
 
 type ExtensionSpec struct {
@@ -275,6 +284,23 @@ func (s ExtensionSpec) Validate() error {
 	}
 	if s.Source.Type == "" {
 		s.Source.Type = detectSourceType(s.Source.URL)
+	}
+	// Audit H-3: a remote single-file source (http/https) carries no
+	// tamper evidence without an explicit sha256 checksum, and the file is
+	// executed by the kernel after extraction. Refuse such specs at
+	// validation time — never install an unverified remote artifact.
+	// Local sources are trusted by definition (operator-provided path);
+	// git sources are pinned by Source.Commit instead (checked after clone).
+	switch s.Source.Type {
+	case "http", "https":
+		if s.Source.Checksum == "" {
+			return fmt.Errorf("extension source %q: http(s) sources require an explicit sha256 checksum (source.checksum = sha256:<hex>)", s.Source.URL)
+		}
+	case "git":
+		if s.Source.Commit == "" {
+			logger.WithComponent("extmgr").Warn("git extension source is not pinned to a commit — the installed HEAD is whatever the remote default branch points at",
+				"extension_id", s.ID, "url", s.Source.URL)
+		}
 	}
 	switch s.ExtType {
 	case ExtTypeCheckModule, ExtTypeScoringPlugin, ExtTypeAdapter,

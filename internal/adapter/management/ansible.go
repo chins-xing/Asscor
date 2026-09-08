@@ -38,9 +38,9 @@ func (a *AnsibleAdapter) Fetch(ctx context.Context, config map[string]string) ([
 
 	data, err := os.ReadFile(inventoryPath)
 	if err != nil {
-		ansiblePath := config["adapter_paths.ansible"]
-		if ansiblePath == "" {
-			ansiblePath = "ansible"
+		ansiblePath, err := adapter.ResolveToolBinary(config, "adapter_paths.ansible", "ansible")
+		if err != nil {
+			return nil, err
 		}
 		cmd := exec.CommandContext(ctx, ansiblePath, "-m", "setup", "--tree", "/tmp/ansible_facts")
 		out, err := cmd.Output()

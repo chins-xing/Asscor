@@ -62,9 +62,9 @@ func NewOSVScannerAdapter() *OSVScannerAdapter {
 }
 
 func (o *OSVScannerAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	osvPath := config["adapter_paths.osv_scanner"]
-	if osvPath == "" {
-		osvPath = "osv-scanner"
+	osvPath, err := adapter.ResolveToolBinary(config, "adapter_paths.osv_scanner", "osv-scanner")
+	if err != nil {
+		return nil, err
 	}
 
 	scanPath := config["osv_scanner.scan_path"]
@@ -194,9 +194,9 @@ func NewAIDEAdapter() *AIDEAdapter {
 }
 
 func (a *AIDEAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	aidePath := config["adapter_paths.aide"]
-	if aidePath == "" {
-		aidePath = "aide"
+	aidePath, err := adapter.ResolveToolBinary(config, "adapter_paths.aide", "aide")
+	if err != nil {
+		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, aidePath, "--check")
 	out, err := cmd.Output()
@@ -250,9 +250,9 @@ func NewNiktoAdapter() *NiktoAdapter {
 }
 
 func (n *NiktoAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	niktoPath := config["adapter_paths.nikto"]
-	if niktoPath == "" {
-		niktoPath = "nikto"
+	niktoPath, err := adapter.ResolveToolBinary(config, "adapter_paths.nikto", "nikto")
+	if err != nil {
+		return nil, err
 	}
 
 	target := config["nikto.target"]

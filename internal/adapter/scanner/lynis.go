@@ -54,9 +54,9 @@ var lynisSeverityMap = map[string]adapter.Severity{
 }
 
 func (l *LynisAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	lynisPath := config["adapter_paths.lynis"]
-	if lynisPath == "" {
-		lynisPath = "lynis"
+	lynisPath, err := adapter.ResolveToolBinary(config, "adapter_paths.lynis", "lynis")
+	if err != nil {
+		return nil, err
 	}
 
 	args := []string{"audit", "system", "--quick", "--no-colors"}

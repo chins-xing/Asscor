@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -70,8 +71,8 @@ func IssueServerCert(caPair *CertPair, config CertConfig) (*CertPair, error) {
 		ExtKeyUsage: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageServerAuth,
 		},
-		DNSNames:    []string{config.CommonName, "localhost"},
-		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:    serverCertDNSNames(config),
+		IPAddresses: serverCertIPs(config),
 	}
 
 	caCert, err := x509.ParseCertificate(caPair.Cert.Certificate[0])
@@ -292,4 +293,51 @@ func NewClientTLSConfig(agentCert, caCert *CertPair) *tls.Config {
 		RootCAs:      serverPool,
 		MinVersion:   tls.VersionTLS12,
 	}
+}
+
+// serverCertDNSNames builds the DNS SAN list for a kernel server certificate:
+// CommonName, "localhost" (legacy default), the issuing host's own hostname
+// (so agents reaching the kernel by its machine name verify without
+// --tls-skip-verify), and any explicitly configured SANHosts. Deduplicated,
+// in stable order.
+func serverCertDNSNames(config CertConfig) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	add(config.CommonName)
+	add("localhost")
+	if hn, err := os.Hostname(); err == nil {
+		add(hn)
+	}
+	for _, h := range config.SANHosts {
+		add(h)
+	}
+	return out
+}
+
+// serverCertIPs builds the IP SAN list: 127.0.0.1 (legacy) plus any
+// explicitly configured SANIPs.
+func serverCertIPs(config CertConfig) []net.IP {
+	seen := map[string]bool{}
+	var out []net.IP
+	add := func(ip string) {
+		p := net.ParseIP(strings.TrimSpace(ip))
+		if p == nil || seen[ip] {
+			return
+		}
+		seen[ip] = true
+		out = append(out, p)
+	}
+	add("127.0.0.1")
+	for _, ip := range config.SANIPs {
+		add(ip)
+	}
+	return out
 }

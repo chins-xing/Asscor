@@ -96,8 +96,44 @@ func (d *gitDownloader) Fetch(spec ExtensionSpec, dest string) (string, error) {
 		return "", fmt.Errorf("git clone %s: %w\nstderr: %s", spec.Source.URL, err, stderr.String())
 	}
 
+	// Audit H-3: a git source cannot be verified by an archive checksum, so
+	// pinning is the integrity control. When Source.Commit is set, the clone
+	// must land exactly on that commit — a mismatch (e.g. the remote default
+	// branch moved, or the repo was force-pushed) refuses the install.
+	if spec.Source.Commit != "" {
+		if err := verifyGitHead(cloneTarget, spec.Source.Commit); err != nil {
+			return "", fmt.Errorf("git source %s commit verification: %w", spec.Source.URL, err)
+		}
+	}
+
 	logger.WithComponent("extmgr").Info("cloned extension", "extension_id", spec.ID, "source", spec.Source.URL)
 	return cloneTarget, nil
+}
+
+// verifyGitHead asserts that the repository checked out at dir is exactly on
+// the pinned commit. With a shallow (--depth 1) clone the pinned commit must
+// be the cloned branch's tip; otherwise the caller should pin the branch tip
+// (Source.Commit = the SHA of Source.Branch's HEAD). The check refuses
+// mismatches so a moved/pushed-over remote cannot silently supply different
+// code than the spec pins.
+func verifyGitHead(dir, wantCommit string) error {
+	if len(wantCommit) < 7 {
+		return fmt.Errorf("pinned commit %q is too short to verify", wantCommit)
+	}
+	var out bytes.Buffer
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "HEAD")
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("rev-parse HEAD: %w\n%s", err, out.String())
+	}
+	head := strings.TrimSpace(out.String())
+	// Accept an unambiguous prefix or the full 40-hex SHA.
+	if head == wantCommit || strings.HasPrefix(head, wantCommit) {
+		return nil
+	}
+	return fmt.Errorf("checked-out HEAD %s does not match pinned commit %s (remote default branch moved? use Source.Commit = %s to pin current HEAD, or Source.Branch + a fresh SHA)",
+		head, wantCommit, head)
 }
 
 type localDownloader struct{}

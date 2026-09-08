@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"sync"
 
 	prismlib "github.com/chins-xing/prism"
 	ssam "github.com/chins-xing/ssam"
@@ -14,16 +13,25 @@ import (
 	"github.com/asscor/asscor/internal/logger"
 )
 
-var (
-	expectedAlgoDigest string
-	algoDigestOnce     sync.Once
-)
-
-func init() {
-	algoDigestOnce.Do(func() {
-		expectedAlgoDigest = computeAlgoDigest()
-	})
-}
+// expectedAlgoDigest is the SHA-256 of the canonical SSAM/Prism algorithm
+// constant set, frozen at BUILD time (see the note below for regeneration).
+//
+// It deliberately does NOT recompute itself from the live constants at
+// runtime: the whole point of the check is to detect runtime tampering with
+// the default weights/edge factors/scoring config. If the expected value were
+// derived from the same in-memory constants it protects (the pre-fix design),
+// mutating those constants would silently change both sides of the comparison
+// and the check could never fail. Freezing the digest here moves the
+// reference outside the protected data, so a runtime mutation of the weights
+// now makes computeAlgoDigest() diverge and VerifyAlgo() reports the breach.
+//
+// Regeneration: whenever ssam.DefaultWeights / DefaultEdgeFactors /
+// DefaultScoringConfig or prismlib.DefaultConfig() change legitimately, run
+// `go test -tags integrity -run TestAlgoDigestMatchesFrozen` — it prints the
+// current digest on failure — and update this constant (or regenerate via
+// cmd/algodigest if present). The test TestAlgoDigestMatchesFrozen enforces
+// that the frozen value and the canonical constants never drift apart.
+const expectedAlgoDigest = "b534f8c1e4b4d9491641b81992fadc53b5f5a82460187f0e942c0c8fd82f1620"
 
 func computeAlgoDigest() string {
 	var payload string
@@ -48,7 +56,6 @@ func VerifyAlgo() bool {
 	if !IsAlgoVerifyEnabled() {
 		return true
 	}
-	algoDigestOnce.Do(func() { expectedAlgoDigest = computeAlgoDigest() })
 	digest := computeAlgoDigest()
 	if digest != expectedAlgoDigest {
 		logger.WithComponent("integrity").Error("ALGORITHM INTEGRITY VIOLATION", "expected", expectedAlgoDigest, "actual", digest)

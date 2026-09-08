@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/asscor/asscor/internal/checks"
@@ -28,6 +29,13 @@ type PrivilegedConfig struct {
 	// SocketPath is the Unix socket path (informational; the actual listener
 	// fd comes from systemd socket activation).
 	SocketPath string
+	// IsolationKeepPorts lists TCP ports that stay reachable while a host is
+	// isolated (audit H-5). Isolating INPUT by default DROP would otherwise
+	// cut the operator's own management/SSH channel along with the attacker;
+	// these ports receive an explicit ACCEPT rule before the DROP policy is
+	// installed. Empty means no extra ports are kept (only already-established
+	// connections survive).
+	IsolationKeepPorts []int
 }
 
 // PrivilegedAgent is the root-privileged worker process. It is started
@@ -37,6 +45,11 @@ type PrivilegedAgent struct {
 	cfg PrivilegedConfig
 	ln  net.Listener
 	log *slog.Logger
+
+	// isoMu serializes isolation state transitions (concurrent connections
+	// may dispatch isolate/deisolate at once) and guards lastIsolation.
+	isoMu         sync.Mutex
+	lastIsolation time.Time
 }
 
 // NewPrivilegedAgent creates a privileged agent bound to the systemd-activated
@@ -93,17 +106,22 @@ func (p *PrivilegedAgent) serveConn(conn net.Conn) {
 }
 
 // verifyPeer enforces the peer credential check: only the configured main
-// agent UID may connect.
+// agent UID may connect. A missing or unset AllowedPeerUID (<= 0) is refused
+// — fail-closed: a peer check that cannot name its expected UID must not
+// silently admit everyone (audit C-2).
 func (p *PrivilegedAgent) verifyPeer(conn net.Conn) error {
 	unixConn, ok := conn.(*net.UnixConn)
 	if !ok {
 		return fmt.Errorf("not a unix socket connection")
 	}
+	if p.cfg.AllowedPeerUID <= 0 {
+		return fmt.Errorf("peer check disabled (AllowedPeerUID=%d) — refusing connection", p.cfg.AllowedPeerUID)
+	}
 	uid, err := peerUID(unixConn)
 	if err != nil {
 		return fmt.Errorf("peer credential unavailable: %w", err)
 	}
-	if p.cfg.AllowedPeerUID > 0 && uid != p.cfg.AllowedPeerUID {
+	if uid != p.cfg.AllowedPeerUID {
 		return fmt.Errorf("peer uid %d not allowed (want %d)", uid, p.cfg.AllowedPeerUID)
 	}
 	return nil
@@ -147,22 +165,106 @@ func (p *PrivilegedAgent) runRootCommand(req *PrivilegedRequest) *PrivilegedResp
 	}
 }
 
+// isolationCooldown bounds how often isolate_host may be applied to the same
+// host. After a successful isolation the privileged agent ignores further
+// isolate requests inside the window, so a repeated or looped trigger cannot
+// churn the firewall rules (audit H-5). De-isolation is never rate-limited.
+const isolationCooldown = 30 * time.Second
+
+// isolationOnCooldown reports whether a new isolate request must be refused
+// because one was applied recently (audit H-5 anti-churn guard).
+func (p *PrivilegedAgent) isolationOnCooldown() bool {
+	return !p.lastIsolation.IsZero() && time.Since(p.lastIsolation) < isolationCooldown
+}
+
 func (p *PrivilegedAgent) executeIsolation() *PrivilegedResponse {
-	out1, err1 := common.RunCmdTimeout(30*time.Second, "iptables", "-A", "INPUT", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT")
-	out2, err2 := common.RunCmdTimeout(30*time.Second, "iptables", "-P", "INPUT", "DROP")
-	if err1 != nil || err2 != nil {
-		p.log.Error("privileged agent: isolate_host failed", "out1", out1, "err1", err1, "out2", out2, "err2", err2)
-		return &PrivilegedResponse{OK: false, Error: "isolate_host firewall rule failed"}
+	p.isoMu.Lock()
+	defer p.isoMu.Unlock()
+
+	if p.isolationOnCooldown() {
+		remain := isolationCooldown - time.Since(p.lastIsolation)
+		p.log.Warn("privileged agent: isolate_host in cooldown, ignoring", "retry_in", remain.String())
+		return &PrivilegedResponse{OK: false, Error: "isolate_host in cooldown, try again later"}
 	}
-	p.log.Warn("privileged agent: host isolated (INPUT DROP)")
+
+	// Keep the management channel reachable BEFORE dropping INPUT: without
+	// an explicit exception the operator's own SSH/management session would
+	// be severed together with the attacker's (audit H-5). Build the check
+	// (-C) list from the same single source isolationExceptionRules() so the
+	// installed rules and the later de-isolation removal can never drift.
+	cmds := [][]string{}
+	for _, rule := range p.isolationExceptionRules() {
+		check := append([]string{"-C"}, rule...)
+		cmds = append(cmds, check)
+	}
+
+	// Install only missing rules (idempotent): iptables -C fails when the rule
+	// is absent, then -A adds it. Re-isolation after a de-isolation therefore
+	// never duplicates rules.
+	for _, c := range cmds {
+		exists, _ := iptablesRuleExists(c)
+		if !exists {
+			args := append([]string{"-A"}, c[1:]...)
+			if _, err := common.RunCmdTimeout(30*time.Second, "iptables", args...); err != nil {
+				p.log.Error("privileged agent: isolate_host add rule failed", "rule", c, "error", err)
+				return &PrivilegedResponse{OK: false, Error: "isolate_host firewall rule failed"}
+			}
+		}
+	}
+
+	if _, err := common.RunCmdTimeout(30*time.Second, "iptables", "-P", "INPUT", "DROP"); err != nil {
+		p.log.Error("privileged agent: isolate_host set policy failed", "error", err)
+		return &PrivilegedResponse{OK: false, Error: "isolate_host firewall policy failed"}
+	}
+
+	p.lastIsolation = time.Now()
+	p.log.Warn("privileged agent: host isolated (INPUT DROP, management ports kept)")
 	return &PrivilegedResponse{OK: true, Output: "host isolated"}
 }
 
 func (p *PrivilegedAgent) executeDeisolation() *PrivilegedResponse {
+	p.isoMu.Lock()
+	defer p.isoMu.Unlock()
+
+	// Remove the exception rules first (ignore "no such rule" — the host may
+	// have been de-isolated already), then restore the ACCEPT policy.
+	for _, rule := range p.isolationExceptionRules() {
+		args := append([]string{"-D"}, rule...)
+		common.RunCmdTimeout(30*time.Second, "iptables", args...)
+	}
 	common.RunCmdTimeout(30*time.Second, "iptables", "-P", "INPUT", "ACCEPT")
-	common.RunCmdTimeout(30*time.Second, "iptables", "-D", "INPUT", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT")
+
+	p.lastIsolation = time.Time{}
 	p.log.Info("privileged agent: host de-isolated (INPUT ACCEPT)")
 	return &PrivilegedResponse{OK: true, Output: "host de-isolated"}
+}
+
+// isolationExceptionRules returns the full INPUT rules (without -A/-C/-D) that
+// isolation installs and de-isolation removes.
+func (p *PrivilegedAgent) isolationExceptionRules() [][]string {
+	rules := [][]string{
+		{"INPUT", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"},
+		{"INPUT", "-p", "tcp", "-m", "tcp", "--dport", "22", "-j", "ACCEPT"},
+	}
+	for _, port := range p.cfg.IsolationKeepPorts {
+		if port > 0 && port != 22 {
+			rules = append(rules, []string{"INPUT", "-p", "tcp", "-m", "tcp", "--dport", strconv.Itoa(port), "-j", "ACCEPT"})
+		}
+	}
+	return rules
+}
+
+// iptablesRuleExists reports whether the rule (checkArgs already prefixed
+// with -C) is present. err == nil means present; any error (iptables exits 1
+// for a missing rule, which common.RunCmdTimeout surfaces as a CommandError)
+// means "not present". Isolation treats a missing rule as "needs adding" and
+// de-isolation treats it as "already gone", so both directions are idempotent.
+func iptablesRuleExists(checkArgs []string) (bool, error) {
+	_, err := common.RunCmdTimeout(30*time.Second, "iptables", checkArgs...)
+	if err == nil {
+		return true, nil
+	}
+	return false, nil
 }
 
 // systemdActivatedListener returns the listening socket passed by systemd
@@ -227,20 +329,21 @@ func peerUID(conn *net.UnixConn) (int, error) {
 	return uid, nil
 }
 
-// LookupUID resolves a unix account name to its numeric UID. It returns 0
-// (root) when the lookup fails so the caller can decide how to handle it.
-func LookupUID(name string) int {
+// LookupUID resolves a unix account name to its numeric UID. It returns an
+// error when the account cannot be resolved — the caller must then refuse to
+// start rather than fall back to UID 0 (root), which would silently disable
+// the peer credential check (audit C-2).
+func LookupUID(name string) (int, error) {
 	if name == "" {
-		return 0
+		return 0, fmt.Errorf("empty user name")
 	}
 	u, err := user.Lookup(name)
 	if err != nil {
-		logger.WithComponent("agent-priv").Warn("peer user lookup failed", "user", name, "error", err.Error())
-		return 0
+		return 0, fmt.Errorf("lookup user %q: %w", name, err)
 	}
 	uid, err := strconv.Atoi(u.Uid)
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("parse uid of %q: %w", name, err)
 	}
-	return uid
+	return uid, nil
 }

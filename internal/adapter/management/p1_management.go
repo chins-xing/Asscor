@@ -29,9 +29,9 @@ func NewFreeIPAAdapter() *FreeIPAAdapter {
 }
 
 func (f *FreeIPAAdapter) Fetch(ctx context.Context, config map[string]string) ([]byte, error) {
-	ipaPath := config["adapter_paths.freeipa"]
-	if ipaPath == "" {
-		ipaPath = "ipa"
+	ipaPath, err := adapter.ResolveToolBinary(config, "adapter_paths.freeipa", "ipa")
+	if err != nil {
+		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, ipaPath, "user-find", "--sizelimit=100")
 	out, err := cmd.Output()
