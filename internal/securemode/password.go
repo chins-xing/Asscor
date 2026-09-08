@@ -152,8 +152,9 @@ func (pv *PasswordVerifier) Verify(password string) bool {
 	// values to argon2 can panic (keyLen=0 nil deref, N=0 rounds, p>=256
 	// truncated to 0 threads) or cause OOM/CPU DoS, so reject them before any
 	// derivation work — same defense as Decrypt's header checks in crypt.go.
-	dN, dR, dP, dKL := DefaultKDFParams()
-	if n != dN || r != dR || p != dP || keyLen != dKL {
+	// The supported set admits the pre-RC-L3 t=1 default so legacy verifiers
+	// keep working.
+	if !isSupportedKDFParams(n, r, p, keyLen) {
 		return false
 	}
 	expected := data[off : off+int(keyLen)]

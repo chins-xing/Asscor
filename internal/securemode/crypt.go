@@ -28,8 +28,39 @@ type Header struct {
 }
 
 // DefaultKDFParams returns argon2id parameters (time, memory KiB, threads, keyLen).
+// time=2 with 64 MiB memory (audit RC-L3): the previous t=1 is weak against
+// GPU/ASIC offline cracking; OWASP recommends t>=2 at this memory level for
+// password hashing. Verifier files store these params in their header, so
+// existing verifiers/.enc created with t=1 remain verifiable (SupportedKDFParams
+// admits both); only NEW hashes use the stronger default.
 func DefaultKDFParams() (n, r, p, keyLen uint32) {
-	return 1, 64 * 1024, 4, 32
+	return 2, 64 * 1024, 4, 32
+}
+
+// kdfParamEntry is one accepted (time, memoryKiB, parallelism, keyLen)
+// combination. Header parsing admits ONLY these — see isSupportedKDFParams —
+// so an attacker-controlled .enc/verifier cannot push argon2 into a panic
+// (threads<1 after uint8 narrowing), OOM, or unbounded CPU (arbitrary large
+// memory/time). The set intentionally contains the previous default (t=1) so
+// files encrypted before the RC-L3 t-raise keep verifying.
+type kdfParamEntry struct {
+	n, r, p, keyLen uint32
+}
+
+var supportedKDFParams = []kdfParamEntry{
+	{1, 64 * 1024, 4, 32}, // legacy default (pre RC-L3)
+	{2, 64 * 1024, 4, 32}, // current default
+}
+
+// isSupportedKDFParams reports whether a header's argon2 parameters are in
+// the accepted set (DoS/panic guard shared by Decrypt and Verify).
+func isSupportedKDFParams(n, r, p, keyLen uint32) bool {
+	for _, e := range supportedKDFParams {
+		if n == e.n && r == e.r && p == e.p && keyLen == e.keyLen {
+			return true
+		}
+	}
+	return false
 }
 
 // deriveKey derives a key of keyLen bytes from password+salt via argon2id.
@@ -152,16 +183,16 @@ func Decrypt(data []byte, password string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// v1 files are written only by Encrypt, which always records the default
-	// KDF parameters. Any other values are attacker-controlled header input
+	// v1 files are written only by Encrypt, which always records a supported
+	// KDF parameter set. Any other values are attacker-controlled header input
 	// that could panic argon2 (threads<1 after uint8 narrowing) or trigger an
 	// OOM/CPU DoS from unbounded memory/time costs, so reject them before any
-	// derivation.
-	n, r, p, kl := DefaultKDFParams()
-	if h.ArgonN != n || h.ArgonR != r || h.ArgonP != p || h.KeyLen != kl {
+	// derivation. The supported set admits the pre-RC-L3 default (t=1) so
+	// existing files keep verifying.
+	if !isSupportedKDFParams(h.ArgonN, h.ArgonR, h.ArgonP, h.KeyLen) {
 		return nil, errors.New("unsupported KDF parameters in header")
 	}
-	kek := deriveKey(password, h.Salt, n, r, p, kl)
+	kek := deriveKey(password, h.Salt, h.ArgonN, h.ArgonR, h.ArgonP, h.KeyLen)
 	defer zeroize(kek)
 
 	block, err := aes.NewCipher(kek)

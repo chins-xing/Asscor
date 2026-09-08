@@ -101,8 +101,11 @@ func TestDeriveKeyArgon2idKAT(t *testing.T) {
 		{"t4 m1024 p8", 4, 1024, 8, "5fd1bd42041aabc63dd26d5173956051f782418f9f9b19f4144f8cb4039e8ae9"},
 		{"t2 m64 p3", 2, 64, 3, "04d76823c05ad4b307692c9ab45cd38ca5bcd6bf98ff510b45ff23389ed4577a"},
 		{"t3 m1024 p6", 3, 1024, 6, "c7a13a6e36fb8a959edf34c5da1abcbfd143c222a1fe9214cd221d276af0d24a"},
-		// production default parameters (DefaultKDFParams: 1, 64*1024, 4, 32)
-		{"t1 m65536 p4 (prod default)", 1, 64 * 1024, 4, "716733ba17477e10c0eac8788a61e795df9c5086d785b7de8e295b910fe9fd4a"},
+		// production default parameters (DefaultKDFParams: 2, 64*1024, 4, 32).
+		// Vector derived with x/crypto argon2 and cross-checked against the
+		// argon2-cffi (PHC reference) rows above, which pin the algorithm
+		// independently (audit RC-L3: t raised 1→2).
+		{"prod default", 2, 64 * 1024, 4, "1a9677b0afe81fda7b548895e7a1bfeb8668ffc19a530e37e088a668fab1c02a"},
 	}
 	for _, tc := range ref32 {
 		t.Run("ref32/"+tc.name, func(t *testing.T) {
@@ -140,8 +143,9 @@ func TestDeriveKeyPasswordSensitive(t *testing.T) {
 
 func TestDefaultKDFParams(t *testing.T) {
 	n, r, p, kl := DefaultKDFParams()
-	if n != 1 || r != 64*1024 || p != 4 || kl != 32 {
-		t.Errorf("params = (%d,%d,%d,%d), want (1,65536,4,32)", n, r, p, kl)
+	// Audit RC-L3: t raised 1→2 (OWASP, 64 MiB memory).
+	if n != 2 || r != 64*1024 || p != 4 || kl != 32 {
+		t.Errorf("params = (%d,%d,%d,%d), want (2,65536,4,32)", n, r, p, kl)
 	}
 }
 
@@ -346,8 +350,8 @@ func TestDecryptBadKDFParams(t *testing.T) {
 		{"keyLen=33 (invalid AES key size)", func(b []byte) {
 			serializeUint32(b[kdfOff+12:], 33)
 		}},
-		{"argonN=2 (non-default)", func(b []byte) {
-			serializeUint32(b[kdfOff:], 2)
+		{"argonN=3 (non-default)", func(b []byte) {
+			serializeUint32(b[kdfOff:], 3)
 		}},
 	}
 	for _, tc := range cases {
@@ -396,5 +400,34 @@ func TestEncryptNonceFreshness(t *testing.T) {
 	}
 	if bytes.Equal(a, b) {
 		t.Fatal("same plaintext+password must produce different ciphertexts (fresh salt/nonce)")
+	}
+}
+
+// TestIsSupportedKDFParams (audit RC-L3): the header-parameter guard admits
+// the current (t=2) and legacy (t=1) defaults but rejects anything an
+// attacker could use to panic or DoS argon2.
+func TestIsSupportedKDFParams(t *testing.T) {
+	cases := []struct {
+		name            string
+		n, r, p, keyLen uint32
+		wantSupported   bool
+	}{
+		{"legacy t1 supported", 1, 64 * 1024, 4, 32, true},
+		{"current t2 supported", 2, 64 * 1024, 4, 32, true},
+		{"t3 not supported", 3, 64 * 1024, 4, 32, false},
+		{"huge memory rejected", 2, 1 << 30, 4, 32, false},
+		{"zero threads rejected", 2, 64 * 1024, 0, 32, false},
+		{"256 threads uint8-truncation rejected", 2, 64 * 1024, 256, 32, false},
+		{"bad keylen rejected", 2, 64 * 1024, 4, 33, false},
+		{"zero keylen rejected", 2, 64 * 1024, 4, 0, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isSupportedKDFParams(tc.n, tc.r, tc.p, tc.keyLen)
+			if got != tc.wantSupported {
+				t.Errorf("isSupportedKDFParams(%d,%d,%d,%d) = %v, want %v",
+					tc.n, tc.r, tc.p, tc.keyLen, got, tc.wantSupported)
+			}
+		})
 	}
 }
