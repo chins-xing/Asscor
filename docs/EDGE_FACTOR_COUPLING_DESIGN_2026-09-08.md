@@ -69,7 +69,7 @@ P_d        = P_floor + (1 − P_floor) · exp(−λ_d · L_d)     # 指数饱和
 Score_d'   = Base_d · P_d
 ```
 
-- `v_i[d] ≥ 0`：因子 i 对域 d 的作用权重（未标定时默认 `1`，即作用于全部域）。
+- `v_i[d] ≥ 0`：因子 i 对域 d 的作用权重。**完全未配置向量**的因子走 fallback（等价于作用于全部域、强度 1）——该 fallback 只存在于代码默认路径，**不写进配置、不参与校验**；一旦配置了 `vector.<id>`，就必须满足 `Σ_d v_i[d] ≤ 1`（典型做法是归一化，如 5 域各 0.2）。
 - `c_ij ≥ 0`：耦合系数（`G` 对称共现；`C` 有向 + 时序窗口）。
 - `P_floor ∈ (0,1)`、`λ_d > 0`：饱和参数；`P_floor` 直接决定**惩罚上限 `1 − P_floor`**。
 - 全域总分由既有的域加权聚合完成（`WeightConfig`），本框架只改域分修正环节。
@@ -147,7 +147,7 @@ chain.window_seconds = 300                            ; 仅 chain
 
 规则：
 
-1. **默认 legacy**：不写该段即走 M0，历史逐位一致；V/G/C 参数只能来自拟合产物或实验配置。
+1. **默认 legacy**：不写该段即走 M0，历史逐位一致；V/G/C 参数只能来自拟合产物或实验配置。语义分工（评审裁定）：**"默认 legacy" 由配置装载层表达**——`[edge_factors.model]` 段缺席时，调用方走 legacy 路径、**不构造**新模型参数；`edgefactor.Params` 的零值（`Model == ""`）被 `Validate` **刻意拒绝**，不提供零值兜底，避免装配层漏写 `model` 却静默按某个模型计分。
 2. **ACL 权重一并参数化（RC-M4）**：`w_int`、`temperature`、`α β γ δ`、`attackerstate` 映射改为实验配置注入，**不改算法语义**；其标定排在本轮之后。
 3. **参数校验 fail-fast**：`v` 维度不符、`f∉(0,1]`、`c<0`、`λ≤0`、`p_floor∉(0,1)`、`Σ_d v_i[d] > 1` 直接拒绝启动（与方向① 坏正则 fail-fast 同款纪律）。
 4. **可追溯**：`EdgeFactorResult` 增加 `ModelID` 与 `ParamsHash`；离线重算与在线评分都写入，报告与审计可复现。
@@ -238,7 +238,7 @@ chain.window_seconds = 300                            ; 仅 chain
 | 位置 | 职责 |
 |---|---|
 | `ssam-lib`（内嵌独立仓库） | **仅一处钩子**：`evalProductChain` 改为"可注入合成策略"（接口 + 默认连乘），默认路径逐位一致 |
-| `internal/edgefactor`（主仓，tag `edgefactor`） | 统一框架、四候选、参数校验、性质测试 |
+| `internal/edgefactor`（主仓，**无 build tag**，默认编译） | 统一框架、四候选、参数校验、性质测试（纯函数、无内部依赖；随默认构建与 CI 无 tag 线一起受测） |
 | `config.ini [edge_factors.model]` + `configs/edgeexp/` | 参数注入与实验模板 |
 | `cmd/edgecompare`（tag 门控） | 离线重算、指标、拟合、报告（与在线共用同一实现） |
 | `internal/engine/ssam/adapter.go` | 触发映射改由配置表提供（默认等价） |
@@ -321,6 +321,6 @@ chain.window_seconds = 300                            ; 仅 chain
 | `model` | `legacy` | 不配置即现状 |
 | `p_floor` | 0.50 | 惩罚上限 = 1 − p_floor |
 | `λ_d` | 1.0 | 每域饱和速率 |
-| `v_i[d]` | 1（未标定） | `Σ_d v_i[d] ≤ 1` 约束 |
+| `v_i[d]` | 未配置 = 代码 fallback（全 1，不写配置）；配置时必须 `Σ_d v_i[d] ≤ 1` | 归一化写典型值 0.2/域 |
 | `c_ij` | 0 | 仅 `graph`/`chain` 且必须显式给出 |
 | `chain.window_seconds` | 300 | 级联时序窗口 |
