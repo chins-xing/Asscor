@@ -165,7 +165,9 @@ chain.window_seconds = 300
 3. **ACL 权重一并参数化（RC-M4）**：`w_int`、`temperature`、`α β γ δ`、`attackerstate` 映射改为实验配置注入，**不改算法语义**；其标定排在本轮之后。
 3. **参数校验 fail-fast**：`v` 维度不符、`f∉(0,1]`、`c<0`、`λ≤0`、`p_floor∉(0,1)`、`Σ_d v_i[d] > 1`、非有限值 直接拒绝启动（与方向① 坏正则 fail-fast 同款纪律）；此外有运行时校验（见 §3.1 的"运行时校验"要点）。
 4. **可追溯**：`EdgeFactorResult` 增加 `ModelID` 与 `ParamsHash`；离线重算与在线评分都写入，报告与审计可复现。
-5. **触发映射可配**：因子→触发检查映射从 `adapter.go` 的硬编码改为配置表（默认值保持等价）。
+5. **触发映射可配**：因子→触发检查映射从 `adapter.go` 的硬编码改为配置表（默认值保持等价）。可覆盖的键必须覆盖**全部真实产出的因子**（六个内置因子 + `EF-3FA` + `[edge_factors.custom]` 的键）；出现该集合之外的 `trigger.<id>` **报错**（拼错的键此前会被静默丢弃，与本方向"不静默"纪律冲突）。
+6. **自定义因子同样进入模型**：`[edge_factors.custom]` 的因子必须进入 `Params.Factors`（权重取配置），这样它们的 `vector.<id>` / `coupling.<id>.*` 才能通过"键 ⊆ `Factors`"的校验 —— 否则"变量化"对自定义因子不完整。
+7. **未启用路径不构造模型参数**：`[edge_factors.model]` 段缺席时，装配层返回的 `Params` **不得**填入 `p_floor`/`λ`/`vector`/`coupling` 之类的"看起来可用"的值（模型字段保持零值），并统一让 `Model == legacy` （包括出错返回路径）；`p_floor=0` 在误用时由 `Validate` 明确拒绝。
 
 ---
 
