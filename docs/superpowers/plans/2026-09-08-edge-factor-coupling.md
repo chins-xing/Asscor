@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - 分支 `ASSCOR-Research-Core`；提交说明必须**中文**（`feat(edgefactor): …` 前缀可保留英文分类词）。
-- 新包全部文件（含测试）首行 `//go:build edgefactor`；测试命令 `go test -tags edgefactor ./internal/edgefactor/...`。
+- `internal/edgefactor` **不带 build tag**（默认编译，纯函数、无内部依赖、默认 legacy 不改变行为）——它随默认构建与 CI 无 tag 线一起受测；只有离线工具 `cmd/edgecompare` 带 tag `edgeexp`，内仓钩子随 `ssam-lib` 常规编译。测试命令：`go test ./internal/edgefactor/...`（无 tag）。
 - **默认行为不变（硬门禁）**：未配置 `[edge_factors.model]` 时必须走 `legacy` 乘性路径，与历史评分**逐位一致**；方向① 的可信度语义 `effective_f = 1 − (1 − f)·c_trigger` 原样保留。
 - 公式（spec §3.1）：`a_i[d] = (1 − effective_f_i)·v_i[d]`；`L_d = Σ a_i[d] + Σ c_ij·a_i[d]·a_j[d]`；`P_d = P_floor + (1−P_floor)·exp(−λ_d·L_d)`；域分修正 `Score_d' = Base_d · P_d`。
 - `legacy` 的特殊性：它在**聚合后**作用于总分（`∏ f_i`），不由 `P_d` 表达 → 由 `Result.GlobalMultiplier` 承载（新模型恒为 1）。
@@ -63,6 +63,7 @@
 - Test: `internal/edgefactor/model_test.go`
 
 **Interfaces:**
+- 包无 build tag（主控裁定，优先于本节早期草稿）。
 - Produces:
   - `type ModelID string`，常量 `ModelLegacy`/`ModelVector`/`ModelGraph`/`ModelChain`
   - `type Params struct{ Model ModelID; PFloor float64; Lambda map[string]float64; Vectors map[string]map[string]float64; Coupling map[string]map[string]float64; ChainWindowSeconds int; Factors map[string]float64 }`
@@ -73,8 +74,6 @@
 - [ ] **Step 1: 写失败测试**
 
 ```go
-//go:build edgefactor
-
 package edgefactor
 
 import (
@@ -150,7 +149,7 @@ func TestHashIsStableAndSensitive(t *testing.T) {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `go test -tags edgefactor ./internal/edgefactor/ -run TestValidate -v`
+Run: `go test ./internal/edgefactor/ -run TestValidate -v`
 Expected: FAIL — `undefined: Params`
 
 - [ ] **Step 3: 实现**
@@ -268,7 +267,7 @@ func (p Params) Hash() string {
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `go test -tags edgefactor ./internal/edgefactor/ -v`
+Run: `go test ./internal/edgefactor/ -v`
 Expected: PASS
 
 - [ ] **Step 5: 提交**
@@ -296,8 +295,6 @@ Expected: PASS
 - [ ] **Step 1: 写失败测试**
 
 ```go
-//go:build edgefactor
-
 package edgefactor
 
 import (
@@ -442,8 +439,6 @@ func TestSynthesizeLegacyUsesMultiplicativeMultiplier(t *testing.T) {
 ```
 
 ```go
-//go:build edgefactor
-
 package edgefactor
 
 import (
@@ -627,7 +622,7 @@ func randomCase(rng *rand.Rand, domains []string) (Params, Input) {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `go test -tags edgefactor ./internal/edgefactor/ -run 'TestSynthesize|TestEffectiveFactor' -v`
+Run: `go test ./internal/edgefactor/ -run 'TestSynthesize|TestEffectiveFactor' -v`
 Expected: FAIL — `undefined: Synthesize`
 
 - [ ] **Step 3: 实现**
@@ -812,7 +807,7 @@ var _ = fmt.Sprintf // 保留 fmt 供后续诊断使用
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `go test -tags edgefactor ./internal/edgefactor/ -v`
+Run: `go test ./internal/edgefactor/ -v`
 Expected: PASS（含 4 个性质测试与 64 组合扫描）
 
 - [ ] **Step 5: 提交**
@@ -2585,7 +2580,7 @@ Expected: PASS
 
 ## 里程碑 A 验收门禁
 
-- [ ] `go test -tags edgefactor ./internal/edgefactor/...` 全绿（含 4 性质测试 + 2⁶ 组合扫描）
+- [ ] `go test ./internal/edgefactor/...` 全绿（无 tag；含 4 性质测试 + 2⁶ 组合扫描）
 - [ ] `go test ./internal/config/ -run TestParseEdgeFactorModel` 全绿
 - [ ] `go test -tags "engine,assessor" ./internal/engine/...` 全绿，**全默认配置评分逐位一致**
 - [ ] 内仓：`cd ssam-lib && go test ./...` 全绿（默认路径不回归）
