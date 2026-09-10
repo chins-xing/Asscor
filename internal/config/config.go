@@ -261,6 +261,13 @@ func Parse(content string) (*Config, error) {
 
 	if sec, ok := sections["edge_factors"]; ok {
 		for k := range sec {
+			// Keys belonging to [edge_factors.model] would be dropped by the
+			// float-only whitelist below and silently ignored, so the operator
+			// would believe graph/chain was active while the kernel still
+			// scored M0. Reject them instead (design §4 rule 1).
+			if isEdgeFactorModelSectionKey(k) {
+				return nil, fmt.Errorf("config: [edge_factors] %s must be set in the [edge_factors.model] section, not in [edge_factors]", k)
+			}
 			if f, ok := getFloat(sec, k); ok {
 				switch k {
 				case "two_factor_failure":
