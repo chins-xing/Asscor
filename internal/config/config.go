@@ -66,6 +66,13 @@ type Config struct {
 	// Confidence carries the [confidence] model configuration (design
 	// CONFIDENCE_MODEL_DESIGN_2026-09-08 §3). Disabled by default.
 	Confidence ConfidenceConfig
+
+	// EdgeFactorModel carries the [edge_factors.model] section (design
+	// EDGE_FACTOR_COUPLING_DESIGN_2026-09-08 §4). It is a pure parse result:
+	// assembly into edgefactor.Params happens in the caller. An absent
+	// section leaves the zero value — EdgeFactorModel.Model == "" means
+	// "keep legacy multiplicative behavior".
+	EdgeFactorModel EdgeFactorModelConfig
 }
 
 type ExtMgrConfig struct {
@@ -277,6 +284,16 @@ func Parse(content string) (*Config, error) {
 		if f, ok := getFloat(sec, "two_factor_failure"); ok {
 			cfg.EdgeFactors.TwoFactorFailure = f
 		}
+	}
+
+	// [edge_factors.model]: pure parse of the vectorized/coupled synthesis
+	// configuration. An absent section leaves the zero value so callers keep
+	// the legacy multiplicative path; a malformed section fails fast here
+	// rather than at scoring time.
+	if edgeModel, present, err := ParseEdgeFactorModel(sections); err != nil {
+		return nil, err
+	} else if present {
+		cfg.EdgeFactorModel = edgeModel
 	}
 
 	if sec, ok := sections["threat"]; ok {
