@@ -4,6 +4,7 @@ package ssam
 
 import (
 	"math"
+	"sort"
 	"strings"
 	"testing"
 
@@ -358,8 +359,8 @@ func TestConfigToEdgeFactorsAppliesEF3FATriggerOverride(t *testing.T) {
 
 // TestConfigToEdgeFactorsAppliesCustomFactorTriggerOverride pins 裁定 A 的键面语义：
 // trigger.<自定义因子> 既然被装配层允许，就必须真的被消费 —— 否则又是一条「校验通过
-// 但静默无效」的路径。自定义因子的默认触发仍来自 [edge_factors.custom_triggers]。
-// 产出的 ID 是规范大写（Fix round 2 第 1 项）。
+// 但静默无效」的路径。自定义因子的默认触发仍来自 [edge_factors.custom_triggers]，
+// 且产出的 ID 保持 parseSections 的小写形态（Fix round 3：产出侧不做归一）。
 func TestConfigToEdgeFactorsAppliesCustomFactorTriggerOverride(t *testing.T) {
 	cfg := &config.Config{EdgeFactors: defaultTestEdgeFactors()}
 	// 注意：真实配置经 parseSections 后键是小写的，这里一并覆盖该形态。
@@ -371,8 +372,8 @@ func TestConfigToEdgeFactorsAppliesCustomFactorTriggerOverride(t *testing.T) {
 	for _, f := range ConfigToEdgeFactors(cfg) {
 		plain[f.ID] = f.TriggerCheck
 	}
-	if plain["EF-CUSTOM"] != "RS-001" {
-		t.Fatalf("without an override the custom trigger must come from [edge_factors.custom_triggers], got %q", plain["EF-CUSTOM"])
+	if plain["ef-custom"] != "RS-001" {
+		t.Fatalf("without an override the custom trigger must come from [edge_factors.custom_triggers], got %q", plain["ef-custom"])
 	}
 
 	cfg.EdgeFactorModel.TriggerMap = map[string]string{"EF-CUSTOM": "RS-042"}
@@ -380,8 +381,8 @@ func TestConfigToEdgeFactorsAppliesCustomFactorTriggerOverride(t *testing.T) {
 	for _, f := range ConfigToEdgeFactors(cfg) {
 		got[f.ID] = f.TriggerCheck
 	}
-	if got["EF-CUSTOM"] != "RS-042" {
-		t.Errorf("trigger.EF-CUSTOM must override the custom factor's check, got %q", got["EF-CUSTOM"])
+	if got["ef-custom"] != "RS-042" {
+		t.Errorf("trigger.EF-CUSTOM must override the custom factor's check, got %q", got["ef-custom"])
 	}
 }
 
@@ -585,8 +586,9 @@ func TestParamsFromConfigBuiltinWeightsWinOverCustomDuplicates(t *testing.T) {
 }
 
 // factoryLikeConfig 复刻出厂模板的形态：[edge_factors.custom] 把 6 个内置 ID 连同 EF-3FA
-// 再列一遍（键经 parseSections 后全是小写）。用于固定「同名 custom 条目不得进入因子清单」
-// 这条 Fix round 2 的行为。
+// 再列一遍（键经 parseSections 后全是小写），触发检查来自 [edge_factors.custom_triggers]
+// （出厂模板里该段同样含 EF-3FA = EF-002），其中 ef-selinux 取行业定制值 0.78（内置项 0.80）。
+// 用于固定「改造前后产出逐项一致」这条 Fix round 3 的不变式。
 func factoryLikeConfig() *config.Config {
 	cfg := &config.Config{EdgeFactors: defaultTestEdgeFactors()}
 	cfg.EdgeFactorsCustom = map[string]config.CustomEdgeFactorConfig{
@@ -596,19 +598,183 @@ func factoryLikeConfig() *config.Config {
 		"ef-apparmor":  {Factor: 0.82, TriggerCheck: "OT-005"},
 		"ef-no-siem":   {Factor: 0.90, TriggerCheck: "RS-007"},
 		"ef-no-ids":    {Factor: 0.88, TriggerCheck: "RS-006"},
-		"ef-3fa":       {Factor: 0.82}, // custom_triggers 段里没有 EF-3FA
+		"ef-3fa":       {Factor: 0.82, TriggerCheck: "EF-002"},
 	}
 	return cfg
 }
 
-// TestConfigToEdgeFactorsNormalizesCustomFactorID pins Fix round 2 第 1 项（Task 7 的前置条件）：
-// custom 分支产出的 ID 必须是规范大写，且用该 ID 能在 Params.Vectors 里查到 —— 否则 Task 7
-// 拿 EdgeFactorResult.ID 查向量会落空，合成层静默走「未声明 → 全强度」fallback。
-// 这里不满足于「查得到」：用一棵与全强度（1.0）不同的声明向量跑 Synthesize，断言 L 精确等于
-// (1−f)·v[i]，从而证明真正用的是声明值而不是 fallback。
-func TestConfigToEdgeFactorsNormalizesCustomFactorID(t *testing.T) {
+// sortedByID 返回按 ID 排序的副本（custom 部分的产出顺序取决于 map 迭代，比较前必须定序）。
+func sortedByID(factors []EdgeFactorConfig) []EdgeFactorConfig {
+	out := append([]EdgeFactorConfig(nil), factors...)
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// TestConfigToEdgeFactorsOutputUnchangedByTriggerRefactor pins Fix round 3 的核心验收不变式：
+// 触发映射改造只允许改变 TriggerCheck 的**来源**（改为查表），不得改变条目集合、ID 形状或数值。
+// 期望值即改造前 adapter.go 的硬编码产出（内联于此），逐字段比对：
+// 7 个内置/级联条目 + [edge_factors.custom] 的全部条目（ID/Name 保持 parseSections 小写化后的
+// 原样，Factor 取行业定制值，TriggerCheck 取自定义触发段的值——ef-3fa 在该段里没有条目，故为空）。
+//
+// 这条不变式测试是唯一正确的验收方式：P4 的硬承诺是「默认 legacy 与历史评分逐位一致」，
+// 而 ssam-lib 以 ID 为 map 键（ssam.go 的 efMap），所以**条目集合/ID 形状的任何变化**都可能
+// 改变出厂配置的乘子 —— 只有逐项比对能把它挡住（数值层面的间接断言挡不住 ID 形状变化）。
+func TestConfigToEdgeFactorsOutputUnchangedByTriggerRefactor(t *testing.T) {
+	cfg := factoryLikeConfig()
+	wantBuiltin := []EdgeFactorConfig{
+		{ID: "EF-002FA", Name: "2FA Missing", Factor: 0.85, TriggerCheck: "EF-001"},
+		{ID: "EF-SYNCOOKIE", Name: "SYN Cookie Disabled", Factor: 0.75, TriggerCheck: "RS-005"},
+		{ID: "EF-SELINUX", Name: "SELinux Disabled", Factor: 0.80, TriggerCheck: "OT-005"},
+		{ID: "EF-APPARMOR", Name: "AppArmor Disabled", Factor: 0.82, TriggerCheck: "OT-005"},
+		{ID: "EF-NO-SIEM", Name: "SIEM Integration Missing", Factor: 0.90, TriggerCheck: "RS-007"},
+		{ID: "EF-NO-IDS", Name: "IDS/IPS Missing", Factor: 0.88, TriggerCheck: "RS-006"},
+		{ID: ef3FAFactorID, Name: "3FA Not Met", Factor: 0.82, TriggerCheck: "EF-002",
+			CascadeTo: "EF-002FA", CascadeValue: 0.82, CascadeOnly: true},
+	}
+	wantCustom := []EdgeFactorConfig{
+		{ID: "ef-002fa", Name: "ef-002fa", Factor: 0.85, TriggerCheck: "EF-001"},
+		{ID: "ef-3fa", Name: "ef-3fa", Factor: 0.82, TriggerCheck: "EF-002"},
+		{ID: "ef-apparmor", Name: "ef-apparmor", Factor: 0.82, TriggerCheck: "OT-005"},
+		{ID: "ef-no-ids", Name: "ef-no-ids", Factor: 0.88, TriggerCheck: "RS-006"},
+		{ID: "ef-no-siem", Name: "ef-no-siem", Factor: 0.90, TriggerCheck: "RS-007"},
+		{ID: "ef-selinux", Name: "ef-selinux", Factor: 0.78, TriggerCheck: "OT-005"},
+		{ID: "ef-syncookie", Name: "ef-syncookie", Factor: 0.75, TriggerCheck: "RS-005"},
+	}
+
+	got := ConfigToEdgeFactors(cfg)
+	if len(got) != len(wantBuiltin)+len(wantCustom) {
+		t.Fatalf("entry count = %d, want %d（内置 7 + custom %d，一个都不能多、不能少）",
+			len(got), len(wantBuiltin)+len(wantCustom), len(wantCustom))
+	}
+	// 内置部分顺序确定，逐位比对
+	for i, want := range wantBuiltin {
+		if got[i] != want {
+			t.Errorf("builtin entry[%d] =\n  %+v\nwant\n  %+v", i, got[i], want)
+		}
+	}
+	// custom 部分按 ID 定序后逐字段比对
+	gotCustom := sortedByID(got[len(wantBuiltin):])
+	for i, want := range wantCustom {
+		if gotCustom[i] != want {
+			t.Errorf("custom entry[%d] =\n  %+v\nwant\n  %+v", i, gotCustom[i], want)
+		}
+	}
+}
+
+// TestConfigToEdgeFactorsKeepsEmptyCustomTrigger 固定另一种合法形态：条目只出现在
+// [edge_factors.custom] 而 [edge_factors.custom_triggers] 缺该项（例如操作员新加的自定义因子
+// 还没配触发检查）。改造前后都必须原样产出该条目、TriggerCheck 为空 —— 在 ssam-lib 里
+// TriggerCheck == "" 永不等于任何 check id，故该条目不激活（既有语义，不是本任务引入）。
+func TestConfigToEdgeFactorsKeepsEmptyCustomTrigger(t *testing.T) {
 	cfg := &config.Config{EdgeFactors: defaultTestEdgeFactors()}
-	// 真实配置的形态：Key 是小写的 ef-custom，而模型段的 vector 键已被 Task 3 归一为大写。
+	cfg.EdgeFactorsCustom = map[string]config.CustomEdgeFactorConfig{
+		"ef-custom": {Factor: 0.7}, // [edge_factors.custom_triggers] 里没有 ef-custom
+	}
+	got := ConfigToEdgeFactors(cfg)
+	want := EdgeFactorConfig{ID: "ef-custom", Name: "ef-custom", Factor: 0.7, TriggerCheck: ""}
+	if len(got) != 8 {
+		t.Fatalf("entry count = %d, want 8（内置 7 + 1 个 custom）", len(got))
+	}
+	if got[7] != want {
+		t.Errorf("custom entry = %+v, want %+v", got[7], want)
+	}
+}
+
+// TestConfigToEdgeFactorsOverrideChangesOnlyTriggerCheck 收紧上一条：允许的改变只有
+// TriggerCheck 一处 —— 用整份产出的逐项 diff 证明覆盖没有夹带任何其它字段的改动。
+func TestConfigToEdgeFactorsOverrideChangesOnlyTriggerCheck(t *testing.T) {
+	cfg := factoryLikeConfig()
+	base := sortedByID(ConfigToEdgeFactors(cfg))
+
+	cfg.EdgeFactorModel.TriggerMap = map[string]string{"EF-SELINUX": "OT-099", ef3FAFactorID: "EF-777"}
+	got := sortedByID(ConfigToEdgeFactors(cfg))
+	if len(got) != len(base) {
+		t.Fatalf("override must not change the entry count: %d vs %d", len(got), len(base))
+	}
+	for i := range base {
+		want := base[i]
+		// 覆盖按「归一后的逻辑因子」生效：同名的内地条目与其小写定制副本都属于该因子，
+		// 两者都改（否则定制副本会留着旧触发检查，同一逻辑因子的触发来源不一致）。
+		switch NormalizeFactorID(want.ID) {
+		case "EF-SELINUX":
+			want.TriggerCheck = "OT-099"
+		case ef3FAFactorID:
+			want.TriggerCheck = "EF-777"
+		}
+		if got[i] != want {
+			t.Errorf("entry[%d] =\n  %+v\nwant\n  %+v（覆盖只应改 TriggerCheck，条目集合/ID/数值都不许动）", i, got[i], want)
+		}
+	}
+}
+
+// TestNormalizeFactorIDIsTheConsumerSideNormalization pins Fix round 3 的落点：归一化放在
+// **消费侧**（Task 7 查 Params 之前），产出侧保持改造前的 ID 形状。
+func TestNormalizeFactorIDIsTheConsumerSideNormalization(t *testing.T) {
+	cases := map[string]string{
+		"ef-selinux":    "EF-SELINUX",
+		"EF-SELINUX":    "EF-SELINUX",
+		"  ef-custom  ": "EF-CUSTOM",
+		"":              "",
+	}
+	for in, want := range cases {
+		if got := NormalizeFactorID(in); got != want {
+			t.Errorf("NormalizeFactorID(%q) = %q, want %q", in, got, want)
+		}
+	}
+	// 产出侧不得再做归一：custom 条目仍以 parseSections 的小写键原样产出。
+	emitted := map[string]bool{}
+	cfg := factoryLikeConfig()
+	for _, f := range ConfigToEdgeFactors(cfg) {
+		emitted[f.ID] = true
+	}
+	for id := range cfg.EdgeFactorsCustom {
+		if !emitted[id] {
+			t.Errorf("custom entry %q must be emitted with its raw (lowercase) id", id)
+		}
+	}
+}
+
+// TestNormalizeFactorIDBridgesEmittedIDsToParamsKeys pins「产出 ID 经消费者侧归一后必须都能在
+// Params 里查到」这条不变式（取代 Fix round 2 的产出侧归一变体）：
+// 正向：每个产出 ID 归一后都有权重（EF-3FA 例外，它是无权重的级联入口）；
+// 反向：Params.Factors 的每个键都能由某个产出 ID 归一得到（否则是「配了却永不激活」）。
+func TestNormalizeFactorIDBridgesEmittedIDsToParamsKeys(t *testing.T) {
+	cfg := factoryLikeConfig()
+	cfg.EdgeFactorsCustom["ef-custom"] = config.CustomEdgeFactorConfig{Factor: 0.7, TriggerCheck: "RS-001"}
+	cfg.EdgeFactorModel = config.EdgeFactorModelConfig{
+		Model: "graph", PFloor: 0.4,
+		Lambda:  map[string]float64{"attack_surface": 1.0},
+		Vectors: map[string]map[string]float64{"EF-CUSTOM": fiveDomainVector(0.5)},
+	}
+	p, enabled, err := ParamsFromConfig(cfg)
+	if err != nil || !enabled {
+		t.Fatalf("ParamsFromConfig: enabled=%v err=%v", enabled, err)
+	}
+
+	normalized := map[string]bool{}
+	for _, f := range ConfigToEdgeFactors(cfg) {
+		key := NormalizeFactorID(f.ID)
+		normalized[key] = true
+		if key == ef3FAFactorID {
+			continue // 级联入口：产出但不携带权重
+		}
+		if _, ok := p.Factors[key]; !ok {
+			t.Errorf("emitted id %q normalizes to %q with no weight in Params.Factors — Task 7 必须用 NormalizeFactorID 查表", f.ID, key)
+		}
+	}
+	for id := range p.Factors {
+		if !normalized[id] {
+			t.Errorf("Params.Factors has %q but no emitted id normalizes to it — 配了却永不激活", id)
+		}
+	}
+}
+
+// TestNormalizeFactorIDMakesCustomVectorsReachable 是给 Task 7 的端到端用法示范：
+// 引擎以小写 ID 产出自定义因子（改造前的既有形状），消费侧用 NormalizeFactorID 归一后再查
+// Params.Vectors 就能命中。断言不满足于「查得到」：用与全强度（1.0）不同的声明向量跑
+// Synthesize，L 精确等于 (1−f)·v[i]；若走了「未声明 → 全强度」fallback 会是 0.3。
+func TestNormalizeFactorIDMakesCustomVectorsReachable(t *testing.T) {
+	cfg := &config.Config{EdgeFactors: defaultTestEdgeFactors()}
 	cfg.EdgeFactorsCustom = map[string]config.CustomEdgeFactorConfig{
 		"ef-custom": {Factor: 0.7, TriggerCheck: "RS-001"},
 	}
@@ -627,22 +793,26 @@ func TestConfigToEdgeFactorsNormalizesCustomFactorID(t *testing.T) {
 			emitted = f.ID
 		}
 	}
-	if emitted != "EF-CUSTOM" {
-		t.Fatalf("custom factor id must be canonical uppercase, got %q", emitted)
+	if emitted != "ef-custom" {
+		t.Fatalf("producer side must keep the parseSections spelling, got %q", emitted)
 	}
 
 	p, enabled, err := ParamsFromConfig(cfg)
 	if err != nil || !enabled {
 		t.Fatalf("ParamsFromConfig: enabled=%v err=%v", enabled, err)
 	}
-	vec, ok := p.Vectors[emitted]
+	vec, ok := p.Vectors[NormalizeFactorID(emitted)]
 	if !ok {
-		t.Fatalf("the engine-emitted id %q must be a key of Params.Vectors, got %v", emitted, p.Vectors)
+		t.Fatalf("NormalizeFactorID(%q) = %q must be a key of Params.Vectors, got %v",
+			emitted, NormalizeFactorID(emitted), p.Vectors)
 	}
 
 	act, ok := ActivationFromResult(EdgeFactorResult{ID: emitted, Factor: 0.7, Active: true, TriggerConfidence: 1}, "RS-001")
 	if !ok {
 		t.Fatal("an active factor must produce an activation item")
+	}
+	if act.FactorID != "EF-CUSTOM" {
+		t.Errorf("ActivationFromResult must normalize FactorID to the canonical key, got %q", act.FactorID)
 	}
 	// 声明向量是全 5 域，故 Synthesize 也必须按全 5 域调用（Validate 要求键面一致）。
 	res, err := edgefactor.Synthesize(p, edgefactor.DefaultDomains(), edgefactor.Input{
@@ -654,76 +824,21 @@ func TestConfigToEdgeFactorsNormalizesCustomFactorID(t *testing.T) {
 	}
 	// (1−0.7)×0.5 = 0.15（浮点比较带容差）；0.3 说明走了全强度 fallback。
 	if got := res.L["attack_surface"]; math.Abs(got-0.15) > 1e-12 {
-		t.Errorf("L = %v, want 0.15 = (1−0.7)×%v（用的是声明向量）；0.3 说明走了全强度 fallback", got, vec["attack_surface"])
-	}
-}
-
-// TestEmittedFactorIDsMatchParamsKeyFace pins Fix round 1/2 合起来的不变式（Task 7 依赖它）：
-// 引擎产出的因子 ID 与 Params.Factors 的键面必须**双向**对齐 ——
-// 正向：产出的每个 ID 都有权重（否则 Task 7 的权重/向量查表会落空）；EF-3FA 例外，它是
-// 级联入口、本来就不带权重（裁定 A）。
-// 反向：Params.Factors 里的每个键都能被引擎产出（否则是「配了但永远不会激活」的死配置）。
-func TestEmittedFactorIDsMatchParamsKeyFace(t *testing.T) {
-	cfg := factoryLikeConfig()
-	cfg.EdgeFactorsCustom["ef-custom"] = config.CustomEdgeFactorConfig{Factor: 0.7, TriggerCheck: "RS-001"}
-	cfg.EdgeFactorModel = config.EdgeFactorModelConfig{
-		Model: "graph", PFloor: 0.4,
-		Lambda:  map[string]float64{"attack_surface": 1.0},
-		Vectors: map[string]map[string]float64{"EF-CUSTOM": fiveDomainVector(0.5)},
-	}
-	p, enabled, err := ParamsFromConfig(cfg)
-	if err != nil || !enabled {
-		t.Fatalf("ParamsFromConfig: enabled=%v err=%v", enabled, err)
+		t.Errorf("L = %v, want 0.15 = (1−0.7)×%v（声明向量命中）；0.3 说明走了全强度 fallback", got, vec["attack_surface"])
 	}
 
-	emitted := map[string]bool{}
-	for _, f := range ConfigToEdgeFactors(cfg) {
-		emitted[f.ID] = true
-		if f.ID == ef3FAFactorID {
-			continue // 级联入口：产出但不携带权重
-		}
-		if _, ok := p.Factors[f.ID]; !ok {
-			t.Errorf("engine emits factor %q with no weight in Params.Factors — 查表会落空", f.ID)
-		}
+	// 反面对照：把未归一的 ID 直接塞进 FactorActivation（绕过上面的归一），合成层的
+	// Vectors 查表落空并静默按全强度处理 —— 这正是 Task 7 必须走 NormalizeFactorID 的原因。
+	leaked, err := edgefactor.Synthesize(p, edgefactor.DefaultDomains(), edgefactor.Input{
+		Factors: []edgefactor.FactorActivation{{
+			FactorID: emitted, EffectiveFactor: 0.7,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Synthesize(leaked): %v", err)
 	}
-	for id := range p.Factors {
-		if !emitted[id] {
-			t.Errorf("Params.Factors has %q but the engine never emits it — 配了却永不激活", id)
-		}
-	}
-}
-
-// TestConfigToEdgeFactorsSkipsDuplicateCustomEntries pins Fix round 2 的关键回归防护：
-// 工厂模板会在 [edge_factors.custom] 里重复列出内置因子与 EF-3FA。若把它们按规范大写
-// 一并产出，ssam-lib 的 efMap（以 ID 为键）会互相覆盖 —— 实测 EF-3FA 的级联字段被
-// 「无触发检查」的 custom 副本抹掉（EF-002 失败后不再级联 0.82，乘子从 0.82 变成 1.0）。
-// 故同名 custom 条目必须被跳过，清单里每个 ID 只能出现一次。
-func TestConfigToEdgeFactorsSkipsDuplicateCustomEntries(t *testing.T) {
-	cfg := factoryLikeConfig()
-	factors := ConfigToEdgeFactors(cfg)
-
-	if len(factors) != 7 {
-		t.Errorf("factory config must emit exactly the 6 built-ins + EF-3FA, got %d entries", len(factors))
-	}
-	seen := map[string]int{}
-	for _, f := range factors {
-		seen[f.ID]++
-	}
-	for id, n := range seen {
-		if n != 1 {
-			t.Errorf("factor %q emitted %d times — 同名条目会在 ssam-lib 的 efMap 里互相覆盖", id, n)
-		}
-	}
-	for _, f := range factors {
-		if f.ID != ef3FAFactorID {
-			continue
-		}
-		if !f.CascadeOnly || f.CascadeTo != "EF-002FA" || f.CascadeValue != 0.82 {
-			t.Errorf("EF-3FA cascade fields must survive the duplicate skip, got %+v", f)
-		}
-		if f.TriggerCheck != "EF-002" {
-			t.Errorf("EF-3FA trigger = %q, want the default EF-002", f.TriggerCheck)
-		}
+	if math.Abs(leaked.L["attack_surface"]-0.3) > 1e-12 {
+		t.Fatalf("control case must show the full-strength fallback (L = 0.3), got %v", leaked.L["attack_surface"])
 	}
 }
 

@@ -81,13 +81,20 @@ func ParamsFromConfig(cfg *config.Config) (edgefactor.Params, bool, error) {
 	return p, true, nil
 }
 
-// canonicalFactorID 返回因子 ID 的规范拼写（引擎的 FactorID 约定：全大写）。
-// 语义与 internal/config 的同名未导出函数一致（定义见 internal/config/edgefactor.go:218，
-// 未导出故不可直接复用，这里实现等价版本）。
-// 用途：parseSections 会把配置键小写化，而 Params.Factors/Vectors 的键面是规范大写 ——
-// 不归一的话「引擎产出的 ID」与「Params 的键」口径不一致，Task 7 拿 EdgeFactorResult.ID
-// 去查 Params.Vectors 会查不中，回落成全强度默认向量（静默失效）。
-func canonicalFactorID(id string) string {
+// NormalizeFactorID 把因子 ID 归一为规范拼写（引擎的 FactorID 约定：全大写），并在
+// 查表前使用 —— **产出侧不改 ID，只在消费侧归一**（Fix round 3）。
+//
+// 语义必须与 internal/config 的 canonicalFactorID 保持一致（定义见
+// internal/config/edgefactor.go:218；该函数未导出，无法直接复用，**两处修改务必同步**）。
+//
+// 为什么需要它：parseSections 会把配置键小写化，于是 [edge_factors.custom] 的条目在
+// ConfigToEdgeFactors 里以**小写 ID** 产出（这是改造前就有的既有语义，出厂模板正是靠
+// 「大写内置项 + 小写定制副本」两个不同的 map 键让定制值各自计入 —— 见 ssam.go 的 efMap），
+// 而 Params.Factors/Vectors 的键面是规范大写（Task 3 已把模型段的 vector./coupling./trigger.
+// 键归一为大写）。Task 7 若直接拿 EdgeFactorResult.ID 去查 Params.Vectors，自定义因子会查不中
+// 并静默回落成全强度默认向量 —— 用本函数把 ID 归一后再查，即可消除该回落，同时保持产出侧
+// 与历史评分逐位一致。
+func NormalizeFactorID(id string) string {
 	return strings.ToUpper(strings.TrimSpace(id))
 }
 
@@ -112,7 +119,7 @@ func factorWeights(cfg *config.Config) map[string]float64 {
 		"EF-NO-IDS":    cfg.EdgeFactors.NoIDS,
 	}
 	for id, c := range cfg.EdgeFactorsCustom {
-		key := canonicalFactorID(id)
+		key := NormalizeFactorID(id)
 		if key == "" {
 			// 畸形配置（`= 0.7` 这类无键行）会产出空键；空因子 ID 不可能被任何
 			// vector./coupling./trigger. 键指向，跳过即可（不存在与之配对的配置项，
@@ -212,12 +219,18 @@ func validateTriggerOverrides(overrides map[string]string, known map[string]bool
 // 其语义是「该因子沿用配置权重」，这是 Synthesize 的既有约定而非缺陷。
 //
 // triggerCheck 仅用于溯源（Synthesize 不消费该字段），无来源时传 ""。
+//
+// FactorID 会经 NormalizeFactorID 归一后再填入：合成层的 Vectors / Factors / Coupling
+// 三处查表都以规范大写键进行，而未归一的 ID（parseSections 小写化的自定义因子）会让
+// Vectors 查表落空、静默回落到「全强度」默认向量 —— 实测 L 由 0.15 变成 0.3。
+// 归一写在这里而不是留给调用方，是为了让「激活项的 ID 恒为规范键」成为构造性保证；
+// 调用方若还要自己查 Params，同样使用 NormalizeFactorID。
 func ActivationFromResult(r EdgeFactorResult, triggerCheck string) (edgefactor.FactorActivation, bool) {
 	if !r.Active {
 		return edgefactor.FactorActivation{}, false
 	}
 	return edgefactor.FactorActivation{
-		FactorID:        r.ID,
+		FactorID:        NormalizeFactorID(r.ID),
 		TriggerCheck:    triggerCheck,
 		CTrigger:        r.TriggerConfidence,
 		EffectiveFactor: edgefactor.EffectiveFactor(r.Factor, r.TriggerConfidence),
