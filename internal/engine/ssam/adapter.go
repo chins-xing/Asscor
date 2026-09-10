@@ -34,6 +34,8 @@ func ConfigToEdgeFactors(cfg *config.Config) []EdgeFactorConfig {
 		return nil
 	}
 	triggers := DefaultTriggerMap()
+	// 显式覆盖表：自定义因子只认它，不认合并后的默认表（见下方循环内的说明）。
+	modelTriggers := cfg.EdgeFactorModel.TriggerMap
 	for id, check := range cfg.EdgeFactorModel.TriggerMap {
 		// 主控裁定 #5 的第二道防线：空值绝不允许覆盖默认表。写进去等于让该因子
 		// 静默失去触发检查（永不激活）。本函数没有 error 通道，报错由同一装配流程里的
@@ -69,12 +71,22 @@ func ConfigToEdgeFactors(cfg *config.Config) []EdgeFactorConfig {
 		Factor: cfg.EdgeFactors.NoIDS, TriggerCheck: triggers["EF-NO-IDS"],
 	})
 	result = append(result, EdgeFactorConfig{
-		ID: "EF-3FA", Name: "3FA Not Met",
-		Factor: 0.82, TriggerCheck: "EF-002", CascadeTo: "EF-002FA", CascadeValue: 0.82, CascadeOnly: true,
+		ID: ef3FAFactorID, Name: "3FA Not Met",
+		Factor: 0.82, TriggerCheck: triggers[ef3FAFactorID], CascadeTo: "EF-002FA", CascadeValue: 0.82, CascadeOnly: true,
 	})
 	for id, cfg := range cfg.EdgeFactorsCustom {
+		// 模型段的 trigger.<factor> 同样覆盖自定义因子（裁定 A）：该键已被装配层的
+		// 键面校验列为合法，若在此不消费就又是一条「校验通过但静默无效」的路径。
+		// 只认显式配置的覆盖（modelTriggers），不查合并后的默认表 —— 否则内置因子的
+		// 默认值会反过来盖掉 [edge_factors.custom_triggers] 里操作员自己写的触发检查，
+		// 破坏「未配置模型段时默认行为逐字等价」。
+		// 注意 id 来自 parseSections（键被小写化），而 trigger 键在 Task 3 已归一为大写。
+		triggerCheck := cfg.TriggerCheck
+		if override, ok := modelTriggers[strings.ToUpper(id)]; ok && strings.TrimSpace(override) != "" {
+			triggerCheck = override
+		}
 		result = append(result, EdgeFactorConfig{
-			ID: id, Name: id, Factor: cfg.Factor, TriggerCheck: cfg.TriggerCheck,
+			ID: id, Name: id, Factor: cfg.Factor, TriggerCheck: triggerCheck,
 		})
 	}
 	return result

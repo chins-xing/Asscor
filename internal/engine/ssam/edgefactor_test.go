@@ -19,15 +19,28 @@ func defaultTestEdgeFactors() model.EdgeFactors {
 	}
 }
 
+// TestDefaultTriggerMapMatchesCurrentHardcoding 现在做**双向**精确比对（Fix round 1 Minor#6）：
+// 只遍历 want 查 got[k] 时，多出来的键（例如误把别的因子写进默认表）检测不到。
+// want 里加入 EF-3FA 是裁定 A 的要求：它同样是 ConfigToEdgeFactors 的产出项，其默认触发
+// "EF-002" 也是改造前的硬编码原值，故一并进默认表 —— 表长因此是 7 而不是 6。
 func TestDefaultTriggerMapMatchesCurrentHardcoding(t *testing.T) {
 	want := map[string]string{
 		"EF-002FA": "EF-001", "EF-SYNCOOKIE": "RS-005", "EF-SELINUX": "OT-005",
 		"EF-APPARMOR": "OT-005", "EF-NO-SIEM": "RS-007", "EF-NO-IDS": "RS-006",
+		"EF-3FA": "EF-002",
 	}
 	got := DefaultTriggerMap()
+	if len(got) != len(want) {
+		t.Errorf("default trigger map has %d entries, want %d — 缺键与多键都必须被发现", len(got), len(want))
+	}
 	for k, v := range want {
 		if got[k] != v {
 			t.Errorf("trigger[%s] = %q, want %q", k, got[k], v)
+		}
+	}
+	for k := range got {
+		if _, ok := want[k]; !ok {
+			t.Errorf("unexpected key %q in the default trigger map", k)
 		}
 	}
 }
@@ -225,8 +238,10 @@ func TestParamsFromConfigRejectsVectorSumAboveOne(t *testing.T) {
 	}
 }
 
-// TestParamsFromConfigAbsentSectionStaysInert 记录裁定 #4 的边界：段缺席时不构造、
-// 不校验新模型参数，调用方据 enabled=false 保持既有路径。
+// TestParamsFromConfigAbsentSectionStaysInert pins 裁定 #4 的边界（Fix round 1 Important#1
+// 之后收紧）：段缺席时不构造、不校验新模型参数，模型字段一律保持零值 —— 装配层不得凭空
+// 造出 p_floor=0.5 这类「看起来可用」的下限；未启用的参数一旦被误用，零值 p_floor 会被
+// edgefactor.Validate 大声拒绝，而不是带着捏造的下限静默参与计算。
 func TestParamsFromConfigAbsentSectionStaysInert(t *testing.T) {
 	cfg := &config.Config{EdgeFactors: defaultTestEdgeFactors()}
 	p, enabled, err := ParamsFromConfig(cfg)
@@ -236,8 +251,57 @@ func TestParamsFromConfigAbsentSectionStaysInert(t *testing.T) {
 	if p.Model != edgefactor.ModelLegacy {
 		t.Errorf("model = %q, want legacy", p.Model)
 	}
+	if p.PFloor != 0 || p.ChainWindowSeconds != 0 {
+		t.Errorf("model fields must stay at their zero value, got p_floor=%v chain_window=%d",
+			p.PFloor, p.ChainWindowSeconds)
+	}
 	if len(p.Vectors) != 0 || len(p.Coupling) != 0 || len(p.Lambda) != 0 {
 		t.Errorf("absent section must not fabricate model params, got %+v", p)
+	}
+}
+
+// TestParamsFromConfigErrorPathsKeepLegacyModel pins Fix round 1 Minor#6：所有错误返回
+// 统一是 {Model: ModelLegacy} 而不是全零值，使「未启用或出错 ⇒ Model == legacy」这条
+// 不变式在每一条返回路径上都成立 —— 调用方无需区分「零值」与「legacy」两种失败形态。
+func TestParamsFromConfigErrorPathsKeepLegacyModel(t *testing.T) {
+	badTriggerKey := graphTestConfig()
+	badTriggerKey.EdgeFactorModel.TriggerMap = map[string]string{"EF-SELNUX": "OT-005"}
+
+	badVectorKey := graphTestConfig()
+	badVectorKey.EdgeFactorModel.Vectors = map[string]map[string]float64{"EF-SELNUX": fiveDomainVector(0.5)}
+
+	asymmetricCoupling := graphTestConfig()
+	asymmetricCoupling.EdgeFactorModel.Coupling = map[string]map[string]float64{
+		"EF-SELINUX": {"EF-APPARMOR": 0.30}, "EF-APPARMOR": {"EF-SELINUX": 0.40},
+	}
+
+	missingPFloor := graphTestConfig()
+	missingPFloor.EdgeFactorModel.PFloor = 0
+
+	emptyTrigger := graphTestConfig()
+	emptyTrigger.EdgeFactorModel.TriggerMap = map[string]string{"EF-SELINUX": ""}
+
+	cases := map[string]*config.Config{
+		"nil config":          nil,
+		"unknown trigger key": badTriggerKey,
+		"unknown vector key":  badVectorKey,
+		"asymmetric coupling": asymmetricCoupling,
+		"missing p_floor":     missingPFloor,
+		"empty trigger":       emptyTrigger,
+	}
+	for name, cfg := range cases {
+		t.Run(name, func(t *testing.T) {
+			p, enabled, err := ParamsFromConfig(cfg)
+			if err == nil {
+				t.Fatal("this config must be rejected")
+			}
+			if enabled {
+				t.Error("a rejected config must not enable the new model")
+			}
+			if p.Model != edgefactor.ModelLegacy {
+				t.Errorf("error return must carry Model=legacy, got %q", p.Model)
+			}
+		})
 	}
 }
 
@@ -254,7 +318,7 @@ func TestParamsFromConfigRejectsNilConfig(t *testing.T) {
 }
 
 // TestConfigToEdgeFactorsKeepsDefaultTriggers 是改造前的逐字回归：不带覆盖时每个
-// 内置因子的 TriggerCheck 与旧硬编码一致。
+// 因子的 TriggerCheck 与旧硬编码一致（EF-3FA 的 EF-002 现在也来自默认表，裁定 A）。
 func TestConfigToEdgeFactorsKeepsDefaultTriggers(t *testing.T) {
 	cfg := &config.Config{EdgeFactors: defaultTestEdgeFactors()}
 	got := map[string]string{}
@@ -268,6 +332,54 @@ func TestConfigToEdgeFactorsKeepsDefaultTriggers(t *testing.T) {
 	}
 	if got["EF-3FA"] != "EF-002" {
 		t.Errorf("EF-3FA trigger = %q, want EF-002 (cascade entry unchanged)", got["EF-3FA"])
+	}
+}
+
+// TestConfigToEdgeFactorsAppliesEF3FATriggerOverride pins 裁定 A：EF-3FA 是
+// ConfigToEdgeFactors 的产出项，故 trigger.EF-3FA 不能再是静默 no-op。
+func TestConfigToEdgeFactorsAppliesEF3FATriggerOverride(t *testing.T) {
+	cfg := &config.Config{EdgeFactors: defaultTestEdgeFactors()}
+	cfg.EdgeFactorModel.TriggerMap = map[string]string{"EF-3FA": "EF-777"}
+	got := map[string]string{}
+	for _, f := range ConfigToEdgeFactors(cfg) {
+		got[f.ID] = f.TriggerCheck
+	}
+	if got["EF-3FA"] != "EF-777" {
+		t.Errorf("EF-3FA override not applied, got %q", got["EF-3FA"])
+	}
+	// 级联语义不得被覆盖动作破坏
+	for _, f := range ConfigToEdgeFactors(cfg) {
+		if f.ID == "EF-3FA" && (!f.CascadeOnly || f.CascadeTo != "EF-002FA" || f.CascadeValue != 0.82) {
+			t.Errorf("EF-3FA cascade fields must be untouched, got %+v", f)
+		}
+	}
+}
+
+// TestConfigToEdgeFactorsAppliesCustomFactorTriggerOverride pins 裁定 A 的键面语义：
+// trigger.<自定义因子> 既然被装配层允许，就必须真的被消费 —— 否则又是一条「校验通过
+// 但静默无效」的路径。自定义因子的默认触发仍来自 [edge_factors.custom_triggers]。
+func TestConfigToEdgeFactorsAppliesCustomFactorTriggerOverride(t *testing.T) {
+	cfg := &config.Config{EdgeFactors: defaultTestEdgeFactors()}
+	// 注意：真实配置经 parseSections 后键是小写的，这里一并覆盖该形态。
+	cfg.EdgeFactorsCustom = map[string]config.CustomEdgeFactorConfig{
+		"ef-custom": {Factor: 0.7, TriggerCheck: "RS-001"},
+	}
+
+	plain := map[string]string{}
+	for _, f := range ConfigToEdgeFactors(cfg) {
+		plain[f.ID] = f.TriggerCheck
+	}
+	if plain["ef-custom"] != "RS-001" {
+		t.Fatalf("without an override the custom trigger must come from [edge_factors.custom_triggers], got %q", plain["ef-custom"])
+	}
+
+	cfg.EdgeFactorModel.TriggerMap = map[string]string{"EF-CUSTOM": "RS-042"}
+	got := map[string]string{}
+	for _, f := range ConfigToEdgeFactors(cfg) {
+		got[f.ID] = f.TriggerCheck
+	}
+	if got["ef-custom"] != "RS-042" {
+		t.Errorf("trigger.EF-CUSTOM must override the custom factor's check, got %q", got["ef-custom"])
 	}
 }
 
@@ -305,9 +417,12 @@ func TestConfigToEdgeFactorsIgnoresEmptyTriggerOverride(t *testing.T) {
 // 这里同时钉住「原始 c 被直接塞进 EffectiveFactor」这一错误实现：c=0.5 时
 // EffectiveFactor = 0.9 ≠ 0.5。
 func TestActivationFromResultConvertsTriggerConfidenceToEffectiveFactor(t *testing.T) {
-	a := ActivationFromResult(EdgeFactorResult{
+	a, ok := ActivationFromResult(EdgeFactorResult{
 		ID: "EF-SELINUX", Factor: 0.8, Active: true, TriggerConfidence: 0.5,
 	}, "OT-005")
+	if !ok {
+		t.Fatal("an active factor must produce an activation item")
+	}
 	if a.FactorID != "EF-SELINUX" || a.TriggerCheck != "OT-005" {
 		t.Fatalf("identity fields must be carried, got %+v", a)
 	}
@@ -318,8 +433,151 @@ func TestActivationFromResultConvertsTriggerConfidenceToEffectiveFactor(t *testi
 		t.Errorf("EffectiveFactor = %v, want EffectiveFactor(0.8, 0.5) = 0.9", a.EffectiveFactor)
 	}
 
-	full := ActivationFromResult(EdgeFactorResult{ID: "EF-NO-IDS", Factor: 0.88, TriggerConfidence: 1}, "")
+	full, ok := ActivationFromResult(EdgeFactorResult{ID: "EF-NO-IDS", Factor: 0.88, Active: true, TriggerConfidence: 1}, "")
+	if !ok {
+		t.Fatal("an active factor must produce an activation item")
+	}
 	if full.EffectiveFactor != 0.88 {
 		t.Errorf("c=1 must keep the configured weight, got %v", full.EffectiveFactor)
+	}
+}
+
+// TestActivationFromResultSkipsInactiveFactors pins Fix round 1 Important#2：未激活因子
+// 必须被滤掉。未激活时 Factor 为 0，而 EffectiveFactor(0, c) 在 c >= 1 时恰好等于 0，
+// 0 又是 Synthesize 里「未提供，回落到配置权重」的哨兵 —— 于是「未激活 + Factor==0 +
+// TriggerConfidence>=1」会让一个根本没触发的因子按配置权重计入惩罚（静默误评分）。
+func TestActivationFromResultSkipsInactiveFactors(t *testing.T) {
+	inactive := EdgeFactorResult{ID: "EF-NO-IDS", Factor: 0, Active: false, TriggerConfidence: 1}
+	if _, ok := ActivationFromResult(inactive, "RS-006"); ok {
+		t.Fatal("an inactive factor must not produce an activation item")
+	}
+
+	// 整体效果：只喂入「按契约滤过」的激活项，未激活因子不得降低 P。
+	p := edgefactor.Params{
+		Model: edgefactor.ModelGraph, PFloor: 0.4,
+		Lambda:  map[string]float64{"attack_surface": 1.0},
+		Vectors: map[string]map[string]float64{"EF-NO-IDS": {"attack_surface": 1.0}},
+		Factors: map[string]float64{"EF-NO-IDS": 0.88},
+	}
+	in := edgefactor.Input{}
+	if a, ok := ActivationFromResult(inactive, "RS-006"); ok {
+		in.Factors = append(in.Factors, a)
+	}
+	res, err := edgefactor.Synthesize(p, []string{"attack_surface"}, in)
+	if err != nil {
+		t.Fatalf("Synthesize: %v", err)
+	}
+	if res.P["attack_surface"] != 1 {
+		t.Errorf("an inactive factor must not lower P, got %v", res.P["attack_surface"])
+	}
+
+	// 反面对照：若把未激活项原样塞进 Input（EffectiveFactor 恰为 0 = 哨兵），合成层会
+	// 回落到配置权重 0.88 并真的扣分 —— 这正是过滤要拦住的静默误评分路径。
+	leaked := edgefactor.Input{Factors: []edgefactor.FactorActivation{{
+		FactorID:        inactive.ID,
+		EffectiveFactor: edgefactor.EffectiveFactor(inactive.Factor, inactive.TriggerConfidence),
+	}}}
+	leakedRes, err := edgefactor.Synthesize(p, []string{"attack_surface"}, leaked)
+	if err != nil {
+		t.Fatalf("Synthesize(leaked): %v", err)
+	}
+	if leakedRes.P["attack_surface"] >= 1 {
+		t.Fatalf("control case must show the sentinel fallback penalty, got P=%v", leakedRes.P["attack_surface"])
+	}
+}
+
+// TestParamsFromConfigRejectsUnknownTriggerKey pins 裁定 A 的键面校验：拼错的
+// trigger.EF-SELNUX 目前会被静默丢弃（no-op），与裁定 1 属同源失败类，必须报错。
+func TestParamsFromConfigRejectsUnknownTriggerKey(t *testing.T) {
+	cfg := graphTestConfig()
+	cfg.EdgeFactorModel.TriggerMap = map[string]string{"EF-SELNUX": "OT-005"}
+	_, _, err := ParamsFromConfig(cfg)
+	if err == nil {
+		t.Fatal("a trigger override for an unknown factor id must be rejected")
+	}
+	if !strings.Contains(err.Error(), "EF-SELNUX") {
+		t.Errorf("error must name the offending factor, got %v", err)
+	}
+}
+
+// TestParamsFromConfigAcceptsKnownTriggerKeys pins 裁定 A 的合法键集合：
+// 六个内置因子、EF-3FA（无权重但确实是产出项）以及 [edge_factors.custom] 的因子。
+func TestParamsFromConfigAcceptsKnownTriggerKeys(t *testing.T) {
+	cfg := graphTestConfig()
+	cfg.EdgeFactorsCustom = map[string]config.CustomEdgeFactorConfig{"ef-custom": {Factor: 0.7}}
+	cfg.EdgeFactorModel.TriggerMap = map[string]string{
+		"EF-SELINUX": "OT-005", "EF-3FA": "EF-002", "EF-CUSTOM": "RS-001",
+	}
+	if _, _, err := ParamsFromConfig(cfg); err != nil {
+		t.Fatalf("known trigger keys must be accepted: %v", err)
+	}
+}
+
+// TestParamsFromConfigAddsCustomFactors pins 裁定 B：自定义因子必须进入 Factors，
+// 否则 vector.<custom> 会被裁定 1 的「键 ⊆ Factors」直接拒绝，「变量化」对自定义
+// 因子不完整。键归一为规范大写，以便与 Task 3 归一后的 vector./coupling. 键对上。
+func TestParamsFromConfigAddsCustomFactors(t *testing.T) {
+	for name, id := range map[string]string{"canonical": "EF-CUSTOM", "lowercase (parseSections 形态)": "ef-custom"} {
+		t.Run(name, func(t *testing.T) {
+			cfg := graphTestConfig()
+			cfg.EdgeFactorsCustom = map[string]config.CustomEdgeFactorConfig{id: {Factor: 0.7}}
+			cfg.EdgeFactorModel.Vectors = map[string]map[string]float64{"EF-CUSTOM": fiveDomainVector(0.5)}
+
+			p, enabled, err := ParamsFromConfig(cfg)
+			if err != nil {
+				t.Fatalf("a custom factor with a full-coverage vector must be accepted: %v", err)
+			}
+			if !enabled {
+				t.Fatal("the model must be enabled")
+			}
+			if p.Factors["EF-CUSTOM"] != 0.7 {
+				t.Errorf("custom factor weight = %v, want 0.7 (from [edge_factors.custom])", p.Factors["EF-CUSTOM"])
+			}
+			if _, ok := p.Vectors["EF-CUSTOM"]; !ok {
+				t.Errorf("custom vector must survive key validation, got %v", p.Vectors)
+			}
+		})
+	}
+}
+
+// TestParamsFromConfigStillValidatesCustomVectors pins 裁定 B 的后半句：自定义因子的
+// 向量仍要过值域与覆盖率校验，不得因为「自定义」而放宽。
+func TestParamsFromConfigStillValidatesCustomVectors(t *testing.T) {
+	over := graphTestConfig()
+	over.EdgeFactorsCustom = map[string]config.CustomEdgeFactorConfig{"ef-custom": {Factor: 0.7}}
+	over.EdgeFactorModel.Vectors = map[string]map[string]float64{"EF-CUSTOM": fiveDomainVector(1.5)}
+
+	partial := graphTestConfig()
+	partial.EdgeFactorsCustom = map[string]config.CustomEdgeFactorConfig{"ef-custom": {Factor: 0.7}}
+	partial.EdgeFactorModel.Vectors = map[string]map[string]float64{"EF-CUSTOM": {"attack_surface": 0.5}}
+
+	for name, cfg := range map[string]*config.Config{"Σv > 1": over, "缺域": partial} {
+		t.Run(name, func(t *testing.T) {
+			if _, _, err := ParamsFromConfig(cfg); err == nil {
+				t.Fatal("a custom factor's vector must still obey Validate")
+			}
+		})
+	}
+}
+
+// TestParamsFromConfigBuiltinWeightsWinOverCustomDuplicates pins 一条明确的自决：
+// 工厂模板把同样 6 个内置 ID 重复写进 [edge_factors.custom]（键经 parseSections 变成
+// 小写），若让它们覆盖 Factors 会静默改写内置权重、破坏 brief 的「[edge_factors] 是
+// 单一事实来源」约定，也与 legacy 路径的实际行为（大写查表永远查不到小写键 ⇒ 覆盖
+// 从未生效）不一致。故同名自定义项不覆盖内置权重。
+func TestParamsFromConfigBuiltinWeightsWinOverCustomDuplicates(t *testing.T) {
+	cfg := graphTestConfig()
+	cfg.EdgeFactorsCustom = map[string]config.CustomEdgeFactorConfig{
+		"ef-selinux": {Factor: 0.10, TriggerCheck: "OT-005"},
+	}
+	p, _, err := ParamsFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("ParamsFromConfig: %v", err)
+	}
+	if p.Factors["EF-SELINUX"] != cfg.EdgeFactors.SELinuxDisabled {
+		t.Errorf("built-in weight must keep coming from [edge_factors], got %v", p.Factors["EF-SELINUX"])
+	}
+	if len(p.Factors) != 6 {
+		t.Errorf("a lowercase duplicate of a built-in must not add a second key, got %v", len(p.Factors))
 	}
 }
