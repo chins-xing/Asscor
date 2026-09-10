@@ -74,6 +74,16 @@ func ConfigToEdgeFactors(cfg *config.Config) []EdgeFactorConfig {
 		ID: ef3FAFactorID, Name: "3FA Not Met",
 		Factor: 0.82, TriggerCheck: triggers[ef3FAFactorID], CascadeTo: "EF-002FA", CascadeValue: 0.82, CascadeOnly: true,
 	})
+	// 已产出的因子 ID（内置六因子 + EF-3FA）。[edge_factors.custom] 里与它们同名的条目一律
+	// 忽略：工厂模板会把同样 6 个内置 ID 连同 EF-3FA 重复写进 custom 段，而 ssam-lib 以 ID
+	// 为 map 键（ssam.go 的 efMap），ID 归一为大写后同名条目会互相覆盖 —— 实测会让 EF-3FA
+	// 的级联字段被「无触发检查」的 custom 副本抹掉，EF-002 失败后不再级联 0.82。
+	// 内置因子的权重/触发/级联一律以 [edge_factors] + 模型段触发表为准，与 Params.Factors
+	// 的口径（内置优先）保持一致；custom 段只负责增添全新的自定义因子。
+	emitted := make(map[string]bool, len(result))
+	for _, f := range result {
+		emitted[f.ID] = true
+	}
 	for id, cfg := range cfg.EdgeFactorsCustom {
 		// 模型段的 trigger.<factor> 同样覆盖自定义因子（裁定 A）：该键已被装配层的
 		// 键面校验列为合法，若在此不消费就又是一条「校验通过但静默无效」的路径。
@@ -81,12 +91,19 @@ func ConfigToEdgeFactors(cfg *config.Config) []EdgeFactorConfig {
 		// 默认值会反过来盖掉 [edge_factors.custom_triggers] 里操作员自己写的触发检查，
 		// 破坏「未配置模型段时默认行为逐字等价」。
 		// 注意 id 来自 parseSections（键被小写化），而 trigger 键在 Task 3 已归一为大写。
+		// ID 一律归一为规范大写，与 Params.Factors/Vectors 的键面口径统一（Fix round 2 第 1 项）：
+		// 否则 Task 7 拿 EdgeFactorResult.ID 查 Params.Vectors 会查不中，回落成全强度默认向量。
+		factorID := canonicalFactorID(id)
+		if factorID == "" || emitted[factorID] {
+			continue
+		}
+		emitted[factorID] = true
 		triggerCheck := cfg.TriggerCheck
-		if override, ok := modelTriggers[strings.ToUpper(id)]; ok && strings.TrimSpace(override) != "" {
+		if override, ok := modelTriggers[factorID]; ok && strings.TrimSpace(override) != "" {
 			triggerCheck = override
 		}
 		result = append(result, EdgeFactorConfig{
-			ID: id, Name: id, Factor: cfg.Factor, TriggerCheck: triggerCheck,
+			ID: factorID, Name: id, Factor: cfg.Factor, TriggerCheck: triggerCheck,
 		})
 	}
 	return result

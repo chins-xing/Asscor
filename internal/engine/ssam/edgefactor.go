@@ -81,6 +81,16 @@ func ParamsFromConfig(cfg *config.Config) (edgefactor.Params, bool, error) {
 	return p, true, nil
 }
 
+// canonicalFactorID 返回因子 ID 的规范拼写（引擎的 FactorID 约定：全大写）。
+// 语义与 internal/config 的同名未导出函数一致（定义见 internal/config/edgefactor.go:218，
+// 未导出故不可直接复用，这里实现等价版本）。
+// 用途：parseSections 会把配置键小写化，而 Params.Factors/Vectors 的键面是规范大写 ——
+// 不归一的话「引擎产出的 ID」与「Params 的键」口径不一致，Task 7 拿 EdgeFactorResult.ID
+// 去查 Params.Vectors 会查不中，回落成全强度默认向量（静默失效）。
+func canonicalFactorID(id string) string {
+	return strings.ToUpper(strings.TrimSpace(id))
+}
+
 // factorWeights 汇总合成层可见的因子权重：内置六因子取自 [edge_factors]（单一事实来源），
 // 外加 [edge_factors.custom] 里的自定义因子（Fix round 1 裁定 B：变量化必须覆盖自定义
 // 因子，否则 vector.<custom> 会被裁定 1 的「键 ⊆ Factors」直接拒绝）。
@@ -102,7 +112,7 @@ func factorWeights(cfg *config.Config) map[string]float64 {
 		"EF-NO-IDS":    cfg.EdgeFactors.NoIDS,
 	}
 	for id, c := range cfg.EdgeFactorsCustom {
-		key := strings.ToUpper(strings.TrimSpace(id))
+		key := canonicalFactorID(id)
 		if key == "" {
 			// 畸形配置（`= 0.7` 这类无键行）会产出空键；空因子 ID 不可能被任何
 			// vector./coupling./trigger. 键指向，跳过即可（不存在与之配对的配置项，
@@ -143,6 +153,12 @@ func validateAssembly(p edgefactor.Params) error {
 		for to := range tos {
 			if _, ok := p.Factors[to]; !ok {
 				return fmt.Errorf("ssam: coupling to unknown factor id %q — not a factor of [edge_factors] or [edge_factors.custom]", to)
+			}
+			// 自耦合没有任何语义：Synthesize 在累加耦合项时显式跳过 from.id == to.id
+			// （synthesize.go:153-156），所以 coupling.<X>.<X> 只会静默失效。拒绝它，
+			// 而不是让操作员以为自己配了一条耦合边（Fix round 2 第 2 项）。
+			if from == to {
+				return fmt.Errorf("ssam: coupling %s→%s is self-coupling — Synthesize skips i == j, so it would be silently ignored; remove the entry", from, to)
 			}
 		}
 	}
