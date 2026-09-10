@@ -3,6 +3,8 @@
 package ssam
 
 import (
+	"strings"
+
 	"github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/model"
 )
@@ -31,30 +33,40 @@ func ConfigToEdgeFactors(cfg *config.Config) []EdgeFactorConfig {
 	if cfg == nil {
 		return nil
 	}
+	triggers := DefaultTriggerMap()
+	for id, check := range cfg.EdgeFactorModel.TriggerMap {
+		// 主控裁定 #5 的第二道防线：空值绝不允许覆盖默认表。写进去等于让该因子
+		// 静默失去触发检查（永不激活）。本函数没有 error 通道，报错由同一装配流程里的
+		// ParamsFromConfig 承担（见 edgefactor.go validateTriggerOverrides）。
+		if strings.TrimSpace(check) == "" {
+			continue
+		}
+		triggers[id] = check
+	}
 	result := make([]EdgeFactorConfig, 0)
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-002FA", Name: "2FA Missing",
-		Factor: cfg.EdgeFactors.TwoFactorFailure, TriggerCheck: "EF-001",
+		Factor: cfg.EdgeFactors.TwoFactorFailure, TriggerCheck: triggers["EF-002FA"],
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-SYNCOOKIE", Name: "SYN Cookie Disabled",
-		Factor: cfg.EdgeFactors.SYNCookieDisabled, TriggerCheck: "RS-005",
+		Factor: cfg.EdgeFactors.SYNCookieDisabled, TriggerCheck: triggers["EF-SYNCOOKIE"],
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-SELINUX", Name: "SELinux Disabled",
-		Factor: cfg.EdgeFactors.SELinuxDisabled, TriggerCheck: "OT-005",
+		Factor: cfg.EdgeFactors.SELinuxDisabled, TriggerCheck: triggers["EF-SELINUX"],
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-APPARMOR", Name: "AppArmor Disabled",
-		Factor: cfg.EdgeFactors.AppArmorDisabled, TriggerCheck: "OT-005",
+		Factor: cfg.EdgeFactors.AppArmorDisabled, TriggerCheck: triggers["EF-APPARMOR"],
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-NO-SIEM", Name: "SIEM Integration Missing",
-		Factor: cfg.EdgeFactors.NoSIEM, TriggerCheck: "RS-007",
+		Factor: cfg.EdgeFactors.NoSIEM, TriggerCheck: triggers["EF-NO-SIEM"],
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-NO-IDS", Name: "IDS/IPS Missing",
-		Factor: cfg.EdgeFactors.NoIDS, TriggerCheck: "RS-006",
+		Factor: cfg.EdgeFactors.NoIDS, TriggerCheck: triggers["EF-NO-IDS"],
 	})
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-3FA", Name: "3FA Not Met",
