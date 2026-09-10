@@ -818,6 +818,11 @@ Expected: PASS（含 4 个性质测试与 64 组合扫描）
 
 ### Task 3: 配置纯解析（模型段 + 触发映射表）
 
+> **⚠️ 实现后修订（代码为准）**：本节 Step 3 的代码块是最初版本，评审后经两次裁定修订，**已落地于 `internal/config/edgefactor.go`，请以代码为准**，勿照抄本代码块：
+> 1. 因子名/触发检查名统一 `strings.ToUpper` 归一化（配置里大小写均可，键面与引擎 `FactorID` 对齐）——否则 `vector.EF-SELINUX` 会落成小写键、被合成层静默忽略；
+> 2. `[edge_factors]` 段里出现 `model`/`p_floor`/`lambda.`/`vector.`/`coupling.`/`chain.`/`trigger.` 键时**直接报错**并指向 `[edge_factors.model]`（此前会被静默忽略 → 操作者以为在跑 graph，实际仍是 M0）；
+> 3. 全部错误串统一 `config: [edge_factors.model] …` 前缀；域顺序常量改为 `[5]string`；空 `vector.`/`lambda.`/`trigger.` 名拒绝。
+
 **Files:**
 - Create: `internal/config/edgefactor.go`
 - Modify: `internal/config/config.go`（`Config` 结构体增加 `EdgeFactorModel EdgeFactorModelConfig` 字段，并在既有解析流程里填入）
