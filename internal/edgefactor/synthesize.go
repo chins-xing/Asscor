@@ -1,6 +1,7 @@
 package edgefactor
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -44,10 +45,49 @@ func EffectiveFactor(f, cTrigger float64) float64 {
 
 // Synthesize 按 spec §3.1 合成域分修正。
 // legacy 分支在聚合后作用于总分，故只返回 GlobalMultiplier；V/G/C 返回逐域 P_d。
+//
+// 前置约定（三条 fail-fast，全部拒绝静默退化）：
+//   - FactorActivation.EffectiveFactor == 0 表示「未提供」：回落到配置权重 p.Factors[id]；
+//     两者都缺即报错，绝不静默按 1（无惩罚）处理。
+//   - ModelChain 要求每个激活因子都带时间戳；零值 TS 直接报错，不允许静默退化成 vector。
+//   - 本次请求的每个 domain 都必须有 p.Lambda[d]（legacy 豁免，它不读 λ）。
 func Synthesize(p Params, domains []string, in Input) (Result, error) {
 	if err := p.Validate(domains); err != nil {
 		return Result{}, err
 	}
+
+	// λ_d 是 V/G/C 公式的必需项：缺失即报错，不得静默取 1.0 这类代码内建常量。
+	// 只校验**本次请求的域**（不是全部 5 个默认域），故单域调用仍然合法。
+	// legacy 不读 λ（惩罚完全由 GlobalMultiplier 表达），因此对它豁免。
+	if p.Model != ModelLegacy {
+		for _, d := range domains {
+			if _, ok := p.Lambda[d]; !ok {
+				return Result{}, fmt.Errorf("edgefactor: no lambda configured for domain %q", d)
+			}
+		}
+	}
+
+	// chain 是有向时序模型：缺时间戳意味着全部耦合项静默失效（结果精确等于 vector），
+	// 故 fail-fast，而不是让时序语义无声消失。
+	if p.Model == ModelChain {
+		for _, f := range in.Factors {
+			if f.TS.IsZero() {
+				return Result{}, fmt.Errorf("edgefactor: chain model requires timestamps for every factor (missing for %q)", f.FactorID)
+			}
+		}
+	}
+
+	// 解析每个激活因子的有效值：EffectiveFactor == 0 是「未提供」的哨兵，
+	// 回落到配置权重；两者都缺即报错（否则会静默变成「该因子无惩罚」）。
+	effs := make([]float64, len(in.Factors))
+	for i, f := range in.Factors {
+		eff, err := resolveEffective(p, f)
+		if err != nil {
+			return Result{}, err
+		}
+		effs[i] = eff
+	}
+
 	res := Result{
 		Model:            p.Model,
 		ParamsHash:       p.Hash(),
@@ -59,12 +99,8 @@ func Synthesize(p Params, domains []string, in Input) (Result, error) {
 
 	if p.Model == ModelLegacy {
 		mult := 1.0
-		for _, f := range in.Factors {
-			eff := f.EffectiveFactor
-			if eff == 0 {
-				eff = p.Factors[f.FactorID]
-			}
-			if eff > 0 && eff < 1 {
+		for i := range in.Factors {
+			if eff := effs[i]; eff > 0 && eff < 1 {
 				mult *= eff
 			}
 		}
@@ -84,11 +120,8 @@ func Synthesize(p Params, domains []string, in Input) (Result, error) {
 		ts time.Time
 	}
 	contribs := make([]contribution, 0, len(in.Factors))
-	for _, f := range in.Factors {
-		eff := f.EffectiveFactor
-		if eff == 0 {
-			eff = p.Factors[f.FactorID]
-		}
+	for i, f := range in.Factors {
+		eff := effs[i]
 		vec, ok := p.Vectors[f.FactorID]
 		if !ok {
 			// 未配置向量的因子按"作用于全部域、强度 1"处理（默认语义，spec §3.1）。
@@ -152,6 +185,19 @@ func Synthesize(p Params, domains []string, in Input) (Result, error) {
 		res.DomainScores[d] = in.DomainScores[d] * P
 	}
 	return res, nil
+}
+
+// resolveEffective 解析一个激活因子的有效值（spec §3.1）。
+// f.EffectiveFactor == 0 表示调用方未提供该值：回落到配置权重 p.Factors[f.FactorID]；
+// 两者都缺即报错 —— 绝不静默按「无惩罚」处理，那会低估惩罚且无人察觉。
+func resolveEffective(p Params, f FactorActivation) (float64, error) {
+	if f.EffectiveFactor != 0 {
+		return f.EffectiveFactor, nil
+	}
+	if w, ok := p.Factors[f.FactorID]; ok {
+		return w, nil
+	}
+	return 0, fmt.Errorf("edgefactor: factor %q has neither an effective value nor a configured weight", f.FactorID)
 }
 
 // couplingValue 取耦合系数；graph 对称（任一方向配置均可），chain 取有向配置。

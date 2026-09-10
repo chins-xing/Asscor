@@ -2,6 +2,7 @@ package edgefactor
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -137,5 +138,128 @@ func TestSynthesizeLegacyUsesMultiplicativeMultiplier(t *testing.T) {
 	}
 	if !approx(res.DomainScores["attack_surface"], 90, 1e-12) {
 		t.Errorf("legacy must not modify domain scores, got %v", res.DomainScores["attack_surface"])
+	}
+}
+
+// 裁定 A：EffectiveFactor == 0 是「未提供」的哨兵，回落到配置权重 p.Factors[id]。
+func TestSynthesizeZeroEffectiveFallsBackToConfiguredWeight(t *testing.T) {
+	p := vectorParams()
+	res, err := Synthesize(p, []string{"attack_surface"}, Input{
+		DomainScores: map[string]float64{"attack_surface": 100},
+		Factors:      []FactorActivation{{FactorID: "EF-A", CTrigger: 1}}, // EffectiveFactor 缺省为 0
+	})
+	if err != nil {
+		t.Fatalf("Synthesize: %v", err)
+	}
+	// 回落到 p.Factors["EF-A"] = 0.8 → a = 0.1，与显式传 0.8 完全一致。
+	wantP := 0.5 + 0.5*math.Exp(-0.1)
+	if !approx(res.P["attack_surface"], wantP, 1e-9) {
+		t.Errorf("P = %v, want %v (fallback to configured weight)", res.P["attack_surface"], wantP)
+	}
+}
+
+// 裁定 A：既没有 effective 值、配置里也没有该权重 → 必须报错，绝不静默按「无惩罚」处理。
+func TestSynthesizeRejectsFactorWithoutEffectiveValueOrWeight(t *testing.T) {
+	const want = "edgefactor: factor"
+	p := vectorParams()
+	_, err := Synthesize(p, []string{"attack_surface"}, Input{
+		DomainScores: map[string]float64{"attack_surface": 100},
+		Factors:      []FactorActivation{{FactorID: "EF-UNKNOWN", CTrigger: 1}},
+	})
+	if err == nil {
+		t.Fatal("V/G/C: an unresolved factor must be rejected instead of silently applying no penalty")
+	}
+	if !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "EF-UNKNOWN") {
+		t.Errorf("error must name the offending factor, got %q", err)
+	}
+
+	// legacy 分支同理：不得静默按「乘 1」放行。
+	lp := Params{Model: ModelLegacy, PFloor: 0.5, Factors: map[string]float64{"A": 0.8}}
+	_, err = Synthesize(lp, []string{"attack_surface"}, Input{
+		DomainScores: map[string]float64{"attack_surface": 90},
+		Factors:      []FactorActivation{{FactorID: "B", CTrigger: 1}},
+	})
+	if err == nil {
+		t.Fatal("legacy: an unresolved factor must be rejected instead of silently ignoring it")
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("legacy error must name the offending factor, got %q", err)
+	}
+}
+
+// 裁定 B：chain 模型的零值时间戳必须 fail-fast，不得静默退化成 vector。
+func TestSynthesizeChainRejectsZeroTimestamp(t *testing.T) {
+	base := time.Unix(1700000000, 0).UTC()
+	chainParams := func() Params {
+		p := vectorParams()
+		p.Model = ModelChain
+		p.ChainWindowSeconds = 300
+		p.Coupling = map[string]map[string]float64{"EF-B": {"EF-A": 0.5}}
+		p.Vectors["EF-B"] = map[string]float64{"attack_surface": 0.5}
+		p.Factors["EF-B"] = 0.8
+		return p
+	}
+	both := func(tsB, tsA time.Time) Input {
+		return Input{DomainScores: map[string]float64{"attack_surface": 100}, Factors: []FactorActivation{
+			{FactorID: "EF-B", CTrigger: 1, EffectiveFactor: 0.8, TS: tsB},
+			{FactorID: "EF-A", CTrigger: 1, EffectiveFactor: 0.8, TS: tsA},
+		}}
+	}
+
+	cases := map[string]Input{
+		"cascade source without timestamp": both(time.Time{}, base.Add(60*time.Second)),
+		"cascade target without timestamp": both(base, time.Time{}),
+	}
+	for name, in := range cases {
+		if _, err := Synthesize(chainParams(), []string{"attack_surface"}, in); err == nil {
+			t.Errorf("%s: chain must reject a zero timestamp instead of silently degrading to vector", name)
+		} else if !strings.Contains(err.Error(), "edgefactor: chain model requires timestamps for every factor") {
+			t.Errorf("%s: unexpected error %q", name, err)
+		}
+	}
+
+	// 该 fail-fast 只属于 chain：graph 不读 TS，零值时间戳仍须被接受。
+	gp := vectorParams()
+	gp.Model = ModelGraph
+	if _, err := Synthesize(gp, []string{"attack_surface"}, both(time.Time{}, time.Time{})); err != nil {
+		t.Errorf("graph must not require timestamps, got %v", err)
+	}
+}
+
+// 裁定 C：请求域缺 λ 必须报错，不得静默取 λ = 1.0。
+func TestSynthesizeRejectsMissingLambdaForRequestedDomain(t *testing.T) {
+	const want = "edgefactor: no lambda configured for domain"
+	in := Input{DomainScores: map[string]float64{"attack_surface": 100}}
+
+	for _, m := range []ModelID{ModelVector, ModelGraph, ModelChain} {
+		p := vectorParams()
+		p.Model = m
+		if m == ModelChain {
+			p.ChainWindowSeconds = 300
+		}
+		p.Lambda = map[string]float64{} // 请求域 attack_surface 没有 λ
+		_, err := Synthesize(p, []string{"attack_surface"}, in)
+		if err == nil {
+			t.Errorf("model %q: a requested domain without lambda must be rejected", m)
+			continue
+		}
+		if !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "attack_surface") {
+			t.Errorf("model %q: error must name the domain, got %q", m, err)
+		}
+	}
+
+	// 只校验**请求**域：未请求的域缺 λ 不影响单域合成（vectorParams 只配了 attack_surface）。
+	p := vectorParams()
+	if _, err := Synthesize(p, []string{"attack_surface"}, in); err != nil {
+		t.Errorf("unrequested domains must not be required to carry a lambda: %v", err)
+	}
+
+	// legacy 不读 λ（惩罚完全由 GlobalMultiplier 表达），因此豁免。
+	lp := Params{Model: ModelLegacy, PFloor: 0.5, Factors: map[string]float64{"A": 0.8}}
+	if _, err := Synthesize(lp, []string{"attack_surface"}, Input{
+		DomainScores: map[string]float64{"attack_surface": 90},
+		Factors:      []FactorActivation{{FactorID: "A", CTrigger: 1, EffectiveFactor: 0.8}},
+	}); err != nil {
+		t.Errorf("legacy must not require lambda, got %v", err)
 	}
 }
