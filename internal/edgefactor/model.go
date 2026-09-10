@@ -94,6 +94,14 @@ func (p Params) Validate(domains []string) error {
 		if sum > 1 {
 			return fmt.Errorf("edgefactor: vector %s sums to %v (> 1) — overlap must be absorbed by normalisation", id, sum)
 		}
+		// 已声明的向量必须覆盖本次传入的全部域：否则缺失的域会取到零值，
+		// 表现为「该域零惩罚且不报错」——与「未声明 vector → fallback 满强度」
+		// 既不连续、又是静默陷阱。空/nil 向量同样在此被拒绝。
+		for _, d := range domains {
+			if _, ok := vec[d]; !ok {
+				return fmt.Errorf("edgefactor: vector %q does not cover domain %q", id, d)
+			}
+		}
 	}
 	for from, tos := range p.Coupling {
 		for to, c := range tos {

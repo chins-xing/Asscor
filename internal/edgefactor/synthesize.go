@@ -98,11 +98,13 @@ func Synthesize(p Params, domains []string, in Input) (Result, error) {
 	}
 
 	if p.Model == ModelLegacy {
+		// effs 已在 resolveEffective 中统一校验为有限的 (0,1]，故这里直接连乘。
+		// 原 plan 的 `if eff > 0 && eff < 1 { mult *= eff }` 门控会把越界值静默跳过
+		// （等于按「无惩罚」处理），那正是裁定 A 要清除的同类静默路径 —— 本包按主控
+		// 裁定覆盖该 plan 文字：越界一律在 resolveEffective 处报错，绝不静默跳过。
 		mult := 1.0
 		for i := range in.Factors {
-			if eff := effs[i]; eff > 0 && eff < 1 {
-				mult *= eff
-			}
+			mult *= effs[i]
 		}
 		res.GlobalMultiplier = mult
 		for _, d := range domains {
@@ -175,10 +177,10 @@ func Synthesize(p Params, domains []string, in Input) (Result, error) {
 				}
 			}
 		}
-		lambda, ok := p.Lambda[d]
-		if !ok {
-			lambda = 1.0
-		}
+		// 非 legacy 的每个请求域都已在入口处校验 λ 存在，legacy 也已提前返回，
+		// 故这里直接取值 —— 不再保留 λ = 1.0 的兜底（那条分支已不可达，
+		// 留着只会误导读者并给未来重构重新打开静默兜底的抓手）。
+		lambda := p.Lambda[d]
 		P := p.PFloor + (1-p.PFloor)*math.Exp(-lambda*L)
 		res.L[d] = L
 		res.P[d] = P
@@ -190,14 +192,27 @@ func Synthesize(p Params, domains []string, in Input) (Result, error) {
 // resolveEffective 解析一个激活因子的有效值（spec §3.1）。
 // f.EffectiveFactor == 0 表示调用方未提供该值：回落到配置权重 p.Factors[f.FactorID]；
 // 两者都缺即报错 —— 绝不静默按「无惩罚」处理，那会低估惩罚且无人察觉。
+//
+// 最终采用的 eff 值（含从 p.Factors 回落的那条路径）统一在此校验：Input 侧的值不经过
+// Validate（Validate 只覆盖 Params），故必须自查。若放任越界值直通：eff > 1 会让
+// a = (1−eff)·v 变负 → L < 0 → P > 1（域分被抬到基线之上，反向违反 P1）；
+// NaN 则因「NaN != 0」为真而原样直通，把 L/P/DomainScores 全污染成 NaN 且无任何报错。
 func resolveEffective(p Params, f FactorActivation) (float64, error) {
-	if f.EffectiveFactor != 0 {
-		return f.EffectiveFactor, nil
+	eff := f.EffectiveFactor
+	if eff == 0 {
+		w, ok := p.Factors[f.FactorID]
+		if !ok {
+			return 0, fmt.Errorf("edgefactor: factor %q has neither an effective value nor a configured weight", f.FactorID)
+		}
+		eff = w
 	}
-	if w, ok := p.Factors[f.FactorID]; ok {
-		return w, nil
+	if nonFinite(eff) {
+		return 0, fmt.Errorf("edgefactor: factor %q effective value %v must be finite", f.FactorID, eff)
 	}
-	return 0, fmt.Errorf("edgefactor: factor %q has neither an effective value nor a configured weight", f.FactorID)
+	if eff <= 0 || eff > 1 {
+		return 0, fmt.Errorf("edgefactor: factor %q effective value %v out of (0,1]", f.FactorID, eff)
+	}
+	return eff, nil
 }
 
 // couplingValue 取耦合系数；graph 对称（任一方向配置均可），chain 取有向配置。

@@ -8,10 +8,11 @@ import (
 
 func baseParams() Params {
 	return Params{
-		Model:   ModelVector,
-		PFloor:  0.5,
-		Lambda:  map[string]float64{"attack_surface": 1.0, "operation_trust": 1.0},
-		Vectors: map[string]map[string]float64{"EF-SELINUX": {"attack_surface": 0.5}},
+		Model:  ModelVector,
+		PFloor: 0.5,
+		Lambda: map[string]float64{"attack_surface": 1.0, "operation_trust": 1.0},
+		// 已声明的 vector 必须覆盖被测的全部域（Fix round 2 / M1），故两域都显式给出。
+		Vectors: map[string]map[string]float64{"EF-SELINUX": {"attack_surface": 0.5, "operation_trust": 0.5}},
 		Factors: map[string]float64{"EF-SELINUX": 0.8},
 	}
 }
@@ -248,5 +249,73 @@ func TestValidateAcceptsLegacyAndGraph(t *testing.T) {
 	chain.ChainWindowSeconds = 300
 	if err := chain.Validate(domains); err != nil {
 		t.Errorf("chain with a positive window must be accepted: %v", err)
+	}
+}
+
+// M1：凡在 Vectors 中声明的因子，其键集合必须覆盖传入的 domains。
+// 否则缺失的域会取到零值 → 「该域零惩罚且不报错」，与「未声明 → fallback 满强度」
+// 既不连续又是静默陷阱；空/nil 向量同理。
+func TestValidateRejectsVectorNotCoveringDomains(t *testing.T) {
+	domains := []string{"attack_surface", "operation_trust"}
+	const want = "edgefactor: vector"
+	cases := []struct {
+		name    string
+		vec     map[string]float64
+		missing string
+	}{
+		{"partial coverage", map[string]float64{"attack_surface": 0.5}, "operation_trust"},
+		{"empty vector", map[string]float64{}, "attack_surface"},
+		{"nil vector", nil, "attack_surface"},
+	}
+	for _, tc := range cases {
+		p := baseParams()
+		p.Vectors["EF-SELINUX"] = tc.vec
+		err := p.Validate(domains)
+		if err == nil {
+			t.Errorf("%s: Validate must fail", tc.name)
+			continue
+		}
+		if !strings.Contains(err.Error(), want) ||
+			!strings.Contains(err.Error(), "EF-SELINUX") ||
+			!strings.Contains(err.Error(), tc.missing) {
+			t.Errorf("%s: error must name vector and missing domain %q, got %q", tc.name, tc.missing, err)
+		}
+	}
+
+	// 单个域的单域调用仍然合法（只校验**传入**的域）：λ 与 vector 都只声明该域即可。
+	single := baseParams()
+	single.Lambda = map[string]float64{"attack_surface": 1.0}
+	single.Vectors["EF-SELINUX"] = map[string]float64{"attack_surface": 0.5}
+	if err := single.Validate([]string{"attack_surface"}); err != nil {
+		t.Errorf("single-domain call must stay legal: %v", err)
+	}
+}
+
+// M1 的另一半：**未声明** vector 的因子仍走 fallback（作用于全部域、强度 1），
+// Validate 不得因此报错，Synthesize 也必须真的按满强度施加惩罚。
+func TestValidateAllowsUndeclaredVectorFallback(t *testing.T) {
+	domains := []string{"attack_surface", "operation_trust"}
+	p := Params{
+		Model:   ModelVector,
+		PFloor:  0.5,
+		Lambda:  map[string]float64{"attack_surface": 1.0, "operation_trust": 1.0},
+		Factors: map[string]float64{"EF-A": 0.8}, // 刻意不给 Vectors
+	}
+	if err := p.Validate(domains); err != nil {
+		t.Fatalf("an undeclared vector must fall back, got %v", err)
+	}
+	res, err := Synthesize(p, domains, Input{
+		DomainScores: map[string]float64{"attack_surface": 100, "operation_trust": 50},
+		Factors:      []FactorActivation{{FactorID: "EF-A", CTrigger: 1, EffectiveFactor: 0.8}},
+	})
+	if err != nil {
+		t.Fatalf("Synthesize: %v", err)
+	}
+	// fallback：全域强度 1 → a = (1−0.8)·1 = 0.2，两个域应当完全一致。
+	wantP := 0.5 + 0.5*math.Exp(-0.2)
+	for _, d := range domains {
+		if !approx(res.P[d], wantP, 1e-9) {
+			t.Errorf("domain %s: P = %v, want %v (full-strength fallback)", d, res.P[d], wantP)
+		}
 	}
 }

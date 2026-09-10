@@ -263,3 +263,116 @@ func TestSynthesizeRejectsMissingLambdaForRequestedDomain(t *testing.T) {
 		t.Errorf("legacy must not require lambda, got %v", err)
 	}
 }
+
+// 裁定 I1：Input 侧的浮点值不经过 Validate（它只校验 Params），故 Synthesize 必须自查
+// 有限性与量程 (0,1]。否则 eff > 1 会让 a = (1−eff)·v 变负 → L < 0 → P > 1
+// （域分被抬到基线之上，反向违反 P1），NaN 则直通污染 L/P/DomainScores 且不报错。
+func TestSynthesizeRejectsOutOfRangeEffectiveValue(t *testing.T) {
+	const want = "edgefactor: factor"
+	cases := []struct {
+		name string
+		eff  float64
+	}{
+		{"above one (P1 violation)", 2.0},
+		{"negative", -1},
+		{"NaN", math.NaN()},
+		{"+Inf", math.Inf(1)},
+		{"-Inf", math.Inf(-1)},
+	}
+	for _, tc := range cases {
+		_, err := Synthesize(vectorParams(), []string{"attack_surface"}, Input{
+			DomainScores: map[string]float64{"attack_surface": 100},
+			Factors:      []FactorActivation{{FactorID: "EF-A", CTrigger: 1, EffectiveFactor: tc.eff}},
+		})
+		if err == nil {
+			t.Errorf("%s: effective value %v must be rejected", tc.name, tc.eff)
+			continue
+		}
+		if !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "EF-A") {
+			t.Errorf("%s: error must name the offending factor, got %q", tc.name, err)
+		}
+	}
+
+	// legacy 分支同样必须拒绝越界值，而不是静默跳过该因子（等于按「无惩罚」处理）。
+	lp := Params{Model: ModelLegacy, PFloor: 0.5, Factors: map[string]float64{"A": 0.8}}
+	for _, eff := range []float64{2.0, -1, math.NaN()} {
+		_, err := Synthesize(lp, []string{"attack_surface"}, Input{
+			DomainScores: map[string]float64{"attack_surface": 90},
+			Factors:      []FactorActivation{{FactorID: "A", CTrigger: 1, EffectiveFactor: eff}},
+		})
+		if err == nil {
+			t.Errorf("legacy: effective value %v must be rejected instead of silently skipped", eff)
+			continue
+		}
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("legacy: error must name the offending factor, got %q", err)
+		}
+	}
+}
+
+// 量程上界 eff == 1 是合法值（a = 0，无惩罚），不得被误拒；P 恰好落在 1（P1 的上界）。
+func TestSynthesizeAcceptsEffectiveValueOfOne(t *testing.T) {
+	res, err := Synthesize(vectorParams(), []string{"attack_surface"}, Input{
+		DomainScores: map[string]float64{"attack_surface": 100},
+		Factors:      []FactorActivation{{FactorID: "EF-A", CTrigger: 1, EffectiveFactor: 1}},
+	})
+	if err != nil {
+		t.Fatalf("effective value 1 must be accepted: %v", err)
+	}
+	if !approx(res.L["attack_surface"], 0, 1e-12) || !approx(res.P["attack_surface"], 1, 1e-12) {
+		t.Errorf("L/P = %v/%v, want 0/1", res.L["attack_surface"], res.P["attack_surface"])
+	}
+	if !approx(res.DomainScores["attack_surface"], 100, 1e-9) {
+		t.Errorf("score = %v, want 100 (no penalty)", res.DomainScores["attack_surface"])
+	}
+}
+
+// M4：graph 的耦合是对称的 —— 只配反向 c_BA 必须与只配正向 c_AB 等价，
+// 且同一对因子无论配几个方向都只计一次（覆盖 couplingValue 的反向回查分支）。
+func TestSynthesizeGraphCouplingIsSymmetricAndCountedOnce(t *testing.T) {
+	newParams := func(coupling map[string]map[string]float64) Params {
+		p := vectorParams()
+		p.Model = ModelGraph
+		p.Coupling = coupling
+		p.Vectors["EF-B"] = map[string]float64{"attack_surface": 0.5}
+		p.Factors["EF-B"] = 0.8
+		return p
+	}
+	both := Input{DomainScores: map[string]float64{"attack_surface": 100}, Factors: []FactorActivation{
+		{FactorID: "EF-A", CTrigger: 1, EffectiveFactor: 0.8},
+		{FactorID: "EF-B", CTrigger: 1, EffectiveFactor: 0.8},
+	}}
+
+	cases := []struct {
+		name     string
+		coupling map[string]map[string]float64
+	}{
+		{"forward only c_AB", map[string]map[string]float64{"EF-A": {"EF-B": 0.5}}},
+		{"reverse only c_BA", map[string]map[string]float64{"EF-B": {"EF-A": 0.5}}},
+		{"both directions configured", map[string]map[string]float64{
+			"EF-A": {"EF-B": 0.5}, "EF-B": {"EF-A": 0.5},
+		}},
+	}
+	for _, tc := range cases {
+		res, err := Synthesize(newParams(tc.coupling), []string{"attack_surface"}, both)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		// 0.1 + 0.1 + 0.5·0.1·0.1 = 0.205；若同一对被计两次则会得到 0.21。
+		if !approx(res.L["attack_surface"], 0.205, 1e-9) {
+			t.Errorf("%s: L = %v, want 0.205 (coupling counted exactly once)", tc.name, res.L["attack_surface"])
+		}
+	}
+
+	// 双向配置**数值冲突**时行为仍是确定的：id 字典序较小一侧的正向配置优先。
+	// （是否在配置装载层直接拒绝这种冲突由 Task 4 负责，本包只保证确定性。）
+	res, err := Synthesize(newParams(map[string]map[string]float64{
+		"EF-A": {"EF-B": 0.5}, "EF-B": {"EF-A": 0.9},
+	}), []string{"attack_surface"}, both)
+	if err != nil {
+		t.Fatalf("conflicting directions: %v", err)
+	}
+	if !approx(res.L["attack_surface"], 0.205, 1e-9) {
+		t.Errorf("L = %v, want 0.205 (forward config wins deterministically)", res.L["attack_surface"])
+	}
+}

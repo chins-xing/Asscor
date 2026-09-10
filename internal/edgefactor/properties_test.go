@@ -56,6 +56,7 @@ func TestPropertyLimitApproachesFloor(t *testing.T) {
 		Vectors: map[string]map[string]float64{"A": {"attack_surface": 0.5}}, Factors: map[string]float64{"A": 0.5}}
 	in := Input{DomainScores: map[string]float64{"attack_surface": 100}}
 	prevL := -1.0
+	prevGap := math.Inf(1)
 	for n := 1; n <= 20; n++ {
 		factors := make([]FactorActivation, 0, n)
 		for i := 0; i < n; i++ {
@@ -72,10 +73,36 @@ func TestPropertyLimitApproachesFloor(t *testing.T) {
 		if res.P["attack_surface"] <= p.PFloor {
 			t.Fatalf("P crossed the floor at n=%d: %v", n, res.P["attack_surface"])
 		}
+
+		// 收敛断言：a = (1−0.5)·0.5 = 0.25 → L = 0.25n（0.25 二进制可表示，故精确），
+		// P − P_floor = 0.6·e^{−2L} 随 n **严格递减**。
+		if wantL := 0.25 * float64(n); !approx(res.L["attack_surface"], wantL, 1e-12) {
+			t.Fatalf("L at n=%d = %v, want %v", n, res.L["attack_surface"], wantL)
+		}
+		gap := res.P["attack_surface"] - p.PFloor
+		if wantGap := 0.6 * math.Exp(-2*res.L["attack_surface"]); !approx(gap, wantGap, 1e-12) {
+			t.Fatalf("P − P_floor at n=%d = %v, want analytic %v", n, gap, wantGap)
+		}
+		if gap >= prevGap {
+			t.Fatalf("P − P_floor must strictly decrease at n=%d: %v >= %v", n, gap, prevGap)
+		}
+		prevGap = gap
+	}
+	// n = 20：L = 5，P − P_floor = 0.6·e^{−10} ≈ 2.7e-5 —— 已收敛，但仍严格为正。
+	if !approx(prevL, 5.0, 1e-12) {
+		t.Errorf("L at n=20 = %v, want 5", prevL)
+	}
+	if prevGap >= 1e-3 {
+		t.Errorf("P − P_floor at n=20 = %v, want < 1e-3", prevGap)
+	}
+	if prevGap <= 0 {
+		t.Errorf("P − P_floor must stay strictly positive at n=20, got %v", prevGap)
 	}
 }
 
-// P3: L(A) − L(∅) ≥ Σ_i [L({i}) − L(∅)]（超模性）
+// P3: L(A) − Σ_i L({i}) 必须**等于**解析的成对耦合和 Σ_{i<j} c_ij·a_i·a_j。
+// 只断言 ≥ 0 是弱断言；断言解析值能区分乘积耦合与和式耦合，也能抓住漏乘 a_j、
+// 漏掉系数一类的实现错误。
 func TestPropertySupermodular(t *testing.T) {
 	rng := rand.New(rand.NewSource(3))
 	domains := []string{"attack_surface"}
@@ -96,6 +123,34 @@ func TestPropertySupermodular(t *testing.T) {
 		}
 		if joint < sumSingle-1e-12 {
 			t.Fatalf("supermodularity violated: L(A)=%v < Σ L({i})=%v", joint, sumSingle)
+		}
+
+		// 解析值：a_i = (1−eff_i)·v_i[d]，再对每一对**不同**因子取 c
+		// （取向与实现一致：按 id 字典序传 (from, to)，graph 先查正向再回查反向）。
+		a := make(map[string]float64, len(in.Factors))
+		for _, f := range in.Factors {
+			eff := f.EffectiveFactor
+			if eff == 0 {
+				eff = p.Factors[f.FactorID]
+			}
+			a[f.FactorID] = (1 - eff) * p.Vectors[f.FactorID]["attack_surface"]
+		}
+		want := 0.0
+		for x := 0; x < len(in.Factors); x++ {
+			for y := x + 1; y < len(in.Factors); y++ {
+				fx, fy := in.Factors[x].FactorID, in.Factors[y].FactorID
+				if fx == fy {
+					continue // 同一因子的自耦合在实现中被跳过
+				}
+				from, to := fx, fy
+				if to < from {
+					from, to = to, from
+				}
+				want += couplingValue(p, from, to) * a[from] * a[to]
+			}
+		}
+		if got := joint - sumSingle; !approx(got, want, 1e-12) {
+			t.Fatalf("joint − Σ L({i}) = %v, want analytic Σ c_ij·a_i·a_j = %v", got, want)
 		}
 	}
 }
