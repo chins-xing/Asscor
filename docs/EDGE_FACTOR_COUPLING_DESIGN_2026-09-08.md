@@ -143,19 +143,26 @@ logit P(y=1) = β0 + Σ β_i a_i + Σ_{(i,j)∈E_prior} β_ij a_i a_j
 
 ```ini
 [edge_factors.model]
-model = legacy                     ; legacy | vector | graph | chain（默认 legacy）
-p_floor = 0.50                     ; 惩罚上限 = 1 − p_floor（理论边界）
-lambda_attack_surface = 1.0        ; 逐域饱和速率 λ_d
-lambda_operation_trust = 1.0
-vector.two_factor_failure = 0.9,0.4,1.0,0.3,0.2       ; 5 域顺序 = config.ini 域定义
-coupling.selinux_disabled.apparmor_disabled = 0.35    ; 仅 graph/chain
-chain.window_seconds = 300                            ; 仅 chain
+model = legacy
+p_floor = 0.50
+lambda.attack_surface = 1.0
+lambda.operation_trust = 1.0
+vector.EF-002FA = 0.9,0.4,1.0,0.3,0.2
+coupling.EF-SELINUX.EF-APPARMOR = 0.35
+chain.window_seconds = 300
 ```
+
+写法说明（实现为准）：
+- 键名一律用**小写段名 + 点号分隔**：`lambda.<domain>`、`vector.<FACTOR-ID>`、`coupling.<FROM>.<TO>`、`trigger.<FACTOR-ID>`；
+- 因子 ID 与触发检查 ID 在解析时统一归一化为**大写**（与引擎 `FactorID` 一致），配置里写大写或小写都可；
+- `vector.<id>` 的值必须是**恰好 5 个**逗号分隔数字，按域顺序 `attack_surface, business_continuity, operation_trust, resilience, kernel_security` 映射；
+- 解析器只支持**整行注释**（行首 `#` 或 `;`），不支持行内注释；`model` 等键只能写在 `[edge_factors.model]` 段，写进 `[edge_factors]` 会报错。
 
 规则：
 
 1. **默认 legacy**：不写该段即走 M0，历史逐位一致；V/G/C 参数只能来自拟合产物或实验配置。语义分工（评审裁定）：**"默认 legacy" 由配置装载层表达**——`[edge_factors.model]` 段缺席时，调用方走 legacy 路径、**不构造**新模型参数；`edgefactor.Params` 的零值（`Model == ""`）被 `Validate` **刻意拒绝**，不提供零值兜底，避免装配层漏写 `model` 却静默按某个模型计分。
-2. **ACL 权重一并参数化（RC-M4）**：`w_int`、`temperature`、`α β γ δ`、`attackerstate` 映射改为实验配置注入，**不改算法语义**；其标定排在本轮之后。
+2. **键面无歧义**：配置解析统一把因子/触发名归一化为大写，装配层据此与引擎 `FactorID` 对齐；任何「查不到即回落」的路径都必须给出明确日志或错误，禁止静默退化为默认强度。
+3. **ACL 权重一并参数化（RC-M4）**：`w_int`、`temperature`、`α β γ δ`、`attackerstate` 映射改为实验配置注入，**不改算法语义**；其标定排在本轮之后。
 3. **参数校验 fail-fast**：`v` 维度不符、`f∉(0,1]`、`c<0`、`λ≤0`、`p_floor∉(0,1)`、`Σ_d v_i[d] > 1`、非有限值 直接拒绝启动（与方向① 坏正则 fail-fast 同款纪律）；此外有运行时校验（见 §3.1 的"运行时校验"要点）。
 4. **可追溯**：`EdgeFactorResult` 增加 `ModelID` 与 `ParamsHash`；离线重算与在线评分都写入，报告与审计可复现。
 5. **触发映射可配**：因子→触发检查映射从 `adapter.go` 的硬编码改为配置表（默认值保持等价）。
