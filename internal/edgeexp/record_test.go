@@ -762,6 +762,26 @@ func TestLoadFileErrorMessagesAreExact(t *testing.T) {
 			cause:   "observed.threshold = 0 must be > 0 — 缺失会被当成 0，任何非负分数都会判 acceptable，决策层退化为『全放行』",
 		},
 		{
+			// **判据顺序的钉子**（brief 的加固项）：这条记录**同时**缺 `threshold` 与
+			// `spc_score`，期望报的是**先检查**的那条（threshold）。本层只报第一个问题，故
+			// 把 spc_score 的检查挪到 threshold 之前会改变既有输入的错误信息 —— 与消费者的
+			// 逐字契约就此破裂。没有这条时，顺序可以被静默改写而整张表照样绿。
+			name:    "missing-threshold-and-spc-score",
+			content: `{"scenario_id":"S0-baseline","observed":{"domain_scores":{"attack_surface":90},"threat_coeff":0.7},"ground_truth":{"compromised":true}}`,
+			line:    1,
+			cause:   "observed.threshold = 0 must be > 0 — 缺失会被当成 0，任何非负分数都会判 acceptable，决策层退化为『全放行』",
+		},
+		{
+			// `ground_truth` 是**最后**一类判据：前面每一项都写全、只有 `compromised` 缺席时，
+			// 报的必须是它（而不是被任何别的字段问题顶掉）。`ground_truth.compromised` 不是
+			// 普通的必填项 —— 它是"存在性"判据（缺失会被静默当成"未攻陷"），是这一层里唯一
+			// 一个**不靠值域**就能出错的字段，故单独钉一遍。
+			name:    "missing-compromised-only",
+			content: `{"scenario_id":"S1-selinux","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":90,"operation_trust":82},"final_score":74.9,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"checks":[{"id":"OT-005","domain":"operation_trust","passed":false,"delta":-15,"confidence":0.9}],"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false}}`,
+			line:    1,
+			cause:   "ground_truth.compromised: missing — 必须显式写出 true/false；缺失会被当成 false，该场景被静默标成『未攻陷』并直接扭曲漏判率/误阻断率",
+		},
+		{
 			name:    "missing-spc-score",
 			content: `{"scenario_id":"S1-selinux","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"threat_coeff":0.7},"ground_truth":{"compromised":true}}`,
 			line:    1,
@@ -788,6 +808,11 @@ func TestLoadFileErrorMessagesAreExact(t *testing.T) {
 		{
 			// 坏行（解码失败）钉住"行号与 JSON 语法错误同处一条消息"，且行号 > 1：
 			// 第 1 行必须是**完全合法**的记录，否则先报的会是第 1 行的字段问题。
+			//
+			// 注意这条 cause 钉的是 **stdlib** `encoding/json` 的原文（"invalid character 'n'
+			// looking for beginning of object key string"）—— 它是这张表里**唯一**不属于本仓的
+			// 消息：其余各条都写在我们自己的 `fmt.Errorf` 里，改文案就必须改表；而这一条会在
+			// Go 升级（或改用第三方 JSON 库）时由编译器/上游负责，届时**在这里**确认新文案即可。
 			name:    "malformed-line-two",
 			content: good + "\n{not json}",
 			line:    2,

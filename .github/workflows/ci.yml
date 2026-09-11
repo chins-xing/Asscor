@@ -44,6 +44,9 @@ jobs:
           # tag, so without this line it is neither compiled nor vetted/tested - the ./cmd/...
           # wildcard skips packages whose files are all excluded by build constraints.
           go build -tags "$MODULE_TAGS" ./cmd/edgecompare/
+          # Scenario collector (cmd/edgescen): same situation - every file is behind the
+          # expr,engine,checks tag set (all three are in MODULE_TAGS), so the wildcard skips it.
+          go build -tags "$MODULE_TAGS" ./cmd/edgescen/
 
       - name: Test (no tags — kernel + always-compiled packages)
         run: go test ./internal/...
@@ -52,6 +55,7 @@ jobs:
         run: |
           go test -tags "$MODULE_TAGS" ./internal/...
           go test -tags "$MODULE_TAGS" ./cmd/edgecompare/
+          go test -tags "$MODULE_TAGS" ./cmd/edgescen/
 
       - name: Plugin SDK (independent module)
         working-directory: pluginsdk
