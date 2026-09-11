@@ -503,12 +503,15 @@ Expected: FAIL —— `undefined: buildRecord`
 - [ ] **Step 4: 实现三块逻辑**
 
 - `observe.go`：`runChecks()` 取该主机真实检查结果（复用 `internal/checks` + `internal/engine.Assessor.Assess`），再按场景规格**强制指定检查失败**（`Passed=false`、`Delta` 取自引擎登记表、`Confidence` 取自可信度解析结果），然后调用 `AssessFromResults` 取得 `*model.AssessmentResult`；从 `result.EdgeFactorChain`（Task 1 交付）读观测链。
+  **`ts` 必须由采集器按"该因子的注入/采集时刻"重写**（Task 1 评审实测发现的硬要求）：引擎侧链上所有条目的 `ts` 是**同一个评分时刻**（`adapter_engine.go:128`），而 chain 模型要求相邻观测严格递增（`synthesize.go:161-171` 用 `from.ts.Before(to.ts)`）⇒ 全部同值会让**所有有向耦合被跳过、C 候选退化成 V**。harness 知道每个检查的注入时刻 ⇒ 采集器把 `ts` 写成"该因子触发检查的注入时刻"（逐条不同、且反映真实先后）；**不得**为了"让 C 有东西可用"而编造递增时间。
   **`spc_score` / `threat_coeff` 的取值有唯一正确来源**（评审的越界观察，必须钉住）：**只允许**取 `result.SPCScore` 与 `result.ThreatCoeff` —— 它们就是引擎传给评分公式的 `RiskContext.Exposure` / `.Threat`（`internal/engine/ssam/engine.go` 的 `RiskContext{Exposure: output.SPCScore, Threat: output.ThreatCoeff}`）。**禁止**从 `internal/attck` 的 `predictedRisk.EnhancedThreat`（`internal/attck/attck.go:526` 恰好也叫 `threat_coeff`，但那是**另一个量**）取，也禁止自己算 —— 取错会让离线分数整体偏移而**所有门禁全绿**。为此实现一条**round-trip 钉桩**（见 Step 5 的门禁②）。
 - `groundtruth.go`：解析攻击 harness 产物得到 `compromised`/`ttc`/`ttps`/`nodes`/`block_effective`；**`ttc` 缺失即报错**（M3 的数据侧处理）。
 - `main.go`：装配 `edgeexp.Record`（含 `meta.weight_source` = `-weights` 或配置文件路径 + `config_hash`、`playbook_hash`），`Validate()` 通过后 `MarshalRecord` 追加写出；任何一步失败都**不写半条记录**并返回非零退出码。**三条 Task 1 实测出来的硬要求**：
   - **必须写 `observed.effective_weights`**（引擎**实际生效**的逐域权重 —— legacy 内在层用 `DynamicScoringEngine` 的动态权重，0 权重域会被填默认值并 `Normalize(100)`），键集 = 参与聚合的域；否则离线复算的权重口径无法还原（Task 4 门禁②依赖它）。
   - **不得用 `trigger_check` 反推 `checks[]`**：`checks[]` 必须独立落盘引擎的**全部失败检查**。legacy（无模型段）的 identity 分支激活时，链上的 `trigger_check` 是**登记的**触发检查而未必是失败的那个（例：identity 检查 `EF-002FA` 失败、链上写登记值 `EF-001`）；`c_trigger = 0` 的级联写值同理。
   - **区分"未配置模型"与"有模型但本次无因子激活"**：两者在 JSON 上因 `omitempty` 同形（链为空），**必须读溯源戳**（`edge_factors.model` / `params_hash`），不得据链是否为空判断。
+  - **每条记录都必须同时有溯源戳与非空观测链，否则拒绝写出**（Task 1 评审实测的 Important-2）：链只在**引擎真的装载了模型**时才回填（与盖戳同一判据），而**未装载**时（无模型段 / `model=chain` / 参数不可用）内仓默认路径**仍然用六因子乘分** ⇒ 会产出"**有惩罚、但链为空**"的记录；这种记录让离线复算（门禁②）**必然失败**，而且看起来像"这个场景没有因子生效"。故采集器必须断言"戳记存在 且 链非空"，不满足即报错退出（不允许"少一条链、静默继续"）。**这也是 M0 基线模板必须显式写 `model = legacy` 的原因**（见 Task 4 Step 1）：显式 legacy 与"未配置"评分逐位一致，但只有前者会装载并输出链。
+  - **观测链是"列表不是映射"**：出厂 `configs/*.ini` 把同样的六个 ID 又写进 `[edge_factors.custom]`，解析层小写化后它们会成为**额外的**因子条目，归一化到同一个规范 ID ⇒ **同一条链里会出现两条 `EF-SELINUX`**（引擎确实乘了两次）。任何消费方都**不得**按因子 ID 去重或建 map（离线 `engineEdgeFactors` 已按列表处理；链时间戳建 map 的那处是 C 模型的既有退化输入，已在代码注释里说明）。
 
 - [ ] **Step 5: 跑测试确认通过 + CI 接线**
 
@@ -520,6 +523,11 @@ Expected: PASS
 go build -tags "$MODULE_TAGS" ./cmd/edgescen/
 go test  -tags "$MODULE_TAGS" ./cmd/edgescen/
 ```
+
+**场景设计必须给 C 候选留出可分辨的时间结构**（Task 1 评审实测）：若某场景的所有因子在同一时刻注入，则链上 `ts` 全同 ⇒ chain 的严格时间窗（`from.ts.Before(to.ts)`）全部被跳过 ⇒ **C 与 V 在这条数据上不可区分**。故：
+- S5（级联 vs 独立）**天然是顺序注入**（先 `EF-002` 触发 3FA，再级联把 `EF-002FA` 压到 0.82），必须采集到两条不同时刻的观测；
+- 另需**至少 2 组"分先后注入"的 S2/S3 子场景**（例如先 `EF-SELINUX` 再 `EF-APPARMOR`，或先 `EF-NO-IDS` 再 `EF-NO-SIEM`），并把注入时刻逐个写进 `run.json` 供采集器回填 `ts`；
+- 其余场景仍可同时注入（C 应与 V 同分，这正是"无时间结构时 C 不该凭空变好"的**反向证据**）。
 
 - [ ] **Step 6: 提交**
 
@@ -543,6 +551,8 @@ git commit -F build/commit-msg.txt   # feat(edgescen): 场景采集器（注入�
 
 - [ ] **Step 1: 模板配置先自我校验（含实验模板纳入既有回归门禁）**
 
+**M0 基线模板必须显式写 `[edge_factors.model]` + `model = legacy`**（Task 1 评审实测）：显式 legacy 与"未配置"在**评分上逐位一致**（里程碑 A 裁定），但只有**装载了模型**的路径才会输出观测链 —— 若 M0 用"不写段"，记录会变成"有惩罚、链为空"，离线复算（门禁②）必然失败。故本计划的 M0 = **显式 legacy**，并把"不写段"留给"未启用部署"这一类，不作为实验基线。
+
 实验模板不能只靠"实验跑起来才发现装不上"。把既有回归用例扩到 `configs/edgeexp/`（**一个包的改动**，不新造工具）：
 
 ```go
@@ -550,9 +560,9 @@ git commit -F build/commit-msg.txt   # feat(edgescen): 场景采集器（注入�
 // TestEdgeExpConfigTemplatesLoad 与 TestShippedConfigTemplatesLoad 同款：
 // configs/edgeexp/*.ini 必须全部能被 Load 解析。
 //
-// 例外必须显式断言：m0-baseline.ini **不得**含 [edge_factors.model] 段
-// （M0 基线 = 未配置路径；显式 model=legacy 与它评分逐位一致但溯源不同 ——
-// 基线记录要保持"没有模型段"这一历史形态），其余模板**必须**含该段。
+// 例外必须显式断言：m0-baseline.ini **必须**含 [edge_factors.model] 且 model = legacy
+// （Task 1 评审实测：不写段 ⇒ 引擎不装载 ⇒ 记录"有惩罚、链为空" ⇒ 离线复算必然失败），
+// 其余模板必须含该段且模型为四项之一。
 func TestEdgeExpConfigTemplatesLoad(t *testing.T) {
 	pattern := filepath.Join("..", "..", "configs", "edgeexp", "*.ini")
 	paths, err := filepath.Glob(pattern)
@@ -565,12 +575,11 @@ func TestEdgeExpConfigTemplatesLoad(t *testing.T) {
 			if err != nil {
 				t.Fatalf("实验模板必须能加载: %v", err)
 			}
-			hasModel := cfg.EdgeFactorModel.Model != ""
-			if filepath.Base(path) == "m0-baseline.ini" && hasModel {
-				t.Error("M0 基线模板不得声明 [edge_factors.model] —— 它代表未配置路径")
+			if cfg.EdgeFactorModel.Model == "" {
+				t.Error("实验模板必须声明 [edge_factors.model]（含 M0 基线的显式 legacy）—— 否则引擎不装载、记录没有观测链")
 			}
-			if filepath.Base(path) != "m0-baseline.ini" && !hasModel {
-				t.Error("候选模板必须声明 [edge_factors.model]（model/p_floor/lambda/...）")
+			if filepath.Base(path) == "m0-baseline.ini" && cfg.EdgeFactorModel.Model != "legacy" {
+				t.Errorf("M0 基线必须是显式 model = legacy，实际 %q", cfg.EdgeFactorModel.Model)
 			}
 		})
 	}
@@ -696,6 +705,7 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
   - 单类别数据集（全是 compromised 或全不是）时 `AUC=0` 是**哨兵**，不是"完全反向"；
   - **可信度双衰减**（`c²`）若在实验中开启，必须在报告里标注"启用模型的惩罚强度显著强于历史路径"，并说明是否修正属独立决策；
   - **S5 级的读法**（Task 1 实测）：`EF-3FA` 的级联把 `EF-002FA` 压到 `0.82`，但该因子"仅由级联激活"⇒ `c_trigger = 0` ⇒ `EffectiveFactor(0.82, 0) = 1` ⇒ **V/G/C 下 `a = 0`（无惩罚），而 legacy 真的乘 0.82**。故 S5 的对照必须写成"**`c = 0` 的因子在可信度模型下不产生惩罚**"，**不得**写成"V/G/C 忽略了级联"——后者是错误结论（spec §10.2 已记）。
+  - **C 与 V 不可区分时必须如实说**（Task 1 评审实测的时间结构问题）：若某场景的观测在时间上无先后（所有 `ts` 相同或先后不反映真实注入顺序），chain 的时间窗全部被跳过 ⇒ **C ≡ V**。此时报告必须写"**本数据集无法区分 C 与 V**"，**不得**因为 C 的某项指标略好就宣称 C 更优（那是浮点噪声或定序差异）。反向亦然：若 C 在**顺序注入**的场景上明显更差（时间窗把该有的耦合砍掉），那才是有信息量的结论。
   - **拟合优化的是分数的线性化代理，不是分数本身**（里程碑 A 最终修复报告遗留疑虑 2，已核代码）：`design()` 用的是**标量汇总**特征 `a_i = (1−eff_i)·Σ_d v_i[d]`（`fit.go` 的 `vectorMass`），而真实评分是**逐域** `L_d`/`P_d` 再乘各域分 —— 两者不同源。故拟合出的 `c_ij` 只是候选参数的**生成器**，报告**不得**声称"拟合更优 ⇒ 决策层更好"；唯一权威判据是用该参数跑**离线重算**后比决策层指标，且必须写明这层近似。
   - **`RenderConfigSection` 不含 `f_i`**（另一已知边界）："贴回配置段 + 同一 JSONL"**不是**完整复现包，必须再给 `[edge_factors]` 表（就是下面这条三件套）。
   - **共线性与罚项都会影响边系数**（Task 10 Fix round 1 实测）：22 个真实场景下特征列高度相关，`c_ij` 的点估计不能直接读作"耦合强度"；报告必须同时给出**点估计、自助法区间、以及"该边是否可辨识"的判断**（不可辨识要明说），并注明 `-l1`/`l2` 的取值对系数的影响方向不保证单调。
