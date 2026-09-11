@@ -197,10 +197,11 @@ chain.window_seconds = 300
 > `invalid character 'ï'`，指不到真正原因），但别依赖它 —— 行内的 U+FEFF 仍按坏数据拒绝。
 > 本节 schema 与读取层、以及示例自身的数值自洽性，由 `cmd/edgecompare/docs_schema_test.go`
 > 直接对照本示例强制执行：**文档漏字段、示例数值自相矛盾、或读取层单方面收紧**，该测试即红。
-> 读取层对**其它**必填项的"放宽"方向由 `cmd/edgecompare/load_test.go` 的逐字段定向用例覆盖
+> 读取层对**其它**必填项的"放宽"方向由 `internal/edgeexp` 的逐字段定向用例覆盖
 > （`scenario_id`/`threshold`/`domain_scores`/`chain[].factor`/`c_trigger`/`effective_factor`/
 > `compromised` 各有独立的"缺失必拒"用例；`ts` 不在其列 —— 空串是**合法**的，被拒的是
-> **非空但非 RFC3339** 的值）。
+> **非空但非 RFC3339** 的值）。这些用例同时保留在 `cmd/edgecompare/load_test.go`（逐字未改），
+> 作为"契约搬迁未改变行为"的证据。
 
 ```json
 {
@@ -233,7 +234,9 @@ chain.window_seconds = 300
 >
 > **这些是"记录构造要求"，不是读取层契约**：`trigger_check` / `checks[]` / `delta` / `meta` 读取层都**不校验**，离线工具`Synthesize` 也**不消费** `trigger_check`（它只用于溯源）—— 写错不会有任何门禁报错，只会让报告与论文证据失真。故本节把它们写清楚，并由 `docs_schema_test.go` 对本示例逐条钉住。
 
-**必填字段（缺失即整条记录 fail-fast，读取层 `cmd/edgecompare/load.go:validateRecord`）**
+**必填字段（缺失即整条记录 fail-fast，读取层 `internal/edgeexp.Validate`）**
+
+> 契约现在**只有一份实现**：`internal/edgeexp`（无 build tag），生产者（采集器 `cmd/edgescen`）与消费者（`cmd/edgecompare`）共用它 —— 此前"文档示例与读取层各写一份"已经漂移过一次（示例被自己的解析器拒绝）。读取层只做**存在性 + 值域**校验；**规范因子 ID、触发关系交叉、生效权重落盘**属于**记录构造要求**，由生产侧的 `ValidateConstruction` / `CheckTriggerCrossReference` / `CheckEffectiveWeightsRecorded` 强制（读取层刻意宽容：消费方在装配时归一 ID，例如既有的 `"  ef-selinux  "` 夹具仍可读）。另：`effective_weights` 的存在性判法是 `len(...) > 0` —— 空 map 会序列化成 `"effective_weights":null`。
 
 离线重算的判据是**部署行为**，故记录必须带齐复现判定线所需的全部输入。JSON 的"零值"与"没写"在 Go 结构体里同形，下列字段一旦缺失就会被静默读成 0 并改变结论，因此一律按"存在性 + 值域"双重拒绝：
 
