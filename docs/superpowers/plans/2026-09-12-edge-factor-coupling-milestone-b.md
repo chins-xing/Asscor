@@ -627,29 +627,34 @@ clab deploy -t asscor.clab.yml          # 必须 destroy+deploy，不用 --recon
 
 - [ ] **Step 5: 矩阵驱动（22+3 场景，逐场景可中断续跑）**
 
+**每场景只采集 1 条记录**（Task 3 实测修正）：四个候选的差异**完全由离线 `edgecompare` 覆盖** —— 记录里的域分是**域级修正前的基分**、链与 E/T 与候选无关、`Evaluate` 也从不读 `final_score`；而 **`chain` 在线不可执行**（C1 裁定：装配期 fail-fast）⇒ 用 `chain.ini` 跑 `edgescen` 必然被拒，若"任何非零退出即整轮失败"就会把整轮判死。故：
+
 ```bash
 # lunwen/clab-lab/scripts/edge_matrix.sh
 set -euo pipefail
 SCENARIOS=(S0-baseline S1-2fa S1-selinux ... R-no-2fa)   # 22+3 全列出，不留占位
+[[ ${#SCENARIOS[@]} -eq 25 ]] || { echo "场景数必须是 25"; exit 1; }
 for s in "${SCENARIOS[@]}"; do
-  for cfg in m0-baseline vector graph chain; do
-    ./scripts/edge_reset.sh
-    ./scripts/edge_attack.sh "$s" "data/edgefactors/attack-$s.json"
-    ./scripts/edge_collect.sh "$s" "configs/edgeexp/$cfg.ini" "data/edgefactors/attack-$s.json" 1
-  done
+  ./scripts/edge_reset.sh
+  ./scripts/edge_attack.sh "$s" "data/edgefactors/attack-$s.json"
+  ./scripts/edge_collect.sh "$s" "configs/edgeexp/m0-baseline.ini" "data/edgefactors/attack-$s.json" 1
 done
 ```
 
-**每次场景结束必须断言**：记录条数 == 4（四个候选各一条）× 场景数；任何 `edgescen` 非零退出即整轮失败（不"跳过继续"）。
+（用哪个模板采集不影响候选比较：`m0-baseline.ini` 的 `model = legacy` 只是让引擎装载模型、从而**产出观测链**；候选差异在 Step 6 的离线比较里体现。）
+
+**每次场景结束必须断言**：记录条数 == **场景数**（每场景 1 条）；任何 `edgescen` 非零退出即整轮失败（不"跳过继续"）。
 
 - [ ] **Step 6: 数据完整性门禁（写入 spec §5.4）**
 
 **门禁⓪ 重复因子条目的实测核对**（Task 2 评审留下的唯一未在**执行层**确证的结论）：出厂 `configs/*.ini` 的 `[edge_factors.custom]` 与内置因子同名 ⇒ 引擎应当为同一因子乘两次、链上出现**两条同 ID 条目**（`EF-SELINUX` 等）。这条此前只有静态溯源 + 记录层探针；**Task 4 必须在真实记录上把它落成事实**：统计每条记录的链里"规范化 ID 出现 ≥2 次的因子"个数与具体 ID，写进 `run.json` 与实验报告。若真实链里**没有**任何重复（说明该配置未产生重复条目），结论要如实写成"未观察到重复条目"，**不得**据静态溯源宣称"引擎会重复乘"。
 
-**门禁①** 工具能读全量记录、无 fail-fast：
+**门禁①** 工具能读全量记录、无 fail-fast（**候选名必须写模型名**：`-candidate` 的名字会被当模型名校验，`report.go` 只接受 `legacy|vector|graph|chain` —— 任务 3 实测 `-candidate m0=…` 会报 `未知模型 "m0"`）：
 ```bash
 ./build/edgecompare -records data/edgefactors/records-wsl-clab-14.jsonl \
-  -candidate m0=configs/edgeexp/m0-baseline.ini ... -weights attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10
+  -candidate legacy=configs/edgeexp/m0-baseline.ini -candidate vector=configs/edgeexp/vector.ini \
+  -candidate graph=configs/edgeexp/graph.ini -candidate chain=configs/edgeexp/chain.ini \
+  -weights attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10
 ```
 Expected: 读出全部记录、无 fail-fast。
 
@@ -693,10 +698,14 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
 
 - [ ] **Step 1: 四候选对比（决策层主判据：漏判率 → 误阻断率 → AUC → 字典序）**
 ```bash
-./build/edgecompare -records <全量数据集> \
-  -candidate m0=... -candidate vector=... -candidate graph=... -candidate chain=... \
-  -weights ... -report md -out fit-report.md
+./build/edgecompare -records lunwen/clab-lab/data/edgefactors/records-wsl-clab-14.jsonl \
+  -candidate legacy=configs/edgeexp/m0-baseline.ini -candidate vector=configs/edgeexp/vector.ini \
+  -candidate graph=configs/edgeexp/graph.ini -candidate chain=configs/edgeexp/chain.ini \
+  -factors EF-002FA=0.75,EF-SYNCOOKIE=0.75,EF-SELINUX=0.80,EF-APPARMOR=0.82,EF-NO-SIEM=0.90,EF-NO-IDS=0.88 \
+  -weights attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10 \
+  -report md -out fit-report.md
 ```
+（**候选名 = 模型名**；`-factors` 必须显式给出 —— 离线工具不读 `[edge_factors]`。）
 - [ ] **Step 2: 拟合**（先验边集 ≤5、L1/L2、交叉验证、自助法）
 ```bash
 ./build/edgecompare -records <全量> -fit -prior-edges data/edgefactors/prior-edges.txt ... 
