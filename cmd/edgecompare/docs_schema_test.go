@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -107,15 +108,15 @@ func TestSpecSection51SampleIsAcceptedByLoader(t *testing.T) {
 	// "缺失被拒"，也就守不住里程碑 B 采集器的契约。
 	for _, tc := range []struct {
 		name   string
-		field  string // 压缩后行内被抹掉的原文片段
-		needle string // 必须出现在错误串里的「缺失」判据
+		field  *regexp.Regexp // 在压缩后的行内定位该字段（**与取值无关**：示例改数值不应让门禁误报）
+		needle string         // 必须出现在错误串里的「缺失」判据
 	}{
-		{"spc_score", `"spc_score":0.93,`, "spc_score: missing"},
-		{"threat_coeff", `"threat_coeff":1.4,`, "threat_coeff: missing"},
+		{"spc_score", regexp.MustCompile(`"spc_score":[0-9.]+,`), "spc_score: missing"},
+		{"threat_coeff", regexp.MustCompile(`"threat_coeff":[0-9.]+,`), "threat_coeff: missing"},
 	} {
-		broken := strings.Replace(oneLine, tc.field, "", 1)
+		broken := tc.field.ReplaceAllString(oneLine, "")
 		if broken == oneLine {
-			t.Fatalf("压缩后的示例里找不到 %s，无法构造反向对照（示例改过？）", tc.field)
+			t.Fatalf("压缩后的示例里找不到 %s，无法构造反向对照（示例改过？）", tc.name)
 		}
 		_, err := LoadRecords(writeJSONL(t, "spec51-broken-"+tc.name+".jsonl", broken+"\n"))
 		if err == nil {
@@ -194,6 +195,16 @@ func TestSpecSection51SampleRoundTripsThroughEngineFormula(t *testing.T) {
 		}
 		seen[id] = true
 	}
+	// 触发检查必须在 checks[] 里以"失败"出现（`c_trigger > 0` 时）——这是因子被激活的原因本身
+	// （引擎按"触发检查失败"激活因子）。**`c_trigger = 0` 必须豁免**：那是"仅由级联激活、
+	// 自身触发检查未失败"的既有形态（`EF-3FA → EF-002FA`，spec §5 的 S5 组），此时该检查
+	// 本来就不该失败。
+	failedChecks := map[string]bool{}
+	for _, ck := range rec.Observed.Checks {
+		if !ck.Passed {
+			failedChecks[ck.ID] = true
+		}
+	}
 	for i, c := range rec.Observed.EdgeFactorChain {
 		if edgefactor.NormalizeFactorID(c.Factor) != c.Factor {
 			t.Errorf("edge_factor_chain[%d].factor = %q 不是规范因子 ID", i, c.Factor)
@@ -201,9 +212,20 @@ func TestSpecSection51SampleRoundTripsThroughEngineFormula(t *testing.T) {
 		if !seen[c.Factor] {
 			t.Errorf("edge_factor_chain[%d].factor = %q 不在 factors 列表里 —— 记录自相矛盾", i, c.Factor)
 		}
-		if want := triggers[c.Factor]; want != "" && c.TriggerCheck != want {
+		// 出厂表成员资格是**硬要求**，查不到即失败（旧写法 `want != "" &&` 会让"表里没有的
+		// 因子 ID"静默跳过本条断言 —— 评审指出的加固点）。
+		want, known := triggers[c.Factor]
+		if !known {
+			t.Errorf("edge_factor_chain[%d].factor = %q 不在出厂触发表里 —— 它永远不会被激活，记录自相矛盾", i, c.Factor)
+			continue
+		}
+		if c.TriggerCheck != want {
 			t.Errorf("edge_factor_chain[%d] (%s) 的 trigger_check = %q，出厂触发表是 %q",
 				i, c.Factor, c.TriggerCheck, want)
+		}
+		if c.CTrigger > 0 && !failedChecks[c.TriggerCheck] {
+			t.Errorf("edge_factor_chain[%d] (%s) 的 c_trigger = %v > 0，但触发检查 %s 没有以 passed=false 出现在 checks[] 里 —— 因子被激活的原因不可追溯",
+				i, c.Factor, c.CTrigger, c.TriggerCheck)
 		}
 	}
 
