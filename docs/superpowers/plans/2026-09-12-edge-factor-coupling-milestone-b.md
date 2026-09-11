@@ -17,7 +17,7 @@
 - 分支 `ASSCOR-Research-Core`；提交说明必须**中文**（`feat(edgeexp): …` 前缀可保留英文分类词）；完成后同步 `main`（本地快进）并**两分支一起推送**。
 - **默认行为不变（硬门禁）**：未配置 `[edge_factors.model]` 时评分与历史**逐位一致**；未启用必须零注册（不得注册"等价默认策略"）；显式 `model=legacy` 与"未配置"逐位一致（差别只在溯源输出）。新增输出字段一律 `omitempty`，不得改变任何既有 JSON 键的取值。
 - **契约单一来源**：JSONL 的字段名/存在性/值域只允许有一份实现（本计划落在 `internal/edgeexp`），`cmd/edgecompare` 改为消费它；此前"文档 §5.1 与读取层各写一份"已经漂移过一次（示例被自己的解析器拒绝）。
-- **记录构造要求**（spec §5.1，生产者必须满足，读取层不校验）：因子 ID 用**规范 ID**（`EF-SELINUX`，不是展示名）；`trigger_check` 与该因子在**当前部署解析出的**触发检查一致（内置因子 = `ResolveEdgeFactorTriggerMap`；`[edge_factors.custom]` 条目 = `[edge_factors.custom_triggers]` + `trigger.<ID>` 覆盖）；`c_trigger > 0` 时该检查必须以 `passed=false` 出现在 `checks[]`（`c_trigger = 0` 的纯级联形态豁免）；`checks[].delta` **逐字**取自引擎检查登记表；`checks[]` 必须落盘引擎的**全部失败检查**；实际使用的**权重来源**写进 `meta`（`config_hash` 是现成锚点）。
+- **记录构造要求**（spec §5.1，生产者必须满足，读取层不校验）：因子 ID 用**规范 ID**（`EF-SELINUX`，不是展示名）；`trigger_check` 与该因子在**当前部署解析出的**触发检查一致（内置因子 = `ResolveEdgeFactorTriggerMap`；`[edge_factors.custom]` 条目 = `[edge_factors.custom_triggers]` + `trigger.<ID>` 覆盖）；`c_trigger > 0` 时该检查必须以 `passed=false` 出现在 `checks[]`（**仅插件路径成立**：`c_trigger = 0` 的级联形态豁免，且 `model=legacy` 的 identity 分支激活时链上的 `trigger_check` 是登记值、未必是失败的那个检查 —— 详见 Task 2 Step 3）；`checks[].delta` **逐字**取自引擎检查登记表；`checks[]` 必须落盘引擎的**全部失败检查**；**引擎实际生效的逐域权重**写进记录（`observed.effective_weights`，键集 = 参与聚合的域），`meta.weight_source`/`config_hash` 说明其来源。
 - **`c_trigger` 下界取 0**（不是 `(0,1]`）：`c_trigger = 0` 是"仅由级联激活、自身触发检查未失败"的既有形态（S5 组会产出）；被拒的是**缺失**。
 - **`chain` 只能离线评估**：在线装配期对 `model=chain` fail-fast（引擎结果类型无时间字段）。C 模型的离线时间来源是记录里的 `edge_factor_chain[].ts`。
 - **离线与在线共用同一评分公式**：`cmd/edgecompare` 直接调用内仓 `ssam.SSAMV20Formula`；参数在评分前按 `DefaultDomains ∩ λ` 一致裁剪；非默认域的 λ/向量键一律拒绝（在线装配期口径）。
@@ -314,7 +314,7 @@ git commit -F build/commit-msg.txt   # 中文说明：feat(edgefactor): 观测�
 **Interfaces:**
 - Produces（`package edgeexp`，**无 build tag**）:
   - `type Record struct{ ScenarioID string; Factors []string; Injection string; Observed Observed; GroundTruth GroundTruth; Meta Meta }`
-  - `type Observed struct{ DomainScores map[string]float64; FinalScore float64; Acceptable bool; Threshold float64; SPCScore float64; ThreatCoeff float64; Checks []CheckObs; EdgeFactorChain []ChainObs }`
+  - `type Observed struct{ DomainScores map[string]float64; EffectiveWeights map[string]float64; FinalScore float64; Acceptable bool; Threshold float64; SPCScore float64; ThreatCoeff float64; Checks []CheckObs; EdgeFactorChain []ChainObs }` —— `effective_weights`（JSON 键 `effective_weights`）是 Task 1 实现者实测出来的**必需补充**：①legacy 的内在层加权用 `DynamicScoringEngine` 的**动态权重**（0 权重域会填默认值并 `Normalize(100)`），故"配置权重 ≠ 生效权重"，只凭配置复算会有系统偏差；②`DomainScores` 的核心域字段恒存在，记录无法区分"该域参与聚合但值为 0"与"该域不在聚合里"。故键集 = "参与聚合的域"，值 = 引擎实际使用的权重。**在 `Validate` 里是可选**（否则既有 `cmd/edgecompare` 夹具会红，破坏 Task 2 的"既有用例一条不改仍全绿"验收），但 **Task 3 的采集器必须写它**（生产者自检断言），Task 4 的 round-trip 门禁以它为准。
   - `type CheckObs struct{ ID, Domain string; Passed bool; Delta, Confidence float64; TS string }`
   - `type ChainObs struct{ Factor, TriggerCheck string; CTrigger, EffectiveFactor float64; TS string }`
   - `type GroundTruth struct{ Compromised bool; TimeToCompromiseS int; TTPsAchieved, NodesAffected int; BlockEffective bool }`
@@ -351,7 +351,7 @@ Expected: FAIL —— 包与类型都不存在
 - 新增 `Meta.WeightSource` 与 `Meta.AssemblyError` 两个可选字段（Task 3 需要；`omitempty`），以及 `Validate` 里的**记录构造要求**检查：
   - `Observed.EdgeFactorChain[i].Factor` 必须满足 `edgefactor.NormalizeFactorID(id) == id`（规范 ID）；
   - 因子 ID 不得只有大小写不同（折叠冲突会静默合并）；
-  - `checks[]` 必须包含所有 `c_trigger > 0` 的链条目对应的 `trigger_check` 且 `passed == false`（构造要求，不满足即拒 —— 这是生产者的自检闸门，与读取层只做存在性校验的分工在注释里写明）。
+  - `checks[]` 必须包含所有 `c_trigger > 0` 的链条目对应的 `trigger_check` 且 `passed == false` —— **但这条只能对插件路径（V/G/C）成立，不得对 `model=legacy`（无模型段）记录硬失败**（Task 1 实现者实测）：legacy 保留 *identity 分支*（检查 ID 恰等于因子 ID 时直接激活该因子）与级联写值，此时链上的 `trigger_check` 是"该因子**登记的**触发检查"，**未必**是真正失败的那个检查（例：identity 检查 `EF-002FA` 失败时链上写的是登记值 `EF-001`）。故实现上把它做成"插件路径记录"的构造要求，并在注释里写明"**任何消费者都不得用 `trigger_check` 反推 `checks[]`**"；`checks[]` 的穷尽性（落盘引擎的**全部失败检查**）是它的前提，不是读取层的校验项。
 
 - [ ] **Step 4: 跑测试确认通过**
 
@@ -462,17 +462,30 @@ func TestScenarioInjectionProducesValidRecord(t *testing.T) {
 			t.Errorf("链条目字段不完整: %+v", ob)
 		}
 	}
-	// 记录构造要求：链上每个因子的触发检查必须以 failed 出现在 checks[] 里。
+	// 记录构造要求：**插件路径**（V/G/C）下，链上每个 c_trigger>0 因子的触发检查必须以
+	// failed 出现在 checks[] 里。**这条只适用于插件路径** —— legacy（无模型段）保留 identity
+	// 分支（检查 ID 恰等于因子 ID 时直接激活）与级联写值，此时链上的 trigger_check 是"登记的
+	// 触发检查"、未必是失败的那个检查（Task 1 实现者实测）。故断言必须按产生该记录的模型分支
+	// 分开写，且**绝不可用 trigger_check 反推 checks[]**（checks[] 是独立落盘的引擎失败检查全集）。
 	failed := map[string]bool{}
 	for _, ck := range rec.Observed.Checks {
 		if !ck.Passed {
 			failed[ck.ID] = true
 		}
 	}
-	for _, ob := range rec.Observed.EdgeFactorChain {
+	pluginPath := rec.Observed.EdgeFactorChain  // 采集器的插件路径记录
+	for _, ob := range pluginPath {
 		if ob.CTrigger > 0 && !failed[ob.TriggerCheck] {
 			t.Errorf("链上 %s 的 c_trigger = %v > 0，但 %s 不在失败检查里 —— 记录自相矛盾", ob.Factor, ob.CTrigger, ob.TriggerCheck)
 		}
+	}
+	// 另：`checks[]` 必须落盘引擎的**全部失败检查**（穷尽性），而不是"链上提到的那几条"。
+	if len(rec.Observed.Checks) == 0 {
+		t.Error("checks[] 为空 —— 记录构造要求是落盘引擎的全部失败检查")
+	}
+	// effective_weights 必须写出且与域分键集一致（Task 1 实测的动态权重/聚合域歧义）。
+	if len(rec.Observed.EffectiveWeights) == 0 {
+		t.Error("缺 observed.effective_weights —— 离线复算的权重口径无法还原（动态权重 ≠ 配置权重）")
 	}
 }
 
@@ -492,7 +505,10 @@ Expected: FAIL —— `undefined: buildRecord`
 - `observe.go`：`runChecks()` 取该主机真实检查结果（复用 `internal/checks` + `internal/engine.Assessor.Assess`），再按场景规格**强制指定检查失败**（`Passed=false`、`Delta` 取自引擎登记表、`Confidence` 取自可信度解析结果），然后调用 `AssessFromResults` 取得 `*model.AssessmentResult`；从 `result.EdgeFactorChain`（Task 1 交付）读观测链。
   **`spc_score` / `threat_coeff` 的取值有唯一正确来源**（评审的越界观察，必须钉住）：**只允许**取 `result.SPCScore` 与 `result.ThreatCoeff` —— 它们就是引擎传给评分公式的 `RiskContext.Exposure` / `.Threat`（`internal/engine/ssam/engine.go` 的 `RiskContext{Exposure: output.SPCScore, Threat: output.ThreatCoeff}`）。**禁止**从 `internal/attck` 的 `predictedRisk.EnhancedThreat`（`internal/attck/attck.go:526` 恰好也叫 `threat_coeff`，但那是**另一个量**）取，也禁止自己算 —— 取错会让离线分数整体偏移而**所有门禁全绿**。为此实现一条**round-trip 钉桩**（见 Step 5 的门禁②）。
 - `groundtruth.go`：解析攻击 harness 产物得到 `compromised`/`ttc`/`ttps`/`nodes`/`block_effective`；**`ttc` 缺失即报错**（M3 的数据侧处理）。
-- `main.go`：装配 `edgeexp.Record`（含 `meta.weight_source` = `-weights` 或配置文件路径 + `config_hash`、`playbook_hash`），`Validate()` 通过后 `MarshalRecord` 追加写出；任何一步失败都**不写半条记录**并返回非零退出码。
+- `main.go`：装配 `edgeexp.Record`（含 `meta.weight_source` = `-weights` 或配置文件路径 + `config_hash`、`playbook_hash`），`Validate()` 通过后 `MarshalRecord` 追加写出；任何一步失败都**不写半条记录**并返回非零退出码。**三条 Task 1 实测出来的硬要求**：
+  - **必须写 `observed.effective_weights`**（引擎**实际生效**的逐域权重 —— legacy 内在层用 `DynamicScoringEngine` 的动态权重，0 权重域会被填默认值并 `Normalize(100)`），键集 = 参与聚合的域；否则离线复算的权重口径无法还原（Task 4 门禁②依赖它）。
+  - **不得用 `trigger_check` 反推 `checks[]`**：`checks[]` 必须独立落盘引擎的**全部失败检查**。legacy（无模型段）的 identity 分支激活时，链上的 `trigger_check` 是**登记的**触发检查而未必是失败的那个（例：identity 检查 `EF-002FA` 失败、链上写登记值 `EF-001`）；`c_trigger = 0` 的级联写值同理。
+  - **区分"未配置模型"与"有模型但本次无因子激活"**：两者在 JSON 上因 `omitempty` 同形（链为空），**必须读溯源戳**（`edge_factors.model` / `params_hash`），不得据链是否为空判断。
 
 - [ ] **Step 5: 跑测试确认通过 + CI 接线**
 
@@ -679,6 +695,7 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
   - **M3**：`ttc` 由采集器保证必填（数据侧已消除"未知=瞬时"）；
   - 单类别数据集（全是 compromised 或全不是）时 `AUC=0` 是**哨兵**，不是"完全反向"；
   - **可信度双衰减**（`c²`）若在实验中开启，必须在报告里标注"启用模型的惩罚强度显著强于历史路径"，并说明是否修正属独立决策；
+  - **S5 级的读法**（Task 1 实测）：`EF-3FA` 的级联把 `EF-002FA` 压到 `0.82`，但该因子"仅由级联激活"⇒ `c_trigger = 0` ⇒ `EffectiveFactor(0.82, 0) = 1` ⇒ **V/G/C 下 `a = 0`（无惩罚），而 legacy 真的乘 0.82**。故 S5 的对照必须写成"**`c = 0` 的因子在可信度模型下不产生惩罚**"，**不得**写成"V/G/C 忽略了级联"——后者是错误结论（spec §10.2 已记）。
   - **拟合优化的是分数的线性化代理，不是分数本身**（里程碑 A 最终修复报告遗留疑虑 2，已核代码）：`design()` 用的是**标量汇总**特征 `a_i = (1−eff_i)·Σ_d v_i[d]`（`fit.go` 的 `vectorMass`），而真实评分是**逐域** `L_d`/`P_d` 再乘各域分 —— 两者不同源。故拟合出的 `c_ij` 只是候选参数的**生成器**，报告**不得**声称"拟合更优 ⇒ 决策层更好"；唯一权威判据是用该参数跑**离线重算**后比决策层指标，且必须写明这层近似。
   - **`RenderConfigSection` 不含 `f_i`**（另一已知边界）："贴回配置段 + 同一 JSONL"**不是**完整复现包，必须再给 `[edge_factors]` 表（就是下面这条三件套）。
   - **共线性与罚项都会影响边系数**（Task 10 Fix round 1 实测）：22 个真实场景下特征列高度相关，`c_ij` 的点估计不能直接读作"耦合强度"；报告必须同时给出**点估计、自助法区间、以及"该边是否可辨识"的判断**（不可辨识要明说），并注明 `-l1`/`l2` 的取值对系数的影响方向不保证单调。
