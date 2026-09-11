@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 )
 
 const (
@@ -45,7 +46,7 @@ func EvalAST(ast FormulaAST, ctx EvalContext) (float64, error) {
 		return evalWeightedSum(ctx), nil
 
 	case OpProductChain:
-		return evalProductChain(ctx), nil
+		return applyEdgeFactorStrategy(ctx), nil
 
 	case OpMultiply:
 		if ast.Left == nil {
@@ -192,6 +193,8 @@ func evalWeightedSum(ctx EvalContext) float64 {
 	return sum / totalWeight
 }
 
+// evalProductChain 是默认合成策略的实现（历史行为：仅对 Active 且在 (0,1) 内的因子连乘）。
+// 保留为包级函数，既有测试可直接调用。
 func evalProductChain(ctx EvalContext) float64 {
 	result := 1.0
 	for _, f := range ctx.EdgeFactors {
@@ -200,6 +203,60 @@ func evalProductChain(ctx EvalContext) float64 {
 		}
 	}
 	return result
+}
+
+// EdgeFactorStrategy 决定多个激活因子如何合成为总乘子。
+type EdgeFactorStrategy func(factors []EdgeFactorResult) float64
+
+var (
+	strategyMu         sync.RWMutex
+	edgeFactorStrategy EdgeFactorStrategy = evalProductChainStrategy
+)
+
+// DefaultEdgeFactorStrategy 是默认（乘性连乘）策略的只读句柄。
+// 注意：恢复默认请调用 RegisterEdgeFactorStrategy(nil)；重写本变量不会改变内部默认，
+// 内部默认始终是 evalProductChainStrategy。
+var DefaultEdgeFactorStrategy EdgeFactorStrategy = evalProductChainStrategy
+
+func evalProductChainStrategy(factors []EdgeFactorResult) float64 {
+	result := 1.0
+	for _, f := range factors {
+		if f.Active && f.Factor > 0 && f.Factor < 1.0 {
+			result *= f.Factor
+		}
+	}
+	return result
+}
+
+// RegisterEdgeFactorStrategy 注入自定义合成策略；nil 恢复默认乘性连乘。
+// 默认路径与历史行为逐位一致（spec §3.3）。
+func RegisterEdgeFactorStrategy(s EdgeFactorStrategy) {
+	strategyMu.Lock()
+	defer strategyMu.Unlock()
+	if s == nil {
+		edgeFactorStrategy = evalProductChainStrategy
+		return
+	}
+	edgeFactorStrategy = s
+}
+
+// ValidateStrategy 报告合成策略是否可调用（装配根自检用）。
+func ValidateStrategy() error {
+	if currentStrategy() == nil {
+		return fmt.Errorf("ssam: edge factor strategy is not callable")
+	}
+	return nil
+}
+
+func currentStrategy() EdgeFactorStrategy {
+	strategyMu.RLock()
+	defer strategyMu.RUnlock()
+	return edgeFactorStrategy
+}
+
+// applyEdgeFactorStrategy 是内部统一入口：公式求值处改调本函数。
+func applyEdgeFactorStrategy(ctx EvalContext) float64 {
+	return currentStrategy()(ctx.EdgeFactors)
 }
 
 type compiledOp struct {
@@ -285,13 +342,9 @@ func ASTToFormula(ast FormulaAST) ScoringFormula {
 				}
 
 			case OpProductChain:
-				result := 1.0
-				for _, f := range edgeFactors {
-					if f.Active && f.Factor > 0 && f.Factor < 1.0 {
-						result *= f.Factor
-					}
-				}
-				pushValue(result)
+				// 与 EvalAST 走同一策略入口，注入的策略对编译路径同样生效；
+				// 默认策略实现与原先的内联循环逐位一致。
+				pushValue(applyEdgeFactorStrategy(EvalContext{EdgeFactors: edgeFactors}))
 
 			case OpMultiply:
 				right := pop()

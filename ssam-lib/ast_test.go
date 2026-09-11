@@ -2,6 +2,7 @@ package ssam
 
 import (
 	"math"
+	"sync"
 	"testing"
 )
 
@@ -734,5 +735,134 @@ func BenchmarkDirect_V12(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		SSAMV12Formula(scores, weights, 0.90, 0.80, edgeFactors)
+	}
+}
+
+func TestDefaultStrategyPreservesMultiplicativeBehaviour(t *testing.T) {
+	factors := []EdgeFactorResult{
+		{Factor: 0.8, Active: true}, {Factor: 0.5, Active: true}, {Factor: 0.9, Active: false},
+	}
+	got := evalProductChain(EvalContext{EdgeFactors: factors})
+	if math.Abs(got-0.4) > 1e-12 {
+		t.Fatalf("default strategy = %v, want 0.4", got)
+	}
+	RegisterEdgeFactorStrategy(nil) // 恢复默认
+	if err := ValidateStrategy(); err != nil {
+		t.Fatalf("reset strategy must restore the default: %v", err)
+	}
+}
+
+func TestInjectedStrategyIsUsed(t *testing.T) {
+	defer RegisterEdgeFactorStrategy(nil)
+	RegisterEdgeFactorStrategy(func(factors []EdgeFactorResult) float64 { return 0.42 })
+	if got := applyEdgeFactorStrategy(EvalContext{EdgeFactors: nil}); math.Abs(got-0.42) > 1e-12 {
+		t.Fatalf("injected strategy = %v, want 0.42", got)
+	}
+}
+
+// TestDefaultStrategyIsBitIdenticalToProductChain 是「默认路径逐位一致」的回归护栏：
+// 未注入策略时 applyEdgeFactorStrategy / EvalAST 的结果必须与历史实现 evalProductChain 按位相等。
+func TestDefaultStrategyIsBitIdenticalToProductChain(t *testing.T) {
+	defer RegisterEdgeFactorStrategy(nil)
+	RegisterEdgeFactorStrategy(nil)
+
+	cases := []struct {
+		name    string
+		factors []EdgeFactorResult
+	}{
+		{"empty", nil},
+		{"single_active", []EdgeFactorResult{{ID: "EF-A", Factor: 0.85, Active: true}}},
+		{"inactive_and_out_of_range", []EdgeFactorResult{
+			{ID: "EF-A", Factor: 0.9, Active: false},
+			{ID: "EF-B", Factor: 1.0, Active: true},
+			{ID: "EF-C", Factor: 0.0, Active: true},
+			{ID: "EF-D", Factor: -0.5, Active: true},
+			{ID: "EF-E", Factor: 1.5, Active: true},
+		}},
+		{"many_actives", []EdgeFactorResult{
+			{ID: "EF-A", Factor: 0.93, Active: true},
+			{ID: "EF-B", Factor: 0.77, Active: true},
+			{ID: "EF-C", Factor: 0.61, Active: true},
+			{ID: "EF-D", Factor: 0.57, Active: true},
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := EvalContext{EdgeFactors: tc.factors}
+			legacy := evalProductChain(ctx)
+			if got := applyEdgeFactorStrategy(ctx); got != legacy {
+				t.Fatalf("applyEdgeFactorStrategy = %v, legacy = %v (must be bit-identical)", got, legacy)
+			}
+			viaAST, err := EvalAST(FormulaAST{Op: OpProductChain}, ctx)
+			if err != nil {
+				t.Fatalf("EvalAST failed: %v", err)
+			}
+			if viaAST != legacy {
+				t.Fatalf("EvalAST = %v, legacy = %v (must be bit-identical)", viaAST, legacy)
+			}
+			viaCompiled := ASTToFormula(FormulaAST{Op: OpProductChain})(nil, nil, 1.0, 1.0, tc.factors)
+			if viaCompiled != legacy {
+				t.Fatalf("compiled formula = %v, legacy = %v (must be bit-identical)", viaCompiled, legacy)
+			}
+		})
+	}
+}
+
+// TestStrategyIsUsedByBothEvalPaths 确认注入的策略同时作用于 EvalAST 与编译后的公式路径，
+// 且越界因子（>0 且 <1 之外）在默认策略下被跳过。
+func TestStrategyIsUsedByBothEvalPaths(t *testing.T) {
+	defer RegisterEdgeFactorStrategy(nil)
+
+	scores := []DomainScore{{Domain: "attack_surface", Score: 80}}
+	weights := DefaultWeights
+	factors := []EdgeFactorResult{{Factor: 0.8, Active: true}, {Factor: 0.5, Active: true}}
+
+	RegisterEdgeFactorStrategy(func([]EdgeFactorResult) float64 { return 1.0 })
+	ctx := EvalContext{DomainScores: scores, Weights: weights, EdgeFactors: factors}
+	if got, err := EvalAST(FormulaAST{Op: OpProductChain}, ctx); err != nil || math.Abs(got-1.0) > 1e-12 {
+		t.Fatalf("EvalAST with injected strategy = %v (err=%v), want 1.0", got, err)
+	}
+	if got := ASTToFormula(FormulaAST{Op: OpProductChain})(scores, weights, 1.0, 1.0, factors); math.Abs(got-1.0) > 1e-12 {
+		t.Fatalf("compiled formula with injected strategy = %v, want 1.0", got)
+	}
+
+	// 恢复默认后两条路径都回到乘性连乘。
+	RegisterEdgeFactorStrategy(nil)
+	if got, err := EvalAST(FormulaAST{Op: OpProductChain}, ctx); err != nil || math.Abs(got-0.4) > 1e-12 {
+		t.Fatalf("EvalAST after reset = %v (err=%v), want 0.4", got, err)
+	}
+	if got := ASTToFormula(FormulaAST{Op: OpProductChain})(scores, weights, 1.0, 1.0, factors); math.Abs(got-0.4) > 1e-12 {
+		t.Fatalf("compiled formula after reset = %v, want 0.4", got)
+	}
+}
+
+// TestStrategyRegistrationIsConcurrencySafe 并发注入/读取不应死锁或竞态（配合 -race 使用更有意义）。
+func TestStrategyRegistrationIsConcurrencySafe(t *testing.T) {
+	defer RegisterEdgeFactorStrategy(nil)
+	factors := []EdgeFactorResult{{Factor: 0.8, Active: true}, {Factor: 0.5, Active: true}}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				if i%2 == 0 {
+					RegisterEdgeFactorStrategy(func([]EdgeFactorResult) float64 { return 1.0 })
+				} else {
+					if got := applyEdgeFactorStrategy(EvalContext{EdgeFactors: factors}); got <= 0 {
+						t.Errorf("strategy returned non-positive %v", got)
+						return
+					}
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	RegisterEdgeFactorStrategy(nil)
+	if got := applyEdgeFactorStrategy(EvalContext{EdgeFactors: factors}); math.Abs(got-0.4) > 1e-12 {
+		t.Fatalf("after reset = %v, want 0.4", got)
 	}
 }
