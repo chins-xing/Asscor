@@ -287,36 +287,44 @@ func TestValidateAcceptsExplicitFalseCompromised(t *testing.T) {
 }
 
 // ============================================================================
-// 本包新增：大小写折叠冲突 + 生效权重可选
+// 本包新增：重复因子条目必须放行（评审 C1）+ 生效权重可选
 // ============================================================================
 
-// TestValidateRejectsCaseFoldCollision：两个只差大小写的因子 ID 会在消费侧被
-// `NormalizeFactorID`（ToUpper+TrimSpace）**静默合并**成一个因子 —— 链上少一个惩罚项，
-// 而报告照常打印。故读取层直接拒绝这种记录（正常情况下写入侧根本产不出它）。
-func TestValidateRejectsCaseFoldCollision(t *testing.T) {
+// TestValidateAcceptsDuplicateFactorEntries：**同一条链里出现两条同一个因子 ID 是合法的，
+// 且任何消费方都不得去重**（Task 2 评审 C1 的回归测试；被删掉的"大小写折叠冲突即拒绝"规则
+// 就是因为违反本条而被撤下）。
+//
+// 为什么这不是坏数据 —— 出厂部署正会产出它：
+//   - `config.ini` / 每个 `configs/*.ini` 除了 `[edge_factors]` 之外，又把**同样七个因子 ID**
+//     写进 `[edge_factors.custom]`（带各自的触发检查）；`internal/config` 的 `parseSections`
+//     会把配置键小写化，`ConfigToEdgeFactors`（`internal/engine/ssam/adapter.go`）**刻意不去重**
+//     地逐条追加；
+//   - ssam 按因子 ID 各自保留一份，于是**引擎确实按这个因子乘了两次**；
+//   - `observeEdgeFactorChain` 把它们各自归一 ⇒ 链上两条 `factor == "EF-SELINUX"`。
+//
+// 记录是**列表**语义：两条条目 = 两次惩罚，是引擎的真实行为，不是重复数据。若按 ID 去重，
+// 离线重算会**少算一次惩罚**，而分数照样打印出来 —— 这正是"读取层单方面收紧会让实验自己
+// 产出的数据集读不回来"的形态（读不进 + 写不出 ⇒ 采集器零记录）。
+// 需要拒绝的重复是**配置键**的重复（重解析时静默合并），那条规则属于渲染侧
+// （`cmd/edgecompare/report.go` 的 `validateRenderable`），与记录契约无关。
+func TestValidateAcceptsDuplicateFactorEntries(t *testing.T) {
 	r := validRecord()
 	r.Observed.EdgeFactorChain = append(r.Observed.EdgeFactorChain, ChainObs{
-		Factor: "ef-selinux", TriggerCheck: "OT-005", CTrigger: 0.9, EffectiveFactor: 0.82,
+		Factor: "EF-SELINUX", TriggerCheck: "OT-005", CTrigger: 0.9, EffectiveFactor: 0.82,
 		cTriggerSet: true, effectiveFactorSet: true,
 	})
-	mustReject(t, r, "edge_factor_chain", "collides")
-
-	// 前后空白同样被 NormalizeFactorID 吃掉，属同一种折叠。
-	r = validRecord()
-	r.Observed.EdgeFactorChain = append(r.Observed.EdgeFactorChain, ChainObs{
-		Factor: " EF-SELINUX ", TriggerCheck: "OT-005", CTrigger: 0.9, EffectiveFactor: 0.82,
-		cTriggerSet: true, effectiveFactorSet: true,
-	})
-	mustReject(t, r, "edge_factor_chain", "collides")
-
-	// 反向对照：**不同**的因子不得被误报（否则这条检查会拒掉合法数据集）。
-	r = validRecord()
-	r.Observed.EdgeFactorChain = append(r.Observed.EdgeFactorChain, ChainObs{
-		Factor: "EF-APPARMOR", TriggerCheck: "OT-005", CTrigger: 0.9, EffectiveFactor: 0.838,
-		cTriggerSet: true, effectiveFactorSet: true,
-	})
+	r.Factors = []string{"EF-SELINUX"}
 	if err := r.Validate(); err != nil {
-		t.Fatalf("不同因子被误判为折叠冲突：%v", err)
+		t.Fatalf("链上两条同一因子 ID 是出厂部署的真实形态（引擎确实乘了两次），必须放行: %v", err)
+	}
+
+	// 生产端同样不得因此拒绝：写出口只做构造自检，不去重、不折叠。
+	r.Observed.EffectiveWeights = map[string]float64{"attack_surface": 35, "operation_trust": 25}
+	if _, err := MarshalRecord(r); err != nil {
+		t.Fatalf("重复因子条目的记录必须可写出（生产者按列表如实落盘）: %v", err)
+	}
+	if got := len(r.Observed.EdgeFactorChain); got != 2 {
+		t.Fatalf("链条目数被改动（%d，应为 2）—— 去重只能发生在消费方的显式决策里，不能在契约层", got)
 	}
 }
 
@@ -477,6 +485,9 @@ func TestCheckTriggerCrossReferencePassesOnSpecSample(t *testing.T) {
 // 逐域权重（spec §5.1 前提 2），否则离线复算拿不到"哪些域参与聚合、各占多少权重"。
 //
 // 读取层不要求它（见 TestValidateTreatsEffectiveWeightsAsOptional），但生产者必须写。
+// 加严的两条（评审 I2）：①非空；②**每个键都必须出现在 `domain_scores` 里** ——
+// 只查非空会放行 `{"bogus":1}`，而 Task 4 的门禁把这个字段当**真值**用，
+// 错键会让复算按错误的域集加权且**不报错**。
 func TestCheckEffectiveWeightsRecorded(t *testing.T) {
 	r := validRecord()
 	if err := r.CheckEffectiveWeightsRecorded(); err == nil {
@@ -489,10 +500,57 @@ func TestCheckEffectiveWeightsRecorded(t *testing.T) {
 		t.Fatal("空的 effective_weights 等于没写：键集即『参与的域』，不得为空")
 	}
 
+	// 未知域：键集必须 ⊆ domain_scores，否则"哪些域参与了聚合"是错的。
+	r = validRecord()
+	r.Observed.EffectiveWeights = map[string]float64{"bogus": 1}
+	err := r.CheckEffectiveWeightsRecorded()
+	if err == nil {
+		t.Fatal("effective_weights 里的键不在 domain_scores 里，必须被拒绝（键集 = 参与聚合的域，参与聚合的域必然有域分）")
+	}
+	if !strings.Contains(err.Error(), "bogus") || !strings.Contains(err.Error(), "domain_scores") {
+		t.Errorf("错误必须点名坏键与它应当出现的位置: %v", err)
+	}
+
+	// 混合（一个合法、一个未知）同样拒绝 —— 并且坏键的挑选必须**确定**（排序后取第一个），
+	// 否则错误信息会随 map 迭代序漂移，测试与人工复现都要看运气。
+	r = validRecord()
+	r.Observed.EffectiveWeights = map[string]float64{"attack_surface": 35, "zzz": 1, "aaa": 2}
+	err = r.CheckEffectiveWeightsRecorded()
+	if err == nil || !strings.Contains(err.Error(), "aaa") {
+		t.Fatalf("多个坏键时必须确定性地报排序后的第一个（aaa）: %v", err)
+	}
+
 	r = validRecord()
 	r.Observed.EffectiveWeights = map[string]float64{"attack_surface": 35, "operation_trust": 25}
 	if err := r.CheckEffectiveWeightsRecorded(); err != nil {
 		t.Fatalf("写全生效权重后自检必须通过：%v", err)
+	}
+}
+
+// TestMarshalRecordRequiresEffectiveWeights：写出口必须拒绝"没写生效权重"的记录（评审 I2）。
+//
+// 理由：采集器漏调用自检的代价是记录里 `effective_weights` 变成 `null`，而下游 round-trip
+// 门禁以它为**真值** —— 那会表现为一段**静默**偏差（离线按猜的权重复算），比在写出口直接报错
+// 贵得多。**唯一的代价**是"把历史数据集原样重写一遍"这类用法也必须先把权重表填出来；
+// 本项目里没有这种调用方（生产者是 Task 3 的采集器，它本来就必须填），故从严。
+func TestMarshalRecordRequiresEffectiveWeights(t *testing.T) {
+	r := validRecord()
+	if _, err := MarshalRecord(r); err == nil {
+		t.Fatal("缺 effective_weights 的记录不得被写出")
+	} else if !strings.Contains(err.Error(), "effective_weights") {
+		t.Errorf("错误必须点名 effective_weights: %v", err)
+	}
+
+	r = validRecord()
+	r.Observed.EffectiveWeights = map[string]float64{"bogus": 1}
+	if _, err := MarshalRecord(r); err == nil {
+		t.Fatal("effective_weights 含未知域的记录不得被写出（键集必须 ⊆ domain_scores）")
+	}
+
+	r = validRecord()
+	r.Observed.EffectiveWeights = map[string]float64{"attack_surface": 35, "operation_trust": 25}
+	if _, err := MarshalRecord(r); err != nil {
+		t.Fatalf("写全生效权重后必须可写出：%v", err)
 	}
 }
 
@@ -659,8 +717,16 @@ func TestLoadFileAsPreservesConsumerErrorPrefix(t *testing.T) {
 // 夹具直接用 **spec §5.1 的示例正文**（从设计文档里提取，而不是在本文件里再抄一份）：
 // 本项目已经因为"规范示例与读取层各写各的"被咬过一次，再抄一份等于把那个失败模式
 // 搬进契约包自己。
+//
+// 示例正文里**没有** `effective_weights`（它是本轮才加进来的字段，读取层刻意不要求它），
+// 故这里按**生产者**的身份补上"参与聚合的域"的权重后再写出 —— 这正是采集器必须做的事
+// （`MarshalRecord` 会拒绝没写权重的记录，见 TestMarshalRecordRequiresEffectiveWeights）。
 func TestMarshalLoadRoundTrip(t *testing.T) {
 	first := loadDocSample(t)
+	first.Observed.EffectiveWeights = map[string]float64{
+		"attack_surface": 1, "business_continuity": 1, "operation_trust": 1,
+		"resilience": 1, "kernel_security": 1,
+	}
 
 	raw, err := MarshalRecord(first)
 	if err != nil {
@@ -711,11 +777,19 @@ func recordsDeepEqual(a, b Record) bool {
 // TestMarshalRecordRejectsUnconstructibleRecord：写出前做**生产者自检**（构造要求）——
 // 规范因子 ID 不满足时宁可拒绝，也不落盘一条"读取层照样接受、但离线重算会静默走
 // 全 1 fallback"的记录（那正是本任务要根治的漂移形态）。
+//
+// 夹具带上合法的 `effective_weights`，让拒绝的**唯一**理由就是那个非规范 ID
+// （否则本条会被"缺权重"那条自检兜住，测不到构造自检本身）。
 func TestMarshalRecordRejectsUnconstructibleRecord(t *testing.T) {
 	r := validRecord()
+	r.Observed.EffectiveWeights = map[string]float64{"attack_surface": 35, "operation_trust": 25}
 	r.Observed.EdgeFactorChain[0].Factor = "selinux_disabled"
-	if _, err := MarshalRecord(r); err == nil {
+	_, err := MarshalRecord(r)
+	if err == nil {
 		t.Fatal("非规范因子 ID 的记录不得被写出")
+	}
+	if !strings.Contains(err.Error(), "canonical") {
+		t.Errorf("拒绝理由必须指向规范 ID（而不是被别的自检兜住）: %v", err)
 	}
 }
 

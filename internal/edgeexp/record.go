@@ -12,14 +12,16 @@
 //
 // 本包的判据分三层，边界是 spec §5.1 划的，改动前先读清楚：
 //
-//  1. **读取层契约**（`Record.Validate` + `LoadFile`）：必需字段的**存在性**与**值域**，
-//     以及大小写折叠冲突 —— 这些一旦缺失就会被静默读成零值并直接扭曲决策层，故 fail-fast。
+//  1. **读取层契约**（`Record.Validate` + `LoadFile`）：必需字段的**存在性**与**值域** ——
+//     这些一旦缺失就会被静默读成零值并直接扭曲决策层，故 fail-fast。
+//     （**没有别的判据**：链是列表，同一因子 ID 出现多次是出厂部署的真实形态，读取层既不去重
+//     也不做"折叠冲突"检查 —— 那条规则属于**配置键渲染**侧，见 `Validate` 的注释。）
 //  2. **记录构造要求**（`ValidateConstruction` / `CheckTriggerCrossReference` /
 //     `CheckEffectiveWeightsRecorded`）：**生产者侧**自检。spec §5.1 明说
 //     「这些是"记录构造要求"，不是读取层契约」—— 写错不会有任何读取层报错，只会让报告与
 //     论文证据失真。它们由采集器调用（见各函数注释里的路径限制）。
 //  3. **写出口**（`MarshalRecord`）：写之前先做第 2 层里与路径无关的自检，绝不落盘一条
-//     "读取层照样接受、但离线重算会静默改分"的记录。
+//     "读取层照样接受、但离线重算会静默改分（或静默按猜的权重复算）"的记录。
 package edgeexp
 
 import (
@@ -28,6 +30,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -329,6 +332,18 @@ func LoadFileAs(tool, path string) ([]Record, error) {
 // → observed.spc_score / threat_coeff → 因子链 → checks → ground_truth），且**只报第一个问题**：
 // 一条坏行给一个可执行的修复指令，比堆一串错误更有用。
 //
+// **因此新增判据一律追加在所有既有判据之后**：本层只报第一个问题，把新判据插在前面会改变
+// 既有输入的错误信息（同一条坏记录从"报告 threshold 缺失"变成"报告新判据"）—— 那会破坏与
+// 消费者既有用例的逐字契约。**曾经报错的输入，错误信息一字不变**；新判据只可能影响到
+// 以前**通过**的输入（本层目前没有任何新增判据：折叠冲突规则已按评审 C1 删除，见下条）。
+//
+// 链是**列表**，同一条链允许出现**多条同一个因子 ID**（出厂 `config.ini` 把同样七个 ID 又写进
+// `[edge_factors.custom]`，`ConfigToEdgeFactors` 刻意不去重、ssam 按 ID 各留一份 ⇒ 引擎确实
+// 乘了两次 ⇒ 链上两条 `EF-SELINUX`）。**任何消费方都不得按因子 ID 去重**，读取层更不得把
+// "ID 重复/大小写折叠"判成坏数据 —— 那会把实验自己产出的数据集拒之门外（评审 C1）。
+// 重复**配置键**才是需要拒绝的：那条规则属于**渲染侧**（`cmd/edgecompare/report.go` 的
+// `validateRenderable`），因为重复键在重解析时会静默合并，与记录的链语义无关。
+//
 // 值域口径：
 //   - `threshold > 0`：阈值必须是正数，否则 `score >= threshold` 恒真（决策层退化为全放行）。
 //   - `spc_score ∈ (0,1]`：它是引擎的 `AssessmentOutput.SPCScore`（SPC 姿态分 p_score =
@@ -409,17 +424,6 @@ func (r Record) Validate() error {
 		if _, err := ParseTS(c.TS); err != nil {
 			return fmt.Errorf("observed.edge_factor_chain[%d].ts: %w", i, err)
 		}
-	}
-	// 大小写折叠冲突：两个只差大小写（或前后空白）的因子 ID 会被消费侧的 `NormalizeFactorID`
-	// **静默合并**成一个因子 —— 链上少一个惩罚项、V/G/C 的强度也随之变化，而报告照常打印。
-	// 放在所有既有判据**之后**是刻意的：只报第一个问题的口径不变，既有输入的错误信息逐字不变。
-	seen := make(map[string]int, len(r.Observed.EdgeFactorChain))
-	for i, c := range r.Observed.EdgeFactorChain {
-		key := edgefactor.NormalizeFactorID(c.Factor)
-		if j, dup := seen[key]; dup {
-			return fmt.Errorf("observed.edge_factor_chain[%d].factor = %q collides with observed.edge_factor_chain[%d].factor = %q after normalization (%q) — 消费侧会把它静默合并成一个因子，链上少一个惩罚项", i, c.Factor, j, r.Observed.EdgeFactorChain[j].Factor, key)
-		}
-		seen[key] = i
 	}
 	for i, c := range r.Observed.Checks {
 		if _, err := ParseTS(c.TS); err != nil {
@@ -504,25 +508,47 @@ func (r Record) CheckTriggerCrossReference() error {
 // 空 map 等于没写：键集即"参与的域"，为空说明装配期没拿到权重表。
 // 下游读它时同款判断 —— 用 `len(...) > 0`，而不是"JSON 键在不在"（见 `Observed.EffectiveWeights`
 // 的说明：nil map 会被序列化成 `null`，键仍在场）。
+//
+// **键还必须出现在 `observed.domain_scores` 里**（评审 I2 的加固）：这个字段的文档含义是
+// "键集 = 参与聚合的域"，而参与聚合的域必然有域分。只查非空会放行 `{"bogus":1}` 这种
+// "写了但写错域"的记录 —— Task 4 的 round-trip 门禁把它当**真值**用，错键会让复算按错误的
+// 域集加权而**不报错**（与"配置权重 ≠ 生效权重"同一类静默偏差，只是这次连域都选错了）。
 func (r Record) CheckEffectiveWeightsRecorded() error {
 	if len(r.Observed.EffectiveWeights) == 0 {
 		return fmt.Errorf("observed.effective_weights: missing or empty — 记录必须写出引擎实际生效的逐域权重（键集 = 参与聚合的域），否则离线复算拿不到权重口径（spec §5.1 前提 2）")
+	}
+	// 排序列出坏键，让错误信息**确定**（map 迭代序随机，测试与人工复现都不该看运气）。
+	var unknown []string
+	for d := range r.Observed.EffectiveWeights {
+		if _, ok := r.Observed.DomainScores[d]; !ok {
+			unknown = append(unknown, d)
+		}
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		return fmt.Errorf("observed.effective_weights[%q]: 不在 observed.domain_scores 里 — 键集必须 ⊆ 参与聚合的域（参与聚合的域必然有域分，否则离线复算会按错误的域集加权）", unknown[0])
 	}
 	return nil
 }
 
 // MarshalRecord 把一条记录序列化成 JSONL 的一行（含结尾 `\n`，无 BOM）。
 //
-// 写之前先做**生产者自检**（`ValidateConstruction`）：一条能被读取层接受、却会让离线重算
-// 静默改分的记录（例如非规范因子 ID）绝不落盘 —— 这个项目已经因为"两边各写各的"被咬过一次，
-// 写出口宁可在源头拒绝。
+// 写之前做**生产者自检**，两条：
+//   - `ValidateConstruction`（规范因子 ID 等构造要求）：一条能被读取层接受、却会让离线重算
+//     静默改分的记录绝不落盘 —— 这个项目已经因为"两边各写各的"被咬过一次；
+//   - `CheckEffectiveWeightsRecorded`（生效权重必须写、且键必须落在 `domain_scores` 里）：
+//     采集器"忘了写"的代价是 `effective_weights` 变成 `null`，而下游 round-trip 门禁以它为
+//     真值 —— 在写出口拒绝比在报告里表现为一段静默偏差便宜得多。
 //
-// **路径相关的构造要求不在这里**：`CheckTriggerCrossReference`（仅插件路径）与
-// `CheckEffectiveWeightsRecorded`（采集器义务）由采集器在调用本函数前自行执行 ——
-// 它们是否适用取决于该记录由哪条评分路径产出，写出口无从判断。
+// **路径相关的构造要求不在这里**：`CheckTriggerCrossReference` 只对插件路径（V/G/C）成立，
+// legacy 的 identity/级联路径产出的记录**合法地**不满足它，写出口无从判断该记录出自哪条路径，
+// 故它由知道路径的调用方（采集器，Task 3）执行。
 func MarshalRecord(r Record) ([]byte, error) {
 	if err := r.ValidateConstruction(); err != nil {
 		return nil, fmt.Errorf("edgeexp: refuse to marshal an unconstructible record: %w", err)
+	}
+	if err := r.CheckEffectiveWeightsRecorded(); err != nil {
+		return nil, fmt.Errorf("edgeexp: refuse to marshal a record without usable effective weights: %w", err)
 	}
 	raw, err := json.Marshal(r)
 	if err != nil {
