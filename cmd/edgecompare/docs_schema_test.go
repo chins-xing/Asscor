@@ -215,19 +215,24 @@ func TestSpecSection51SampleRoundTripsThroughEngineFormula(t *testing.T) {
 		// 出厂表成员资格是**硬要求**，查不到即失败（旧写法 `want != "" &&` 会让"表里没有的
 		// 因子 ID"静默跳过本条断言 —— 评审指出的加固点）。
 		//
-		// 口径说明（第四轮复审的修正）：这里的锚点是**文档示例**必须用出厂因子分类内的 ID。
-		// 对**真实采集数据**不能这样硬判 —— `[edge_factors.custom]` 里的自定义因子不在出厂表内，
-		// 且覆盖过 `trigger.<FACTOR-ID>` 的部署应当以 `config.ResolveEdgeFactorTriggerMap()`
-		// 解析出的值为准（覆盖是正式配置键，出厂 configs/config.testing.ini 自身就带覆盖）。
+		// 口径说明（第四轮复审的修正，第五轮补正触发来源归属）：这里的锚点是**文档示例**
+		// 必须用出厂内置因子分类内的 ID。对**真实采集数据**不能这样硬判 ——
+		//   ① `[edge_factors.custom]` 的自定义因子不在出厂表内，其触发检查由
+		//      `[edge_factors.custom_triggers]` 提供（`ConfigToEdgeFactors`），再被
+		//      `trigger.<FACTOR-ID>` 覆盖，**不在** `ResolveEdgeFactorTriggerMap` 的表里；
+		//   ② 内置因子的锚点是解析值 `config.ResolveEdgeFactorTriggerMap()`
+		//      （出厂表 + `[edge_factors.model]` 的 `trigger.<ID>` 覆盖）；
+		//   ③ 出厂 config.ini / configs/*.ini 并没有 `[edge_factors.model]` 段，各配置里的
+		//      触发值写在 `[edge_factors.custom_triggers]`。
 		// 本门禁是"文档示例契约"，不是"采集器契约"；采集器那侧的要求写在 spec §5.1 的
-		// 记录构造要求里（并按解析出的触发检查校验）。
+		// 记录构造要求里（按解析出的触发检查校验，且按上面的机制区分内置/自定义）。
 		want, known := triggers[c.Factor]
 		if !known {
 			t.Errorf("edge_factor_chain[%d].factor = %q 不在出厂触发表里 —— 文档示例必须用出厂分类内的因子 ID（自定义因子需在此登记允许集；真实采集数据不受本条约束，见本段注释）", i, c.Factor)
 			continue
 		}
 		if c.TriggerCheck != want {
-			t.Errorf("edge_factor_chain[%d] (%s) 的 trigger_check = %q，出厂触发表是 %q（示例未使用 trigger.* 覆盖，故以出厂表为准；覆盖过的部署应以 ResolveEdgeFactorTriggerMap 的解析值为准）",
+			t.Errorf("edge_factor_chain[%d] (%s) 的 trigger_check = %q，出厂内置触发表是 %q（示例未使用 trigger.* 覆盖，故以出厂表为准；覆盖过的部署应以 ResolveEdgeFactorTriggerMap 的解析值为准，自定义因子则以 [edge_factors.custom_triggers] + 覆盖为准）",
 				i, c.Factor, c.TriggerCheck, want)
 		}
 		if c.CTrigger > 0 && !failedChecks[c.TriggerCheck] {

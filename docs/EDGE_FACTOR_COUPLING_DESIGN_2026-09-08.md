@@ -257,7 +257,7 @@ chain.window_seconds = 300
 1. **候选声明的因子集 == 记录里出现的因子集**：离线只惩罚候选（`params.Factors`）声明的因子，记录里有而候选没声明的会被**静默丢掉**（实测：同一条示例记录，只声明 `EF-SELINUX` 算出 84.68，声明两个才是 80.02）。这正是 CLI 的 `-factors` 覆盖校验存在的原因，也是采集器必须把每个场景实际激活的因子完整写进 `factors` / `edge_factor_chain` 的原因。
 2. **权重表**：记录里**没有**权重字段（它是 `-weights`／配置 `[weights]` 的口径）。本节示例的 80.02 指的是**五域等权**下的值；同一份记录在出厂 `configs/config.ini` 的 `[weights]`（35/25/25/15/10）下是 **81.08**（注意这一组数值恰落在取整半格上，`81.075 → 81.08` 只差浮点噪声，故它只作示例说明、不作断言值）。故采集器必须把实际使用的权重来源写进 `meta`（`config_hash` 是现成锚点），否则"离线复算"的口径无法还原 —— 同前一条，这是**记录构造要求**（读取层不校验 `meta`）。
 3. **因子 ID 与触发关系自洽**：
-   - `trigger_check` 必须是该因子在**当前部署实际解析出的**触发检查上（`config.ResolveEdgeFactorTriggerMap` = 出厂表 + `[edge_factors.model] trigger.<FACTOR-ID>` 覆盖；覆盖是正式键，出厂 `configs/config.testing.ini` 自身就带覆盖），**不是**"出厂表值"——否则覆盖过的部署会被误判；
+   - `trigger_check` 必须是该因子在**当前部署实际解析出的**触发检查上，**不是**"出厂表值"——否则覆盖过的部署会被误判。**两条机制别混为一谈**：①**内置因子**（`EF-SELINUX` 等）经 `config.ResolveEdgeFactorTriggerMap` 解析 = 出厂表 + `[edge_factors.model]` 的 `trigger.<FACTOR-ID>` 覆盖；②`[edge_factors.custom]` 的自定义因子由 `[edge_factors.custom_triggers]` 提供其 `TriggerCheck`（`ConfigToEdgeFactors`），再被 `trigger.<FACTOR-ID>` 覆盖 —— 它们**不在** `ResolveEdgeFactorTriggerMap` 的表里。另注意：出厂 `config.ini` / `configs/*.ini` **没有** `[edge_factors.model]` 段，各配置里的触发值写在 `[edge_factors.custom_triggers]`（例如 `config.ini` 的 `EF-SELINUX = OT-005`），不要把这两处当成同一份覆盖；
    - 当 `c_trigger > 0` 时，该触发检查必须以 `passed = false` 出现在 `checks[]` 里。**`c_trigger = 0` 必须豁免**：那是"未被自身触发检查匹配到失败检查"的既有形态，纯级联因子（`EF-3FA → EF-002FA`）就靠它 —— 这类因子的激活原因**不是**某个检查失败，所以"否则因子永远不会被激活"这类说法对级联不成立；
    - `checks[]` 的**穷尽性从未被 schema 要求**（示例也只是一个子集）。若要让上面的交叉校验在采集数据上成立，采集器必须落盘引擎的**全部失败检查**（至少是链上 `c_trigger > 0` 因子的触发检查）—— 这是额外约定，写在这里以便里程碑 B 实现时对齐；
    - `checks[].delta` 必须**逐字**取自引擎的检查登记表（`OT-005` 为 `-15`）—— 离线不消费 `delta`，但它出现在报告与论文证据里，写错就是溯源造假。
@@ -359,7 +359,7 @@ chain.window_seconds = 300
 
 ### 10.2 已知口径问题（标定前必须处理）
 
-- **可信度被衰减两次**:`ssam-lib` 的 `ApplyEdgeFactorsToChecksPolicy` 已把因子值按可信度衰减一次（`factor = 1-(1-factor)·c`），而装配层 `ActivationFromResult` 又对同一个 `Factor` 再乘一次 `EffectiveFactor(·, c)`，合计为 `1-(1-f)·c²`。**这里说的是 legacy 与 V/G/C 之间的口径差**：同一个部署只能选一个模型，故它体现为"选 V/G/C 比选 legacy 多衰减一次"（`c²` vs `c`），**不是**"离线↔在线不一致" —— 后者对**同一个模型**在任意 `c` 下都成立（详见 §6 表）。可信度策略关闭（`c=1`）时两者恒等，故不影响"默认逐位一致"；但**一旦开启可信度策略，启用模型的惩罚强度会显著强于历史路径**。Task 8–10 的离线重算必须**复用同一口径**，并在标定报告中明确标注；是否修正（去掉重复衰减）属独立决策（会改评分）。
+- **可信度被衰减两次**:`ssam-lib` 的 `ApplyEdgeFactorsToChecksPolicy` 已把因子值按可信度衰减一次（`factor = 1-(1-factor)·c`），而装配层 `ActivationFromResult` 又对同一个 `Factor` 再乘一次 `EffectiveFactor(·, c)`，合计为 `1-(1-f)·c²`。**这里说的是 legacy 与 V/G/C 之间的口径差**：同一个部署只能选一个模型，故它体现为"选 V/G/C 比选 legacy 多衰减一次"（`c²` vs `c`），**不是**"离线↔在线不一致" —— 后者对**同一个模型**在任意 `c` 下都成立（详见 §6 表）。可信度策略关闭（`c=1`）时两者恒等，故不影响"默认逐位一致"；但**一旦开启可信度策略，启用模型的惩罚强度会显著强于历史路径**。Task 8–10 的离线重算必须**复用同一口径**，并在标定报告中明确标注。引用时注意这是**衰减次数**的差，不是"同一个 `c` 数值"：两条路径的置信度归一化并不相同（legacy：`c<=0 或 c>1 ⇒ 1.0`；V/G/C 走 `NormalizeConfidence`：`<=0 ⇒ 默认值`、低于下限 `0.05` 抬到 `0.05`），故极端置信度下两侧的 `c` 数值本身也可能不同。是否修正（去掉重复衰减）属独立决策（会改评分）。
 
 - **交互项可辨识性**：样本量限制下只用先验边集 + 正则；若结论不足，扩充 S2 至全 15 组 / 增加重复次数（A-1）。
 - **代理真实性**：SELinux/AppArmor 场景为检查失败代理，R 组仅能覆盖 IDS/SIEM/2FA；结论须标注。
