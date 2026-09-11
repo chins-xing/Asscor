@@ -15,9 +15,12 @@ import (
 // Dependency direction: ssam → ASSCOR (not ASSCOR → ssam).
 type EngineAdapter struct {
 	engine *Engine
-	// confCfg retains the kernel config used for confidence resolution
-	// (per-check rule lookup happens right before each ComputeScore, so it
-	// reflects hot-reloaded [confidence] rules via ReloadWeights).
+	// confCfg retains the kernel config used for per-check confidence
+	// resolution right before each ComputeScore (per-check rule lookup happens
+	// there, so it reflects hot-reloaded [confidence] rules via ReloadWeights).
+	// It is currently the only config the adapter reads while scoring: the
+	// edge factor *model* params are NOT consumed here yet (see the provenance
+	// note in ComputeScore — stamping stays off until Task 7 wires it up).
 	confCfg *config.Config
 }
 
@@ -56,20 +59,21 @@ func (a *EngineAdapter) ComputeScore(ctx context.Context, result *model.Assessme
 		return err
 	}
 	OutputToModel(output, result)
-	// 溯源（spec §4 规则 4）：把「本次评分使用的模型 + 参数指纹」写进输出层，供实验报告
-	// 与审计复现。三条边界一律留零值（omitempty ⇒ JSON 不输出）：
-	//   - 未配置 [edge_factors.model]（出厂配置与全部历史配置都是如此）⇒ 走历史乘性路径，
-	//     零值就是「未使用新模型」的表达，历史输出逐位不变（裁定 1）；
-	//   - 模型段存在但参数不可用（ParamsFromConfig 报错）⇒ 宁可留空，也不写一个无法复现的
-	//     指纹 —— 假指纹比缺指纹更糟，它会让审计以为这次评分可复现；
-	//   - 指纹取自 ParamsFromConfig(a.confCfg)，即本次评分所用参数集的装配来源（Task 7 的
-	//     ApplyEdgeFactorModel 消费同一份 cfg，故两者是同一套参数）。
-	if cfg := a.confCfgPtr(); cfg != nil && cfg.EdgeFactorModel.Model != "" {
-		if p, enabled, err := ParamsFromConfig(cfg); err == nil && enabled {
-			result.EdgeFactors.Model = string(p.Model)
-			result.EdgeFactors.ParamsHash = p.Hash()
-		}
-	}
+	// 溯源字段（model.EdgeFactors.Model / .ParamsHash）在此**刻意不盖戳**（Task 5 评审裁定 I1）。
+	//
+	// 为什么不盖：本函数今天无法证明「本次评分用了哪套参数」。ssam 的评分仍由内仓的默认乘性
+	// 策略算出 —— edgefactor.Synthesize 在生产代码里没有调用方，ParamsFromConfig 的生产调用
+	// 方也只有本文件（Task 5 初版曾在此盖戳）；而 [edge_factors.model] 段是**运维可达**的：
+	// 它的 trigger.* 覆盖今天就生效（ConfigToEdgeFactors 消费它），且解析层要求「段存在必须
+	// 有 model 键」，所以「配置里写了」不等于「评分用了它」。照配置盖戳会让输出**声称一个
+	// 评分并未使用的模型**，比留空更糟 —— 宁可留空也不写假指纹（同理：参数不可用时更不能写）。
+	//
+	// Task 7 的前置条件：接线（ApplyEdgeFactorModel 真正装载参数并注册合成策略）之后才启用
+	// 盖戳，判据必须是「engine 已装载同一套参数」（取 Engine 侧装载后的 params，而不是再看
+	// 一眼配置），并由 Task 7 的验收条件断言「指纹 == 引擎实际装载参数的 Hash()，且热重载后
+	// 仍相等」。在此之前两条真实评分路径（本适配器与 legacy）的 JSON 都不含这两个键，该
+	// 「溯源超前窗口」由 internal/engine/ssam/provenance_test.go 与
+	// internal/engine/assessor_provenance_test.go 显式钉住，而不是靠口头保证。
 	return nil
 }
 

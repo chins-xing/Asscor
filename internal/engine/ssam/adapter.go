@@ -127,6 +127,13 @@ func DomainScoresFromLegacy(legacy model.DomainScores) map[string]float64 {
 	return m
 }
 
+// EdgeFactorsToModel 把 ssam 的因子结果映射成输出层的 model.EdgeFactors。
+//
+// 溯源字段（Model / ParamsHash）在此**留空**：本函数是纯逐因子映射，形参里既没有
+// edgefactor.Result 也没有 Params（只有 []EdgeFactorResult），而溯源是「整套参数对应一个模型
+// + 一个指纹」的**整体**属性，不属于逐因子映射的职责。它的两个调用方（OutputToModel /
+// OutputV2ToModel）同样只拿到 AssessmentOutput，故也留空；盖戳时机见 adapter_engine.go
+// 的说明（Task 7 接线之后才启用）。
 func EdgeFactorsToModel(factors []EdgeFactorResult) model.EdgeFactors {
 	ef := model.EdgeFactors{}
 	for _, f := range factors {
