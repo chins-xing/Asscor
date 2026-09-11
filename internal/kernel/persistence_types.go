@@ -93,7 +93,12 @@ type AssessmentRecord struct {
 	ATTACKFailedTechs   []string                       `json:"attck_failed_techniques,omitempty"`
 	// EdgeFactorChain 是本次评分实际观测到的边缘因子链（spec §5.1 的
 	// observed.edge_factor_chain[]），由 model.AssessmentResult.EdgeFactorChain 透出。
-	// omitempty：未启用合成模型的部署不输出该键，历史记录格式逐位不变。
+	//
+	// omitempty 只表示"评分引擎没产出链时不写该键"。**"键缺失"不等于"没有因子参与惩罚"**：
+	// **legacy 评分路径**（`[weights] scoring_engine = legacy`，或未带 `engine` tag 的构建）
+	// 没有 [edge_factors.model] 段也会写出链，而插件路径只在装载了合成模型时才写。
+	// 判定"有没有因子惩罚"请看本记录的六个因子权重（two_factor_failure … no_ids）与该部署的
+	// 评分路径；空链/缺键只说明"本条记录没有采集到观测链"。
 	EdgeFactorChain []model.EdgeFactorObservation `json:"edge_factor_chain,omitempty"`
 }
 

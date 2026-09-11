@@ -364,11 +364,19 @@ type AssessmentResult struct {
 	ScoreLower95       float64 `json:"score_lower95,omitempty"`
 	ScoreUpper95       float64 `json:"score_upper95,omitempty"`
 	EvidenceConfidence float64 `json:"evidence_confidence,omitempty"`
-	// EdgeFactorChain 是本次评分实际观测到的因子链（omitempty：默认路径不输出 ⇒
-	// 既有 JSON 逐位不变）。见 EdgeFactorObservation 的注释。
+	// EdgeFactorChain 是本次评分实际观测到的因子链；omitempty 只表示"引擎没产出链时不写该键"。
 	//
-	// 位置说明：它逻辑上属于 EdgeFactors 那一组，但为了不在结构体中部插入注释、
-	// 从而把 gofmt 的字段对齐组切断（会波及 9 行无关空白），放在末尾自成一组。
+	// **"键缺失"不等于"没有因子参与惩罚"**。三种情形必须分开读：
+	//   - **legacy 评分路径**（`[weights] scoring_engine = legacy`，或未带 `engine` tag 的
+	//     构建）**没有 [edge_factors.model] 段也会写出链**，那六个因子权重确实产生了惩罚；
+	//   - 插件路径只在**引擎装载了合成模型**时写出链（未配置 / 参数不可用 ⇒ 无链，但六个
+	//     权重照样按内仓默认乘性路径参与惩罚）；
+	//   - 链为空还可能只是"这次没有任何因子激活"。
+	// 因此"用了哪个模型、有没有因子惩罚"要看溯源戳（EdgeFactors.Model / ParamsHash）与
+	// EdgeFactors 的六个权重；空链/缺键只能读成"本条记录没有采集到链"。
+	//
+	// 见 EdgeFactorObservation 的注释。位置说明：它逻辑上属于 EdgeFactors 那一组，但为了不在
+	// 结构体中部插入注释、从而把 gofmt 的字段对齐组切断（会波及 9 行无关空白），放在末尾自成一组。
 	EdgeFactorChain []EdgeFactorObservation `json:"edge_factor_chain,omitempty"`
 }
 
