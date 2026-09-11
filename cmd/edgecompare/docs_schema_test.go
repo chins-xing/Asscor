@@ -85,16 +85,20 @@ func TestSpecSection51SampleIsAcceptedByLoader(t *testing.T) {
 	}
 
 	// 不只断言"能读"，还钉住两个 C1 新增必填项确实**在示例里被写出来**（而不是靠零值蒙混）。
+	//
+	// 存在性标记是 `internal/edgeexp` 的非导出字段，跨包只能经只读访问器读
+	// （`SPCScoreSet()` 等；口径由 `internal/edgeexp` 的
+	// `TestExistenceAccessorsMirrorJSONPresence` 单独钉住）。除此之外本测试一个字都没改。
 	r := recs[0]
-	if r.ScenarioID == "" || !r.Observed.spcScoreSet || !r.Observed.threatCoeffSet {
+	if r.ScenarioID == "" || !r.Observed.SPCScoreSet() || !r.Observed.ThreatCoeffSet() {
 		t.Fatalf("示例记录缺少 scenario_id / spc_score / threat_coeff: id=%q spcSet=%v threatSet=%v",
-			r.ScenarioID, r.Observed.spcScoreSet, r.Observed.threatCoeffSet)
+			r.ScenarioID, r.Observed.SPCScoreSet(), r.Observed.ThreatCoeffSet())
 	}
 	if len(r.Observed.EdgeFactorChain) == 0 {
 		t.Fatal("示例记录的 edge_factor_chain 为空 —— 链上字段（c_trigger/effective_factor）的存在性契约就没被覆盖")
 	}
 	for i, c := range r.Observed.EdgeFactorChain {
-		if !c.cTriggerSet || !c.effectiveFactorSet {
+		if !c.CTriggerSet() || !c.EffectiveFactorSet() {
 			t.Fatalf("edge_factor_chain[%d] 缺 c_trigger/effective_factor", i)
 		}
 	}
