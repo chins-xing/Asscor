@@ -193,6 +193,8 @@ chain.window_seconds = 300
 ### 5.1 采集 schema（每场景一条 JSONL）
 
 > 下面这条记录为可读性做了缩进；**JSONL 里必须压成单行**（一行一条记录，读取层按行切分）。
+> Windows 上写作/重定向产生的**文件头 UTF-8 BOM 会被剥离**（否则第一条记录只会报
+> `invalid character 'ï'`，指不到真正原因），但别依赖它 —— 行内的 U+FEFF 仍按坏数据拒绝。
 > 本节 schema 与读取层、以及示例自身的数值自洽性，由 `cmd/edgecompare/docs_schema_test.go`
 > 直接对照本示例强制执行：**文档漏字段、示例数值自相矛盾、或读取层单方面收紧**，该测试即红。
 > 读取层对**其它**必填项的"放宽"方向由 `cmd/edgecompare/load_test.go` 的逐字段定向用例覆盖

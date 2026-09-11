@@ -213,6 +213,17 @@ func LoadRecords(path string) ([]Record, error) {
 	for scanner.Scan() {
 		line++
 		raw := scanner.Bytes()
+		// 文件首个字节若是 UTF-8 BOM，先剥掉（Task 8 实现者提出的疑虑 5）。
+		//
+		// 剥离是**刻意**的而不是"宽容"：本项目的采集器与数据集都在 Windows 上产出，
+		// 而记事本/PowerShell 重定向/Python 的部分写法都会在文件头写 BOM；不剥的话
+		// 第一条记录会以 `invalid character 'ï' looking for beginning of value` 报错 ——
+		// 那条信息指不到"文件头有 BOM"，读者会在 JSON 正文里找一个根本不存在的问题，
+		// 而整批数据一条都读不进来。BOM 只在**文件首行行首**剥离（行内的 U+FEFF 仍是数据，
+		// 不静默改写）。
+		if line == 1 {
+			raw = bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf"))
+		}
 		// 空行（含只含空白的行）不携带记录，跳过；它们不可能是"被截断的记录"——
 		// 截断的行一定带内容，会在下面按坏行报错。
 		if len(bytes.TrimSpace(raw)) == 0 {

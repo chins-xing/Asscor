@@ -88,6 +88,30 @@ func TestLoadRecordsSkipsBlankLines(t *testing.T) {
 	}
 }
 
+// TestLoadRecordsStripsLeadingBOM：文件首行的 UTF-8 BOM 被剥离，记录照常解析。
+//
+// 为什么要有这条（Task 8 实现者提出的疑虑 5）：本项目的采集器与数据集都在 Windows 上产出，
+// 而记事本、PowerShell 重定向、Python 的若干写法都会在文件头写 BOM。不剥的话第一条记录会
+// 以 `invalid character 'ï' looking for beginning of value` 失败 —— 那条信息指不到"文件头
+// 有 BOM"，读者会在 JSON 正文里找一个不存在的问题，而整批数据一条都读不进来。
+func TestLoadRecordsStripsLeadingBOM(t *testing.T) {
+	path := writeJSONL(t, "bom.jsonl", "\ufeff"+sampleJSONL+"\n")
+	recs, err := LoadRecords(path)
+	if err != nil {
+		t.Fatalf("带 BOM 的文件必须能读（首个 BOM 应被剥离）: %v", err)
+	}
+	if len(recs) != 1 || recs[0].ScenarioID != "S1-selinux" {
+		t.Fatalf("BOM 剥离后记录应完全等价: %+v", recs)
+	}
+
+	// 反向对照：BOM 出现在**行内**（非首行行首）时仍是数据，不得被静默改写 ——
+	// 剥离只针对文件头的编码标记，不是"到处吃掉 U+FEFF"。
+	bad := writeJSONL(t, "bom-inside.jsonl", sampleJSONL+"\n\ufeff"+sampleJSONL+"\n")
+	if _, err := LoadRecords(bad); err == nil {
+		t.Fatal("行内的 U+FEFF 必须让该行失败（它不在文件头，属坏数据）——剥离范围被放宽了")
+	}
+}
+
 // TestLoadRecordsReportsBadLine：坏行必须带**行号**报错，绝不静默跳过。
 // 第 1 行必须是**完全合法**的记录，否则先报的会是第 1 行的字段问题，测不到第 2 行的解析失败。
 func TestLoadRecordsReportsBadLine(t *testing.T) {
