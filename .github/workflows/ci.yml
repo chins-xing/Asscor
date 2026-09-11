@@ -40,12 +40,18 @@ jobs:
           go build -tags "$MODULE_TAGS" ./cmd/kernel/
           go build -tags "checks" ./cmd/agent/
           go build -tags "engine,checks,adapter,spc,attck_ext" ./cmd/asscor/
+          # Offline comparison tool (cmd/edgecompare): all of its files sit behind the edgeexp
+          # tag, so without this line it is neither compiled nor vetted/tested - the ./cmd/...
+          # wildcard skips packages whose files are all excluded by build constraints.
+          go build -tags "$MODULE_TAGS" ./cmd/edgecompare/
 
       - name: Test (no tags — kernel + always-compiled packages)
         run: go test ./internal/...
 
       - name: Test (full tags — all optional modules)
-        run: go test -tags "$MODULE_TAGS" ./internal/...
+        run: |
+          go test -tags "$MODULE_TAGS" ./internal/...
+          go test -tags "$MODULE_TAGS" ./cmd/edgecompare/
 
       - name: Plugin SDK (independent module)
         working-directory: pluginsdk

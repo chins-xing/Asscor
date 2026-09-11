@@ -135,8 +135,11 @@ func OfflineScoreWithWeights(p edgefactor.Params, rec Record, weights map[string
 }
 
 // OfflineScore 是 weights 取"等权"时的便捷入口。
-// 注意权重表里的域若在记录中缺失会以 0 计入并仍占一份权重（weightedSum 的既有语义）；
-// spec §5.1 的真实记录含全部 5 个域，故这只影响合成/最小夹具。
+//
+// 本函数是**低阶原语**，不做域覆盖校验：权重表里的域若在记录中缺失，会以 0 计入并仍占一份
+// 权重。决策层入口 `Evaluate` 会对"有权重却无观测域分"的记录 fail-fast
+// （`validateDomainsCovered`），故主判据路径不受该语义影响；spec §5.1 的真实记录也含全部
+// 5 个域，该情形只出现在合成/最小夹具里。
 func OfflineScore(p edgefactor.Params, rec Record) (float64, error) {
 	weights := map[string]float64{}
 	for _, d := range edgefactor.DefaultDomains() {
@@ -274,6 +277,27 @@ func orderedDomains(weights map[string]float64) []string {
 	return append(out, rest...)
 }
 
+// validateDomainsCovered 校验记录**覆盖了本次评估用到的每个域**（评审 I2 的另一半）。
+//
+// 为什么这条检查在 Evaluate 而不在读取层：读取层看不到"评估时用了哪些域"——域权重是
+// `Evaluate` 的入参（读取层只能保证 `domain_scores` 非空，见 load.go:validateRecord）。
+// 缺域的危险是**静默压低**：`weightedSum` 对缺失域取到 0，却仍把它那份额度计入分母，
+// 于是总分被无理由拉低、`acceptable` 判定随之翻转，而报告里看不出任何异常。
+// 记录里的域分是评估的输入证据，缺一项就意味着这份记录不能配这张权重表 —— 直接拒绝。
+func validateDomainsCovered(rec Record, weights map[string]float64) error {
+	for _, d := range orderedDomains(weights) {
+		if weights[d] <= 0 {
+			continue
+		}
+		if _, ok := rec.Observed.DomainScores[d]; !ok {
+			return fmt.Errorf(
+				"edgecompare: scenario %s: domain %q has weight %v but no observed domain score — 缺失域会被当成 0 参与聚合（仍占一份权重），静默压低总分并扭曲决策层指标",
+				rec.ScenarioID, d, weights[d])
+		}
+	}
+	return nil
+}
+
 // Evaluate 在同一份真实数据上重算并计算三层指标（spec §2.1）。
 //
 // 决策层对齐规则（模型判定 ↔ 客观结果）：
@@ -300,6 +324,10 @@ func Evaluate(records []Record, p edgefactor.Params, weights map[string]float64)
 	agree, fn, fp := 0, 0, 0
 
 	for _, rec := range records {
+		// 先校验域覆盖（评审 I2）：缺域会被当作 0 聚合、静默扭曲主判据，必须在算分之前拒绝。
+		if err := validateDomainsCovered(rec, weights); err != nil {
+			return Metrics{}, err
+		}
 		score, err := OfflineScoreWithWeights(p, rec, weights)
 		if err != nil {
 			// 返回零值 Metrics（而不是半填的 m）：错误必须让调用方无法把结果当成有效报告。

@@ -232,7 +232,7 @@ func TestChainWithoutTimestampFailsFast(t *testing.T) {
 // TestActivationsOfNormalizesAndConverts：链条目 → 合成层输入的换算点。
 // ID 归一（消费侧口径，须与 ssam.NormalizeFactorID 一致）与可信度双衰减都在这里发生。
 func TestActivationsOfNormalizesAndConverts(t *testing.T) {
-	const rec = `{"scenario_id":"S1-lowercase","observed":{"domain_scores":{"attack_surface":90},"edge_factor_chain":[{"factor":"  ef-selinux  ","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:03Z"}]}}`
+	const rec = `{"scenario_id":"S1-lowercase","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"  ef-selinux  ","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:03Z"}]},"ground_truth":{"compromised":true}}`
 	recs, err := LoadRecords(writeJSONL(t, "lower.jsonl", rec+"\n"))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
@@ -312,9 +312,9 @@ func TestEvaluateThreeLayers(t *testing.T) {
 // "作用于全部域、强度 1"计入惩罚，让一个未建模的因子凭空产生比配置更强的惩罚。
 // 对照组（EF-SYNCOOKIE 在候选的 Factors 里）必须**改变**分数，证明过滤器不是把因子全丢了。
 func TestUnmodeledFactorIsDropped(t *testing.T) {
-	const content = `{"scenario_id":"A","observed":{"domain_scores":{"attack_surface":90},"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8}]}}
-{"scenario_id":"B","observed":{"domain_scores":{"attack_surface":90},"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-3FA","c_trigger":1.0,"effective_factor":0.5}]}}
-{"scenario_id":"C","observed":{"domain_scores":{"attack_surface":90},"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-SYNCOOKIE","c_trigger":1.0,"effective_factor":0.5}]}}
+	const content = `{"scenario_id":"A","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8}]},"ground_truth":{"compromised":true}}
+{"scenario_id":"B","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-3FA","c_trigger":1.0,"effective_factor":0.5}]},"ground_truth":{"compromised":true}}
+{"scenario_id":"C","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-SYNCOOKIE","c_trigger":1.0,"effective_factor":0.5}]},"ground_truth":{"compromised":true}}
 `
 	recs, err := LoadRecords(writeJSONL(t, "unmodeled.jsonl", content))
 	if err != nil {
@@ -456,5 +456,105 @@ func TestEvaluateIsBitwiseDeterministic(t *testing.T) {
 		if !reflect.DeepEqual(firstMetrics, m) {
 			t.Fatalf("第 %d 次三层指标与首次逐位不同：%+v vs %+v", i+1, m, firstMetrics)
 		}
+	}
+}
+
+// TestEvaluateRejectsWeightsForMissingDomains（Fix round 2 / 评审 I2 的另一半）：
+// 「有权重、却无观测域分」的记录会以 0 参与聚合（仍占一份权重）⇒ 静默压低总分、翻转
+// `acceptable` 判定，而报告看不出异常；决策层入口必须拒绝，并点名场景与域。
+func TestEvaluateRejectsWeightsForMissingDomains(t *testing.T) {
+	recs, err := LoadRecords(writeSample(t)) // 该记录只有 attack_surface / operation_trust
+	if err != nil {
+		t.Fatalf("LoadRecords: %v", err)
+	}
+	// 对照：两个域都有 ⇒ 正常评估。
+	if _, err := Evaluate(recs, legacyParams(), twoDomainWeights()); err != nil {
+		t.Fatalf("覆盖完整的权重表不应报错：%v", err)
+	}
+	// 反例：给一个记录里没有的域权重。
+	_, err = Evaluate(recs, legacyParams(), map[string]float64{"attack_surface": 1, "operation_trust": 1, "resilience": 1})
+	if err == nil {
+		t.Fatal("expected a fail-fast error for a weighted domain missing from the record")
+	}
+	msg := err.Error()
+	for _, want := range []string{"S1-selinux", "resilience"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error must name %q: %v", want, err)
+		}
+	}
+	// 权重为 0（或负）的域不参与聚合，故不要求覆盖 —— 否则"只想算一个域"的调用会被误拒。
+	if _, err := Evaluate(recs, legacyParams(), map[string]float64{"attack_surface": 1, "resilience": 0}); err != nil {
+		t.Errorf("权重为 0 的域不应要求覆盖：%v", err)
+	}
+}
+
+// vgcJSONL 是 V/G/C 确定性断言用的 5 域记录：两个因子共用触发检查 OT-005，
+// EF-SELINUX → EF-APPARMOR 级联（带时间戳，chain 候选要用），时间间隔 30s。
+const vgcJSONL = `{"scenario_id":"S5-cascade-vgc","factors":["EF-SELINUX","EF-APPARMOR"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"final_score":0,"acceptable":true,"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"},{"factor":"EF-APPARMOR","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:30Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}`
+
+// vgcParams 返回同一套参数下的 graph / chain 两个候选。
+func vgcParams() []struct {
+	name string
+	p    edgefactor.Params
+} {
+	base := edgefactor.Params{
+		Model: edgefactor.ModelGraph, PFloor: 0.5,
+		Lambda: map[string]float64{"attack_surface": 1.0, "operation_trust": 1.0},
+		Vectors: map[string]map[string]float64{
+			"EF-SELINUX":  {"attack_surface": 0.5, "operation_trust": 0.5},
+			"EF-APPARMOR": {"attack_surface": 0.5, "operation_trust": 0.5},
+		},
+		Coupling: map[string]map[string]float64{"EF-SELINUX": {"EF-APPARMOR": 0.35}},
+		Factors:  map[string]float64{"EF-SELINUX": 0.8, "EF-APPARMOR": 0.82},
+	}
+	chain := base
+	chain.Model = edgefactor.ModelChain
+	chain.ChainWindowSeconds = 60
+	return []struct {
+		name string
+		p    edgefactor.Params
+	}{{"graph", base}, {"chain", chain}}
+}
+
+// TestEvaluateIsBitwiseDeterministicForVGC（Fix round 2 顺手项 M5 扩展）：把确定性断言从
+// legacy + 单因子扩到 **graph / chain** 候选。
+//
+// `Synthesize` 内部对因子贡献项已按 ID 定序（那是内仓性质测试的范围），但"域级修正后的聚合"
+// 与"chain 的时序窗口判定"仍要经过本工具的代码路径（权重定序聚合、`adjustedScores`），
+// 故这里用 5 域记录 + 两个共触发且级联的因子把 V/G/C 也钉住：同一输入必须逐位可复现。
+func TestEvaluateIsBitwiseDeterministicForVGC(t *testing.T) {
+	recs, err := LoadRecords(writeJSONL(t, "vgc.jsonl", vgcJSONL+"\n"))
+	if err != nil {
+		t.Fatalf("LoadRecords: %v", err)
+	}
+	weights := map[string]float64{"attack_surface": 1, "operation_trust": 1}
+
+	for _, cand := range vgcParams() {
+		t.Run(cand.name, func(t *testing.T) {
+			firstScore, err := OfflineScoreWithWeights(cand.p, recs[0], weights)
+			if err != nil {
+				t.Fatalf("OfflineScoreWithWeights: %v", err)
+			}
+			firstMetrics, err := Evaluate(recs, cand.p, weights)
+			if err != nil {
+				t.Fatalf("Evaluate: %v", err)
+			}
+			for i := 0; i < 100; i++ {
+				score, err := OfflineScoreWithWeights(cand.p, recs[0], weights)
+				if err != nil {
+					t.Fatalf("第 %d 次 OfflineScoreWithWeights: %v", i+1, err)
+				}
+				if !reflect.DeepEqual(firstScore, score) {
+					t.Fatalf("第 %d 次总分与首次逐位不同：%v vs %v", i+1, score, firstScore)
+				}
+				m, err := Evaluate(recs, cand.p, weights)
+				if err != nil {
+					t.Fatalf("第 %d 次 Evaluate: %v", i+1, err)
+				}
+				if !reflect.DeepEqual(firstMetrics, m) {
+					t.Fatalf("第 %d 次三层指标与首次逐位不同：%+v vs %+v", i+1, m, firstMetrics)
+				}
+			}
+		})
 	}
 }

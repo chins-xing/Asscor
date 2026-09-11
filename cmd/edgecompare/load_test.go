@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,8 +85,9 @@ func TestLoadRecordsSkipsBlankLines(t *testing.T) {
 }
 
 // TestLoadRecordsReportsBadLine：坏行必须带**行号**报错，绝不静默跳过。
+// 第 1 行必须是**完全合法**的记录，否则先报的会是第 1 行的字段问题，测不到第 2 行的解析失败。
 func TestLoadRecordsReportsBadLine(t *testing.T) {
-	path := writeJSONL(t, "bad.jsonl", "{\"scenario_id\":\"S1\"}\n{not json}\n")
+	path := writeJSONL(t, "bad.jsonl", sampleJSONL+"\n{not json}\n")
 	_, err := LoadRecords(path)
 	if err == nil {
 		t.Fatal("expected an error for a malformed line, got nil")
@@ -111,7 +113,7 @@ func TestLoadRecordsRejectsMissingScenarioID(t *testing.T) {
 // （mandate 口径 3），解析不了就必须在读取层带行号拒绝 —— 否则它会以零值进入合成层，
 // 被 chain 的 fail-fast 当成"没时间戳"，错误信息丢失行号、也分不清是坏数据还是缺数据。
 func TestLoadRecordsRejectsUnparsableTimestamp(t *testing.T) {
-	rec := `{"scenario_id":"S5-cascade","observed":{"edge_factor_chain":[{"factor":"EF-3FA","c_trigger":1.0,"effective_factor":0.82,"ts":"not-a-time"}]}}`
+	rec := `{"scenario_id":"S5-cascade","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-3FA","c_trigger":1.0,"effective_factor":0.82,"ts":"not-a-time"}]},"ground_truth":{"compromised":true}}`
 	_, err := LoadRecords(writeJSONL(t, "bads.jsonl", rec+"\n"))
 	if err == nil {
 		t.Fatal("expected an error for an unparsable ts, got nil")
@@ -123,13 +125,129 @@ func TestLoadRecordsRejectsUnparsableTimestamp(t *testing.T) {
 
 // TestLoadRecordsRejectsEmptyFactorID：链里没有因子 ID 的条目无法参与合成，必须拒绝。
 func TestLoadRecordsRejectsEmptyFactorID(t *testing.T) {
-	rec := `{"scenario_id":"S1-selinux","observed":{"edge_factor_chain":[{"factor":"  ","c_trigger":1.0,"effective_factor":0.82}]}}`
+	rec := `{"scenario_id":"S1-selinux","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"  ","c_trigger":1.0,"effective_factor":0.82}]},"ground_truth":{"compromised":true}}`
 	_, err := LoadRecords(writeJSONL(t, "nofactor.jsonl", rec+"\n"))
 	if err == nil {
 		t.Fatal("expected an error for an empty factor id, got nil")
 	}
 	if !strings.Contains(err.Error(), "factor") {
 		t.Errorf("error must name the offending field: %v", err)
+	}
+}
+
+// --- Fix round 2 / 评审 I2：必需字段的**存在性**与值域 -------------------------------
+
+// mustRejectRecord 断言一条记录被读取层拒绝，且错误带行号与指定字段名（评审 I2 要求）。
+func mustRejectRecord(t *testing.T, name, recordJSON string, wantFields ...string) {
+	t.Helper()
+	_, err := LoadRecords(writeJSONL(t, name, recordJSON+"\n"))
+	if err == nil {
+		t.Fatalf("expected the record to be rejected, got nil error:\n%s", recordJSON)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "line 1") {
+		t.Errorf("error must carry the line number: %v", err)
+	}
+	for _, want := range wantFields {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error must name %q: %v", want, err)
+		}
+	}
+}
+
+// TestLoadRecordsRejectsMissingThreshold：threshold 缺失 ⇒ 零值 0 ⇒ 任何非负分数都判
+// acceptable ⇒ 决策层退化为"全放行"（FNR = 攻陷数/N，FPR ≡ 0），而报告照常打印 —— 必须拒绝。
+func TestLoadRecordsRejectsMissingThreshold(t *testing.T) {
+	mustRejectRecord(t, "no-threshold.jsonl", `{"scenario_id":"S0-baseline","observed":{"domain_scores":{"attack_surface":90},"final_score":90,"acceptable":true},"ground_truth":{"compromised":false}}`, "threshold")
+}
+
+// TestLoadRecordsRejectsNonPositiveThreshold：0 与负值都不是合法阈值（`score >= threshold` 恒真）。
+func TestLoadRecordsRejectsNonPositiveThreshold(t *testing.T) {
+	mustRejectRecord(t, "zero-threshold.jsonl", `{"scenario_id":"S0-baseline","observed":{"domain_scores":{"attack_surface":90},"threshold":0},"ground_truth":{"compromised":false}}`, "threshold")
+	mustRejectRecord(t, "neg-threshold.jsonl", `{"scenario_id":"S0-baseline","observed":{"domain_scores":{"attack_surface":90},"threshold":-1},"ground_truth":{"compromised":false}}`, "threshold")
+}
+
+// TestLoadRecordsRejectsEmptyDomainScores：没有域分就无从重算总分。
+func TestLoadRecordsRejectsEmptyDomainScores(t *testing.T) {
+	mustRejectRecord(t, "no-domains.jsonl", `{"scenario_id":"S0-baseline","observed":{"threshold":60},"ground_truth":{"compromised":false}}`, "domain_scores")
+	mustRejectRecord(t, "empty-domains.jsonl", `{"scenario_id":"S0-baseline","observed":{"threshold":60,"domain_scores":{}},"ground_truth":{"compromised":false}}`, "domain_scores")
+}
+
+// TestLoadRecordsRejectsMissingCTrigger：c_trigger 缺失 ⇒ 0 ⇒ EffectiveFactor 返回 1
+// ⇒ a_i = 0 ⇒ 该因子的惩罚静默消失。
+//
+// 断言里要求出现 "missing"：字段缺失必须报"缺失"，而不是报一个看起来像数值越界的错误
+// —— 前者告诉操作员"记录不完整"，后者会把人引向"值写错了"。这两条信息不可互换。
+func TestLoadRecordsRejectsMissingCTrigger(t *testing.T) {
+	mustRejectRecord(t, "no-ctrigger.jsonl",
+		`{"scenario_id":"S1-selinux","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","effective_factor":0.82}]},"ground_truth":{"compromised":true}}`,
+		"c_trigger", "missing")
+}
+
+// TestLoadRecordsRejectsMissingEffectiveFactor：effective_factor 缺失 ⇒ 0 ⇒ 命中 Synthesize
+// 的"未提供"哨兵 ⇒ 静默回落到配置权重（与真实观测值无关）。
+//
+// 断言同样要求 "missing"：仅靠值域检查（`0 ∉ (0,1]`）虽然也会拒绝，但报出来的是"值越界"，
+// 会掩盖"这条记录根本没写这个字段"这一事实（变异 M9 正是用来钉住这条诊断口径的）。
+func TestLoadRecordsRejectsMissingEffectiveFactor(t *testing.T) {
+	mustRejectRecord(t, "no-eff.jsonl",
+		`{"scenario_id":"S1-selinux","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":0.9}]},"ground_truth":{"compromised":true}}`,
+		"effective_factor", "missing")
+}
+
+// TestLoadRecordsRejectsOutOfRangeChainValues：越界值会让 L/P 失真（eff > 1 时 a < 0 ⇒ P > 1，
+// 反向抬高域分），必须在读取层拒绝。
+func TestLoadRecordsRejectsOutOfRangeChainValues(t *testing.T) {
+	base := `{"scenario_id":"S1-selinux","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":%s,"effective_factor":%s}]},"ground_truth":{"compromised":true}}`
+	mustRejectRecord(t, "c-high.jsonl", fmt.Sprintf(base, "1.5", "0.82"), "c_trigger")
+	mustRejectRecord(t, "c-neg.jsonl", fmt.Sprintf(base, "-0.1", "0.82"), "c_trigger")
+	mustRejectRecord(t, "eff-zero.jsonl", fmt.Sprintf(base, "0.9", "0"), "effective_factor")
+	mustRejectRecord(t, "eff-high.jsonl", fmt.Sprintf(base, "0.9", "1.5"), "effective_factor")
+}
+
+// TestLoadRecordsAcceptsBoundaryChainValues：`c_trigger = 0` 与 `effective_factor = 1` 是**合法**
+// 边界值，必须放行。
+//
+// c_trigger = 0 不是坏数据：ssam-lib 的 `ApplyEdgeFactorsToChecksPolicy` 在"因子仅由级联激活、
+// 自身触发检查未失败"时只把 Active 置真、不动 TriggerConfidence，于是 tc 保持 0
+// （spec §5 的 S5 级联组正会产出这种记录）。被拒的是**缺失**，不是这个值本身。
+func TestLoadRecordsAcceptsBoundaryChainValues(t *testing.T) {
+	rec := `{"scenario_id":"S5-cascade","factors":["EF-3FA","EF-002FA"],"observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-3FA","trigger_check":"EF-002","c_trigger":0,"effective_factor":1}]},"ground_truth":{"compromised":true,"ttps_achieved":4}}`
+	recs, err := LoadRecords(writeJSONL(t, "boundary.jsonl", rec+"\n"))
+	if err != nil {
+		t.Fatalf("边界值应被接受，却被拒绝：%v", err)
+	}
+	if len(recs) != 1 || recs[0].Observed.EdgeFactorChain[0].CTrigger != 0 {
+		t.Fatalf("unexpected records: %+v", recs)
+	}
+}
+
+// TestLoadRecordsRejectsMissingGroundTruth：整段 `ground_truth` 缺失 ⇒ compromised 读成 false
+// ⇒ 该场景被静默标成"未攻陷"。
+func TestLoadRecordsRejectsMissingGroundTruth(t *testing.T) {
+	mustRejectRecord(t, "no-gt.jsonl",
+		`{"scenario_id":"S1-selinux","observed":{"domain_scores":{"attack_surface":90},"threshold":60}}`,
+		"compromised")
+}
+
+// TestLoadRecordsRejectsMissingCompromised：`ground_truth` 在场但没写 `compromised` 同样要拒绝
+// —— 这正是"false（真的没被攻陷）"与"没写（缺失）"必须区分的场合。
+func TestLoadRecordsRejectsMissingCompromised(t *testing.T) {
+	mustRejectRecord(t, "no-compromised.jsonl",
+		`{"scenario_id":"S1-selinux","observed":{"domain_scores":{"attack_surface":90},"threshold":60},"ground_truth":{"ttps_achieved":4}}`,
+		"compromised")
+}
+
+// TestLoadRecordsExplicitFalseCompromisedIsAccepted：显式 `false` 必须被接受，且如实读成 false
+// （不能与"缺失"混为一谈）。
+func TestLoadRecordsExplicitFalseCompromisedIsAccepted(t *testing.T) {
+	recs, err := LoadRecords(writeJSONL(t, "explicit-false.jsonl",
+		`{"scenario_id":"S0-baseline","observed":{"domain_scores":{"attack_surface":95},"threshold":60},"ground_truth":{"compromised":false}}`+"\n"))
+	if err != nil {
+		t.Fatalf("显式 false 应被接受：%v", err)
+	}
+	if recs[0].GroundTruth.Compromised {
+		t.Errorf("compromised = true, want false")
 	}
 }
 

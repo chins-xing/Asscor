@@ -14,10 +14,25 @@ import (
 
 // 读取层：实验 JSONL（spec §5.1 schema）→ []Record。
 //
-// 本层只做「结构 + 可解析性」校验，不做语义推断：坏行必须以**行号**fail-fast，
-// 绝不静默跳过（静默跳过会让报告里的样本量与实验规模对不上，而无人察觉）。
-// 语义校验（λ 覆盖、向量覆盖、因子有效性、时间戳存在性）分别由 edgefactor.Params.Validate
-// 与 edgefactor.Synthesize 在重算时负责 —— 与在线同一份实现。
+// 本层做两件事，缺一不可：
+//
+//  1. **结构可解析性**：坏行必须以**行号** fail-fast，绝不静默跳过（静默跳过会让报告里的
+//     样本量与实验规模对不上，而无人察觉）。
+//  2. **必需字段的存在性与值域**（Fix round 2 / 评审 I2）：JSON 的"零值"与"没写"在 Go 结构体
+//     里无法区分，而本任务的**主判据**恰恰建立在这些字段上 —— 缺失会被静默读成零值并直接
+//     扭曲决策层：
+//     - `observed.threshold` 缺失 ⇒ 0 ⇒ 任何非负分数都判 `acceptable` ⇒ 决策层退化为"全放行"
+//       （漏判率变成"攻陷数 / N"、误阻断率恒为 0），而报告照常打印；
+//     - 链条目 `c_trigger` 缺失 ⇒ 0 ⇒ `EffectiveFactor` 返回 1 ⇒ `a_i = 0` ⇒ 该因子的惩罚
+//       静默消失；
+//     - 链条目 `effective_factor` 缺失 ⇒ 0 ⇒ 命中 `Synthesize` 的"未提供"哨兵 ⇒ 静默回落到
+//       配置权重（与记录里的真实观测值无关）；
+//     - `ground_truth.compromised` 缺失 ⇒ false ⇒ 标签被静默当成"未攻陷"。
+//
+// 故下面用**指针解码 + 存在性标记**把"缺失"与"合法零值"区分开：`c_trigger = 0` 是 ssam-lib
+// 对"仅由级联激活、自身触发检查未失败"的因子的既有取值（见 validateRecord 的说明），必须放行；
+// 而"字段根本没写"一律拒绝。语义校验（λ 覆盖、向量覆盖、因子有效性）仍由
+// `edgefactor.Params.Validate` 与 `edgefactor.Synthesize` 在重算时负责 —— 与在线同一份实现。
 
 type Record struct {
 	ScenarioID  string      `json:"scenario_id"`
@@ -58,20 +73,80 @@ type CheckObs struct {
 //     本工具**复用**它，不修正（修正属独立决策，会改变评分）。
 //   - `ts` 是 chain 模型（离线专用，在线因引擎结果类型无时间字段而 fail-fast）的唯一
 //     时间来源。
+//
+// `cTriggerSet` / `effectiveFactorSet` 是**非导出的字段存在性标记**（不参与序列化），只用来
+// 区分"写了 0"与"没写" —— 见本文件顶部说明与 validateRecord。
 type ChainObs struct {
 	Factor          string  `json:"factor"`
 	TriggerCheck    string  `json:"trigger_check"`
 	CTrigger        float64 `json:"c_trigger"`
 	EffectiveFactor float64 `json:"effective_factor"`
 	TS              string  `json:"ts"`
+
+	cTriggerSet        bool
+	effectiveFactorSet bool
 }
 
+// UnmarshalJSON 记录 c_trigger / effective_factor 是否**显式出现**。
+//
+// 用指针解码是为了拿到"字段存在"这一位信息：不加这层的话，缺失与合法零值在 `float64` 上完全
+// 同形，而下层会把缺失当成 0 并静默算出一个"看起来正常"的分数（评审 I2）。
+func (c *ChainObs) UnmarshalJSON(data []byte) error {
+	aux := struct {
+		Factor          string   `json:"factor"`
+		TriggerCheck    string   `json:"trigger_check"`
+		CTrigger        *float64 `json:"c_trigger"`
+		EffectiveFactor *float64 `json:"effective_factor"`
+		TS              string   `json:"ts"`
+	}{}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	c.Factor, c.TriggerCheck, c.TS = aux.Factor, aux.TriggerCheck, aux.TS
+	if aux.CTrigger != nil {
+		c.CTrigger, c.cTriggerSet = *aux.CTrigger, true
+	}
+	if aux.EffectiveFactor != nil {
+		c.EffectiveFactor, c.effectiveFactorSet = *aux.EffectiveFactor, true
+	}
+	return nil
+}
+
+// GroundTruth 是客观实验结果（与任何模型无关）。
+//
+// `Compromised` 保持 `bool`（下游 Task 9/10 直接消费该字段，不动接口），但**必须显式出现**：
+// 用 `compromisedSet` 标记区分"写了 false"与"没写"。两者若不加区分，缺失会被读成 false，
+// 该场景就被静默标成"未攻陷"，直接扭曲漏判率（分子分母同时被动）。
 type GroundTruth struct {
 	Compromised       bool    `json:"compromised"`
 	TimeToCompromiseS float64 `json:"time_to_compromise_s"`
 	TTPsAchieved      int     `json:"ttps_achieved"`
 	NodesAffected     int     `json:"nodes_affected"`
 	BlockEffective    bool    `json:"block_effective"`
+
+	compromisedSet bool
+}
+
+// UnmarshalJSON 记录 `compromised` 是否显式出现（理由见类型注释与 validateRecord）。
+func (g *GroundTruth) UnmarshalJSON(data []byte) error {
+	aux := struct {
+		Compromised       *bool   `json:"compromised"`
+		TimeToCompromiseS float64 `json:"time_to_compromise_s"`
+		TTPsAchieved      int     `json:"ttps_achieved"`
+		NodesAffected     int     `json:"nodes_affected"`
+		BlockEffective    bool    `json:"block_effective"`
+	}{}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.Compromised != nil {
+		g.Compromised, g.compromisedSet = *aux.Compromised, true
+	}
+	g.TimeToCompromiseS = aux.TimeToCompromiseS
+	g.TTPsAchieved = aux.TTPsAchieved
+	g.NodesAffected = aux.NodesAffected
+	g.BlockEffective = aux.BlockEffective
+	return nil
 }
 
 type Meta struct {
@@ -117,18 +192,55 @@ func LoadRecords(path string) ([]Record, error) {
 	return out, nil
 }
 
-// validateRecord 做「结构性可解析」校验：字段缺失/时间戳写坏都必须当场报错。
+// validateRecord 做「必需字段存在性 + 值域」校验（评审 I2 的落点），错误信息一律带字段路径。
 //
-// 为什么时间戳要在读取层解析一次（而不是留给合成层）：chain 模型对零值时间戳 fail-fast，
-// 若坏字符串一路带到那里，报出来的是"缺时间戳"——分不清是**数据写坏了**还是**记录本就没有**
-// 时间戳，且丢失行号。在这里解析一次，两类问题都能被定位到具体行与字段。
+// 检查顺序按 schema 的自然阅读顺序（scenario_id → observed.threshold → observed.domain_scores
+// → 因子链 → checks → ground_truth），且**只报第一个问题**：一条坏行给一个可执行的修复指令，
+// 比堆一串错误更有用。
+//
+// 值域口径：
+//   - `threshold > 0`：阈值必须是正数，否则 `score >= threshold` 恒真（决策层退化为全放行）。
+//   - `effective_factor ∈ (0,1]`：合法因子值域（`EffectiveFactor` 的输出域）。0 是
+//     `Synthesize` 里"未提供、回落到配置权重"的哨兵，越界值则会让 `a = (1−eff)·v` 变负。
+//   - `c_trigger ∈ [0,1]`：**下界取 0 而不是 (0,1]** —— `c_trigger = 0` 是 ssam-lib 对
+//     「仅由级联激活、自身触发检查未失败」的因子的既有取值
+//     （`ApplyEdgeFactorsToChecksPolicy` 的 cascade 分支只把 Active 置真、不动 TriggerConfidence），
+//     spec §5 的 S5 级联组正会产出这种记录；硬拒会拒掉真实数据集。被拒的是**缺失**
+//     （字段根本不存在），那才是评审 I2 指出的静默路径。
+//   - `ground_truth.compromised` 必须显式出现（缺失 ⇒ 静默变成"未攻陷"）。
+//
+// 域覆盖性不在这里校验：本层看不到"评估时用了哪些域"（权重是 `Evaluate` 的入参），
+// 该检查落在 `Evaluate`（见 metrics.go:validateDomainsCovered）；本层只保证域分**非空**。
 func validateRecord(rec Record) error {
 	if rec.ScenarioID == "" {
 		return fmt.Errorf("missing scenario_id")
 	}
+	if rec.Observed.Threshold <= 0 {
+		return fmt.Errorf("observed.threshold = %v must be > 0 — 缺失会被当成 0，任何非负分数都会判 acceptable，决策层退化为『全放行』", rec.Observed.Threshold)
+	}
+	if len(rec.Observed.DomainScores) == 0 {
+		return fmt.Errorf("observed.domain_scores: missing or empty — 没有域分就无从重算总分")
+	}
+	for d := range rec.Observed.DomainScores {
+		if strings.TrimSpace(d) == "" {
+			return fmt.Errorf("observed.domain_scores: contains an empty domain name")
+		}
+	}
 	for i, c := range rec.Observed.EdgeFactorChain {
 		if strings.TrimSpace(c.Factor) == "" {
-			return fmt.Errorf("observed.edge_factor_chain[%d]: missing factor", i)
+			return fmt.Errorf("observed.edge_factor_chain[%d].factor: missing", i)
+		}
+		if !c.cTriggerSet {
+			return fmt.Errorf("observed.edge_factor_chain[%d].c_trigger: missing — 缺失会被当成 0（= 无可信度）并让该因子的惩罚静默消失", i)
+		}
+		if !c.effectiveFactorSet {
+			return fmt.Errorf("observed.edge_factor_chain[%d].effective_factor: missing — 缺失会被当成 0（= Synthesize 的『未提供』哨兵）并静默回落到配置权重", i)
+		}
+		if c.CTrigger < 0 || c.CTrigger > 1 {
+			return fmt.Errorf("observed.edge_factor_chain[%d].c_trigger = %v out of [0,1]", i, c.CTrigger)
+		}
+		if c.EffectiveFactor <= 0 || c.EffectiveFactor > 1 {
+			return fmt.Errorf("observed.edge_factor_chain[%d].effective_factor = %v out of (0,1]", i, c.EffectiveFactor)
 		}
 		if _, err := parseTS(c.TS); err != nil {
 			return fmt.Errorf("observed.edge_factor_chain[%d].ts: %w", i, err)
@@ -138,6 +250,9 @@ func validateRecord(rec Record) error {
 		if _, err := parseTS(c.TS); err != nil {
 			return fmt.Errorf("observed.checks[%d].ts: %w", i, err)
 		}
+	}
+	if !rec.GroundTruth.compromisedSet {
+		return fmt.Errorf("ground_truth.compromised: missing — 必须显式写出 true/false；缺失会被当成 false，该场景被静默标成『未攻陷』并直接扭曲漏判率/误阻断率")
 	}
 	return nil
 }
