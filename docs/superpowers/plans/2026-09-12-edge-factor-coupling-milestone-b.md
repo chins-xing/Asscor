@@ -589,6 +589,8 @@ func TestEdgeExpConfigTemplatesLoad(t *testing.T) {
 Run: `go test ./internal/config/ -run TestEdgeExpConfigTemplatesLoad -v`
 Expected: 先 FAIL（模板还没建）→ 建好模板后 PASS。
 
+**同一提交还要修一处出厂模板的"静默 no-op"陷阱**（Task 1 复审顺带发现，已核代码）：7 份 `configs/*.ini` 把 `scoring_engine` 的说明与键写在 **`[extension_weights]`** 段（如 `configs/config.enterprise.ini:184-185`），而解析器**只在 `[weights]` 段**读它（`internal/config/config.go:221-226`；`[extension_weights]` 的循环只取数值，`config.go:365-370` 对非数值静默跳过）⇒ 运营者按出厂骨架取消注释并填 `legacy` 会得到一个**静默无效**的配置。修法：把该键（连同其注释）移到 `[weights]` 段，并加回归断言 —— ①`[weights] scoring_engine = legacy` 必须解析为 `cfg.ScoringEngine == "legacy"`；②**任何出厂模板都不得在解析器不读的段里声明该键**（用 `parseSections` 或直接断言各段内容）。这条与"出厂模板 check_deltas 符号写错"是同一类缺陷（模板说的位置/取值与实际解析不符），也是 Task 4 之后选择 M0 评分路径的前提。
+
 **关键**：V/G/C 模板的 `lambda` 必须覆盖到默认域的子集且声明的向量覆盖全部 5 域（否则离线导出会被 `validateRenderable` 拒），`chain` 模板必须带 `chain.window_seconds > 0`。
 
 - [ ] **Step 2: 复位脚本（每次场景从干净环境开始）**
