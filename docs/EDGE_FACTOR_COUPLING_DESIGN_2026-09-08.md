@@ -193,24 +193,29 @@ chain.window_seconds = 300
 ### 5.1 采集 schema（每场景一条 JSONL）
 
 > 下面这条记录为可读性做了缩进；**JSONL 里必须压成单行**（一行一条记录，读取层按行切分）。
-> 本节 schema 与读取层的契约由 `cmd/edgecompare/docs_schema_test.go` 直接对照本示例强制执行：
-> 示例与 `load.go` 任一侧漂移，该测试即红。
+> 本节 schema 与读取层、以及示例自身的数值自洽性，由 `cmd/edgecompare/docs_schema_test.go`
+> 直接对照本示例强制执行：**文档漏字段、示例数值自相矛盾、或读取层单方面收紧**，该测试即红。
+> 读取层对**其它**必填项的"放宽"方向由 `cmd/edgecompare/load_test.go` 的逐字段定向用例覆盖
+> （`scenario_id`/`threshold`/`domain_scores`/`c_trigger`/`effective_factor`/`ts`/`compromised`
+> 各有独立的"缺失必拒"用例）。
 
 ```json
 {
   "scenario_id": "S2-selinux-apparmor-01",
-  "factors": ["selinux_disabled", "apparmor_disabled"],
+  "factors": ["EF-SELINUX", "EF-APPARMOR"],
   "injection": "check_fail",
   "observed": {
     "domain_scores": {"attack_surface": 82.0, "business_continuity": 75.0,
                       "operation_trust": 68.0, "resilience": 71.0, "kernel_security": 55.0},
-    "final_score": 69.4, "acceptable": true, "threshold": 60.0,
+    "final_score": 80.02, "acceptable": true, "threshold": 60.0,
     "spc_score": 0.93, "threat_coeff": 1.4,
-    "checks": [{"id": "RS-005", "domain": "resilience", "passed": false,
-                "delta": -8.0, "confidence": 0.9, "ts": "2026-09-08T10:00:03Z"}],
-    "edge_factor_chain": [{"factor": "selinux_disabled", "trigger_check": "OT-007",
-                           "c_trigger": 0.9, "effective_factor": 0.82,
-                           "ts": "2026-09-08T10:00:03Z"}]
+    "checks": [{"id": "OT-005", "domain": "operation_trust", "passed": false,
+                "delta": -6.0, "confidence": 0.9, "ts": "2026-09-08T10:00:03Z"}],
+    "edge_factor_chain": [
+      {"factor": "EF-SELINUX", "trigger_check": "OT-005",
+       "c_trigger": 0.9, "effective_factor": 0.82, "ts": "2026-09-08T10:00:03Z"},
+      {"factor": "EF-APPARMOR", "trigger_check": "OT-005",
+       "c_trigger": 0.9, "effective_factor": 0.838, "ts": "2026-09-08T10:00:03Z"}]
   },
   "ground_truth": {
     "compromised": true, "time_to_compromise_s": 213, "ttps_achieved": 4,
@@ -221,26 +226,32 @@ chain.window_seconds = 300
 }
 ```
 
+> **示例里的每个值都必须自洽**：`factors` / `edge_factor_chain[].factor` 用**规范因子 ID**（`EF-SELINUX`，不是展示名 `selinux_disabled` —— 写错会让离线重算查不到 `Vectors` 而静默走"全 1"fallback，改变 V/G/C 的惩罚强度）；`trigger_check` 与该因子的默认触发检查一致（`EF-SELINUX`/`EF-APPARMOR` 共用 `OT-005`，这正是 S2 组要建模的同源耦合）；`effective_factor` 是策略层衰减后的观测值（默认配置 `f_selinux=0.80`、`f_apparmor=0.82`，`1−(1−f)·c` 取 `c=0.9` ⇒ 0.82 / 0.838）；`final_score` 必须能被 `cmd/edgecompare` 用记录自身的输入复算出来（`docs_schema_test.go` 会对本示例做这条 round-trip 断言，数值自相矛盾即红）。
+
 **必填字段（缺失即整条记录 fail-fast，读取层 `cmd/edgecompare/load.go:validateRecord`）**
 
 离线重算的判据是**部署行为**，故记录必须带齐复现判定线所需的全部输入。JSON 的"零值"与"没写"在 Go 结构体里同形，下列字段一旦缺失就会被静默读成 0 并改变结论，因此一律按"存在性 + 值域"双重拒绝：
 
 | 字段 | 值域 | 缺失/越界的后果 |
 |---|---|---|
+| `scenario_id` | 非空 | 空串无法把记录归因到场景，指标会失去可追溯性 |
 | `observed.threshold` | `> 0` | 0 ⇒ `score >= threshold` 恒真 ⇒ 决策层退化为"全放行"（漏判率 = 攻陷数/N、误阻断率恒 0） |
 | `observed.spc_score` | `(0,1]` | 0 是引擎的"未设置"哨兵（按 1.0 计）⇒ 静默变成"无暴露面惩罚" |
 | `observed.threat_coeff` | `> 0`（**无上界**，实测配置出现过 1.4） | 0 同为"未设置"哨兵 ⇒ 静默按 1.0 计 |
 | `observed.domain_scores` | 非空、域名非空 | 没有域分就无从重算总分 |
+| `observed.edge_factor_chain[].factor` | 非空 | 空因子 ID 无法归因，且会让链上条目静默失配 |
 | `observed.edge_factor_chain[].c_trigger` | `[0,1]` | 0 是"仅由级联激活、自身触发检查未失败"的**既有合法取值**（S5 组会产出），故下界取 0；被拒的是**缺失** |
 | `observed.edge_factor_chain[].effective_factor` | `(0,1]` | 0 是 `Synthesize` 的"未提供"哨兵 ⇒ 静默回落到配置权重 |
 | `observed.edge_factor_chain[].ts` / `observed.checks[].ts` | 空串合法（= 缺席）；非空必须 **RFC3339** | 非空但解析不了一律拒绝（`"..."` 这种占位写法会被拒）；`ts` 是 chain 模型的**唯一**时间来源 — 在线引擎的结果类型没有时间字段，故 chain 只能离线评估（spec §10.1） |
 | `ground_truth.compromised` | 必须显式出现 | 缺失 ⇒ 标签静默当成"未攻陷" |
 
-`spc_score` / `threat_coeff` 的来源是引擎 `AssessmentOutput.SPCScore` 与 `[threat] coefficient`（引擎总分 = `round2(0.5·base + 30·E + 20·T)`）。**注意**：仓内 `internal/attck/attck.go` 中存在同名字段但写的是 `predictedRisk.EnhancedThreat`（**另一个量**），采集器取错会让离线分数整体偏移而门禁全绿 —— 采集器落地时必须补一条 round-trip 钉桩（`observed.final_score` 必须能被 `cmd/edgecompare` 用同一条记录复算出来）。
+`spc_score` / `threat_coeff` 的来源是引擎 `AssessmentOutput.SPCScore` 与 `[threat] coefficient`（引擎总分 = `round2(0.5·base + 30·E + 20·T)`）。**注意**：仓内 `internal/attck/attck.go` 中存在同名字段但写的是 `predictedRisk.EnhancedThreat`（**另一个量**），采集器取错会让离线分数整体偏移而门禁全绿 —— 故本节的示例记录带一条 round-trip 钉桩（`observed.final_score` 必须能被 `cmd/edgecompare` 用记录自身输入复算出来，已验证），采集器落地时必须对自采数据做同样的事。
+
+**round-trip 的前提是"候选声明的因子集 == 记录里出现的因子集"**：离线重算只惩罚候选（`params.Factors`）声明的因子，记录里有而候选没声明的会被**静默丢掉**（实测：同一条示例记录，只声明 `EF-SELINUX` 算出 84.68，声明两个才是 80.02）。这正是 CLI 的 `-factors` 覆盖校验存在的原因，也是采集器必须把每个场景实际激活的因子完整写进 `factors` / `edge_factor_chain` 的原因。
 
 ### 5.2 离线重算流程（`cmd/edgecompare`）
 
-1. 读 JSONL → 构造 `EvalContext`（域分、因子激活与触发链、置信度）；
+1. 读 JSONL → 装配离线评估所需的输入（域分与权重、因子激活与触发链、`spc_score`/`threat_coeff`、链上时间戳）；
 2. 对每个候选模型 × 参数组重算域分、总分与接受性判定；
 3. 计算三层指标（决策一致率/漏判率/误阻断率；Spearman/Kendall；AUC）；
 4. 交叉验证选模型，输出报告（Markdown + JSON）与**可直接粘贴的 config 参数段**；
@@ -264,7 +275,7 @@ chain.window_seconds = 300
 | 兼容性 | 全默认配置 → 与历史评分**逐位一致**（硬门禁） |
 | 参数校验 | 坏向量长度/`f` 越界/`c<0`/`λ≤0`/`Σ v>1` 全部 fail-fast |
 | 拟合可信度 | 合成已知 `c_ij` 的数据 → 回归可恢复（含噪声容限） |
-| 离线↔在线一致 | 同一 `EvalContext` 下，"域级修正 → 置信度换算 → 公式内钳位 → 总分聚合 → 阈值判定"**全部共用同一份实现**（离线直接调用内仓 `ssam.SSAMV20Formula`，域级修正经 `RegisterDomainAdjust`/`RegisterEdgeFactorStrategy` 注入、legacy 零注册），故离线分数与在线评分逐位相同、判定线一致 |
+| 离线↔在线一致 | 总分与判定线共用同一份实现：离线直接调用内仓 `ssam.SSAMV20Formula`（域分加权、公式内钳位、`0.5·base+30·E+20·T` 聚合、两次取整全部由它完成），域级修正经 `RegisterDomainAdjust`、乘子经 `RegisterEdgeFactorStrategy` 注入，legacy 零注册；判定线同款 `总分 ≥ threshold`。**边界（勿过度承诺）**：因子激活项的**装配**（`ActivationFromResult` 的置信度换算）在线/离线仍是两份实现，只是算术口径相同；"逐位一致"在 `c=1` 时成立（spec §10.2 的双重衰减口径见该节），且对 chain 无定义 —— chain 在线必失败（离线专用），故该行对 chain 不适用 |
 | 内仓回归 | `ssam-lib` 钩子默认路径不改变既有测试结果（内仓 `go test ./...`） |
 | 常规门禁 | 全 tag 构建、CI 全量线（新 tag 纳入）、LF 归一 gofmt |
 

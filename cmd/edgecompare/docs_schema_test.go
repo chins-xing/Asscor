@@ -8,6 +8,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/edgefactor"
 )
 
 // ============================================================================
@@ -23,10 +26,22 @@ import (
 // 故把这条契约变成可执行的：直接解析设计文档里的示例记录，喂给**真实的** `LoadRecords`。
 // 文档与读取层任何一侧漂移，这条测试就红。
 //
-// 反向对照（有牙齿的证明）：把示例里的 `spc_score` 抹掉后，读取层**必须**拒绝 ——
-// 否则本测试只证明"某个 JSON 能读进来"，而不能证明它在守 spc_score 的存在性。
+// 反向对照（有牙齿的证明）：把示例里的必填项抹掉后，读取层**必须**拒绝、且理由必须是"缺失"
+// —— 否则本测试只证明"某个 JSON 能读进来"，而不能证明它在守这些字段的存在性（详见测试内注释）。
 
 const designDocPath = "../../docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md"
+
+// compactLine 把 §5.1 里**缩进打印**的示例压成 JSONL 的真实形态（一条记录一行）。
+//
+// 压缩只动结构空白、不动字符串内容；示例本身不合法 JSON 时直接 fail（那是文档坏了）。
+func compactLine(t *testing.T, sample string) string {
+	t.Helper()
+	var compacted bytes.Buffer
+	if err := json.Compact(&compacted, []byte(sample)); err != nil {
+		t.Fatalf("§5.1 的示例不是合法 JSON（连读取层之前的解析都过不了）: %v", err)
+	}
+	return compacted.String()
+}
 
 // extractSection51Sample 取 §5.1 标题之后第一个 ```json 围栏的内容。
 func extractSection51Sample(t *testing.T, doc string) string {
@@ -58,13 +73,7 @@ func TestSpecSection51SampleIsAcceptedByLoader(t *testing.T) {
 	if !strings.HasPrefix(sample, "{") {
 		t.Fatalf("§5.1 的 json 围栏内容不像一条记录:\n%s", sample)
 	}
-	// §5.1 为了可读性是**缩进打印**的，而 JSONL 要求一条记录压成一行：这里按 JSONL 的真实
-	// 形态压缩空白后再喂给读取层（压缩只动结构空白，不动字符串内容）。
-	var compacted bytes.Buffer
-	if err := json.Compact(&compacted, []byte(sample)); err != nil {
-		t.Fatalf("§5.1 的示例不是合法 JSON（连读取层之前的解析都过不了）: %v", err)
-	}
-	oneLine := compacted.String()
+	oneLine := compactLine(t, sample)
 
 	recs, err := LoadRecords(writeJSONL(t, "spec51.jsonl", oneLine+"\n"))
 	if err != nil {
@@ -89,14 +98,139 @@ func TestSpecSection51SampleIsAcceptedByLoader(t *testing.T) {
 		}
 	}
 
-	// 反向对照：抹掉 spc_score 后必须被拒（证明这条门禁真的在守该字段）。
-	broken := strings.Replace(oneLine, `"spc_score":0.93,`, "", 1)
-	if broken == oneLine {
-		t.Fatalf("压缩后的示例里找不到 `\"spc_score\":0.93,`，无法构造反向对照（示例改过？）")
+	// 反向对照：抹掉 C1 新增的**两个**必填项后必须被拒，且拒绝理由必须指向「缺失」（存在性
+	// 检查），而不是「存在但越界」（值域检查）。
+	//
+	// 这个区分是刻意的、也是实测出来的：只断言"错误串里出现字段名"的版本在**读取层悄悄放宽
+	// 存在性校验**时依然是绿的 —— `spc_score` 缺失会读成 0，随后仍被值域检查（`0 ∉ (0,1]`）
+	// 拦下，错误串里照样有 `spc_score` 字样。那样的反向对照只证明了"零值非法"，证明不了
+	// "缺失被拒"，也就守不住里程碑 B 采集器的契约。
+	for _, tc := range []struct {
+		name   string
+		field  string // 压缩后行内被抹掉的原文片段
+		needle string // 必须出现在错误串里的「缺失」判据
+	}{
+		{"spc_score", `"spc_score":0.93,`, "spc_score: missing"},
+		{"threat_coeff", `"threat_coeff":1.4,`, "threat_coeff: missing"},
+	} {
+		broken := strings.Replace(oneLine, tc.field, "", 1)
+		if broken == oneLine {
+			t.Fatalf("压缩后的示例里找不到 %s，无法构造反向对照（示例改过？）", tc.field)
+		}
+		_, err := LoadRecords(writeJSONL(t, "spec51-broken-"+tc.name+".jsonl", broken+"\n"))
+		if err == nil {
+			t.Fatalf("抹掉 %s 后读取层仍然接受 —— 本门禁没有守到该字段", tc.name)
+		}
+		if !strings.Contains(err.Error(), tc.needle) {
+			t.Fatalf("抹掉 %s 后读取层拒绝了，但理由不是『缺失』——存在性校验可能已被放宽，只是被值域检查兜住: %v", tc.name, err)
+		}
 	}
-	if _, err := LoadRecords(writeJSONL(t, "spec51-broken.jsonl", broken+"\n")); err == nil {
-		t.Fatal("抹掉 spc_score 后读取层仍然接受 —— 本门禁没有守到该字段")
-	} else if !strings.Contains(err.Error(), "spc_score") {
-		t.Fatalf("拒绝原因不是 spc_score 缺失，而是: %v", err)
+}
+
+// specSampleLegacyCandidate 是"示例记录是在哪个候选下产生的"的可执行说明：出厂 legacy 权重
+// （`configs/config.ini` 的 `EF-SELINUX = 0.80` / `EF-APPARMOR = 0.82`）。
+//
+// 为什么必须显式写出候选：离线重算的惩罚集是**候选声明的因子集**，不是记录里的因子集 ——
+// 未在候选里声明的因子会被**静默丢掉**（实测：只声明 EF-SELINUX 时同一条记录算出 84.68，
+// 声明两个才是 80.02）。这正是 CLI 的 `-factors` 覆盖校验要拦的那类静默偏差，故示例的
+// round-trip 只有在"候选与记录因子集一致"时才有定义。
+func specSampleLegacyCandidate() edgefactor.Params {
+	return edgefactor.Params{
+		Model:  edgefactor.ModelLegacy,
+		PFloor: 0.5,
+		Factors: map[string]float64{
+			"EF-SELINUX":  0.80,
+			"EF-APPARMOR": 0.82,
+		},
+	}
+}
+
+// equalDomainWeights 是全部默认域各一份权重（引擎的加权平均退化为等权平均）。
+func equalDomainWeights() map[string]float64 {
+	w := map[string]float64{}
+	for _, d := range edgefactor.DefaultDomains() {
+		w[d] = 1
+	}
+	return w
+}
+
+// TestSpecSection51SampleRoundTripsThroughEngineFormula 锁定"示例记录自洽"。
+//
+// 这条测试有**双重**作用：
+//  1. 落地 §5.1 里那句 round-trip 承诺 —— 示例的 `final_score` 必须能被 `cmd/edgecompare`
+//     用记录自身的输入（域分 + `spc_score`/`threat_coeff` + 链上 `effective_factor`）复算出来。
+//     评审实测旧示例的 69.4 **在任何合法权重下都不可能**（base 是域分加权平均 ⇒ 与权重无关地
+//     ∈[55,82]，再乘因子、代入 `round2(0.5·base+30·E+20·T)` 后落在 [78.45,89.52]），而当时
+//     的门禁只查"能不能解析"，抓不到数值自相矛盾 —— 里程碑 B 的采集器照抄就会产出一批
+//     与引擎对不上的记录。
+//  2. 钉住三处"示例必须自洽"的口径：因子 ID 必须是**规范 ID**（`EF-SELINUX` 而非展示名
+//     `selinux_disabled` —— 写错会让离线查不到 `Vectors` 而静默走"全 1"fallback，改变 V/G/C
+//     惩罚强度）；`trigger_check` 必须与出厂触发表一致（`EF-SELINUX`/`EF-APPARMOR` 共用
+//     `OT-005`，评审实测旧示例写的 `OT-007` 与出厂表、与本文档附录三处不符）；
+//     `acceptable` 必须等于 `final_score ≥ threshold`。
+func TestSpecSection51SampleRoundTripsThroughEngineFormula(t *testing.T) {
+	raw, err := os.ReadFile(designDocPath)
+	if err != nil {
+		t.Fatalf("读设计文档: %v", err)
+	}
+	recs, err := LoadRecords(writeJSONL(t, "spec51-roundtrip.jsonl",
+		compactLine(t, extractSection51Sample(t, string(raw)))+"\n"))
+	if err != nil {
+		t.Fatalf("spec §5.1 示例被读取层拒绝: %v", err)
+	}
+	rec := recs[0]
+	cand := specSampleLegacyCandidate()
+	triggers := config.DefaultEdgeFactorTriggerMap()
+
+	// (a) 因子 ID 规范 + 触发检查与出厂表一致 + 链上因子确实在候选里声明。
+	seen := map[string]bool{}
+	for _, id := range rec.Factors {
+		if edgefactor.NormalizeFactorID(id) != id {
+			t.Errorf("factors 里的 %q 不是规范因子 ID（规范形为 %q）—— 采集器照抄会让离线静默改变惩罚强度",
+				id, edgefactor.NormalizeFactorID(id))
+		}
+		if _, ok := cand.Factors[id]; !ok {
+			t.Errorf("factors 里的 %q 未在示例候选里声明 —— 离线会**静默丢掉**它的惩罚（这就是 round-trip 口径的一部分）", id)
+		}
+		seen[id] = true
+	}
+	for i, c := range rec.Observed.EdgeFactorChain {
+		if edgefactor.NormalizeFactorID(c.Factor) != c.Factor {
+			t.Errorf("edge_factor_chain[%d].factor = %q 不是规范因子 ID", i, c.Factor)
+		}
+		if !seen[c.Factor] {
+			t.Errorf("edge_factor_chain[%d].factor = %q 不在 factors 列表里 —— 记录自相矛盾", i, c.Factor)
+		}
+		if want := triggers[c.Factor]; want != "" && c.TriggerCheck != want {
+			t.Errorf("edge_factor_chain[%d] (%s) 的 trigger_check = %q，出厂触发表是 %q",
+				i, c.Factor, c.TriggerCheck, want)
+		}
+	}
+
+	// (b) round-trip：示例自己的输入必须复算出 final_score。
+	weights := equalDomainWeights()
+	got, err := OfflineScoreWithWeights(cand, rec, weights)
+	if err != nil {
+		t.Fatalf("用示例自身的输入重算失败: %v", err)
+	}
+	if got != rec.Observed.FinalScore {
+		t.Errorf("round-trip 失败: 复算 = %v，记录里写的是 %v —— 示例数值自相矛盾（采集器照此实现会产出与引擎对不上的记录）",
+			got, rec.Observed.FinalScore)
+	}
+	if want := got >= rec.Observed.Threshold; rec.Observed.Acceptable != want {
+		t.Errorf("acceptable = %v，但由 final_score %v 与 threshold %v 推出的应是 %v",
+			rec.Observed.Acceptable, rec.Observed.FinalScore, rec.Observed.Threshold, want)
+	}
+
+	// (c) 反向对照：只声明一个因子时**不能**复现同一个分数 —— 证明 (b) 不是恒真，
+	// 同时把"因子集不一致 = 静默改分"这一危险语义钉成可执行证据。
+	partial := cand
+	partial.Factors = map[string]float64{"EF-SELINUX": 0.80}
+	other, err := OfflineScoreWithWeights(partial, rec, weights)
+	if err != nil {
+		t.Fatalf("反向对照重算失败: %v", err)
+	}
+	if other == rec.Observed.FinalScore {
+		t.Errorf("只声明一个因子时也得到 %v —— (b) 的 round-trip 断言无区分力（它并没有真正检验记录的数值自洽性）", other)
 	}
 }
