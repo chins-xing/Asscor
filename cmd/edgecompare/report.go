@@ -109,8 +109,8 @@ func better(a, b Metrics) bool {
 // sortedNames 返回 map 键的字典序切片。
 //
 // 报告里三处输出（模型表、向量、边）都经它定序：Go 的 map 迭代序随机，直接 range 会让
-// 报告"同一输入两次不同"，而这类产物一旦进论文附录就再也无法归因（与 Task 8 的
-// weightedSum 定序是同一条纪律）。
+// 报告"同一输入两次不同"，而这类产物一旦进论文附录就再也无法归因（与重算层"不让 map 迭代序
+// 影响分数"是同一条纪律 —— 域分加权求和已在 score.go 按权重键定序后再交给内仓公式）。
 func sortedNames[V any](m map[string]V) []string {
 	names := make([]string, 0, len(m))
 	for name := range m {

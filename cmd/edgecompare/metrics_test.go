@@ -565,7 +565,7 @@ func vgcParams() []struct {
 // legacy + 单因子扩到 **graph / chain** 候选。
 //
 // `Synthesize` 内部对因子贡献项已按 ID 定序（那是内仓性质测试的范围），但"域级修正后的聚合"
-// 与"chain 的时序窗口判定"仍要经过本工具的代码路径（权重定序聚合、`adjustedScores`），
+// 与"chain 的时序窗口判定"仍要经过本工具的代码路径（钩子注入与拆除、权重定序、阈值判定），
 // 故这里用 5 域记录 + 两个共触发且级联的因子把 V/G/C 也钉住：同一输入必须逐位可复现。
 func TestEvaluateIsBitwiseDeterministicForVGC(t *testing.T) {
 	recs, err := LoadRecords(writeJSONL(t, "vgc.jsonl", vgcJSONL+"\n"))
