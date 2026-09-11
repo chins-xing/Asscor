@@ -265,6 +265,11 @@ type EdgeFactors struct {
 	AppArmorDisabled  float64 `json:"apparmor_disabled"`
 	NoSIEM            float64 `json:"no_siem"`
 	NoIDS             float64 `json:"no_ids"`
+
+	// Model / ParamsHash 记录本次边缘因子合成使用的模型与参数指纹
+	// （spec §4 规则 4），供实验报告与审计复现；零值表示 legacy 路径，不输出。
+	Model      string `json:"model,omitempty"`
+	ParamsHash string `json:"params_hash,omitempty"`
 }
 
 func (e EdgeFactors) ActiveFactors() []float64 {

@@ -689,6 +689,10 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		NoSIEM:            1.0,
 		NoIDS:             1.0,
 	}
+	// 溯源字段（Model / ParamsHash）在 legacy 路径上**刻意留零值**：本路径不构造
+	// edgefactor.Params、也不关心 [edge_factors.model] 段（它只被 ssam 路径消费），
+	// 填任何模型名都会把「这次评分用的是历史乘性路径」写成假事实。零值 + omitempty
+	// 同时保证了历史输出逐位不变（裁定 1）；溯源由 ssam 插件路径的适配层填充。
 	if v, ok := localFactors["EF-002FA"]; ok && v < 1.0 {
 		mapped.TwoFactorFailure = v
 	}

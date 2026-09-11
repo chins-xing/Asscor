@@ -56,6 +56,20 @@ func (a *EngineAdapter) ComputeScore(ctx context.Context, result *model.Assessme
 		return err
 	}
 	OutputToModel(output, result)
+	// 溯源（spec §4 规则 4）：把「本次评分使用的模型 + 参数指纹」写进输出层，供实验报告
+	// 与审计复现。三条边界一律留零值（omitempty ⇒ JSON 不输出）：
+	//   - 未配置 [edge_factors.model]（出厂配置与全部历史配置都是如此）⇒ 走历史乘性路径，
+	//     零值就是「未使用新模型」的表达，历史输出逐位不变（裁定 1）；
+	//   - 模型段存在但参数不可用（ParamsFromConfig 报错）⇒ 宁可留空，也不写一个无法复现的
+	//     指纹 —— 假指纹比缺指纹更糟，它会让审计以为这次评分可复现；
+	//   - 指纹取自 ParamsFromConfig(a.confCfg)，即本次评分所用参数集的装配来源（Task 7 的
+	//     ApplyEdgeFactorModel 消费同一份 cfg，故两者是同一套参数）。
+	if cfg := a.confCfgPtr(); cfg != nil && cfg.EdgeFactorModel.Model != "" {
+		if p, enabled, err := ParamsFromConfig(cfg); err == nil && enabled {
+			result.EdgeFactors.Model = string(p.Model)
+			result.EdgeFactors.ParamsHash = p.Hash()
+		}
+	}
 	return nil
 }
 
