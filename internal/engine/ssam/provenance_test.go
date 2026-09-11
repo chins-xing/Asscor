@@ -18,15 +18,16 @@ import (
 //
 //	情形 A：**未配置** [edge_factors.model] 段 → 无戳记 ⇒ JSON 里**不含** model / params_hash
 //	        两个键（历史输出格式逐位不变）。
-//	情形 B：**显式 `model = legacy`** → 真的装载了一套参数、且真的参与了评分（总分乘子语义）
-//	        ⇒ 输出 "legacy" + 指纹。这与情形 A **语义不同**（"没配置" vs "配置为 legacy"），
-//	        必须可区分 —— 否则运维/审计再也分不出两者。
+//	情形 B：**显式 `model = legacy`** → 引擎保留"已装载"标记（但**评分走与情形 A 完全相同**的
+//	        内仓默认路径，见 Fix round 2 裁定）⇒ 输出 "legacy" + 指纹。
+//	        这与情形 A **语义不同**（"没配置" vs "配置为 legacy"），必须可区分 —— 否则
+//	        运维/审计再也分不出两者。**评分逐位相同、只有溯源输出不同**，正是这条裁定的要点。
 //	情形 C：配置段存在、但引擎**没装载**（参数不可用 / chain 在线不可执行）
 //	        ⇒ 无戳记。该配置段是运维可达的（`trigger.*` 独立于合成模型就生效），所以
 //	        "配置可解析出参数"绝不能当成"评分用了这套参数"。
 //
 // 注意区分两个都叫 "legacy" 的东西：**情形 B** 指 `[edge_factors.model]` 里显式写
-// `model = legacy`（走 ssam 插件路径、装载参数、**会**盖戳）；而 legacy **评分路径**
+// `model = legacy`（走 ssam 插件路径、保留装载标记、**会**盖戳）；而 legacy **评分路径**
 // （`internal/engine` 的 DynamicScoringEngine / `evaluateEdgeFactorChain`）**永远**不盖戳
 // （见 internal/engine/assessor_provenance_test.go）—— 那条路径压根不构造 Params。
 
@@ -100,8 +101,11 @@ func TestEngineAdapterLeavesProvenanceEmptyWithoutModelSection(t *testing.T) {
 }
 
 // TestEngineAdapterStampsExplicitLegacyModel 是**情形 B**：
-// 显式 `model = legacy` ⇒ 输出 "legacy" + 指纹（引擎真的装载并真的参与评分），
-// 与情形 A（同一份夹具去掉模型段 ⇒ 不盖戳）**必须可区分**。
+// 显式 `model = legacy` ⇒ 输出 "legacy" + 引擎装载参数的指纹。
+//
+// 注意（Fix round 2 裁定）：这里盖戳**不是**因为 legacy 走了什么单独的评分分支 —— 它的评分路径
+// 与情形 A（未配置）**逐位相同**（零注册、内仓默认逐次相乘）；区别只在溯源输出，正是这条
+// 区分能力（"没配置" vs "配置为 legacy"）要求保留盖戳。
 func TestEngineAdapterStampsExplicitLegacyModel(t *testing.T) {
 	resetHooksForTest(t)
 
@@ -122,9 +126,13 @@ func TestEngineAdapterStampsExplicitLegacyModel(t *testing.T) {
 	assertStamped(t, "显式 model=legacy", result.EdgeFactors, "legacy", want)
 	assertJSONHasProvenanceKeys(t, "显式 model=legacy", result.EdgeFactors)
 
-	// 对照：同一份夹具去掉模型段 ⇒ 不盖戳（两种形态分得开）。
+	// 对照：同一份夹具去掉模型段 ⇒ 不盖戳（两种形态分得开），但**评分逐位相同**。
 	plainResult := withChecks(t, boundaryConfig(), boundaryChecks())
 	assertNoProvenance(t, "同一夹具未配置模型段", plainResult.EdgeFactors)
+	if plainResult.FinalScore != result.FinalScore {
+		t.Fatalf("显式 legacy = %v 与未配置 = %v 必须同分（仅溯源输出不同）",
+			result.FinalScore, plainResult.FinalScore)
+	}
 }
 
 // TestEngineAdapterStampsOnlyWhatTheEngineLoaded 是**情形 C**（Task 5 评审 I1 的原始牙齿，

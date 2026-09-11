@@ -281,7 +281,10 @@ type synthesizePlan struct {
 	domains []string
 }
 
-// newSynthesizePlan 计算合成计划（同时是在线**可执行性**的装配期闸门）。
+// newSynthesizePlan 计算合成计划（V/G/C 专用；同时是在线**可执行性**的装配期闸门）。
+//
+// 前置条件：调用方已提前处理另外两种模型 —— **legacy**（M0：与"未启用"共用内仓默认的逐次
+// 相乘路径、零注册，不需要合成计划）与 **chain**（在线不可执行，见下）。
 //
 // **chain 在线不可执行 ⇒ fail-fast（C1 裁定）**：这是**能力缺口**，不是配置错误。
 // 内仓 Synthesize 对 chain 要求每个激活因子带非零时间戳（刻意 fail-fast，不允许静默退化成
@@ -296,22 +299,24 @@ type synthesizePlan struct {
 // `cmd/edgecompare` 离线评估 —— 与 spec「离线重算为主」一致。与"λ 一个都没配 ⇒ 装配失败"
 // 同款纪律：能装配出来的东西必须真的能算。
 //
-// 其余非 legacy 模型要求「请求的每个域都有 λ_d」（内仓 Synthesize 的 fail-fast），因此请求域
+// V/G 要求「请求的每个域都有 λ_d」（内仓 Synthesize 的 fail-fast），因此请求域
 // = DefaultDomains ∩ p.Lambda：**未配置 λ 的域不做域级修正**（不是整次失败后静默退化）。
-// 一个 λ 都没配的非 legacy 模型永远产生不出任何修正 ⇒ 报错，由装配层拒绝装配并保持默认路径
+// 一个 λ 都没配的 V/G 模型永远产生不出任何修正 ⇒ 报错，由装配层拒绝装配并保持默认路径
 // ——否则会出现「戳记写着 graph、评分却分毫未变」的假溯源。
 //
-// legacy 不读 λ（惩罚完全由总分乘子表达），故请求全部默认域、不做裁剪。
+// 第三条错误分支（"模型没有在线合成计划"）是**穷尽性兜底**：`Params.Validate` 只放行
+// legacy/vector/graph/chain 四个模型，前两者已由调用方处理，故它不可达，但保留它可以让
+// 本函数对未来新增的模型保持 fail-fast（而不是静默返回一个空计划）。
 func newSynthesizePlan(p edgefactor.Params) (synthesizePlan, error) {
 	if p.Model == edgefactor.ModelChain {
 		return synthesizePlan{}, fmt.Errorf(
 			"ssam: edge factor model %q requires timestamped factor observations, which the current engine result type cannot supply; chain is evaluated offline only",
 			p.Model)
 	}
-	all := edgefactor.DefaultDomains()
-	if p.Model == edgefactor.ModelLegacy {
-		return synthesizePlan{params: p, domains: all}, nil
+	if p.Model != edgefactor.ModelVector && p.Model != edgefactor.ModelGraph {
+		return synthesizePlan{}, fmt.Errorf("ssam: edge factor model %s has no online synthesis plan", p.Model)
 	}
+	all := edgefactor.DefaultDomains()
 	requested := make([]string, 0, len(all))
 	for _, d := range all {
 		if _, ok := p.Lambda[d]; ok {

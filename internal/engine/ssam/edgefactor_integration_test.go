@@ -495,19 +495,18 @@ func TestGraphModelAppliesPerDomainCoefficient(t *testing.T) {
 	}
 }
 
-// TestLegacyModelKeepsMultiplierSemantics 钉住 M0/legacy 候选的语义：**总分乘子**
-// （Result.GlobalMultiplier = ∏ effective_f），域级修正不参与。
+// TestLegacyModelKeepsMultiplierSemantics 钉住 M0/legacy 候选的语义：**现状乘性连乘**
+// （内仓默认路径，不注册任何钩子），域级修正不参与。
 //
 // 与 TestGraphModelAppliesPerDomainCoefficient **同一份夹具、只换 model**，因此两个断言
 // 值的差别完全来自语义差别：
 //
-//	legacy：base·∏eff = 90·0.5 = 45 → ic=0.45 → wa=(0.45·50+30+20)/100=0.725 → 总分 72.5
+//	legacy：base·∏f = 90·0.5 = 45 → ic=0.45 → wa=(0.45·50+30+20)/100=0.725 → 总分 72.5
 //	graph ：域分被 P_AS 修正（90·0.8230…=74.07）→ 总分 87.04
 //
-// legacy 的 72.5 与「未启用」的默认乘性路径同值（这正是 M0 的定义：现状基线），区别只在于
-// 它走的是内仓「注入策略」分支（base×乘子）而非默认的顺序乘法 —— IEEE754 不满足结合律，
-// 两者只在取整半格边界上可分辨，那属于「未启用即零注册」的门禁（见
-// TestDefaultConfigKeepsBitIdenticalScoring / TestDisabledConfigRegistersNoHook）。
+// legacy 的 72.5 与「未启用」同值，因为两者**就是同一条路径**（Fix round 2 裁定：
+// 显式 legacy 零注册）。它与"未配置"的逐位一致由
+// TestExplicitLegacyModelScoresBitIdenticallyToUnconfigured 在取整半格夹具上钉住。
 func TestLegacyModelKeepsMultiplierSemantics(t *testing.T) {
 	resetHooksForTest(t)
 
@@ -519,8 +518,73 @@ func TestLegacyModelKeepsMultiplierSemantics(t *testing.T) {
 		t.Fatalf("model=legacy 总分 = %v：走成了域级修正（legacy 不参与逐域 P_d）", got.FinalScore)
 	}
 	if got.FinalScore != plainGraphFixtureTotal {
-		t.Fatalf("model=legacy 总分 = %v, want %v（总分乘子语义 base·∏eff）",
+		t.Fatalf("model=legacy 总分 = %v, want %v（现状乘性连乘）",
 			got.FinalScore, plainGraphFixtureTotal)
+	}
+}
+
+// TestExplicitLegacyModelScoresBitIdenticallyToUnconfigured 是 Fix round 2（主控裁定）的用例：
+//
+// **显式 `model = legacy` 必须与「未配置」逐位一致** —— 它的语义就是内仓默认路径（现状乘性
+// 连乘），因此**不得注册任何钩子**。此前实现给它注册了一个返回 ∏effective_f 的"等价乘子"，
+// 于是内仓从"逐次相乘"切成"base×单次乘积"，因 IEEE754 不满足结合律，在取整半格边界上
+// 产生 1 ulp 的可观测差异（未配置 50.31 vs 显式 legacy 50.32）。
+//
+// 两条断言：
+//   - 同一边界夹具下，显式 legacy 与未配置的整份评分数值**逐位相同**，且都等于默认路径的
+//     50.31（并显式排除 50.32 —— 若谁把"等价乘子"加回来，这里立刻红）；
+//   - 生产入口（适配器）走完管线后**仍输出** "legacy" + 引擎装载参数的 Hash()：评分路径相同、
+//     溯源输出不同，这正是 I1 裁定要保留的区分能力（详细断言见
+//     TestEngineAdapterStampsExplicitLegacyModel）。
+func TestExplicitLegacyModelScoresBitIdenticallyToUnconfigured(t *testing.T) {
+	resetHooksForTest(t)
+
+	legacyCfg := boundaryConfig()
+	legacyCfg.EdgeFactorModel = config.EdgeFactorModelConfig{Model: "legacy", PFloor: 0.5}
+	plainCfg := boundaryConfig()
+
+	// 同一个引擎实例上比较两种装配（配置只差"有没有模型段"）。
+	e := NewEngine()
+	e.SetWeights(ConfigToWeights(boundaryConfig()))
+	e.SetEdgeFactors(ConfigToEdgeFactors(boundaryConfig()))
+
+	if err := e.ApplyEdgeFactorModel(legacyCfg); err != nil {
+		t.Fatalf("ApplyEdgeFactorModel(legacy): %v", err)
+	}
+	if _, loaded := e.LoadedEdgeFactorParams(); !loaded {
+		t.Error("显式 legacy 必须保留「已装载」标记（溯源要输出 legacy + 指纹）")
+	}
+	legacyOut := scoreEngineOutput(t, e, boundaryChecks())
+	if legacyOut.FinalScore == boundarySingleProductTotal {
+		t.Fatalf("显式 model=legacy 总分 = %v：注册了「等价乘子」，把默认逐次相乘换成了单次乘积",
+			legacyOut.FinalScore)
+	}
+
+	if err := e.ApplyEdgeFactorModel(plainCfg); err != nil {
+		t.Fatalf("ApplyEdgeFactorModel(未启用): %v", err)
+	}
+	plainOut := scoreEngineOutput(t, e, boundaryChecks())
+
+	if !reflect.DeepEqual(legacyOut, plainOut) {
+		t.Fatalf("显式 legacy 与未配置必须逐位一致:\n legacy %+v\n 未配置 %+v", legacyOut, plainOut)
+	}
+	if plainOut.FinalScore != boundarySequentialTotal {
+		t.Fatalf("边界夹具总分 = %v, want %v（逐次相乘）", plainOut.FinalScore, boundarySequentialTotal)
+	}
+
+	// 生产入口同样逐位一致，且**仍**盖 legacy 戳（评分相同、溯源不同）。
+	adapter := NewEngineAdapter(legacyCfg)
+	wantHash := loadedHash(t, adapter)
+	got := computeWith(t, adapter, boundaryChecks())
+	if got.FinalScore != boundarySequentialTotal {
+		t.Fatalf("生产入口显式 legacy 总分 = %v, want %v", got.FinalScore, boundarySequentialTotal)
+	}
+	assertStamped(t, "显式 legacy（生产入口）", got.EdgeFactors, "legacy", wantHash)
+	if plain := withChecks(t, plainCfg, boundaryChecks()); plain.FinalScore != got.FinalScore {
+		t.Fatalf("生产入口：显式 legacy = %v 与未配置 = %v 必须同分",
+			got.FinalScore, plain.FinalScore)
+	} else {
+		assertNoProvenance(t, "同夹具未配置（对照）", plain.EdgeFactors)
 	}
 }
 

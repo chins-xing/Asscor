@@ -399,14 +399,18 @@ func resetEdgeFactorHooks() {
 //
 //   - **未启用**（无 [edge_factors.model] 段，或 cfg == nil）：**零注册** —— 两个钩子
 //     恢复成内仓默认，既不安装策略也不安装域级修正，也不安装任何"等价默认策略"。
-//   - **启用**：安装两个钩子，它们都在生产公式 SSAMV20Formula 的统一入口上生效（不是
+//   - **显式 `model = legacy`（M0 候选）**：同样**零注册**、与"未启用"走**同一条**评分路径
+//     （内仓默认的逐次相乘）。理由：M0 的语义**就是**现状乘性连乘 = 内仓默认路径；给它注册一个
+//     "语义等价的乘子"会让内仓从逐次相乘切成 base×单次乘积，因 IEEE754 不满足结合律，在取整
+//     半格边界上产生可观测差异（实测 50.31 → 50.32）。**但装载标记保留** ⇒ 输出仍盖
+//     "legacy" + 指纹：评分路径与"未配置"逐位一致，仅溯源输出不同（Task 7 评审 I1 要保留的
+//     区分能力）。
+//   - **启用 V/G/C**：安装两个钩子，它们都在生产公式 SSAMV20Formula 的统一入口上生效（不是
 //     AST 入口）：
-//     1. RegisterEdgeFactorStrategy —— 总分乘子语义：legacy/M0 返回
-//     Result.GlobalMultiplier（∏ effective_f）；V/G/C 恒为 1，用来**抵消**内仓默认的
-//     逐次相乘路径（它们的惩罚完全由域级系数 P_d 表达，不能再乘一次）。
-//     2. RegisterDomainAdjust —— V/G/C 的域级修正 Score_d' = Base_d · P_d；
-//     legacy 注册 nil（域级修正不参与）。
-//   - **参数不可用或无法产生任何修正**（ParamsFromConfig / newSynthesizePlan 报错）：
+//     1. RegisterEdgeFactorStrategy —— 恒等乘子 1，用来**抵消**内仓默认的逐次相乘路径
+//     （V/G/C 的惩罚完全由域级系数 P_d 表达，不能再乘一次）；
+//     2. RegisterDomainAdjust —— 域级修正 Score_d' = Base_d · P_d。
+//   - **参数不可用、模型在线不可执行（chain）、或无法产生任何修正**：
 //     清空装载状态、恢复默认路径并返回错误 —— 宁可回落默认乘性路径，也不带着半套参数
 //     评分，更不在输出里声称用了某个模型（那正是 Task 5 评审 I1 要消除的假溯源）。
 //
@@ -433,13 +437,24 @@ func (e *Engine) ApplyEdgeFactorModel(cfg *config.Config) error {
 		return nil
 	}
 
+	// 记载"已装载"标记（溯源用）先于任何钩子安装：legacy 也会走到这里并保留该标记。
+	e.storeEdgeFactorModel(p)
+
+	if p.Model == edgefactor.ModelLegacy {
+		// M0/legacy：不注册任何钩子，与"未启用"共用内仓默认的逐次相乘路径（评审 Fix round 2 裁定）。
+		// 注意**不能**改成"注册一个返回 ∏effective_f 的策略"：那会让默认路径从逐次相乘变成
+		// base×单次乘积，在取整半格边界上产生 1 ulp 的可观测差异（实测 50.31 → 50.32）。
+		// 装载标记仍保留 ⇒ 溯源仍输出 "legacy" + 指纹（评分相同、溯源不同）。
+		resetEdgeFactorHooks()
+		return nil
+	}
+
 	plan, err := newSynthesizePlan(p)
 	if err != nil {
 		e.clearEdgeFactorModel()
 		resetEdgeFactorHooks()
 		return err
 	}
-	e.storeEdgeFactorModel(p)
 
 	ssam.RegisterEdgeFactorStrategy(func(factors []EdgeFactorResult) float64 {
 		res, err := synthesizeWithModel(plan, factors)
@@ -449,14 +464,8 @@ func (e *Engine) ApplyEdgeFactorModel(cfg *config.Config) error {
 			// 这里是兜底而不是常规路径。
 			return 1
 		}
-		return res.GlobalMultiplier // V/G/C 恒为 1；legacy 是 ∏ effective_f
+		return res.GlobalMultiplier // V/G/C 恒为 1（域级系数已表达惩罚，不能再乘一次）
 	})
-
-	if p.Model == edgefactor.ModelLegacy {
-		// legacy 的惩罚完全由总分乘子表达，域级修正保持未注册（恒等）。
-		ssam.RegisterDomainAdjust(nil)
-		return nil
-	}
 
 	ssam.RegisterDomainAdjust(func(scores []DomainScore, factors []EdgeFactorResult) []DomainScore {
 		res, err := synthesizeWithModel(plan, factors)

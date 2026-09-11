@@ -1425,11 +1425,12 @@ Run（外层）：`go test -tags engine ./internal/engine/ssam/ ./internal/engin
 
 > **⚠️ 实现后修订（代码为准）**：本节 Step 3 的代码块是最初版本，Task 6b（内仓钩子）与本次实现后**已落地于 `internal/engine/ssam/engine.go`、`edgefactor.go`、`adapter_engine.go`，请以代码为准**，勿照抄本代码块：
 > 1. **域级修正的接入方式**：不是 `DomainAdjust() map[string]float64` + `lastInput` 字段，而是内仓 Task 6b 交付的 `RegisterDomainAdjust(func([]DomainScore, []EdgeFactorResult) []DomainScore)` —— 钩子每次评分都拿到本轮的域分与因子结果，因此无需缓存 `lastInput`；逐域系数 `P_d` 由钩子内部算得并就地乘到域分上（`Score_d' = Base_d · P_d`）。
-> 2. **V/G/C 必须注册一个返回 1 的策略**：内仓 `applyEdgeFactorStrategyToBase` 在**未注入**时走默认的逐次相乘。若 V/G/C 只注册域级修正、不注册策略，惩罚会被"默认乘性 × 逐域 P_d"算两次。故 V/G/C 注册"恒等乘子"(1)，legacy 注册 `Result.GlobalMultiplier`。
-> 3. **参数按 λ 做一致裁剪**（design §3.1 注记给的第二条出路）：内仓 `Validate/Synthesize` 以**传入的域列表**为准，配置里出现请求域之外的 `λ`/`vector` 键会被拒绝；而配置层允许只声明部分 λ。故评分期请求域 = `DefaultDomains ∩ p.Lambda`，并把 `Lambda`/`Vectors` 裁剪到该域集（`Coupling`/`Factors` 不动）。一个 λ 都没配的非 legacy 模型**装配失败**（否则会出现"戳记写着 graph、评分分毫未变"的假溯源）。**裁剪只作用于评分期**：装载与溯源仍用完整参数（指纹 = 完整参数的 `Hash()`）。
+> 2. **V/G/C 必须注册一个返回 1 的策略**：内仓 `applyEdgeFactorStrategyToBase` 在**未注入**时走默认的逐次相乘。若 V/G/C 只注册域级修正、不注册策略，惩罚会被"默认乘性 × 逐域 P_d"算两次。故 V/G/C 注册"恒等乘子"(1)。
+> 2b. **显式 `model = legacy`（M0）零注册**（Task 7 评审 Fix round 2 裁定）：M0 的语义**就是**现状乘性连乘 = 内仓默认路径，所以它与"未启用"走**同一条**路径、不注册任何钩子；**但保留"已装载"标记**，溯源仍输出 `legacy` + 指纹。**不得**注册"返回 `∏effective_f` 的等价乘子" —— 那会把内仓从逐次相乘切成 `base×单次乘积`，因 IEEE754 不满足结合律在取整半格边界上产生 1 ulp 的可观测差异（实测未配置 50.31 vs 显式 legacy 50.32）。口径：**显式 legacy 与未配置在评分上逐位一致，仅溯源输出不同**。
+> 3. **参数按 λ 做一致裁剪**（design §3.1 注记给的第二条出路）：内仓 `Validate/Synthesize` 以**传入的域列表**为准，配置里出现请求域之外的 `λ`/`vector` 键会被拒绝；而配置层允许只声明部分 λ。故评分期请求域 = `DefaultDomains ∩ p.Lambda`，并把 `Lambda`/`Vectors` 裁剪到该域集（`Coupling`/`Factors` 不动）。一个 λ 都没配的 **V/G** 模型**装配失败**（否则会出现"戳记写着 graph、评分分毫未变"的假溯源）。**裁剪只作用于评分期**：装载与溯源仍用完整参数（指纹 = 完整参数的 `Hash()`）。
 > 4. **未启用 = 零注册**：未配置模型段时调用 `RegisterEdgeFactorStrategy(nil)` + `RegisterDomainAdjust(nil)`（`nil` 即内仓的"未注册/默认"），**不得**传入 `ssam.DefaultEdgeFactorStrategy` 这类"语义等价的默认策略" —— 那会让默认路径从逐次相乘变成单次乘积；实测边界夹具 50.31 → 50.32（见 `TestDefaultConfigKeepsBitIdenticalScoring`）。
 > 5. **装配点**：适配器**构造函数**（任何构造路径都装到位）而非只在 `cmd/kernel`；`ReloadWeights` 必须重装；`cmd/kernel/engine_on.go` 只做启动期自检。
-> 6. **盖戳启用**：`model.EdgeFactors.Model/ParamsHash` 按 Task 5 评审 I1 的交接条件启用，判据是 `Engine` **实际装载**的 `Params`（不是"配置里写了"），热重载后同源更新。口径（Task 7 评审 I1 改准）：**「未配置」⇒ JSON 不含这两个键**；**「显式 `model=legacy`」⇒ 输出 `"legacy"` + 指纹**（它真的装载并参与评分，且必须与"没配置"可区分）。
+> 6. **盖戳启用**：`model.EdgeFactors.Model/ParamsHash` 按 Task 5 评审 I1 的交接条件启用，判据是 `Engine` **实际装载**的 `Params`（不是"配置里写了"），热重载后同源更新。口径（Task 7 评审 I1 改准 + Fix round 2 补）：**「未配置」⇒ JSON 不含这两个键**；**「显式 `model=legacy`」⇒ 输出 `"legacy"` + 指纹** —— 后者与前者**评分逐位一致**（见第 2b 条），区别只在溯源输出，正是这条区分能力要求保留盖戳。
 > 7. **chain 明确为「离线专用模型」（Task 7 评审 C1 裁定）**：内仓 `Synthesize` 对 chain 要求每个激活因子带非零时间戳（刻意 fail-fast、不退化），而在线的 `ssam.EdgeFactorResult` **根本没有时间字段** ⇒ chain 在线**永远**合成不出来；若照常装载，闭包兜底会把错误吞掉（惩罚全丢、评分比未启用更宽松）却仍盖 `model="chain"` 的戳。故**装配期 fail-fast**（能力缺口，不是配置错误）：不装载、不盖戳、回落未启用路径（评分与未配置逐位一致）。时间戳在离线 JSONL（spec §5.1 的 `edge_factor_chain[].ts`）里有，chain 由 `cmd/edgecompare` 离线评估 —— 与 spec「离线重算为主」一致。
 
 **Files:**
