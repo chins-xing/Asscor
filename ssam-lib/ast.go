@@ -179,9 +179,12 @@ func evalRef(ref string, ctx EvalContext) (float64, error) {
 func evalWeightedSum(ctx EvalContext) float64 {
 	wMap := BuildWeightMap(ctx.Weights)
 
+	// 域级修正统一入口（默认恒等，逐位不变）。
+	domainScores := applyDomainAdjust(ctx.DomainScores, ctx.EdgeFactors)
+
 	sum := 0.0
 	totalWeight := 0.0
-	for _, ds := range ctx.DomainScores {
+	for _, ds := range domainScores {
 		if w, ok := wMap[ds.Domain]; ok && w > 0 {
 			sum += ds.Score * w
 			totalWeight += w
@@ -209,8 +212,9 @@ func evalProductChain(ctx EvalContext) float64 {
 type EdgeFactorStrategy func(factors []EdgeFactorResult) float64
 
 var (
-	strategyMu         sync.RWMutex
-	edgeFactorStrategy EdgeFactorStrategy = evalProductChainStrategy
+	strategyMu                  sync.RWMutex
+	edgeFactorStrategy          EdgeFactorStrategy = evalProductChainStrategy
+	edgeFactorStrategyIsDefault                    = true
 )
 
 // DefaultEdgeFactorStrategy 是默认（乘性连乘）策略的只读句柄。
@@ -230,14 +234,18 @@ func evalProductChainStrategy(factors []EdgeFactorResult) float64 {
 
 // RegisterEdgeFactorStrategy 注入自定义合成策略；nil 恢复默认乘性连乘。
 // 默认路径与历史行为逐位一致（spec §3.3）。
+// 注意：注册「与本包默认实现等价的策略」（例如传入 DefaultEdgeFactorStrategy）
+// 会走注入路径（base*乘子），不再保留下述逐次相乘的算术顺序。
 func RegisterEdgeFactorStrategy(s EdgeFactorStrategy) {
 	strategyMu.Lock()
 	defer strategyMu.Unlock()
 	if s == nil {
 		edgeFactorStrategy = evalProductChainStrategy
+		edgeFactorStrategyIsDefault = true
 		return
 	}
 	edgeFactorStrategy = s
+	edgeFactorStrategyIsDefault = false
 }
 
 // ValidateStrategy 报告合成策略是否可调用（装配根自检用）。
@@ -257,6 +265,31 @@ func currentStrategy() EdgeFactorStrategy {
 // applyEdgeFactorStrategy 是内部统一入口：公式求值处改调本函数。
 func applyEdgeFactorStrategy(ctx EvalContext) float64 {
 	return currentStrategy()(ctx.EdgeFactors)
+}
+
+// applyEdgeFactorStrategyToBase 把边缘因子合成作用于层内基分，返回缩放后的基分。
+//
+// 默认策略（未注入，或 RegisterEdgeFactorStrategy(nil)）走「逐次相乘」路径，
+// 与改造前 SSAMV20Formula 的内联循环**算术顺序完全一致**：IEEE754 乘法不满足
+// 结合律，若默认路径改为 base*(f1*f2*…) 会在取整半格边界上产生可观测差异
+// （见 TestProductionFormulaDefaultKeepsSequentialMultiplyOrder），故保留顺序。
+// 判定条件与 evalProductChainStrategy 一致（仅 Active 且 Factor∈(0,1) 的因子参与）。
+// 注入策略时按「总分乘子单次作用」：base * strategy(factors)。
+func applyEdgeFactorStrategyToBase(base float64, factors []EdgeFactorResult) float64 {
+	strategyMu.RLock()
+	strategy := edgeFactorStrategy
+	isDefault := edgeFactorStrategyIsDefault
+	strategyMu.RUnlock()
+
+	if !isDefault && strategy != nil {
+		return base * strategy(factors)
+	}
+	for _, f := range factors {
+		if f.Active && f.Factor > 0 && f.Factor < 1.0 {
+			base *= f.Factor
+		}
+	}
+	return base
 }
 
 type compiledOp struct {
@@ -327,9 +360,11 @@ func ASTToFormula(ast FormulaAST) ScoringFormula {
 				}
 
 			case OpWeightedSum:
+				// 与 EvalAST 共用同一域级修正入口（默认恒等，逐位不变）。
+				adjustedScores := applyDomainAdjust(domainScores, edgeFactors)
 				sum := 0.0
 				totalWeight := 0.0
-				for _, ds := range domainScores {
+				for _, ds := range adjustedScores {
 					if w, ok := wMap[ds.Domain]; ok && w > 0 {
 						sum += ds.Score * w
 						totalWeight += w

@@ -6,6 +6,9 @@ import (
 )
 
 func SSAMV20Formula(domainScores []DomainScore, weights []WeightConfig, riskCtx RiskContext, edgeFactors []EdgeFactorResult) FinalScore {
+	// 域级修正统一入口：未注册钩子（默认）时原样返回入参，逐位不变。
+	domainScores = applyDomainAdjust(domainScores, edgeFactors)
+
 	wMap := BuildWeightMap(weights)
 
 	sum := 0.0
@@ -33,9 +36,12 @@ func SSAMV20Formula(domainScores []DomainScore, weights []WeightConfig, riskCtx 
 	for _, f := range edgeFactors {
 		if f.Active && f.Factor > 0 && f.Factor < 1.0 {
 			intrinsicContributors = append(intrinsicContributors, "edge_factor:"+f.ID)
-			baseScore *= f.Factor
 		}
 	}
+
+	// 边缘因子合成统一入口：默认策略（乘性连乘）与改造前的内联连乘逐位一致
+	// （保留逐次相乘的算术顺序）；注入的策略正是在此处对生产评分生效。
+	baseScore = applyEdgeFactorStrategyToBase(baseScore, edgeFactors)
 
 	baseScore = math.Round(baseScore*100) / 100
 
