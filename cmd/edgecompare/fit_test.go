@@ -596,6 +596,123 @@ func TestFitKeepsCouplingWhenDataSupportsIt(t *testing.T) {
 	}
 }
 
+// TestFitNormalisesReverseStoredCouplingOnWrite 钉住 Fix round 2 / ③：`β > 0` 的**写值路径**
+// 也必须清掉反向旧值。
+//
+// 病根与 C1 同源、但方向相反：`graph` 的耦合是对称的（`couplingValue` 双向查表），
+// 基准若把这条边存在 `B→A`，而拟合出的规范边是 `A|B`，只写 `A→B` 就会让产物里
+// **同一条对称边有两个不同的值**（`B→A = 0.5` 旧值 + `A→B = 拟合值`），
+// `RenderConfigSection` 会把两者都写进配置段 —— 又一份自相矛盾的产物。
+// 故写值与移除两条分支统一先走 `removeCouplingEdge`。
+//
+// 断言直接落在**渲染 → 重解析**后的产物上（而不只是内存里的 map）：
+// 配置段里这条边必须只剩一行，且值就是拟合值。
+func TestFitNormalisesReverseStoredCouplingOnWrite(t *testing.T) {
+	base := fitBaseParams()
+	base.Coupling = map[string]map[string]float64{"B": {"A": 0.5}}
+	p, _, err := Fit(syntheticRecords(t, 0.4, 7), base, fitEdgeOpts(7))
+	if err != nil {
+		t.Fatalf("Fit: %v", err)
+	}
+	if v, ok := p.Coupling["B"]["A"]; ok {
+		t.Errorf("反向旧值必须被清掉（否则同一条对称边在产物里有两个值）：B→A = %v", v)
+	}
+	fitted, ok := p.Coupling["A"]["B"]
+	if !ok {
+		t.Fatal("数据支持该边（β > 0）⇒ 产物必须保留 A→B")
+	}
+	if fitted < 0.25 {
+		t.Errorf("A→B = %v 应是拟合值（≈0.4），不是被保留的基准旧值", fitted)
+	}
+	// 基线不被就地改写（深拷贝契约）。
+	if base.Coupling["B"]["A"] != 0.5 {
+		t.Errorf("Fit 就地改写了基准的 Coupling：%v", base.Coupling)
+	}
+
+	var buf bytes.Buffer
+	if err := RenderConfigSection(&buf, string(p.Model), p); err != nil {
+		t.Fatalf("RenderConfigSection: %v", err)
+	}
+	sections, err := parseRenderedSections(buf.String())
+	if err != nil {
+		t.Fatalf("parseRenderedSections: %v", err)
+	}
+	if got := countCouplingKeys(sections); got != 1 {
+		t.Errorf("配置段里这条对称边只能有一行，实际 %d 行：\n%s", got, buf.String())
+	}
+	cfg, present, err := config.ParseEdgeFactorModel(sections)
+	if err != nil || !present {
+		t.Fatalf("ParseEdgeFactorModel: %v (present=%v)", err, present)
+	}
+	if cfg.Coupling["A"]["B"] != fitted {
+		t.Errorf("回填后的耦合 = %v, want %v", cfg.Coupling["A"]["B"], fitted)
+	}
+	if _, ok := cfg.Coupling["B"]["A"]; ok {
+		t.Errorf("回填后的配置里不该再有反向的那一行：%v", cfg.Coupling)
+	}
+}
+
+// TestFitWithoutCouplingRendersBackToConfigSection 覆盖 `β ≤ 0` 分支的**渲染—回填链路**
+// （Fix round 2 顺带修 ②）：C1 之后该分支会产出**没有 coupling 行**的配置段，
+// 而这条路径此前没有任何用例 —— "没有 coupling 行"的段落能否通过生产解析层与
+// `Validate(DefaultDomains())`，是一处未验证风险（少一行配置让整段贴不回去，
+// 是"看起来能粘、实际粘不上"的典型形态）。
+func TestFitWithoutCouplingRendersBackToConfigSection(t *testing.T) {
+	base := fitBaseParams()
+	base.Coupling = map[string]map[string]float64{"A": {"B": 0.5}}
+	p, rep, err := Fit(syntheticRecords(t, -1.0, 7), base, fitEdgeOpts(7))
+	if err != nil {
+		t.Fatalf("Fit: %v", err)
+	}
+	if beta, ok := rep.EdgeCoefficients["A|B"]; !ok || beta > 0 {
+		t.Fatalf("夹具前提：c = −1.0 应给出负的边系数，实际 %v (ok=%v)", beta, ok)
+	}
+	if len(p.Coupling) != 0 {
+		t.Fatalf("β ≤ 0 ⇒ 产物里不该有任何耦合，实际 %v", p.Coupling)
+	}
+
+	var buf bytes.Buffer
+	if err := RenderConfigSection(&buf, string(p.Model), p); err != nil {
+		t.Fatalf("RenderConfigSection: %v", err)
+	}
+	if strings.Contains(buf.String(), "coupling.") {
+		t.Errorf("β ≤ 0 ⇒ 配置段里不该有 coupling 行：\n%s", buf.String())
+	}
+	sections, err := parseRenderedSections(buf.String())
+	if err != nil {
+		t.Fatalf("parseRenderedSections: %v", err)
+	}
+	cfg, present, err := config.ParseEdgeFactorModel(sections)
+	if err != nil {
+		t.Fatalf("没有 coupling 行的段被解析层拒绝：%v", err)
+	}
+	if !present {
+		t.Fatal("渲染结果里没有 [edge_factors.model] 段")
+	}
+	rebuilt := edgefactor.Params{
+		Model:              edgefactor.ModelID(cfg.Model),
+		PFloor:             cfg.PFloor,
+		Lambda:             cfg.Lambda,
+		Vectors:            cfg.Vectors,
+		Coupling:           cfg.Coupling,
+		ChainWindowSeconds: cfg.ChainWindowSeconds,
+	}
+	if err := rebuilt.Validate(edgefactor.DefaultDomains()); err != nil {
+		t.Fatalf("没有 coupling 行的段过不了 Validate(DefaultDomains())：%v", err)
+	}
+}
+
+// countCouplingKeys 数一遍解析结果里的 coupling 条目（用来断言同一条对称边只有一行）。
+func countCouplingKeys(sections map[string]map[string]string) int {
+	n := 0
+	for key := range sections["edge_factors.model"] {
+		if strings.HasPrefix(key, "coupling.") {
+			n++
+		}
+	}
+	return n
+}
+
 // ============================================================================
 // Fix round 1 / I1：偏置断言 —— 抓得住"罚项把耦合系数整体推高"这类回归
 // ============================================================================

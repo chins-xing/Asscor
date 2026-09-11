@@ -131,7 +131,8 @@ func factorFromCoefficient(beta float64) float64 {
 // couplingFromCoefficient 把交互项系数折成耦合强度（mandate 给定的规则，逐字实现）：
 //
 //	β_ij > 0 ⇒ Coupling[i][j] = min(β_ij, 1)
-//	β_ij ≤ 0 ⇒ 不写（保持 0，冗余由 Σ_d v ≤ 1 吸收）
+//	β_ij ≤ 0 ⇒ 不写，且**移除基准里该边已有的旧值**（见下方说明；Fix round 2 把规则行的
+//	            "保持 0" 措辞改准 —— 语义不是"留着旧值当 0"，而是"这条边从产物里消失"）
 //
 // 返回的第二个值表示"是否写入"：`β ≤ 0` 时**不写**，而且 `Fit` 会把基准里已有的这条边
 // **一并移除**（`removeCouplingEdge`）。两者在 `Synthesize` 里等价（`couplingValue` 取不到
@@ -143,6 +144,9 @@ func factorFromCoefficient(beta float64) float64 {
 //     或带上一轮的拟合产物；只跳过不删除会让**已经不再显著的边永久留存**，
 //     参数段越粘越"满"，而读者从报告里看不出这件事；
 //  3. 本拟合器的结论口径正是"哪些边显著"（spec §6），对不显著的边保留旧值等于替数据说话。
+//
+// 「冗余由 Σ_d v ≤ 1 吸收」这条不变：耦合项与主效应项共享同一个作用量上界，不写该边不会让
+// 其它项的惩罚凭空变大。
 //
 // **近似性标注**：β_ij 是"两因子同时激活时的对数优势比超出主效应线性叠加的部分"，
 // 而 c_ij 是逐域惩罚项 `c_ij·a_i·a_j` 的系数；两者的对应同样依赖线性化，
@@ -208,15 +212,16 @@ func Fit(records []Record, base edgefactor.Params, opts FitOptions) (edgefactor.
 		case i >= firstEdge:
 			e := d.edges[i-firstEdge]
 			rep.EdgeCoefficients[edgeColumnName(e)] = beta[i]
+			// **无论写值还是移除，都先清掉该边在这份产物里的全部旧表示**（Fix round 1 / C1
+			// 与 Fix round 2 / ③ 的统一口径）。graph 的耦合是对称的 —— `couplingValue`
+			// 双向查表 —— 于是"产物里的这条边"可能以 `A→B` 或 `B→A` 两种写法存在：
+			//   · β ≤ 0：只 continue 会留下旧值，报告行却打印"coupling 不写（β ≤ 0）"；
+			//   · β > 0：只写 `A→B` 会与基准的 `B→A = 旧值` **并存**，同一条对称边在产物里
+			//     有了两个不同的值，而 RenderConfigSection 会把两者都写进配置段。
+			// 两种情形都是"同一份产物自相矛盾"，故走同一个 removeCouplingEdge 收口。
+			removeCouplingEdge(out, e)
 			c, write := couplingFromCoefficient(beta[i])
 			if !write {
-				// **「不写」= 移除基准里的旧值**（Fix round 1 / C1）。
-				// 返回的是 base 的深拷贝，若只 continue，产物会**带着旧耦合**被
-				// RenderConfigSection 写进配置段，而报告行却打印「coupling 不写（β ≤ 0）」
-				// —— 产物自相矛盾。可达路径真实：-fit 的基准就是 config.Load 读进来的配置
-				// （真实配置会带 C 模型的级联边，或上一轮的拟合产物），重复拟合会把已经
-				// 不再显著的边永久保留下来，参数段越粘越"满"。
-				removeCouplingEdge(out, e)
 				continue
 			}
 			if out.Coupling[e[0]] == nil {
@@ -230,8 +235,14 @@ func Fit(records []Record, base edgefactor.Params, opts FitOptions) (edgefactor.
 	return out, rep, nil
 }
 
-// removeCouplingEdge 从参数副本里删掉一条边，口径与 `couplingValue` 的查表口径一致：
-// graph 的耦合是对称的（反向配置同样会被消费），故两个方向都要删；chain 只删有向的那一条。
+// removeCouplingEdge 从参数副本里删掉一条边在这份产物里的**全部表示**，口径与
+// `couplingValue` 的查表口径一致：graph 的耦合是对称的（反向配置同样会被消费），故两个方向
+// 都要删；chain 只删有向的那一条。
+//
+// 它在 `Fit` 的映射循环里**写值与移除两条分支之前**无条件调用：写值分支也必须先清反向旧值，
+// 否则 graph 基准里以 `B→A` 存着的那条边会与新的 `A→B` 并存 —— 同一条对称边在产物里有两个
+// 不同的值，`RenderConfigSection` 会把两者都写进配置段（Fix round 2 / ③）。
+//
 // 删空的内层 map 一并删掉，让"该边消失"在结构上看得见（`RenderConfigSection` 只遍历
 // 实际存在的键，留着空 map 不会多写行，但会让 `Hash()` 与人的阅读都对不上）。
 func removeCouplingEdge(p edgefactor.Params, e [2]string) {
@@ -627,14 +638,27 @@ func denormaliseCoefficients(coef, means, scales []float64) []float64 {
 // `w_j = S(c_j − Σ_{k≠j}G_jk·w_k, l1) / (G_jj·(1+l2))`，于是 `l2` 对**每一列**给出
 // 同一个**相对收缩率** `1/(1+l2)`，与列的信息量无关。`FitOptions.L2` 的注释里有动机说明。
 //
-// 收敛点满足原问题的次梯度平稳条件（把 `z_i = η_i + (y_i−p_i)/W_i` 代回第 j 个坐标方程即得；
-// `j ≥ 1`）：
+// 收敛点满足**罚正则负对数似然**的次梯度平稳条件（`j ≥ 1`）：
 //
-//	(1/n)Σ_i (y_i − p_i)·x_ij  +  l2·G_jj·w_j  +  l1·sgn(w_j) = 0
+//	(1/n)Σ_i (p_i − y_i)·x_ij  +  l2·G_jj·w_j  +  l1·∂|w_j| = 0        （∂|·| 取次梯度）
 //
-// 即"对数似然的梯度 + 相对 L2 的梯度 + L1 的次梯度"三者相消，`l1 = 0` 时退化成标准的
-// 岭正则 logistic 平稳条件。整套迭代是 MM（优化-最小化）：二次近似是光滑损失的**上界**，
-// 加入精确的 L1/L2 罚项后每一步都不增大原目标。
+// 等价写法（把首项反号、罚项一并反号）：
+//
+//	(1/n)Σ_i (y_i − p_i)·x_ij  −  l2·G_jj·w_j  −  l1·sgn(w_j) = 0
+//
+// 即**负对数似然的梯度与罚项的（次）梯度相消**；`l1 = 0` 时退化成标准的岭正则 logistic
+// 平稳条件。整套迭代是 MM（优化-最小化）：二次近似是光滑损失的**上界**，加入精确的
+// L1/L2 罚项后每一步都不增大原目标。
+//
+// **两个罚项必须反号（Fix round 2 更正）**：本注释初版误写成 `(1/n)Σ(y−p)x + l2·G_jj·w_j +
+// l1·sgn(w_j) = 0`（首项取 y−p 却让罚项保持正号）—— 那条式子的解会把系数推**离** 0，
+// 与坐标解 `G_jj(1+l2)w_j = S(R, l1)`、`TestElasticNetL1ShrinksToExactZero` 的收缩/精确置零、
+// 以及 §3.3 的偏置符号全部矛盾。推导（把 `W_i(z_i−η_i) = y_i − p_i` 代入第 j 个加罚坐标方程
+// `Ĝ w|_j = c_j − l1·sgn(w_j)`，其中 `Ĝ = G⁰ + l2·diag(G⁰_jj)`）：
+//
+//	(1/n)Σ W_i x_ij(z_i − η_i) = (1/n)Σ x_ij(y_i − p_i) = l2·G_jj·w_j + l1·sgn(w_j)
+//
+// 故 `(1/n)Σ(y_i−p_i)x_ij − l2·G_jj·w_j − l1·sgn(w_j) = 0` ✓。
 //
 // 为什么不用 brief 示例里的纯梯度下降（这是本实现相对 brief 示例代码的主要偏离，理由如下）：
 //
