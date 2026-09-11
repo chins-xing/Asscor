@@ -27,10 +27,17 @@ func assertProvenanceEmpty(t *testing.T, ctx string, ef model.EdgeFactors) {
 	}
 }
 
-// TestLegacyEdgeFactorChainLeavesProvenanceEmpty pin 住「legacy 路径一律留零值」：
+// TestLegacyEdgeFactorChainLeavesProvenanceEmpty pin 住「**legacy 评分路径**一律留零值」：
 // 溯源字段为空（JSON 不输出），包括「配置里写了合法 [edge_factors.model] 段」的情况。
 //
-// 为什么留空：legacy 路径（本包的 evaluateEdgeFactorChain）**只消费该段的 trigger.***，
+// 注意区分（Task 7 评审 I1 的表述口径）：本用例针对的是 DynamicScoringEngine 这条 legacy
+// **评分路径**（`evaluateEdgeFactorChain`）。配置里**显式写 `model = legacy`** 是另一回事 ——
+// 那走 ssam 插件路径，引擎会真的装载该参数集并真的参与评分（总分乘子语义），因此
+// `internal/engine/ssam` 侧的用例断言它输出 `"model":"legacy"` + 指纹。
+// 两者语义不同（「本路径不走新框架」vs「配置为 legacy」），必须可区分，**不能**概括成
+// "legacy 一律不输出"。
+//
+// 为什么本路径留空：legacy 路径（本包的 evaluateEdgeFactorChain）**只消费该段的 trigger.***，
 // 不消费该段的合成参数（model / p_floor / vector / coupling / λ）—— 它不构造
 // edgefactor.Params，因此没有「本次评分用了哪个模型、哪套参数」可言。填一个 "graph" 会把
 // 「这次评分走的是历史乘性路径」写成假事实。零值表达「历史乘性路径」，比填字符串 "legacy"

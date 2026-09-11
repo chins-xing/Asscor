@@ -11,6 +11,25 @@ import (
 	"github.com/chins-xing/asscor/internal/model"
 )
 
+// 本文件的主题是**溯源**（model.EdgeFactors.Model / ParamsHash）。判据只有一条：
+// **Engine 实际装载了哪套参数**（`Engine.LoadedEdgeFactorParams`），不是"配置里写了什么"。
+//
+// 三种必须互相可区分、且各自被独立用例钉住的情形：
+//
+//	情形 A：**未配置** [edge_factors.model] 段 → 无戳记 ⇒ JSON 里**不含** model / params_hash
+//	        两个键（历史输出格式逐位不变）。
+//	情形 B：**显式 `model = legacy`** → 真的装载了一套参数、且真的参与了评分（总分乘子语义）
+//	        ⇒ 输出 "legacy" + 指纹。这与情形 A **语义不同**（"没配置" vs "配置为 legacy"），
+//	        必须可区分 —— 否则运维/审计再也分不出两者。
+//	情形 C：配置段存在、但引擎**没装载**（参数不可用 / chain 在线不可执行）
+//	        ⇒ 无戳记。该配置段是运维可达的（`trigger.*` 独立于合成模型就生效），所以
+//	        "配置可解析出参数"绝不能当成"评分用了这套参数"。
+//
+// 注意区分两个都叫 "legacy" 的东西：**情形 B** 指 `[edge_factors.model]` 里显式写
+// `model = legacy`（走 ssam 插件路径、装载参数、**会**盖戳）；而 legacy **评分路径**
+// （`internal/engine` 的 DynamicScoringEngine / `evaluateEdgeFactorChain`）**永远**不盖戳
+// （见 internal/engine/assessor_provenance_test.go）—— 那条路径压根不构造 Params。
+
 // provenanceChecks 是溯源用例的最小检查集（两次失败 + 一次通过）。
 // RS-999 只在「模型段里写了 trigger.EF-NO-IDS = RS-999」时才激活任何因子，用于证明
 // [edge_factors.model] 段的 trigger.* **独立于合成模型**就被消费（部分消费）——这正是
@@ -38,31 +57,88 @@ func assertNoProvenance(t *testing.T, ctx string, ef model.EdgeFactors) {
 	}
 }
 
-// TestEngineAdapterStampsProvenanceOnlyWhenModelLoaded 是 Task 5 评审 I1 的执行期守卫，
-// 由 Task 7 按交接条件**启用并改写**：
-//
-// Task 5 时两条真实评分路径都不盖戳（字段只加不填）。Task 7 完成接线后，判据变成
-// 「**engine 已装载同一套参数**」—— 从 Engine 侧取实际装载的 Params/指纹，而不是再看
-// 一眼配置。因此：
-//
-//	配置里写了模型段、且引擎真的装载了它   ⇒ 必须盖戳（且指纹 == 装载参数的 Hash()）
-//	没写模型段 / 参数不可用（引擎未装载）  ⇒ 不得盖戳，JSON 里不得出现这两个键
-//
-// 「参数不可用」这一条是本用例的牙齿：该配置段**今天就被部分消费**（trigger.* 生效），
-// 因此「配置可解析出参数」绝不能当成「评分用了这套参数」——照配置盖戳会输出一个
-// 评分并未使用的模型。
-func TestEngineAdapterStampsProvenanceOnlyWhenModelLoaded(t *testing.T) {
+// assertJSONHasProvenanceKeys 断言两个键确实出现在 JSON 里（omitempty 没被误用成"永远省略"）。
+func assertJSONHasProvenanceKeys(t *testing.T, ctx string, ef model.EdgeFactors) {
+	t.Helper()
+	raw, err := json.Marshal(ef)
+	if err != nil {
+		t.Fatalf("%s: marshal: %v", ctx, err)
+	}
+	if !strings.Contains(string(raw), `"model"`) || !strings.Contains(string(raw), `"params_hash"`) {
+		t.Errorf("%s: 必须输出 model / params_hash 两个键: %s", ctx, raw)
+	}
+}
+
+// withChecks 用给定配置与检查集跑一遍生产入口（适配器 = plugin 引擎），返回结果。
+func withChecks(t *testing.T, cfg *config.Config, checks []model.CheckResult) *model.AssessmentResult {
+	t.Helper()
+	result := &model.AssessmentResult{
+		HostID:      "provenance-host",
+		Threshold:   cfg.Threshold,
+		SPCScore:    1.0,
+		ThreatCoeff: 1.0,
+		Checks:      checks,
+	}
+	if err := NewEngineAdapter(cfg).ComputeScore(t.Context(), result); err != nil {
+		t.Fatalf("ComputeScore: %v", err)
+	}
+	return result
+}
+
+// TestEngineAdapterLeavesProvenanceEmptyWithoutModelSection 是**情形 A**：
+// 未配置模型段 ⇒ 无戳记、JSON 不含两个键（历史输出格式逐位不变），且引擎未装载参数。
+func TestEngineAdapterLeavesProvenanceEmptyWithoutModelSection(t *testing.T) {
 	resetHooksForTest(t)
 
-	t.Run("出厂配置（无 [edge_factors.model] 段）", func(t *testing.T) {
-		got := scoreAdapter(t, factoryConfig(), provenanceChecks())
-		assertNoProvenance(t, "未配置模型段", got.EdgeFactors)
-	})
+	cfg := factoryConfig()
+	got := withChecks(t, cfg, provenanceChecks())
+
+	assertNoProvenance(t, "未配置模型段", got.EdgeFactors)
+	if _, ok := NewEngineAdapter(cfg).engine.LoadedEdgeFactorParams(); ok {
+		t.Error("未配置模型段时引擎不得装载参数")
+	}
+}
+
+// TestEngineAdapterStampsExplicitLegacyModel 是**情形 B**：
+// 显式 `model = legacy` ⇒ 输出 "legacy" + 指纹（引擎真的装载并真的参与评分），
+// 与情形 A（同一份夹具去掉模型段 ⇒ 不盖戳）**必须可区分**。
+func TestEngineAdapterStampsExplicitLegacyModel(t *testing.T) {
+	resetHooksForTest(t)
+
+	cfg := boundaryConfig()
+	cfg.EdgeFactorModel = config.EdgeFactorModelConfig{Model: "legacy", PFloor: 0.5}
+
+	adapter := NewEngineAdapter(cfg)
+	want := loadedHash(t, adapter)
+
+	result := &model.AssessmentResult{
+		HostID: "provenance-host", Threshold: cfg.Threshold,
+		SPCScore: 1.0, ThreatCoeff: 1.0, Checks: boundaryChecks(),
+	}
+	if err := adapter.ComputeScore(t.Context(), result); err != nil {
+		t.Fatalf("ComputeScore: %v", err)
+	}
+
+	assertStamped(t, "显式 model=legacy", result.EdgeFactors, "legacy", want)
+	assertJSONHasProvenanceKeys(t, "显式 model=legacy", result.EdgeFactors)
+
+	// 对照：同一份夹具去掉模型段 ⇒ 不盖戳（两种形态分得开）。
+	plainResult := withChecks(t, boundaryConfig(), boundaryChecks())
+	assertNoProvenance(t, "同一夹具未配置模型段", plainResult.EdgeFactors)
+}
+
+// TestEngineAdapterStampsOnlyWhatTheEngineLoaded 是**情形 C**（Task 5 评审 I1 的原始牙齿，
+// Task 7 保留并扩展）：判据是"引擎已装载"，所以
+//
+//   - 已装载的 graph ⇒ 必须盖戳，且指纹 == **引擎实际装载参数**的 Hash()；
+//   - 参数不可用（未装载）⇒ 不盖戳 —— 哪怕该配置段的 `trigger.*` 确实生效
+//     （配置可达 ≠ 评分用了它）；
+//   - chain 在线不可执行（未装载）⇒ 同样不盖戳。
+func TestEngineAdapterStampsOnlyWhatTheEngineLoaded(t *testing.T) {
+	resetHooksForTest(t)
 
 	t.Run("模型段合法且引擎已装载（graph）", func(t *testing.T) {
 		cfg := graphWiringConfig(0.2, 0.5)
-		// 前置事实：这套配置确实装配得出一套合法参数 —— 否则本用例的「盖戳」会退化成
-		// 「因为参数坏了所以留空」，测不到想测的东西。
 		adapter := NewEngineAdapter(cfg)
 		want := loadedHash(t, adapter)
 
@@ -76,36 +152,17 @@ func TestEngineAdapterStampsProvenanceOnlyWhenModelLoaded(t *testing.T) {
 		assertStamped(t, "引擎已装载 graph", result.EdgeFactors, "graph", want)
 	})
 
-	t.Run("显式 legacy 模型也是「已装载」形态，与未配置可区分", func(t *testing.T) {
-		// Task 5 §3.2 的裁定：未配置 ⇒ 零值（键不出现）；显式 model=legacy ⇒ 真的装载了
-		// 一套参数并真的参与了评分（总分乘子），所以输出 "legacy" + 指纹。两者语义不同，
-		// 必须可区分 —— 否则再也分不出「没配置」与「配置为 legacy」。
-		cfg := boundaryConfig()
-		cfg.EdgeFactorModel = config.EdgeFactorModelConfig{Model: "legacy", PFloor: 0.5}
-
-		adapter := NewEngineAdapter(cfg)
-		want := loadedHash(t, adapter)
-		result := &model.AssessmentResult{
-			HostID: "provenance-host", Threshold: cfg.Threshold,
-			SPCScore: 1.0, ThreatCoeff: 1.0, Checks: boundaryChecks(),
-		}
-		if err := adapter.ComputeScore(t.Context(), result); err != nil {
-			t.Fatalf("ComputeScore: %v", err)
-		}
-		assertStamped(t, "显式 legacy", result.EdgeFactors, "legacy", want)
-	})
-
 	t.Run("模型段的 trigger.* 覆盖生效但参数不可用时不写假指纹", func(t *testing.T) {
-		// 该配置段**运维可达**：trigger.EF-NO-IDS = RS-999 今天就生效（ConfigToEdgeFactors
-		// 消费它）。但 p_floor 缺失 ⇒ ParamsFromConfig 报错 ⇒ 引擎未装载 ⇒ 评分仍走默认
-		// 乘性路径。此时盖戳就是"声称一个评分并未使用的模型"。
+		// 该配置段**运维可达**：trigger.EF-NO-IDS = RS-999 独立于合成模型就生效
+		// （ConfigToEdgeFactors 消费它）。但 p_floor 缺失 ⇒ ParamsFromConfig 报错 ⇒ 引擎
+		// 未装载 ⇒ 评分仍走默认乘性路径。此时盖戳就是"声称一个评分并未使用的模型"。
 		cfg := graphWiringConfig(0, 0.5)
 		cfg.EdgeFactorModel.TriggerMap = map[string]string{"EF-NO-IDS": "RS-999"}
 		if _, enabled, err := ParamsFromConfig(cfg); err == nil || enabled {
 			t.Fatalf("precondition: 缺 p_floor 的模型段必须装配失败，got enabled=%v err=%v", enabled, err)
 		}
 
-		got := scoreAdapter(t, cfg, provenanceChecks())
+		got := withChecks(t, cfg, provenanceChecks())
 
 		// 覆盖确实生效（该段被部分消费的证明）。
 		if got.EdgeFactors.NoIDS <= 0 || got.EdgeFactors.NoIDS >= 1.0 {
@@ -113,5 +170,20 @@ func TestEngineAdapterStampsProvenanceOnlyWhenModelLoaded(t *testing.T) {
 				got.EdgeFactors.NoIDS)
 		}
 		assertNoProvenance(t, "模型段 trigger.* 覆盖 + 参数不可用", got.EdgeFactors)
+	})
+
+	t.Run("chain 在线不可执行（未装载）时不盖戳", func(t *testing.T) {
+		cfg := graphWiringConfig(0.2, 0.5)
+		cfg.EdgeFactorModel = config.EdgeFactorModelConfig{
+			Model: "chain", PFloor: 0.2,
+			Lambda:             map[string]float64{"attack_surface": 1.0},
+			ChainWindowSeconds: 300,
+		}
+		if _, enabled, err := ParamsFromConfig(cfg); err != nil || !enabled {
+			t.Fatalf("precondition: chain 必须能通过装配层校验，got enabled=%v err=%v", enabled, err)
+		}
+
+		got := withChecks(t, cfg, provenanceChecks())
+		assertNoProvenance(t, "chain 在线不可执行", got.EdgeFactors)
 	})
 }

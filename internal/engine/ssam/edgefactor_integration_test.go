@@ -156,6 +156,9 @@ const (
 	// graphWiringConfig 夹具在**未启用**（默认乘性路径 / M0 乘子语义）下的总分：
 	// base·∏eff = 90·0.5 = 45 → ic=0.45 → wa=0.725 → 72.5。
 	plainGraphFixtureTotal = 72.5
+	// 反例：若链式模型的错误被闭包吞掉（惩罚全丢），同一夹具会给出 95（域分 90 不被缩放）。
+	// 用于把"失败模式"写成断言，而不是只写在注释里。
+	swallowedPenaltyTotal = 95
 )
 
 // ---------------------------------------------------------------------------
@@ -167,8 +170,10 @@ const (
 // 三层证据：
 //  1. 生产入口（适配器）在出厂夹具上的评分等于 Task 7 之前实测捕获的**历史冻结值**
 //     （73.9）—— 接线若改变了默认路径，这里就红；
-//  2. 装配「未启用」配置后，整份评分输出（域分/因子/后验统计/可接受判定）与装配前
-//     逐位相同（reflect.DeepEqual，float64 走 ==）；
+//  2. **在同一个引擎实例上**比较 `ApplyEdgeFactorModel(未启用配置)` 前后的整份评分输出
+//     （域分/因子/后验统计/可接受判定，`reflect.DeepEqual`，float64 走 `==`）—— 这一层
+//     观测的是**装配动作本身的副作用**；若改用"再新建一个适配器评分"，装配动作就被
+//     新适配器的构造覆盖了，测不到任何东西；
 //  3. 边界夹具的算术顺序仍是「逐次相乘」：总分 50.31 而非 50.32 —— 这一条专门抓
 //     「注册了一个语义等价的默认策略」这种把默认算术顺序换掉的坏接线。
 func TestDefaultConfigKeepsBitIdenticalScoring(t *testing.T) {
@@ -181,15 +186,24 @@ func TestDefaultConfigKeepsBitIdenticalScoring(t *testing.T) {
 	}
 	assertNoProvenance(t, "出厂配置", baseline.EdgeFactors)
 
-	// (2) 装配「未启用」配置后，整份评分输出逐位不变。
+	// (2) 装配动作的副作用：**同一个引擎实例**，装配前 vs 装配后。
 	e := NewEngine()
+	e.SetWeights(ConfigToWeights(factoryConfig()))
+	e.SetEdgeFactors(ConfigToEdgeFactors(factoryConfig()))
+	e.SetConfidencePolicy(ConfigToConfidencePolicy(factoryConfig()))
+	before := scoreEngineOutput(t, e, factoryChecks())
+
 	if err := e.ApplyEdgeFactorModel(factoryConfig()); err != nil {
 		t.Fatalf("ApplyEdgeFactorModel(未启用): %v", err)
 	}
-	after := scoreAdapter(t, factoryConfig(), factoryChecks())
-	assertNoProvenance(t, "未启用装配后", after.EdgeFactors)
-	if !reflect.DeepEqual(snapshot(after), snapshot(baseline)) {
-		t.Fatalf("未启用装配改变了评分输出:\n got %+v\nwant %+v", snapshot(after), snapshot(baseline))
+	after := scoreEngineOutput(t, e, factoryChecks())
+
+	if !reflect.DeepEqual(after, before) {
+		t.Fatalf("未启用装配改变了评分输出:\n got %+v\nwant %+v", after, before)
+	}
+	// 同一实例的装配后数值也必须落在历史冻结值上（与生产入口互证）。
+	if after.FinalScore != 73.9 {
+		t.Fatalf("未启用装配后总分 = %v, want 73.9（历史冻结值）", after.FinalScore)
 	}
 
 	// (3) 算术顺序门禁（牙齿）。
@@ -198,15 +212,58 @@ func TestDefaultConfigKeepsBitIdenticalScoring(t *testing.T) {
 	}
 }
 
+// TestEquivalentDefaultStrategyIsObservablyDifferent（Minor 1）把「门禁有牙齿」本身固化成
+// 常驻用例：**显式注册一个非 nil 的等价默认策略**后，边界夹具必须给出 50.32 而不是 50.31。
+//
+// 两个作用：
+//   - 它是"夹具仍落在取整半格边界上"的**自检** —— 未来若有人改了夹具的 delta 或因子取值，
+//     使两种算术顺序重新变得不可分辨，本用例会立刻变红，从而防止
+//     `TestDefaultConfigKeepsBitIdenticalScoring` 悄悄退化成恒真断言；
+//   - 它把"等价默认策略 = 可观测的坏接线"这条结论钉进代码，而不只是留在 Task 6b/7 的报告里。
+func TestEquivalentDefaultStrategyIsObservablyDifferent(t *testing.T) {
+	resetHooksForTest(t)
+
+	e := NewEngine()
+	e.SetWeights(ConfigToWeights(boundaryConfig()))
+	e.SetEdgeFactors(ConfigToEdgeFactors(boundaryConfig()))
+
+	// 装配「未启用」配置 ⇒ 逐次相乘 ⇒ 50.31。
+	if err := e.ApplyEdgeFactorModel(boundaryConfig()); err != nil {
+		t.Fatalf("ApplyEdgeFactorModel(未启用): %v", err)
+	}
+	if got := scoreEngineOutput(t, e, boundaryChecks()).FinalScore; got != boundarySequentialTotal {
+		t.Fatalf("默认路径总分 = %v, want %v", got, boundarySequentialTotal)
+	}
+
+	// 显式注册内仓导出的默认策略句柄（非 nil ⇒ 内仓判定为"已注入"）⇒ 单次乘积 ⇒ 50.32。
+	ssamlib.RegisterEdgeFactorStrategy(ssamlib.DefaultEdgeFactorStrategy)
+	got := scoreEngineOutput(t, e, boundaryChecks()).FinalScore
+	if got == boundarySequentialTotal {
+		t.Fatalf("注册等价默认策略后总分仍为 %v：夹具已失去分辨两种算术顺序的能力"+
+			"（取整半格边界被破坏）—— 条件 3 的逐位一致门禁会退化成恒真断言", got)
+	}
+	if got != boundarySingleProductTotal {
+		t.Fatalf("注册等价默认策略后总分 = %v, want %v（单次乘积）", got, boundarySingleProductTotal)
+	}
+
+	// 装配「未启用」配置把它拆掉 ⇒ 回到 50.31（装配动作是幂等的"恢复默认"）。
+	if err := e.ApplyEdgeFactorModel(boundaryConfig()); err != nil {
+		t.Fatalf("ApplyEdgeFactorModel(未启用): %v", err)
+	}
+	if got := scoreEngineOutput(t, e, boundaryChecks()).FinalScore; got != boundarySequentialTotal {
+		t.Fatalf("再次装配未启用配置后总分 = %v, want %v", got, boundarySequentialTotal)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 验收条件 2：未启用即零注册
 // ---------------------------------------------------------------------------
 
-// scoreEngine 用**给定的引擎实例**评分（不重新构造适配器）。专门用来观察
-// ApplyEdgeFactorModel / ReloadWeights 在**进程级全局钩子**上留下的状态：
+// scoreEngineOutput 用**给定的引擎实例**评分（不新建适配器），返回可比较的评分数值切片。
+// 专门用来观察 ApplyEdgeFactorModel / ReloadWeights 在**进程级全局钩子**上留下的状态：
 // 每次 NewEngineAdapter 都会按自己的配置重装钩子，因此"用新适配器评分"永远看不到
 // 前一次装配残留了什么。
-func scoreEngine(t *testing.T, e *Engine, checks []model.CheckResult) float64 {
+func scoreEngineOutput(t *testing.T, e *Engine, checks []model.CheckResult) scoringOutput {
 	t.Helper()
 	out, err := e.ComputeScore(t.Context(), &AssessmentInput{
 		HostID:      "integration-engine",
@@ -218,7 +275,22 @@ func scoreEngine(t *testing.T, e *Engine, checks []model.CheckResult) float64 {
 	if err != nil {
 		t.Fatalf("ComputeScore: %v", err)
 	}
-	return out.FinalScore
+	domains := model.DomainScores{}
+	for _, d := range out.DomainScores {
+		domains.Set(d.Domain, d.Score)
+	}
+	return scoringOutput{
+		FinalScore:         out.FinalScore,
+		Acceptable:         out.Acceptable,
+		DomainScores:       domains,
+		EdgeFactors:        EdgeFactorsToModel(out.EdgeFactors),
+		ThreatCoeff:        out.ThreatCoeff,
+		SPCScore:           out.SPCScore,
+		FinalSigma:         out.FinalSigma,
+		Lower95:            out.Lower95,
+		Upper95:            out.Upper95,
+		EvidenceConfidence: out.EvidenceConfidence,
+	}
 }
 
 // TestDisabledConfigRegistersNoHook 钉住「未启用 ⇒ 零注册」：
@@ -265,7 +337,7 @@ func TestDisabledConfigRegistersNoHook(t *testing.T) {
 	if err := ssamlib.ValidateStrategy(); err != nil {
 		t.Fatalf("默认策略必须仍可调用: %v", err)
 	}
-	if got := scoreEngine(t, e, boundaryChecks()); got != boundarySequentialTotal {
+	if got := scoreEngineOutput(t, e, boundaryChecks()).FinalScore; got != boundarySequentialTotal {
 		t.Fatalf("未启用装配后边界夹具总分 = %v, want %v —— 不得注册「等价默认策略」"+
 			"（那会把算术顺序换成单次乘积 = %v）", got, boundarySequentialTotal, boundarySingleProductTotal)
 	}
@@ -507,6 +579,76 @@ func TestApplyEdgeFactorModelRejectsUnusableParams(t *testing.T) {
 	}
 	if got := scoreAdapter(t, boundaryConfig(), boundaryChecks()).FinalScore; got != boundarySequentialTotal {
 		t.Fatalf("装配失败后总分 = %v, want %v（必须停在默认乘性路径）", got, boundarySequentialTotal)
+	}
+}
+
+// TestChainModelIsOfflineOnly 钉住 C1 的裁定：`model=chain` 在**在线**评分里不可执行，
+// 必须在装配期 fail-fast（能力缺口），不得"装载并盖戳"。
+//
+// 为什么不能装：内仓 `Synthesize` 对 chain 要求每个激活因子带**非零时间戳**（刻意 fail-fast，
+// 不允许静默退化成 vector），而在线评分的源头类型 `ssam.EdgeFactorResult` 根本没有时间字段
+// ⇒ chain 在当前数据流下**永远**合成不出来。若照常装载，两个闭包的兜底会把错误吞掉
+// （策略返回恒等乘子 1、域级修正原样返回入参）⇒ 惩罚全部消失、评分比未启用**更宽松**，
+// 却仍然盖着 `model="chain"` 的戳：既是静默失效，又是假溯源。
+//
+// 四类断言（缺一不可）：
+//
+//	① 配置层认为 chain 合法（`ParamsFromConfig` 给 enabled=true）—— 所以问题在接线层；
+//	② 装配**失败**且错误明确指向"离线/时间戳"这条能力缺口；
+//	③ 不装载（`LoadedEdgeFactorParams` ok=false）⇒ 输出无戳记；
+//	④ 评分与未启用路径**逐位一致**（72.5），而**不是**"惩罚被吞掉"的 95。
+//
+// chain 的时间戳在离线 JSONL（spec §5.1 的 `edge_factor_chain[].ts`）里是有的，
+// 因此 chain 由 cmd/edgecompare 离线评估 —— 与 spec「离线重算为主」一致。
+func TestChainModelIsOfflineOnly(t *testing.T) {
+	resetHooksForTest(t)
+
+	chainCfg := graphWiringConfig(0.2, 0.5)
+	chainCfg.EdgeFactorModel = config.EdgeFactorModelConfig{
+		Model:              "chain",
+		PFloor:             0.2,
+		Lambda:             map[string]float64{"attack_surface": 1.0},
+		ChainWindowSeconds: 300,
+	}
+	plainCfg := graphWiringConfig(0.2, 0.5)
+	plainCfg.EdgeFactorModel = config.EdgeFactorModelConfig{}
+
+	// ① 前置事实：chain 在**配置/装配层**是合法模型（问题不在解析层，而在在线数据流）。
+	if _, enabled, err := ParamsFromConfig(chainCfg); err != nil || !enabled {
+		t.Fatalf("precondition: chain 必须能通过装配层校验，got err=%v enabled=%v", err, enabled)
+	}
+
+	// ② 装配必须失败，且错误点明"离线"这条能力缺口。
+	e := NewEngine()
+	err := e.ApplyEdgeFactorModel(chainCfg)
+	if err == nil {
+		t.Fatal("chain 在线不可执行（引擎结果类型无时间戳），装配必须 fail-fast")
+	}
+	if !strings.Contains(err.Error(), "chain") || !strings.Contains(err.Error(), "offline") {
+		t.Fatalf("装配错误必须点明 chain 只能离线评估，got: %v", err)
+	}
+
+	// ③ 不装载 ⇒ 不盖戳。
+	if _, ok := e.LoadedEdgeFactorParams(); ok {
+		t.Error("chain 装配失败时不得留下装载状态（否则会盖一个它根本没用过的模型戳）")
+	}
+	if err := ssamlib.ValidateStrategy(); err != nil {
+		t.Fatalf("chain 被拒后默认策略必须仍可调用: %v", err)
+	}
+
+	// ④ 评分与未启用**逐位一致**，且不是"惩罚被吞掉"的 95。
+	got := scoreAdapter(t, chainCfg, graphWiringChecks())
+	assertNoProvenance(t, "chain 装配失败后", got.EdgeFactors)
+	if got.FinalScore == swallowedPenaltyTotal {
+		t.Fatalf("chain 配置评分 = %v：惩罚被静默丢弃（比未启用更宽松）—— "+
+			"装配必须在装载前就失败", got.FinalScore)
+	}
+	if !reflect.DeepEqual(snapshot(got), snapshot(scoreAdapter(t, plainCfg, graphWiringChecks()))) {
+		t.Fatalf("chain 被拒后必须与未启用路径逐位一致：got %+v want %+v",
+			snapshot(got), snapshot(scoreAdapter(t, plainCfg, graphWiringChecks())))
+	}
+	if got.FinalScore != plainGraphFixtureTotal {
+		t.Fatalf("chain 被拒后总分 = %v, want %v（未启用路径）", got.FinalScore, plainGraphFixtureTotal)
 	}
 }
 

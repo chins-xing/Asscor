@@ -689,13 +689,20 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		NoSIEM:            1.0,
 		NoIDS:             1.0,
 	}
-	// 溯源字段（Model / ParamsHash）在 legacy 路径上**刻意留零值**：
+	// 溯源字段（Model / ParamsHash）在 **legacy 评分路径**上**刻意留零值**：
 	// 本路径只消费 [edge_factors.model] 段的 trigger.*（ResolveEdgeFactorTriggerMap 与
 	// legacyTriggerOverridesByCheck，见本函数上方），**不消费**该段的合成参数
 	// （model / p_floor / vector / coupling / λ）—— 它不构造 edgefactor.Params，因此没有
 	// 「本次评分用了哪个模型、哪套参数」可言。填一个模型名会把「这次评分走的是历史乘性路径」
-	// 写成假事实。零值 + omitempty 同时保证历史输出逐位不变（裁定 1）；ssam 路径的盖戳时机
-	// 见 adapter_engine.go（Task 7 接线之后才启用）。
+	// 写成假事实。零值 + omitempty 同时保证历史输出逐位不变（裁定 1）。
+	//
+	// 注意区分两个都叫 legacy 的东西（Task 7 评审 I1 的表述口径）：
+	//   - **本函数这条 legacy 评分路径**（DynamicScoringEngine）**永远**不盖戳；
+	//   - `[edge_factors.model]` 里**显式写 `model = legacy`** 走的是另一条路 —— ssam 插件
+	//     路径，引擎会装载这套参数并真的用它评分（总分乘子语义），因此输出
+	//     `"model":"legacy"` + 指纹。那是「配置为 legacy」，与本函数的「未配置/不走新框架」
+	//     语义不同，必须可区分（见 internal/engine/ssam/provenance_test.go）。
+	// ssam 路径的盖戳判据见 adapter_engine.go：**引擎实际装载了什么**，而不是配置里写了什么。
 	if v, ok := localFactors["EF-002FA"]; ok && v < 1.0 {
 		mapped.TwoFactorFailure = v
 	}

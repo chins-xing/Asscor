@@ -1429,7 +1429,8 @@ Run（外层）：`go test -tags engine ./internal/engine/ssam/ ./internal/engin
 > 3. **参数按 λ 做一致裁剪**（design §3.1 注记给的第二条出路）：内仓 `Validate/Synthesize` 以**传入的域列表**为准，配置里出现请求域之外的 `λ`/`vector` 键会被拒绝；而配置层允许只声明部分 λ。故评分期请求域 = `DefaultDomains ∩ p.Lambda`，并把 `Lambda`/`Vectors` 裁剪到该域集（`Coupling`/`Factors` 不动）。一个 λ 都没配的非 legacy 模型**装配失败**（否则会出现"戳记写着 graph、评分分毫未变"的假溯源）。**裁剪只作用于评分期**：装载与溯源仍用完整参数（指纹 = 完整参数的 `Hash()`）。
 > 4. **未启用 = 零注册**：未配置模型段时调用 `RegisterEdgeFactorStrategy(nil)` + `RegisterDomainAdjust(nil)`（`nil` 即内仓的"未注册/默认"），**不得**传入 `ssam.DefaultEdgeFactorStrategy` 这类"语义等价的默认策略" —— 那会让默认路径从逐次相乘变成单次乘积；实测边界夹具 50.31 → 50.32（见 `TestDefaultConfigKeepsBitIdenticalScoring`）。
 > 5. **装配点**：适配器**构造函数**（任何构造路径都装到位）而非只在 `cmd/kernel`；`ReloadWeights` 必须重装；`cmd/kernel/engine_on.go` 只做启动期自检。
-> 6. **盖戳启用**：`model.EdgeFactors.Model/ParamsHash` 按 Task 5 评审 I1 的交接条件启用，判据是 `Engine` **实际装载**的 `Params`（不是"配置里写了"），热重载后同源更新。
+> 6. **盖戳启用**：`model.EdgeFactors.Model/ParamsHash` 按 Task 5 评审 I1 的交接条件启用，判据是 `Engine` **实际装载**的 `Params`（不是"配置里写了"），热重载后同源更新。口径（Task 7 评审 I1 改准）：**「未配置」⇒ JSON 不含这两个键**；**「显式 `model=legacy`」⇒ 输出 `"legacy"` + 指纹**（它真的装载并参与评分，且必须与"没配置"可区分）。
+> 7. **chain 明确为「离线专用模型」（Task 7 评审 C1 裁定）**：内仓 `Synthesize` 对 chain 要求每个激活因子带非零时间戳（刻意 fail-fast、不退化），而在线的 `ssam.EdgeFactorResult` **根本没有时间字段** ⇒ chain 在线**永远**合成不出来；若照常装载，闭包兜底会把错误吞掉（惩罚全丢、评分比未启用更宽松）却仍盖 `model="chain"` 的戳。故**装配期 fail-fast**（能力缺口，不是配置错误）：不装载、不盖戳、回落未启用路径（评分与未配置逐位一致）。时间戳在离线 JSONL（spec §5.1 的 `edge_factor_chain[].ts`）里有，chain 由 `cmd/edgecompare` 离线评估 —— 与 spec「离线重算为主」一致。
 
 **Files:**
 - Modify: `internal/engine/ssam/engine.go`（按配置装配策略）
