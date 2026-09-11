@@ -341,8 +341,9 @@ func LoadFileAs(tool, path string) ([]Record, error) {
 // `[edge_factors.custom]`，`ConfigToEdgeFactors` 刻意不去重、ssam 按 ID 各留一份 ⇒ 引擎确实
 // 乘了两次 ⇒ 链上两条 `EF-SELINUX`）。**任何消费方都不得按因子 ID 去重**，读取层更不得把
 // "ID 重复/大小写折叠"判成坏数据 —— 那会把实验自己产出的数据集拒之门外（评审 C1）。
-// 重复**配置键**才是需要拒绝的：那条规则属于**渲染侧**（`cmd/edgecompare/report.go` 的
-// `validateRenderable`），因为重复键在重解析时会静默合并，与记录的链语义无关。
+// 需要拒绝的是**渲染侧身份键的折叠冲突**（仅大小写不同的键在重解析时会静默合并）——
+// 那条规则在 `cmd/edgecompare/report.go` 的 `validateRenderable`（`validateCaseFoldCollisions`），
+// 与记录的链语义无关。
 //
 // 值域口径：
 //   - `threshold > 0`：阈值必须是正数，否则 `score >= threshold` 恒真（决策层退化为全放行）。

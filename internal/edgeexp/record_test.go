@@ -3,6 +3,7 @@ package edgeexp
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -305,8 +306,9 @@ func TestValidateAcceptsExplicitFalseCompromised(t *testing.T) {
 // 记录是**列表**语义：两条条目 = 两次惩罚，是引擎的真实行为，不是重复数据。若按 ID 去重，
 // 离线重算会**少算一次惩罚**，而分数照样打印出来 —— 这正是"读取层单方面收紧会让实验自己
 // 产出的数据集读不回来"的形态（读不进 + 写不出 ⇒ 采集器零记录）。
-// 需要拒绝的重复是**配置键**的重复（重解析时静默合并），那条规则属于渲染侧
-// （`cmd/edgecompare/report.go` 的 `validateRenderable`），与记录契约无关。
+// 需要拒绝的是**渲染侧身份键的折叠冲突**（仅大小写不同的键在重解析时会静默合并）——
+// 那条规则在 `cmd/edgecompare/report.go` 的 `validateRenderable`（`validateCaseFoldCollisions`），
+// 与记录的链语义无关。
 func TestValidateAcceptsDuplicateFactorEntries(t *testing.T) {
 	r := validRecord()
 	r.Observed.EdgeFactorChain = append(r.Observed.EdgeFactorChain, ChainObs{
@@ -325,6 +327,25 @@ func TestValidateAcceptsDuplicateFactorEntries(t *testing.T) {
 	}
 	if got := len(r.Observed.EdgeFactorChain); got != 2 {
 		t.Fatalf("链条目数被改动（%d，应为 2）—— 去重只能发生在消费方的显式决策里，不能在契约层", got)
+	}
+
+	// 大小写/空白变体（`"  ef-selinux  "`）与规范 ID 共处一条链：**读取层同样必须放行** ——
+	// 它在消费侧装配期被 `NormalizeFactorID` 归一成同一个因子，两条惩罚项都还在，
+	// 与上面"两条完全相同的 ID"是同一种列表语义。这条口径原先被删除的折叠规则用例反向覆盖过，
+	// 删除后必须由本用例**正面**钉住，否则"读取层重新收紧"会无声无息地溜过去。
+	//
+	// 注意**读/写不对称**（评审已裁定 accepted）：`Validate` 放行非规范 ID，而写出口
+	// `ValidateConstruction` 要求规范 ID —— 故这里只断言读取层；生产者侧的那一半由
+	// `TestValidateAcceptsNonCanonicalFactorIDForReader` 钉住。
+	r.Observed.EdgeFactorChain = append(r.Observed.EdgeFactorChain, ChainObs{
+		Factor: "  ef-selinux  ", TriggerCheck: "OT-005", CTrigger: 0.9, EffectiveFactor: 0.838,
+		cTriggerSet: true, effectiveFactorSet: true,
+	})
+	if err := r.Validate(); err != nil {
+		t.Fatalf("规范 ID 与大小写/空白变体共处一条链，读取层必须放行（消费侧归一后是同一因子的两次惩罚）: %v", err)
+	}
+	if got := len(r.Observed.EdgeFactorChain); got != 3 {
+		t.Fatalf("链条目数被改动（%d，应为 3）—— 读取层不得合并或丢弃任何条目", got)
 	}
 }
 
@@ -708,6 +729,90 @@ func TestLoadFileAsPreservesConsumerErrorPrefix(t *testing.T) {
 	want := "edgecompare: " + path + " line 2: "
 	if !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("消费者错误前缀/格式必须逐字不变:\n got: %v\nwant: %s…", err, want)
+	}
+}
+
+// TestLoadFileErrorMessagesAreExact **逐字**钉住整条错误串（含 `<tool>: <path> line N: <原因>` 的形状）。
+//
+// 为什么需要它（Task 2 Fix round 2 评审指出的覆盖缺口）：本包其余用例断言的是**子串**
+// （"错误里必须出现 `spc_score` 与 `missing`"）。子串断言能守住"诊断口径不被改坏"，却守不住
+// 两件更细的事：
+//  1. **错误信息被重排/改写**（判据顺序、文案措辞）—— 只要子串还在，子串断言照样绿；
+//  2. **整条错误的形状**（工具名前缀、路径、行号的位置与分隔符）—— 消费者 CLI 直接把它打给
+//     操作员，它是可观测行为的一部分。
+//
+// 上一轮靠"与 Task 2 之前的 worktree 做 A/B 探针"证明过逐字不变，但那个探针是一次性的
+// （worktree 用完即删，无法阻止**将来**的漂移）。本用例把同样的逐字口径固化成**常驻**门禁：
+// 任何一次改写都会在这里响亮地失败，而不需要旧版本在场。
+//
+// 期望值**逐字**照抄实现里的 `fmt.Errorf` 文案 —— 改文案就必须同时改这里（这正是目的）。
+// 临时目录的随机部分用 `<dir>` 归一，避免断言随环境漂移。
+func TestLoadFileErrorMessagesAreExact(t *testing.T) {
+	const good = sampleJSONL
+	cases := []struct {
+		name    string
+		content string
+		line    int
+		cause   string
+	}{
+		{
+			name:    "missing-threshold",
+			content: `{"scenario_id":"S0-baseline","observed":{"domain_scores":{"attack_surface":90},"spc_score":0.8,"threat_coeff":0.7},"ground_truth":{"compromised":true}}`,
+			line:    1,
+			cause:   "observed.threshold = 0 must be > 0 — 缺失会被当成 0，任何非负分数都会判 acceptable，决策层退化为『全放行』",
+		},
+		{
+			name:    "missing-spc-score",
+			content: `{"scenario_id":"S1-selinux","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"threat_coeff":0.7},"ground_truth":{"compromised":true}}`,
+			line:    1,
+			cause:   "observed.spc_score: missing — 引擎的判定线需要它（总分 = round2(0.5·base + 30·E + 20·T)）；缺失会被当成 0，而 0 是引擎的『未设置』哨兵（按 1.0 计），总分被静默抬到最宽松的一档",
+		},
+		{
+			name:    "missing-c-trigger",
+			content: `{"scenario_id":"S1-selinux","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","effective_factor":0.82}]},"ground_truth":{"compromised":true}}`,
+			line:    1,
+			cause:   "observed.edge_factor_chain[0].c_trigger: missing — 缺失会被当成 0（= 无可信度）并让该因子的惩罚静默消失",
+		},
+		{
+			name:    "unparsable-chain-ts",
+			content: `{"scenario_id":"S5-cascade","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-3FA","c_trigger":1.0,"effective_factor":0.82,"ts":"not-a-time"}]},"ground_truth":{"compromised":true}}`,
+			line:    1,
+			cause:   `observed.edge_factor_chain[0].ts: not an RFC3339 timestamp: "not-a-time"`,
+		},
+		{
+			name:    "empty-chain-factor",
+			content: `{"scenario_id":"S1-selinux","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"  ","c_trigger":1.0,"effective_factor":0.82}]},"ground_truth":{"compromised":true}}`,
+			line:    1,
+			cause:   "observed.edge_factor_chain[0].factor: missing",
+		},
+		{
+			// 坏行（解码失败）钉住"行号与 JSON 语法错误同处一条消息"，且行号 > 1：
+			// 第 1 行必须是**完全合法**的记录，否则先报的会是第 1 行的字段问题。
+			name:    "malformed-line-two",
+			content: good + "\n{not json}",
+			line:    2,
+			cause:   "invalid character 'n' looking for beginning of object key string",
+		},
+	}
+
+	dir := t.TempDir()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(dir, tc.name+".jsonl")
+			if err := os.WriteFile(path, []byte(tc.content+"\n"), 0o600); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			_, err := LoadFileAs("edgecompare", path)
+			if err == nil {
+				t.Fatal("expected the record to be rejected, got nil error")
+			}
+			// 临时目录逐机不同：把它的字面量归一，断言只对"形状 + 文案"敏感。
+			got := strings.ReplaceAll(err.Error(), dir, "<dir>")
+			want := "edgecompare: " + filepath.Join("<dir>", tc.name+".jsonl") + fmt.Sprintf(" line %d: ", tc.line) + tc.cause
+			if got != want {
+				t.Errorf("错误串已漂移：\n got: %s\nwant: %s", got, want)
+			}
+		})
 	}
 }
 

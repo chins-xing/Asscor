@@ -127,7 +127,8 @@ func orderedDomains(weights map[string]float64) []string {
 // validateDomainsCovered 校验记录**覆盖了本次评估用到的每个域**（评审 I2 的另一半）。
 //
 // 为什么这条检查在 Evaluate 而不在读取层：读取层看不到"评估时用了哪些域"——域权重是
-// `Evaluate` 的入参（读取层只能保证 `domain_scores` 非空，见 load.go:validateRecord）。
+// `Evaluate` 的入参（读取层只能保证 `domain_scores` 非空，见 `internal/edgeexp.Record.Validate`，
+// 由 `load.go` 的 `LoadRecords` 转发调用）。
 // 缺域的危险是**静默压低**：引擎公式对缺失域取到 0，却仍把它那份额度计入分母（
 // `engineDomainScores` 会为该域装入一个 0 分），于是总分被无理由拉低、`acceptable` 判定随之
 // 翻转，而报告里看不出任何异常。
