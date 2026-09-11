@@ -926,3 +926,41 @@ func TestFitRejectsSingleClassLabels(t *testing.T) {
 		})
 	}
 }
+
+// TestFitKeepsReverseDirectedEdgeForChain 钉住 `removeCouplingEdge` 的
+// `p.Model == ModelGraph` 守卫（Task 10 复审「需上游注意」第 3 点：该守卫此前只有代码级证据）。
+//
+// 为什么必须钉：`graph` 的耦合是对称的（`couplingValue` 双向查表），删一条边必须**双向删**；
+// 而 **`chain` 的耦合是有向的** —— `A→B` 与 `B→A` 是两条独立的边。若守卫被去掉、一律对称
+// 清理，就会**静默删掉一条数据支持的定向边**：评分随之改变，而报告里看不出任何异常
+// （`EdgeCoefficients` 只描述设计矩阵里的那一列）。
+//
+// 夹具：base 同时存 `A→B` 与 `B→A`，但先验边集只列 `A|B`（设计矩阵里只有一条列）。
+// `c = −1.0` 的数据让该列 β ≤ 0 ⇒ 只允许删 `A→B`；不在设计矩阵里的 `B→A` 必须保持基准旧值。
+func TestFitKeepsReverseDirectedEdgeForChain(t *testing.T) {
+	base := fitBaseParams()
+	base.Model = edgefactor.ModelChain
+	base.ChainWindowSeconds = 60
+	base.Coupling = map[string]map[string]float64{
+		"A": {"B": 0.5},
+		"B": {"A": 0.5},
+	}
+
+	p, rep, err := Fit(syntheticRecords(t, -1.0, 7), base, fitEdgeOpts(7))
+	if err != nil {
+		t.Fatalf("Fit: %v", err)
+	}
+	if beta, ok := rep.EdgeCoefficients["A|B"]; !ok || beta > 0 {
+		t.Fatalf("夹具前提不成立（c = −1.0 的数据应给出 β ≤ 0）: %+v", rep.EdgeCoefficients)
+	}
+	if got, ok := p.Coupling["A"]["B"]; ok {
+		t.Errorf("β ≤ 0 ⇒ 产物里必须没有 A→B，实际 %v", got)
+	}
+	got, ok := p.Coupling["B"]["A"]
+	if !ok {
+		t.Fatal("chain 的耦合是有向的：删 A→B 不得连带删掉 B→A —— 这里失败说明对称清理的 graph 守卫被去掉了")
+	}
+	if got != 0.5 {
+		t.Errorf("B→A 不在设计矩阵里、无从估计，必须保持基准旧值 0.5，实际 %v", got)
+	}
+}
