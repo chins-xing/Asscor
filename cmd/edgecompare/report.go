@@ -399,6 +399,9 @@ func validateRenderable(model string, p edgefactor.Params) error {
 	if err := validateIdentityKeys(p); err != nil {
 		return err
 	}
+	if err := validateCaseFoldCollisions(p); err != nil {
+		return err
+	}
 	for _, id := range sortedNames(p.Vectors) {
 		for _, d := range edgefactor.DefaultDomains() {
 			if _, isLambda := p.Lambda[d]; !isLambda {
@@ -446,6 +449,50 @@ func validateDefaultDomainKeys(p edgefactor.Params) error {
 // 这些键会直接拼进 `vector.<id>` / `lambda.<d>` / `coupling.<from>.<to>`：含换行的键会**伪造**
 // 出额外的配置行，含等号的键会伪造出键值对 —— 生成出来的段与参数集不再对应，而它看起来完全
 // 正常。键为空则直接产出畸形键（`vector.`），解析层会拒，但错误信息会指向一个使用者没写过的键。
+// validateCaseFoldCollisions 拒绝"仅大小写不同"的重复因子 ID（评审对 Task 9 fix round 1
+// 的越界观察 ① 的收口）。
+//
+// 渲染出去的键会经解析层折叠（配置键大小写不敏感），于是 `EF-A` 与 `ef-a` 会在**重建参数时
+// 静默合并成同一个因子**：导出的段与参数集不再是同一套，而 `renderRoundTrip` 抓不到它 ——
+// 折叠后的参数各自都合法，断言只证明"这段配置贴得上"，证明不了"贴出来还是同一套参数"。
+// 这正是"统一断言只覆盖贴不上、不覆盖贴得上的缺失"这一已知盲区里最可执行的一半。
+//
+// 检查三处身份键（`vector.<id>` / `coupling.<from>.<to>` / `p.Factors` 的键），因为它们都会被
+// 写成配置键。λ 的域不受影响：域名已经由 `validateDefaultDomainKeys` 限定在默认域内。
+func validateCaseFoldCollisions(p edgefactor.Params) error {
+	seen := map[string]string{} // 折叠后的键 → 首次出现时的原拼写
+	check := func(kind, id string) error {
+		folded := strings.ToLower(id)
+		if prev, ok := seen[kind+"\x00"+folded]; ok && prev != id {
+			return fmt.Errorf("edgecompare: %s 的身份键 %q 与 %q 只有大小写不同 —— 配置键大小写不敏感，粘回去会静默合并成同一个因子，导出的段与参数集不再是同一套",
+				kind, prev, id)
+		}
+		seen[kind+"\x00"+folded] = id
+		return nil
+	}
+	for _, id := range sortedNames(p.Vectors) {
+		if err := check("vector 因子", id); err != nil {
+			return err
+		}
+	}
+	for _, id := range sortedNames(p.Factors) {
+		if err := check("因素权重", id); err != nil {
+			return err
+		}
+	}
+	for _, from := range sortedNames(p.Coupling) {
+		if err := check("coupling 因子", from); err != nil {
+			return err
+		}
+		for _, to := range sortedNames(p.Coupling[from]) {
+			if err := check("coupling 因子", to); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func validateIdentityKeys(p edgefactor.Params) error {
 	bad := func(kind, key string) error {
 		if strings.TrimSpace(key) == "" {

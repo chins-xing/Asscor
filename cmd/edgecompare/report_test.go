@@ -986,6 +986,49 @@ func TestRenderConfigSectionRejectsNonDefaultDomainKeys(t *testing.T) {
 	}
 }
 
+// TestRenderConfigSectionRejectsCaseFoldCollisions 钉住"仅大小写不同"的重复因子 ID 必须被拒
+// （评审对 Task 9 fix round 1 的越界观察 ① 的收口）。
+//
+// 背景：渲染出去的键经解析层折叠（配置键大小写不敏感），`EF-A` 与 `ef-a` 会在重建参数时
+// **静默合并**成同一个因子。`renderRoundTrip` 抓不到这种情形 —— 合并后的参数各自都合法，
+// 那条断言只证明"这段配置贴得上"，证明不了"贴出来还是同一套参数"。
+//
+// 反向对照：把重复的那个键改成不同拼写（不再折叠相撞）后必须能正常渲染，否则本用例只证明了
+// "这套参数什么都渲染不了"。
+func TestRenderConfigSectionRejectsCaseFoldCollisions(t *testing.T) {
+	base := func() edgefactor.Params {
+		return edgefactor.Params{
+			Model: edgefactor.ModelVector, PFloor: 0.5,
+			Lambda: map[string]float64{"attack_surface": 1.0},
+			Vectors: map[string]map[string]float64{
+				"EF-A": {"attack_surface": 1.0},
+				"EF-B": {"attack_surface": 1.0},
+			},
+			Factors: map[string]float64{"EF-A": 0.8, "EF-B": 0.9},
+		}
+	}
+
+	// 反向对照：两个不同拼写的因子必须能渲染。
+	var ok bytes.Buffer
+	if err := RenderConfigSection(&ok, "vector", base()); err != nil {
+		t.Fatalf("对照参数集（ID 拼写不同）应当能渲染: %v", err)
+	}
+
+	t.Run("vector 的因子 ID 只有大小写不同", func(t *testing.T) {
+		p := base()
+		p.Vectors["ef-a"] = map[string]float64{"attack_surface": 1.0}
+		p.Factors["ef-a"] = 0.7
+		var buf bytes.Buffer
+		err := RenderConfigSection(&buf, "vector", p)
+		if err == nil {
+			t.Fatalf("只有大小写不同的因子 ID 必须被拒 —— 粘回去会静默合并成同一个因子：\n%s", buf.String())
+		}
+		if buf.Len() != 0 {
+			t.Errorf("出错时不得写出半段配置：%q", buf.String())
+		}
+	})
+}
+
 // TestRenderConfigSectionRejectsModelNameMismatch 钉住两条渲染前的 fail-fast：
 //   - 模型名与参数集的 Model 不一致 ⇒ 粘回去的配置会"用一个模型的名字描述另一套参数"（静默错配）；
 //   - 未知模型名 ⇒ 配置解析层只接受 legacy|vector|graph|chain，写出来也是废段。
