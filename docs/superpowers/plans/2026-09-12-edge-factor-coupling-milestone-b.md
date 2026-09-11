@@ -349,8 +349,9 @@ Expected: FAIL —— 包与类型都不存在
 从 `cmd/edgecompare/load.go` **逐字搬迁**现有语义（不要重写：那些注释记录了每一处判据的失败后果），仅做两处必要改动：
 - 类型与函数改为导出（`Validate`/`LoadFile`/`MarshalRecord`），字段名与 JSON tag 不变；
 - 新增 `Meta.WeightSource` 与 `Meta.AssemblyError` 两个可选字段（Task 3 需要；`omitempty`），以及 `Validate` 里的**记录构造要求**检查：
-  - `Observed.EdgeFactorChain[i].Factor` 必须满足 `edgefactor.NormalizeFactorID(id) == id`（规范 ID）；
-  - 因子 ID 不得只有大小写不同（折叠冲突会静默合并）；
+  - `Observed.EdgeFactorChain[i].Factor` 必须满足 `edgefactor.NormalizeFactorID(id) == id`（规范 ID）—— **但这属于生产侧要求，不能放进读取层 `Validate`**（Task 2 实测：放进去会让既有 `metrics_test.go:267` 的 `"  ef-selinux  "` 夹具变红，破坏"既有用例一条不改"这条更高优先级的验收）；读取层保持宽容、消费方在装配时归一（既有设计）。
+  - **链上允许同一规范 ID 出现多次，且禁止去重**（Task 2 评审 C1 修正）：出厂 `config.ini`/`configs/*.ini` 把同样七个 ID 又写进 `[edge_factors.custom]`（带触发），`ConfigToEdgeFactors` 刻意不去重、ssam 按 ID 各留一份 ⇒ **同一条链里会出现两条 `EF-SELINUX`（引擎确实乘了两次）**。故"大小写折叠冲突即拒绝"这类规则**不适用于记录**：它是**配置键渲染**的规则（milestone A 的 `validateRenderable`，那里重复键会在重解析时静默合并），而记录里的链是**列表**。把渲染规则搬进记录契约会让**实验自己产出的数据集读不回来**（读取层拒绝 + 生产侧写不出去 ⇒ 零记录）。
+  - `checks[]` 的穷尽性（必须落盘引擎的**全部失败检查**）写成本条的**前提**，而不是让人以为读取层会校验它。
   - `checks[]` 必须包含所有 `c_trigger > 0` 的链条目对应的 `trigger_check` 且 `passed == false` —— **但这条只能对插件路径（V/G/C）成立，不得对 `model=legacy`（无模型段）记录硬失败**（Task 1 实现者实测）：legacy 保留 *identity 分支*（检查 ID 恰等于因子 ID 时直接激活该因子）与级联写值，此时链上的 `trigger_check` 是"该因子**登记的**触发检查"，**未必**是真正失败的那个检查（例：identity 检查 `EF-002FA` 失败时链上写的是登记值 `EF-001`）。故实现上把它做成"插件路径记录"的构造要求，并在注释里写明"**任何消费者都不得用 `trigger_check` 反推 `checks[]`**"；`checks[]` 的穷尽性（落盘引擎的**全部失败检查**）是它的前提，不是读取层的校验项。
 
 - [ ] **Step 4: 跑测试确认通过**
