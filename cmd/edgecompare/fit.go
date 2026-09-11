@@ -33,14 +33,25 @@ import (
 
 // FitOptions 是拟合的全部可调项（brief 给定的四字段 + 追加的 L1）。
 //
-// `L1` 是**追加字段**（brief 的接口只列了 L2）：本拟合器解的是 elastic net
-// `l2·||β||² + l1·||β||₁`，L1 稀疏路径默认关闭（0），与 brief 的接口保持兼容。
+// **`L2` 的语义（Task 10 Fix round 1 澄清：已改名换义，务必按实现理解）**：
+// `L2` **不是**"绝对脊参数"，而是**相对收缩率**。实现的罚项是按列信息量归一过的：
+// 标准化列上的罚项为 `½·L2·G_jj·w_j²`（`G_jj` = 该列未加罚的加权 Gram 对角元），
+// 于是 `L2` 对**每一列**都是同一个相对收缩率 `1/(1+L2)`，与列的信息量无关。
+// `L2 = 0.01` ⇒ 每列收缩 1%；`L2 = 0` 表示不收缩。
+//
+// 为什么不用绝对罚项 `½·L2·||w||²`（brief 示例代码的写法）：本书的 IRLS 权重
+// `W = p(1−p) ≈ 0.21`，绝对罚项 `L2 = 0.01` 等价于对每列收缩 4.8%，而这一收缩会沿
+// 高度共线的设计方向被放大成**耦合系数 +0.14 的系统偏置**（n = 60000 实测 +0.142，与 n 无关），
+// 且每一组数据集单独看仍在 ±0.25 的逐数据集容差之内。推导与实测见 task-10-report.md §3.3。
+//
+// `L1` 是**追加字段**（brief 的接口只列了 L2）：`L1` 是标准的绝对 L1 罚项
+// `L1·||w||₁`（作用于标准化尺度、截距除外），默认关闭（0），与 brief 的接口保持兼容。
 // 之所以默认关闭：先验边集 ≤ 5 这条可辨识性约束本身已经承担了稀疏化职责，而在 22 场景的
 // 真实数据上再套一层 L1 会让"边是否显著"的结论同时受两个旋钮影响。
 type FitOptions struct {
 	PriorEdges [][2]string
-	L2         float64
-	L1         float64
+	L2         float64 // 相对收缩率：每列收缩 1/(1+L2)（见上）
+	L1         float64 // 标准化尺度上的绝对 L1 罚项，默认 0
 	Folds      int
 	Seed       int64
 }
@@ -50,7 +61,12 @@ type FitOptions struct {
 //	Coefficients     ：全部设计列（含 "(intercept)" 与边列）在**原始列尺度**上的系数
 //	EdgeCoefficients ：只含边列（键形如 "A|B"），供"哪些边显著"的结论直接引用
 //	CVErr            ：k 折交叉验证的平均对数损失
-//	Bootstrap        ：自助法 95% 百分位区间（键与 Coefficients 一致）
+//	Bootstrap        ：自助法 95% 百分位区间，**与 Coefficients 同一尺度（原始列尺度）**
+//
+// `Bootstrap` 的尺度是 Task 10 Fix round 1 修正的：自助法重采样在标准化尺度上求解，
+// 早期实现在那一尺度上取百分位，于是同一张报告里"系数"与"区间"量纲不同（区间看着总是
+// 包不住系数），"区间是否覆盖真值"这条最有力的无偏性断言也就无从写起。现在每个重采样
+// 样本都**先反归一化再取百分位**（非截距列是单调变换，截距列则逐样本换算后取百分位）。
 type FitReport struct {
 	Coefficients     map[string]float64    `json:"coefficients"`
 	EdgeCoefficients map[string]float64    `json:"edge_coefficients"`
@@ -117,9 +133,16 @@ func factorFromCoefficient(beta float64) float64 {
 //	β_ij > 0 ⇒ Coupling[i][j] = min(β_ij, 1)
 //	β_ij ≤ 0 ⇒ 不写（保持 0，冗余由 Σ_d v ≤ 1 吸收）
 //
-// 返回的第二个值表示"是否写入"：`β ≤ 0` 时不写，而不是写 0。两者在 `Synthesize` 里等价
-// （`couplingValue` 取不到就是 0），但"不写"让配置段里不会出现一堆无语义的 0，
-// 也让 `Coefficients` 与 `Coupling` 的差异（前者有负系数、后者没有）一眼可见。
+// 返回的第二个值表示"是否写入"：`β ≤ 0` 时**不写**，而且 `Fit` 会把基准里已有的这条边
+// **一并移除**（`removeCouplingEdge`）。两者在 `Synthesize` 里等价（`couplingValue` 取不到
+// 就是 0），但"移除"是本任务选定的语义，理由有三：
+//
+//  1. 它是本规则的**唯一自洽读法**：报告行打印"coupling 不写（β ≤ 0）"，
+//     产物里若仍带着基准的旧值，配置段与报告自相矛盾（Fix round 1 / C1）；
+//  2. `-fit` 的基准就是 `config.Load` 读进来的配置 —— 真实配置带 C 模型的级联边，
+//     或带上一轮的拟合产物；只跳过不删除会让**已经不再显著的边永久留存**，
+//     参数段越粘越"满"，而读者从报告里看不出这件事；
+//  3. 本拟合器的结论口径正是"哪些边显著"（spec §6），对不显著的边保留旧值等于替数据说话。
 //
 // **近似性标注**：β_ij 是"两因子同时激活时的对数优势比超出主效应线性叠加的部分"，
 // 而 c_ij 是逐域惩罚项 `c_ij·a_i·a_j` 的系数；两者的对应同样依赖线性化，
@@ -139,7 +162,10 @@ func couplingFromCoefficient(beta float64) (float64, bool) {
 // Fit 在带标签的实验记录上拟合"主效应 + 先验边"的 logistic 模型，并把系数折回
 // `edgefactor.Params`（mandate 口径 1 与 2）。
 //
-// 返回的 Params 是**基准参数的独立副本**：主效应列覆盖 `Factors`，正系数的边写入 `Coupling`，
+// 返回的 Params 是**基准参数的独立副本**：主效应列覆盖 `Factors`；`Coupling` 里**先验边集
+// 覆盖到的边**由拟合结果决定 —— `β_ij > 0` 写入 `min(β_ij,1)`，`β_ij ≤ 0` **移除该边**
+// （移除语义见 couplingFromCoefficient 的注释）；先验边集**之外**的边保持基准值不动
+// （它们不进设计矩阵，无从估计，改动它们等于凭空造结论）。
 // 其余字段（Model / PFloor / Lambda / Vectors / ChainWindowSeconds）原样保留。
 // `base` 绝不会被就地修改（Caller 从配置装载它，随后还要用它）。
 func Fit(records []Record, base edgefactor.Params, opts FitOptions) (edgefactor.Params, FitReport, error) {
@@ -147,62 +173,50 @@ func Fit(records []Record, base edgefactor.Params, opts FitOptions) (edgefactor.
 	if err := validateFitRequest(records, base, opts); err != nil {
 		return edgefactor.Params{}, FitReport{}, err
 	}
-	// 与在线装配 / 离线重算**同一裁剪口径**：特征域 = DefaultDomains ∩ λ（legacy 例外）。
-	domains, err := fitDomains(base)
+	d, err := buildFitDesign(records, base, opts)
 	if err != nil {
 		return edgefactor.Params{}, FitReport{}, err
 	}
-	// 基准参数必须先过裁剪域上的 Validate：λ ≤ 0 这类参数在 Synthesize 里就会被拒，
-	// 在这里兜底（例如把它悄悄当 1.0 用）只会产出一份"能拟合、算不出"的参数。
-	if err := pruneToDomains(base, domains).Validate(domains); err != nil {
-		return edgefactor.Params{}, FitReport{}, fmt.Errorf(
-			"edgecompare: 基准参数在拟合域 %v 上过不了 Validate —— 拟合前请先修好它（不得兜底）：%w", domains, err)
-	}
-	edges := canonicalEdges(base, opts.PriorEdges)
-	names, X, y := design(records, base, domains, edges)
-	if len(names) <= 1 {
-		return edgefactor.Params{}, FitReport{}, fmt.Errorf(
-			"edgecompare: 设计矩阵只有截距列（基准既无因子也无先验边）—— 零列上的任何『系数』都只是正则项的产物")
-	}
+	beta := d.pointEstimate()
 
-	// 按列标准化（均值 0 / 标准差 1）保证数值稳定；系数在最后反归一化回**原始列尺度**，
-	// 这样报告里的 β 与"a_i = (1−eff_i)·Σ_d v_i[d]"同尺度，可直接与已知真值比对。
-	means, scales := standardise(X)
-
-	coef := fitElasticNet(X, y, opts.L1, opts.L2, nil)
-	beta := denormaliseCoefficients(coef, means, scales)
-
-	cvErr, err := crossValidate(X, y, opts, coef)
+	cvErr, err := crossValidate(d.X, d.y, opts, d.coef)
 	if err != nil {
 		return edgefactor.Params{}, FitReport{}, err
 	}
 	rep := FitReport{
-		Coefficients:     make(map[string]float64, len(names)),
-		EdgeCoefficients: make(map[string]float64, len(edges)),
+		Coefficients:     make(map[string]float64, len(d.names)),
+		EdgeCoefficients: make(map[string]float64, len(d.edges)),
 		CVErr:            cvErr,
-		Bootstrap:        bootstrapCoefficients(X, y, names, opts, coef),
+		Bootstrap:        bootstrapCoefficients(d.X, d.y, d.names, opts, d.coef, d.means, d.scales),
 	}
-	for i, name := range names {
+	for i, name := range d.names {
 		rep.Coefficients[name] = beta[i]
 	}
 
 	out := cloneParams(base)
 	if out.Factors == nil {
-		out.Factors = make(map[string]float64, len(names))
+		out.Factors = make(map[string]float64, len(d.names))
 	}
 	if out.Coupling == nil {
-		out.Coupling = make(map[string]map[string]float64, len(edges))
+		out.Coupling = make(map[string]map[string]float64, len(d.edges))
 	}
-	firstEdge := len(names) - len(edges)
-	for i, name := range names {
+	firstEdge := len(d.names) - len(d.edges)
+	for i, name := range d.names {
 		switch {
 		case i == 0:
 			// 截距不映射成任何参数：它吸收的是"基线被攻陷概率"，不属于因子模型。
 		case i >= firstEdge:
-			e := edges[i-firstEdge]
+			e := d.edges[i-firstEdge]
 			rep.EdgeCoefficients[edgeColumnName(e)] = beta[i]
 			c, write := couplingFromCoefficient(beta[i])
 			if !write {
+				// **「不写」= 移除基准里的旧值**（Fix round 1 / C1）。
+				// 返回的是 base 的深拷贝，若只 continue，产物会**带着旧耦合**被
+				// RenderConfigSection 写进配置段，而报告行却打印「coupling 不写（β ≤ 0）」
+				// —— 产物自相矛盾。可达路径真实：-fit 的基准就是 config.Load 读进来的配置
+				// （真实配置会带 C 模型的级联边，或上一轮的拟合产物），重复拟合会把已经
+				// 不再显著的边永久保留下来，参数段越粘越"满"。
+				removeCouplingEdge(out, e)
 				continue
 			}
 			if out.Coupling[e[0]] == nil {
@@ -214,6 +228,101 @@ func Fit(records []Record, base edgefactor.Params, opts FitOptions) (edgefactor.
 		}
 	}
 	return out, rep, nil
+}
+
+// removeCouplingEdge 从参数副本里删掉一条边，口径与 `couplingValue` 的查表口径一致：
+// graph 的耦合是对称的（反向配置同样会被消费），故两个方向都要删；chain 只删有向的那一条。
+// 删空的内层 map 一并删掉，让"该边消失"在结构上看得见（`RenderConfigSection` 只遍历
+// 实际存在的键，留着空 map 不会多写行，但会让 `Hash()` 与人的阅读都对不上）。
+func removeCouplingEdge(p edgefactor.Params, e [2]string) {
+	remove := func(from, to string) {
+		tos, ok := p.Coupling[from]
+		if !ok {
+			return
+		}
+		delete(tos, to)
+		if len(tos) == 0 {
+			delete(p.Coupling, from)
+		}
+	}
+	remove(e[0], e[1])
+	if p.Model == edgefactor.ModelGraph {
+		remove(e[1], e[0])
+	}
+}
+
+// fitDesign 是拟合的**构造与求解结果**：裁剪域、先验边、设计矩阵、标准化参数与点估计系数。
+//
+// 之所以单独抽出来（Fix round 1 / I1）：偏置回归测试要跑几十组独立数据集，而 k 折交叉验证 +
+// 100 次自助法占单次 `Fit` 九成以上的耗时、且与"估计量是否有偏"无关。测试直接用本结构体
+// 复算点估计，走的是与 `Fit` **完全相同**的构造与求解函数（`design` / `standardise` /
+// `fitElasticNet` / `denormaliseCoefficients`），不是产品路径的复制品。
+type fitDesign struct {
+	domains []string
+	edges   [][2]string
+	names   []string
+	X       [][]float64
+	y       []bool
+	means   []float64
+	scales  []float64
+	coef    []float64
+}
+
+// pointEstimate 返回原始列尺度上的点估计系数（与 `Fit` 写入 `Coefficients` 的值逐位一致）。
+func (d fitDesign) pointEstimate() []float64 {
+	return denormaliseCoefficients(d.coef, d.means, d.scales)
+}
+
+// buildFitDesign 做「裁剪域 → 校验 → 设计矩阵 → 列标准化 → 求解」三步。
+func buildFitDesign(records []Record, base edgefactor.Params, opts FitOptions) (fitDesign, error) {
+	var d fitDesign
+	// 与在线装配 / 离线重算**同一裁剪口径**：特征域 = DefaultDomains ∩ λ（legacy 例外）。
+	domains, err := fitDomains(base)
+	if err != nil {
+		return fitDesign{}, err
+	}
+	// 基准参数必须先过裁剪域上的 Validate：λ ≤ 0 这类参数在 Synthesize 里就会被拒，
+	// 在这里兜底（例如把它悄悄当 1.0 用）只会产出一份"能拟合、算不出"的参数。
+	if err := pruneToDomains(base, domains).Validate(domains); err != nil {
+		return fitDesign{}, fmt.Errorf(
+			"edgecompare: 基准参数在拟合域 %v 上过不了 Validate —— 拟合前请先修好它（不得兜底）：%w", domains, err)
+	}
+	d.domains = domains
+	d.edges = canonicalEdges(base, opts.PriorEdges)
+	names, X, y := design(records, base, domains, d.edges)
+	if len(names) <= 1 {
+		return fitDesign{}, fmt.Errorf(
+			"edgecompare: 设计矩阵只有截距列（基准既无因子也无先验边）—— 零列上的任何『系数』都只是正则项的产物")
+	}
+	d.names, d.X, d.y = names, X, y
+	// 按列标准化（均值 0 / 标准差 1）保证数值稳定；系数随后反归一化回**原始列尺度**，
+	// 这样报告里的 β 与"a_i = (1−eff_i)·Σ_d v_i[d]"同尺度，可直接与已知真值比对。
+	d.means, d.scales = standardise(X)
+	d.coef = fitElasticNet(X, y, opts.L1, opts.L2, nil)
+	return d, nil
+}
+
+// validateLabelVariation 要求标签里**两类都出现**。
+//
+// 单类别标签下 logistic 回归没有有限解：似然随系数范数单调上升，IRLS 会被推向完全分离，
+// 系数被迭代上限截停在"接近饱和"的位置。对本拟合器的后果尤其恶劣 ——
+// `factorFromCoefficient` 在 β ≥ 1 时 clip 到 1e-3（"该因子几乎完全失效"），
+// `couplingFromCoefficient` 在 β ≥ 1 时给 min(β,1) = 1（"耦合拉满"），
+// 于是产物是一份**极端参数**；`CVErr` 则退化成常数预测器的对数损失，
+// 看起来像一次正常的测量。全程没有任何错误或告警 ⇒ 必须在这里拒绝。
+func validateLabelVariation(records []Record) error {
+	compromised := 0
+	for _, rec := range records {
+		if rec.GroundTruth.Compromised {
+			compromised++
+		}
+	}
+	if compromised == 0 || compromised == len(records) {
+		return fmt.Errorf("edgecompare: %d 条记录的 ground_truth.compromised 全是 %v —— 单类别标签下 logistic 似然被推向完全分离，"+
+			"系数会被截停在饱和区（主效应 clip 到 1e-3、边系数 min(β,1)=1），CVErr 退化成常数预测器的损失："+
+			"这份产物看起来正常，实际只是迭代上限的产物", len(records), compromised == len(records))
+	}
+	return nil
 }
 
 // normaliseFitOptions 把零值选项补成 brief 给定的默认值（Folds = 3、L2 = 0.01、Seed = 1）。
@@ -246,6 +355,14 @@ func normaliseFitOptions(opts FitOptions) FitOptions {
 func validateFitRequest(records []Record, base edgefactor.Params, opts FitOptions) error {
 	if len(records) == 0 {
 		return fmt.Errorf("edgecompare: 拟合需要至少一条带标签的记录 —— 零记录下任何系数都只是正则项的产物")
+	}
+	// 单类别标签（全部被攻陷 / 全部未攻陷）⇒ logistic 似然被推向完全分离区间：
+	// IRLS 会把系数冲到饱和（主效应 clip 到"因子全失效"、边系数 min(β,1)="耦合全 1"），
+	// CVErr 退化成常数预测器的损失，而**全程零错误零告警**。真实实验里单类别并不罕见
+	// （某一轮只跑了一组被攻陷的场景），故必须 fail-fast —— 与本文件"不产出看起来有结论、
+	// 实际没有的产物"是同一条纪律（Fix round 1 / I5）。
+	if err := validateLabelVariation(records); err != nil {
+		return err
 	}
 	if len(opts.PriorEdges) > fitMaxPriorEdges {
 		return fmt.Errorf("edgecompare: 先验边集有 %d 条，超过可辨识性上限 %d 条 —— 超过就先验化了，请收窄边集而不是让它被悄悄截断",
@@ -498,19 +615,26 @@ func denormaliseCoefficients(coef, means, scales []float64) []float64 {
 // 求解器：elastic-net logistic（IRLS 外层 + 坐标下降内层）
 // ============================================================================
 
-// fitElasticNet 解
+// fitElasticNet 解的是下面这个**每轮 IRLS 的二次子问题**（`½` 因子与罚项按列归一是精确表述）：
 //
-//	min_w  (1/n)Σ W_i(z_i − x_iᵀw)² + l2·||w||² + l1·||w||₁        （IRLS 二次近似）
+//	min_w  ½·(1/n)Σ_i W_i(z_i − x_iᵀw)²  +  ½·l2·Σ_{j≥1} G_jj·w_j²  +  l1·Σ_{j≥1}|w_j|
 //
-// 等价于对原问题
+// 其中 `G_jj = (1/n)Σ_i W_i·x_ij²` 是该列**未加罚**的加权 Gram 对角元，`j = 0` 是截距列
+// （不参与任何惩罚 —— 惩罚截距会把基线概率硬拉向 0.5）。
 //
-//	min_w  −(1/n)Σ [y_i·log σ(η_i) + (1−y_i)·log(1−σ(η_i))] + l2·||w||² + l1·||w||₁
+// **罚项的口径（Fix round 1 / I2 明确化，实现与文档在此对齐）**：
+// L2 罚的是 `½·l2·G_jj·w_j²`，不是 `½·l2·w_j²`。因为该子问题的坐标解是
+// `w_j = S(c_j − Σ_{k≠j}G_jk·w_k, l1) / (G_jj·(1+l2))`，于是 `l2` 对**每一列**给出
+// 同一个**相对收缩率** `1/(1+l2)`，与列的信息量无关。`FitOptions.L2` 的注释里有动机说明。
 //
-// 做 MM（优化-最小化）迭代：二次近似是光滑损失的**上界**，加入精确的（L1/L2）罚项后每步
-// 都不增大原目标。**截距列（下标 0）不参与惩罚**（惩罚截距会把基线概率硬拉向 0.5）。
+// 收敛点满足原问题的次梯度平稳条件（把 `z_i = η_i + (y_i−p_i)/W_i` 代回第 j 个坐标方程即得；
+// `j ≥ 1`）：
 //
-// 收敛点满足原问题的次梯度平稳条件：把 z_i = η_i + (y_i−p_i)/W_i 代回第 j 个坐标方程即可
-// 得到 (1/n)Σ(p_i−y_i)x_ij + 2·l2·w_j + l1·sgn(w_j) = 0（j ≥ 1）。
+//	(1/n)Σ_i (y_i − p_i)·x_ij  +  l2·G_jj·w_j  +  l1·sgn(w_j) = 0
+//
+// 即"对数似然的梯度 + 相对 L2 的梯度 + L1 的次梯度"三者相消，`l1 = 0` 时退化成标准的
+// 岭正则 logistic 平稳条件。整套迭代是 MM（优化-最小化）：二次近似是光滑损失的**上界**，
+// 加入精确的 L1/L2 罚项后每一步都不增大原目标。
 //
 // 为什么不用 brief 示例里的纯梯度下降（这是本实现相对 brief 示例代码的主要偏离，理由如下）：
 //
@@ -588,15 +712,15 @@ func fitElasticNet(X [][]float64, y []bool, l1, l2 float64, start []float64) []f
 				gram[k][j] = gram[j][k]
 			}
 		}
-		// **相对 L2**（本实现相对 brief 示例代码的第二处偏离，理由见下）：
-		// 罚项按列信息量归一（glmnet 的 penalty.factor 同款思路），即把 G_jj 放缩成
-		// G_jj·(1+l2)，于是 l2 对**每一列**都是同一个相对收缩率 1/(1+l2)，
+		// **相对 L2**（本实现相对 brief 示例代码的第二处偏离，理由见 FitOptions.L2 的注释）：
+		// 罚项按列信息量归一，即把 G_jj 放缩成 G_jj·(1+l2)，于是坐标解的分母变成
+		// G_jj·(1+l2)，l2 对**每一列**都是同一个相对收缩率 1/(1+l2)，
 		// 而不是"对信息量小的列罚得更重"。截距列不惩罚。
+		// 等价说法：罚的是 ½·l2·G_jj·w_j²（而不是 ½·l2·w_j²）。
 		//
 		// 为什么必须这样做：本例的 IRLS 权重 W = p(1−p) ≈ 0.21，列又高度共线，
 		// 绝对罚项 l2 = 0.01 相当于对每一列收缩 0.21/(0.21+0.01) ≈ 4.8%，
-		// 而这 4.8% 会沿共线方向被放大成**耦合系数 +0.13 的系统偏置**（实测：20 组独立
-		// 合成数据上，真值 c = 0.4 的还原均值是 0.533；改成相对罚项后偏置降到 +0.03 量级）。
+		// 而这 4.8% 会沿共线方向被放大成**耦合系数 +0.14 的系统偏置**（n = 60000 实测 +0.142）。
 		// 偏置不随样本量下降，只随 l2 下降（绝对 l2 = 1e-4 时偏置 +0.0003），
 		// 因此在"已知 c_ij 必须被近似还原"这条验收上，相对罚项是唯一既保留 L2、又不过度偏置的做法。
 		for j := 1; j < d; j++ {
@@ -771,7 +895,14 @@ func logLoss(w []float64, X [][]float64, y []bool) float64 {
 //
 // `start` 是热启动向量（全量解，glmnet 的 CV/自助法同样这么做）：重采样拟合与全量拟合是
 // 同一个优化问题的重启，起点只影响收敛速度、不影响解，而 100 次重采样的总耗时因此降一个量级。
-func bootstrapCoefficients(X [][]float64, y []bool, names []string, opts FitOptions, start []float64) map[string][2]float64 {
+//
+// **每个重采样样本都先反归一化再取百分位**（Fix round 1 / I1）：重采样是在标准化尺度上求解的，
+// 若在该尺度上取百分位，`Bootstrap` 与 `Coefficients`（原始列尺度）量纲不同 —— 报告里区间
+// 看着总是包不住系数，"区间是否覆盖真值"这条最有力的无偏性断言也就无从写起。
+// 非截距列的反归一化是单调变换（除以正的列尺度），截距列则是各样本独立的线性组合，
+// 故一律逐样本换算后再排序取百分位（对线性组合而言，逐样本换算严格正确，先取百分位再换算是错的）。
+func bootstrapCoefficients(X [][]float64, y []bool, names []string, opts FitOptions,
+	start, means, scales []float64) map[string][2]float64 {
 	n := len(X)
 	out := make(map[string][2]float64, len(names))
 	if n == 0 {
@@ -786,9 +917,9 @@ func bootstrapCoefficients(X [][]float64, y []bool, names []string, opts FitOpti
 			k := rng.Intn(n)
 			bx[i], by[i] = X[k], y[k]
 		}
-		w := fitElasticNet(bx, by, opts.L1, opts.L2, start)
+		raw := denormaliseCoefficients(fitElasticNet(bx, by, opts.L1, opts.L2, start), means, scales)
 		for j := range names {
-			samples[j] = append(samples[j], w[j])
+			samples[j] = append(samples[j], raw[j])
 		}
 	}
 	for j, name := range names {

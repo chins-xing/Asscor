@@ -177,7 +177,10 @@ func adjustedScores(observed map[string]float64, res edgefactor.Result) map[stri
 // 门禁**只在可信度策略关闭（c = 1）的前提下成立** —— `EffectiveFactor(f, 1) = f`，两次衰减
 // 与在线 legacy 的单次衰减恒等；一旦 c ≠ 1，在线 legacy 路径（`assessor.go` 的 `attenuate`、
 // 内仓 `ApplyEdgeFactors` 的默认乘法）只衰减一次，而这里统一按装配层口径衰减两次，两者相差
-// 一次衰减（offline legacy 惩罚更重）。本任务按 mandate 口径 2 **统一**复用装配层换算，
+// 一次衰减 —— **衰减越多、因子值越接近 1、惩罚越轻，故 offline legacy 惩罚更轻（分数更高、更乐观）**
+// （Fix round 1 / I3 的方向澄清：0.8 → 0.82 → 0.838，离线 90×0.838 = 75.42 > 在线观测 90×0.82 = 73.8）。
+// 这条符号决定离线工具相对引擎是乐观还是保守，而里程碑 B 的决策层主判据全部来自离线重算。
+// 本任务按 mandate 口径 2 **统一**复用装配层换算，
 // **不在**此处为 legacy 开特例；c ≠ 1 的候选间对比不在本轮范围（spec §10.2 已记录该已知
 // 口径问题，是否修正属独立决策）。
 func activationsOf(rec Record) []edgefactor.FactorActivation {

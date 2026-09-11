@@ -29,8 +29,14 @@ import (
 //
 //	本门禁**只在可信度策略关闭（c = 1）时成立**。`EffectiveFactor(f, 1) = f`，两次衰减与在线
 //	legacy 的单次衰减恒等；一旦 c ≠ 1，在线 legacy 路径（assessor 的 attenuate / 内仓默认的
-//	逐次相乘）只衰减一次，而离线统一按装配层口径衰减两次，两者天然相差一次衰减（离线的 legacy
-//	惩罚更重）。spec §10.2 已把这条记为「可信度被衰减两次」的已知口径问题，是否修正属独立决策；
+//	逐次相乘）只衰减一次，而离线统一按装配层口径衰减两次，两者天然相差一次衰减。
+//
+//	**方向必须写对（Fix round 1 / I3）**：`0.8 → 0.82（策略层一次衰减）→ 0.838（装配层再一次）`，
+//	衰减得越多因子值越接近 1 ⇒ 惩罚越轻。故离线（双衰减）的 **legacy 惩罚更轻、分数更高、更乐观**：
+//	离线 `90 × 0.838 = 75.42` > 在线观测 `90 × 0.82 = 73.8`。这条符号不是润色问题 ——
+//	它决定离线工具相对真实引擎是**乐观**还是保守，而里程碑 B 的决策层主判据**全部**来自离线重算：
+//	写反会把"漏判率被低估"读成相反结论。
+//	spec §10.2 已把这条记为「可信度被衰减两次」的已知口径问题，是否修正属独立决策；
 //	Task 8–10 一律**复用**同一口径并在报告标注。TestConsistencyGateOnlyHoldsAtFullConfidence
 //	把这件事钉成可执行的证据，而不是一句注释。
 //
@@ -238,8 +244,10 @@ func TestConsistencyGateOnlyHoldsAtFullConfidence(t *testing.T) {
 		}
 	}
 
-	// ② c = 0.9：同一条记录的离线重算与**在线观测总分**必须不同，且离线更重。
-	// 观测 final_score 是 90 × 0.82（在线 legacy 单次衰减），离线是 90 × 0.838（双衰减）。
+	// ② c = 0.9：同一条记录的离线重算与**在线观测总分**必须不同，且**离线更高（离线惩罚更轻）**。
+	// 观测 final_score 是 90 × 0.82（在线 legacy 单次衰减），离线是 90 × 0.838（双衰减）——
+	// 衰减越多、因子值越接近 1、惩罚越轻，故 75.42（离线）> 73.8（在线观测）。
+	// 方向写反会把"漏判率被低估"读成相反结论，见文件头 §前提的方向说明。
 	// 两侧都按记录的两个域等权聚合，故差异只可能来自换算口径本身。
 	recs, err := LoadRecords(writeSample(t))
 	if err != nil {
@@ -263,7 +271,8 @@ func TestConsistencyGateOnlyHoldsAtFullConfidence(t *testing.T) {
 		t.Fatalf("离线 = %v, want %v（双衰减口径）", offline, wantOffline)
 	}
 	if observed >= offline {
-		t.Fatalf("c ≠ 1 时在线（单次衰减）应比离线（双衰减）宽松：观测 %v 应 < 离线 %v", observed, offline)
+		t.Fatalf("c ≠ 1 时在线（单次衰减）的分数应**低于**离线（双衰减）：衰减次数越多惩罚越轻，"+
+			"故离线更乐观。观测 %v 应 < 离线 %v（若反了说明换算次数或方向变了）", observed, offline)
 	}
 	// 低阶原语与等权入口在同一记录上口径一致（差的是权重表，不是换算）。
 	if equalWeight, err := OfflineScore(legacyParams(), rec); err != nil {

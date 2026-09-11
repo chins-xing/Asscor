@@ -54,17 +54,24 @@ const (
 	fitN = 60000
 )
 
-// syntheticRecords 生成 n 条**标签由已知真值模型产生**的合成记录。
+// syntheticRecords 生成 fitN 条**标签由已知真值模型产生**的合成记录。
 //
-// 偏离 brief 的两处（均在报告 §自行决策中记录）：
+// 偏离 brief 的三处（均在报告 §自行决策中记录）：
 //   - 多一个 `seed` 参数：可恢复性只用一个数据集证明是「一次偶然」，故用多组独立种子交叉验证；
+//   - 样本量由 `fitN` 决定而不是 hardcode 在函数里（偏置测试需要别处复用同一生成器）；
 //   - 不返回 `*testing.T` 之外的随机夹具：真实 c 由调用方给出（brief 的 `syntheticRecords(t, 0.4)`）。
 func syntheticRecords(t *testing.T, c float64, seed int64) []Record {
 	t.Helper()
+	return generateSyntheticRecords(t, c, seed, fitN)
+}
+
+// generateSyntheticRecords 是样本量可变版本的生成器（唯一实现，`syntheticRecords` 只是包一层）。
+func generateSyntheticRecords(t *testing.T, c float64, seed int64, n int) []Record {
+	t.Helper()
 	rng := rand.New(rand.NewSource(seed))
 	base := time.Date(2026, 9, 8, 10, 0, 0, 0, time.UTC)
-	out := make([]Record, 0, fitN)
-	for i := 0; i < fitN; i++ {
+	out := make([]Record, 0, n)
+	for i := 0; i < n; i++ {
 		rec := Record{
 			ScenarioID: fmt.Sprintf("SYN-%04d", i),
 			Observed: Observed{
@@ -116,6 +123,31 @@ func fitBaseParams() edgefactor.Params {
 // fitEdgeOpts 是默认拟合选项 + 先验边 A|B（合成数据里唯一真实存在的耦合）。
 func fitEdgeOpts(seed int64) FitOptions {
 	return FitOptions{PriorEdges: [][2]string{{"A", "B"}}, L2: 0.01, Folds: 3, Seed: seed}
+}
+
+// syntheticRecordsN 是 syntheticRecords 的样本量可调版本（只给需要"更便宜的数据集"的用例用）。
+func syntheticRecordsN(t *testing.T, c float64, seed int64, n int) []Record {
+	t.Helper()
+	return generateSyntheticRecords(t, c, seed, n)
+}
+
+// estimateCouplingForTest 走 `buildFitDesign` + `pointEstimate`（与 `Fit` 写入 Coefficients
+// 的**同一批函数**），但跳过 k 折交叉验证与 100 次自助法 —— 那一部分占单次 Fit 九成以上耗时，
+// 且与"估计量是否有偏"无关。偏置测试要跑几十组独立数据集，只能走这条便宜路径。
+func estimateCouplingForTest(t *testing.T, records []Record, base edgefactor.Params, opts FitOptions) float64 {
+	t.Helper()
+	d, err := buildFitDesign(records, base, opts)
+	if err != nil {
+		t.Fatalf("buildFitDesign: %v", err)
+	}
+	beta := d.pointEstimate()
+	for i, name := range d.names {
+		if name == "A|B" {
+			return beta[i]
+		}
+	}
+	t.Fatalf("设计矩阵里没有边列 A|B：%v", d.names)
+	return 0
 }
 
 // ============================================================================
@@ -471,5 +503,304 @@ func TestFittedParamsRenderBackToConfigSection(t *testing.T) {
 	// 拟合出的耦合必须原样回填（不只是"能解析"）：渲染 → 重解析后系数逐位相同。
 	if got := rebuilt.Coupling["A"]["B"]; got != p.Coupling["A"]["B"] {
 		t.Errorf("回填后的耦合 = %v, want %v", got, p.Coupling["A"]["B"])
+	}
+}
+
+// ============================================================================
+// Fix round 1 / C1：β_ij ≤ 0 时的「不写」必须**移除基准里的旧值**
+// ============================================================================
+
+// TestFitRemovesUnsupportedBaseCoupling 钉住 C1：基准参数里已有的耦合，若数据不给支持
+// （拟合出的 β_ij ≤ 0），**必须从产物里消失**。
+//
+// 为什么这条是 Critical：`Fit` 返回的是 `base` 的深拷贝。若对 β ≤ 0 只 `continue`，产物会
+// 带着基准的旧耦合被 `RenderConfigSection` 写进配置段，而报告行却打印「coupling 不写（β ≤ 0）」
+// —— 同一份产物自相矛盾。可达路径真实：`-fit` 的基准就是 `config.Load` 读进来的配置
+// （真实配置会带 C 模型的级联边，或上一轮的拟合产物），于是重复拟合会把已经不再显著的边
+// **永久保留**下来。
+//
+// 夹具用 c = −1.0（强负交互）：真值边系数约为 −1，远在任何容差之外，故本用例是确定性的
+// （不需要"碰巧 β ≤ 0"）。同时验证三件事：
+//  1. 产物里该边消失（正/反两个存储方向都要删 —— graph 的耦合是对称的）；
+//  2. **基准本身不被就地改写**（深拷贝契约）；
+//  3. 先验边集**之外**的边保持基准值（它们不进设计矩阵，无从估计）；
+//  4. 报告仍然给出该边的系数（"哪些边显著"的结论需要看到这个负号）。
+func TestFitRemovesUnsupportedBaseCoupling(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		coupled map[string]map[string]float64
+	}{
+		{"正向存储 A→B", map[string]map[string]float64{"A": {"B": 0.5}}},
+		{"反向存储 B→A（graph 对称）", map[string]map[string]float64{"B": {"A": 0.5}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := fitBaseParams()
+			base.Coupling = map[string]map[string]float64{}
+			for from, tos := range tc.coupled {
+				base.Coupling[from] = map[string]float64{}
+				for to, c := range tos {
+					base.Coupling[from][to] = c
+				}
+			}
+			// 先验边集之外的边（作对照）：拟合不该动它 —— 它不在设计矩阵里，无从估计。
+			base.Coupling["ZZ-ORPHAN"] = map[string]float64{"YY-ORPHAN": 0.25}
+
+			p, rep, err := Fit(syntheticRecords(t, -1.0, 7), base, fitEdgeOpts(7))
+			if err != nil {
+				t.Fatalf("Fit: %v", err)
+			}
+			if beta, ok := rep.EdgeCoefficients["A|B"]; !ok {
+				t.Fatalf("报告必须给出该边的系数（哪怕为负）：%+v", rep.EdgeCoefficients)
+			} else if beta > 0 {
+				t.Fatalf("夹具前提不成立：c = −1.0 的数据本应给出负的边系数，实际 %v", beta)
+			}
+			if got, ok := p.Coupling["A"]["B"]; ok {
+				t.Errorf("数据不支持该边（β ≤ 0）⇒ 产物里必须没有 A→B，实际 %v", got)
+			}
+			if got, ok := p.Coupling["B"]["A"]; ok {
+				t.Errorf("数据不支持该边（β ≤ 0）⇒ 产物里必须没有 B→A（graph 对称），实际 %v", got)
+			}
+			if _, ok := p.Coupling["A"]; ok {
+				t.Errorf("删空的内层 map 应一并删掉，实际 %v", p.Coupling["A"])
+			}
+			// 基准是调用方的财产：既有耦合不能被就地删掉/改写。
+			if base.Coupling["A"]["B"] != 0.5 && base.Coupling["B"]["A"] != 0.5 {
+				t.Errorf("Fit 就地改写了基准的 Coupling：%v", base.Coupling)
+			}
+			// 先验边之外的边保持基准值。
+			if p.Coupling["ZZ-ORPHAN"]["YY-ORPHAN"] != 0.25 {
+				t.Errorf("先验边集之外的边应保持基准值，实际 %v", p.Coupling["ZZ-ORPHAN"])
+			}
+		})
+	}
+}
+
+// TestFitKeepsCouplingWhenDataSupportsIt 是 C1 的**反向对照**：数据支持该边时不能把它删掉。
+// 没有这条，把 `removeCouplingEdge` 写成无条件调用也能让上面那条测试通过。
+func TestFitKeepsCouplingWhenDataSupportsIt(t *testing.T) {
+	base := fitBaseParams()
+	base.Coupling = map[string]map[string]float64{"A": {"B": 0.05}} // 旧值应被拟合值覆盖
+	p, _, err := Fit(syntheticRecords(t, 0.4, 7), base, fitEdgeOpts(7))
+	if err != nil {
+		t.Fatalf("Fit: %v", err)
+	}
+	got, ok := p.Coupling["A"]["B"]
+	if !ok {
+		t.Fatal("数据支持该边（β > 0）⇒ 产物必须保留 A→B")
+	}
+	if got < 0.25 {
+		t.Errorf("产物里的耦合 %v 应是拟合值（≈0.4），不是被保留的基准旧值 0.05", got)
+	}
+	if base.Coupling["A"]["B"] != 0.05 {
+		t.Errorf("Fit 就地改写了基准的 Coupling：%v", base.Coupling)
+	}
+}
+
+// ============================================================================
+// Fix round 1 / I1：偏置断言 —— 抓得住"罚项把耦合系数整体推高"这类回归
+// ============================================================================
+
+// TestFitCouplingIsUnbiasedAcrossSeeds 断言**均值无偏**：多组独立数据集上还原出的耦合系数
+// 的平均值必须贴近真值。
+//
+// 为什么必须补这条：`TestFitRecoversKnownCoupling` 的 ±0.25 是**逐数据集容差**，它挡的是
+// 抽样噪声，挡不住系统偏置。实测：把 L2 换回绝对罚项（本任务 D2 修掉的那个缺陷）时，
+// 真值 c = 0.4 的还原均值是 0.542（偏置 +0.142），**而每一组单独看都还在 ±0.25 之内** ——
+// 也就是说没有这条断言，D2 的缺陷回归时全套测试照样全绿。
+//
+// 判据（40 组种子 × n = 60000）：
+//
+//	实现                                       实测均值   偏置     本断言
+//	相对 L2（现实现）                            0.433    +0.033    ✅ 通过（余量 3.9σ）
+//	绝对 L2（D2 之前的写法，临时回滚实测）        0.542    +0.142   ❌ 失败（−4.4σ）
+//
+// 阈值取 0.08：现实现的偏置 +0.033 距阈值 3.9 个标准误（sem ≈ 0.012），
+// 而被测的那个回归偏置 +0.142 距阈值 4.4 个标准误 —— 两侧都有足够余量。
+func TestFitCouplingIsUnbiasedAcrossSeeds(t *testing.T) {
+	const (
+		rounds  = 40
+		records = 60000
+		want    = 0.4
+		tol     = 0.08
+	)
+	sum := 0.0
+	for seed := int64(1); seed <= rounds; seed++ {
+		opts := fitEdgeOpts(seed)
+		got := estimateCouplingForTest(t, syntheticRecordsN(t, want, seed, records), fitBaseParams(), opts)
+		sum += math.Min(math.Max(got, 0), 1) // 与 couplingFromCoefficient 的落库口径一致
+	}
+	mean := sum / float64(rounds)
+	if math.Abs(mean-want) > tol {
+		t.Errorf("还原出的耦合均值 = %.4f（偏置 %+.4f），want %.2f ± %.2f —— 逐数据集容差抓不住系统偏置，"+
+			"绝对罚项回归时的实测偏置是 +0.142", mean, mean-want, want, tol)
+	}
+}
+
+// TestFitBootstrapCoversTrueCoupling 断言自助法 95% 区间**覆盖真值**。
+//
+// 这条同时钉住两件事：
+//  1. 区间是真的在测抽样分布（不是"返回零值假装测过"，也不是宽度为 0 的假区间）；
+//  2. `Bootstrap` 与 `Coefficients` 处在**同一尺度**（Fix round 1 / I1 修正的 bug：
+//     自助法重采样在标准化尺度上求解，早期实现在那个尺度上取百分位，于是区间看着总是
+//     包不住系数 —— 区间与系数不同量纲，这条断言根本写不出来）。
+func TestFitBootstrapCoversTrueCoupling(t *testing.T) {
+	const want = 0.4
+	for _, seed := range []int64{7, 20260912, 88} {
+		p, rep, err := Fit(syntheticRecords(t, want, seed), fitBaseParams(), fitEdgeOpts(seed))
+		if err != nil {
+			t.Fatalf("seed=%d: Fit: %v", seed, err)
+		}
+		ci, ok := rep.Bootstrap["A|B"]
+		if !ok {
+			t.Fatalf("seed=%d: 缺 A|B 的自助法区间：%+v", seed, rep.Bootstrap)
+		}
+		if ci[0] >= ci[1] {
+			t.Errorf("seed=%d: 区间非法 %v", seed, ci)
+		}
+		if want < ci[0] || want > ci[1] {
+			t.Errorf("seed=%d: 95%% 自助法区间 [%v, %v] 未覆盖真值 %v（点估计 %v）—— "+
+				"区间与系数可能已不在同一尺度", seed, ci[0], ci[1], want, p.Coupling["A"]["B"])
+		}
+		// 区间必须包含或贴着点估计（同一尺度、同一次拟合的必然结果）。
+		if point := p.Coupling["A"]["B"]; point < ci[0] || point > ci[1] {
+			t.Errorf("seed=%d: 点估计 %v 落在自己的 95%% 区间 [%v, %v] 之外 —— 尺度不一致",
+				seed, point, ci[0], ci[1])
+		}
+	}
+}
+
+// ============================================================================
+// Fix round 1 / I4：L1 路径的收缩与可复现性
+// ============================================================================
+
+// TestElasticNetL1ShrinksToExactZero 直接在**设计正交**的数据上钉住 L1 的收缩语义。
+//
+// 为什么不拿本包的合成夹具测"L1 把耦合压小"：那个夹具的列高度共线（交互列 ≈ 两个主效应列
+// 之积），L1 会把主效应压没、转而用交互列当代理，**中等强度的 L1 反而把耦合系数推高**
+// （实测 n=20000、c=0.4：l1 = 0 → 0.453；l1 = 0.01 → 0.664；l1 = 0.05 → 0.918，同时主效应被压到 0）。
+// 那是共线性下的真实行为，不是求解器的问题，但它让"L1 ⇒ 耦合更小"在这个夹具上并不成立 ——
+// 拿它当断言会写出假命题。故本用例改用 3 个**精确正交**（且与截距正交）的 ±1 列：
+// Gram 矩阵是对角的 ⇒ 坐标解就是 `S(c_j, l1)/G_jj`，收缩与置零都是可逐项验证的精确行为。
+func TestElasticNetL1ShrinksToExactZero(t *testing.T) {
+	// 4 个模式两两正交、且与常数列正交；每个模式复制 400 次 ⇒ n = 1600。
+	patterns := [][3]float64{{1, 1, 1}, {1, -1, -1}, {-1, 1, -1}, {-1, -1, 1}}
+	const perPattern = 400
+	truth := []float64{-0.3, 1.2, 0.6, 0.0} // 第 3 个特征无效 ⇒ L1 应当先把它压到 0
+	rng := rand.New(rand.NewSource(20261010))
+	var X [][]float64
+	var y []bool
+	for _, p := range patterns {
+		z := truth[0] + truth[1]*p[0] + truth[2]*p[1] + truth[3]*p[2]
+		prob := 1 / (1 + math.Exp(-z))
+		for i := 0; i < perPattern; i++ {
+			X = append(X, []float64{1, p[0], p[1], p[2]})
+			y = append(y, rng.Float64() < prob)
+		}
+	}
+
+	abs := func(w []float64) []float64 {
+		out := make([]float64, len(w))
+		for i, v := range w {
+			out[i] = math.Abs(v)
+		}
+		return out
+	}
+	prev := abs(fitElasticNet(X, y, 0, 0, nil))
+	if prev[1] < 0.5 || prev[2] < 0.2 {
+		t.Fatalf("前提不成立：正交夹具上 L1=0 的系数本应接近真值，实际 %v", prev)
+	}
+	for _, l1 := range []float64{0.05, 0.2, 0.5, 1.0, 2.0} {
+		got := fitElasticNet(X, y, l1, 0, nil)
+		// ① 单调收缩：正交设计下 soft-threshold 对每个坐标都是非增的。
+		for j := 1; j < len(got); j++ {
+			if math.Abs(got[j]) > prev[j]+1e-12 {
+				t.Errorf("l1=%v：第 %d 个系数 %v 比 l1 更小时（%v）更大 —— L1 必须收缩",
+					l1, j, got[j], prev[j])
+			}
+		}
+		// ② 可复现：同一输入两次求解逐位相同。
+		if again := fitElasticNet(X, y, l1, 0, nil); !reflect.DeepEqual(got, again) {
+			t.Errorf("l1=%v：两次求解不同 %v vs %v", l1, got, again)
+		}
+		prev = abs(got)
+	}
+	// ③ 足够大的 L1 把**无效特征精确压到 0**（软阈值的精确性，而不是"变小"）。
+	big := fitElasticNet(X, y, 2.0, 0, nil)
+	for j := 1; j < len(big); j++ {
+		if big[j] != 0 {
+			t.Errorf("l1=2.0：第 %d 个系数 %v 应为精确 0（软阈值）", j, big[j])
+		}
+	}
+	if big[0] == 0 {
+		t.Error("截距不参与惩罚，不该被压成 0")
+	}
+}
+
+// TestFitWithLargeL1YieldsNoCoupling 是 L1 的**整链路**用例：罚到极致时所有非截距系数
+// 恰好为 0 ⇒ 按映射规则得到"不写耦合 + f_i = 1（不惩罚）"，且基准里已有的耦合被移除
+// （与 C1 同一口径），并且结果可复现。
+func TestFitWithLargeL1YieldsNoCoupling(t *testing.T) {
+	base := fitBaseParams()
+	base.Coupling = map[string]map[string]float64{"A": {"B": 0.5}}
+	opts := fitEdgeOpts(7)
+	opts.L1 = 10 // 远大于任何非截距系数在标准化尺度上的偏残差
+	p, rep, err := Fit(syntheticRecordsN(t, 0.4, 7, 20000), base, opts)
+	if err != nil {
+		t.Fatalf("Fit: %v", err)
+	}
+	for _, name := range []string{"A", "B", "A|B"} {
+		if got := rep.Coefficients[name]; got != 0 {
+			t.Errorf("L1=10 时 %s 的系数应为精确 0（软阈值），实际 %v", name, got)
+		}
+	}
+	if _, ok := p.Coupling["A"]["B"]; ok {
+		t.Errorf("耦合系数被压到 0 ⇒ 产物里必须没有该边，实际 %v", p.Coupling)
+	}
+	for _, id := range []string{"A", "B"} {
+		if p.Factors[id] != 1 {
+			t.Errorf("β_%s ≤ 0 ⇒ Factors[%s] = 1（不惩罚），实际 %v", id, id, p.Factors[id])
+		}
+	}
+	if rep.Coefficients["(intercept)"] == 0 {
+		t.Error("截距不参与惩罚，不该被压成 0")
+	}
+	p2, rep2, err := Fit(syntheticRecordsN(t, 0.4, 7, 20000), base, opts)
+	if err != nil {
+		t.Fatalf("Fit #2: %v", err)
+	}
+	if !reflect.DeepEqual(p, p2) || !reflect.DeepEqual(rep, rep2) {
+		t.Error("L1 > 0 时拟合必须仍然确定（两次结果不同）")
+	}
+}
+
+// ============================================================================
+// Fix round 1 / I5：单类别标签必须 fail-fast
+// ============================================================================
+
+// TestFitRejectsSingleClassLabels：标签只有一类时 logistic 似然被推向完全分离区间 ——
+// 系数被截停在饱和区（主效应 clip 到 1e-3、边系数 min(β,1)=1），CVErr 退化成常数预测器的
+// 损失，而全程零错误零告警。真实实验里单类别并不罕见（某一轮只跑了一组被攻陷的场景），
+// 故必须拒绝而不是产出一份"看起来正常"的极端参数。
+func TestFitRejectsSingleClassLabels(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		labels bool
+	}{
+		{"全部被攻陷", true},
+		{"全部未攻陷", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recs := syntheticRecordsN(t, 0.4, 7, 64)
+			for i := range recs {
+				recs[i].GroundTruth.Compromised = tc.labels
+			}
+			_, _, err := Fit(recs, fitBaseParams(), fitEdgeOpts(7))
+			if err == nil {
+				t.Fatal("单类别标签必须报错（否则产物是迭代上限的产物，而不是拟合结果）")
+			}
+			if !strings.Contains(err.Error(), "单类别标签") {
+				t.Errorf("错误信息必须点明原因：%v", err)
+			}
+		})
 	}
 }

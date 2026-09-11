@@ -76,7 +76,7 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	edgesSpec := fs.String("edges", "", "先验候选边 i|j[,...]（上限 5 条）")
 	seed := fs.Int64("seed", fitDefaultSeed, "拟合随机种子（自助法可复现）")
 	folds := fs.Int("folds", fitDefaultFolds, "交叉验证折数")
-	l2 := fs.Float64("l2", fitDefaultL2, "L2 正则系数")
+	l2 := fs.Float64("l2", fitDefaultL2, "L2 相对收缩率：标准化后每一列收缩 1/(1+l2)（不是绝对脊参数，见 FitOptions.L2 注释）")
 	l1 := fs.Float64("l1", 0, "L1 正则系数（默认 0：稀疏化由先验边集上限承担）")
 
 	if err := fs.Parse(args); err != nil {
