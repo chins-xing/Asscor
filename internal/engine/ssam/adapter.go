@@ -33,18 +33,11 @@ func ConfigToEdgeFactors(cfg *config.Config) []EdgeFactorConfig {
 	if cfg == nil {
 		return nil
 	}
-	triggers := DefaultTriggerMap()
+	// 默认表 + 显式覆盖的解析统一在 internal/config（legacy 路径消费同一个函数）：
+	// 同一个 trigger.<factor> 配置不允许在两条评分路径上得到两张不同的映射表。
+	triggers := config.ResolveEdgeFactorTriggerMap(cfg)
 	// 显式覆盖表：自定义因子只认它，不认合并后的默认表（见下方循环内的说明）。
 	modelTriggers := cfg.EdgeFactorModel.TriggerMap
-	for id, check := range cfg.EdgeFactorModel.TriggerMap {
-		// 主控裁定 #5 的第二道防线：空值绝不允许覆盖默认表。写进去等于让该因子
-		// 静默失去触发检查（永不激活）。本函数没有 error 通道，报错由同一装配流程里的
-		// ParamsFromConfig 承担（见 edgefactor.go validateTriggerOverrides）。
-		if strings.TrimSpace(check) == "" {
-			continue
-		}
-		triggers[id] = check
-	}
 	result := make([]EdgeFactorConfig, 0)
 	result = append(result, EdgeFactorConfig{
 		ID: "EF-002FA", Name: "2FA Missing",

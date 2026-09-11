@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -505,6 +506,103 @@ func (a *Assessor) computeDynamicDomainScores(result *model.AssessmentResult) *m
 	return scores
 }
 
+// legacyDefaultCustomFactors 返回 legacy 路径的内置边缘因子默认表。
+//
+// 六个条目（Factor 与 TriggerCheck）是改造前 assessor.go 内联字面量的**原样搬运**：
+// Factor 数值（0.75/0.80/0.82/0.90/0.88）刻意保持字面量，不改成读 cfg.EdgeFactors.*
+// —— 那会让 legacy 路径开始跟随 [edge_factors] 配置（行为变化，须独立决策）；
+// EF-002FA 的权重沿用既有约定取自 [edge_factors] two_factor_failure。
+//
+// TriggerCheck 的值与 config.DefaultEdgeFactorTriggerMap 的对应条目一致（由不变式
+// 测试锁定），但这里保留独立字面量而不是查表：该字段在 legacy 循环里不参与判定
+// （判定用的是 config.ResolveEdgeFactorTriggerMap 派生的触发检查），它是这张默认表
+// 的**内容**——P4「默认逐位一致」约束的正是这份内容。
+func legacyDefaultCustomFactors(cfg *config.Config) map[string]config.CustomEdgeFactorConfig {
+	return map[string]config.CustomEdgeFactorConfig{
+		"EF-002FA":     {Factor: cfg.EdgeFactors.TwoFactorFailure, TriggerCheck: "EF-001"},
+		"EF-SYNCOOKIE": {Factor: 0.75, TriggerCheck: "RS-005"},
+		"EF-SELINUX":   {Factor: 0.80, TriggerCheck: "OT-005"},
+		"EF-APPARMOR":  {Factor: 0.82, TriggerCheck: "OT-005"},
+		"EF-NO-SIEM":   {Factor: 0.90, TriggerCheck: "RS-007"},
+		"EF-NO-IDS":    {Factor: 0.88, TriggerCheck: "RS-006"},
+	}
+}
+
+// legacyOverrideFactorIDs 是「由显式 trigger.<factor> 覆盖来激活」的因子集合：六个内置因子里
+// 除去 EF-002FA（它和 EF-3FA 一起由循环里派生自解析表的两处内置分支处理）。集合外的键
+// （EF-3FA 自身、以及 legacy 输出层没有槽位的自定义因子）不在这里激活，理由见各自注释。
+var legacyOverrideFactorIDs = map[string]bool{
+	"EF-SYNCOOKIE": true, "EF-SELINUX": true, "EF-APPARMOR": true,
+	"EF-NO-SIEM": true, "EF-NO-IDS": true,
+}
+
+// legacyTriggerOverridesByCheck 把配置里显式的 trigger.<factor> 覆盖整理成
+// 「检查 ID → 因子 ID 列表」，供 legacy 循环消费。
+//
+// 语义与 ssam 路径一致（同一个 config.ResolveEdgeFactorTriggerMap 入口）：
+// trigger.<factor> = <check> 表示**该因子改由这个检查激活**。
+//
+// 值是列表而不是单个因子：默认表里 EF-SELINUX 与 EF-APPARMOR 就共用 OT-005，
+// 操作员把两个因子的触发检查都配成同一个检查 ID 是合法且可预期的用法；若用
+// map[string]string 就只能留下一个，另一个的覆盖会被静默丢弃 —— 那正是本方向要消除的
+// 「配了但静默无效」。列表顺序固定（按因子 ID 字典序），不依赖 map 迭代序。
+//
+// 空值覆盖不参与（解析层已拒绝；此处是第二道防线，与 config 的解析规则一致）。
+func legacyTriggerOverridesByCheck(cfg *config.Config) map[string][]string {
+	if cfg == nil {
+		return nil
+	}
+	overrides := make(map[string][]string)
+	for factorID, check := range cfg.EdgeFactorModel.TriggerMap {
+		if strings.TrimSpace(check) == "" || !legacyOverrideFactorIDs[factorID] {
+			continue
+		}
+		overrides[check] = append(overrides[check], factorID)
+	}
+	for check := range overrides {
+		sort.Strings(overrides[check])
+	}
+	return overrides
+}
+
+// legacyOverridePenalty 返回「覆盖激活」因子 factorID 时应使用的惩罚权重。
+//
+// 取值优先级与两处内置分支同形（先查 customFactors，再用出厂默认表的字面量兜底）：
+//  1. customFactors[factorID] 按**原拼写**（default 分支与两处内置分支就是这么查的）；
+//  2. legacyDefaultCustomFactors 的同一份字面量（本函数只为 legacyOverrideFactorIDs 里的
+//     五个内置因子调用，默认表必然命中 ⇒ 覆盖激活不会因为配置里没有对应条目而静默失效）。
+//
+// 这里刻意**不**改读 [edge_factors] 的同名权重（cfg.EdgeFactors.SELinuxDisabled 等）：
+// legacy 路径的权重来源是它自己的默认表字面量，把来源一并统一属行为变化，须独立决策
+// （见 evaluateEdgeFactorChain 末段）。
+func legacyOverridePenalty(cfg *config.Config, customFactors map[string]config.CustomEdgeFactorConfig, factorID string) (float64, bool) {
+	if v, ok := customFactors[factorID]; ok && v.Factor > 0 && v.Factor < 1.0 {
+		return v.Factor, true
+	}
+	if v, ok := legacyDefaultCustomFactors(cfg)[factorID]; ok && v.Factor > 0 && v.Factor < 1.0 {
+		return v.Factor, true
+	}
+	return 0, false
+}
+
+// evaluateEdgeFactorChain 按失败检查项计算六个边缘因子（legacy 乘性路径）。
+//
+// 触发映射的单一来源是 internal/config（默认表 + 显式覆盖，见 ResolveEdgeFactorTriggerMap），
+// 与 ssam 路径（adapter.ConfigToEdgeFactors）消费同一个解析函数 —— cmd/kernel/engine_on.go
+// 同时装配两条路径，配置覆盖不允许只对一半生效。
+//
+// 默认零行为变化（P4，硬约束）决定了本函数**不能**把默认表整体接进来：改造前 legacy 只用
+// case "EF-001" / case "EF-002" 两处内联字面量激活因子，其值恰好是默认表里 EF-002FA /
+// EF-3FA 的触发检查；默认表其余四项（RS-005 / OT-005 / RS-007 / RS-006）在 legacy 上
+// 从来没有生效过（default 分支是把 check ID 当因子 ID 查表，与触发映射无关），把它们接进来
+// 会**新增**默认激活 ⇒ 改变既有评分。因此：
+//   - 内置两项的触发检查改为从解析表派生（默认值与旧字面量逐字相同 ⇒ 逐位一致；
+//     trigger.EF-002FA / trigger.EF-3FA 写了覆盖时随之替换）；
+//   - 其余内置因子只消费**显式覆盖**（无覆盖 ⇒ 与改造前完全一致，一个都不多）；
+//   - 自定义因子在 legacy 输出层没有槽位，覆盖它不产生激活（评分不变）。
+//
+// 权重字面量（0.75/0.80/…）原样保留，不随 [edge_factors] 配置变化：把 legacy 的权重来源
+// 也统一起来会让本任务从「触发映射来源」变成「评分语义变化」，须独立决策。
 func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 	localFactors := make(map[string]float64)
 	for _, ef := range model.ListEdgeFactors() {
@@ -513,15 +611,13 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 
 	customFactors := a.cfg.EdgeFactorsCustom
 	if len(customFactors) == 0 {
-		customFactors = map[string]config.CustomEdgeFactorConfig{
-			"EF-002FA":     {Factor: a.cfg.EdgeFactors.TwoFactorFailure, TriggerCheck: "EF-001"},
-			"EF-SYNCOOKIE": {Factor: 0.75, TriggerCheck: "RS-005"},
-			"EF-SELINUX":   {Factor: 0.80, TriggerCheck: "OT-005"},
-			"EF-APPARMOR":  {Factor: 0.82, TriggerCheck: "OT-005"},
-			"EF-NO-SIEM":   {Factor: 0.90, TriggerCheck: "RS-007"},
-			"EF-NO-IDS":    {Factor: 0.88, TriggerCheck: "RS-006"},
-		}
+		customFactors = legacyDefaultCustomFactors(a.cfg)
 	}
+
+	// 默认表 + 配置覆盖：EF-002FA / EF-3FA 两处内置分支的检查 ID 由它派生。
+	triggers := config.ResolveEdgeFactorTriggerMap(a.cfg)
+	// 其余内置因子的显式覆盖：检查 ID → 因子 ID。
+	triggerOverrides := legacyTriggerOverridesByCheck(a.cfg)
 
 	for _, check := range result.Checks {
 		if check.Passed {
@@ -540,14 +636,18 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 			}
 			return 1.0 - (1.0-f)*conf
 		}
+		// 内置两项（改造前是 case "EF-001" / case "EF-002" 两处字面量）：触发检查取自
+		// 解析表，因此 trigger.EF-002FA / trigger.EF-3FA 的覆盖是**替换**语义（与 ssam 路径
+		// 一致）。两值相同时 switch 只走第一支：这是刻意覆盖才能构造出的退化配置，
+		// 默认表两个值不同，默认行为不受影响。
 		switch check.CheckID {
-		case "EF-001":
+		case triggers["EF-002FA"]:
 			if v, ok := customFactors["EF-002FA"]; ok {
 				localFactors["EF-002FA"] = attenuate(v.Factor)
 			} else {
 				localFactors["EF-002FA"] = attenuate(a.cfg.EdgeFactors.TwoFactorFailure)
 			}
-		case "EF-002":
+		case triggers["EF-3FA"]:
 			if v, ok := customFactors["EF-3FA"]; ok {
 				localFactors["EF-3FA"] = attenuate(v.Factor)
 			} else {
@@ -559,9 +659,24 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 			if v, ok := localFactors["EF-002FA"]; !ok || v > 0.82 {
 				localFactors["EF-002FA"] = 0.82
 			}
-		default:
+		}
+		// legacy 既有 identity 分支（原 default 分支）：check ID 恰好是因子 ID 时按该因子的
+		// 权重激活。改造前它被上面两个 case 的标签挡住，这里按派生后的标签保持同一形状
+		// （默认标签即 EF-001 / EF-002，故默认行为逐位不变）。
+		if check.CheckID != triggers["EF-002FA"] && check.CheckID != triggers["EF-3FA"] {
 			if penalty, ok := customFactors[check.CheckID]; ok && penalty.Factor < 1.0 {
 				localFactors[check.CheckID] = attenuate(penalty.Factor)
+			}
+		}
+		// 显式触发覆盖（trigger.<factor> = <check>）：配置里明写的映射必须在 legacy 路径上
+		// 生效，否则同一个配置只对 ssam 路径有效（本次改造要消除的问题）。
+		//
+		// 独立于上面的 switch 应用，而不是塞进 default 分支：一个检查 ID 同时是覆盖目标与
+		// 内置分支标签时（例如把 trigger.EF-SYNCOOKIE 也指向 EF-001），塞进 default 会让
+		// 该覆盖被 switch 静默吞掉。覆盖晚于 identity 写入，故显式配置优先。
+		for _, factorID := range triggerOverrides[check.CheckID] {
+			if penalty, ok := legacyOverridePenalty(a.cfg, customFactors, factorID); ok {
+				localFactors[factorID] = attenuate(penalty)
 			}
 		}
 	}

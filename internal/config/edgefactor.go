@@ -219,6 +219,72 @@ func canonicalFactorID(name string) string {
 	return strings.ToUpper(strings.TrimSpace(name))
 }
 
+// edgeFactor3FAID is the cascade factor id that ConfigToEdgeFactors always
+// produces although it carries no weight in either [edge_factors] or
+// [edge_factors.custom] — it is the only factor that exists without a penalty
+// value, and it is the reason the default trigger table has seven entries.
+const edgeFactor3FAID = "EF-3FA"
+
+// DefaultEdgeFactorTriggerMap returns the factory default mapping
+// factor id → the security check id whose failure triggers that factor.
+//
+// This is the single source of the table that used to be hard-coded twice:
+// once in internal/engine/ssam (adapter.go, for the plugin path) and once in
+// internal/engine/assessor.go (evaluateEdgeFactorChain, for the legacy path).
+// Both paths consume it now, so a configured [edge_factors.model] trigger.<factor>
+// override lands on both of them. It lives in internal/config because that
+// package is imported by both paths and because the table is, by nature, a set
+// of configuration defaults.
+//
+// Seven entries: the six built-in factors plus EF-3FA. EF-3FA is special — it
+// has no weight anywhere in the configuration (its 0.82 penalty is a fixed
+// cascade onto EF-002FA), yet its trigger check must still be configurable;
+// the legacy path expresses that cascade with its own branch and derives the
+// branch label from this table.
+//
+// The caller must treat the result as the *base* of a resolution and overlay the
+// operator's explicit overrides on it (see ResolveEdgeFactorTriggerMap) rather
+// than using it directly. A fresh map is returned on every call, so mutating the
+// result is safe.
+func DefaultEdgeFactorTriggerMap() map[string]string {
+	return map[string]string{
+		"EF-002FA":      "EF-001",
+		"EF-SYNCOOKIE":  "RS-005",
+		"EF-SELINUX":    "OT-005",
+		"EF-APPARMOR":   "OT-005",
+		"EF-NO-SIEM":    "RS-007",
+		"EF-NO-IDS":     "RS-006",
+		edgeFactor3FAID: "EF-002",
+	}
+}
+
+// ResolveEdgeFactorTriggerMap returns DefaultEdgeFactorTriggerMap overlaid with
+// the operator's explicit [edge_factors.model] trigger.<factor> entries.
+//
+// This is the one resolution both the legacy path (internal/engine) and the
+// plugin path (internal/engine/ssam) use, so "the same configuration" cannot
+// mean two different mappings depending on which engine a deployment assembled.
+// A nil cfg yields the plain default table.
+//
+// A blank override value never replaces a default: writing `trigger.EF-SELINUX =`
+// would leave the factor without a trigger check (it could never activate), which
+// is silent failure rather than "no override". ParseEdgeFactorModel already
+// rejects such a line, and this is the second line of defense for hand-built
+// *Config values (same ruling as the ssam assembly path).
+func ResolveEdgeFactorTriggerMap(cfg *Config) map[string]string {
+	resolved := DefaultEdgeFactorTriggerMap()
+	if cfg == nil {
+		return resolved
+	}
+	for id, check := range cfg.EdgeFactorModel.TriggerMap {
+		if strings.TrimSpace(check) == "" {
+			continue
+		}
+		resolved[id] = check
+	}
+	return resolved
+}
+
 // parseEdgeFactorNumber parses one numeric entry of the section and rejects
 // non-finite results. strconv.ParseFloat accepts "NaN"/"Inf"/"-Inf", and a
 // non-finite value would silently poison the penalty formula — it is neither

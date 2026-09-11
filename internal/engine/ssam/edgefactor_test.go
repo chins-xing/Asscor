@@ -47,6 +47,39 @@ func TestDefaultTriggerMapMatchesCurrentHardcoding(t *testing.T) {
 	}
 }
 
+// TestTriggerMapComesFromConfigSingleSource 锁定「ssam 路径的触发映射来自 config 的
+// 单一来源」：默认表是转发薄包装，显式覆盖由 config.ResolveEdgeFactorTriggerMap 解析。
+//
+// 与 legacy 路径（internal/engine 的 TestEvaluateEdgeFactorChainAppliesTriggerOverride，
+// 断言同一份覆盖在旧引擎上也生效）配对，构成「同一个配置 ⇒ 两条路径同一套触发映射」的
+// 证据：两处都断言自己消费的是 config 的解析结果，而不是各自内联的表。
+func TestTriggerMapComesFromConfigSingleSource(t *testing.T) {
+	// 转发薄包装：DefaultTriggerMap 必须逐项等于 config 的默认表。
+	for id, check := range config.DefaultEdgeFactorTriggerMap() {
+		if got := DefaultTriggerMap()[id]; got != check {
+			t.Errorf("DefaultTriggerMap()[%s] = %q, want config 默认表 %q", id, got, check)
+		}
+	}
+	if len(DefaultTriggerMap()) != len(config.DefaultEdgeFactorTriggerMap()) {
+		t.Errorf("转发包装条目数 = %d, want %d", len(DefaultTriggerMap()), len(config.DefaultEdgeFactorTriggerMap()))
+	}
+
+	// 覆盖生效：ConfigToEdgeFactors 的 TriggerCheck 出自 config 的解析结果。
+	cfg := &config.Config{EdgeFactors: defaultTestEdgeFactors()}
+	cfg.EdgeFactorModel.TriggerMap = map[string]string{"EF-SELINUX": "OT-099", "EF-3FA": "EF-777"}
+	resolved := config.ResolveEdgeFactorTriggerMap(cfg)
+
+	got := map[string]string{}
+	for _, f := range ConfigToEdgeFactors(cfg) {
+		got[f.ID] = f.TriggerCheck
+	}
+	for _, id := range []string{"EF-002FA", "EF-SYNCOOKIE", "EF-SELINUX", "EF-APPARMOR", "EF-NO-SIEM", "EF-NO-IDS", "EF-3FA"} {
+		if got[id] != resolved[id] {
+			t.Errorf("%s TriggerCheck = %q, want config 解析结果 %q", id, got[id], resolved[id])
+		}
+	}
+}
+
 func TestParamsFromConfigDefaultsToLegacy(t *testing.T) {
 	cfg := &config.Config{EdgeFactors: defaultTestEdgeFactors()}
 	p, enabled, err := ParamsFromConfig(cfg)

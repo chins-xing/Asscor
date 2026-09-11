@@ -15,17 +15,16 @@ import (
 // （主控裁定 A：此前 trigger.EF-3FA 是静默 no-op）。
 const ef3FAFactorID = "EF-3FA"
 
-// DefaultTriggerMap 是现有硬编码触发映射的默认表（adapter.go 原值，含 EF-3FA 的级联入口）。
+// DefaultTriggerMap 是现有硬编码触发映射的默认表（含 EF-3FA 的级联入口）。
+//
+// 单一事实来源已下沉到 internal/config（config.DefaultEdgeFactorTriggerMap），
+// 因为 legacy 路径（internal/engine/assessor.go 的 evaluateEdgeFactorChain）与
+// 本包的 adapter.go 必须消费**同一张**表：engine 不能 import 本包（adapter_engine.go
+// 反向 import 了 engine，会构成循环），而 config 已被两边 import，且这张表本来就是
+// 一组配置默认值。本函数保留为转发薄包装，既有调用面与测试（Task 4 落地）不受影响；
+// 新代码应直接用 config.ResolveEdgeFactorTriggerMap（默认表 + 配置覆盖）。
 func DefaultTriggerMap() map[string]string {
-	return map[string]string{
-		"EF-002FA":     "EF-001",
-		"EF-SYNCOOKIE": "RS-005",
-		"EF-SELINUX":   "OT-005",
-		"EF-APPARMOR":  "OT-005",
-		"EF-NO-SIEM":   "RS-007",
-		"EF-NO-IDS":    "RS-006",
-		ef3FAFactorID:  "EF-002",
-	}
+	return config.DefaultEdgeFactorTriggerMap()
 }
 
 // legacyOnlyParams 是「未启用」与「出错」两类返回共用的参数集：模型字段全为零值，
