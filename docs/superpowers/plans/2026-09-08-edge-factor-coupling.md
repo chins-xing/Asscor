@@ -1423,6 +1423,14 @@ Run（外层）：`go test -tags engine ./internal/engine/ssam/ ./internal/engin
 
 ### Task 7: 外层接入与逐位一致门禁
 
+> **⚠️ 实现后修订（代码为准）**：本节 Step 3 的代码块是最初版本，Task 6b（内仓钩子）与本次实现后**已落地于 `internal/engine/ssam/engine.go`、`edgefactor.go`、`adapter_engine.go`，请以代码为准**，勿照抄本代码块：
+> 1. **域级修正的接入方式**：不是 `DomainAdjust() map[string]float64` + `lastInput` 字段，而是内仓 Task 6b 交付的 `RegisterDomainAdjust(func([]DomainScore, []EdgeFactorResult) []DomainScore)` —— 钩子每次评分都拿到本轮的域分与因子结果，因此无需缓存 `lastInput`；逐域系数 `P_d` 由钩子内部算得并就地乘到域分上（`Score_d' = Base_d · P_d`）。
+> 2. **V/G/C 必须注册一个返回 1 的策略**：内仓 `applyEdgeFactorStrategyToBase` 在**未注入**时走默认的逐次相乘。若 V/G/C 只注册域级修正、不注册策略，惩罚会被"默认乘性 × 逐域 P_d"算两次。故 V/G/C 注册"恒等乘子"(1)，legacy 注册 `Result.GlobalMultiplier`。
+> 3. **参数按 λ 做一致裁剪**（design §3.1 注记给的第二条出路）：内仓 `Validate/Synthesize` 以**传入的域列表**为准，配置里出现请求域之外的 `λ`/`vector` 键会被拒绝；而配置层允许只声明部分 λ。故评分期请求域 = `DefaultDomains ∩ p.Lambda`，并把 `Lambda`/`Vectors` 裁剪到该域集（`Coupling`/`Factors` 不动）。一个 λ 都没配的非 legacy 模型**装配失败**（否则会出现"戳记写着 graph、评分分毫未变"的假溯源）。**裁剪只作用于评分期**：装载与溯源仍用完整参数（指纹 = 完整参数的 `Hash()`）。
+> 4. **未启用 = 零注册**：未配置模型段时调用 `RegisterEdgeFactorStrategy(nil)` + `RegisterDomainAdjust(nil)`（`nil` 即内仓的"未注册/默认"），**不得**传入 `ssam.DefaultEdgeFactorStrategy` 这类"语义等价的默认策略" —— 那会让默认路径从逐次相乘变成单次乘积；实测边界夹具 50.31 → 50.32（见 `TestDefaultConfigKeepsBitIdenticalScoring`）。
+> 5. **装配点**：适配器**构造函数**（任何构造路径都装到位）而非只在 `cmd/kernel`；`ReloadWeights` 必须重装；`cmd/kernel/engine_on.go` 只做启动期自检。
+> 6. **盖戳启用**：`model.EdgeFactors.Model/ParamsHash` 按 Task 5 评审 I1 的交接条件启用，判据是 `Engine` **实际装载**的 `Params`（不是"配置里写了"），热重载后同源更新。
+
 **Files:**
 - Modify: `internal/engine/ssam/engine.go`（按配置装配策略）
 - Test: `internal/engine/ssam/edgefactor_integration_test.go`

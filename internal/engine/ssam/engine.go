@@ -8,6 +8,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/edgefactor"
 	"github.com/chins-xing/asscor/internal/logger"
 	ssam "github.com/chins-xing/ssam"
 )
@@ -17,6 +19,13 @@ type Engine struct {
 	cfg            ssam.ScoringConfig
 	customFormulas map[string]ssam.ScoringFormula
 	hooks          map[HookPhase][]hookEntry
+
+	// 边缘因子合成模型（Task 7）：按配置**实际装载**的参数与其装载状态。
+	// 这是溯源（model.EdgeFactors.Model / ParamsHash）的唯一判据 —— 不是"配置里写了
+	// 什么"，而是"引擎真的装载了哪套参数"。零值 + edgeFactorLoaded=false 表示未装载
+	// （未配置 [edge_factors.model]、参数不可用，或已热重载为未启用）。
+	edgeFactorParams edgefactor.Params
+	edgeFactorLoaded bool
 }
 
 type hookEntry struct {
@@ -368,4 +377,133 @@ func (e *Engine) InitializeDefaults(defaultWeights map[string]float64, defaultFa
 	if len(e.cfg.EdgeFactors) == 0 && len(defaultFactors) > 0 {
 		e.cfg.EdgeFactors = append([]EdgeFactorConfig{}, defaultFactors...)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// 边缘因子合成模型装配（Task 7：把内仓钩子接到生产评分链上）
+// ---------------------------------------------------------------------------
+
+// resetEdgeFactorHooks 把内仓的两个钩子恢复成默认（nil == 未注册 ⇒ 逐位一致的历史乘性路径）。
+//
+// 绝不能用「注册一个语义等价的默认策略」来代替它：内仓 ast.go 的
+// edgeFactorStrategyIsDefault 标记决定 applyEdgeFactorStrategyToBase 走「逐次相乘」还是
+// 「base×单次乘积」，显式注册等价策略会换掉默认算术顺序，在取整半格边界上产生可观测差异。
+func resetEdgeFactorHooks() {
+	ssam.RegisterEdgeFactorStrategy(nil)
+	ssam.RegisterDomainAdjust(nil)
+}
+
+// ApplyEdgeFactorModel 按配置装配边缘因子合成模型：注册合成策略与域级修正两个钩子。
+//
+// 语义（逐条对应 Task 7 的验收条件）：
+//
+//   - **未启用**（无 [edge_factors.model] 段，或 cfg == nil）：**零注册** —— 两个钩子
+//     恢复成内仓默认，既不安装策略也不安装域级修正，也不安装任何"等价默认策略"。
+//   - **启用**：安装两个钩子，它们都在生产公式 SSAMV20Formula 的统一入口上生效（不是
+//     AST 入口）：
+//     1. RegisterEdgeFactorStrategy —— 总分乘子语义：legacy/M0 返回
+//     Result.GlobalMultiplier（∏ effective_f）；V/G/C 恒为 1，用来**抵消**内仓默认的
+//     逐次相乘路径（它们的惩罚完全由域级系数 P_d 表达，不能再乘一次）。
+//     2. RegisterDomainAdjust —— V/G/C 的域级修正 Score_d' = Base_d · P_d；
+//     legacy 注册 nil（域级修正不参与）。
+//   - **参数不可用或无法产生任何修正**（ParamsFromConfig / newSynthesizePlan 报错）：
+//     清空装载状态、恢复默认路径并返回错误 —— 宁可回落默认乘性路径，也不带着半套参数
+//     评分，更不在输出里声称用了某个模型（那正是 Task 5 评审 I1 要消除的假溯源）。
+//
+// 钩子是**进程级全局状态**（内仓设计如此），所以每次装配都是"全量替换"，且闭包用**值捕获**
+// 带上它被装配时的那套参数：热重载后旧闭包不会读到新参数，戳记（引擎装载的参数）与实际
+// 计算所用的参数永远同源。
+func (e *Engine) ApplyEdgeFactorModel(cfg *config.Config) error {
+	if cfg == nil {
+		// nil 配置 = 未配置任何模型段（不是"坏配置"），按未启用处理。
+		e.clearEdgeFactorModel()
+		resetEdgeFactorHooks()
+		return nil
+	}
+
+	p, enabled, err := ParamsFromConfig(cfg)
+	if err != nil {
+		e.clearEdgeFactorModel()
+		resetEdgeFactorHooks()
+		return err
+	}
+	if !enabled {
+		e.clearEdgeFactorModel()
+		resetEdgeFactorHooks()
+		return nil
+	}
+
+	plan, err := newSynthesizePlan(p)
+	if err != nil {
+		e.clearEdgeFactorModel()
+		resetEdgeFactorHooks()
+		return err
+	}
+	e.storeEdgeFactorModel(p)
+
+	ssam.RegisterEdgeFactorStrategy(func(factors []EdgeFactorResult) float64 {
+		res, err := synthesizeWithModel(plan, factors)
+		if err != nil {
+			// 保守：合成失败不额外惩罚（乘子 1 = 恒等），绝不让评分 panic。
+			// 装配期已排除本文档化的失败形态（λ 覆盖、向量覆盖、f∈(0,1]），
+			// 这里是兜底而不是常规路径。
+			return 1
+		}
+		return res.GlobalMultiplier // V/G/C 恒为 1；legacy 是 ∏ effective_f
+	})
+
+	if p.Model == edgefactor.ModelLegacy {
+		// legacy 的惩罚完全由总分乘子表达，域级修正保持未注册（恒等）。
+		ssam.RegisterDomainAdjust(nil)
+		return nil
+	}
+
+	ssam.RegisterDomainAdjust(func(scores []DomainScore, factors []EdgeFactorResult) []DomainScore {
+		res, err := synthesizeWithModel(plan, factors)
+		if err != nil {
+			return scores // 恒等：宁可不动域分，也不静默改分
+		}
+		for i := range scores {
+			pd, ok := res.P[scores[i].Domain]
+			if !ok {
+				// 未配置 λ 的域不参与修正（合成计划已保证至少有一个域参与）。
+				continue
+			}
+			scores[i].Score *= pd
+		}
+		return scores
+	})
+	return nil
+}
+
+// LoadedEdgeFactorParams 返回引擎**实际装载**的边缘因子参数（Task 5/7 的溯源判据）。
+//
+// ok=false 表示未装载：未配置 [edge_factors.model] 段、参数不可用，或已热重载为未启用。
+// 调用方必须据此留零值 —— **不得**改用"配置里写了模型段"来判断是否盖戳：该配置段里的
+// trigger.* 独立于合成模型就生效，所以"配置可解析出参数"不等于"评分用了这套参数"。
+func (e *Engine) LoadedEdgeFactorParams() (edgefactor.Params, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if !e.edgeFactorLoaded {
+		return edgefactor.Params{}, false
+	}
+	return e.edgeFactorParams, true
+}
+
+// storeEdgeFactorModel 记录**已装载**的参数集（load 状态与参数同时更新，读侧永远看到一致的一对）。
+func (e *Engine) storeEdgeFactorModel(p edgefactor.Params) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.edgeFactorParams = p
+	e.edgeFactorLoaded = true
+}
+
+// clearEdgeFactorModel 清空装载状态：零值 + loaded=false。任何"未装载"的路径（未启用、
+// 参数不可用、装配失败、热重载回未启用）都必须走这里，否则会留下上一个模型的参数
+// —— 那会让溯源戳记与新配置不同源。
+func (e *Engine) clearEdgeFactorModel() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.edgeFactorParams = edgefactor.Params{}
+	e.edgeFactorLoaded = false
 }

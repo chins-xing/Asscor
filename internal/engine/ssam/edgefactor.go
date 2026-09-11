@@ -235,3 +235,112 @@ func ActivationFromResult(r EdgeFactorResult, triggerCheck string) (edgefactor.F
 		EffectiveFactor: edgefactor.EffectiveFactor(r.Factor, r.TriggerConfidence),
 	}, true
 }
+
+// activationsFromResults 把引擎侧的因子结果列表换算成合成层的输入项（Task 7 验收条件 4）。
+//
+// 两条口径都不能省：
+//
+//   - 激活项由 ActivationFromResult 构造 —— 它内部做 ID 归一，并处理 bool：未激活项
+//     **不得**进入输入（未激活因子 Factor 为 0，会命中 Synthesize 里"沿用配置权重"的
+//     哨兵，让一个根本没触发的因子按配置权重计入惩罚）。
+//   - 归一后的 ID 必须能查到 Params.Factors —— 查不到说明该因子根本不在模型的因子集合里
+//     （例如只作级联入口、从不 Active 的 EF-3FA，或配置改坏后的孤儿 ID）。放进去会让
+//     Params.Vectors 查表落空，并**静默**按"作用于全部域、强度 1"计入惩罚 —— 一个未建模的
+//     因子凭空产生比配置更强的惩罚。这里直接丢弃。
+//
+// Vectors 的查表在 Synthesize 内部进行，用的是同一个归一 ID，与这里的 Factors 查表口径一致。
+func activationsFromResults(p edgefactor.Params, results []EdgeFactorResult) []edgefactor.FactorActivation {
+	activations := make([]edgefactor.FactorActivation, 0, len(results))
+	for _, r := range results {
+		act, ok := ActivationFromResult(r, "")
+		if !ok {
+			continue
+		}
+		id := NormalizeFactorID(act.FactorID)
+		if _, known := p.Factors[id]; !known {
+			continue
+		}
+		act.FactorID = id
+		activations = append(activations, act)
+	}
+	return activations
+}
+
+// synthesizePlan 是装配期为评分期算好的合成计划：**一致裁剪**后的参数集 + 请求域。
+//
+// 为什么必须裁剪（而不是直接用装配出来的 p）：内仓的 Validate/Synthesize 以**传入的域列表**
+// 为准，配置里出现请求域之外的 λ 或 vector 键会被直接拒绝（design §3.1 的运行时校验注记），
+// 而配置层允许只声明部分 λ。设计文档给了两条出路 ——「始终以完整域列表校验配置」或
+// 「对配置做一致裁剪」：前者会让"只配了两个 λ"的合法配置在评分期整次报错后**静默退回
+// 默认乘性**（接口说装了 graph、行为却是历史乘性），所以这里取后者。
+//
+// 裁剪只影响**评分期**：Engine 装载并用于溯源的仍是完整参数（指纹 = 完整参数的 Hash()），
+// 输出的 pruned 副本因此不会污染戳记。
+type synthesizePlan struct {
+	params  edgefactor.Params
+	domains []string
+}
+
+// newSynthesizePlan 计算合成计划。
+//
+// 非 legacy 模型要求「请求的每个域都有 λ_d」（内仓 Synthesize 的 fail-fast），因此请求域
+// = DefaultDomains ∩ p.Lambda：**未配置 λ 的域不做域级修正**（不是整次失败后静默退化）。
+// 一个 λ 都没配的非 legacy 模型永远产生不出任何修正 ⇒ 报错，由装配层拒绝装配并保持默认路径
+// ——否则会出现「戳记写着 graph、评分却分毫未变」的假溯源。
+//
+// legacy 不读 λ（惩罚完全由总分乘子表达），故请求全部默认域、不做裁剪。
+func newSynthesizePlan(p edgefactor.Params) (synthesizePlan, error) {
+	all := edgefactor.DefaultDomains()
+	if p.Model == edgefactor.ModelLegacy {
+		return synthesizePlan{params: p, domains: all}, nil
+	}
+	requested := make([]string, 0, len(all))
+	for _, d := range all {
+		if _, ok := p.Lambda[d]; ok {
+			requested = append(requested, d)
+		}
+	}
+	if len(requested) == 0 {
+		return synthesizePlan{}, fmt.Errorf(
+			"ssam: model %s declares no lambda.<domain> for any default domain — it could never adjust a domain score", p.Model)
+	}
+	return synthesizePlan{params: pruneToDomains(p, requested), domains: requested}, nil
+}
+
+// pruneToDomains 返回 p 在给定域集合上的一致裁剪副本（新建 map，绝不改动调用方的 map ——
+// Params 的 Lambda/Vectors 与 config 段共享同一批 map）。
+//
+// 裁剪安全：装配路径已用完整默认域列表跑过 Validate，因此每个已声明的向量都**包含全部 5 个
+// 域**，裁剪后必然仍覆盖请求域（不会出现"声明了向量却缺域"的第二类报错），且 Σ_d v ≤ 1 在
+// 取子集后仍成立。未声明的向量不在此处生成 —— 它们由 Synthesize 走文档化的"全 1"fallback。
+func pruneToDomains(p edgefactor.Params, domains []string) edgefactor.Params {
+	keep := make(map[string]bool, len(domains))
+	for _, d := range domains {
+		keep[d] = true
+	}
+	pruned := p
+	pruned.Lambda = make(map[string]float64, len(domains))
+	for d := range keep {
+		if l, ok := p.Lambda[d]; ok {
+			pruned.Lambda[d] = l
+		}
+	}
+	pruned.Vectors = make(map[string]map[string]float64, len(p.Vectors))
+	for id, vec := range p.Vectors {
+		trimmed := make(map[string]float64, len(domains))
+		for d := range keep {
+			if v, ok := vec[d]; ok {
+				trimmed[d] = v
+			}
+		}
+		pruned.Vectors[id] = trimmed
+	}
+	return pruned
+}
+
+// synthesizeWithModel 用合成计划对一次评分的因子结果做合成。
+func synthesizeWithModel(plan synthesizePlan, factors []EdgeFactorResult) (edgefactor.Result, error) {
+	return edgefactor.Synthesize(plan.params, plan.domains, edgefactor.Input{
+		Factors: activationsFromResults(plan.params, factors),
+	})
+}

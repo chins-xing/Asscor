@@ -64,3 +64,7 @@ var (
 	SSAMV12AST     = ssam.SSAMV12AST
 	SSAMV20AST     = ssam.SSAMV20AST
 )
+
+// ValidateEdgeFactorStrategy 报告合成策略是否可调用（装配根启动期自检用）。
+// 默认路径（RegisterEdgeFactorStrategy(nil)）与启用路径都必须让它通过。
+var ValidateEdgeFactorStrategy = ssam.ValidateStrategy
