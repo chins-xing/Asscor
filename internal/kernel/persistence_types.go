@@ -91,6 +91,10 @@ type AssessmentRecord struct {
 	ATTACKAPTMatches    []model.ATTACKAPTMatchInfo     `json:"attck_apt_matches,omitempty"`
 	ATTACKPredictedRisk *model.ATTACKPredictedRiskInfo `json:"attck_predicted_risk,omitempty"`
 	ATTACKFailedTechs   []string                       `json:"attck_failed_techniques,omitempty"`
+	// EdgeFactorChain 是本次评分实际观测到的边缘因子链（spec §5.1 的
+	// observed.edge_factor_chain[]），由 model.AssessmentResult.EdgeFactorChain 透出。
+	// omitempty：未启用合成模型的部署不输出该键，历史记录格式逐位不变。
+	EdgeFactorChain []model.EdgeFactorObservation `json:"edge_factor_chain,omitempty"`
 }
 
 type CheckDetail struct {

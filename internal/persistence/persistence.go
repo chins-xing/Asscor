@@ -719,6 +719,9 @@ func (m *Module) onAssessmentResult(ctx context.Context, msg kernel.Message) err
 			PrismResultFields: kernel.PrismFieldsFromResult(ar),
 			CheckCount:        len(ar.Checks),
 			Checks:            checkDetails,
+			// 观测链（spec §5.1）：与六个权重同源，直接透出 —— 采集器与离线重算要用它
+			// 复现"引擎这次到底用了哪些因子、各自被哪个检查触发、可信度多少"。
+			EdgeFactorChain: ar.EdgeFactorChain,
 		}
 
 		for _, c := range ar.Checks {

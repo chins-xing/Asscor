@@ -295,6 +295,25 @@ func (e EdgeFactors) ActiveFactors() []float64 {
 	return factors
 }
 
+// EdgeFactorObservation 是一次评分中**实际观测到**的边缘因子链条目
+// （spec §5.1 的 observed.edge_factor_chain[]）。
+//
+// 为什么必须在输出层承载它：实验记录要把"引擎这次到底用了哪些因子、各自被哪个检查
+// 触发、可信度多少、观测值多少"写进 JSONL，而离线重算（尤其 chain 模型）与审计复现
+// 都以此为唯一输入。此前这些信息只存在于评分过程的输出结构里
+// （ssam.AssessmentOutput.EdgeFactors），外层只把它折算成六个数值权重，采集器无从取得。
+//
+// 口径：EffectiveFactor 是**在线观测值**（内仓策略层已按可信度衰减一次的值，即
+// edgeFactorResult.Factor）；CTrigger 是触发检查的可信度；TS 是该条观测的时间戳
+// （空串合法，见 spec §5.1 必填表 —— chain 模型要求非零）。
+type EdgeFactorObservation struct {
+	Factor          string  `json:"factor"`
+	TriggerCheck    string  `json:"trigger_check"`
+	CTrigger        float64 `json:"c_trigger"`
+	EffectiveFactor float64 `json:"effective_factor"`
+	TS              string  `json:"ts"`
+}
+
 type AssessmentResult struct {
 	HostID                     string                   `json:"host_id"`
 	Hostname                   string                   `json:"hostname"`
@@ -345,6 +364,12 @@ type AssessmentResult struct {
 	ScoreLower95       float64 `json:"score_lower95,omitempty"`
 	ScoreUpper95       float64 `json:"score_upper95,omitempty"`
 	EvidenceConfidence float64 `json:"evidence_confidence,omitempty"`
+	// EdgeFactorChain 是本次评分实际观测到的因子链（omitempty：默认路径不输出 ⇒
+	// 既有 JSON 逐位不变）。见 EdgeFactorObservation 的注释。
+	//
+	// 位置说明：它逻辑上属于 EdgeFactors 那一组，但为了不在结构体中部插入注释、
+	// 从而把 gofmt 的字段对齐组切断（会波及 9 行无关空白），放在末尾自成一组。
+	EdgeFactorChain []EdgeFactorObservation `json:"edge_factor_chain,omitempty"`
 }
 
 type Weights struct {

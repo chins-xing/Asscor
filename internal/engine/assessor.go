@@ -608,6 +608,11 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 	for _, ef := range model.ListEdgeFactors() {
 		localFactors[ef.ID] = 1.0
 	}
+	// localConf 记录**每个因子是被多大可信度的检查触发的**（与 localFactors 同一次写入、
+	// 同一个来源），供输出层的观测链写 c_trigger（spec §5.1）。级联写入刻意不动它：
+	// 级联值的来源是配置而非触发观测（design §2.4），若该因子自身触发检查未失败，
+	// 它的可信度就是 0（"仅由级联激活"，与插件路径 TriggerConfidence=0 同形）。
+	localConf := make(map[string]float64)
 
 	customFactors := a.cfg.EdgeFactorsCustom
 	if len(customFactors) == 0 {
@@ -647,12 +652,14 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 			} else {
 				localFactors["EF-002FA"] = attenuate(a.cfg.EdgeFactors.TwoFactorFailure)
 			}
+			localConf["EF-002FA"] = conf
 		case triggers["EF-3FA"]:
 			if v, ok := customFactors["EF-3FA"]; ok {
 				localFactors["EF-3FA"] = attenuate(v.Factor)
 			} else {
 				localFactors["EF-3FA"] = attenuate(0.82)
 			}
+			localConf["EF-3FA"] = conf
 			// EF-3FA cascades a FIXED config penalty onto EF-002FA; cascade
 			// values are not confidence-attenuated (design §2.4 — their
 			// provenance is the config, not this trigger observation).
@@ -666,6 +673,7 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		if check.CheckID != triggers["EF-002FA"] && check.CheckID != triggers["EF-3FA"] {
 			if penalty, ok := customFactors[check.CheckID]; ok && penalty.Factor < 1.0 {
 				localFactors[check.CheckID] = attenuate(penalty.Factor)
+				localConf[check.CheckID] = conf
 			}
 		}
 		// 显式触发覆盖（trigger.<factor> = <check>）：配置里明写的映射必须在 legacy 路径上
@@ -677,6 +685,7 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		for _, factorID := range triggerOverrides[check.CheckID] {
 			if penalty, ok := legacyOverridePenalty(a.cfg, customFactors, factorID); ok {
 				localFactors[factorID] = attenuate(penalty)
+				localConf[factorID] = conf
 			}
 		}
 	}
@@ -722,6 +731,57 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 		mapped.NoIDS = v
 	}
 	result.EdgeFactors = mapped
+
+	// 观测链（Task 1 / spec §5.1 的 observed.edge_factor_chain[]）：与上面的因子映射同源 ——
+	// 只写**真的被乘进总分**的那批值，供 M0 基线记录与离线重算使用。
+	result.EdgeFactorChain = legacyObservedFactorChain(mapped, triggers, localConf, time.Now())
+}
+
+// legacyObservedFactorChain 把 legacy 路径**实际乘进总分**的因子写成观测链（spec §5.1）。
+//
+// 三条口径（与插件路径 ssam.observeEdgeFactorChain 刻意保持同一套语义）：
+//
+//  1. 只写 mapped 里落在 (0,1) 的因子 —— 它们正是 computeDynamicFinalScore 会乘进
+//     intrinsicCoeff 的那批值（model.EdgeFactors.ActiveFactors 的同一批），顺序也取同一顺序
+//     （六字段序），使离线逐次相乘与在线的算术顺序逐位一致。内部因子表 localFactors 里
+//     **没有输出槽位**的项不写：legacy 的 EF-3FA（只作级联入口，影响已体现在 EF-002FA 的
+//     0.82 上）与自定义因子被记进 localFactors 却从未参与相乘，写进链会让离线重算凭空产生惩罚。
+//  2. EffectiveFactor 写 legacy **实际乘上去的值**（attenuate 之后）；c_trigger 写该因子这次
+//     触发观测的可信度。legacy 不消费合成参数，故不存在 spec §10.2 的第二次衰减；级联激活
+//     且自身触发检查未失败时 c_trigger 为 0（与插件路径 TriggerConfidence=0 同形）。
+//  3. TS 取**评分时刻**（本进程时间）：model.CheckResult 没有采集时间字段（与插件路径同口径）。
+//
+// TriggerCheck 用**解析后的**触发表查得（默认表 + trigger.* 覆盖，与两条评分路径共用的同一张
+// 表）。注意它与"本轮是哪个检查触发了激活"不是一回事：legacy 还保留 identity 分支（检查 ID
+// 恰好是因子 ID），此时链上的 trigger_check 仍是该因子登记在解析表里的检查 —— spec §5.1 要求
+// 它"与该因子在当前部署实际解析出的触发检查一致"，而观测可信度由 c_trigger 承载。
+func legacyObservedFactorChain(mapped model.EdgeFactors, triggers map[string]string, confs map[string]float64, at time.Time) []model.EdgeFactorObservation {
+	fields := []struct {
+		id    string
+		value float64
+	}{
+		{"EF-002FA", mapped.TwoFactorFailure},
+		{"EF-SYNCOOKIE", mapped.SYNCookieDisabled},
+		{"EF-SELINUX", mapped.SELinuxDisabled},
+		{"EF-APPARMOR", mapped.AppArmorDisabled},
+		{"EF-NO-SIEM", mapped.NoSIEM},
+		{"EF-NO-IDS", mapped.NoIDS},
+	}
+	ts := at.UTC().Format(time.RFC3339)
+	chain := make([]model.EdgeFactorObservation, 0, len(fields))
+	for _, f := range fields {
+		if f.value <= 0 || f.value >= 1.0 {
+			continue
+		}
+		chain = append(chain, model.EdgeFactorObservation{
+			Factor:          f.id,
+			TriggerCheck:    triggers[f.id],
+			CTrigger:        confs[f.id],
+			EffectiveFactor: f.value,
+			TS:              ts,
+		})
+	}
+	return chain
 }
 
 func (a *Assessor) applyATTACK(hostID string, result *model.AssessmentResult) {

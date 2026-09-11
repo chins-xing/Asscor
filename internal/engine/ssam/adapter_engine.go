@@ -4,6 +4,7 @@ package ssam
 
 import (
 	"context"
+	"time"
 
 	"github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/engine"
@@ -86,8 +87,60 @@ func (a *EngineAdapter) ComputeScore(ctx context.Context, result *model.Assessme
 	if p, loaded := a.engine.LoadedEdgeFactorParams(); loaded {
 		result.EdgeFactors.Model = string(p.Model)
 		result.EdgeFactors.ParamsHash = p.Hash()
+
+		// 观测链（Task 1 / spec §5.1 的 observed.edge_factor_chain[]）：与溯源戳**同一处、
+		// 同一判据**的另一种落地 —— 没装载就既不该盖戳、也不该输出链。
+		//
+		// 两个来源都不是"再看一眼配置"推出来的：
+		//   - 因子集合与观测值来自本次评分**自己的输出**（output.EdgeFactors）；
+		//   - 触发检查来自配置层的**解析结果**（默认表 + trigger.* 覆盖，两条评分路径共用
+		//     的同一张表），因为内仓结果类型没有该字段，也不该知道配置层的触发映射。
+		result.EdgeFactorChain = observeEdgeFactorChain(
+			output.EdgeFactors, config.ResolveEdgeFactorTriggerMap(a.confCfgPtr()), time.Now())
+	} else {
+		// 未装载（未配置 / 参数不可用 / 已热重载为未启用）：不留任何链。写 nil 而不是不动它，
+		// 是为了让"同一个 result 被再次评分"时不会残留上一次的观测链（假溯源）。
+		result.EdgeFactorChain = nil
 	}
 	return nil
+}
+
+// observeEdgeFactorChain 把本次评分的逐因子结果映射成输出层的观测链（spec §5.1）。
+//
+// 三条口径（Task 1 裁定，改任何一条都会改变离线重算的含义）：
+//
+//  1. EffectiveFactor 写**在线观测值** —— 即内仓策略层 ApplyEdgeFactorsToChecksPolicy 已按
+//     可信度衰减一次后的值（EdgeFactorResult.Factor），**不是**配置里的因子权重 f_i。
+//     对 V/G/C 而言装配层会再衰减一次（eff = edgefactor.EffectiveFactor(观测值, c)，
+//     合计 c²），这是 spec §10.2 的**已知口径差**：记录描述"引擎看到了什么"，口径差由
+//     离线重算与报告负责标注，此处刻意不做任何补偿（补偿会改评分）。
+//  2. TS 取**评分时刻**（本进程时间），不是检查的采集时刻 —— 内仓结果类型与
+//     model.CheckResult 都没有时间字段。它满足 chain 模型"每个激活因子必须带非零时间戳"
+//     的前提；同一场景内的相对顺序由写出顺序保证（= 内仓的因子结果序 = 因子 ID 序）。
+//  3. Active == false 的项**不写进链**：它们没有产生任何惩罚，写进去会让离线重算凭空
+//     产生惩罚（与"丢弃未建模因子"是同一类纪律）。EF-3FA 正是这一类（CascadeOnly，
+//     它的影响已经体现在 EF-002FA 的观测值上）。
+//
+// TriggerCheck 只从**配置层解析结果**查得（config.ResolveEdgeFactorTriggerMap），而不是
+// 重新读一遍 [edge_factors.model] 段：解析结果才是两条评分路径共用的同一张表。
+// 解析表里没有该因子时（自定义因子）留空，绝不编造一个检查 ID。
+func observeEdgeFactorChain(factors []EdgeFactorResult, triggers map[string]string, at time.Time) []model.EdgeFactorObservation {
+	ts := at.UTC().Format(time.RFC3339)
+	chain := make([]model.EdgeFactorObservation, 0, len(factors))
+	for _, f := range factors {
+		if !f.Active {
+			continue
+		}
+		id := NormalizeFactorID(f.ID)
+		chain = append(chain, model.EdgeFactorObservation{
+			Factor:          id,
+			TriggerCheck:    triggers[id],
+			CTrigger:        f.TriggerConfidence,
+			EffectiveFactor: f.Factor,
+			TS:              ts,
+		})
+	}
+	return chain
 }
 
 func (a *EngineAdapter) Name() string {
