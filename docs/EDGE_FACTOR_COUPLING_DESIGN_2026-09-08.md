@@ -270,6 +270,12 @@ chain.window_seconds = 300
 4. 交叉验证选模型，输出报告（Markdown + JSON）与**可直接粘贴的 config 参数段**；
 5. `--fit` 模式：拟合主效应与先验交互边，输出参数 + 自助法不确定度。
 
+> **参数段的可复现性（Task 9 遗留 (c)，里程碑 B 必须遵守）**：`RenderConfigSection` 只导出
+> **模型级**参数（`[edge_factors.model]`：model/p_floor/lambda/vector/coupling/chain.window），
+> 而因子权重 `f_i` 的单一来源是 `[edge_factors]`（含 `[edge_factors.custom]`）。故一份"可复现的
+> 候选"= **该段 + 对应配置的 `[edge_factors]` 段 + 数据集 JSONL（含权重口径，见 §5.1 前提 2）**；
+> 只发这一段会让别人复算出不同的分数。报告与论文附件里这三样必须一起给出。
+
 ### 5.3 环境分工
 
 | 环境 | 角色 | 注意 |
