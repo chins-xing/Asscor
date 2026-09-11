@@ -125,6 +125,9 @@ func sortedNames[V any](m map[string]V) []string {
 // 列序（模型｜决策一致率｜漏判率｜误阻断率｜Spearman｜Kendall｜AUC｜N）与 spec §2.1 的三层指标
 // 顺序一致，且**不按选优判据重排**：报告是原始证据，判据顺序已经在结论行里写明。
 //
+// 表头之前先写一行**判定口径**（C1 第 5 条）：离线分数 = 引擎总分（同一公式），阈值 = 引擎
+// 决策线。这张表的全部价值在于"它描述的是部署行为"，口径不写明就无法被复核。
+//
 // 空候选集直接拒绝（而不是打印一张空表）：一份"表头齐全、零行、结论为空"的报告会被误读成
 // "比过了"。整篇文档先渲染进内存再一次性写出，故任何校验失败都不会留下半份报告。
 //
@@ -140,6 +143,12 @@ func RenderMarkdown(w io.Writer, rep Report) error {
 	var b strings.Builder
 	b.WriteString("# 边缘因子模型对比报告\n\n")
 	fmt.Fprintf(&b, "生成时间: %s｜场景数: %d\n\n", rep.GeneratedAt.Format(time.RFC3339), rep.Records)
+	// 判定口径必须写在报告头上（主控裁定 C1 第 5 条）：这张表里的"分数"与部署引擎的分数是
+	// **同一个量**（同一个 `ssam.SSAMV20Formula`），阈值就是引擎的决策线。少了这一行，
+	// 读者无法判断报告里的漏判率/误阻断率是不是部署行为 —— 而这正是里程碑 B 的全部意义。
+	b.WriteString("判定口径: 离线分数 = 引擎总分（`ssam.SSAMV20Formula`，与在线评分同一公式；")
+	b.WriteString("域级修正经 `RegisterDomainAdjust`/`RegisterEdgeFactorStrategy` 注入，legacy 零注册）；")
+	b.WriteString("阈值 = 引擎决策线（`Acceptable = 总分 ≥ threshold`）\n\n")
 	b.WriteString("| 模型 | 决策一致率 | 漏判率 | 误阻断率 | Spearman | Kendall | AUC | N |\n")
 	b.WriteString("|---|---|---|---|---|---|---|---|\n")
 	for _, name := range sortedNames(rep.Models) {
@@ -154,12 +163,47 @@ func RenderMarkdown(w io.Writer, rep Report) error {
 		_, err := io.WriteString(w, b.String())
 		return err
 	}
+	// 三层判据全等（主控 I4 第 3 条）：此时 `Best` 只可能来自第四层兜底（模型名字典序），
+	// 打印一个确定语气的「选定模型」就是凭空造结论 —— 与零记录分支同款纪律。
+	// 判据直接由表格里的指标算出（而不是读一个 `Report` 字段），这样手搓 Report 的调用方
+	// 也无法绕过它。
+	if allMetricsTied(rep.Models) {
+		b.WriteString("\n**本次比较无区分力：未选模**（全部候选的三层判据逐位相同：")
+		b.WriteString("漏判率、误阻断率、AUC 全等；此时「最优候选」只会是模型名字典序的产物，故不给出结论）\n")
+		_, err := io.WriteString(w, b.String())
+		return err
+	}
 	// 结论行必须把四层判据全写出来（含字典序兜底）：报告读者要能据此复算出 Best，
 	// 只写"漏判率 → 误阻断率 → AUC"会让平局情形的结论显得无从解释。
 	fmt.Fprintf(&b, "\n**选定模型**: `%s`（判据：漏判率 ↓ → 误阻断率 ↓ → AUC ↑ → 模型名字典序）\n",
 		escapeCell(rep.Best))
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// allMetricsTied 报告全部候选在**选优判据**上是否完全无法分辨（三层全平）。
+//
+// 判据就是 `better`（主判据 → 次判据 → AUC）：任意两个候选之间都不存在"严格更优"，
+// 于是 `pickBest` 的结果只能来自第四层兜底（模型名字典序）—— 那时打印「选定模型」
+// 就是把字典序当结论。
+//
+// 为什么用 `better` 而不是逐字段 `==`：判据是**分层短路**的。两个候选的排序层
+// （Spearman/Kendall）可以不同而三层判据全等；此时选模仍然无据可依，报告同样只能写
+// "无区分力"。反过来，只要有一层真的分出高下，`better` 就会为真，结论行照常打印。
+//
+// 单候选（len < 2）不算平局：那时不存在"比较"，报告里的「选定模型」读作
+// "本次只评估了这一个候选"，而不是"它比别的候选更好"。
+func allMetricsTied(models map[string]Metrics) bool {
+	if len(models) < 2 {
+		return false
+	}
+	names := sortedNames(models)
+	for _, name := range names[1:] {
+		if better(models[name], models[names[0]]) || better(models[names[0]], models[name]) {
+			return false
+		}
+	}
+	return true
 }
 
 // escapeCell 把模型名安全地放进 Markdown 表格单元格。

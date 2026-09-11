@@ -8,10 +8,12 @@
 //	对比（-candidate）：在同一份数据上评估候选模型，按决策层主判据选优并导出参数段（Task 9）；
 //	拟合（-fit）：在带标签的记录上拟合"主效应 + 先验边"并把结果折回配置段（Task 10）。
 //
-// 退出码约定（CLI 错误面，Task 10 mandate 口径 4）：
+// 退出码约定（CLI 错误面，Task 10 mandate 口径 4 + 本轮 I4）：
 //
-//	0 成功；1 运行期失败（读取层 / Compare / RenderConfigSection / Fit 返回的错误）；
-//	2 用法错误（缺必填开关、权重表非法、-candidate 形式错误、-fit 与 -candidate 冲突）。
+//	0 成功；1 运行期失败（读取层 / Compare / RenderConfigSection / Fit 返回的错误，
+//	以及 `-factors` 未覆盖记录里用到的因子这类**数据相关**的拒绝）；
+//	2 用法错误（缺必填开关、权重表非法、`-factors` 整表为空、-candidate 形式错误、
+//	-fit 与 -candidate 冲突）。
 //
 // 两条纪律贯穿全文件：
 //
@@ -72,7 +74,7 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	weightsSpec := fs.String("weights", "", "域权重表 domain=w[,...]（对比模式必填）")
 	fitMode := fs.Bool("fit", false, "拟合模式：在带标签记录上拟合主效应 + 先验边")
 	configPath := fs.String("config", "", "拟合基准配置路径（须含 [edge_factors.model] 段）")
-	factorsSpec := fs.String("factors", "", "因子权重 f_i：ID=v[,...]")
+	factorsSpec := fs.String("factors", "", "因子权重 f_i：ID=v[,...]（对比/拟合模式必填；须覆盖记录里用到的全部因子）")
 	edgesSpec := fs.String("edges", "", "先验候选边 i|j[,...]（上限 5 条）")
 	seed := fs.Int64("seed", fitDefaultSeed, "拟合随机种子（自助法可复现）")
 	folds := fs.Int("folds", fitDefaultFolds, "交叉验证折数")
@@ -113,6 +115,14 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, err)
 			return exitUsage
 		}
+		// I4 第 1 条在 -fit 模式下的对应面：`parseFactors("")` 返回 nil，而空因子表会让基准
+		// 参数集里没有任何因子、设计矩阵只剩截距列 —— 拟合出来的"系数"只是正则项的产物。
+		// （上面的开关校验已拦住空串，这里是"解析后仍为空"的第二道防线：`-factors " , "`
+		// 这类形式错误由 parseFactors 自己报。）
+		if len(factors) == 0 {
+			fmt.Fprintln(stderr, "edgecompare: -fit 需要至少一个因子权重（-factors ID=v）—— 空表下设计矩阵只剩截距列")
+			return exitUsage
+		}
 		if edges, err = parseEdges(*edgesSpec); err != nil {
 			fmt.Fprintln(stderr, err)
 			return exitUsage
@@ -131,12 +141,29 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, err)
 			return exitUsage
 		}
+		// I4 第 1 条：整表为空是**用法错误**（与 parseWeights 同款纪律），不再只打一行
+		// stderr 警告后照常出报告 —— 空表意味着观测链上的每个因子都被丢弃，离线重算退化
+		// 成"不修正任何域分"，而报告会以完全正常的语气打印一份与部署无关的对比结论。
+		if len(factors) == 0 {
+			fmt.Fprintln(stderr, "edgecompare: -factors 是必填项且不得为空 —— 它是『这套部署的因子权重』的唯一声明面（[edge_factors.model] 段没有对应键）；空表会让观测链上的每个因子都被丢弃、离线重算退化为不修正任何域分，报告里的决策层指标与任何真实部署都没有关系")
+			return exitUsage
+		}
 	}
 
 	records, err := LoadRecords(*recordsPath)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitFailure
+	}
+
+	// I4 第 2 条（数据类错误 ⇒ 退出码 1，与 Compare/Evaluate 同档）：`-factors` 必须覆盖记录里
+	// **实际用到**的每个因子。少一个就会让该因子被静默丢弃（候选的因子集合就是过滤器），
+	// 分数被悄悄抬高、漏判率被低估，而报告里看不出少了谁。两种模式都查。
+	if len(factors) > 0 {
+		if err := validateFactorsCoverage(records, factors); err != nil {
+			fmt.Fprintln(stderr, err)
+			return exitFailure
+		}
 	}
 
 	switch {
@@ -174,11 +201,14 @@ func runSelfCheck(records []Record, verbose bool, stdout io.Writer) int {
 		}
 		envs[rec.Meta.Env]++
 		for _, c := range rec.Observed.EdgeFactorChain {
-			factors[normalizeFactorID(c.Factor)]++
+			factors[edgefactor.NormalizeFactorID(c.Factor)]++
 		}
 	}
 
 	fmt.Fprintf(stdout, "记录数: %d\n", len(records))
+	// 判定口径（主控裁定 C1 第 5 条）：自检打印的 `观测总分`/`判` 是引擎输出的**观测值**；
+	// 对比模式的"分数"则是同一条引擎公式的重算结果（见 RenderMarkdown 的表头）。
+	fmt.Fprintln(stdout, "判定口径: 观测分数/判定来自引擎输出（`SSAMV20Formula`）；对比模式的离线分数与它同公式同口径")
 	fmt.Fprintf(stdout, "客观被攻陷: %d/%d\n", compromised, len(records))
 	fmt.Fprintf(stdout, "含因子场景: %d｜含因子链观测: %d\n", factored, chained)
 	fmt.Fprintf(stdout, "环境: %s\n", formatCounts(envs))
@@ -216,18 +246,16 @@ func runCompare(records []Record, weights map[string]float64, pairs []candidateR
 		// -factors 是**显式**输入的因子权重（f_i）。CLI 刻意不读 [edge_factors]：
 		// 内置因子 ID ↔ 配置字段的映射唯一事实来源是引擎的带 tag 适配层
 		// （internal/engine/ssam，离线工具不能 import 它），在这里重抄一份就成了第二份真相。
-		if len(factors) > 0 {
-			if p.Factors == nil {
-				p.Factors = make(map[string]float64, len(factors))
-			}
-			for id, f := range factors {
-				p.Factors[id] = f
-			}
+		//
+		// 空表已在 runCLI 处以用法错误拒绝（I4 第 1 条），故这里不再有"警告 + 照常出报告"
+		// 的退化路径。
+		if p.Factors == nil {
+			p.Factors = make(map[string]float64, len(factors))
+		}
+		for id, f := range factors {
+			p.Factors[id] = f
 		}
 		paramsByModel[ref.name] = p
-	}
-	if len(factors) == 0 {
-		fmt.Fprintln(stderr, "警告: 未提供 -factors ⇒ 候选的 f_i 为空，观测因子链上的因子会被全部丢弃（离线重算退化为不修正域分）。真实比较请显式给出 -factors。")
 	}
 
 	rep, err := Compare(records, paramsByModel, weights)
@@ -259,13 +287,11 @@ func runCompare(records []Record, weights map[string]float64, pairs []candidateR
 func runFit(records []Record, base edgefactor.Params, factors map[string]float64,
 	edges [][2]string, opts FitOptions, outPath string, stdout, stderr io.Writer) int {
 
-	if len(factors) > 0 {
-		if base.Factors == nil {
-			base.Factors = make(map[string]float64, len(factors))
-		}
-		for id, f := range factors {
-			base.Factors[id] = f
-		}
+	if base.Factors == nil {
+		base.Factors = make(map[string]float64, len(factors))
+	}
+	for id, f := range factors {
+		base.Factors[id] = f
 	}
 	opts.PriorEdges = edges
 	fitted, rep, err := Fit(records, base, opts)
@@ -458,7 +484,7 @@ func parseFactors(spec string) (map[string]float64, error) {
 		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 || f > 1 {
 			return nil, fmt.Errorf("edgecompare: -factors %s = %q 不在 (0,1] 内（Validate 会以同样的理由拒绝它）", id, raw)
 		}
-		out[normalizeFactorID(id)] = f
+		out[edgefactor.NormalizeFactorID(id)] = f
 	}
 	return out, nil
 }
@@ -485,6 +511,41 @@ func parseEdges(spec string) ([][2]string, error) {
 		out = append(out, [2]string{from, to})
 	}
 	return out, nil
+}
+
+// validateFactorsCoverage 校验 `-factors` 覆盖了记录里**实际用到**的每个因子 ID（I4 第 2 条）。
+//
+// 为什么必须拒绝而不是静默丢弃：候选模型的因子集合（`Params.Factors`）同时也是
+// `engineEdgeFactors` 的过滤器 —— 链上出现、却没在 `-factors` 里声明权重的因子会被丢掉，
+// 于是它**不产生任何惩罚**，分数被悄悄抬高、漏判率被低估（偏保守的一侧，但同样失真），
+// 而报告里完全看不出少了一个因子。
+//
+// 错误列出**具体 ID**（按字典序，确定性）：操作者要能直接照着补一行，而不是去猜哪个因子
+// 没被建模。空表由上层的用法错误拦下（退出码 2），这里只处理"部分缺失"（数据类错误，退出码 1）。
+func validateFactorsCoverage(records []Record, factors map[string]float64) error {
+	missing := map[string]bool{}
+	for _, rec := range records {
+		for _, c := range rec.Observed.EdgeFactorChain {
+			id := edgefactor.NormalizeFactorID(c.Factor)
+			if id == "" {
+				continue // 空 ID 已在读取层按行拒绝，这里只是防御
+			}
+			if _, ok := factors[id]; !ok {
+				missing[id] = true
+			}
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(missing))
+	for id := range missing {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return fmt.Errorf("edgecompare: -factors 未覆盖记录里用到的因子 %s —— 未声明权重的因子会被静默丢弃（不产生任何惩罚），"+
+		"分数被抬高、漏判率被低估，而报告里看不出少了一个因子；请为它们补上 f_i 或确认这些条目不该出现在链上",
+		strings.Join(ids, ", "))
 }
 
 // formatCounts 以稳定的字典序输出计数表（报告/日志必须可复现，不能依赖 map 迭代序）。

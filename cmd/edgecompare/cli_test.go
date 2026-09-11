@@ -88,7 +88,7 @@ func TestCLIReportsCompareErrorOnEmptyRecords(t *testing.T) {
 	records := writeJSONL(t, "empty.jsonl", "\n\n")
 	cfg := writeConfig(t, "cand-legacy.ini", "[edge_factors.model]\nmodel = legacy\np_floor = 0.2\n")
 	code, stdout, stderr := runCLIForTest(t,
-		"-records", records, "-candidate", "legacy="+cfg, "-weights", "attack_surface=1")
+		"-records", records, "-candidate", "legacy="+cfg, "-weights", "attack_surface=1", "-factors", "EF-SELINUX=0.8")
 	if code != 1 {
 		t.Fatalf("退出码 = %d, want 1；stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -141,7 +141,7 @@ func TestCLIRejectsCandidateWithoutModelSection(t *testing.T) {
 	records := writeJSONL(t, "t9.jsonl", t9FixtureJSONL)
 	cfg := writeConfig(t, "no-model.ini", "[weights]\nattack_surface = 35\n")
 	code, _, stderr := runCLIForTest(t,
-		"-records", records, "-candidate", "x="+cfg, "-weights", "attack_surface=1")
+		"-records", records, "-candidate", "x="+cfg, "-weights", "attack_surface=1", "-factors", "EF-SELINUX=0.8")
 	if code != 1 {
 		t.Fatalf("退出码 = %d, want 1；stderr=%s", code, stderr)
 	}
@@ -159,7 +159,7 @@ func TestCLIReportsRenderErrorWithoutPartialOutput(t *testing.T) {
 		"[edge_factors.model]\nmodel = vector\np_floor = 0.2\nlambda.attack_surface = 5\nlambda.made_up = 0.5\nvector.EF-SELINUX = 0.5,0,0,0,0\n")
 	out := filepath.Join(t.TempDir(), "report.md")
 	code, stdout, stderr := runCLIForTest(t,
-		"-records", records, "-candidate", "vector="+cfg, "-weights", "attack_surface=1", "-out", out)
+		"-records", records, "-candidate", "vector="+cfg, "-weights", "attack_surface=1", "-factors", "EF-SELINUX=0.8", "-out", out)
 	if code != 1 {
 		t.Fatalf("退出码 = %d, want 1；stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -183,7 +183,7 @@ func TestCLICompareWritesReportAndSection(t *testing.T) {
 		"[edge_factors.model]\nmodel = vector\np_floor = 0.2\nlambda.attack_surface = 5\nvector.EF-SELINUX = 0.5,0,0,0,0\n")
 	out := filepath.Join(t.TempDir(), "report.md")
 	code, _, stderr := runCLIForTest(t,
-		"-records", records, "-candidate", "vector="+cfg, "-weights", "attack_surface=1", "-out", out)
+		"-records", records, "-candidate", "vector="+cfg, "-weights", "attack_surface=1", "-factors", "EF-SELINUX=0.8", "-out", out)
 	if code != 0 {
 		t.Fatalf("退出码 = %d, want 0；stderr=%s", code, stderr)
 	}
@@ -286,6 +286,114 @@ func TestCLIRejectsMalformedCandidateFlag(t *testing.T) {
 		if code != 2 {
 			t.Errorf("-candidate %q：退出码 = %d, want 2", bad, code)
 		}
+	}
+}
+
+// ============================================================================
+// I4：-factors 的产物纪律（整表为空 / 部分缺失）与"无区分力"的产物纪律
+// ============================================================================
+
+// TestCLIRejectsEmptyFactors（主控 I4 第 1 条）：`-factors` 整表为空必须是**用法错误**
+// （退出码 2，与 parseWeights 同款纪律），而不是打一行 stderr 警告后照常出报告。
+//
+// 为什么：`-factors` 是"这套部署的因子权重"的唯一声明面（`[edge_factors.model]` 段里没有
+// 对应键），空表意味着候选的因子集合为空 ⇒ 观测链上的**每个**因子都会被丢弃 ⇒ 离线重算
+// 退化成"不做任何域级修正"。这样算出来的决策层指标与任何真实部署都没有关系，而报告会以
+// 完全正常的语气打印出一份"比过了"的结论。
+func TestCLIRejectsEmptyFactors(t *testing.T) {
+	records := writeJSONL(t, "t9.jsonl", t9FixtureJSONL)
+	cfg := writeConfig(t, "cand-vector.ini",
+		"[edge_factors.model]\nmodel = vector\np_floor = 0.2\nlambda.attack_surface = 5\nvector.EF-SELINUX = 0.5,0,0,0,0\n")
+	for _, factors := range []string{"", "   "} {
+		code, stdout, stderr := runCLIForTest(t,
+			"-records", records, "-candidate", "vector="+cfg, "-weights", "attack_surface=1", "-factors", factors)
+		if code != 2 {
+			t.Fatalf("-factors %q：退出码 = %d, want 2（用法错误）；stderr=%s", factors, code, stderr)
+		}
+		if !strings.Contains(stderr, "-factors") {
+			t.Errorf("-factors %q：stderr 必须点名该开关：%s", factors, stderr)
+		}
+		if strings.TrimSpace(stdout) != "" {
+			t.Errorf("-factors %q：失败时不得产出报告：%s", factors, stdout)
+		}
+	}
+	// 正向对照：给出覆盖观测因子的表就照常出报告。
+	code, stdout, stderr := runCLIForTest(t,
+		"-records", records, "-candidate", "vector="+cfg, "-weights", "attack_surface=1",
+		"-factors", "EF-SELINUX=0.8")
+	if code != 0 {
+		t.Fatalf("退出码 = %d, want 0；stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "选定模型") {
+		t.Errorf("正向对照应产出报告：%s", stdout)
+	}
+}
+
+// TestCLIRejectsFactorsMissingObservedIDs（主控 I4 第 2 条）：记录里**用到**、而 `-factors`
+// 没给权重的因子必须被**列出并拒绝**（退出码 1，与 Compare/Evaluate 的数据类错误同一档），
+// 而不是静默丢弃。
+//
+// 为什么：被丢弃的因子不产生任何惩罚（`engineEdgeFactors` 按候选的因子集合过滤），于是
+// 分数被静默抬高、漏判率被低估 —— 而报告里看不出少了一个因子。列出 ID 才能让操作者知道
+// 该补哪一行。
+func TestCLIRejectsFactorsMissingObservedIDs(t *testing.T) {
+	records := writeJSONL(t, "t9.jsonl", t9FixtureJSONL) // 链条目用的是 EF-SELINUX
+	cfg := writeConfig(t, "cand-vector.ini",
+		"[edge_factors.model]\nmodel = vector\np_floor = 0.2\nlambda.attack_surface = 5\nvector.EF-NO-IDS = 0.5,0,0,0,0\n")
+	code, stdout, stderr := runCLIForTest(t,
+		"-records", records, "-candidate", "vector="+cfg, "-weights", "attack_surface=1",
+		"-factors", "EF-NO-IDS=0.9")
+	if code != 1 {
+		t.Fatalf("退出码 = %d, want 1；stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "EF-SELINUX") {
+		t.Errorf("错误必须列出被丢弃的因子 ID：%s", stderr)
+	}
+	if strings.TrimSpace(stdout) != "" {
+		t.Errorf("失败时不得产出报告：%s", stdout)
+	}
+}
+
+// TestCLIRejectsPartialFactorsInFitMode：同一条纪律在 -fit 模式下也成立（拟合的基准因子
+// 集合同样来自 -factors，缺一个就会让该因子在设计矩阵里消失）。
+func TestCLIRejectsPartialFactorsInFitMode(t *testing.T) {
+	records := writeRecordsJSONL(t, "syn.jsonl", syntheticRecordsN(t, 0.4, 7, 12))
+	cfg := writeConfig(t, "base.ini",
+		"[edge_factors.model]\nmodel = graph\np_floor = 0.5\nlambda.attack_surface = 1\nvector.A = 1,0,0,0,0\nvector.B = 1,0,0,0,0\n")
+	code, stdout, stderr := runCLIForTest(t,
+		"-records", records, "-fit", "-config", cfg, "-factors", "A=0.5", "-edges", "A|B")
+	if code != 1 {
+		t.Fatalf("退出码 = %d, want 1；stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "B") {
+		t.Errorf("错误必须列出未声明权重的因子 ID：%s", stderr)
+	}
+	if strings.TrimSpace(stdout) != "" {
+		t.Errorf("失败时不得产出产物：%s", stdout)
+	}
+}
+
+// TestCLIRendersNoSelectionWhenAllCandidatesTie（主控 I4 第 3 条）：三层指标全等时，
+// 报告必须打印"本次比较无区分力，未选模"，且**不得**打印 `选定模型` 结论行 —— 与 Task 9
+// 对"零记录"的处理同款：比不出来就别给结论，绝不能把名字字典序的产物当成选模结果。
+func TestCLIRendersNoSelectionWhenAllCandidatesTie(t *testing.T) {
+	records := writeJSONL(t, "t9.jsonl", t9FixtureJSONL)
+	// graph 与 chain 在本夹具（单因子、无耦合边）下数学同构 ⇒ 三层指标逐位相同。
+	graph := writeConfig(t, "cand-graph.ini",
+		"[edge_factors.model]\nmodel = graph\np_floor = 0.2\nlambda.attack_surface = 5\nvector.EF-SELINUX = 0.5,0,0,0,0\n")
+	chain := writeConfig(t, "cand-chain.ini",
+		"[edge_factors.model]\nmodel = chain\np_floor = 0.2\nlambda.attack_surface = 5\nvector.EF-SELINUX = 0.5,0,0,0,0\nchain.window_seconds = 60\n")
+	code, stdout, stderr := runCLIForTest(t,
+		"-records", records, "-candidate", "graph="+graph+",chain="+chain,
+		"-weights", "attack_surface=1", "-factors", "EF-SELINUX=0.8")
+	if code != 0 {
+		t.Fatalf("退出码 = %d, want 0；stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "无区分力") || !strings.Contains(stdout, "未选模") {
+		t.Errorf("全平局必须写明『无区分力、未选模』：\n%s", stdout)
+	}
+	if strings.Contains(stdout, "**选定模型**:") {
+		t.Errorf("全平局不得打印选模结论行：\n%s", stdout)
 	}
 }
 

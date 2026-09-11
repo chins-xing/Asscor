@@ -54,6 +54,51 @@ func TestParseEdgeFactorModelAbsentMeansLegacy(t *testing.T) {
 	}
 }
 
+// TestParseEdgeFactorModelRequiresPFloorWhenSectionPresent 钉住主控 I3 的最小裁定：
+// `[edge_factors.model]` 段**存在**却缺 `p_floor` 时，装载层必须直接报错。
+//
+// 为什么这不是"多一条校验"而是必须的：`p_floor` 的零值 0 不在 `(0,1)` 内，`edgefactor.Validate`
+// 会以同样的理由拒绝它 —— 但那一步发生在**装配期**，而装配失败的后果是"打印一条 Warn 后回落
+// legacy"。于是配置里明明写着 `model = graph`，内核却按历史乘性评分：**假溯源**，
+// 且操作者只会在日志里看到一行 Warn。装载层是唯一能把这个错误变成"启动即失败"的地方
+// （内核是否把装配失败升级为启动失败是另一件事，见 spec §10 的独立决策）。
+//
+// 反向对照：段缺席仍是合法的（`present=false` ⇒ 调用方走 legacy），不得误报。
+func TestParseEdgeFactorModelRequiresPFloorWhenSectionPresent(t *testing.T) {
+	cases := []map[string]string{
+		{"model": "graph"},
+		{"model": "graph", "lambda.attack_surface": "1.5"},
+		{"model": "vector", "lambda.attack_surface": "1.5", "vector.EF-A": vectorDistinct},
+		{"model": "legacy"},
+	}
+	for i, kv := range cases {
+		_, present, err := ParseEdgeFactorModel(map[string]map[string]string{"edge_factors.model": kv})
+		if err == nil {
+			t.Errorf("case %d：段存在但缺 p_floor 必须报错：%v（present=%v）", i, kv, present)
+			continue
+		}
+		if !strings.Contains(err.Error(), "p_floor") {
+			t.Errorf("case %d：错误必须点名 p_floor：%v", i, err)
+		}
+	}
+
+	// 有 p_floor 的正常配置不受影响。
+	if _, present, err := ParseEdgeFactorModel(map[string]map[string]string{
+		"edge_factors.model": {"model": "legacy", "p_floor": "0.2"},
+	}); err != nil || !present {
+		t.Errorf("带 p_floor 的合法段不应报错：present=%v err=%v", present, err)
+	}
+	// 段缺席仍然合法（调用方据此走 legacy）。
+	cfg, present, err := ParseEdgeFactorModel(map[string]map[string]string{})
+	if err != nil || present || cfg.Model != "" {
+		t.Errorf("段缺席必须保持 (zero,false,nil)：present=%v err=%v cfg=%+v", present, err, cfg)
+	}
+	// 整条配置装载路径（config.Parse）同样必须报错（装载层才是操作者能看见的地方）。
+	if _, err := Parse("[edge_factors.model]\nmodel = graph\nlambda.attack_surface = 1.5\n"); err == nil {
+		t.Error("config.Parse 必须把『段存在但缺 p_floor』当成本错")
+	}
+}
+
 func TestParseEdgeFactorModelReadsAllFields(t *testing.T) {
 	sections := map[string]map[string]string{
 		"edge_factors.model": {

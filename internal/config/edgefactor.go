@@ -111,6 +111,14 @@ func ParseEdgeFactorModel(sections map[string]map[string]string) (EdgeFactorMode
 		Coupling:   map[string]map[string]float64{},
 		TriggerMap: map[string]string{},
 	}
+	// pFloorSeen 区分"段里写了 p_floor"与"段存在但缺这一键"（主控 I3）。
+	//
+	// 为什么必须在装载层拒绝：p_floor 的零值 0 不在 (0,1) 内，`edgefactor.Validate` 会以
+	// 同样的理由拒绝它 —— 但那一步在**装配期**，而装配失败的后果是"内核打印一行 Warn 后
+	// 回落 legacy"。操作者看到的是配置里写着 `model = graph`、实际按历史乘性评分：假溯源。
+	// 把这条检查放在解析层，错误就在**装载**时变成一条指名道姓的失败，而不是一行 Warn。
+	// （装配失败是否升级为内核启动失败是独立决策，本轮不动。）
+	pFloorSeen := false
 	for key, raw := range kv {
 		value := strings.TrimSpace(raw)
 		switch {
@@ -128,6 +136,7 @@ func ParseEdgeFactorModel(sections map[string]map[string]string) (EdgeFactorMode
 				return EdgeFactorModelConfig{}, false, fmt.Errorf("config: [edge_factors.model] p_floor = %q must be in (0,1)", value)
 			}
 			cfg.PFloor = f
+			pFloorSeen = true
 		case strings.HasPrefix(key, "lambda."):
 			domain := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(key, "lambda.")))
 			if domain == "" {
@@ -207,6 +216,13 @@ func ParseEdgeFactorModel(sections map[string]map[string]string) (EdgeFactorMode
 	if cfg.Model == "" {
 		return EdgeFactorModelConfig{}, false, fmt.Errorf("config: [edge_factors.model] present without a model key")
 	}
+	// I3：段存在却缺 p_floor ⇒ 直接报错。裸的 `model = graph` 会在装配期被
+	// edgefactor.Validate 以 "p_floor 0 out of (0,1)" 拒绝，而装配失败在内核里只降级成一行
+	// Warn + 回落 legacy —— 配置写着 graph、实际按历史乘性评分，属于最危险的一类静默失效。
+	if !pFloorSeen {
+		return EdgeFactorModelConfig{}, false, fmt.Errorf(
+			"config: [edge_factors.model] is present but has no p_floor (model = %s) — p_floor ∈ (0,1) is required by edgefactor.Validate, and without it the assembly fails and the kernel silently keeps the legacy multiplicative path", cfg.Model)
+	}
 	if cfg.Model == "chain" && cfg.ChainWindowSeconds <= 0 {
 		return EdgeFactorModelConfig{}, false, fmt.Errorf("config: [edge_factors.model] model=chain requires chain.window_seconds")
 	}
@@ -215,6 +231,13 @@ func ParseEdgeFactorModel(sections map[string]map[string]string) (EdgeFactorMode
 
 // canonicalFactorID normalizes a factor id to its canonical uppercase spelling
 // (the engine's FactorID convention: EF-SELINUX, EF-NO-IDS, EF-3FA).
+//
+// 与引擎/离线工具侧的唯一实现 `internal/edgefactor.NormalizeFactorID` **逐字同义**
+// （都是 `strings.ToUpper(strings.TrimSpace(id))`），主控 I2 裁定后仍保留两份，理由是
+// **依赖方向**：本包刻意不依赖合成层（审计 F6：config 是纯解析器，解析不带任何合成语义），
+// 而 `internal/edgefactor` 是合成层的家。引擎与 cmd/edgecompare 两侧已经统一到
+// `edgefactor.NormalizeFactorID`；改动其中之一时**必须同步另一处**（本文件是解析层，
+// 那边是消费层）。
 func canonicalFactorID(name string) string {
 	return strings.ToUpper(strings.TrimSpace(name))
 }

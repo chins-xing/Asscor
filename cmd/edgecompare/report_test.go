@@ -25,31 +25,30 @@ import (
 //	(1) 至少两个候选在**决策层**给出不同判定（不是分数差一点、而是 acceptable 翻转）；
 //	(2) 差异**只**出现在决策层 —— 这样 Best 只可能由主判据（漏判率）决定，
 //	    选优判据的每一层分界才各自可测、可归因；
-//	(3) 每条记录的分数化简成 `base × k_候选`（k 与记录无关），使推算可以逐条手算复核。
+//	(3) 每条记录的分数可以逐条手算复核。
 //
 // 为此夹具取**单域 + 单因子**（attack_surface + EF-SELINUX）：
 //
-//	域分只有 attack_surface（权重 1）⇒ 聚合分 = base，不受加权平均干扰；
-//	因子只有一个 ⇒ 无耦合项、无级联，V/G/C 在本夹具下退化（耦合语义另由 Task 8 的
-//	TestEvaluateIsBitwiseDeterministicForVGC 与 internal/edgefactor 的性质测试钉住）；
-//	c_trigger = 1.0 ⇒ EffectiveFactor(f,1) = f，两条候选的有效因子值都等于 0.8，
-//	推算里没有「可信度被衰减两次」这层（Task 8 的 TestOfflineScoreUsesAssemblyConfidenceDecay
-//	已在 c = 0.9 上钉住该口径）。
+//	域分只有 attack_surface（权重 1）⇒ base = 该域分，不受加权平均干扰；
+//	因子只有一个 ⇒ 无耦合项、无级联，V/G/C 在本夹具下退化（耦合语义另由门禁的
+//	TestConsistencyGateCoversCouplingNotJustMainEffects 与 internal/edgefactor 的性质测试钉住）；
+//	c_trigger = 1.0 ⇒ EffectiveFactor(f,1) = f，两条候选的有效因子值都等于 0.8。
 //
-// 两条候选（k 的推导见 t9LegacyMultiplier / t9VectorPenalty）：
+// **C1 之后分数是引擎总分**（`round2(0.5·base_adj + 30·E + 20·T)`，E = spc_score = 0.8、
+// T = threat_coeff = 0.75 ⇒ 层次项 = 24 + 15 = 39），不再是旧的"base × k"。
+// 接受条件因此是 `round2(0.5·base_adj) + 39 ≥ 60` ⇔ `base_adj ≳ 42`：
 //
-//	legacy  k = ∏ f_i = 0.8                              ⇒ 接受 iff base·0.8 ≥ 50 ⇔ base ≥ 62.5
-//	vector  k = P_floor + (1−P_floor)·exp(−λ·L)
-//	          = 0.2 + 0.8·exp(−5·(1−0.8)·0.5) = 0.6852245277701068
-//	                                                      ⇒ 接受 iff base ≥ 72.9688…
+//	legacy  base_adj = round2(0.8·b)                 ⇒ 接受 iff b ≥ 52.5
+//	vector  base_adj = round2(P·b)，P = P_floor + (1−P_floor)·exp(−λ·L)
+//	        = 0.2 + 0.8·exp(−5·(1−0.8)·0.5) = 0.6852245277701068 ⇒ 接受 iff b ≥ 61.29…
 //
-// 四条记录（base / 客观结果 / 两条候选的模型判定）：
+// 四条记录（base / 客观结果 / 两条候选的模型判定；总分按上面的式子逐条手算）：
 //
-//	记录  base  客观       legacy(0.8)        vector(0.6852)
-//	R1     65   被攻陷     52 ≥ 50 接受 ⇒ **漏判(FN)**   44.54 < 50 拒绝 ⇒ 正确
-//	R2     40   被攻陷     32 < 50 拒绝 ⇒ 正确           27.41 < 50 拒绝 ⇒ 正确
-//	R3     85   未攻陷     68 ≥ 50 接受 ⇒ 正确           58.24 ≥ 50 接受 ⇒ 正确
-//	R4     70   未攻陷     56 ≥ 50 接受 ⇒ 正确           47.97 < 50 拒绝 ⇒ **误阻断(FP)**
+//	记录  base  客观     legacy(0.8)                   vector(0.6852)
+//	R1     55   被攻陷   61 ≥ 60 接受 ⇒ **漏判(FN)**    57.85 < 60 拒绝 ⇒ 正确
+//	R2     45   被攻陷   57 < 60 拒绝 ⇒ 正确            54.42 < 60 拒绝 ⇒ 正确
+//	R3     75   未攻陷   69 ≥ 60 接受 ⇒ 正确            64.70 ≥ 60 接受 ⇒ 正确
+//	R4     58   未攻陷   62.2 ≥ 60 接受 ⇒ 正确           58.87 < 60 拒绝 ⇒ **误阻断(FP)**
 //
 // 由此（N = 4，两个率都是「占样本比」）：
 //
@@ -61,20 +60,21 @@ import (
 // 主判据（漏判率 0 < 0.25）判定为 vector，且这正是设计目标：如果实现把 FP 当主判据、
 // 或把 AUC/Spearman 掺进选优，断言就会红。
 //
-// 排序层/数值层为何两条候选逐位相同：两条候选的分数互为**常数倍**
-// （vector/legacy = 0.6852245277701068/0.8 = 0.8565306597126335），秩完全一致；
+// 排序层/数值层为何两条候选逐位相同：两条候选的分数次序完全一致
+// （R2 < R1 < R4 < R3，两条候选都一样 —— 层次项是同一个常数），秩完全一致；
 // 而 AUC 只看危险度（100−score）的组间序，也同样一致。
 //
-// 记录里的 `final_score` / `acceptable` 是在线 legacy 的观测值（离线 legacy 在 c = 1 时
-// 与在线逐位一致，见 TestT9FixtureMatchesOnlineObservations）。
+// 记录里的 `final_score` / `acceptable` 是在线 legacy 的观测值；离线 legacy 必须**复现**它们
+// （与在线同一个公式、同一次衰减，见 TestT9FixtureMatchesOnlineObservations）。
 
-const t9FixtureJSONL = `{"scenario_id":"T9-R1","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":65},"final_score":52,"acceptable":true,"threshold":50,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}
-{"scenario_id":"T9-R2","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":40},"final_score":32,"acceptable":false,"threshold":50,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:01Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":600,"ttps_achieved":2,"nodes_affected":1,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}
-{"scenario_id":"T9-R3","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":85},"final_score":68,"acceptable":true,"threshold":50,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:02Z"}]},"ground_truth":{"compromised":false,"time_to_compromise_s":0,"ttps_achieved":0,"nodes_affected":0,"block_effective":true},"meta":{"env":"wsl-clab-14","run":1}}
-{"scenario_id":"T9-R4","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":70},"final_score":56,"acceptable":true,"threshold":50,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:03Z"}]},"ground_truth":{"compromised":false,"time_to_compromise_s":0,"ttps_achieved":0,"nodes_affected":0,"block_effective":true},"meta":{"env":"wsl-clab-14","run":1}}
+const t9FixtureJSONL = `{"scenario_id":"T9-R1","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":55},"final_score":61,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}
+{"scenario_id":"T9-R2","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":45},"final_score":57,"acceptable":false,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:01Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":600,"ttps_achieved":2,"nodes_affected":1,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}
+{"scenario_id":"T9-R3","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":75},"final_score":69,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:02Z"}]},"ground_truth":{"compromised":false,"time_to_compromise_s":0,"ttps_achieved":0,"nodes_affected":0,"block_effective":true},"meta":{"env":"wsl-clab-14","run":1}}
+{"scenario_id":"T9-R4","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":58},"final_score":62.2,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:03Z"}]},"ground_truth":{"compromised":false,"time_to_compromise_s":0,"ttps_achieved":0,"nodes_affected":0,"block_effective":true},"meta":{"env":"wsl-clab-14","run":1}}
 `
 
-// t9LegacyMultiplier = ∏ f_i = 0.8（legacy 的惩罚只在聚合后作用于总分）。
+// t9LegacyMultiplier = 记录里的 effective_factor = 0.8（引擎的默认策略直接乘它，
+// 即 legacy 的惩罚只在聚合后的 base 上作用一次）。
 const t9LegacyMultiplier = 0.8
 
 // t9VectorPenalty = P_floor + (1−P_floor)·exp(−λ·L)，其中 L = (1−0.8)·0.5 = 0.1、λ = 5、P_floor = 0.2。
@@ -480,6 +480,9 @@ func TestRenderMarkdownFormat(t *testing.T) {
 	for _, want := range []string{
 		"# 边缘因子模型对比报告",
 		"生成时间: 2026-09-08T12:00:00Z｜场景数: 4",
+		// C1 第 5 条：报告头必须写明判定口径（分数 = 引擎总分、阈值 = 引擎决策线）。
+		"判定口径: 离线分数 = 引擎总分（`ssam.SSAMV20Formula`",
+		"阈值 = 引擎决策线",
 		"| 模型 | 决策一致率 | 漏判率 | 误阻断率 | Spearman | Kendall | AUC | N |",
 		"|---|---|---|---|---|---|---|---|",
 		"| legacy | 0.750 | 0.250 | 0.000 | -0.738 | -0.600 | 1.000 | 4 |",
@@ -546,6 +549,51 @@ func TestRenderMarkdownRejectsEmptyReport(t *testing.T) {
 	}
 	if buf.Len() != 0 {
 		t.Errorf("出错时不得写出半份报告：%q", buf.String())
+	}
+}
+
+// TestRenderMarkdownTiePrintsNoSelection（主控 I4 第 3 条）：三层判据全等时，
+// 报告只能给出"本次比较无区分力，未选模"，**不得**打印 `选定模型` 结论行。
+//
+// 与零记录分支同款纪律：`Best` 在平局时只是模型名字典序的产物，把它印成结论就是在
+// 替数据说话 —— 而报告的用途恰恰是入档与进论文。
+func TestRenderMarkdownTiePrintsNoSelection(t *testing.T) {
+	tied := Metrics{DecisionAgreement: 0.75, FalseNegativeRate: 0.25, FalsePositiveRate: 0,
+		Spearman: t9Spearman, Kendall: t9Kendall, AUC: t9AUC, N: 4}
+	rep := Report{
+		GeneratedAt: time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC),
+		Records:     4,
+		Best:        "chain", // 即便调用方硬塞了一个 Best，渲染也必须拒绝把它当成结论打印
+		Models:      map[string]Metrics{"graph": tied, "chain": tied},
+	}
+	var buf bytes.Buffer
+	if err := RenderMarkdown(&buf, rep); err != nil {
+		t.Fatalf("RenderMarkdown: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "无区分力") || !strings.Contains(out, "未选模") {
+		t.Errorf("全平局报告必须写明『无区分力、未选模』：\n%s", out)
+	}
+	if strings.Contains(out, "**选定模型**:") {
+		t.Errorf("全平局报告不得打印选模结论行：\n%s", out)
+	}
+	if strings.Contains(out, "`chain`") {
+		t.Errorf("全平局报告不得把传入的 Best 当成结论打印：\n%s", out)
+	}
+	// 表格照常渲染（三层指标是有效信息，不因平局而不打印）。
+	if !strings.Contains(out, "| graph | 0.750 | 0.250 | 0.000 |") {
+		t.Errorf("平局时表格仍必须渲染：\n%s", out)
+	}
+	// 只要有一层不同就必须恢复结论行（否则本检查会把"有区分力"的报告也一起吞掉）。
+	distinct := tied
+	distinct.AUC = 0.9
+	rep.Models["chain"] = distinct
+	buf.Reset()
+	if err := RenderMarkdown(&buf, rep); err != nil {
+		t.Fatalf("RenderMarkdown: %v", err)
+	}
+	if !strings.Contains(buf.String(), "**选定模型**:") {
+		t.Errorf("有区分力时必须打印结论行：\n%s", buf.String())
 	}
 }
 

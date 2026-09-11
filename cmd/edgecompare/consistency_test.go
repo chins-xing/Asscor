@@ -3,129 +3,104 @@
 package main
 
 import (
-	"fmt"
+	"math"
+	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/chins-xing/asscor/internal/edgefactor"
+	ssam "github.com/chins-xing/ssam"
 )
 
 // ============================================================================
-// 离线 ↔ 在线一致性门禁（Task 10 mandate 口径 3）
+// 离线 ↔ 在线一致性门禁（主控裁定 C1，Fix wave 重写）
 // ============================================================================
 //
-// 门禁内容 —— 三条「同一」，缺一条门禁就是假的：
+// **旧版门禁为什么必须删掉**：它把生产实现与一个测试侧独立重写的"在线接线镜像"
+// （`onlineMirror`）逐位对比 —— 而两者都只是同一个 `edgefactor.Synthesize` + 自研聚合的
+// 两份抄写。这样的门禁**永远无法与真实引擎对拍**：评审实测的致命口径差
+// （离线 `weightedSum × 乘子` vs 引擎 `round2(0.5·base + 30·E + 20·T)`）在旧门禁下是绿的，
+// 因为两侧犯的是同一个错。门禁的对照物必须是**部署引擎真正调用的那个函数**。
 //
-//	1. **同一实现**：离线重算不做任何自研公式，把观测装进 `edgefactor.Input` 后调用
-//	   `edgefactor.Synthesize` —— 与在线评分同一个函数（onlinePathScore 是测试侧**独立
-//	   重写**的接线镜像：它照在线装配期的三步自己走一遍，用来抓"离线把某一步走错了"）；
-//	2. **同一域裁剪口径**：请求域 = `DefaultDomains ∩ λ`，参数按该域集合一致裁剪后再合成。
-//	   不裁剪就会假红（缺 λ 的域直接报错）或假绿（未经裁剪地放宽校验），见
-//	   TestConsistencyGatePrunesDomainsLikeTheOnlineAssembly；
-//	3. **同一可信度换算口径**：记录里的 `effective_factor` 是 ssam-lib 策略层已经衰减过一次
-//	   的值，离线必须复用装配层的换算 `EffectiveFactor(f, c)` 再衰减一次（合计 1−(1−f)·c²，
-//	   spec §10.2 的既有口径），不得直接把记录里的值用掉。
+// 新版门禁的内容 —— 每条都直接调用或直接对照 `ssam.SSAMV20Formula`：
 //
-// **前提（必须如实标注，这不是本任务要修的缺陷）**：
+//	1. **同一公式**：离线的总分 == `ssam.SSAMV20Formula` 对同一组入参的 `Total`。
+//	   legacy 分支的入参在**测试里独立装配**（自己遍历默认域、自己构造因子结果），
+//	   并显式保证钩子处于默认状态 —— 这条对照物是内仓的真实公式，不是本工具的抄写。
+//	2. **同一注入方式**：V/G/C 的域级修正走 `ssam.RegisterDomainAdjust`（在线同一入口），
+//	   恒等乘子走 `ssam.RegisterEdgeFactorStrategy`；期望值用「预修正域分 + 恒等因子 + 真实
+//	   公式」独立算出，并附反向对照（不做域级修正时分数必然不同）。
+//	3. **同一裁剪口径**：请求域 = `DefaultDomains ∩ λ`（`edgefactor.RequestedDomains`，
+//	   与在线装配期同一实现）。不裁剪的完整默认域调用必须被拒 —— 否则本门禁测不到裁剪。
+//	4. **同一评审反例**：评审实测的那条记录（域分 62.5、threshold 60、因子 0.8）在旧口径下
+//	   判 not acceptable、在引擎口径下判 acceptable，本门禁把它钉成可执行证据。
 //
-//	本门禁**只在可信度策略关闭（c = 1）时成立**。`EffectiveFactor(f, 1) = f`，两次衰减与在线
-//	legacy 的单次衰减恒等；一旦 c ≠ 1，在线 legacy 路径（assessor 的 attenuate / 内仓默认的
-//	逐次相乘）只衰减一次，而离线统一按装配层口径衰减两次，两者天然相差一次衰减。
-//
-//	**方向必须写对（Fix round 1 / I3）**：`0.8 → 0.82（策略层一次衰减）→ 0.838（装配层再一次）`，
-//	衰减得越多因子值越接近 1 ⇒ 惩罚越轻。故离线（双衰减）的 **legacy 惩罚更轻、分数更高、更乐观**：
-//	离线 `90 × 0.838 = 75.42` > 在线观测 `90 × 0.82 = 73.8`。这条符号不是润色问题 ——
-//	它决定离线工具相对真实引擎是**乐观**还是保守，而里程碑 B 的决策层主判据**全部**来自离线重算：
-//	写反会把"漏判率被低估"读成相反结论。
-//	spec §10.2 已把这条记为「可信度被衰减两次」的已知口径问题，是否修正属独立决策；
-//	Task 8–10 一律**复用**同一口径并在报告标注。TestConsistencyGateOnlyHoldsAtFullConfidence
-//	把这件事钉成可执行的证据，而不是一句注释。
-//
-// 域覆盖：门禁走 `Evaluate`（带域覆盖校验的决策层入口）或显式校验，绝不用低阶原语
-// `OfflineScore*` 静默按 0 聚合缺域记录 —— 后者会把"记录缺一个域"变成"总分被无理由压低"
-// 且报告上看不出异常（Task 8 评审 I2）。
+// 可信度换算的口径（spec §10.2 记录在案，本轮**不修正**）：legacy 直接使用记录里的
+// `effective_factor`（策略层已衰减一次的观测值 = 引擎 `EdgeFactorResult.Factor`），
+// V/G/C 在合成层前再衰减一次（`EffectiveFactor(f, c)`，与在线 `activationsFromResults` 同口径）。
+// 这两条与在线逐位一致，正是 C1 要的"同一个量"。
 
-// onlineMirror 是**测试侧独立重写**的在线接线镜像（不调用生产代码的 offlinePlan/
-// activationsOf，否则就成了拿生产代码验证生产代码）。它照在线装配期做三步：
+// engineFormulaDirect 用**测试侧独立装配**的入参调用真实引擎公式（legacy 分支）。
 //
-//	① 取请求域 = DefaultDomains ∩ λ；
-//	② 把参数裁剪到该域集合；
-//	③ 把记录的因子链按装配层换算（EffectiveFactor(f, c)）装进 Input，调用 Synthesize，
-//	   再把逐域修正后的域分按权重聚合。
-//
-// 与生产实现的差别只应是"代码写法"，不是"口径"；任何一处口径漂移都会被逐位比较抓住。
-func onlineMirror(p edgefactor.Params, rec Record, weights map[string]float64) (float64, error) {
-	requested := make([]string, 0, len(weights))
+// 它刻意不复用生产侧的 `engineDomainScores` / `engineEdgeFactors`：门禁要抓的正是
+// "生产侧的装配与引擎口径不一致"，复用生产代码会把这条检查变成同义反复。
+// 钩子显式恢复成默认（legacy 零注册 = 内仓默认的逐次相乘路径）。
+func engineFormulaDirect(rec Record, weights map[string]float64) ssam.FinalScore {
+	ssam.RegisterEdgeFactorStrategy(nil)
+	ssam.RegisterDomainAdjust(nil)
+
+	scores := make([]ssam.DomainScore, 0, len(weights))
 	for _, d := range edgefactor.DefaultDomains() {
-		if _, ok := p.Lambda[d]; ok {
-			requested = append(requested, d)
+		if w, ok := weights[d]; ok && w > 0 {
+			scores = append(scores, ssam.DomainScore{Domain: d, Score: rec.Observed.DomainScores[d]})
 		}
 	}
-	if len(requested) == 0 {
-		return 0, fmt.Errorf("onlineMirror: λ 未覆盖任何默认域")
+	weightConfigs := make([]ssam.WeightConfig, 0, len(weights))
+	for d, w := range weights {
+		weightConfigs = append(weightConfigs, ssam.WeightConfig{Domain: d, Weight: w})
 	}
-	keep := make(map[string]bool, len(requested))
-	for _, d := range requested {
-		keep[d] = true
-	}
-	pruned := edgefactor.Params{
-		Model:              p.Model,
-		PFloor:             p.PFloor,
-		Lambda:             map[string]float64{},
-		Vectors:            map[string]map[string]float64{},
-		Coupling:           p.Coupling,
-		ChainWindowSeconds: p.ChainWindowSeconds,
-		Factors:            p.Factors,
-	}
-	for d := range keep {
-		if l, ok := p.Lambda[d]; ok {
-			pruned.Lambda[d] = l
-		}
-	}
-	for id, vec := range p.Vectors {
-		trimmed := map[string]float64{}
-		for d := range keep {
-			if v, ok := vec[d]; ok {
-				trimmed[d] = v
-			}
-		}
-		pruned.Vectors[id] = trimmed
-	}
-
-	var acts []edgefactor.FactorActivation
+	factors := make([]ssam.EdgeFactorResult, 0, len(rec.Observed.EdgeFactorChain))
 	for _, c := range rec.Observed.EdgeFactorChain {
-		ts, _ := parseTS(c.TS)
-		acts = append(acts, edgefactor.FactorActivation{
-			FactorID:        normalizeFactorID(c.Factor),
-			TriggerCheck:    c.TriggerCheck,
-			CTrigger:        c.CTrigger,
-			EffectiveFactor: edgefactor.EffectiveFactor(c.EffectiveFactor, c.CTrigger),
-			TS:              ts,
+		factors = append(factors, ssam.EdgeFactorResult{
+			ID: edgefactor.NormalizeFactorID(c.Factor),
+			// 记录里的 effective_factor 就是引擎侧 EdgeFactorResult.Factor（策略层衰减一次后的观测值）。
+			Factor:            c.EffectiveFactor,
+			Active:            true,
+			TriggerConfidence: c.CTrigger,
 		})
 	}
-	res, err := edgefactor.Synthesize(pruned, requested, edgefactor.Input{
-		DomainScores: rec.Observed.DomainScores,
-		Factors:      acts,
-	})
-	if err != nil {
-		return 0, err
+	return ssam.SSAMV20Formula(scores, weightConfigs,
+		ssam.RiskContext{Exposure: rec.Observed.SPCScore, Threat: rec.Observed.ThreatCoeff},
+		factors)
+}
+
+// bespokeAggregate 是**被 C1 废弃的旧口径**：`weightedSum(观测域分) × ∏effective_f`。
+// 它只出现在反例里，用来证明新门禁有区分力（旧实现回归时第 1 条测试会立刻变红）。
+func bespokeAggregate(rec Record, weights map[string]float64) float64 {
+	sum, total := 0.0, 0.0
+	for _, d := range edgefactor.DefaultDomains() {
+		w := weights[d]
+		if w <= 0 {
+			continue
+		}
+		sum += rec.Observed.DomainScores[d] * w
+		total += w
 	}
-	if p.Model == edgefactor.ModelLegacy {
-		return weightedSum(rec.Observed.DomainScores, weights) * res.GlobalMultiplier, nil
+	if total == 0 {
+		return 0
 	}
-	merged := map[string]float64{}
-	for d, s := range rec.Observed.DomainScores {
-		merged[d] = s
+	mult := 1.0
+	for _, c := range rec.Observed.EdgeFactorChain {
+		mult *= c.EffectiveFactor
 	}
-	for d, s := range res.DomainScores {
-		merged[d] = s
-	}
-	return weightedSum(merged, weights), nil
+	return sum / total * mult
 }
 
 // twoFactorChainJSONL 是门禁用的两条记录：同一条链里同时激活 A 与 B（graph 耦合项真的被算到），
-// c_trigger = 1.0（门禁成立的前提），域分只给 attack_surface（与裁剪后的请求域一致）。
-const twoFactorChainJSONL = `{"scenario_id":"CONS-R1","factors":["A","B"],"observed":{"domain_scores":{"attack_surface":80},"threshold":50,"edge_factor_chain":[{"factor":"A","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.6,"ts":"2026-09-08T10:00:00Z"},{"factor":"B","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.5,"ts":"2026-09-08T10:00:01Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":100,"ttps_achieved":2,"nodes_affected":1,"block_effective":false}}
-{"scenario_id":"CONS-R2","factors":["A"],"observed":{"domain_scores":{"attack_surface":30},"threshold":50,"edge_factor_chain":[{"factor":"A","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.9,"ts":"2026-09-08T10:00:02Z"}]},"ground_truth":{"compromised":false,"time_to_compromise_s":0,"ttps_achieved":0,"nodes_affected":0,"block_effective":true}}
+// c_trigger = 1.0，域分只给 attack_surface（与裁剪后的请求域一致）。
+const twoFactorChainJSONL = `{"scenario_id":"CONS-R1","factors":["A","B"],"observed":{"domain_scores":{"attack_surface":80},"threshold":50,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"A","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.6,"ts":"2026-09-08T10:00:00Z"},{"factor":"B","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.5,"ts":"2026-09-08T10:00:01Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":100,"ttps_achieved":2,"nodes_affected":1,"block_effective":false}}
+{"scenario_id":"CONS-R2","factors":["A"],"observed":{"domain_scores":{"attack_surface":30},"threshold":50,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"A","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.9,"ts":"2026-09-08T10:00:02Z"}]},"ground_truth":{"compromised":false,"time_to_compromise_s":0,"ttps_achieved":0,"nodes_affected":0,"block_effective":true}}
 `
 
 // consGraphParams 是门禁用的 graph 候选：λ 只声明 attack_surface、向量只覆盖该域（故**必须**
@@ -145,150 +120,241 @@ func consGraphParams() edgefactor.Params {
 
 func consWeights() map[string]float64 { return map[string]float64{"attack_surface": 1} }
 
-// TestConsistencyGateOfflineMatchesOnlineWiring 是门禁的主测试：同一份记录、同一套参数、
-// 同一个权重表下，离线重算与在线接线镜像必须**逐位相同**（不是容差相等）。
-func TestConsistencyGateOfflineMatchesOnlineWiring(t *testing.T) {
+func consRecords(t *testing.T) []Record {
+	t.Helper()
 	recs, err := LoadRecords(writeJSONL(t, "cons.jsonl", twoFactorChainJSONL))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
 	}
-	p := consGraphParams()
-	for _, rec := range recs {
+	return recs
+}
+
+// legacyParityParams 是门禁 legacy 分支的候选参数（与在线 legacy 同一条路径：零注册）。
+func legacyParityParams() edgefactor.Params {
+	return edgefactor.Params{Model: edgefactor.ModelLegacy, PFloor: 0.5,
+		Factors: map[string]float64{"A": 0.6, "B": 0.5}}
+}
+
+// TestConsistencyGateOfflineEqualsEngineFormula 是门禁的主测试（legacy 分支）：
+// 离线重算的总分必须**逐位等于**真实引擎公式对同一组入参的输出。
+//
+// 对照物是内仓的 `ssam.SSAMV20Formula`（部署引擎实际调用的那个函数），入参在测试侧独立装配。
+// 旧实现（自研加权和 × 乘子）在这条测试下必然红 —— 两条判定线不是同一个量。
+func TestConsistencyGateOfflineEqualsEngineFormula(t *testing.T) {
+	p := legacyParityParams()
+	for _, rec := range consRecords(t) {
 		offline, err := OfflineScoreWithWeights(p, rec, consWeights())
 		if err != nil {
 			t.Fatalf("%s: OfflineScoreWithWeights: %v", rec.ScenarioID, err)
 		}
-		online, err := onlineMirror(p, rec, consWeights())
-		if err != nil {
-			t.Fatalf("%s: onlineMirror: %v", rec.ScenarioID, err)
+		want := engineFormulaDirect(rec, consWeights()).Total
+		if offline != want {
+			t.Fatalf("%s: 离线总分 %v ≠ 引擎公式 SSAMV20Formula 的 Total %v（两条判定线不是同一个量）",
+				rec.ScenarioID, offline, want)
 		}
-		if offline != online {
-			t.Fatalf("%s: 离线 %v ≠ 在线 %v —— 两侧必须共用同一份 Synthesize 与同一裁剪口径",
-				rec.ScenarioID, offline, online)
-		}
-		// 逐位可复现：同一 EvalContext 下重复重算不得抖出 1 ulp（Task 8 Fix round 1 的定序契约）。
-		for i := 0; i < 100; i++ {
-			again, err := OfflineScoreWithWeights(p, rec, consWeights())
-			if err != nil {
-				t.Fatalf("repeat %d: %v", i, err)
-			}
-			if again != offline {
-				t.Fatalf("%s: 第 %d 次重算 = %v ≠ %v（聚合序不确定）", rec.ScenarioID, i, again, offline)
-			}
+		// 反向对照：废弃的旧口径（加权和 × 乘子）**不等于**引擎总分 ⇒ 本门禁真的有区分力，
+		// 不是"两边都算错还相等"。
+		if bespoke := bespokeAggregate(rec, consWeights()); bespoke == offline {
+			t.Fatalf("%s: 旧口径与新口径给出同一个数（%v）—— 本门禁测不出 C1 要求的差异",
+				rec.ScenarioID, bespoke)
 		}
 	}
 }
 
-// TestConsistencyGateCoversCouplingNotJustMainEffects：门禁必须真的走到耦合项上 ——
-// 若把 ConsGraphParams 的耦合清零，分数必须变（否则上一条测试只在测主效应）。
-func TestConsistencyGateCoversCouplingNotJustMainEffects(t *testing.T) {
-	recs, err := LoadRecords(writeJSONL(t, "cons.jsonl", twoFactorChainJSONL))
+// TestConsistencyGateReproducesTheReviewerCounterexample：评审实测的那条记录 ——
+//
+//	域分 62.5、threshold 60、因子 0.8
+//	旧离线口径：62.5 × 0.8 = 50 < 60 ⇒ not acceptable
+//	引擎口径  ：round2(0.5×50 + 30×1 + 20×1) = 75 ≥ 60 ⇒ acceptable
+//
+// 两条判定线给出**相反结论**。C1 之后离线必须跟随引擎（这才是部署行为），
+// 且这条断言同时钉住"量纲"这件事：引擎总分既不是域分，也不是域分×乘子。
+func TestConsistencyGateReproducesTheReviewerCounterexample(t *testing.T) {
+	const recJSON = `{"scenario_id":"REVIEW-CASE","factors":["EF-SELINUX"],"observed":{"domain_scores":{"attack_surface":62.5},"threshold":60,"spc_score":1.0,"threat_coeff":1.0,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8}]},"ground_truth":{"compromised":false}}`
+	recs, err := LoadRecords(writeJSONL(t, "review-case.jsonl", recJSON+"\n"))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
 	}
-	withCoupling, err := OfflineScoreWithWeights(consGraphParams(), recs[0], consWeights())
+	rec := recs[0]
+	p := edgefactor.Params{Model: edgefactor.ModelLegacy, PFloor: 0.5,
+		Factors: map[string]float64{"EF-SELINUX": 0.8}}
+	weights := map[string]float64{"attack_surface": 1}
+
+	if got := bespokeAggregate(rec, weights); got != 50 {
+		t.Fatalf("反例前提失效：旧口径应为 62.5×0.8 = 50，实得 %v", got)
+	}
+	offline, err := OfflineScoreWithWeights(p, rec, weights)
+	if err != nil {
+		t.Fatalf("OfflineScoreWithWeights: %v", err)
+	}
+	if offline != 75 {
+		t.Errorf("离线总分 = %v, want 75（引擎公式：round2(0.5×50 + 30×1 + 20×1)）", offline)
+	}
+	if offline < rec.Observed.Threshold {
+		t.Errorf("离线判定 = not acceptable（%v < %v）—— 引擎会判 acceptable，两条判定线又反了",
+			offline, rec.Observed.Threshold)
+	}
+	if offline == bespokeAggregate(rec, weights) {
+		t.Error("离线总分等于废弃的旧口径 —— C1 没有落地")
+	}
+}
+
+// TestConsistencyGateVGCUsesTheSameDomainAdjustAsTheEngine：V/G/C 分支的对照 ——
+//
+// 引擎的域级修正是"域聚合之前乘 P_d"，乘子恒为 1（惩罚完全由 P_d 表达）。测试侧独立算出
+// 期望值：先用合成层唯一实现 `edgefactor.Synthesize` 取 P_d，把观测域分**预修正**，
+// 再调用真实公式并让默认策略乘 1（Factor = 1 落在默认策略的判据之外 ⇒ 乘子恒 1）。
+func TestConsistencyGateVGCUsesTheSameDomainAdjustAsTheEngine(t *testing.T) {
+	p := consGraphParams()
+	recs := consRecords(t)
+	weights := consWeights()
+
+	requested := edgefactor.RequestedDomains(p)
+	if len(requested) == 0 {
+		t.Fatal("夹具失效：graph 候选应至少覆盖一个默认域的 λ")
+	}
+	plan := edgefactor.PruneToDomains(p, requested)
+
+	for _, rec := range recs {
+		offline, err := OfflineScoreWithWeights(p, rec, weights)
+		if err != nil {
+			t.Fatalf("%s: OfflineScoreWithWeights: %v", rec.ScenarioID, err)
+		}
+
+		// 期望值：预修正的域分 + 恒等乘子 + 真实公式。
+		acts := make([]edgefactor.FactorActivation, 0, len(rec.Observed.EdgeFactorChain))
+		identity := make([]ssam.EdgeFactorResult, 0, len(rec.Observed.EdgeFactorChain))
+		for _, c := range rec.Observed.EdgeFactorChain {
+			id := edgefactor.NormalizeFactorID(c.Factor)
+			if _, known := p.Factors[id]; !known {
+				continue
+			}
+			acts = append(acts, edgefactor.FactorActivation{
+				FactorID:        id,
+				CTrigger:        c.CTrigger,
+				EffectiveFactor: edgefactor.EffectiveFactor(c.EffectiveFactor, c.CTrigger),
+				TS:              mustTS(t, c.TS),
+			})
+			identity = append(identity, ssam.EdgeFactorResult{
+				ID: id, Factor: 1, Active: true, TriggerConfidence: c.CTrigger,
+			})
+		}
+		res, err := edgefactor.Synthesize(plan, requested, edgefactor.Input{Factors: acts})
+		if err != nil {
+			t.Fatalf("%s: Synthesize: %v", rec.ScenarioID, err)
+		}
+		adjusted := map[string]float64{}
+		for d, s := range rec.Observed.DomainScores {
+			adjusted[d] = s
+		}
+		for d, pd := range res.P {
+			adjusted[d] = rec.Observed.DomainScores[d] * pd
+		}
+
+		ssam.RegisterEdgeFactorStrategy(nil)
+		ssam.RegisterDomainAdjust(nil)
+		scores := make([]ssam.DomainScore, 0, len(weights))
+		for _, d := range edgefactor.DefaultDomains() {
+			if w, ok := weights[d]; ok && w > 0 {
+				scores = append(scores, ssam.DomainScore{Domain: d, Score: adjusted[d]})
+			}
+		}
+		riskCtx := ssam.RiskContext{Exposure: rec.Observed.SPCScore, Threat: rec.Observed.ThreatCoeff}
+		want := ssam.SSAMV20Formula(scores, []ssam.WeightConfig{{Domain: "attack_surface", Weight: 1}},
+			riskCtx, identity).Total
+		if offline != want {
+			t.Fatalf("%s: 离线 %v ≠ 「预修正域分 + 恒等乘子 + 真实公式」%v", rec.ScenarioID, offline, want)
+		}
+
+		// 反向对照：不做域级修正时分数必然不同 —— 否则本测试测不到域级修正这条通路。
+		unadjusted := ssam.SSAMV20Formula(
+			[]ssam.DomainScore{{Domain: "attack_surface", Score: rec.Observed.DomainScores["attack_surface"]}},
+			[]ssam.WeightConfig{{Domain: "attack_surface", Weight: 1}},
+			riskCtx, identity).Total
+		if unadjusted == offline {
+			t.Fatalf("%s: 未修正与已修正的分数相同（%v）—— 域级修正没有生效", rec.ScenarioID, offline)
+		}
+	}
+}
+
+// TestConsistencyGateUsesTheFormulaOutputVerbatim：离线返回的就是公式的输出对象本身 ——
+// `.Total` 与三层明细全部来自 `SSAMV20Formula`，不存在"离线自己再聚合一次"的中间步骤。
+// 三层权重（50/30/20）是内仓公式的常量，一个自研聚合不可能凭空产出它们。
+func TestConsistencyGateUsesTheFormulaOutputVerbatim(t *testing.T) {
+	rec := consRecords(t)[0]
+	res, err := offlineFormulaResult(legacyParityParams(), rec, consWeights())
+	if err != nil {
+		t.Fatalf("offlineFormulaResult: %v", err)
+	}
+	total, err := OfflineScoreWithWeights(legacyParityParams(), rec, consWeights())
+	if err != nil {
+		t.Fatalf("OfflineScoreWithWeights: %v", err)
+	}
+	if res.Total != total {
+		t.Fatalf("离线入口的分数 %v ≠ 公式输出的 Total %v", total, res.Total)
+	}
+	if res.Layers.Intrinsic.Weight != 50 || res.Layers.Exposure.Weight != 30 || res.Layers.Threat.Weight != 20 {
+		t.Errorf("三层权重 = %v/%v/%v, want 50/30/20（引擎公式的固定层次）",
+			res.Layers.Intrinsic.Weight, res.Layers.Exposure.Weight, res.Layers.Threat.Weight)
+	}
+	want := engineFormulaDirect(rec, consWeights())
+	if res.Total != want.Total {
+		t.Errorf("离线 = %v, 直接调用引擎公式 = %v", res.Total, want.Total)
+	}
+	if res.Layers.Intrinsic.Coeff != want.Layers.Intrinsic.Coeff {
+		t.Errorf("Intrinsic 层系数 = %v, want %v", res.Layers.Intrinsic.Coeff, want.Layers.Intrinsic.Coeff)
+	}
+}
+
+// TestConsistencyGateCoversCouplingNotJustMainEffects：门禁必须真的走到耦合项上 ——
+// 若把 consGraphParams 的耦合清零，分数必须变（否则上面的测试只在测主效应）。
+func TestConsistencyGateCoversCouplingNotJustMainEffects(t *testing.T) {
+	rec := consRecords(t)[0]
+	withCoupling, err := OfflineScoreWithWeights(consGraphParams(), rec, consWeights())
 	if err != nil {
 		t.Fatalf("OfflineScoreWithWeights: %v", err)
 	}
 	noCoupling := consGraphParams()
 	noCoupling.Coupling = nil
-	plain, err := OfflineScoreWithWeights(noCoupling, recs[0], consWeights())
+	plain, err := OfflineScoreWithWeights(noCoupling, rec, consWeights())
 	if err != nil {
 		t.Fatalf("OfflineScoreWithWeights(无耦合): %v", err)
 	}
 	if withCoupling == plain {
 		t.Fatalf("耦合清零后分数不变（%v）⇒ 门禁没有覆盖耦合路径", withCoupling)
 	}
-	if !(withCoupling < plain) {
+	if withCoupling >= plain {
 		t.Errorf("耦合应加重惩罚：有耦合 %v 应 < 无耦合 %v", withCoupling, plain)
 	}
 }
 
 // TestConsistencyGatePrunesDomainsLikeTheOnlineAssembly：裁剪口径必须是
-// `DefaultDomains ∩ λ`。证据是**两条路径的对照**：按完整默认域直接调用 Synthesize 会被拒
-// （缺 λ / 向量不覆盖），而离线路径（与在线同一裁剪）能算。
+// `DefaultDomains ∩ λ`（与在线装配期同一实现 `edgefactor.RequestedDomains`）。证据是
+// **两条路径的对照**：按完整默认域直接调用 Synthesize 会被拒（缺 λ / 向量不覆盖），
+// 而离线路径（与在线同一裁剪）能算。
 func TestConsistencyGatePrunesDomainsLikeTheOnlineAssembly(t *testing.T) {
-	recs, err := LoadRecords(writeJSONL(t, "cons.jsonl", twoFactorChainJSONL))
-	if err != nil {
-		t.Fatalf("LoadRecords: %v", err)
-	}
+	rec := consRecords(t)[0]
 	p := consGraphParams()
 	// 不裁剪：请求域含没有 λ 的域 ⇒ Synthesize 必须拒绝。这条断言保证本测试真的在测裁剪，
 	// 而不是"两条路径都恰好能算"。
 	if _, err := edgefactor.Synthesize(p, edgefactor.DefaultDomains(), edgefactor.Input{
-		DomainScores: recs[0].Observed.DomainScores,
-		Factors:      modelActivations(p, recs[0]),
+		Factors: modelActivations(p, rec),
 	}); err == nil {
 		t.Fatal("未经裁剪的完整默认域调用本应被拒 —— 否则本测试测不到裁剪口径")
 	}
-	if _, err := OfflineScoreWithWeights(p, recs[0], consWeights()); err != nil {
+	if _, err := OfflineScoreWithWeights(p, rec, consWeights()); err != nil {
 		t.Fatalf("离线路径应自行裁剪到 DefaultDomains ∩ λ 并成功：%v", err)
 	}
-}
-
-// TestConsistencyGateOnlyHoldsAtFullConfidence 是本门禁的**前提证据**（mandate 口径 3 明文要求）：
-//
-//   - c = 1.0：离线重算与在线观测/镜像逐位一致（门禁成立）；
-//   - c ≠ 1（0.9）：离线（双衰减 1−(1−f)c²）与在线 legacy 单次衰减（记录里的
-//     effective_factor 本就是衰减一次后的观测值）**必然不等** —— 门禁在该前提下不成立，
-//     这是 spec §10.2 记录在案的已知口径问题，本任务复用而不修正。
-func TestConsistencyGateOnlyHoldsAtFullConfidence(t *testing.T) {
-	// ① c = 1.0：T9 夹具（c_trigger = 1.0）的离线 legacy 重算必须复现**在线观测总分**。
-	for _, rec := range t9Records(t) {
-		score, err := OfflineScoreWithWeights(t9LegacyCandidate(), rec, t9Weights())
-		if err != nil {
-			t.Fatalf("%s: %v", rec.ScenarioID, err)
-		}
-		if score != rec.Observed.FinalScore {
-			t.Fatalf("%s: c=1 时离线 %v 必须逐位等于在线观测 %v", rec.ScenarioID, score, rec.Observed.FinalScore)
-		}
-	}
-
-	// ② c = 0.9：同一条记录的离线重算与**在线观测总分**必须不同，且**离线更高（离线惩罚更轻）**。
-	// 观测 final_score 是 90 × 0.82（在线 legacy 单次衰减），离线是 90 × 0.838（双衰减）——
-	// 衰减越多、因子值越接近 1、惩罚越轻，故 75.42（离线）> 73.8（在线观测）。
-	// 方向写反会把"漏判率被低估"读成相反结论，见文件头 §前提的方向说明。
-	// 两侧都按记录的两个域等权聚合，故差异只可能来自换算口径本身。
-	recs, err := LoadRecords(writeSample(t))
-	if err != nil {
-		t.Fatalf("LoadRecords: %v", err)
-	}
-	rec := recs[0]
-	if rec.Observed.EdgeFactorChain[0].CTrigger == 1 {
-		t.Fatal("夹具已变：这条记录本应是 c_trigger = 0.9")
-	}
-	weights := twoDomainWeights()
-	offline, err := OfflineScoreWithWeights(legacyParams(), rec, weights)
-	if err != nil {
-		t.Fatalf("OfflineScoreWithWeights: %v", err)
-	}
-	observed := rec.Observed.FinalScore
-	if offline == observed {
-		t.Fatalf("c ≠ 1 时离线 %v 不该逐位等于在线观测 %v —— 若相等说明换算口径已经改了", offline, observed)
-	}
-	wantOffline := 90.0 * assemblyDecay(0.82, 0.9)
-	if offline != wantOffline {
-		t.Fatalf("离线 = %v, want %v（双衰减口径）", offline, wantOffline)
-	}
-	if observed >= offline {
-		t.Fatalf("c ≠ 1 时在线（单次衰减）的分数应**低于**离线（双衰减）：衰减次数越多惩罚越轻，"+
-			"故离线更乐观。观测 %v 应 < 离线 %v（若反了说明换算次数或方向变了）", observed, offline)
-	}
-	// 低阶原语与等权入口在同一记录上口径一致（差的是权重表，不是换算）。
-	if equalWeight, err := OfflineScore(legacyParams(), rec); err != nil {
-		t.Fatalf("OfflineScore: %v", err)
-	} else if equalWeight != (90.0+90.0)/5.0*assemblyDecay(0.82, 0.9) {
-		t.Fatalf("等权入口 = %v，与显式权重入口的换算口径不一致", equalWeight)
+	// 裁剪口径本身与在线同一实现：请求域 = DefaultDomains ∩ λ，且保持默认域顺序。
+	if got, want := edgefactor.RequestedDomains(p), []string{"attack_surface"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("RequestedDomains = %v, want %v", got, want)
 	}
 }
 
 // TestConsistencyGateGoesThroughDomainCoverageCheck：门禁的域覆盖校验必须落在 `Evaluate`
 // 层（带权重却无观测域分的记录直接拒绝），而不是让低阶原语静默按 0 聚合。
 func TestConsistencyGateGoesThroughDomainCoverageCheck(t *testing.T) {
-	recs, err := LoadRecords(writeJSONL(t, "cons.jsonl", twoFactorChainJSONL))
-	if err != nil {
-		t.Fatalf("LoadRecords: %v", err)
-	}
+	recs := consRecords(t)
 	// 记录只有 attack_surface，权重表却给 operation_trust 也记了分量 ⇒ 必须先拒绝。
 	weights := map[string]float64{"attack_surface": 1, "operation_trust": 1}
 	if _, err := Evaluate(recs, consGraphParams(), weights); err == nil {
@@ -304,44 +370,111 @@ func TestConsistencyGateGoesThroughDomainCoverageCheck(t *testing.T) {
 	}
 }
 
-// TestConsistencyGateHoldsAcrossWeightTables：同一 EvalContext 下换权重表只应改聚合口径，
-// 两侧（离线入口与独立镜像）仍必须逐位相等。
+// TestConsistencyGateHoldsAcrossWeightTables：换权重表只应改聚合口径，
+// 离线结果仍必须与真实引擎公式逐位相等（权重表是公式的入参之一，不是离线自己发明的）。
 func TestConsistencyGateHoldsAcrossWeightTables(t *testing.T) {
-	recs, err := LoadRecords(writeJSONL(t, "cons.jsonl", twoFactorChainJSONL))
-	if err != nil {
-		t.Fatalf("LoadRecords: %v", err)
-	}
-	p := consGraphParams()
+	rec := consRecords(t)[0]
+	p := legacyParityParams()
 	for _, w := range []map[string]float64{
 		{"attack_surface": 1},
 		{"attack_surface": 3},
+		{"attack_surface": 1, "operation_trust": 2},
 	} {
-		a, err := OfflineScoreWithWeights(p, recs[0], w)
+		offline, err := OfflineScoreWithWeights(p, rec, w)
 		if err != nil {
-			t.Fatalf("offline: %v", err)
+			t.Fatalf("offline(%v): %v", w, err)
 		}
-		b, err := onlineMirror(p, recs[0], w)
-		if err != nil {
-			t.Fatalf("mirror: %v", err)
-		}
-		if a != b {
-			t.Errorf("权重 %v 下离线 %v ≠ 镜像 %v", w, a, b)
+		want := engineFormulaDirect(rec, w).Total
+		if offline != want {
+			t.Errorf("权重 %v 下离线 %v ≠ 引擎公式 %v", w, offline, want)
 		}
 	}
 }
 
-// TestConsistencyGateMirrorIsIndependent 是一条**反向守卫**：镜像若被改成转发调用生产入口，
-// 本门禁就退化成同义反复（自己和自己比）。这里用一个两侧都会拒绝、但**报错来源不同**的输入
-// 来证明两条路径确实各走各的代码：一旦镜像变成转发，两条错误就会逐字相同。
-func TestConsistencyGateMirrorIsIndependent(t *testing.T) {
-	bad := consGraphParams()
-	bad.Lambda = map[string]float64{"made_up_domain": 1}
-	_, mirrorErr := onlineMirror(bad, Record{}, consWeights())
-	_, prodErr := OfflineScoreWithWeights(bad, Record{}, consWeights())
-	if mirrorErr == nil || prodErr == nil {
-		t.Fatalf("两侧都必须拒绝 λ 未覆盖任何默认域的参数：mirror=%v prod=%v", mirrorErr, prodErr)
+// TestConsistencyGateIsBitwiseReproducible：同一输入重复重算必须逐位相同 ——
+// 钩子是进程级全局态，安装/拆除若有泄漏或顺序漂移，门禁与报告都会"偶然绿、偶然红"。
+func TestConsistencyGateIsBitwiseReproducible(t *testing.T) {
+	for _, p := range []edgefactor.Params{legacyParityParams(), consGraphParams()} {
+		for _, rec := range consRecords(t) {
+			first, err := OfflineScoreWithWeights(p, rec, consWeights())
+			if err != nil {
+				t.Fatalf("%s/%s: %v", p.Model, rec.ScenarioID, err)
+			}
+			for i := 0; i < 100; i++ {
+				again, err := OfflineScoreWithWeights(p, rec, consWeights())
+				if err != nil {
+					t.Fatalf("repeat %d: %v", i, err)
+				}
+				if !reflect.DeepEqual(first, again) {
+					t.Fatalf("%s/%s: 第 %d 次重算 = %v ≠ %v（聚合序或钩子状态不确定）",
+						p.Model, rec.ScenarioID, i, again, first)
+				}
+			}
+		}
 	}
-	if mirrorErr.Error() == prodErr.Error() {
-		t.Errorf("镜像与生产入口报了同一条错误 %q —— 它们很可能已经不是独立实现", mirrorErr)
+}
+
+// TestConsistencyGateLeavesHooksUnregistered：用完之后钩子必须回到**默认**
+// （`Register*(nil)`）。残留注册会在下一次评分里静默改变分数：钩子是进程级的，
+// 而 default（逐次相乘）与"注入的等价策略（base×乘子）"在取整半格边界上不同。
+func TestConsistencyGateLeavesHooksUnregistered(t *testing.T) {
+	rec := consRecords(t)[0]
+	if _, err := OfflineScoreWithWeights(consGraphParams(), rec, consWeights()); err != nil {
+		t.Fatalf("OfflineScoreWithWeights: %v", err)
 	}
+	// 拆除后，直接用默认路径算同一个 legacy 输入必须与"从未装过钩子"一致。
+	got := engineFormulaDirect(rec, consWeights()).Total
+	want, err := OfflineScoreWithWeights(legacyParityParams(), rec, consWeights())
+	if err != nil {
+		t.Fatalf("OfflineScoreWithWeights(legacy): %v", err)
+	}
+	if got != want {
+		t.Fatalf("V/G/C 重算后 legacy 直接调用公式 = %v ≠ 离线 legacy %v —— 钩子有残留",
+			got, want)
+	}
+}
+
+// TestConsistencyGateChainWindowComesFromTheRecord：chain 的时间戳只能来自 JSONL
+// （在线结果类型没有时间字段），窗口内外必须给出不同分数，且窗口内受更重的惩罚。
+func TestConsistencyGateChainWindowComesFromTheRecord(t *testing.T) {
+	p := consGraphParams()
+	p.Model = edgefactor.ModelChain
+	p.ChainWindowSeconds = 30
+
+	within := consRecords(t)
+	// 窗口外的那条必须**重新读一份 JSONL**（不能浅拷贝 Record 后改字段：Record 里的
+	// EdgeFactorChain 是切片，浅拷贝会让两条记录共享同一份链条目）。
+	outside, err := LoadRecords(writeJSONL(t, "cons-outside.jsonl",
+		strings.Replace(twoFactorChainJSONL, `"ts":"2026-09-08T10:00:01Z"`, `"ts":"2026-09-08T10:05:00Z"`, 1)))
+	if err != nil {
+		t.Fatalf("LoadRecords(outside): %v", err)
+	}
+
+	inScore, err := OfflineScoreWithWeights(p, within[0], consWeights())
+	if err != nil {
+		t.Fatalf("chain(within): %v", err)
+	}
+	outScore, err := OfflineScoreWithWeights(p, outside[0], consWeights())
+	if err != nil {
+		t.Fatalf("chain(outside): %v", err)
+	}
+	if inScore == outScore {
+		t.Fatalf("时间戳没有影响结果（%v）：chain 的时序语义未生效", inScore)
+	}
+	if inScore >= outScore {
+		t.Errorf("窗口内应受更重的惩罚：窗口内 %v 应 < 窗口外 %v", inScore, outScore)
+	}
+	if math.Abs(inScore-outScore) < 1e-9 {
+		t.Errorf("窗口内外的差异小到不可观测：%v vs %v", inScore, outScore)
+	}
+}
+
+// mustTS 解析夹具里的 RFC3339 时间戳（夹具错误即测试失败）。
+func mustTS(t *testing.T, v string) time.Time {
+	t.Helper()
+	ts, err := parseTS(v)
+	if err != nil {
+		t.Fatalf("夹具时间戳非法 %q: %v", v, err)
+	}
+	return ts
 }

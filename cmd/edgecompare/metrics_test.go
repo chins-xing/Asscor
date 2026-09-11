@@ -26,14 +26,30 @@ func twoDomainWeights() map[string]float64 {
 // assemblyDecay 是在线装配层 `ActivationFromResult` 的换算口径：对**已经过 ssam-lib 策略
 // 衰减一次**的因子值再衰减一次 ⇒ 合计 1−(1−f)·c²（spec §10.2 的既有口径，本任务复用它，
 // 不修正）。样例记录：f=0.8、c=0.9 ⇒ 策略层 0.82 ⇒ 装配层 0.838。
+//
+// **它只适用于 V/G/C**（合成层在域级修正前做这次换算）；legacy 走引擎默认策略，
+// 直接乘记录里的 `effective_factor`（单次衰减），见 engineEdgeFactors 的注释。
 func assemblyDecay(chainValue, cTrigger float64) float64 {
 	return edgefactor.EffectiveFactor(chainValue, cTrigger)
 }
 
+// engineTotalOf 按 `ssam.SSAMV20Formula` 的式子**手算期望总分**（夹具期望值的推导，
+// 不是对拍用的第二实现 —— 对拍由 consistency_test.go 直接调用内仓的真公式完成）：
+//
+//	base_adj = round2(base)            // 内仓公式先对 base 取整到两位
+//	总分     = round2(0.5·base_adj + 30·E + 20·T)
+//
+// 式子与内仓逐项对齐（含两次取整的位置），断言失败时能一眼看出是哪一项算错了。
+func engineTotalOf(base, spc, threat float64) float64 {
+	rounded := math.Round(base*100) / 100
+	weightedAvg := (rounded/100*50 + spc*30 + threat*20) / 100
+	return math.Round(weightedAvg*100*100) / 100
+}
+
 func TestEvaluateFalseNegativeCounted(t *testing.T) {
 	recs, _ := LoadRecords(writeSample(t))
-	// legacy 候选 + 现状乘性路径：域分不被逐域修正，∏effective_f 作用于聚合总分。
-	// 本记录聚合分 90、乘子 0.838（双衰减口径）⇒ 75.42 ≥ 阈值 60 ⇒ 判 acceptable，
+	// 样例记录（域分 90/90、因子观测值 0.82、spc 0.8、threat 0.7、阈值 60）：
+	// 引擎总分 = round2(0.5×73.8 + 30×0.8 + 20×0.7) = 74.9 ≥ 60 ⇒ acceptable，
 	// 而客观被攻陷 ⇒ 漏判（FN）。
 	m, err := Evaluate(recs, legacyParams(), twoDomainWeights())
 	if err != nil {
@@ -47,10 +63,14 @@ func TestEvaluateFalseNegativeCounted(t *testing.T) {
 	}
 }
 
-// TestOfflineScoreUsesAssemblyConfidenceDecay 钉住 mandate 口径 2：离线必须复用在线装配层
-// 的换算（1−(1−f)·c，配合 ssam-lib 策略层已衰减过一次 ⇒ 合计 1−(1−f)c²），而不是把记录里
-// 的 effective_factor 直接用掉（那会少衰减一次，也是 Task 7 评审 I2 记录在案的口径差）。
-func TestOfflineScoreUsesAssemblyConfidenceDecay(t *testing.T) {
+// TestOfflineScoreUsesTheObservedFactorLikeTheEngine 钉住 C1 之后 legacy 的因子口径：
+// **直接用记录里的 `effective_factor`**（策略层已按 c_trigger 衰减一次的观测值），
+// 因为引擎的默认策略乘的就是 `EdgeFactorResult.Factor`。
+//
+// 旧实现在这里再衰减一次（0.82 → 0.838），于是离线分数比引擎**高**（惩罚更轻、更乐观），
+// 与部署行为不是同一个量 —— 这正是 C1 要消除的口径差。本用例把两个方向都钉住：
+// 分数必须等于单次衰减的引擎总分，且**不得**等于双衰减的那个值。
+func TestOfflineScoreUsesTheObservedFactorLikeTheEngine(t *testing.T) {
 	recs, err := LoadRecords(writeSample(t))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
@@ -64,37 +84,43 @@ func TestOfflineScoreUsesAssemblyConfidenceDecay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OfflineScoreWithWeights: %v", err)
 	}
-	doubleDecay := assemblyDecay(chain.EffectiveFactor, chain.CTrigger) // 0.838
-	singleDecay := chain.EffectiveFactor                                // 0.82
-
-	if score != 90*doubleDecay {
-		t.Errorf("score = %v, want aggregate(90) × 1-(1-f)c² = %v", score, 90*doubleDecay)
+	spc, threat := recs[0].Observed.SPCScore, recs[0].Observed.ThreatCoeff
+	// 单次衰减（引擎口径）：base = 90 × 0.82 = 73.8。
+	if want := engineTotalOf(90*chain.EffectiveFactor, spc, threat); score != want {
+		t.Errorf("score = %v, want %v（90 × 记录里的 effective_factor 0.82 的引擎总分）", score, want)
 	}
-	if score == 90*singleDecay {
-		t.Errorf("score = %v equals the single-decay value — 未复用在线的装配层换算", score)
+	// 双衰减（旧口径）：base = 90 × 0.838 —— 必须**不**等于它。
+	doubleDecay := assemblyDecay(chain.EffectiveFactor, chain.CTrigger)
+	if double := engineTotalOf(90*doubleDecay, spc, threat); score == double {
+		t.Errorf("score = %v 等于双衰减口径（%v）—— legacy 又走上了装配层换算", score, double)
 	}
-	if score == 90 {
+	if score == engineTotalOf(90, spc, threat) {
 		t.Errorf("score = %v: 因子惩罚没有生效", score)
+	}
+	// 与在线观测的 final_score 逐位一致：这是"同一个量"的最直接证据。
+	if score != recs[0].Observed.FinalScore {
+		t.Errorf("离线重算 %v ≠ 在线观测 final_score %v", score, recs[0].Observed.FinalScore)
 	}
 }
 
-// TestLegacyAppliesMultiplierToAggregatedTotal 钉住 mandate 口径 4：legacy 的域分不被逐域
-// 修正，乘子只作用于**聚合后的总分**；同一条记录上 vector 走的是"先逐域修正再聚合"的另一支，
-// 两者必须给出不同的分数。
+// TestLegacyAppliesMultiplierToAggregatedTotal 钉住 legacy 的层次：域分不被逐域修正，
+// ∏effective_f 作用于**聚合之后的 base**（内仓默认的逐次相乘路径）；
+// 同一条记录上 vector 走的是"先逐域修正再聚合"的另一支，两者必须给出不同的分数。
 func TestLegacyAppliesMultiplierToAggregatedTotal(t *testing.T) {
 	recs, err := LoadRecords(writeSample(t))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
 	}
 	weights := map[string]float64{"attack_surface": 2, "operation_trust": 1}
+	spc, threat := recs[0].Observed.SPCScore, recs[0].Observed.ThreatCoeff
 
 	legacyScore, err := OfflineScoreWithWeights(legacyParams(), recs[0], weights)
 	if err != nil {
 		t.Fatalf("legacy: %v", err)
 	}
-	mult := assemblyDecay(0.82, 0.9)
-	if want := (90*2 + 90*1) / 3.0 * mult; legacyScore != want {
-		t.Errorf("legacy score = %v, want weighted aggregate × mult = %v", legacyScore, want)
+	mult := recs[0].Observed.EdgeFactorChain[0].EffectiveFactor // 0.82（引擎侧直接乘它）
+	if want := engineTotalOf((90*2+90*1)/3.0*mult, spc, threat); legacyScore != want {
+		t.Errorf("legacy score = %v, want 加权聚合 × 观测因子 = %v", legacyScore, want)
 	}
 
 	vec := edgefactor.Params{Model: edgefactor.ModelVector, PFloor: 0.5,
@@ -105,20 +131,23 @@ func TestLegacyAppliesMultiplierToAggregatedTotal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("vector: %v", err)
 	}
-	p := 0.5 + 0.5*math.Exp(-1.0*((1-mult)*0.5)) // 域级系数 P_d（λ=1、v=0.5）
-	if want := (90*p*2 + 90*p*1) / 3.0; math.Abs(vecScore-want) > 1e-9 {
-		t.Errorf("vector score = %v, want per-domain adjustment then aggregate = %v", vecScore, want)
+	// 域级系数 P_d（λ=1、v=0.5）：有效因子经**装配层**换算（双衰减 0.838），
+	// 惩罚作用在**每个域**上，聚合发生在修正之后。
+	eff := assemblyDecay(mult, recs[0].Observed.EdgeFactorChain[0].CTrigger)
+	p := 0.5 + 0.5*math.Exp(-1.0*((1-eff)*0.5))
+	if want := engineTotalOf((90*p*2+90*p*1)/3.0, spc, threat); math.Abs(vecScore-want) > 1e-12 {
+		t.Errorf("vector score = %v, want 逐域修正后聚合再进公式 = %v", vecScore, want)
 	}
 	if vecScore == legacyScore {
 		t.Errorf("legacy 与 vector 走了同一条聚合支路（%v）", vecScore)
 	}
 }
 
-// TestVectorTrimsToLambdaDomainsAndPassesThroughOthers 钉住 mandate 口径 1：离线必须复用在线的
-// 域裁剪口径「DefaultDomains ∩ λ」——未配 λ 的域**不做**域级修正，但它在聚合里仍应使用**观测值**
+// TestVectorTrimsToLambdaDomainsAndPassesThroughOthers 钉住裁剪口径「DefaultDomains ∩ λ」：
+// 未配 λ 的域**不做**域级修正，但它在聚合里仍应使用**观测值**
 // （在线 DomainAdjust 对不在计划内的域原样放行），不能被当成 0。
 func TestVectorTrimsToLambdaDomainsAndPassesThroughOthers(t *testing.T) {
-	const rec = `{"scenario_id":"S2-partial","factors":["EF-SELINUX"],"observed":{"domain_scores":{"attack_surface":90,"operation_trust":60,"resilience":30},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true}}`
+	const rec = `{"scenario_id":"S2-partial","factors":["EF-SELINUX"],"observed":{"domain_scores":{"attack_surface":90,"operation_trust":60,"resilience":30},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true}}`
 	recs, err := LoadRecords(writeJSONL(t, "partial.jsonl", rec+"\n"))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
@@ -133,13 +162,14 @@ func TestVectorTrimsToLambdaDomainsAndPassesThroughOthers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OfflineScoreWithWeights: %v", err)
 	}
+	spc, threat := recs[0].Observed.SPCScore, recs[0].Observed.ThreatCoeff
 	eff := assemblyDecay(0.82, 0.9)
 	pd := 0.5 + 0.5*math.Exp(-1.0*((1-eff)*0.5))
-	want := (90*pd + 60*pd + 30*1) / 3.0
-	if math.Abs(score-want) > 1e-9 {
+	want := engineTotalOf((90*pd+60*pd+30*1)/3.0, spc, threat)
+	if math.Abs(score-want) > 1e-12 {
 		t.Errorf("score = %v, want %v (未配 λ 的域必须原样参与聚合)", score, want)
 	}
-	if math.Abs(score-(90*pd+60*pd+0)/3.0) < 1e-9 {
+	if zeroed := engineTotalOf((90*pd+60*pd+0)/3.0, spc, threat); math.Abs(score-zeroed) < 1e-12 {
 		t.Errorf("score = %v: 未配 λ 的域被当成 0 参与聚合", score)
 	}
 }
@@ -166,7 +196,7 @@ func TestVectorWithoutAnyDefaultLambdaFailsFast(t *testing.T) {
 // EF-SELINUX 级联到 EF-APPARMOR，时间戳由参数给出（离线 chain 的唯一时间来源）。
 // 与其它夹具一样必须是**一行**（JSONL：一行一条记录）。
 func chainJSONL(secondTS string) string {
-	return fmt.Sprintf(`{"scenario_id":"S5-cascade","factors":["EF-SELINUX","EF-APPARMOR"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":90},"final_score":80,"acceptable":true,"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"},{"factor":"EF-APPARMOR","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":%q}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3},"meta":{"env":"wsl-clab-14","run":1}}`, secondTS)
+	return fmt.Sprintf(`{"scenario_id":"S5-cascade","factors":["EF-SELINUX","EF-APPARMOR"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":90},"final_score":80,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"},{"factor":"EF-APPARMOR","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":%q}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3},"meta":{"env":"wsl-clab-14","run":1}}`, secondTS)
 }
 
 func chainParams() edgefactor.Params {
@@ -192,6 +222,7 @@ func TestChainUsesJSONLTimestampsOffline(t *testing.T) {
 		t.Fatalf("LoadRecords(outside): %v", err)
 	}
 	weights := map[string]float64{"attack_surface": 1}
+	spc, threat := within[0].Observed.SPCScore, within[0].Observed.ThreatCoeff
 
 	// c_trigger=1 ⇒ 两次衰减恒等，有效值 = 0.8；a_i = (1−0.8)·0.5 = 0.1。
 	gotWithin, err := OfflineScoreWithWeights(chainParams(), within[0], weights)
@@ -199,7 +230,8 @@ func TestChainUsesJSONLTimestampsOffline(t *testing.T) {
 		t.Fatalf("chain(within): %v", err)
 	}
 	lWithin := 0.1 + 0.1 + 0.35*0.1*0.1 // 级联项 c·a_i·a_j
-	if want := 90 * (0.5 + 0.5*math.Exp(-1.0*lWithin)); math.Abs(gotWithin-want) > 1e-12 {
+	pWithin := 0.5 + 0.5*math.Exp(-1.0*lWithin)
+	if want := engineTotalOf(90*pWithin, spc, threat); math.Abs(gotWithin-want) > 1e-12 {
 		t.Errorf("chain(within) = %v, want %v (窗口内级联应生效)", gotWithin, want)
 	}
 
@@ -207,7 +239,8 @@ func TestChainUsesJSONLTimestampsOffline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("chain(outside): %v", err)
 	}
-	if want := 90 * (0.5 + 0.5*math.Exp(-1.0*0.2)); math.Abs(gotOutside-want) > 1e-12 {
+	pOutside := 0.5 + 0.5*math.Exp(-1.0*0.2)
+	if want := engineTotalOf(90*pOutside, spc, threat); math.Abs(gotOutside-want) > 1e-12 {
 		t.Errorf("chain(outside) = %v, want %v (超出窗口不应级联)", gotOutside, want)
 	}
 	if gotWithin == gotOutside {
@@ -232,7 +265,7 @@ func TestChainWithoutTimestampFailsFast(t *testing.T) {
 // TestActivationsOfNormalizesAndConverts：链条目 → 合成层输入的换算点。
 // ID 归一（消费侧口径，须与 ssam.NormalizeFactorID 一致）与可信度双衰减都在这里发生。
 func TestActivationsOfNormalizesAndConverts(t *testing.T) {
-	const rec = `{"scenario_id":"S1-lowercase","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"  ef-selinux  ","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:03Z"}]},"ground_truth":{"compromised":true}}`
+	const rec = `{"scenario_id":"S1-lowercase","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"  ef-selinux  ","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:03Z"}]},"ground_truth":{"compromised":true}}`
 	recs, err := LoadRecords(writeJSONL(t, "lower.jsonl", rec+"\n"))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
@@ -253,12 +286,12 @@ func TestActivationsOfNormalizesAndConverts(t *testing.T) {
 }
 
 // TestEvaluateThreeLayers 用四条记录同时钉住三层指标的手算值。
-// 决策层：分数 = 聚合分 × 0.838（legacy），阈值 50。
+// 决策层：引擎总分 = round2(0.5·round2(域分×0.82) + 30×0.8 + 20×0.7)，阈值 50。
 //
-//	R1 90 → 75.42 ≥50 接受 / 客观被攻陷 ⇒ 漏判（FN）
-//	R2 10 →  8.38 <50 拒绝 / 客观被攻陷 ⇒ 正确
-//	R3 90 → 75.42 ≥50 接受 / 客观未被攻陷 ⇒ 正确
-//	R4 10 →  8.38 <50 拒绝 / 客观未被攻陷 ⇒ 误阻断（FP）
+//	R1 90 → 74.9 ≥50 接受 / 客观被攻陷 ⇒ 漏判（FN）
+//	R2 10 → 42.1 <50 拒绝 / 客观被攻陷 ⇒ 正确
+//	R3 90 → 74.9 ≥50 接受 / 客观未被攻陷 ⇒ 正确
+//	R4 10 → 42.1 <50 拒绝 / 客观未被攻陷 ⇒ 误阻断（FP）
 //
 // 排序层：本组记录刻意包含一例漏判与一例误阻断（模型是**失败**的），R1 与 R3 的模型分数
 // 完全相同而客观结果相反 ⇒ 分数与严重度呈**正**相关（秩：分数 [3.5,1.5,3.5,1.5]、
@@ -271,7 +304,7 @@ func TestActivationsOfNormalizesAndConverts(t *testing.T) {
 // 数值层：AUC 以 (100−score) 为危险度 ⇒ 0.5（两类各两例、且危险度完全重合）。
 func TestEvaluateThreeLayers(t *testing.T) {
 	rec := func(id string, as float64, compromised bool, ttc float64, ttps, nodes int) string {
-		return fmt.Sprintf(`{"scenario_id":%q,"factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":%v},"final_score":0,"acceptable":true,"threshold":50,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":%t,"time_to_compromise_s":%v,"ttps_achieved":%d,"nodes_affected":%d,"block_effective":false},"meta":{"env":"test","run":1}}`, id, as, compromised, ttc, ttps, nodes)
+		return fmt.Sprintf(`{"scenario_id":%q,"factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":%v},"final_score":0,"acceptable":true,"threshold":50,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":%t,"time_to_compromise_s":%v,"ttps_achieved":%d,"nodes_affected":%d,"block_effective":false},"meta":{"env":"test","run":1}}`, id, as, compromised, ttc, ttps, nodes)
 	}
 	content := strings.Join([]string{
 		rec("R1", 90, true, 213, 4, 3),
@@ -312,9 +345,9 @@ func TestEvaluateThreeLayers(t *testing.T) {
 // "作用于全部域、强度 1"计入惩罚，让一个未建模的因子凭空产生比配置更强的惩罚。
 // 对照组（EF-SYNCOOKIE 在候选的 Factors 里）必须**改变**分数，证明过滤器不是把因子全丢了。
 func TestUnmodeledFactorIsDropped(t *testing.T) {
-	const content = `{"scenario_id":"A","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8}]},"ground_truth":{"compromised":true}}
-{"scenario_id":"B","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-3FA","c_trigger":1.0,"effective_factor":0.5}]},"ground_truth":{"compromised":true}}
-{"scenario_id":"C","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-SYNCOOKIE","c_trigger":1.0,"effective_factor":0.5}]},"ground_truth":{"compromised":true}}
+	const content = `{"scenario_id":"A","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8}]},"ground_truth":{"compromised":true}}
+{"scenario_id":"B","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-3FA","c_trigger":1.0,"effective_factor":0.5}]},"ground_truth":{"compromised":true}}
+{"scenario_id":"C","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-SYNCOOKIE","c_trigger":1.0,"effective_factor":0.5}]},"ground_truth":{"compromised":true}}
 `
 	recs, err := LoadRecords(writeJSONL(t, "unmodeled.jsonl", content))
 	if err != nil {
@@ -328,9 +361,10 @@ func TestUnmodeledFactorIsDropped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("A: %v", err)
 	}
-	// c_trigger=1 ⇒ 两次衰减恒等 ⇒ 乘子 = 0.8（与在线单次衰减逐位相同）。
-	if scoreA != 90*0.8 {
-		t.Fatalf("A = %v, want %v", scoreA, 90*0.8)
+	// 引擎公式：base = round2(90×0.8) = 72 ⇒ 总分 = round2(0.5×72 + 30×0.8 + 20×0.7) = 74。
+	spc, threat := recs[0].Observed.SPCScore, recs[0].Observed.ThreatCoeff
+	if want := engineTotalOf(90*0.8, spc, threat); scoreA != want {
+		t.Fatalf("A = %v, want %v", scoreA, want)
 	}
 	scoreB, err := OfflineScoreWithWeights(p, recs[1], weights)
 	if err != nil {
@@ -343,8 +377,8 @@ func TestUnmodeledFactorIsDropped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("C: %v", err)
 	}
-	if scoreC != 90*0.8*0.5 {
-		t.Errorf("C = %v, want %v（在途因子必须计入）", scoreC, 90*0.8*0.5)
+	if want := engineTotalOf(90*0.8*0.5, spc, threat); scoreC != want {
+		t.Errorf("C = %v, want %v（在途因子必须计入）", scoreC, want)
 	}
 }
 
@@ -360,8 +394,10 @@ func TestEvaluateEmptyRecordsIsZero(t *testing.T) {
 }
 
 // TestOfflineScoreEqualWeights：OfflineScore 是"等权"便捷入口；权重表里出现的域若在记录里
-// 缺失，会以 0 计入并仍占一份权重（brief 给定的 weightedSum 语义）。真实记录含全部 5 个域
-// （spec §5.1），故该情形只出现在合成/最小夹具里。
+// 缺失，会以 0 计入并仍占一份权重（内仓公式 `SSAMV20Formula` 对权重表内的域一律计入分母）。
+// 真实记录含全部 5 个域（spec §5.1），故该情形只出现在合成/最小夹具里。
+//
+// 样例记录只有 2 个域有观测（90/90），等权表给 5 个默认域各 1 份 ⇒ 聚合分 = 180/5 = 36。
 func TestOfflineScoreEqualWeights(t *testing.T) {
 	recs, err := LoadRecords(writeSample(t))
 	if err != nil {
@@ -371,21 +407,22 @@ func TestOfflineScoreEqualWeights(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OfflineScore: %v", err)
 	}
-	if want := (90.0 + 90.0) / 5.0 * assemblyDecay(0.82, 0.9); score != want {
+	if want := engineTotalOf((90.0+90.0)/5.0*0.82, recs[0].Observed.SPCScore, recs[0].Observed.ThreatCoeff); score != want {
 		t.Errorf("score = %v, want %v", score, want)
 	}
 }
 
-// TestWeightedSumIsBitwiseDeterministic（Fix round 1）：域聚合必须**逐位可复现**。
+// TestDomainAggregationIsBitwiseDeterministic（原 TestWeightedSumIsBitwiseDeterministic）：
+// 域聚合必须**逐位可复现**。
 //
 // 为什么这是硬契约而不是"精度洁癖"：本方向的主门禁是「离线重算 ↔ 在线评分逐位一致」，
-// 在线侧的域聚合顺序是确定的；若离线按 map 迭代序累加，末位 1 ulp 会随机抖动 ⇒ 门禁"
-// 偶然绿、偶然红"，同一份数据两次跑出不同结论时报告数字无法归因。
+// 在线侧的域聚合顺序由权重表决定；若离线按 map 迭代序装域分切片，末位 1 ulp 会随机抖动
+// ⇒ 门禁"偶然绿、偶然红"，同一份数据两次跑出不同结论时报告数字无法归因。
 //
-// 夹具刻意选 order-sensitive 的组合（宽动态范围 1e16/1e-16 + 不可精确表示的十进制 0.1/0.2/0.3），
-// 让"累加顺序不同的实现"必然在不同次调用间抖出差异；比较用 reflect.DeepEqual，
-// **不用容差** —— 容差会正好掩盖要抓的 1 ulp。
-func TestWeightedSumIsBitwiseDeterministic(t *testing.T) {
+// 夹具刻意选 order-sensitive 的组合（宽动态范围 1e16/1e-16 + 不可精确表示的十进制
+// 0.1/0.2/0.3），让"累加顺序不同的实现"必然在不同次调用间抖出差异；比较用
+// reflect.DeepEqual，**不用容差** —— 容差会正好掩盖要抓的 1 ulp。
+func TestDomainAggregationIsBitwiseDeterministic(t *testing.T) {
 	scores := map[string]float64{
 		"attack_surface":      0.1,
 		"business_continuity": 0.2,
@@ -402,17 +439,25 @@ func TestWeightedSumIsBitwiseDeterministic(t *testing.T) {
 		"kernel_security":     1,
 		"zzz_custom":          4,
 	}
-	first := weightedSum(scores, weights)
+	first := engineDomainScores(scores, weights)
 	for i := 0; i < 100; i++ {
-		got := weightedSum(scores, weights)
+		got := engineDomainScores(scores, weights)
 		if !reflect.DeepEqual(first, got) {
-			t.Fatalf("第 %d 次调用与首次逐位不同（聚合不可复现）：%v vs %v", i+1, got, first)
+			t.Fatalf("第 %d 次装出的域分切片与首次不同（聚合不可复现）：%v vs %v", i+1, got, first)
 		}
 	}
-	// 顺序契约本身：默认域按 DefaultDomains 顺序在前，其余键按字典序追加。
+	// 切片顺序契约本身：默认域按 DefaultDomains 顺序在前，其余键按字典序追加；
+	// 权重 ≤ 0 的域不进切片（与内仓公式 `w > 0` 的判据同义）。
 	wantOrder := []string{"attack_surface", "business_continuity", "operation_trust", "resilience", "kernel_security", "zzz_custom"}
 	if got := orderedDomains(weights); !reflect.DeepEqual(got, wantOrder) {
 		t.Errorf("orderedDomains = %v, want %v", got, wantOrder)
+	}
+	if len(first) != len(wantOrder) || first[0].Domain != "attack_surface" || first[5].Domain != "zzz_custom" {
+		t.Errorf("域分切片顺序不对：%+v", first)
+	}
+	zero := map[string]float64{"attack_surface": 1, "resilience": 0}
+	if got := engineDomainScores(scores, zero); len(got) != 1 || got[0].Domain != "attack_surface" {
+		t.Errorf("权重为 0 的域不得进入域分切片：%+v", got)
 	}
 	// "其余键按字典序"必须真的生效（而不是"非默认键随便放在末尾"）。
 	rest := map[string]float64{"operation_trust": 1, "zzz": 1, "aaa": 1}
@@ -421,10 +466,10 @@ func TestWeightedSumIsBitwiseDeterministic(t *testing.T) {
 	}
 }
 
-// TestEvaluateIsBitwiseDeterministic：整条离线重算路径（Synthesize + 定序聚合 + 三层指标）
+// TestEvaluateIsBitwiseDeterministic：整条离线重算路径（引擎公式 + 钩子注入 + 三层指标）
 // 也必须逐位可复现 —— 报告与门禁都建立在这个契约上。
 func TestEvaluateIsBitwiseDeterministic(t *testing.T) {
-	const rec = `{"scenario_id":"S2-all-domains","factors":["EF-SELINUX"],"observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3}}`
+	const rec = `{"scenario_id":"S2-all-domains","factors":["EF-SELINUX"],"observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3}}`
 	recs, err := LoadRecords(writeJSONL(t, "determinism.jsonl", rec+"\n"))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
@@ -490,7 +535,7 @@ func TestEvaluateRejectsWeightsForMissingDomains(t *testing.T) {
 
 // vgcJSONL 是 V/G/C 确定性断言用的 5 域记录：两个因子共用触发检查 OT-005，
 // EF-SELINUX → EF-APPARMOR 级联（带时间戳，chain 候选要用），时间间隔 30s。
-const vgcJSONL = `{"scenario_id":"S5-cascade-vgc","factors":["EF-SELINUX","EF-APPARMOR"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"final_score":0,"acceptable":true,"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"},{"factor":"EF-APPARMOR","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:30Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}`
+const vgcJSONL = `{"scenario_id":"S5-cascade-vgc","factors":["EF-SELINUX","EF-APPARMOR"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"final_score":0,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"},{"factor":"EF-APPARMOR","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:30Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}`
 
 // vgcParams 返回同一套参数下的 graph / chain 两个候选。
 func vgcParams() []struct {

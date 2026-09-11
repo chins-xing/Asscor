@@ -28,8 +28,9 @@ import (
 //     以及 task-10-report.md §拟合器设计）。
 //
 // 与在线评分共用**同一裁剪口径**：特征域集合取 `DefaultDomains ∩ λ`（legacy 例外，它不读 λ），
-// 与 `offlinePlan` / `pruneToDomains` 逐条一致；基准参数先裁剪到该域集合再 `Validate`
-// （这是 TestFitRejectsNonPositiveLambda 与合成夹具的共同前提）。
+// 由 `fitDomains`（→ `edgefactor.RequestedDomains`）与 `edgefactor.PruneToDomains` 提供；
+// 基准参数先裁剪到该域集合再 `Validate`（这是 TestFitRejectsNonPositiveLambda 与合成夹具的
+// 共同前提）。
 
 // FitOptions 是拟合的全部可调项（brief 给定的四字段 + 追加的 L1）。
 //
@@ -294,7 +295,7 @@ func buildFitDesign(records []Record, base edgefactor.Params, opts FitOptions) (
 	}
 	// 基准参数必须先过裁剪域上的 Validate：λ ≤ 0 这类参数在 Synthesize 里就会被拒，
 	// 在这里兜底（例如把它悄悄当 1.0 用）只会产出一份"能拟合、算不出"的参数。
-	if err := pruneToDomains(base, domains).Validate(domains); err != nil {
+	if err := edgefactor.PruneToDomains(base, domains).Validate(domains); err != nil {
 		return fitDesign{}, fmt.Errorf(
 			"edgecompare: 基准参数在拟合域 %v 上过不了 Validate —— 拟合前请先修好它（不得兜底）：%w", domains, err)
 	}
@@ -385,7 +386,7 @@ func validateFitRequest(records []Record, base edgefactor.Params, opts FitOption
 	}
 	seen := make(map[string]bool, len(opts.PriorEdges))
 	for _, e := range opts.PriorEdges {
-		from, to := normalizeFactorID(e[0]), normalizeFactorID(e[1])
+		from, to := edgefactor.NormalizeFactorID(e[0]), edgefactor.NormalizeFactorID(e[1])
 		if from == "" || to == "" {
 			return fmt.Errorf("edgecompare: 先验边 %q|%q 含空因子 ID —— 会产出畸形列名与畸形配置键", e[0], e[1])
 		}
@@ -418,7 +419,10 @@ func validateFitRequest(records []Record, base edgefactor.Params, opts FitOption
 }
 
 // fitDomains 返回本次拟合的特征域集合，口径与在线装配 / 离线重算完全一致：
-// `DefaultDomains ∩ λ`（legacy 例外：它不读 λ，惩罚完全由 GlobalMultiplier 表达）。
+// `DefaultDomains ∩ λ`（legacy 例外：它不读 λ，惩罚完全由全局乘子表达）。
+//
+// 唯一实现是 `internal/edgefactor.RequestedDomains`（主控 I2 裁定）—— 本函数只负责把
+// "一个默认域都没有"变成 fail-fast 错误，不再自己抄一遍交集口径。
 //
 // 一个 λ 都没覆盖到默认域（V/G/C）时直接报错，而不是退回"全部 5 个默认域"——
 // 后者会让缺失的域以 0 参与求和、悄悄改变特征尺度。
@@ -426,13 +430,7 @@ func fitDomains(p edgefactor.Params) ([]string, error) {
 	if p.Model == edgefactor.ModelLegacy {
 		return edgefactor.DefaultDomains(), nil
 	}
-	all := edgefactor.DefaultDomains()
-	requested := make([]string, 0, len(all))
-	for _, d := range all {
-		if _, ok := p.Lambda[d]; ok {
-			requested = append(requested, d)
-		}
-	}
+	requested := edgefactor.RequestedDomains(p)
 	if len(requested) == 0 {
 		return nil, fmt.Errorf(
 			"edgecompare: 模型 %s 没有为任何默认域声明 lambda.<domain> —— 任何一个域都不会被修正，拟合特征无从构造", p.Model)
@@ -453,7 +451,7 @@ func canonicalEdge(p edgefactor.Params, e [2]string) [2]string {
 // edgeColumnName 是边列在报告与设计矩阵里的列名（"i|j"）。
 func edgeColumnName(e [2]string) string { return e[0] + "|" + e[1] }
 
-// canonicalEdges 归一先验边集：ID 大写归一（与消费侧 `normalizeFactorID` 同语义）、
+// canonicalEdges 归一先验边集：ID 大写归一（唯一实现 `edgefactor.NormalizeFactorID`）、
 // graph 下按字典序定向、最后按列名字典序排序。
 //
 // 排序是**确定性要求**：列序决定设计矩阵的列序，也决定 `Coefficients` 的写入顺序；
@@ -461,7 +459,7 @@ func edgeColumnName(e [2]string) string { return e[0] + "|" + e[1] }
 func canonicalEdges(p edgefactor.Params, edges [][2]string) [][2]string {
 	out := make([][2]string, 0, len(edges))
 	for _, e := range edges {
-		out = append(out, canonicalEdge(p, [2]string{normalizeFactorID(e[0]), normalizeFactorID(e[1])}))
+		out = append(out, canonicalEdge(p, [2]string{edgefactor.NormalizeFactorID(e[0]), edgefactor.NormalizeFactorID(e[1])}))
 	}
 	sort.Slice(out, func(i, j int) bool { return edgeColumnName(out[i]) < edgeColumnName(out[j]) })
 	return out

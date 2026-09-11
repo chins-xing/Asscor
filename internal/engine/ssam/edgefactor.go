@@ -83,18 +83,12 @@ func ParamsFromConfig(cfg *config.Config) (edgefactor.Params, bool, error) {
 // NormalizeFactorID 把因子 ID 归一为规范拼写（引擎的 FactorID 约定：全大写），并在
 // 查表前使用 —— **产出侧不改 ID，只在消费侧归一**（Fix round 3）。
 //
-// 语义必须与 internal/config 的 canonicalFactorID 保持一致（定义见
-// internal/config/edgefactor.go:218；该函数未导出，无法直接复用，**两处修改务必同步**）。
-//
-// 为什么需要它：parseSections 会把配置键小写化，于是 [edge_factors.custom] 的条目在
-// ConfigToEdgeFactors 里以**小写 ID** 产出（这是改造前就有的既有语义，出厂模板正是靠
-// 「大写内置项 + 小写定制副本」两个不同的 map 键让定制值各自计入 —— 见 ssam.go 的 efMap），
-// 而 Params.Factors/Vectors 的键面是规范大写（Task 3 已把模型段的 vector./coupling./trigger.
-// 键归一为大写）。Task 7 若直接拿 EdgeFactorResult.ID 去查 Params.Vectors，自定义因子会查不中
-// 并静默回落成全强度默认向量 —— 用本函数把 ID 归一后再查，即可消除该回落，同时保持产出侧
-// 与历史评分逐位一致。
+// 唯一实现在无 build tag 的 `internal/edgefactor.NormalizeFactorID`（主控 I2 裁定）：
+// 离线重算工具（cmd/edgecompare，带 tag edgeexp）必须使用**同一个**归一化函数，
+// 而它不能 import 本包。本函数保留为转发薄包装，既有调用面（adapter.go 与 Task 7 的测试）
+// 不受影响 —— 与 DefaultTriggerMap 转发 config.DefaultEdgeFactorTriggerMap 是同一种处理。
 func NormalizeFactorID(id string) string {
-	return strings.ToUpper(strings.TrimSpace(id))
+	return edgefactor.NormalizeFactorID(id)
 }
 
 // factorWeights 汇总合成层可见的因子权重：内置六因子取自 [edge_factors]（单一事实来源），
@@ -316,49 +310,12 @@ func newSynthesizePlan(p edgefactor.Params) (synthesizePlan, error) {
 	if p.Model != edgefactor.ModelVector && p.Model != edgefactor.ModelGraph {
 		return synthesizePlan{}, fmt.Errorf("ssam: edge factor model %s has no online synthesis plan", p.Model)
 	}
-	all := edgefactor.DefaultDomains()
-	requested := make([]string, 0, len(all))
-	for _, d := range all {
-		if _, ok := p.Lambda[d]; ok {
-			requested = append(requested, d)
-		}
-	}
-	if len(requested) == 0 {
+	all := edgefactor.RequestedDomains(p)
+	if len(all) == 0 {
 		return synthesizePlan{}, fmt.Errorf(
 			"ssam: model %s declares no lambda.<domain> for any default domain — it could never adjust a domain score", p.Model)
 	}
-	return synthesizePlan{params: pruneToDomains(p, requested), domains: requested}, nil
-}
-
-// pruneToDomains 返回 p 在给定域集合上的一致裁剪副本（新建 map，绝不改动调用方的 map ——
-// Params 的 Lambda/Vectors 与 config 段共享同一批 map）。
-//
-// 裁剪安全：装配路径已用完整默认域列表跑过 Validate，因此每个已声明的向量都**包含全部 5 个
-// 域**，裁剪后必然仍覆盖请求域（不会出现"声明了向量却缺域"的第二类报错），且 Σ_d v ≤ 1 在
-// 取子集后仍成立。未声明的向量不在此处生成 —— 它们由 Synthesize 走文档化的"全 1"fallback。
-func pruneToDomains(p edgefactor.Params, domains []string) edgefactor.Params {
-	keep := make(map[string]bool, len(domains))
-	for _, d := range domains {
-		keep[d] = true
-	}
-	pruned := p
-	pruned.Lambda = make(map[string]float64, len(domains))
-	for d := range keep {
-		if l, ok := p.Lambda[d]; ok {
-			pruned.Lambda[d] = l
-		}
-	}
-	pruned.Vectors = make(map[string]map[string]float64, len(p.Vectors))
-	for id, vec := range p.Vectors {
-		trimmed := make(map[string]float64, len(domains))
-		for d := range keep {
-			if v, ok := vec[d]; ok {
-				trimmed[d] = v
-			}
-		}
-		pruned.Vectors[id] = trimmed
-	}
-	return pruned
+	return synthesizePlan{params: edgefactor.PruneToDomains(p, all), domains: all}, nil
 }
 
 // synthesizeWithModel 用合成计划对一次评分的因子结果做合成。

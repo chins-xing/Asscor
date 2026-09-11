@@ -1,0 +1,301 @@
+//go:build edgeexp
+
+package main
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/chins-xing/asscor/internal/edgefactor"
+	ssam "github.com/chins-xing/ssam"
+)
+
+// 离线重算的**评分层**：与部署引擎共用同一个评分公式与同一套因子注入方式（主控裁定 C1）。
+//
+// 为什么必须共用（评审实测结论）：此前离线用自己的 `weightedSum(域分) × 乘子` 与
+// `observed.threshold` 比较，而引擎（internal/engine/ssam → ssam.SSAMV20Formula）的总分是
+// `round2(0.5·base + 30·E + 20·T)`，`Acceptable = Total >= Threshold`。两者**不是同一个量**：
+// 同一条记录（域分 62.5、threshold 60、因子 0.8）离线判 not acceptable、引擎判 acceptable，
+// 于是里程碑 B 的漏判率/误阻断率根本不是部署行为。spec §2.1 把决策层定为主判据、
+// §2.2 把离线重算定为唯一比较范式，两者都要求这里的分数**逐位等于**引擎总分。
+//
+// 因此本文件只做三件事：
+//
+//  1. 把 JSONL 的观测量装成 `ssam.SSAMV20Formula` 的四个入参（域分 / 权重 / 风险上下文 /
+//     因子结果）；
+//  2. 按候选模型**以在线相同的方式**注入合成层钩子
+//     （V/G/C：恒等乘子 + 域级 P_d；legacy：零注册 = 内仓默认的逐次相乘路径）；
+//  3. 调用 `ssam.SSAMV20Formula` 并把它的 `Total` 作为离线分数。
+//
+// 与在线路径的一致点逐条如下（每一条都对应一处曾经可能漂移的口径）：
+//
+//	域分        ：观测的 `domain_scores`（= 引擎输出的 DomainScores），按权重表的确定顺序
+//	              装入切片；未参与聚合（权重 ≤ 0）的域不进入切片。
+//	权重        ：`-weights` 表 → []ssam.WeightConfig（引擎用 cfg.Weights）。
+//	风险上下文  ：`observed.spc_score` / `observed.threat_coeff` → RiskContext{Exposure, Threat}
+//	              （引擎用 output.SPCScore / output.ThreatCoeff；四层公式的 Intrinsic 层不入参）。
+//	因子结果    ：`observed.edge_factor_chain[].effective_factor` 就是引擎侧
+//	              `ApplyEdgeFactorsToChecksPolicy` 输出的 `EdgeFactorResult.Factor`
+//	              （策略层按触发可信度衰减**一次**后的观测值），故这里**原样**装进
+//	              `EdgeFactorResult.Factor`，绝不再衰减一次。
+//	域级修正    ：V/G/C 走 `RegisterDomainAdjust`（Score_d' = Base_d·P_d），与在线同一入口；
+//	              legacy 不注册任何钩子，走内仓默认的**逐次相乘**路径（与在线逐位一致）。
+//
+// 钩子是**进程级全局状态**（内仓设计如此），故每次重算都成对安装/拆除；
+// 拆除用 `Register*(nil)`（恢复内仓默认），绝不注册"等价默认策略"——那会换掉默认路径的
+// 算术顺序（IEEE754 乘法不满足结合律），在取整半格边界上产生可观测差异。
+
+// synthesizePlan 是离线重算用的合成计划：**一致裁剪**后的参数集 + 请求域。
+//
+// 裁剪口径与在线装配期（`ssam.newSynthesizePlan`）相同，且两侧都调用
+// `internal/edgefactor.RequestedDomains` / `PruneToDomains` —— 唯一实现（主控 I2）:
+// 内仓 `Validate`/`Synthesize` 以**传入的域列表**为准，配置里出现请求域之外的 λ 或向量键
+// 会被直接拒绝，而配置允许只声明部分 λ；故请求域 = `DefaultDomains ∩ λ`，参数裁剪到该域
+// 集合上再合成。裁剪只用于**计算**（装载/指纹仍用完整参数，与在线一致）。
+type synthesizePlan struct {
+	params  edgefactor.Params
+	domains []string
+}
+
+// offlinePlan 计算离线合成计划（与在线 `ssam.newSynthesizePlan` 同一口径、同一实现）。
+//
+// legacy 例外：legacy 不读 λ（惩罚完全由全局乘子表达），在线也不为它构造合成计划
+// （显式 model=legacy 与"未配置"共用内仓默认的逐次相乘路径），故这里用完整的默认域列表
+// 返回计划 —— 它只用于文档化口径，legacy 路径不会调用 `Synthesize`。
+//
+// V/G/C：一个 λ 都没覆盖到默认域 ⇒ 任何域都不会被修正，报错而不是静默返回"未修正"的分数
+// （与在线装配期的 fail-fast 同款纪律：能装配出来的东西必须真的能算）。
+func offlinePlan(p edgefactor.Params) (synthesizePlan, error) {
+	if p.Model == edgefactor.ModelLegacy {
+		return synthesizePlan{params: p, domains: edgefactor.DefaultDomains()}, nil
+	}
+	requested := edgefactor.RequestedDomains(p)
+	if len(requested) == 0 {
+		return synthesizePlan{}, fmt.Errorf(
+			"edgecompare: model %s declares no lambda.<domain> for any default domain — it could never adjust a domain score",
+			p.Model)
+	}
+	return synthesizePlan{params: edgefactor.PruneToDomains(p, requested), domains: requested}, nil
+}
+
+// OfflineScoreWithWeights 用**引擎的评分公式**重算总分（主控裁定 C1）。
+//
+// 返回值就是 `ssam.SSAMV20Formula(...).Total`：与在线评分同一个函数、同一套入参口径，
+// 因而是同一个量 —— 决策层可以拿它直接与 `observed.threshold` 比较（引擎的
+// `Acceptable = FinalScore >= Threshold`）。
+//
+// 本函数是**低阶原语**：不做域覆盖校验（见 metrics.go:validateDomainsCovered 的说明）。
+func OfflineScoreWithWeights(p edgefactor.Params, rec Record, weights map[string]float64) (float64, error) {
+	res, err := offlineFormulaResult(p, rec, weights)
+	if err != nil {
+		return 0, err
+	}
+	return res.Total, nil
+}
+
+// OfflineScore 是 weights 取"等权"时的便捷入口（等权 = 全部默认域各 1 份）。
+//
+// 语义与 `SSAMV20Formula` 的加权平均一致：权重表里出现的域若在记录中缺失，会以 0 计入
+// 并仍占一份权重。决策层入口 `Evaluate` 会对"有权重却无观测域分"的记录 fail-fast
+// （`validateDomainsCovered`），故主判据路径不受该语义影响。
+func OfflineScore(p edgefactor.Params, rec Record) (float64, error) {
+	weights := map[string]float64{}
+	for _, d := range edgefactor.DefaultDomains() {
+		weights[d] = 1
+	}
+	return OfflineScoreWithWeights(p, rec, weights)
+}
+
+// offlineFormulaResult 返回引擎公式对同一条记录的**完整输出**（Total + 三层明细）。
+//
+// 单独暴露它的理由是可检验性：一致性门禁要断言的正是「离线算出的分数与总分 == 该公式对
+// 同一输入的结果」，而 `.Total` 与 `.Layers` 都来自内仓函数的返回值，不存在"离线自己再
+// 聚合一次"的中间步骤。
+func offlineFormulaResult(p edgefactor.Params, rec Record, weights map[string]float64) (ssam.FinalScore, error) {
+	plan, err := offlinePlan(p)
+	if err != nil {
+		return ssam.FinalScore{}, err
+	}
+	results := engineEdgeFactors(p, rec)
+	cleanup, err := installEngineHooks(p, plan, results, chainTimestamps(rec))
+	if err != nil {
+		return ssam.FinalScore{}, err
+	}
+	defer cleanup()
+
+	return ssam.SSAMV20Formula(
+		engineDomainScores(rec.Observed.DomainScores, weights),
+		engineWeightConfigs(weights),
+		ssam.RiskContext{Exposure: rec.Observed.SPCScore, Threat: rec.Observed.ThreatCoeff},
+		results,
+	), nil
+}
+
+// engineEdgeFactors 把记录里观测到的因子链还原成引擎侧的因子结果列表。
+//
+// `Factor` 直接取 `effective_factor`：它是 ssam-lib 策略路径（`ApplyEdgeFactorsToChecksPolicy`）
+// 按触发可信度衰减**一次**之后的观测值，也就是引擎侧 `EdgeFactorResult.Factor` 本身。
+// 引擎的 legacy 路径（内仓默认的逐次相乘）乘的就是这个值，故离线必须原样使用 ——
+// 再衰减一次（`EffectiveFactor(f, c)`）会让惩罚变轻、分数变高，离线相对于引擎变成**乐观**，
+// 而里程碑 B 的决策层主判据全部来自离线重算（Task 8 评审 I2 记录在案的口径差，
+// 由本轮 C1 按"与引擎逐位一致"的裁定消除）。
+//
+// 候选未建模的因子（归一后不在 `p.Factors` 里，例如只作级联入口、从不 Active 的 EF-3FA，
+// 或配置改坏后的孤儿 ID）一律丢弃 —— 与在线消费者 `ssam.activationsFromResults` 同口径。
+// 放进去的后果是 Vectors 查表落空并**静默**按"作用于全部域、强度 1"计入惩罚，
+// 让一个未建模的因子凭空产生比配置更强的惩罚。
+func engineEdgeFactors(p edgefactor.Params, rec Record) []ssam.EdgeFactorResult {
+	out := make([]ssam.EdgeFactorResult, 0, len(rec.Observed.EdgeFactorChain))
+	for _, c := range rec.Observed.EdgeFactorChain {
+		id := edgefactor.NormalizeFactorID(c.Factor)
+		if _, known := p.Factors[id]; !known {
+			continue
+		}
+		out = append(out, ssam.EdgeFactorResult{
+			ID:                id,
+			Factor:            c.EffectiveFactor,
+			Active:            true,
+			TriggerConfidence: c.CTrigger,
+		})
+	}
+	return out
+}
+
+// chainTimestamps 是 chain 模型唯一的时间来源（JSONL 的 `edge_factor_chain[].ts`）。
+//
+// 在线评分拿不到它：引擎侧的结果类型 `ssam.EdgeFactorResult` 没有时间字段，故 chain 在
+// 在线路径上不可执行（装配期即 fail-fast，见 `ssam.newSynthesizePlan`），
+// 由本工具的离线评估承担 —— 与 spec「离线重算为主」一致。
+//
+// 同一条链里同一因子出现多次时取**最后一个非零时间戳**：这在 chain 语义下本就是退化输入
+// （同一因子的两次激活没有先后区分），读取层保证坏时间戳不会走到这里。
+func chainTimestamps(rec Record) map[string]time.Time {
+	out := make(map[string]time.Time, len(rec.Observed.EdgeFactorChain))
+	for _, c := range rec.Observed.EdgeFactorChain {
+		ts, _ := parseTS(c.TS) // 坏值已在 LoadRecords 处按行拒绝
+		if ts.IsZero() {
+			continue
+		}
+		out[edgefactor.NormalizeFactorID(c.Factor)] = ts
+	}
+	return out
+}
+
+// resetEngineHooks 把内仓的两个钩子恢复成默认（nil == 未注册 ⇒ 逐位一致的历史乘性路径）。
+//
+// 绝不能用「注册一个语义等价的默认策略」来代替它：内仓 ast.go 的 edgeFactorStrategyIsDefault
+// 标记决定 applyEdgeFactorStrategyToBase 走「逐次相乘」还是「base×单次乘积」，
+// 显式注册等价策略会换掉默认算术顺序，在取整半格边界上产生可观测差异（实测 50.31 → 50.32）。
+func resetEngineHooks() {
+	ssam.RegisterEdgeFactorStrategy(nil)
+	ssam.RegisterDomainAdjust(nil)
+}
+
+// installEngineHooks 按候选模型安装合成层钩子，返回**必须 defer 的**拆除函数。
+//
+// 安装口径与在线装配期 `Engine.ApplyEdgeFactorModel` 逐条一致：
+//
+//   - **legacy（M0）**：零注册（钩子保持内仓默认），与"未配置"走同一条评分路径。
+//   - **V/G/C**：
+//     1. `RegisterEdgeFactorStrategy` 返回 `res.GlobalMultiplier` —— V/G/C 恒为 1，
+//     用来**抵消**内仓默认的逐次相乘（惩罚完全由域级系数 P_d 表达，不能再乘一次）；
+//     2. `RegisterDomainAdjust` 把域级修正 `Score_d' = Base_d·P_d` 应用到**域聚合之前**
+//     （与在线同一入口、同一写法；不在计划内的域原样放行）。
+//
+// 与在线的一处**刻意差异**（如实标注）：在线在钩子内部调用 `Synthesize` 并吞掉错误
+// （返回恒等乘子 / 原样域分），而离线在这里**先算一次并让错误向上传** ——
+// 离线工具的全部意义是"如实报错，不造兜底"，链缺时间戳、向量漏域这类输入必须在重算处
+// fail-fast，而不是悄悄产出一个"没被修正过"的分数。合成是纯函数，先算一次与在钩子里算
+// 结果逐位相同（钩子捕获的是同一份 `res`，与它收到的 `factors` 同源）。
+func installEngineHooks(p edgefactor.Params, plan synthesizePlan, results []ssam.EdgeFactorResult,
+	ts map[string]time.Time) (func(), error) {
+
+	// 每次重算都从默认状态出发：钩子是进程级全局态，上一次重算若因 panic 之外的路径
+	// 留下注册（例如测试里手动注册过），不清掉就会污染本次评分。
+	resetEngineHooks()
+	if p.Model == edgefactor.ModelLegacy {
+		return resetEngineHooks, nil
+	}
+
+	acts := activationsFromResults(p, results, ts)
+	res, err := edgefactor.Synthesize(plan.params, plan.domains, edgefactor.Input{Factors: acts})
+	if err != nil {
+		return nil, err
+	}
+
+	ssam.RegisterEdgeFactorStrategy(func([]ssam.EdgeFactorResult) float64 {
+		return res.GlobalMultiplier
+	})
+	ssam.RegisterDomainAdjust(func(scores []ssam.DomainScore, _ []ssam.EdgeFactorResult) []ssam.DomainScore {
+		for i := range scores {
+			pd, ok := res.P[scores[i].Domain]
+			if !ok {
+				// 未配置 λ 的域不参与修正（合成计划已保证至少有一个域参与）。
+				continue
+			}
+			scores[i].Score *= pd
+		}
+		return scores
+	})
+	return resetEngineHooks, nil
+}
+
+// activationsFromResults 把引擎侧的因子结果换算成合成层的输入项，与在线
+// `ssam.activationsFromResults` 同口径，外加一个**离线专有**的时间戳来源。
+//
+// 逐条对齐在线（任何一处漂移都会让 V/G/C 的惩罚与在线不同）：
+//   - 未激活项不得进入输入（未激活因子 Factor 为 0，会命中 `Synthesize` 里"沿用配置权重"
+//     的哨兵，让一个根本没触发的因子按配置权重计入惩罚）；
+//   - ID 归一后再查 `p.Factors`，查不到即丢弃；
+//   - `EffectiveFactor(r.Factor, r.TriggerConfidence)` —— 对**已衰减一次**的观测值再衰减一次，
+//     合计 `1−(1−f)·c²`（spec §10.2 记录的既有口径，本工具复用而不修正）；
+//   - `TriggerCheck` 仅用于溯源，`Synthesize` 不消费，故不填。
+func activationsFromResults(p edgefactor.Params, results []ssam.EdgeFactorResult,
+	ts map[string]time.Time) []edgefactor.FactorActivation {
+
+	out := make([]edgefactor.FactorActivation, 0, len(results))
+	for _, r := range results {
+		if !r.Active {
+			continue
+		}
+		id := edgefactor.NormalizeFactorID(r.ID)
+		if _, known := p.Factors[id]; !known {
+			continue
+		}
+		out = append(out, edgefactor.FactorActivation{
+			FactorID:        id,
+			CTrigger:        r.TriggerConfidence,
+			EffectiveFactor: edgefactor.EffectiveFactor(r.Factor, r.TriggerConfidence),
+			TS:              ts[id],
+		})
+	}
+	return out
+}
+
+// engineDomainScores 把观测域分装成 `SSAMV20Formula` 的域分切片。
+//
+// 顺序取 `orderedDomains(weights)`（默认域在前、其余按字典序）：公式按切片顺序累加
+// `sum += ds.Score * w`，顺序漂移会在末位抖出 1 ulp，让"逐位一致"变成偶然。
+//
+// 只装入**权重 > 0** 的域（公式对 w ≤ 0 的域本来就会跳过），未参与聚合的域不占分母 ——
+// 与内仓公式的 `if w, ok := wMap[ds.Domain]; ok && w > 0` 逐字同义。
+func engineDomainScores(scores, weights map[string]float64) []ssam.DomainScore {
+	out := make([]ssam.DomainScore, 0, len(weights))
+	for _, d := range orderedDomains(weights) {
+		if weights[d] <= 0 {
+			continue
+		}
+		out = append(out, ssam.DomainScore{Domain: d, Score: scores[d]})
+	}
+	return out
+}
+
+// engineWeightConfigs 把权重表装成引擎的 []WeightConfig（引擎侧来自 cfg.Weights）。
+// 定序只为可复现；内仓用 BuildWeightMap 建映射后按域分切片顺序消费，权重侧的次序无语义。
+func engineWeightConfigs(weights map[string]float64) []ssam.WeightConfig {
+	out := make([]ssam.WeightConfig, 0, len(weights))
+	for _, d := range orderedDomains(weights) {
+		out = append(out, ssam.WeightConfig{Domain: d, Weight: weights[d]})
+	}
+	return out
+}

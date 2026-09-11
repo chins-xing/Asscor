@@ -23,6 +23,10 @@ import (
 //     扭曲决策层：
 //     - `observed.threshold` 缺失 ⇒ 0 ⇒ 任何非负分数都判 `acceptable` ⇒ 决策层退化为"全放行"
 //       （漏判率变成"攻陷数 / N"、误阻断率恒为 0），而报告照常打印；
+//     - `observed.spc_score` / `observed.threat_coeff` 缺失 ⇒ 0 ⇒ 被引擎公式的
+//       `<= 0 ⇒ 1.0` 兜底成"无暴露面/无威胁"，总分被静默抬到最宽松的一档（C1 裁定新增的
+//       两个必填项：引擎的总分是 `round2(0.5·base + 30·E + 20·T)`，缺了 E/T 就复现不出
+//       部署判定线）；
 //     - 链条目 `c_trigger` 缺失 ⇒ 0 ⇒ `EffectiveFactor` 返回 1 ⇒ `a_i = 0` ⇒ 该因子的惩罚
 //       静默消失；
 //     - 链条目 `effective_factor` 缺失 ⇒ 0 ⇒ 命中 `Synthesize` 的"未提供"哨兵 ⇒ 静默回落到
@@ -48,8 +52,45 @@ type Observed struct {
 	FinalScore      float64            `json:"final_score"`
 	Acceptable      bool               `json:"acceptable"`
 	Threshold       float64            `json:"threshold"`
+	SPCScore        float64            `json:"spc_score"`
+	ThreatCoeff     float64            `json:"threat_coeff"`
 	Checks          []CheckObs         `json:"checks"`
 	EdgeFactorChain []ChainObs         `json:"edge_factor_chain"`
+
+	spcScoreSet    bool
+	threatCoeffSet bool
+}
+
+// UnmarshalJSON 记录 spc_score / threat_coeff 是否**显式出现**（口径同 ChainObs 与 GroundTruth）。
+//
+// 这两个字段是 C1 裁定新增的**必填项**：引擎的总分是
+// `round2(0.5·base + 30·E + 20·T)`（`ssam.SSAMV20Formula`），缺了 E/T 就复现不出部署判定线。
+// 而 JSON 的"零值"与"没写"在 Go 结构体里同形：缺失会被静默读成 0，随后被公式的
+// `<= 0 ⇒ 1.0` 兜底成"无暴露/无威胁"，把总分抬到最宽松的一档 —— 报告照常打印，
+// 决策层判据却全部失真。故与 `threshold`/`compromised` 同款处理：用指针解码区分两者。
+func (o *Observed) UnmarshalJSON(data []byte) error {
+	aux := struct {
+		DomainScores    map[string]float64 `json:"domain_scores"`
+		FinalScore      float64            `json:"final_score"`
+		Acceptable      bool               `json:"acceptable"`
+		Threshold       float64            `json:"threshold"`
+		SPCScore        *float64           `json:"spc_score"`
+		ThreatCoeff     *float64           `json:"threat_coeff"`
+		Checks          []CheckObs         `json:"checks"`
+		EdgeFactorChain []ChainObs         `json:"edge_factor_chain"`
+	}{}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	o.DomainScores, o.FinalScore, o.Acceptable, o.Threshold = aux.DomainScores, aux.FinalScore, aux.Acceptable, aux.Threshold
+	o.Checks, o.EdgeFactorChain = aux.Checks, aux.EdgeFactorChain
+	if aux.SPCScore != nil {
+		o.SPCScore, o.spcScoreSet = *aux.SPCScore, true
+	}
+	if aux.ThreatCoeff != nil {
+		o.ThreatCoeff, o.threatCoeffSet = *aux.ThreatCoeff, true
+	}
+	return nil
 }
 
 type CheckObs struct {
@@ -195,11 +236,18 @@ func LoadRecords(path string) ([]Record, error) {
 // validateRecord 做「必需字段存在性 + 值域」校验（评审 I2 的落点），错误信息一律带字段路径。
 //
 // 检查顺序按 schema 的自然阅读顺序（scenario_id → observed.threshold → observed.domain_scores
-// → 因子链 → checks → ground_truth），且**只报第一个问题**：一条坏行给一个可执行的修复指令，
-// 比堆一串错误更有用。
+// → observed.spc_score / threat_coeff → 因子链 → checks → ground_truth），且**只报第一个问题**：
+// 一条坏行给一个可执行的修复指令，比堆一串错误更有用。
 //
 // 值域口径：
 //   - `threshold > 0`：阈值必须是正数，否则 `score >= threshold` 恒真（决策层退化为全放行）。
+//   - `spc_score ∈ (0,1]`：它是引擎的 `AssessmentOutput.SPCScore`（SPC 姿态分 p_score =
+//     max(minPScore, 1 − 总惩罚)，归一化到 (0,1]，见 internal/spc/spc.go:604）。**0 是引擎的
+//     "未设置"哨兵**（engine.go: `if output.SPCScore == 0 { output.SPCScore = 1.0 }`），
+//     而缺失同样读成 0 ⇒ 两条路径都会静默变成"无暴露面惩罚"，把总分抬到最宽松的一档，
+//     直接扭曲决策层判据。故缺失与 ≤ 0 都要拒绝。
+//   - `threat_coeff > 0`：`[threat] coefficient` 的既有值域只有下界（ranges.go: `must be > 0`），
+//     实测配置里出现过 1.4，故**不设上界**；0（缺失/未设置）同样被引擎兜底成 1.0。
 //   - `effective_factor ∈ (0,1]`：合法因子值域（`EffectiveFactor` 的输出域）。0 是
 //     `Synthesize` 里"未提供、回落到配置权重"的哨兵，越界值则会让 `a = (1−eff)·v` 变负。
 //   - `c_trigger ∈ [0,1]`：**下界取 0 而不是 (0,1]** —— `c_trigger = 0` 是 ssam-lib 对
@@ -225,6 +273,18 @@ func validateRecord(rec Record) error {
 		if strings.TrimSpace(d) == "" {
 			return fmt.Errorf("observed.domain_scores: contains an empty domain name")
 		}
+	}
+	if !rec.Observed.spcScoreSet {
+		return fmt.Errorf("observed.spc_score: missing — 引擎的判定线需要它（总分 = round2(0.5·base + 30·E + 20·T)）；缺失会被当成 0，而 0 是引擎的『未设置』哨兵（按 1.0 计），总分被静默抬到最宽松的一档")
+	}
+	if rec.Observed.SPCScore <= 0 || rec.Observed.SPCScore > 1 {
+		return fmt.Errorf("observed.spc_score = %v out of (0,1] — 它是引擎输出的 SPC 姿态分（p_score = max(minPScore, 1−总惩罚)），0 是引擎的『未设置』哨兵", rec.Observed.SPCScore)
+	}
+	if !rec.Observed.threatCoeffSet {
+		return fmt.Errorf("observed.threat_coeff: missing — 引擎的判定线需要它（总分 = round2(0.5·base + 30·E + 20·T)）；缺失会被当成 0，而 0 是引擎的『未设置』哨兵（按 1.0 计），总分被静默抬到最宽松的一档")
+	}
+	if rec.Observed.ThreatCoeff <= 0 {
+		return fmt.Errorf("observed.threat_coeff = %v must be > 0（[threat] coefficient 的既有值域只有下界）— 0 是引擎的『未设置』哨兵", rec.Observed.ThreatCoeff)
 	}
 	for i, c := range rec.Observed.EdgeFactorChain {
 		if strings.TrimSpace(c.Factor) == "" {

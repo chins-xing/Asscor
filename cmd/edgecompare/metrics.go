@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"strings"
 
 	"github.com/chins-xing/asscor/internal/edgefactor"
 )
@@ -15,15 +14,18 @@ import (
 //
 // 对比范式是「离线重算为主」：真实攻防实验只记录**原始观测与客观结果**，四候选
 // （legacy / vector / graph / chain）在同一份真实数据上用 `internal/edgefactor` 的
-// **同一份 Synthesize** 重算分数与决策。因此本文件里没有任何自己的评分公式 ——
-// 它只负责把 JSONL 的观测装进 `edgefactor.Input`、按在线口径裁剪域、再按 spec §2.1 的三层
-// 指标汇总。
+// **同一份 Synthesize** 重算分数与决策。评分本身（含总分公式）在 `score.go`：
+// 离线分数 == `ssam.SSAMV20Formula` 的总分（主控裁定 C1），本文件只负责把 JSONL 的观测
+// 装进合成层、按在线口径裁剪域、再按 spec §2.1 的三层指标汇总。
 //
 // 三层指标（定义处见 Evaluate / severityOf / auc）：
 //
 //	决策层（主判据）：DecisionAgreement / FalseNegativeRate / FalsePositiveRate
 //	排序层（辅助）  ：Spearman / Kendall（模型分数 vs 客观严重度）
 //	数值层（辅助）  ：AUC（以 100−score 为危险度，compromised 为正类）
+//
+// **判定口径（C1 报告头要求，必须与在线一致）**：离线分数 = 引擎总分（同一公式
+// `SSAMV20Formula`），阈值 = 引擎决策线（`Acceptable = Total >= threshold`）。
 
 type Metrics struct {
 	DecisionAgreement float64 `json:"decision_agreement"`
@@ -35,132 +37,6 @@ type Metrics struct {
 	N                 int     `json:"n"`
 }
 
-// synthesizePlan 是离线重算用的合成计划：**一致裁剪**后的参数集 + 请求域。
-//
-// 为什么必须裁剪（mandate 口径 1，来自 Task 7 评审裁定 / spec §10.1）：
-// 内仓 `Validate`/`Synthesize` 以**传入的域列表**为准，配置里出现请求域之外的 λ 或 vector
-// 键会被直接拒绝；而配置允许只声明部分 λ。在线装配期（`ssam.newSynthesizePlan`）因此把
-// 请求域定为 `DefaultDomains ∩ λ` 并把参数裁剪到该域集合上再合成。离线重算若直接用完整
-// 参数 + 完整默认域列表调用，就会出现两种情况，**都会让「离线↔在线逐位一致」门禁假绿/假红**：
-// 只声明部分 λ 时直接报错（假红），或未经裁剪地自行放宽校验（假绿）。
-// 故此处逐条复用在线口径：请求域 = DefaultDomains ∩ λ；裁剪副本只用于**计算**
-// （装载/指纹仍用完整参数，与在线一致）。
-type synthesizePlan struct {
-	params  edgefactor.Params
-	domains []string
-}
-
-// offlinePlan 计算离线合成计划（与在线 `ssam.newSynthesizePlan` 同一口径）。
-//
-// legacy 例外：legacy 不读 λ（惩罚完全由 GlobalMultiplier 表达），在线也不为它构造合成
-// 计划（显式 model=legacy 与"未配置"共用内仓默认的逐次相乘路径），故这里用完整的默认域
-// 列表调用 Synthesize —— 域分不被逐域修正，域列表对它没有语义作用。
-//
-// V/G/C：一个 λ 都没覆盖到默认域 ⇒ 任何域都不会被修正，报错而不是静默返回"未修正"的分数
-// （与在线装配期的 fail-fast 同款纪律：能装配出来的东西必须真的能算）。
-func offlinePlan(p edgefactor.Params) (synthesizePlan, error) {
-	if p.Model == edgefactor.ModelLegacy {
-		return synthesizePlan{params: p, domains: edgefactor.DefaultDomains()}, nil
-	}
-	all := edgefactor.DefaultDomains()
-	requested := make([]string, 0, len(all))
-	for _, d := range all {
-		if _, ok := p.Lambda[d]; ok {
-			requested = append(requested, d)
-		}
-	}
-	if len(requested) == 0 {
-		return synthesizePlan{}, fmt.Errorf(
-			"edgecompare: model %s declares no lambda.<domain> for any default domain — it could never adjust a domain score",
-			p.Model)
-	}
-	return synthesizePlan{params: pruneToDomains(p, requested), domains: requested}, nil
-}
-
-// pruneToDomains 返回 p 在给定域集合上的一致裁剪副本。
-//
-// 语义与 `ssam.pruneToDomains` 必须一致（两处修改务必同步）：新建 map，绝不改动调用方的 map；
-// 未声明的向量不在此处生成（它们由 Synthesize 走文档化的"全 1"fallback）。
-// 之所以这样安全：裁剪前请求域已由 Validate（在 Assembled 参数上）保证是默认域的子集，
-// 取子集后 Σ_d v ≤ 1 仍成立，且已声明的向量裁剪后仍覆盖请求域。
-func pruneToDomains(p edgefactor.Params, domains []string) edgefactor.Params {
-	keep := make(map[string]bool, len(domains))
-	for _, d := range domains {
-		keep[d] = true
-	}
-	pruned := p
-	pruned.Lambda = make(map[string]float64, len(domains))
-	for d := range keep {
-		if l, ok := p.Lambda[d]; ok {
-			pruned.Lambda[d] = l
-		}
-	}
-	pruned.Vectors = make(map[string]map[string]float64, len(p.Vectors))
-	for id, vec := range p.Vectors {
-		trimmed := make(map[string]float64, len(domains))
-		for d := range keep {
-			if v, ok := vec[d]; ok {
-				trimmed[d] = v
-			}
-		}
-		pruned.Vectors[id] = trimmed
-	}
-	return pruned
-}
-
-// OfflineScoreWithWeights 用与在线相同的 Synthesize 重算总分。
-// legacy：GlobalMultiplier 作用于聚合后的总分（mandate 口径 4，与内仓默认的顺序乘法一致）；
-// V/G/C：域分先逐域修正（Score_d' = Base_d · P_d）再按权重聚合。
-//
-// 聚合（weightedSum）按固定域顺序累加，保证同一输入逐位可复现；但「离线 ↔ 在线逐位一致」
-// 只在可信度策略关闭（c = 1）时成立（见 activationsOf 的口径边界注）。
-func OfflineScoreWithWeights(p edgefactor.Params, rec Record, weights map[string]float64) (float64, error) {
-	plan, err := offlinePlan(p)
-	if err != nil {
-		return 0, err
-	}
-	res, err := edgefactor.Synthesize(plan.params, plan.domains, edgefactor.Input{
-		DomainScores: rec.Observed.DomainScores,
-		Factors:      modelActivations(p, rec),
-	})
-	if err != nil {
-		return 0, err
-	}
-	if p.Model == edgefactor.ModelLegacy {
-		return weightedSum(rec.Observed.DomainScores, weights) * res.GlobalMultiplier, nil
-	}
-	// V/G/C：只有被裁剪进来的域带修正系数 P_d，其余域保持观测值参与聚合
-	// （在线 DomainAdjust 对计划外的域原样放行，见 internal/engine/ssam/engine.go）。
-	return weightedSum(adjustedScores(rec.Observed.DomainScores, res), weights), nil
-}
-
-// OfflineScore 是 weights 取"等权"时的便捷入口。
-//
-// 本函数是**低阶原语**，不做域覆盖校验：权重表里的域若在记录中缺失，会以 0 计入并仍占一份
-// 权重。决策层入口 `Evaluate` 会对"有权重却无观测域分"的记录 fail-fast
-// （`validateDomainsCovered`），故主判据路径不受该语义影响；spec §5.1 的真实记录也含全部
-// 5 个域，该情形只出现在合成/最小夹具里。
-func OfflineScore(p edgefactor.Params, rec Record) (float64, error) {
-	weights := map[string]float64{}
-	for _, d := range edgefactor.DefaultDomains() {
-		weights[d] = 1
-	}
-	return OfflineScoreWithWeights(p, rec, weights)
-}
-
-// adjustedScores 把合成结果里的**修正后域分**覆盖到观测域分上，返回聚合用的域分表。
-// 未被修正的域（没配 λ）保持观测值。
-func adjustedScores(observed map[string]float64, res edgefactor.Result) map[string]float64 {
-	out := make(map[string]float64, len(observed)+len(res.DomainScores))
-	for d, s := range observed {
-		out[d] = s
-	}
-	for d, s := range res.DomainScores {
-		out[d] = s
-	}
-	return out
-}
-
 // activationsOf 把 JSONL 的因子链换算成合成层的输入项（Task 10 的拟合也用它）。
 //
 // 这里就是 mandate 口径 2 的落点：**复用在线装配层 `ActivationFromResult` 的换算**——
@@ -169,26 +45,23 @@ func adjustedScores(observed map[string]float64, res edgefactor.Result) map[stri
 // 「可信度被衰减两次」的已知问题，并要求 Task 8–10 的离线重算**复用**它、在标定报告中标注，
 // 而不是在此处修正（修正会改变评分，属独立决策）。
 //
-// 同时做**消费侧**的因子 ID 归一（与 `ssam.NormalizeFactorID` 同语义）：合成层的
-// Vectors / Factors / Coupling 三处查表都以规范大写键进行，不归一会查表落空并静默回落到
-// "全强度"默认向量。
+// **这条换算只属于 V/G/C 的合成层**：`score.go:activationsFromResults` 用它把"已衰减一次"
+// 的观测值再衰减一次（与在线 `ssam.activationsFromResults` 同口径）。legacy 走的是另一条路
+// —— 引擎的默认策略直接乘 `EdgeFactorResult.Factor`（= 记录里的 `effective_factor`，
+// 单次衰减），故 legacy 的重算**不得**经过本函数（C1 裁定后由 `engineEdgeFactors` 承担）。
 //
-// **口径边界（主控 Fix round 1 裁定，务必如实标注）**：「离线重算 ↔ 在线评分逐位一致」这条
-// 门禁**只在可信度策略关闭（c = 1）的前提下成立** —— `EffectiveFactor(f, 1) = f`，两次衰减
-// 与在线 legacy 的单次衰减恒等；一旦 c ≠ 1，在线 legacy 路径（`assessor.go` 的 `attenuate`、
-// 内仓 `ApplyEdgeFactors` 的默认乘法）只衰减一次，而这里统一按装配层口径衰减两次，两者相差
-// 一次衰减 —— **衰减越多、因子值越接近 1、惩罚越轻，故 offline legacy 惩罚更轻（分数更高、更乐观）**
-// （Fix round 1 / I3 的方向澄清：0.8 → 0.82 → 0.838，离线 90×0.838 = 75.42 > 在线观测 90×0.82 = 73.8）。
-// 这条符号决定离线工具相对引擎是乐观还是保守，而里程碑 B 的决策层主判据全部来自离线重算。
-// 本任务按 mandate 口径 2 **统一**复用装配层换算，
-// **不在**此处为 legacy 开特例；c ≠ 1 的候选间对比不在本轮范围（spec §10.2 已记录该已知
-// 口径问题，是否修正属独立决策）。
+// 本函数同时供拟合器（fit.go 的设计矩阵）使用：拟合的列口径是
+// `a_i = (1−eff_i)·Σ_d v_i[d]`，其中 eff_i 就是装配层换算后的值。
+//
+// 因子 ID 一并做**消费侧**归一（唯一实现：`internal/edgefactor.NormalizeFactorID`）：
+// 合成层的 Vectors / Factors / Coupling 三处查表都以规范大写键进行，不归一会查表落空并
+// 静默回落到"全强度"默认向量。
 func activationsOf(rec Record) []edgefactor.FactorActivation {
 	out := make([]edgefactor.FactorActivation, 0, len(rec.Observed.EdgeFactorChain))
 	for _, c := range rec.Observed.EdgeFactorChain {
 		ts, _ := parseTS(c.TS) // 坏值已在 LoadRecords 处按行拒绝
 		out = append(out, edgefactor.FactorActivation{
-			FactorID:        normalizeFactorID(c.Factor),
+			FactorID:        edgefactor.NormalizeFactorID(c.Factor),
 			TriggerCheck:    c.TriggerCheck,
 			CTrigger:        c.CTrigger,
 			EffectiveFactor: edgefactor.EffectiveFactor(c.EffectiveFactor, c.CTrigger),
@@ -221,45 +94,16 @@ func modelActivations(p edgefactor.Params, rec Record) []edgefactor.FactorActiva
 	return out
 }
 
-// normalizeFactorID 把因子 ID 归一为规范拼写（引擎约定：全大写）。
-//
-// 与 `internal/engine/ssam.NormalizeFactorID` 语义一致；后者的定义又必须与
-// `internal/config` 的 canonicalFactorID 一致。三处修改务必同步（`engine` 包带 build tag，
-// 离线工具不能 import 它，故此处按 brief 要求自行实现等价逻辑）。
-func normalizeFactorID(id string) string {
-	return strings.ToUpper(strings.TrimSpace(id))
-}
-
-// weightedSum 按**确定顺序**累加：先按 `edgefactor.DefaultDomains()` 的顺序，再按其余键的
-// 字典序追加。
-//
-// 确定性契约（本方向的核心门禁「离线重算 ↔ 在线评分逐位一致」依赖它）：**同一输入必须给出
-// 逐位相同的结果**。Go 的 map 迭代序是随机的，直接 `range` 会让多域加权和在末位抖动 1 ulp ——
-// 门禁于是"偶然绿、偶然红"，这不是精度问题而是**不可复现**问题（同一份数据两次跑出不同判定
-// 时，报告里的数字无法归因）。brief 在此处给的 `range` 写法属缺陷，按主控裁定改为定序累加
-// （Fix round 1）。
-//
-// 定序不改变数学语义（加法交换律），只把浮点舍入路径钉死：权重表里的域应是默认域的子集
-// （spec §5.1）；非默认键（拼写错误/未来的自定义域）也必须落在某个确定位置上，否则它们又会
-// 退回 map 迭代序的不确定性里。
-func weightedSum(scores, weights map[string]float64) float64 {
-	sum, total := 0.0, 0.0
-	for _, d := range orderedDomains(weights) {
-		w := weights[d]
-		if w <= 0 {
-			continue
-		}
-		sum += scores[d] * w
-		total += w
-	}
-	if total == 0 {
-		return 0
-	}
-	return sum / total
-}
-
 // orderedDomains 返回权重键的确定顺序：默认域在前（按 DefaultDomains 的顺序），其余键按字典序
 // 追加。只返回**实际出现在 weights 里**的键，故不改变"哪些域参与聚合"的语义。
+//
+// 确定性契约（本方向的核心门禁「离线重算 ↔ 在线评分逐位一致」依赖它）：**同一输入必须给出
+// 逐位相同的结果**。Go 的 map 迭代序是随机的，直接 `range` 会让域分切片在末位抖动 1 ulp ——
+// 门禁于是"偶然绿、偶然红"，这不是精度问题而是**不可复现**问题（同一份数据两次跑出不同判定
+// 时，报告里的数字无法归因）。
+//
+// 顺序的消费者是 `score.go:engineDomainScores`：内仓 `SSAMV20Formula` 按域分切片顺序累加
+// `sum += ds.Score * w`（加法交换律保证数学语义不变，定序只把浮点舍入路径钉死）。
 func orderedDomains(weights map[string]float64) []string {
 	out := make([]string, 0, len(weights))
 	known := make(map[string]bool, len(weights))
@@ -284,8 +128,9 @@ func orderedDomains(weights map[string]float64) []string {
 //
 // 为什么这条检查在 Evaluate 而不在读取层：读取层看不到"评估时用了哪些域"——域权重是
 // `Evaluate` 的入参（读取层只能保证 `domain_scores` 非空，见 load.go:validateRecord）。
-// 缺域的危险是**静默压低**：`weightedSum` 对缺失域取到 0，却仍把它那份额度计入分母，
-// 于是总分被无理由拉低、`acceptable` 判定随之翻转，而报告里看不出任何异常。
+// 缺域的危险是**静默压低**：引擎公式对缺失域取到 0，却仍把它那份额度计入分母（
+// `engineDomainScores` 会为该域装入一个 0 分），于是总分被无理由拉低、`acceptable` 判定随之
+// 翻转，而报告里看不出任何异常。
 // 记录里的域分是评估的输入证据，缺一项就意味着这份记录不能配这张权重表 —— 直接拒绝。
 func validateDomainsCovered(rec Record, weights map[string]float64) error {
 	for _, d := range orderedDomains(weights) {

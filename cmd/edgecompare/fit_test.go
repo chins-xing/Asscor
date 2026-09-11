@@ -77,6 +77,11 @@ func generateSyntheticRecords(t *testing.T, c float64, seed int64, n int) []Reco
 			Observed: Observed{
 				DomainScores: map[string]float64{"attack_surface": 60},
 				Threshold:    50,
+				// C1 裁定新增的两个必填字段。拟合器本身不消费它们（它只用域分与因子链），
+				// 但记录会经 `writeRecordsJSONL` 落到 JSONL 再被读取层加载，
+				// 缺了就会被 fail-fast 拒绝（这正是读取层的纪律）。
+				SPCScore:    0.8,
+				ThreatCoeff: 0.7,
 			},
 		}
 		aA, aB := 0.0, 0.0
