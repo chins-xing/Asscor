@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -372,5 +373,88 @@ func TestOfflineScoreEqualWeights(t *testing.T) {
 	}
 	if want := (90.0 + 90.0) / 5.0 * assemblyDecay(0.82, 0.9); score != want {
 		t.Errorf("score = %v, want %v", score, want)
+	}
+}
+
+// TestWeightedSumIsBitwiseDeterministic（Fix round 1）：域聚合必须**逐位可复现**。
+//
+// 为什么这是硬契约而不是"精度洁癖"：本方向的主门禁是「离线重算 ↔ 在线评分逐位一致」，
+// 在线侧的域聚合顺序是确定的；若离线按 map 迭代序累加，末位 1 ulp 会随机抖动 ⇒ 门禁"
+// 偶然绿、偶然红"，同一份数据两次跑出不同结论时报告数字无法归因。
+//
+// 夹具刻意选 order-sensitive 的组合（宽动态范围 1e16/1e-16 + 不可精确表示的十进制 0.1/0.2/0.3），
+// 让"累加顺序不同的实现"必然在不同次调用间抖出差异；比较用 reflect.DeepEqual，
+// **不用容差** —— 容差会正好掩盖要抓的 1 ulp。
+func TestWeightedSumIsBitwiseDeterministic(t *testing.T) {
+	scores := map[string]float64{
+		"attack_surface":      0.1,
+		"business_continuity": 0.2,
+		"operation_trust":     0.3,
+		"resilience":          1e16,
+		"kernel_security":     1e-16,
+		"zzz_custom":          7,
+	}
+	weights := map[string]float64{
+		"attack_surface":      1,
+		"business_continuity": 3,
+		"operation_trust":     5,
+		"resilience":          2,
+		"kernel_security":     1,
+		"zzz_custom":          4,
+	}
+	first := weightedSum(scores, weights)
+	for i := 0; i < 100; i++ {
+		got := weightedSum(scores, weights)
+		if !reflect.DeepEqual(first, got) {
+			t.Fatalf("第 %d 次调用与首次逐位不同（聚合不可复现）：%v vs %v", i+1, got, first)
+		}
+	}
+	// 顺序契约本身：默认域按 DefaultDomains 顺序在前，其余键按字典序追加。
+	wantOrder := []string{"attack_surface", "business_continuity", "operation_trust", "resilience", "kernel_security", "zzz_custom"}
+	if got := orderedDomains(weights); !reflect.DeepEqual(got, wantOrder) {
+		t.Errorf("orderedDomains = %v, want %v", got, wantOrder)
+	}
+	// "其余键按字典序"必须真的生效（而不是"非默认键随便放在末尾"）。
+	rest := map[string]float64{"operation_trust": 1, "zzz": 1, "aaa": 1}
+	if got, want := orderedDomains(rest), []string{"operation_trust", "aaa", "zzz"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("orderedDomains(含非默认键) = %v, want %v", got, want)
+	}
+}
+
+// TestEvaluateIsBitwiseDeterministic：整条离线重算路径（Synthesize + 定序聚合 + 三层指标）
+// 也必须逐位可复现 —— 报告与门禁都建立在这个契约上。
+func TestEvaluateIsBitwiseDeterministic(t *testing.T) {
+	const rec = `{"scenario_id":"S2-all-domains","factors":["EF-SELINUX"],"observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"threshold":60,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3}}`
+	recs, err := LoadRecords(writeJSONL(t, "determinism.jsonl", rec+"\n"))
+	if err != nil {
+		t.Fatalf("LoadRecords: %v", err)
+	}
+	weights := map[string]float64{}
+	for _, d := range edgefactor.DefaultDomains() {
+		weights[d] = 1
+	}
+	firstScore, err := OfflineScoreWithWeights(legacyParams(), recs[0], weights)
+	if err != nil {
+		t.Fatalf("OfflineScoreWithWeights: %v", err)
+	}
+	firstMetrics, err := Evaluate(recs, legacyParams(), weights)
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	for i := 0; i < 100; i++ {
+		score, err := OfflineScoreWithWeights(legacyParams(), recs[0], weights)
+		if err != nil {
+			t.Fatalf("第 %d 次 OfflineScoreWithWeights: %v", i+1, err)
+		}
+		if !reflect.DeepEqual(firstScore, score) {
+			t.Fatalf("第 %d 次总分与首次逐位不同：%v vs %v", i+1, score, firstScore)
+		}
+		m, err := Evaluate(recs, legacyParams(), weights)
+		if err != nil {
+			t.Fatalf("第 %d 次 Evaluate: %v", i+1, err)
+		}
+		if !reflect.DeepEqual(firstMetrics, m) {
+			t.Fatalf("第 %d 次三层指标与首次逐位不同：%+v vs %+v", i+1, m, firstMetrics)
+		}
 	}
 }

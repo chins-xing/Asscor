@@ -111,6 +111,9 @@ func pruneToDomains(p edgefactor.Params, domains []string) edgefactor.Params {
 // OfflineScoreWithWeights 用与在线相同的 Synthesize 重算总分。
 // legacy：GlobalMultiplier 作用于聚合后的总分（mandate 口径 4，与内仓默认的顺序乘法一致）；
 // V/G/C：域分先逐域修正（Score_d' = Base_d · P_d）再按权重聚合。
+//
+// 聚合（weightedSum）按固定域顺序累加，保证同一输入逐位可复现；但「离线 ↔ 在线逐位一致」
+// 只在可信度策略关闭（c = 1）时成立（见 activationsOf 的口径边界注）。
 func OfflineScoreWithWeights(p edgefactor.Params, rec Record, weights map[string]float64) (float64, error) {
 	plan, err := offlinePlan(p)
 	if err != nil {
@@ -166,6 +169,14 @@ func adjustedScores(observed map[string]float64, res edgefactor.Result) map[stri
 // 同时做**消费侧**的因子 ID 归一（与 `ssam.NormalizeFactorID` 同语义）：合成层的
 // Vectors / Factors / Coupling 三处查表都以规范大写键进行，不归一会查表落空并静默回落到
 // "全强度"默认向量。
+//
+// **口径边界（主控 Fix round 1 裁定，务必如实标注）**：「离线重算 ↔ 在线评分逐位一致」这条
+// 门禁**只在可信度策略关闭（c = 1）的前提下成立** —— `EffectiveFactor(f, 1) = f`，两次衰减
+// 与在线 legacy 的单次衰减恒等；一旦 c ≠ 1，在线 legacy 路径（`assessor.go` 的 `attenuate`、
+// 内仓 `ApplyEdgeFactors` 的默认乘法）只衰减一次，而这里统一按装配层口径衰减两次，两者相差
+// 一次衰减（offline legacy 惩罚更重）。本任务按 mandate 口径 2 **统一**复用装配层换算，
+// **不在**此处为 legacy 开特例；c ≠ 1 的候选间对比不在本轮范围（spec §10.2 已记录该已知
+// 口径问题，是否修正属独立决策）。
 func activationsOf(rec Record) []edgefactor.FactorActivation {
 	out := make([]edgefactor.FactorActivation, 0, len(rec.Observed.EdgeFactorChain))
 	for _, c := range rec.Observed.EdgeFactorChain {
@@ -213,9 +224,22 @@ func normalizeFactorID(id string) string {
 	return strings.ToUpper(strings.TrimSpace(id))
 }
 
+// weightedSum 按**确定顺序**累加：先按 `edgefactor.DefaultDomains()` 的顺序，再按其余键的
+// 字典序追加。
+//
+// 确定性契约（本方向的核心门禁「离线重算 ↔ 在线评分逐位一致」依赖它）：**同一输入必须给出
+// 逐位相同的结果**。Go 的 map 迭代序是随机的，直接 `range` 会让多域加权和在末位抖动 1 ulp ——
+// 门禁于是"偶然绿、偶然红"，这不是精度问题而是**不可复现**问题（同一份数据两次跑出不同判定
+// 时，报告里的数字无法归因）。brief 在此处给的 `range` 写法属缺陷，按主控裁定改为定序累加
+// （Fix round 1）。
+//
+// 定序不改变数学语义（加法交换律），只把浮点舍入路径钉死：权重表里的域应是默认域的子集
+// （spec §5.1）；非默认键（拼写错误/未来的自定义域）也必须落在某个确定位置上，否则它们又会
+// 退回 map 迭代序的不确定性里。
 func weightedSum(scores, weights map[string]float64) float64 {
 	sum, total := 0.0, 0.0
-	for d, w := range weights {
+	for _, d := range orderedDomains(weights) {
+		w := weights[d]
 		if w <= 0 {
 			continue
 		}
@@ -226,6 +250,28 @@ func weightedSum(scores, weights map[string]float64) float64 {
 		return 0
 	}
 	return sum / total
+}
+
+// orderedDomains 返回权重键的确定顺序：默认域在前（按 DefaultDomains 的顺序），其余键按字典序
+// 追加。只返回**实际出现在 weights 里**的键，故不改变"哪些域参与聚合"的语义。
+func orderedDomains(weights map[string]float64) []string {
+	out := make([]string, 0, len(weights))
+	known := make(map[string]bool, len(weights))
+	for _, d := range edgefactor.DefaultDomains() {
+		if _, ok := weights[d]; ok {
+			out = append(out, d)
+			known[d] = true
+		}
+	}
+	rest := make([]string, 0, len(weights))
+	for d := range weights {
+		if !known[d] {
+			rest = append(rest, d)
+		}
+	}
+	// 先收集再排序：map 迭代序只影响收集顺序，不影响排序后的结果。
+	sort.Strings(rest)
+	return append(out, rest...)
 }
 
 // Evaluate 在同一份真实数据上重算并计算三层指标（spec §2.1）。
