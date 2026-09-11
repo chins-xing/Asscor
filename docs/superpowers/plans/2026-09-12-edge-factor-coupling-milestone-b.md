@@ -490,6 +490,7 @@ Expected: FAIL —— `undefined: buildRecord`
 - [ ] **Step 4: 实现三块逻辑**
 
 - `observe.go`：`runChecks()` 取该主机真实检查结果（复用 `internal/checks` + `internal/engine.Assessor.Assess`），再按场景规格**强制指定检查失败**（`Passed=false`、`Delta` 取自引擎登记表、`Confidence` 取自可信度解析结果），然后调用 `AssessFromResults` 取得 `*model.AssessmentResult`；从 `result.EdgeFactorChain`（Task 1 交付）读观测链。
+  **`spc_score` / `threat_coeff` 的取值有唯一正确来源**（评审的越界观察，必须钉住）：**只允许**取 `result.SPCScore` 与 `result.ThreatCoeff` —— 它们就是引擎传给评分公式的 `RiskContext.Exposure` / `.Threat`（`internal/engine/ssam/engine.go` 的 `RiskContext{Exposure: output.SPCScore, Threat: output.ThreatCoeff}`）。**禁止**从 `internal/attck` 的 `predictedRisk.EnhancedThreat`（`internal/attck/attck.go:526` 恰好也叫 `threat_coeff`，但那是**另一个量**）取，也禁止自己算 —— 取错会让离线分数整体偏移而**所有门禁全绿**。为此实现一条**round-trip 钉桩**（见 Step 5 的门禁②）。
 - `groundtruth.go`：解析攻击 harness 产物得到 `compromised`/`ttc`/`ttps`/`nodes`/`block_effective`；**`ttc` 缺失即报错**（M3 的数据侧处理）。
 - `main.go`：装配 `edgeexp.Record`（含 `meta.weight_source` = `-weights` 或配置文件路径 + `config_hash`、`playbook_hash`），`Validate()` 通过后 `MarshalRecord` 追加写出；任何一步失败都**不写半条记录**并返回非零退出码。
 
@@ -613,11 +614,19 @@ done
 
 - [ ] **Step 6: 数据完整性门禁（写入 spec §5.4）**
 
+**门禁①** 工具能读全量记录、无 fail-fast：
 ```bash
 ./build/edgecompare -records data/edgefactors/records-wsl-clab-14.jsonl \
   -candidate m0=configs/edgeexp/m0-baseline.ini ... -weights attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10
 ```
-Expected: 读出全部记录、无 fail-fast；报告里 `final_score` 行与记录的 round-trip 对拍通过（这正是 Task 2/3 契约共用的意义）。
+Expected: 读出全部记录、无 fail-fast。
+
+**门禁② round-trip 钉桩（`spc_score`/`threat_coeff` 取值来源的唯一保障）**：对**每一条**采集记录，用**记录自身的输入**（域分 + `spc_score` + `threat_coeff` + 链上 `effective_factor`）离线复算 `final_score`，必须与记录里的值相等。这条就是"E/T 取错则门禁会红"的那道闸门 —— 评审实测过：字段取错时所有其它门禁都是绿的。
+```bash
+# 实现方式：edgescen 写完后立刻自检（同一进程内用同一公式重算），
+# 或在 edgecompare 的报告里输出逐条 |复算 − 记录| 的对比表并要求全零。
+```
+Expected: 逐条相等（浮点逐位或两位小数内相等，取整口径与引擎一致）。
 
 - [ ] **Step 7: 提交（脚本 + 模板 + spec §5.4）**
 
@@ -688,7 +697,9 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
 - Modify（若论文涉及）: `lunwen/paper/*.tex`（**只允许**加标注与升级路径，**不得回退**既有数字；E1–E9 的 upper bound 限定必须保留）
 
 - [ ] **Step 1: 债务与已知问题对账**：把本里程碑新发现的问题（含被评审记下但本轮未处理的项）逐条落到债务清单，标 Status/Decision。
-- [ ] **Step 2: 论文影响判定**：若结论触达论文中"边缘因子/评分"相关表述，写一段"升级路径"说明；否则在报告里明确"无需改动论文"。
+- [ ] **Step 2: 论文影响判定**：若结论触达论文中"边缘因子/评分"相关表述，写一段"升级路径"说明；否则在报告里明确"无需改动论文"。**并处理两条必须在论文口径里说明的边界**（评审的越界观察，核过代码）：
+  - **`threat_coeff` 无上界 ⇒ 总分可能 >100**：引擎公式是 `round2(0.5·base + 30·E + 20·T)`，`T = 1.4` 且 `base = 100`、`E = 1.0` 时得 `108`，而 `ssam-lib/ir.go:96` 的 `final_score ∈ [0,100]` 是**另一层**的约束。离线工具忠实复现引擎口径（这是 C1 裁定要求的），但**论文表格里出现 >100 的分数必须加脚注说明**，否则会被读成计算错误。
+  - **排序层与标签同源（M2）**：与 Task 6 的口径一致，论文若引用 Spearman/Kendall 必须写明它测的是什么。
 - [ ] **Step 3: 双分支同步与推送**
 ```bash
 git push . ASSCOR-Research-Core:main      # 本地快进 main（不切分支）
