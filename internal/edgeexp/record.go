@@ -58,6 +58,10 @@ type Observed struct {
 	//
 	// 在**读取层是可选**的（既有夹具与历史数据集里没有它，读取层不得因此变红）；写它是
 	// **生产者**的义务，由 `CheckEffectiveWeightsRecorded` 自检、由离线的 round-trip 门禁消费。
+	//
+	// 判存在性请用 `len(...) > 0`，**不要**用"JSON 里有没有这个键"：`json.Marshal` 对 nil map
+	// 会写出 `"effective_weights":null`（键在场、值为空），那是一个可见的"未记录"信号，
+	// 而不是"记了空权重表"（后者本来也不是合法状态 —— 键集即"参与聚合的域"）。
 	EffectiveWeights map[string]float64 `json:"effective_weights"`
 
 	FinalScore      float64    `json:"final_score"`
@@ -498,6 +502,8 @@ func (r Record) CheckTriggerCrossReference() error {
 // 离线重算就只能靠 `-weights` 猜，而配置权重 ≠ 生效权重（`DynamicScoringEngine` 会给 0 权重
 // 域填默认值并 `Normalize(100)`），round-trip 门禁因此没有定义（spec §5.1 前提 2）。
 // 空 map 等于没写：键集即"参与的域"，为空说明装配期没拿到权重表。
+// 下游读它时同款判断 —— 用 `len(...) > 0`，而不是"JSON 键在不在"（见 `Observed.EffectiveWeights`
+// 的说明：nil map 会被序列化成 `null`，键仍在场）。
 func (r Record) CheckEffectiveWeightsRecorded() error {
 	if len(r.Observed.EffectiveWeights) == 0 {
 		return fmt.Errorf("observed.effective_weights: missing or empty — 记录必须写出引擎实际生效的逐域权重（键集 = 参与聚合的域），否则离线复算拿不到权重口径（spec §5.1 前提 2）")
