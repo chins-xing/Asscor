@@ -603,3 +603,58 @@ func TestEvaluateIsBitwiseDeterministicForVGC(t *testing.T) {
 		})
 	}
 }
+
+// TestOfflineRejectsNonDefaultDomainKeys（Task 8 评审 M6 的收口）：离线重算必须**拒绝**
+// 非默认域的 λ / 向量键，而不是静默裁掉它们。
+//
+// 为什么这条重要：在线装配期对这类配置是**硬报错**（`edgefactor.Validate` 的
+// `lambda for unknown domain`，`ssam.ParamsFromConfig` 在完整默认域列表上跑），而离线此前
+// 直接按 `DefaultDomains ∩ λ` 裁剪 ⇒ 一个把 `operation_trust` 拼错的配置会在离线拿到一份
+// 看起来有效的报告，而它**永远装不上**。Task 10 的"离线↔在线一致"门禁在这类数据上无法归因
+// （两侧一个报错、一个出数）。
+//
+// 反向对照是必需的：把同一个键改回默认域后必须能正常算分 —— 否则上面两条断言只证明了
+// "这个候选什么都算不了"。
+func TestOfflineRejectsNonDefaultDomainKeys(t *testing.T) {
+	recs, err := LoadRecords(writeSample(t))
+	if err != nil {
+		t.Fatalf("LoadRecords: %v", err)
+	}
+	weights := map[string]float64{"attack_surface": 1, "operation_trust": 1}
+
+	newCandidate := func() edgefactor.Params {
+		return edgefactor.Params{Model: edgefactor.ModelVector, PFloor: 0.5,
+			Lambda:  map[string]float64{"attack_surface": 1.0},
+			Vectors: map[string]map[string]float64{"EF-SELINUX": {"attack_surface": 1.0}},
+			Factors: map[string]float64{"EF-SELINUX": 0.8}}
+	}
+
+	// 反向对照（先做）：未被打错的候选必须能算。
+	if _, err := OfflineScoreWithWeights(newCandidate(), recs[0], weights); err != nil {
+		t.Fatalf("对照候选（键都在默认域上）应当能算分: %v", err)
+	}
+
+	t.Run("lambda 的域拼错", func(t *testing.T) {
+		p := newCandidate()
+		p.Lambda["operaton_trust"] = 1.0 // 拼错：operation_trust
+		_, err := OfflineScoreWithWeights(p, recs[0], weights)
+		if err == nil {
+			t.Fatal("非默认域的 lambda 键被静默裁掉并照常算分 —— 会产出一份「永远装不上」的候选的报告")
+		}
+		if !strings.Contains(err.Error(), "operaton_trust") {
+			t.Errorf("错误信息必须点名那个键，实际是: %v", err)
+		}
+	})
+
+	t.Run("向量的分量域拼错", func(t *testing.T) {
+		p := newCandidate()
+		p.Vectors["EF-SELINUX"]["operaton_trust"] = 0.5
+		_, err := OfflineScoreWithWeights(p, recs[0], weights)
+		if err == nil {
+			t.Fatal("非默认域的向量分量被静默裁掉并照常算分")
+		}
+		if !strings.Contains(err.Error(), "operaton_trust") {
+			t.Errorf("错误信息必须点名那个域，实际是: %v", err)
+		}
+	})
+}

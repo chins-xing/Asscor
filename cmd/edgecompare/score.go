@@ -69,6 +69,21 @@ func offlinePlan(p edgefactor.Params) (synthesizePlan, error) {
 	if p.Model == edgefactor.ModelLegacy {
 		return synthesizePlan{params: p, domains: edgefactor.DefaultDomains()}, nil
 	}
+	// 拒绝**非默认域**的 λ / 向量键（Task 8 评审 M6 的收口）。
+	//
+	// 为什么必须在这里拦：`PruneToDomains` 的文档化前提是"请求域已由 `Validate`（在完整参数上）
+	// 保证是默认域的子集"，在线 `ssam.newSynthesizePlan` 正是这么做的；而离线此前直接裁剪，
+	// 于是"λ/向量键写到了非默认域"（例如把 `operation_trust` 拼错）这类**在线永远装不上**的
+	// 配置会被静默裁掉，离线照样给出一份看起来有效的报告 —— Task 10 的"离线↔在线一致"门禁
+	// 在这类数据上根本无法归因（两侧一个报错、一个出数）。
+	//
+	// 这里复用渲染侧的 `validateDefaultDomainKeys`（Task 9 为导出路径写的同一条规则），
+	// 而**不是**整份 `p.Validate(DefaultDomains())`：后者还要求"已声明的向量覆盖全部默认域"，
+	// 那是在线装配期的额外约束，会把只声明部分向量分量的夹具一并拒掉 —— 那是另一种口径，
+	// 不属于本条修复的范围。
+	if err := validateDefaultDomainKeys(p); err != nil {
+		return synthesizePlan{}, err
+	}
 	requested := edgefactor.RequestedDomains(p)
 	if len(requested) == 0 {
 		return synthesizePlan{}, fmt.Errorf(
