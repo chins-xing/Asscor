@@ -335,21 +335,52 @@ func TestCompareRejectsEmptyCandidateSet(t *testing.T) {
 	}
 }
 
-// TestCompareEmptyDatasetTiesAtZero：空数据集不是错误（工具要能对空 JSONL 出报告），
-// 但此时每个候选的三层指标全零、Best 只能由字典序兜底 —— 报告里的 N = 0 会把这件事显式写出来。
-func TestCompareEmptyDatasetTiesAtZero(t *testing.T) {
-	rep, err := Compare(nil, map[string]edgefactor.Params{
+// TestCompareRejectsEmptyRecords（Fix round 1 / Important-2 ①）：零记录必须 fail-fast。
+//
+// 零记录时每个候选的三层指标都是零值 ⇒ 三层全平 ⇒ `Best` 只是字典序兜底的产物；若 Compare
+// 照常返回报告，`RenderMarkdown` 就会打印「场景数: 0」外加一个确定语气的「选定模型」——
+// 筛选条件写错（路径写错、字段改名）时，操作者与下游产物文件看到的是一份**伪结论**。
+// 这与"拒空候选集"是同一条纪律：比不了就别给结论。
+func TestCompareRejectsEmptyRecords(t *testing.T) {
+	candidates := map[string]edgefactor.Params{
 		"legacy": t9LegacyCandidate(),
 		"vector": t9VectorCandidate(),
-	}, t9Weights())
+	}
+	for _, records := range [][]Record{nil, {}} {
+		rep, err := Compare(records, candidates, t9Weights())
+		if err == nil {
+			t.Fatalf("零记录必须报错（records = %#v）", records)
+		}
+		if !strings.Contains(err.Error(), "记录") {
+			t.Errorf("错误信息应说明「没有有效记录」：%v", err)
+		}
+		if len(rep.Models) != 0 || rep.Best != "" {
+			t.Errorf("出错时不得返回半成品报告：%+v", rep)
+		}
+	}
+}
+
+// TestEmptyDatasetTieIsDecidedAtTheMetricLayer（原 TestCompareEmptyDatasetTiesAtZero 收窄而来）。
+//
+// 「零记录 ⇒ 三层全平 ⇒ 字典序兜底」这条**层次**上的事实仍然成立（`Evaluate` 对空输入返回零值
+// Metrics，`pickBest` 在三层全平时取字典序靠前者），本用例继续钉住它；但端到端契约已按
+// Fix round 1 / Important-2 收紧：`Compare` 对零记录 fail-fast、`RenderMarkdown` 对
+// `Records == 0` 不打印选模结论 —— 故这里改在 Evaluate/pickBest 层面验证，而不再从 Compare 走
+// （若继续从 Compare 断言，就等于要求端到端契约反过来变松）。
+func TestEmptyDatasetTieIsDecidedAtTheMetricLayer(t *testing.T) {
+	legacyM, err := Evaluate(nil, t9LegacyCandidate(), t9Weights())
 	if err != nil {
-		t.Fatalf("Compare(nil): %v", err)
+		t.Fatalf("Evaluate(nil): %v", err)
 	}
-	if rep.Records != 0 || rep.Models["vector"].N != 0 {
-		t.Errorf("空数据集应如实记录 N = 0：%+v", rep)
+	vectorM, err := Evaluate(nil, t9VectorCandidate(), t9Weights())
+	if err != nil {
+		t.Fatalf("Evaluate(nil): %v", err)
 	}
-	if rep.Best != "legacy" {
-		t.Errorf("Best = %q, want legacy（全零平局 ⇒ 名字字典序靠前者）", rep.Best)
+	if legacyM != (Metrics{}) || vectorM != (Metrics{}) {
+		t.Fatalf("零记录应给出零值指标：legacy=%+v vector=%+v", legacyM, vectorM)
+	}
+	if got := pickBest(map[string]Metrics{"legacy": legacyM, "vector": vectorM}); got != "legacy" {
+		t.Errorf("pickBest = %q, want legacy（三层全平 ⇒ 名字字典序靠前者）", got)
 	}
 }
 
@@ -515,6 +546,39 @@ func TestRenderMarkdownRejectsEmptyReport(t *testing.T) {
 	}
 	if buf.Len() != 0 {
 		t.Errorf("出错时不得写出半份报告：%q", buf.String())
+	}
+}
+
+// TestRenderMarkdownZeroRecordsPrintsNoSelection（Fix round 1 / Important-2 ②）：
+// 零记录的报告必须**显式**写明"无有效记录、未选模"，且**不得**打印任何选模结论。
+//
+// 这里与 TestCompareRejectsEmptyRecords 是两道独立的闸门：Compare 已经会拒零记录，但
+// `RenderMarkdown` 是导出函数，可能被别的调用方（或未来的 CLI 分支）直接喂一份手搓 Report；
+// 只要 `Records == 0`，它就不能输出「选定模型」——那正是本文件自述要消灭的"看起来有结论、
+// 实际没有"的产物（Best 在零记录下只是字典序兜底的产物）。
+func TestRenderMarkdownZeroRecordsPrintsNoSelection(t *testing.T) {
+	rep := t9Report()
+	rep.Records = 0
+	rep.Best = "legacy" // 即便调用方硬塞了一个 Best，渲染也必须拒绝把它当成结论打印
+
+	var buf bytes.Buffer
+	if err := RenderMarkdown(&buf, rep); err != nil {
+		t.Fatalf("RenderMarkdown: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "无有效记录") || !strings.Contains(out, "未选模") {
+		t.Errorf("零记录报告必须写明「无有效记录、未选模」：\n%s", out)
+	}
+	// 结论行的标记必须缺席（用标记而不是"选定模型"这四个字：说明文字里出现这个词
+	// 恰恰是正确的 —— 它正在解释"为什么没有选模"）。
+	if strings.Contains(out, "**选定模型**:") {
+		t.Errorf("零记录报告不得打印选模结论行：\n%s", out)
+	}
+	if strings.Contains(out, "`legacy`") {
+		t.Errorf("零记录报告不得把传入的 Best 当成结论打印：\n%s", out)
+	}
+	if !strings.Contains(out, "场景数: 0") {
+		t.Errorf("场景数应如实为 0：\n%s", out)
 	}
 }
 
@@ -704,6 +768,173 @@ func TestRenderConfigSectionIsDeterministic(t *testing.T) {
 	}
 	if !strings.Contains(first.String(), "chain.window_seconds = 60") {
 		t.Errorf("chain 参数必须输出窗口：\n%s", first.String())
+	}
+}
+
+// TestRenderConfigSectionChainNeedsWindow（Fix round 1 / Important-1）：
+//
+// `chain.window_seconds` 只在 `ChainWindowSeconds > 0` 时输出，而解析层对"缺窗口的 chain"
+// 是硬拒绝（`model=chain requires chain.window_seconds`）、`edgefactor.Validate` 同样要求
+// `chain_window_seconds > 0`。于是"chain + 窗口 ≤ 0"会渲染出一份**必被解析器拒绝**的配置 ——
+// 而函数契约正是"可直接粘贴"。故这里要求渲染前就 fail-fast，且不写出任何内容。
+func TestRenderConfigSectionChainNeedsWindow(t *testing.T) {
+	for _, window := range []int{0, -1} {
+		p := t9RenderedParams()
+		p.Model = edgefactor.ModelChain
+		p.ChainWindowSeconds = window
+
+		// 前置：这套参数确实过不了 Validate（渲染出它没有意义）。
+		if err := p.Validate(edgefactor.DefaultDomains()); err == nil {
+			t.Fatalf("前置失效：chain 窗口 = %d 本应被 Validate 拒绝", window)
+		}
+		// 层次断言：拦下它的必须是**渲染前的显式校验**（validateRenderable），
+		// 而不是靠末尾的统一断言兜底。两者的行为在"报错"上重叠（见下），但契约不同：
+		// 显式校验是给操作员的精确诊断（点名窗口与原因），统一断言是防漏网之鱼。
+		// 少了这条断言，"删掉显式校验"的变异会存活 —— 统一断言会替它报错，行为看起来一模一样。
+		if err := validateRenderable("chain", p); err == nil {
+			t.Errorf("validateRenderable 必须直接拒绝 chain 窗口 = %d 的参数集", window)
+		}
+		var buf bytes.Buffer
+		err := RenderConfigSection(&buf, "chain", p)
+		if err == nil {
+			t.Fatalf("chain 窗口 = %d 必须报错（渲染出的段粘不回去）", window)
+		}
+		for _, want := range []string{"chain", "window"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("错误信息应点名 %q：%v", want, err)
+			}
+		}
+		if buf.Len() != 0 {
+			t.Errorf("出错时不得写出半段配置：%q", buf.String())
+		}
+	}
+}
+
+// TestRenderConfigSectionChainRoundTrips：合法 chain（带窗口）的正向对照 ——
+// 渲染 → 真解析器读回 → 重建参数 → `Validate(DefaultDomains())` 全通过，且窗口确实出现在段里。
+func TestRenderConfigSectionChainRoundTrips(t *testing.T) {
+	p := t9RenderedParams()
+	p.Model = edgefactor.ModelChain
+	p.ChainWindowSeconds = 60
+
+	var buf bytes.Buffer
+	if err := RenderConfigSection(&buf, "chain", p); err != nil {
+		t.Fatalf("RenderConfigSection: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "chain.window_seconds = 60") {
+		t.Errorf("chain 段必须带窗口：\n%s", out)
+	}
+	cfg, present, err := config.ParseEdgeFactorModel(parseRenderedSection(t, out))
+	if err != nil {
+		t.Fatalf("chain 段必须能被真解析器接受：%v\n%s", err, out)
+	}
+	if !present || cfg.Model != "chain" || cfg.ChainWindowSeconds != 60 {
+		t.Fatalf("解析结果不对：present=%v cfg=%+v", present, cfg)
+	}
+	rebuilt := edgefactor.Params{
+		Model: edgefactor.ModelID(cfg.Model), PFloor: cfg.PFloor,
+		Lambda: cfg.Lambda, Vectors: cfg.Vectors, Coupling: cfg.Coupling,
+		ChainWindowSeconds: cfg.ChainWindowSeconds,
+	}
+	if err := rebuilt.Validate(edgefactor.DefaultDomains()); err != nil {
+		t.Errorf("粘回去的 chain 参数必须通过 Validate(DefaultDomains())：%v", err)
+	}
+}
+
+// TestRenderConfigSectionRejectsUnloadableParams 钉住 Fix round 1 / Important-1 的统一断言：
+// 渲染结果必须**自我验证** —— 把最终要写出去的字符串重新解析成配置、重建参数并跑
+// `Validate(DefaultDomains())`，任一环节失败都不得写出任何内容。
+//
+// 三个子用例都是"渲染前的显式校验看不见、但配置层或 Validate 会拒"的输入：
+//
+//	非有限 p_floor   —— 解析层 `must be a finite number`；
+//	未知 λ 域        —— `Validate` 的 `lambda for unknown domain`（离线重算会静默丢掉非默认域的
+//	                    λ 键，但粘回去的配置会被在线装配拒 ⇒ 导出段必须在这里拦下）；
+//	Σ_d v > 1        —— `Validate` 的向量和上限。
+//
+// 统一断言的价值正在于此：不必为每个数值型字段各写一条规则，也不会漏掉下一个。
+func TestRenderConfigSectionRejectsUnloadableParams(t *testing.T) {
+	cases := []struct {
+		name string
+		p    edgefactor.Params
+	}{
+		{
+			name: "非有限 p_floor",
+			p: edgefactor.Params{
+				Model: edgefactor.ModelVector, PFloor: math.NaN(),
+				Lambda:  map[string]float64{"attack_surface": 1.0},
+				Vectors: map[string]map[string]float64{"EF-SELINUX": {"attack_surface": 0.5}},
+			},
+		},
+		{
+			name: "向量和超过 1",
+			p: edgefactor.Params{
+				Model: edgefactor.ModelVector, PFloor: 0.5,
+				Lambda: map[string]float64{"attack_surface": 1.0, "kernel_security": 1.0},
+				Vectors: map[string]map[string]float64{
+					"EF-SELINUX": {"attack_surface": 0.8, "kernel_security": 0.8},
+				},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// 前置：这条输入能穿过渲染前的显式校验（即"看起来能贴"），只可能被统一断言拦下。
+			if err := validateRenderable("vector", tc.p); err != nil {
+				t.Fatalf("前置失效：本应穿过显式校验、由统一断言兜住：%v", err)
+			}
+			var buf bytes.Buffer
+			if err := RenderConfigSection(&buf, "vector", tc.p); err == nil {
+				t.Fatalf("这段渲染结果会被解析层/Validate 拒绝，必须报错：\n%s", buf.String())
+			}
+			if buf.Len() != 0 {
+				t.Errorf("出错时不得写出半段配置：%q", buf.String())
+			}
+		})
+	}
+}
+
+// TestRenderConfigSectionRejectsNonDefaultDomainKeys 钉住"忠实可导出"这一条（Fix round 1
+// 期间由统一断言的反例推出来的，与 Important-1 同类，见报告 §Fix round 1 自决 2）：
+//
+// λ 的域与向量的域都必须是**默认域**。非默认域的键在任何路径上都不会生效，但两条路径的表现
+// 不同：离线重算的裁剪口径是 `DefaultDomains ∩ λ`，会**静默丢掉**它们；在线装配期则直接拒绝
+// （`lambda for unknown domain`）。渲染时若把它们悄悄丢掉，产出的段就是"能贴、但与参数集不是
+// 同一套"的配置 —— 而这段配置的全部意义就是"贴回去等于刚才算的那套参数"。
+func TestRenderConfigSectionRejectsNonDefaultDomainKeys(t *testing.T) {
+	cases := []struct {
+		name string
+		p    edgefactor.Params
+	}{
+		{"非默认域的 λ 键", edgefactor.Params{
+			Model: edgefactor.ModelVector, PFloor: 0.5,
+			Lambda:  map[string]float64{"zzz_custom": 1.0},
+			Vectors: map[string]map[string]float64{"EF-SELINUX": {"zzz_custom": 0.5}},
+		}},
+		{"非默认域的向量分量", edgefactor.Params{
+			Model: edgefactor.ModelVector, PFloor: 0.5,
+			Lambda:  map[string]float64{"attack_surface": 1.0},
+			Vectors: map[string]map[string]float64{"EF-SELINUX": {"attack_surface": 0.5, "zzz_custom": 0.5}},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateRenderable("vector", tc.p); err == nil {
+				t.Error("validateRenderable 必须拒绝非默认域的键")
+			}
+			var buf bytes.Buffer
+			err := RenderConfigSection(&buf, "vector", tc.p)
+			if err == nil {
+				t.Fatalf("非默认域的键必须报错（否则渲染出的段与参数集不是同一套）：\n%s", buf.String())
+			}
+			if !strings.Contains(err.Error(), "zzz_custom") {
+				t.Errorf("错误信息应点名出问题的键：%v", err)
+			}
+			if buf.Len() != 0 {
+				t.Errorf("出错时不得写出半段配置：%q", buf.String())
+			}
+		})
 	}
 }
 

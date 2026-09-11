@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/edgefactor"
 )
 
@@ -19,8 +20,9 @@ import (
 // 按**决策层主判据**选优，`RenderMarkdown` 把结果落成可入档的对比报告，`RenderConfigSection`
 // 把胜出候选的参数导出成能直接粘回 `[edge_factors.model]` 的配置段。
 //
-// 三者的共同纪律：**任何"看起来有结论、实际没有"的产物都必须变成错误**。空候选集、空报告、
-// 与参数集不一致的模型名、漏域的向量 —— 一律 fail-fast，绝不渲染出一份看似完整的产物。
+// 三者的共同纪律：**任何"看起来有结论、实际没有"的产物都必须变成错误**。空候选集、零记录、
+// 空报告、与参数集不一致的模型名、漏域的向量、贴不回去的配置段 —— 一律 fail-fast，
+// 绝不渲染出一份看似完整的产物。
 
 // Report 是一次四候选对比的结果快照。
 //
@@ -45,6 +47,13 @@ type Report struct {
 func Compare(records []Record, paramsByModel map[string]edgefactor.Params, weights map[string]float64) (Report, error) {
 	if len(paramsByModel) == 0 {
 		return Report{}, fmt.Errorf("edgecompare: 没有任何候选模型可对比 —— 空对比会产出一张空表外加一个不存在的『选定模型』")
+	}
+	// 零记录同样必须 fail-fast（Fix round 1 / Important-2 ①）：`Evaluate` 对空输入返回零值
+	// Metrics，于是每个候选三层全平、`Best` 只是名字字典序的产物，而报告会照常打印
+	// 「场景数: 0」外加一个确定语气的「选定模型」—— 筛选条件写错（路径错、字段改名）时，
+	// 操作者与下游产物文件看到的是一份**伪结论**。与"拒空候选集"是同一条纪律：比不了就别给结论。
+	if len(records) == 0 {
+		return Report{}, fmt.Errorf("edgecompare: 没有有效记录，无法比较 —— 零记录下每个候选的三层指标都是零值，选出来的『最优模型』只会是模型名字典序的产物")
 	}
 	rep := Report{
 		GeneratedAt: time.Now().UTC(),
@@ -118,6 +127,12 @@ func sortedNames[V any](m map[string]V) []string {
 //
 // 空候选集直接拒绝（而不是打印一张空表）：一份"表头齐全、零行、结论为空"的报告会被误读成
 // "比过了"。整篇文档先渲染进内存再一次性写出，故任何校验失败都不会留下半份报告。
+//
+// 零记录（Fix round 1 / Important-2 ②）：仍然渲染（表格里每个候选的 N 都是 0，是有效信息），
+// 但**不打印任何选模结论** —— 零记录下三层指标全是零值、`Best` 只是名字字典序的产物，
+// 打印一个确定语气的「选定模型」就是凭空造结论。这里显式写明"无有效记录、未选模"，并且
+// 无视调用方塞进来的 `rep.Best`（`RenderMarkdown` 是导出函数，可能被别的调用方直接喂一份
+// 手搓 Report；与 `Compare` 的零记录 fail-fast 是两道独立闸门）。
 func RenderMarkdown(w io.Writer, rep Report) error {
 	if len(rep.Models) == 0 {
 		return fmt.Errorf("edgecompare: 报告里没有任何候选模型 —— 空表会被误读成『已经比过了』")
@@ -132,6 +147,12 @@ func RenderMarkdown(w io.Writer, rep Report) error {
 		fmt.Fprintf(&b, "| %s | %.3f | %.3f | %.3f | %.3f | %.3f | %.3f | %d |\n",
 			escapeCell(name), m.DecisionAgreement, m.FalseNegativeRate, m.FalsePositiveRate,
 			m.Spearman, m.Kendall, m.AUC, m.N)
+	}
+	if rep.Records == 0 {
+		b.WriteString("\n**无有效记录：未选模**（场景数为 0；零记录下三层指标全为零值，")
+		b.WriteString("「最优候选」只会是模型名字典序的产物，故不给出结论）\n")
+		_, err := io.WriteString(w, b.String())
+		return err
 	}
 	// 结论行必须把四层判据全写出来（含字典序兜底）：报告读者要能据此复算出 Best，
 	// 只写"漏判率 → 误阻断率 → AUC"会让平局情形的结论显得无从解释。
@@ -214,22 +235,106 @@ func RenderConfigSection(w io.Writer, model string, p edgefactor.Params) error {
 	if p.ChainWindowSeconds > 0 {
 		fmt.Fprintf(&b, "chain.window_seconds = %d\n", p.ChainWindowSeconds)
 	}
+	// 统一断言（Fix round 1 / Important-1）：把**最终要写出去的那串字符**重新解析成配置、
+	// 重建参数并跑 Validate(DefaultDomains())，任一环节失败都不得写出任何内容。
+	// 这条断言兜住的是"看起来能贴、实际贴不上"的一整类输入（非有限的 p_floor、Σ_d v > 1、
+	// 未知 λ 域……）：不必为每个数值字段各写一条规则，也不会漏掉下一个。
+	if err := renderRoundTrip(b.String()); err != nil {
+		return err
+	}
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// renderRoundTrip 把渲染结果喂回**生产解析器与校验层**，证明这段配置真的贴得上。
+//
+// 三条链路缺一不可，因为在线装配期也正好走这三步：文本 → `config.ParseEdgeFactorModel`
+// （`[edge_factors.model]` 的真解析器，含键名/个数/值域校验）→ `edgefactor.Validate(DefaultDomains())`
+// （结构规则：p_floor ∈ (0,1)、已声明向量覆盖全部默认域、Σ_d v ≤ 1、λ 域已知、chain 需窗口）。
+//
+// 重建时**不带 `Factors`**：因子权重 f_i 不在本段内（单一事实来源是 `[edge_factors]`，见
+// RenderConfigSection 的已知边界），而 `Validate` 只看已声明的键，nil 的 Factors 不影响它。
+// 注意这里刻意**解析文本**而不是边渲染边攒 map：只有把最终的那串字符读回来，才能发现
+// "键值拼接出事"这一类错误（例如身份键里混进 `=` ⇒ 配置键被腰斩、值里带上半截键）。
+func renderRoundTrip(section string) error {
+	sections, err := parseRenderedSections(section)
+	if err != nil {
+		return err
+	}
+	cfg, present, err := config.ParseEdgeFactorModel(sections)
+	if err != nil {
+		return fmt.Errorf("edgecompare: 渲染出的配置段不被 [edge_factors.model] 解析层接受（粘回去必然失败）：%w", err)
+	}
+	if !present {
+		return fmt.Errorf("edgecompare: 渲染结果里没有 [edge_factors.model] 段")
+	}
+	rebuilt := edgefactor.Params{
+		Model:              edgefactor.ModelID(cfg.Model),
+		PFloor:             cfg.PFloor,
+		Lambda:             cfg.Lambda,
+		Vectors:            cfg.Vectors,
+		Coupling:           cfg.Coupling,
+		ChainWindowSeconds: cfg.ChainWindowSeconds,
+	}
+	if err := rebuilt.Validate(edgefactor.DefaultDomains()); err != nil {
+		return fmt.Errorf("edgecompare: 渲染出的配置段过不了 Validate(DefaultDomains())（在线装配期会以同样的理由拒绝它）：%w", err)
+	}
+	return nil
+}
+
+// parseRenderedSections 把渲染出的文本反解成 `config.ParseEdgeFactorModel` 需要的 sections 结构。
+// 只处理本文件自己产出的形态（段头 + `key = value`），遇上任何别的行即报错 —— 那意味着渲染
+// 出来的东西已经偏离契约，宁可拒绝也不要"读个大概"。
+//
+// 测试里另有一份独立实现的同名解析（`report_test.go` 的 parseRenderedSection）：那是刻意的
+// 第二实现 —— 用它来做格式契约（5 个逗号分隔值、域顺序、逐位数值）的独立核对，
+// 避免"拿生产代码的解析器去验证生产代码的输出"这种自证。
+func parseRenderedSections(section string) (map[string]map[string]string, error) {
+	sections := map[string]map[string]string{}
+	current := ""
+	for _, line := range strings.Split(section, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			current = strings.ToLower(strings.Trim(line, "[]"))
+			if sections[current] == nil {
+				sections[current] = map[string]string{}
+			}
+			continue
+		}
+		if current == "" {
+			return nil, fmt.Errorf("edgecompare: 渲染结果里出现了段外的行 %q", line)
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			return nil, fmt.Errorf("edgecompare: 渲染结果里出现了不是 key = value 的行 %q", line)
+		}
+		sections[current][strings.ToLower(strings.TrimSpace(key))] = strings.TrimSpace(value)
+	}
+	return sections, nil
 }
 
 // validateRenderable 是参数段导出前的 fail-fast（错误一律在**写出任何内容之前**返回：
 // 半段配置是最容易被误粘的形态）。
 //
-// 三条规则：
+// 五条规则：
 //   - 模型名是四个合法模型之一。解析层 `config.ParseEdgeFactorModel` 只认
 //     legacy|vector|graph|chain，写别的进去只会得到一份被拒的配置；
 //   - 模型名与 `p.Model` 一致。两者不一致意味着这份段会用模型 A 的名字描述模型 B 的参数，
 //     粘回去以后"配置写的"和"离线算的"是两套东西 —— 正是本方向最忌讳的假溯源；
 //   - 每个已声明向量都覆盖了**配了 λ 的域**。漏了就是离线重算本身也会被 `Synthesize` 拒绝的
-//     参数集（"vector does not cover domain"），补 0 蒙混会得到一份能算但算得不同的配置。
+//     参数集（"vector does not cover domain"），补 0 蒙混会得到一份能算但算得不同的配置；
+//   - chain 必须有正窗口（Fix round 1 / Important-1）：`chain.window_seconds` 只在 > 0 时输出，
+//     而解析层对"缺窗口的 chain"是硬拒（`model=chain requires chain.window_seconds`）、
+//     `Validate` 同样要求 > 0 ⇒ 不在这里拦，就会渲染出一份**必然贴不上**的配置段；
+//   - λ 与向量的域必须都是**默认域**（见 validateDefaultDomainKeys）：非默认域的键不会被渲染，
+//     于是产出的段"能贴、但与参数集不是同一套"。
 //
-// 身份键里出现换行同样拒绝：它会伪造出额外的配置行（`escapeCell` 只覆盖 Markdown 表格）。
+// 数值层面的"贴不上"（非有限 p_floor、Σ_d v > 1 等）不在这里逐项枚举：由
+// RenderConfigSection 末尾的 renderRoundTrip 统一兜住。身份键里出现换行同样拒绝
+// （它会伪造出额外的配置行；`escapeCell` 只覆盖 Markdown 表格）。
 func validateRenderable(model string, p edgefactor.Params) error {
 	switch edgefactor.ModelID(model) {
 	case edgefactor.ModelLegacy, edgefactor.ModelVector, edgefactor.ModelGraph, edgefactor.ModelChain:
@@ -239,6 +344,13 @@ func validateRenderable(model string, p edgefactor.Params) error {
 	if model != string(p.Model) {
 		return fmt.Errorf("edgecompare: 渲染的 model = %q 与参数集的 Model = %q 不一致 —— 粘回去的配置会用 %q 的名字描述 %q 的参数",
 			model, p.Model, model, p.Model)
+	}
+	if p.Model == edgefactor.ModelChain && p.ChainWindowSeconds <= 0 {
+		return fmt.Errorf("edgecompare: chain 候选的 chain_window_seconds = %d 不是正数 —— 该段缺窗口会被解析层拒绝（model=chain requires chain.window_seconds），粘不回去的配置段不算导出",
+			p.ChainWindowSeconds)
+	}
+	if err := validateDefaultDomainKeys(p); err != nil {
+		return err
 	}
 	if err := validateIdentityKeys(p); err != nil {
 		return err
@@ -251,6 +363,34 @@ func validateRenderable(model string, p edgefactor.Params) error {
 			if _, ok := p.Vectors[id][d]; !ok {
 				return fmt.Errorf("edgecompare: 向量 %s 未声明域 %q，而该域配了 lambda —— 这套参数在离线重算时会被 Synthesize 拒绝；渲染时补 0 会得到一份『看起来能算、算出来不同』的配置",
 					id, d)
+			}
+		}
+	}
+	return nil
+}
+
+// validateDefaultDomainKeys 要求 λ 的域与向量的域都是**默认域**。
+//
+// 渲染只输出 `DefaultDomains()` 覆盖到的键（λ 按默认域顺序、向量的每个分量都来自默认域），
+// 于是非默认域的键会被**静默丢掉**。这会产出一份"能贴、但与参数集不是同一套"的配置段 ——
+// 而这段配置的全部意义就是"贴回去等于刚才算的那套参数"。两条既定路径对这类键都不友好：
+// 离线重算的裁剪口径是 `DefaultDomains ∩ λ`（会静默丢掉），在线装配期直接拒绝
+// （`lambda for unknown domain`）。生产路径（`ssam.ParamsFromConfig`）本来就不可能产出这类参数，
+// 故最诚实的行为是拒绝导出，而不是悄悄少写几行。
+func validateDefaultDomainKeys(p edgefactor.Params) error {
+	known := map[string]bool{}
+	for _, d := range edgefactor.DefaultDomains() {
+		known[d] = true
+	}
+	for _, d := range sortedNames(p.Lambda) {
+		if !known[d] {
+			return fmt.Errorf("edgecompare: lambda.%s 的域不是默认域 —— 它不会被渲染出去（离线重算会丢掉它、在线装配会直接拒绝），导出的段与参数集将不是同一套", d)
+		}
+	}
+	for _, id := range sortedNames(p.Vectors) {
+		for _, d := range sortedNames(p.Vectors[id]) {
+			if !known[d] {
+				return fmt.Errorf("edgecompare: vector.%s 的分量域 %q 不是默认域 —— 它不会被渲染出去，导出的段与参数集将不是同一套", id, d)
 			}
 		}
 	}
