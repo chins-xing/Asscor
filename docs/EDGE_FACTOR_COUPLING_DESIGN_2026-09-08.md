@@ -289,6 +289,33 @@ chain.window_seconds = 300
 | WSL2 Containerlab（14 节点真实拓扑） | 主战场，22+3 场景 | `clab destroy+deploy`；`.wslconfig` 限内存 8GB |
 | A-1（Ubuntu，2c/3.4GB） | 重复性（每场景 3 次）+ 稳定性 | **agent ≤14**；曾因 24 进程压垮 sshd |
 
+#### 5.3.1 观测主体（Task 4C：评估必须发生在被攻节点内）
+
+**口径**：一条记录里的 `observed.checks[]` 描述的是**哪台机器**，必须能被记录本身判定 ——
+因为被攻节点是拓扑里的 `host1` 容器（ground truth 的 `compromised` 来自它上面的 Caldera agent），
+而采集器默认跑在 WSL 宿主上。
+
+| 项 | 取值 | 落盘位置 |
+|---|---|---|
+| 默认（不声明目标） | **本机**（跑 `edgescen` 的那台）—— 与 2026-09 之前逐位一致 | `meta.observation_target` **缺席**（`omitempty`，记录字节不变） |
+| 节点内（`--target <容器>`） | 该容器内部（同一份二进制经 `docker cp` + `docker exec` 执行） | `meta.observation_target = "node:<容器> (hostname=<节点内 hostname>)"` |
+
+为什么必须是新字段而不是复用现有的：`meta.env` 是**操作者手填的标签**（默认值 `wsl-clab-14`，
+与"这份检查集真的来自那台机器"无关 —— 采错机器时它恰恰会照抄那个默认值），`meta.config_hash`
+是**配置文件**的指纹、`meta.playbook_hash`/`timestamp`/`run` 同理，都与运行位置正交。
+2026-09 的一次真实冒烟就采成了 WSL 开发机（输出路径 `/mnt/f/...` 是铁证），而记录字段完全正常
+—— 那次事故在本表的口径下**会**被 `edge_collect.sh` 的 `observation_subject` 核对拦下。
+
+三条纪律：
+
+1. **默认路径逐位不变**：不声明目标时不传 `--target`，取数仍走 `runHostChecks()`（有显式用例钉住：
+   逐要素相等 + "一个 docker 子进程都没起"）。
+2. **绝不静默回落本机**：目标缺失、`docker` 不可用、取回的检查集为空、信封标记/主机名缺失
+   —— 一律响亮失败。回落是最危险的形态：记录看起来是节点数据、实际是宿主数据。
+3. **同一轮数据必须来自同一台机器**：`edge_collect.sh` 会核对"harness 产物里
+   `condition_probes[].probe_target`"与"记录 `meta.observation_target`"是否指向同一个节点
+   （R 组的证据与 `checks[]` 的观测分属两台机器时整轮失败）。
+
 ### 5.4 实验执行手册（Task 4 交付）
 
 本节是**照着做就能复现**的执行面：脚本、参数、命令、门禁与失败语义。任何一条与脚本实现不一致，
@@ -300,8 +327,9 @@ chain.window_seconds = 300
 |---|---|---|
 | 实验模板 ×4 | `configs/edgeexp/{m0-baseline,vector,graph,chain}.ini` | 四份**只差** `[edge_factors.model]` 段；采集恒用 `m0-baseline.ini` |
 | 复位脚本 | `lunwen/clab-lab/scripts/edge_reset.sh` | Caldera 就绪 + `clab destroy --cleanup` + `clab deploy` + sandcat agent 回连 |
-| 攻击脚本 | `lunwen/clab-lab/scripts/edge_attack.sh <scenario> <out.json>` | 相位推进 + 固定剧本 + 客观结果（ground truth 的唯一来源） |
-| 采集脚本 | `lunwen/clab-lab/scripts/edge_collect.sh <scenario> <config.ini> <attack.json> <run>` | 一条记录 + **因子集相等断言** + 门禁⓪ + 时钟核对 + 门禁② 残差 |
+| 攻击脚本 | `lunwen/clab-lab/scripts/edge_attack.sh <scenario> <out.json>` | 相位推进 + 固定剧本 + 客观结果（ground truth 的唯一来源）；`EDGEEXP_TARGET` 声明被攻节点后，条件探针在**该节点内**执行 |
+| 节点内条件探针 | `lunwen/clab-lab/scripts/edge_probe.sh <容器名>` | 被 `edge_attack.sh` source；**在节点内**执行 §5.4.7 的六因子条件判据（`docker exec -i`），退出码 0=条件成立 / 1=不成立 / **2=探针没跑成**。见 §5.3.1 与 §5.4.9 |
+| 采集脚本 | `lunwen/clab-lab/scripts/edge_collect.sh <scenario> <config.ini> <attack.json> <run>` | 一条记录 + **因子集相等断言** + 门禁⓪ + 时钟核对 + 门禁② 残差 + **观测主体核对**（`EDGEEXP_TARGET` ⇒ 记录必须带 `meta.observation_target`，且与 harness 的探针节点一致） |
 | 矩阵驱动 | `lunwen/clab-lab/scripts/edge_matrix.sh [场景…]` | 25 场景全量（无参数）或冒烟子集（给了场景名）；名单与 `edgescen -list` 逐项核对 |
 | 阈值敏感性驱动 | `lunwen/clab-lab/scripts/edge_threshold_sensitivity.sh` | §5.4.6 的强制行；**只读**记录 + 配置 + 离线工具（不碰 clab/Caldera），故随时可补跑；**默认不跑**（`EDGEEXP_SENSITIVITY_THRESHOLDS` 显式开启） |
 | `-factors`/`-weights` 推导 | `lunwen/clab-lab/scripts/edge_spec_lib.sh` | 被矩阵与敏感性驱动**共用**的函数库（单一来源：不在两个脚本里各抄一份 Python，否则两份报告可能用了不同的因子权重而看不出来） |
@@ -565,8 +593,14 @@ EDGEEXP_SENSITIVITY_THRESHOLDS=60 bash scripts/edge_threshold_sensitivity.sh
    状态码语义取自 Caldera `c_link.py` 的 states 表：`SUCCESS=0`、`EXECUTE=-3`、`DISCARD=-2`、
    `HIGH_VIZ=-5`、`ERROR=1`、`TIMEOUT=124`）。观察窗超时时 `operation.window_timeout = true`，
    此时 `ttps_achieved` 是**窗内已达成**的下界，报告必须按这个口径写。
-5. **采集器评的是"跑 `edgescen` 的那台主机"**：真实检查结果来自 `internal/checks` 在本机的执行，
-   攻击侧（clab 节点上的 sandcat agent）只提供客观结果。故 R 组的"真实缺失"是在**采集主机**上核实的。
+5. **采集器评的是"`meta.observation_target` 指出的那台机器"**（Task 4C 起可声明，见 §5.3.1）：
+   真实检查结果来自 `internal/checks` 在**该机器上**的执行 —— 声明 `--target <容器>` 时就是在被攻
+   节点内部（同一份二进制经 `docker cp`/`docker exec` 跑），不声明时是跑 `edgescen` 的这台主机。
+   攻击侧（clab 节点上的 sandcat agent）只提供客观结果。**2026-09 之前的记录没有这个字段**，
+   当时实际采的是 WSL 开发机（勘测实测），那批记录描述的不是被攻节点，引用时必须如此标注。
+   R 组的"真实缺失"自 Task 4C 起**只在被攻节点内**核实（`condition_probes[].probe_host` 自证），
+   且 `condition_probes` 为空数组时不得声称"已核实"（`edge_collect.sh` 会拒绝这种记录）。
+   **节点内评估与宿主评估的实测差异见 §5.4.9**（不是缺陷，但对"哪台机器更严格"这件事有直接影响）。
 6. **A-1 的 3 次重复**是排序层方差用的（§5.3），不属于本手册的四脚本管线。重复运行时**必须同时**换
    `EDGEEXP_RUN_INDEX`（`run` 号）、`EDGEEXP_ENV`（例如 `EDGEEXP_ENV=a1-ubuntu`）与
    `EDGEEXP_RECORDS`（让每轮的记录各自成文件）。**`run>1` 而不给 `EDGEEXP_ENV` 会被直接拒绝** ——
@@ -576,6 +610,79 @@ EDGEEXP_SENSITIVITY_THRESHOLDS=60 bash scripts/edge_threshold_sensitivity.sh
    （既有的硬编码级联 `EF-3FA → EF-002FA`）。其余三条（`EF-NO-SIEM ↔ EF-NO-IDS`、
    `EF-SELINUX ↔ EF-002FA`、`EF-SYNCOOKIE ↔ EF-NO-IDS`）**是同域/同类的先验假设，尚无直接证据** ——
    报告与论文里必须这样标注，不得把它们写成"已证实存在的耦合"。
+
+#### 5.4.9 节点内评估 vs 宿主评估的实测差异（Task 4C Step 4，已知差异不是缺陷）
+
+**实验**（勘测 §3(c) 的最便宜实验，2026-09-12 实测）：把同一份**旧** `build/edgescen`
+`docker cp` 进 `asc-asscor-host1` 后 `docker exec` 跑一次 `S0-baseline`（无攻击、不重建拓扑），
+与在 WSL 宿主上跑同一份二进制的结果逐条做差。配置同为 `m0-baseline.ini`（两边
+`config_hash = dd334cd724ba0c4c` 相同）。随后用新二进制的 `-emit-checks`（只输出检查结果、
+不装载配置、不写记录）补了两次对照，以区分**机器差异**与**身份差异**。
+
+**第一个发现：两次采集同时变了两件事。** 宿主路径在 **用户 `clab`** 身份下跑（`edgescen`
+是 WSL 里手工启动的），节点路径在 **`root`** 身份下跑（`docker exec` 默认 root）。
+`/root` 下的路径因此一边"读不到"、一边"读得到"，而 `statAllowPerm` 把"无权限"与"不存在"
+当作**不同**结论 ⇒ 12 条差异里有 6 条根本不是机器造成的。三个口径的失败检查数：
+
+| 口径 | 身份 | 机器 | 失败检查数 |
+|---|---|---|---|
+| H-clab（现有宿主路径的实际口径） | `clab` | WSL2 开发机 | **49** |
+| H-root（身份对齐对照） | `root` | WSL2 开发机 | **55** |
+| N-root（节点内） | `root` | `host1` 容器 | **55** |
+
+**权威的机器差异（身份同为 root，`H-root` vs `N-root`）**：共 80 条检查，46 条两边都失败，
+两边各有 4 条只在单侧失败 ——
+
+| 只在宿主失败（节点内通过） | 实测成因 |
+|---|---|
+| `AS-004` 最小防火墙规则 | 宿主有 `iptables`（`INPUT` 策略 `ACCEPT` ⇒ 判失败）；节点**没有 `iptables`** ⇒ 检查走"命令不可用"的回退分支**判通过** |
+| `AS-005` 网络服务暴露面 | 宿主有对外监听（`0.0.0.0:8888`、`8022`、`2222`、`10.255.255.254:53`…）；节点只有一个 `127.0.0.11:36801`（Docker 内嵌 DNS） |
+| `OT-006` 敏感文件标记 | 宿主 `/opt /home` 下有可被其他用户读的 `.git`（`/opt/caldera/.git`、`/home/clab/.pyenv/.git`…）；节点一个都没有 |
+| `RS-013` 容器运行时安全 | 宿主有 `/var/run/docker.sock`（且 `/etc/docker/daemon.json` 无 seccomp/apparmor/userns-remap ⇒ 判失败）；节点没有 docker.sock ⇒ 整段检查跳过**判通过** |
+
+| 只在节点失败（本机通过） | 实测成因 |
+|---|---|
+| `AC-001` 网络分段验证 | 节点**没有 `iptables`** 且该检查**没有**回退分支 ⇒ "无法验证网络分段"判失败（与 `AS-004` 互为镜像：**同一台机器、同一个缺失工具，一个判通过一个判失败**） |
+| `AS-003` 强认证策略 | 节点镜像**没有 `/etc/ssh/sshd_config`**（宿主有） |
+| `AS-009` 加密协议强制 | 节点**没有 `systemctl`** ⇒ `systemctl is-active sshd` 不命中 ⇒ "SSH未运行"判失败（宿主 `sshd` 为 `active`） |
+| `KS-006` 内核模块最小化 | 节点**没有 `lsmod`** ⇒ "无法执行 lsmod"判失败（宿主 18 个已加载模块，未超 150 的基线） |
+
+**身份差异（同一台机器，`clab` vs `root`）**：只 `clab` 失败 1 条（`AC-001`，读不到 iptables
+所需的东西），只 `root` 失败 7 条（`AC-002`/`AS-004`/`AS-012`/`BC-006`/`OT-004`/`OT-008`/`OT-020`
+—— 都是"作为 root 才能真的去看 `/root/...` 与系统配置，看了才发现没有"）。
+对 Step 4 那两次采集而言，交叉口径（`H-clab` vs `N-root`）因此是
+**只在宿主失败 3 条**（`AS-005`/`OT-006`/`RS-013`）、**只在节点失败 9 条**
+（`AC-002`/`AS-003`/`AS-009`/`AS-012`/`BC-006`/`KS-006`/`OT-004`/`OT-008`/`OT-020`）。
+
+**结论（对实验结论有直接影响，不是"修一下就好"）**：
+
+1. **勘测预言的 `RS-006` 那条成立**：节点**没有 `systemctl`**（实测），故 `RS-006` 只剩
+   `ps -eo comm` 进程名分支 —— 它的 systemd 分支在容器内**恒不命中**。与勘测的差别是方向：
+   勘测担心"工具缺失让一批检查由失败翻成通过"，实测**两个方向都有**，净结果是两边都 55 条、
+   节点总分更低（52.13 vs 52.65），但这**恰好说明"哪台机器更严格"不是一句可以说清的话**
+   （见下条）。
+2. **"工具缺失"在检查层有两种相反语义，而这会直接污染结论**：`AS-004`（有回退）
+   缺 `iptables` ⇒ 判**通过**；`AC-001`（无回退）缺同一个工具 ⇒ 判**失败**。
+   于是"换观测主体"既能让分数变好也能变坏，且**两种都发生在同一台节点上**。
+   ⇒ 任何"硬化基线"的动作都必须同时补齐检查所依赖的工具（至少 `iptables`/`procps`/`iproute2`/
+   `systemctl`），否则域分变化无法归因到安全姿态。
+3. **宿主路径的身份是实验设计的一部分，必须写清**：现有宿主路径以 `clab` 身份跑，
+   而那台机器上 7 条检查的结论在 root 下会翻转。节点内路径以 `root` 跑。
+   两者比较时"49 vs 55"里混着身份效应 —— **要谈机器差异只能用身份对齐的 55 vs 55**
+   （或把宿主路径也固定成与节点相同的身份）。
+4. **两边因子集与观测链条数一致**（11 条 / 6 个因子，H-clab 那一轮总分 52.65、N-root 52.13，
+   域分 attack_surface 68/52、business_continuity 70/60、kernel_security 29/24、
+   operation_trust 0/0、resilience 0/0）：换观测主体只改变**检查结果**，
+   不改变评分链路本身 —— 这正是 §5.3.1 第 3 条要守住的东西。
+5. **基线不是"有控制可移除"的状态**：节点侧 55 条失败、总分 52.13（阈值 80）、
+   域分 `operation_trust = 0`、`resilience = 0` ⇒ "注入检查失败"对本来就失败的检查是空操作
+   这条结论不变（`RS-005` 除外，它两边都通过）。
+6. **记录写不出失败原因**：`observed.checks[]` 只有 `id/domain/passed/delta/confidence/ts`，
+   检查的 `detail`（"无法执行 lsmod"这类）**没有落盘** ⇒ 本节的成因必须靠另跑 `-emit-checks`
+   或直接探输入才能确认。要在报告里逐条解释成因，得先补这个字段。
+
+**未在本次实验中确定的事**：`RS-005`（`tcp_syncookies`）在容器内 `sysctl -w` 是否真的向下；
+攻击侧结果是否随观测主体改变；`KS-*` 系列在容器与 WSL 内核间的完整差异（只审了发生差异的 8 条）。
 
 #### 5.4.8 lab 配置的键位纪律（每个键都要写在解析器**会读**的段里）
 
