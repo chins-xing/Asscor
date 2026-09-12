@@ -44,6 +44,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/chins-xing/asscor/internal/config"
@@ -56,6 +57,19 @@ const (
 	exitFailure = 1
 	exitUsage   = 2
 )
+
+// nodeTargetFlag 是"评估发生在哪个节点"的开关名（Task 4C）。
+//
+// 单独抽成常量：它是**跨工具接口**（Go 侧与 `lunwen/clab-lab/scripts/*.sh` 两侧都要用同一个
+// 拼写），写错一处不会报错，只会让脚本以为自己在采集节点数据而实际采的是宿主数据。
+const nodeTargetFlag = "target"
+
+// emitChecksFlag 是节点内进程的入口开关（父进程经 `docker exec` 传给它）。
+//
+// 它只在**目标节点内部**有意义：节点内进程不装载配置、不读 harness 产物、不评分，
+// 只把该机器检查登记表的原始结果以信封形式交回父进程 —— 评分与装配（也是本工具全部契约
+// 自检所在）仍由父进程执行，不在节点里重跑第二遍。
+const emitChecksFlag = "emit-checks"
 
 func main() {
 	os.Exit(runCLI(os.Args[1:], os.Stdout, os.Stderr))
@@ -74,12 +88,36 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	envName := fs.String("env", "wsl-clab-14", "环境标识（写进 meta.env，spec §5.3）")
 	playbookHash := fs.String("playbook-hash", "", "剧本哈希覆盖（缺省取 harness 产物里的 playbook_hash）")
 	listScenarios := fs.Bool("list", false, "列出全部场景（矩阵脚本用）并退出")
+	// Task 4C Step 1：**additive** 开关。不传时取数路径与今天逐位一致（本机登记表）；
+	// 传了则改为在目标节点内跑同一份二进制取回检查结果 —— 失败一律报错，绝不退回本机
+	// （那正是"看起来是节点数据、实际是宿主数据"的静默错误）。
+	target := fs.String(nodeTargetFlag, "", "在哪个节点内做评估（容器名，经 docker exec 执行同一份二进制）；缺省=本机（与既有行为逐位一致）")
+	emitChecks := fs.Bool(emitChecksFlag, false, "**节点内进程入口**：把本机检查登记表的原始结果以信封形式写到 stdout 并退出（由父进程经 docker exec 调用，不要手工使用）")
 
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
 	if *listScenarios {
 		printScenarioTable(stdout)
+		return exitOK
+	}
+	if *emitChecks {
+		// 节点内进程的入口：只做一件事（跑本机登记表并输出），故调用方给的其它开关在这里
+		// 一律**拒绝**而不是忽略 —— 忽略会让"父进程以为它传了配置、节点内其实没读"这种事
+		// 静默成立，而两边的数据看起来完全一样。
+		if err := rejectEmitChecksArgs(fs, *target); err != nil {
+			fmt.Fprintln(stderr, "edgescen:", err)
+			return exitUsage
+		}
+		payload, err := emitChecksPayload()
+		if err != nil {
+			fmt.Fprintln(stderr, "edgescen: 节点内输出检查结果:", err)
+			return exitFailure
+		}
+		if _, err := fmt.Fprintln(stdout, string(payload)); err != nil {
+			fmt.Fprintln(stderr, "edgescen: 节点内写出检查结果:", err)
+			return exitFailure
+		}
 		return exitOK
 	}
 
@@ -118,7 +156,7 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 
-	rec, err := buildRecord(context.Background(), *scenarioName, cfg, gt, *runIndex)
+	rec, err := buildRecord(context.Background(), *scenarioName, cfg, gt, *runIndex, strings.TrimSpace(*target))
 	if err != nil {
 		// 装配失败：转述原因并**不写任何产物**。`meta.assembly_error` 与 error 是同一句话的
 		// 两个出口（前者给记录/日志，后者给退出码），故这里两个都打。
@@ -159,6 +197,33 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	}
 	printSummary(stdout, rec, *configPath, *outPath, gt)
 	return exitOK
+}
+
+// rejectEmitChecksArgs 拒绝 `-emit-checks` 模式下除 `target` 之外的**显式**开关。
+//
+// 只拒绝显式给出的：`--env`/`--run` 这类有默认值的开关在不传时也会出现在 `fs` 里，
+// 按"值非空"判断会把节点内进程误判成用法错误。
+//
+// `target` 是唯一允许（且必须为空）的一个：父进程已经在容器里了，节点内进程**再**去
+// docker exec 一层只会把 x 变成 `docker exec host1 /tmp/edgescen --target host1`（容器里
+// 通常没有 docker CLI，于是失败得更晚、更像环境问题）。
+func rejectEmitChecksArgs(fs *flag.FlagSet, target string) error {
+	var bad []string
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == emitChecksFlag || f.Name == nodeTargetFlag {
+			return
+		}
+		bad = append(bad, "-"+f.Name)
+	})
+	if strings.TrimSpace(target) != "" {
+		bad = append(bad, "-"+nodeTargetFlag)
+	}
+	if len(bad) > 0 {
+		sort.Strings(bad)
+		return fmt.Errorf("-%s 是节点内进程的入口，只接受空参数集（收到 %s）—— 它不装载配置、不读 harness 产物、不评分，"+
+			"评分与装配由父进程执行；请手工使用 %s", emitChecksFlag, strings.Join(bad, " "), nodeTargetFlag)
+	}
+	return nil
 }
 
 // appendRecord 把**一整条** JSONL 追加到输出文件（不存在则新建，父目录自动创建）。
@@ -217,6 +282,12 @@ func printSummary(stdout io.Writer, rec edgeexp.Record, configPath, outPath stri
 	fmt.Fprintf(stdout, "  因子 %d：%s\n", len(rec.Factors), orNone(strings.Join(rec.Factors, ", ")))
 	fmt.Fprintf(stdout, "  权重来源：%d 域｜%s\n", len(rec.Observed.EffectiveWeights), rec.Meta.WeightSource)
 	fmt.Fprintf(stdout, "  链条目 ts：%s\n", rec.Meta.TSSource)
+	// 观测主体那一行**只在真的在节点内评过时**出现：本机路径（默认）的摘要逐字与今天一致，
+	// 而节点内路径每一条日志都带着"这次评的是哪台机器"。两个方向都必须显式：
+	// 前者是"默认行为不变"，后者是"节点数据不会被读成宿主数据"。
+	if rec.Meta.ObservationTarget != "" {
+		fmt.Fprintf(stdout, "  观测主体：%s\n", rec.Meta.ObservationTarget)
+	}
 	fmt.Fprintf(stdout, "  注入：%s；注入时刻：%s\n", rec.Injection, gt.injectionSummary())
 	fmt.Fprintf(stdout, "  观测链 %d 条｜失败检查 %d 条｜总分 %.4g（阈值 %.4g，判 %v）｜配置 %s（指纹 %s）\n",
 		len(rec.Observed.EdgeFactorChain), len(rec.Observed.Checks),

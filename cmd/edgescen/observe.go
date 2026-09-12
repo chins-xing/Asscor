@@ -222,12 +222,24 @@ func newScoringAssessor(cfg *config.Config) *engine.Assessor {
 
 // buildRecord 采集一个场景并装配成一条 spec §5.1 记录（含全部生产者自检）。
 //
-// 宿主检查集取自本机的检查登记表；测试与离线复算用 `assembleRecord` 直接给检查集。
-func buildRecord(ctx context.Context, scenarioName string, cfg *config.Config, gt groundTruth, run int) (edgeexp.Record, error) {
-	return assembleRecord(ctx, cfg, scenarioName, gt, run, runHostChecks())
+// 检查集由 `collectChecksForTarget` 决定来源（Task 4C）：
+//   - `target == ""`（默认）⇒ 本机检查登记表，**与今天逐位一致**；
+//   - `target != ""` ⇒ 在目标节点内跑同一份二进制取回检查结果；任何失败都**不**退回本机。
+//
+// 测试与离线复算用 `assembleRecord` 直接给检查集。
+func buildRecord(ctx context.Context, scenarioName string, cfg *config.Config, gt groundTruth, run int, target string) (edgeexp.Record, error) {
+	host, observationTarget, err := collectChecksForTarget(target)
+	if err != nil {
+		return edgeexp.Record{}, err
+	}
+	return assembleRecord(ctx, cfg, scenarioName, gt, run, host, observationTarget)
 }
 
 // assembleRecord 是采集器的核心：把"场景 + 配置 + 客观结果 + 宿主检查集"装配成一条记录。
+//
+// `observationTarget` 说明这份检查集**出自哪台机器**（Task 4C）：空串 = 本机（与今天逐位一致），
+// 非空 = 由 `collectChecksForTarget` 给出的节点内自证串（进 `meta.observation_target`）。
+// 它不参与任何判据，只解决"记录是宿主采的还是节点采的"这个问题（见 `edgeexp.Meta` 的说明）。
 //
 // 调用链（brief 指定的顺序，任何一步失败都**不写半条记录**）：
 //
@@ -238,7 +250,7 @@ func buildRecord(ctx context.Context, scenarioName string, cfg *config.Config, g
 // 失败时返回的记录**带着 `meta.assembly_error`**：拒绝写出的原因必须留痕，否则实验只会
 // "少场景而人不知"。返回的 error 与 `meta.assembly_error` 是同一句话的两个出口
 // （前者给退出码，后者给记录/日志）。
-func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string, gt groundTruth, run int, host []model.CheckResult) (edgeexp.Record, error) {
+func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string, gt groundTruth, run int, host []model.CheckResult, observationTarget string) (edgeexp.Record, error) {
 	rec := edgeexp.Record{
 		ScenarioID: scenarioID(scenarioName, run),
 		Meta: edgeexp.Meta{
@@ -358,6 +370,11 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 	// 代价是"这份生效权重从哪来"的语义被稀释；现在它回到只有一个话题。
 	rec.Meta.WeightSource = weightSource
 	rec.Meta.TSSource = tsNote
+	// 观测主体（Task 4C）：空串 = 本机（默认路径，字段因 omitempty 不出现在 JSON 里 ⇒ 与
+	// 今天写出的字节一致）；非空 = 节点内自证串。写在装配点而不是 CLI 里：它是**检查集**
+	// 的属性（谁采的），与 `-env`（操作者给的标签）是两回事 —— 把两者混在一个字段里，
+	// 将来任何人都无法从记录反推"这份数据到底出自哪台机器"。
+	rec.Meta.ObservationTarget = observationTarget
 	contract, err := gt.recordGroundTruth()
 	if err != nil {
 		return fail("%v", err)

@@ -231,8 +231,8 @@ func (g GroundTruth) CompromisedSet() bool { return g.compromisedSet }
 
 // Meta 是记录的溯源信息。
 //
-// `WeightSource` / `TSSource` / `AssemblyError` 是里程碑 B 新增的**可选**字段（`omitempty`），
-// 读取层不要求它们：
+// `WeightSource` / `TSSource` / `AssemblyError` / `ObservationTarget` 是里程碑 B 新增的
+// **可选**字段（`omitempty`），读取层不要求它们：
 //   - `WeightSource` 说明 `observed.effective_weights` 是从哪来的（以 `config_hash` 为锚点），
 //     供 round-trip 门禁与论文证据链归因；
 //   - `TSSource` 说明**链条目 `ts` 的基准**（例如"全部取评估时刻"的评分时刻基准，或"按 harness
@@ -241,7 +241,14 @@ func (g GroundTruth) CompromisedSet() bool { return g.compromisedSet }
 //     另一部分取评分时刻），而数据看起来完全正常 —— 留痕必须有自己的槽位，否则"这份权重从哪来"
 //     的语义会被稀释；
 //   - `AssemblyError` 记录装配期的非致命异常（例如某域权重被动态补齐），
-//     让"这份记录的权重口径不是纯配置值"这件事**留下痕迹**，而不是只在离线复算时表现为偏差。
+//     让"这份记录的权重口径不是纯配置值"这件事**留下痕迹**，而不是只在离线复算时表现为偏差；
+//   - `ObservationTarget` 说明**这次评估发生在哪台机器**（`node:<容器> (hostname=<节点内自证>)`
+//     或空 = 本机）。为什么既有字段不够（Task 4C 的实测动因）：
+//     `env` 是操作者手填的标签（默认值 `wsl-clab-14`，与"这份检查集真的来自那台机器"无关，
+//     而采错机器时它恰恰会照抄那个默认值）；`config_hash` 是**配置文件**的指纹，与运行位置
+//     正交；`playbook_hash`/`timestamp`/`run` 同理。故"这份记录描述的是被攻节点还是开发机"
+//     在旧 schema 里**无处可查** —— 而一次真实的冒烟就正好采成了开发机（输出路径 `/mnt/f/...`
+//     是铁证），记录本身却完全正常。这个字段就是为此存在的：**观测主体必须能被机器判定**。
 type Meta struct {
 	Env          string `json:"env"`
 	PlaybookHash string `json:"playbook_hash"`
@@ -249,9 +256,10 @@ type Meta struct {
 	Run          int    `json:"run"`
 	Timestamp    string `json:"timestamp"`
 
-	WeightSource  string `json:"weight_source,omitempty"`
-	TSSource      string `json:"ts_source,omitempty"`
-	AssemblyError string `json:"assembly_error,omitempty"`
+	WeightSource      string `json:"weight_source,omitempty"`
+	TSSource          string `json:"ts_source,omitempty"`
+	AssemblyError     string `json:"assembly_error,omitempty"`
+	ObservationTarget string `json:"observation_target,omitempty"`
 }
 
 // LoadFile 读取实验 JSONL（spec §5.1 schema），错误前缀为本包名。

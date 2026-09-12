@@ -362,7 +362,7 @@ func TestScenarioInjectionProducesValidRecord(t *testing.T) {
 	registerFixtureChecks()
 	cfg := fixtureConfig(t)
 	gt := newGroundTruth(true, 213, 4, 3, false)
-	rec, err := buildRecord(context.Background(), "S2-selinux-apparmor", cfg, gt, 1)
+	rec, err := buildRecord(context.Background(), "S2-selinux-apparmor", cfg, gt, 1, "")
 	if err != nil {
 		t.Fatalf("buildRecord: %v", err)
 	}
@@ -427,7 +427,7 @@ func chainHasFactor(rec edgeexp.Record, id string) bool {
 func TestChainIsAListNotAMap(t *testing.T) {
 	registerFixtureChecks()
 	cfg := fixtureConfig(t)
-	rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 120, 3, 2, false), 1)
+	rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 120, 3, 2, false), 1, "")
 	if err != nil {
 		t.Fatalf("buildRecord: %v", err)
 	}
@@ -494,7 +494,7 @@ func TestChainCanLegitimatelyContainEF3FA(t *testing.T) {
 		"EF-002": time.Date(2026, 9, 8, 10, 0, 0, 0, time.UTC),
 		"EF-001": time.Date(2026, 9, 8, 10, 0, 20, 0, time.UTC),
 	}
-	rec, err := assembleRecord(context.Background(), cfg, "S5-cascade-3fa", gt, 1, fixtureHostChecks())
+	rec, err := assembleRecord(context.Background(), cfg, "S5-cascade-3fa", gt, 1, fixtureHostChecks(), "")
 	if err != nil {
 		t.Fatalf("assembleRecord: %v", err)
 	}
@@ -529,7 +529,7 @@ func TestChainCanLegitimatelyContainEF3FA(t *testing.T) {
 func TestChainTriggerConfidenceMatchesChecks(t *testing.T) {
 	registerFixtureChecks()
 	cfg := fixtureConfig(t)
-	rec, err := buildRecord(context.Background(), "S2-selinux-apparmor", cfg, newGroundTruth(true, 213, 4, 3, false), 1)
+	rec, err := buildRecord(context.Background(), "S2-selinux-apparmor", cfg, newGroundTruth(true, 213, 4, 3, false), 1, "")
 	if err != nil {
 		t.Fatalf("buildRecord: %v", err)
 	}
@@ -571,7 +571,7 @@ func TestChainTimestampsComeFromHarnessInjections(t *testing.T) {
 	gt := newGroundTruth(true, 213, 4, 3, false)
 	gt.Injections = map[string]time.Time{"RS-007": t1, "RS-006": t2}
 
-	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S2-no-siem-no-ids"), gt, 1, fixtureHostChecks())
+	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S2-no-siem-no-ids"), gt, 1, fixtureHostChecks(), "")
 	if err != nil {
 		t.Fatalf("assembleRecord: %v", err)
 	}
@@ -619,7 +619,7 @@ func TestSimultaneousScenarioNeverMixesChainTimestamps(t *testing.T) {
 
 	// RS-006 在目标机上自然失败（服务真的缺失）—— 它不在 harness 的注入清单里。
 	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S1-selinux"), gt, 1,
-		hostChecksWithFailures("RS-006"))
+		hostChecksWithFailures("RS-006"), "")
 	if err != nil {
 		t.Fatalf("assembleRecord: %v", err)
 	}
@@ -668,7 +668,7 @@ func TestMissingInjectionTimeIsAnAssemblyError(t *testing.T) {
 	gt := newGroundTruth(true, 213, 4, 3, false)
 	gt.Injections = map[string]time.Time{} // harness 什么都没报
 
-	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S2-no-siem-no-ids"), gt, 1, fixtureHostChecks())
+	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S2-no-siem-no-ids"), gt, 1, fixtureHostChecks(), "")
 	if err == nil {
 		t.Fatal("缺注入时刻时必须拒绝写出（否则顺序注入场景会静默退化成同时注入）")
 	}
@@ -689,7 +689,7 @@ func TestSequentialScenarioNeedsDistinctInstants(t *testing.T) {
 	gt := newGroundTruth(true, 213, 4, 3, false)
 	gt.Injections = map[string]time.Time{"RS-007": at, "RS-006": at}
 
-	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S2-no-siem-no-ids"), gt, 1, fixtureHostChecks())
+	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S2-no-siem-no-ids"), gt, 1, fixtureHostChecks(), "")
 	if err == nil {
 		t.Fatal("顺序注入场景的注入时刻必须有两个不同值，全同时应拒绝写出")
 	}
@@ -721,7 +721,7 @@ func mustScenario(t *testing.T, name string) string {
 func TestEffectiveWeightsAreWhatTheEngineActuallyUsed(t *testing.T) {
 	registerFixtureChecks()
 	cfg := fixtureConfig(t)
-	rec, err := buildRecord(context.Background(), "S4-all", cfg, newGroundTruth(true, 400, 6, 5, false), 1)
+	rec, err := buildRecord(context.Background(), "S4-all", cfg, newGroundTruth(true, 400, 6, 5, false), 1, "")
 	if err != nil {
 		t.Fatalf("buildRecord: %v", err)
 	}
@@ -763,7 +763,7 @@ func TestEffectiveWeightsExcludeDomainsThatDidNotTakePart(t *testing.T) {
 			host = append(host, c)
 		}
 	}
-	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S1-selinux"), newGroundTruth(true, 100, 2, 1, false), 1, host)
+	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S1-selinux"), newGroundTruth(true, 100, 2, 1, false), 1, host, "")
 	if err != nil {
 		t.Fatalf("assembleRecord: %v", err)
 	}
@@ -784,7 +784,7 @@ func TestAssemblyFailureIsRecordedNotSilentlyDropped(t *testing.T) {
 
 	t.Run("无模型段", func(t *testing.T) {
 		cfg := fixtureWithoutModel(t)
-		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1)
+		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1, "")
 		if err == nil {
 			t.Fatal("没装载合成模型时必须拒绝写出 —— 那会产出『有惩罚、但链为空』的记录，离线复算必然失败")
 		}
@@ -803,7 +803,7 @@ func TestAssemblyFailureIsRecordedNotSilentlyDropped(t *testing.T) {
 
 	t.Run("chain 模型在线不可执行", func(t *testing.T) {
 		cfg := fixtureChainModel(t)
-		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1)
+		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1, "")
 		if err == nil {
 			t.Fatal("chain 是离线专用模型（在线结果类型没有时间字段），引擎不会装载它 —— 必须拒绝写出")
 		}
@@ -823,7 +823,7 @@ func TestAssemblyFailureIsRecordedNotSilentlyDropped(t *testing.T) {
 		cfg := mustLoadConfig(t, "fixture-nolambda.ini",
 			strings.Replace(fixtureConfigINI, "[edge_factors.model]\nmodel = legacy\np_floor = 0.50",
 				"[edge_factors.model]\nmodel = vector\np_floor = 0.50", 1))
-		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1)
+		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1, "")
 		if err == nil {
 			t.Fatal("没有任何 lambda.<domain> 的 vector 模型不会被装载，必须拒绝写出")
 		}
@@ -841,7 +841,7 @@ func TestAssemblyFailureIsRecordedNotSilentlyDropped(t *testing.T) {
 		if cfg.ScoringEngine != "legacy" {
 			t.Fatalf("夹具未能让解析层读到 scoring_engine = legacy（实际 %q）", cfg.ScoringEngine)
 		}
-		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1)
+		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1, "")
 		if err == nil {
 			t.Fatal("legacy 评分模式不盖溯源戳，必须拒绝写出")
 		}
@@ -856,7 +856,7 @@ func TestAssemblyFailureIsRecordedNotSilentlyDropped(t *testing.T) {
 		cfg := mustLoadConfig(t, "fixture-bogus-trigger.ini",
 			strings.Replace(fixtureConfigINI, "[edge_factors.model]\nmodel = legacy\np_floor = 0.50",
 				"[edge_factors.model]\nmodel = legacy\np_floor = 0.50\ntrigger.EF-SELINUX = ZZ-999", 1))
-		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1)
+		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1, "")
 		if err == nil {
 			t.Fatal("触发检查不在登记表里时无法执行注入，必须拒绝写出")
 		}
@@ -870,7 +870,7 @@ func TestAssemblyFailureIsRecordedNotSilentlyDropped(t *testing.T) {
 		registerFixtureChecks()
 		cfg := fixtureConfig(t)
 		rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "R-no-ids"),
-			newGroundTruth(true, 100, 2, 1, false), 1, fixtureHostChecks()) // 全部通过
+			newGroundTruth(true, 100, 2, 1, false), 1, fixtureHostChecks(), "") // 全部通过
 		if err == nil {
 			t.Fatal("R 组声明真实缺失的因子没有出现在链上时必须拒绝写出")
 		}
@@ -886,7 +886,7 @@ func TestRealMissingScenarioRecordsTheNaturalFailure(t *testing.T) {
 	registerFixtureChecks()
 	cfg := fixtureConfig(t)
 	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "R-no-ids"),
-		newGroundTruth(true, 100, 2, 1, false), 1, hostChecksWithFailures("RS-006"))
+		newGroundTruth(true, 100, 2, 1, false), 1, hostChecksWithFailures("RS-006"), "")
 	if err != nil {
 		t.Fatalf("assembleRecord: %v", err)
 	}
@@ -905,7 +905,7 @@ func TestRealMissingScenarioRecordsTheNaturalFailure(t *testing.T) {
 func TestRefusesPenaltiesWithoutChain(t *testing.T) {
 	registerFixtureChecks()
 	cfg := fixtureWithoutModel(t)
-	rec, err := buildRecord(context.Background(), "S4-all", cfg, newGroundTruth(true, 400, 6, 5, false), 1)
+	rec, err := buildRecord(context.Background(), "S4-all", cfg, newGroundTruth(true, 400, 6, 5, false), 1, "")
 	if err == nil {
 		t.Fatal("有惩罚但链为空（引擎未装载模型）的记录必须被拒绝")
 	}
@@ -926,7 +926,7 @@ func TestBaselineScenarioWithNoActivationIsWritable(t *testing.T) {
 	registerFixtureChecks()
 	cfg := fixtureConfig(t)
 	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S0-baseline"),
-		newGroundTruth(false, 0, 0, 0, true), 1, fixtureHostChecks())
+		newGroundTruth(false, 0, 0, 0, true), 1, fixtureHostChecks(), "")
 	if err != nil {
 		t.Fatalf("S0 基线（没有任何因子激活）必须能写出: %v", err)
 	}
@@ -968,7 +968,7 @@ func TestRoundTripPinHoldsForEveryCandidate(t *testing.T) {
 			gt.Injections = map[string]time.Time{
 				"OT-005": time.Date(2026, 9, 8, 10, 0, 3, 0, time.UTC),
 			}
-			rec, err := assembleRecord(context.Background(), cfg, "S2-selinux-apparmor", gt, 1, fixtureHostChecks())
+			rec, err := assembleRecord(context.Background(), cfg, "S2-selinux-apparmor", gt, 1, fixtureHostChecks(), "")
 			if err != nil {
 				t.Fatalf("assembleRecord: %v", err)
 			}
@@ -985,7 +985,7 @@ func TestRoundTripPinHasTeeth(t *testing.T) {
 	registerFixtureChecks()
 	cfg := fixtureConfig(t)
 	gt := newGroundTruth(true, 213, 4, 3, false)
-	rec, err := assembleRecord(context.Background(), cfg, "S2-selinux-apparmor", gt, 1, fixtureHostChecks())
+	rec, err := assembleRecord(context.Background(), cfg, "S2-selinux-apparmor", gt, 1, fixtureHostChecks(), "")
 	if err != nil {
 		t.Fatalf("assembleRecord: %v", err)
 	}
@@ -1568,7 +1568,7 @@ func TestEdgeExpTemplatesAreConsumableWhenPresent(t *testing.T) {
 				t.Fatalf("%s 缺 [edge_factors.model] 段 —— 引擎不会装载 ⇒ 记录没有溯源戳与观测链", filepath.Base(path))
 			}
 			// 模板声明的候选若在线不可执行（chain），采集器必须明确拒绝而不是照常评分。
-			rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 120, 2, 1, false), 1)
+			rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 120, 2, 1, false), 1, "")
 			if cfg.EdgeFactorModel.Model == "chain" {
 				if err == nil {
 					t.Fatalf("chain 模板在线不可执行，必须拒绝写出")
