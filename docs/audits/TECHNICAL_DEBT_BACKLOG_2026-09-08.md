@@ -126,8 +126,15 @@
 | 项 | 状态 |
 |---|---|
 | 出厂模板 `scoring_engine` 写在 `[extension_weights]`、解析器只在 `[weights]` 读 ⇒ **静默 no-op** | ✅ 已闭（7 份模板 + 2 条回归断言） |
-| `lunwen/clab-lab/kernel-config.ini` 的 `threshold` 写在解析器不读的段（且无 `[acceptability]` 段）⇒ 该值从未生效、`Default()` 的 80.0 只是巧合 | 🚧 修复中（同类缺陷，含"键是否真的生效"的回归断言） |
-| §5.4 要求的 `threshold = 60.0` 敏感性行**当时无法执行**（工具原先无阈值覆盖） | 🚧 修复中（`-threshold` 已实现，正在做成显式可选的敏感性行） |
-| Task 4 的 7 条单行项（重复 echo、兜底来源字符串、零碎片时空洞为真的路径断言、干跑跳过谓词的重复拷贝、跑扫描前重建 `build/edgescen`、`checks_ts_mismatch` 语义未触发、跨 00:00 UTC 端到端未复现） | ⏳ deferred（随解决 C1 的那次提交一并落地） |
+| `lunwen/clab-lab/kernel-config.ini` 的 `threshold` 写在解析器不读的段（且无 `[acceptability]` 段）⇒ 该值从未生效、`Default()` 的 80.0 只是巧合 | ✅ 已闭（`22f4d33`；两层判据：段位 + **等值探针**"改文件值 ⇒ 解析结果必须跟着变"，评审独立做内容层变异 ⇒ 断言确实会红） |
+| §5.4 要求的 `threshold = 60.0` 敏感性行**当时无法执行**（工具原先无阈值覆盖） | ✅ 已闭（`a1ac836`；显式 opt-in，评审实跑复现数值与报告逐位一致） |
+| Task 4 的 7 条单行项（重复 echo、兜底来源字符串、零碎片时空洞为真的路径断言、干跑跳过谓词的重复拷贝、跑扫描前重建 `build/edgescen`、`checks_ts_mismatch` 语义未触发、跨 00:00 UTC 端到端未复现） | ⏳ deferred（随解决 C1 的那次提交一并落地）。注：**"跑扫描前重建 `build/edgescen`" 已于 2026-09-12 17:00 完成**（`edgescen` + `edgecompare` 均以 HEAD 重建，WSL 实测 `-list` 25 组） |
 | 仓库根 `.gitattributes` 仅覆盖 `*.sh`（`text eol=lf`）；**Go 文件的行尾策略仍待裁定** | ⏳ 待作者裁定（`*.go text eol=lf` 属仓库级决策） |
+| **阈值敏感性行可能在 `-threshold == 记录自带阈值` 时产出"零信息产物"**（表格与主对比逐位相同，报告头却写"覆盖值被忽略"）而**照常 exit 0** ⇒ 看起来做了敏感性分析 | ⏳ deferred（配置清理评审 M1；最小修法：抽样读一条记录的 `observed.threshold`，相等时打醒目警告并写进产物横幅与 `sensitivity.json.warning`；**不**建议 exit 2 —— 用它核对主对比是合法用法） |
+| 7 份出厂模板的 `[webui]` 段**内核解析器不读**（属观察项，未追踪到实际消费者） | ⏳ deferred（配置清理评审 M4） |
+| `internal/config` 的 `[adapters]` 与 `[management_adapters]` 写**同一 key 空间**，谁赢取决于 Go map 迭代序（实测同内容连续 `Parse` 10 次：9 次 `CCC/DDD`、1 次 `AAA/BBB`；lab 现配置两段同值故不可观测） | ⏳ deferred（配置清理评审 M7，**不属**该轮改动；换配置即显形且无日志） |
+| `lunwen/EXPERIMENT_MANUAL.md:90,191` 路径写成 `configs/kernel-config.ini`（实为 `lunwen/clab-lab/kernel-config.ini`），键位描述已过时 | ⏳ deferred（配置清理评审 M6） |
+| `cmd/edgecompare/report.go:237-238` 注释声称"AUC 全等"**与输出自相矛盾**（实测 chain `AUC=0.000`/`Spearman=-0.866`，其余为 0）；真正判据是"FN/FP 全等，AUC 也分不出严格更优" | ⏳ deferred（配置清理评审 M3，纯注释） |
+| **测试方法论教训**（配置清理评审实测）：`internal/config` 部分键带**值域守卫**（如 `[attck] beacon_threshold/attribution_threshold` ∈ `(0,1]`，`config.go:525,529`）⇒ 用域外值（如 `7`）做"等值探针"会**静默跳过**、把**有效**的键误判成"不生效"。**对带守卫的键，等值探针必须用域内值。** | 📝 口径（后续所有配置类断言适用） |
+| 解析层**任何段**都不读 `[heartbeat]`（`enabled`/`timeout_sec`；60s 来自模块内置默认）⇒ 挪段救不活；本轮只钉成断言 + 写进 §5.4.8 | ✅ 已闭（`22f4d33` 侧；lab 配置文件**缺一行警示注释**记 deferred，防读者误以为生效 —— 配置清理评审 M2） |
 
