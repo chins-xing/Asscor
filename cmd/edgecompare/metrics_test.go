@@ -416,7 +416,8 @@ func TestOfflineScoreEqualWeights(t *testing.T) {
 // 域聚合必须**逐位可复现**。
 //
 // 为什么这是硬契约而不是"精度洁癖"：本方向的主门禁是「离线重算 ↔ 在线评分逐位一致」，
-// 在线侧的域聚合顺序由权重表决定；若离线按 map 迭代序装域分切片，末位 1 ulp 会随机抖动
+// 在线侧的域聚合顺序由**引擎**决定（`ssam.ComputeDomainScoresBayes` 输出的字典序，见
+// `orderedDomains`）；若离线按 map 迭代序装域分切片，末位 1 ulp 会随机抖动
 // ⇒ 门禁"偶然绿、偶然红"，同一份数据两次跑出不同结论时报告数字无法归因。
 //
 // 夹具刻意选 order-sensitive 的组合（宽动态范围 1e16/1e-16 + 不可精确表示的十进制
@@ -446,11 +447,12 @@ func TestDomainAggregationIsBitwiseDeterministic(t *testing.T) {
 			t.Fatalf("第 %d 次装出的域分切片与首次不同（聚合不可复现）：%v vs %v", i+1, got, first)
 		}
 	}
-	// 切片顺序契约本身：默认域按 DefaultDomains 顺序在前，其余键按字典序追加；
+	// 切片顺序契约本身：**域名字典序**（= 引擎 `ComputeDomainScoresBayes` 输出的顺序 ——
+	// Task 3B Step 2 改掉了旧的"DefaultDomains 在前、其余按字典序追加"，理由见 orderedDomains）；
 	// 权重 ≤ 0 的域不进切片（与内仓公式 `w > 0` 的判据同义）。
-	wantOrder := []string{"attack_surface", "business_continuity", "operation_trust", "resilience", "kernel_security", "zzz_custom"}
+	wantOrder := []string{"attack_surface", "business_continuity", "kernel_security", "operation_trust", "resilience", "zzz_custom"}
 	if got := orderedDomains(weights); !reflect.DeepEqual(got, wantOrder) {
-		t.Errorf("orderedDomains = %v, want %v", got, wantOrder)
+		t.Errorf("orderedDomains = %v, want %v（必须与引擎的域分切片同序：字典序）", got, wantOrder)
 	}
 	if len(first) != len(wantOrder) || first[0].Domain != "attack_surface" || first[5].Domain != "zzz_custom" {
 		t.Errorf("域分切片顺序不对：%+v", first)
@@ -459,9 +461,10 @@ func TestDomainAggregationIsBitwiseDeterministic(t *testing.T) {
 	if got := engineDomainScores(scores, zero); len(got) != 1 || got[0].Domain != "attack_surface" {
 		t.Errorf("权重为 0 的域不得进入域分切片：%+v", got)
 	}
-	// "其余键按字典序"必须真的生效（而不是"非默认键随便放在末尾"）。
+	// 非默认键与默认键**混在同一个字典序里**（实现按整表排序，不区分"默认/非默认"）——
+	// 旧的"其余键追加在末尾"在这一组上会给出 operation_trust/aaa/zzz。
 	rest := map[string]float64{"operation_trust": 1, "zzz": 1, "aaa": 1}
-	if got, want := orderedDomains(rest), []string{"operation_trust", "aaa", "zzz"}; !reflect.DeepEqual(got, want) {
+	if got, want := orderedDomains(rest), []string{"aaa", "operation_trust", "zzz"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("orderedDomains(含非默认键) = %v, want %v", got, want)
 	}
 }
@@ -530,6 +533,106 @@ func TestEvaluateRejectsWeightsForMissingDomains(t *testing.T) {
 	// 权重为 0（或负）的域不参与聚合，故不要求覆盖 —— 否则"只想算一个域"的调用会被误拒。
 	if _, err := Evaluate(recs, legacyParams(), map[string]float64{"attack_surface": 1, "resilience": 0}); err != nil {
 		t.Errorf("权重为 0 的域不应要求覆盖：%v", err)
+	}
+}
+
+// recordWeightsJSONL 是"记录自带生效权重"的夹具（Task 3B Step 1）。
+//
+// 域分 90/30，**记录自带** `effective_weights` = attack_surface:3 / operation_trust:1（比例 3:1，
+// 即引擎归一后的生效表），而调用方给的是**另一张**等权表：
+//
+//	记录表  ⇒ (90×3 + 30×1)/4 = 75
+//	调用方表 ⇒ (90×1 + 30×1)/2 = 60
+//
+// 两个数刻意不同 ⇒ "谁赢"是可观测的，而不是"两张表恰好同值"。
+const recordWeightsJSONL = `{"scenario_id":"S2-record-weights","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":90,"operation_trust":30},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"effective_weights":{"attack_surface":3,"operation_trust":1},"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}`
+
+// recordWeightsRecords 读回上面的夹具。
+func recordWeightsRecords(t *testing.T) []Record {
+	t.Helper()
+	recs, err := LoadRecords(writeJSONL(t, "record-weights.jsonl", recordWeightsJSONL+"\n"))
+	if err != nil {
+		t.Fatalf("LoadRecords: %v", err)
+	}
+	if len(recs) != 1 || len(recs[0].Observed.EffectiveWeights) == 0 {
+		t.Fatalf("夹具失效（记录必须自带生效权重表）: %+v", recs)
+	}
+	return recs
+}
+
+// callerWeightsForRecordWeights 是"命令行 `-weights`"那一侧的表：与记录自带的表**比例不同**。
+func callerWeightsForRecordWeights() map[string]float64 {
+	return map[string]float64{"attack_surface": 1, "operation_trust": 1}
+}
+
+// TestRecordEffectiveWeightsWinOverTheCallerTable（Task 3B Step 1 / spec §5.1 前提 2）：
+// 记录**自带**的生效权重表是权威 —— 它决定"哪些域参与聚合、各占多少权重"。
+//
+// 为什么必须由记录决定（而不是 `-weights` 覆盖它）：引擎交付的是**归一化之后**的生效权重
+// （`DynamicScoringEngine` 给 0 权重域填默认值再 `Normalize(100)`），归一化**不可逆** ——
+// 计划里那串 `-weights`（35/25/25/15/10，和 110）与引擎归一后的比例本就不同，于是"以
+// `-weights` 为准"会让 round-trip 门禁在**合法记录**上变红，看起来像数据缺陷。
+//
+// 两个方向都钉住：①记录表在场时必须赢；②把该字段抹掉后必须**回到**调用方表（= 本字段引入
+// 之前的行为，既有数据集不破）。
+func TestRecordEffectiveWeightsWinOverTheCallerTable(t *testing.T) {
+	rec := recordWeightsRecords(t)[0]
+	spc, threat := rec.Observed.SPCScore, rec.Observed.ThreatCoeff
+	caller := callerWeightsForRecordWeights()
+
+	got, err := OfflineScoreWithWeights(legacyParams(), rec, caller)
+	if err != nil {
+		t.Fatalf("OfflineScoreWithWeights: %v", err)
+	}
+	wantRecord := engineTotalOf((90*3+30*1)/4.0*0.82, spc, threat)
+	if got != wantRecord {
+		t.Errorf("离线总分 = %v, want %v（记录自带的生效权重 (90×3+30×1)/4 决定聚合）", got, wantRecord)
+	}
+	wantCaller := engineTotalOf((90*1+30*1)/2.0*0.82, spc, threat)
+	if got == wantCaller {
+		t.Errorf("离线总分 = %v 等于按调用方 `-weights` 算出的值（%v）—— 记录自带的权重表被忽略了", got, wantCaller)
+	}
+
+	// 反向对照：记录**没有**该字段时必须回退到调用方表（既有夹具/历史数据集的行为不变）。
+	recWithout := rec
+	recWithout.Observed.EffectiveWeights = nil
+	gotFallback, err := OfflineScoreWithWeights(legacyParams(), recWithout, caller)
+	if err != nil {
+		t.Fatalf("OfflineScoreWithWeights(无 effective_weights): %v", err)
+	}
+	if gotFallback != wantCaller {
+		t.Errorf("回退分支 = %v, want %v（记录没带权重表时必须用调用方那张，且算术逐位不变）",
+			gotFallback, wantCaller)
+	}
+	if gotFallback == wantRecord {
+		t.Errorf("回退分支得出了记录表的结果（%v）—— 反向对照失效", gotFallback)
+	}
+}
+
+// TestEvaluateDomainCoverageFollowsTheRecordWeights（Task 3B Step 1，门禁① 的落点）：
+// 域覆盖判据必须与实际参与聚合的域集**同源**。
+//
+// 危害（Task 3 复审实测）：`validateDomainsCovered` 要求记录的 `domain_scores` 覆盖 `-weights`
+// 的每个域，于是 `-weights` 里多写一个部署根本没聚合的域（例如该部署没有 resilience 检查），
+// 就会让门禁① 在**合法记录**上以"缺域"报错 —— 而记录里明明写着它自己的域集。
+func TestEvaluateDomainCoverageFollowsTheRecordWeights(t *testing.T) {
+	recs := recordWeightsRecords(t)
+	// 调用方表多一个部署没有聚合的域：以记录为准时它根本不参与聚合，不该报覆盖错误。
+	caller := map[string]float64{"attack_surface": 1, "operation_trust": 1, "resilience": 1}
+
+	if _, err := Evaluate(recs, legacyParams(), caller); err != nil {
+		t.Fatalf("记录自带的生效权重决定参与聚合的域集，`-weights` 里多出的域不该触发覆盖错误: %v", err)
+	}
+
+	// 反向对照：同一条记录**没有**该字段时，同一张调用方表必须照旧报错 ——
+	// 否则本用例只证明了"判据被删掉了"，而不是"判据跟着权重来源走"。
+	recs[0].Observed.EffectiveWeights = nil
+	_, err := Evaluate(recs, legacyParams(), caller)
+	if err == nil {
+		t.Fatal("记录没带生效权重表时必须回退到调用方表并报覆盖错误（= 本字段引入前的行为）")
+	}
+	if !strings.Contains(err.Error(), "resilience") {
+		t.Errorf("覆盖错误必须点名那个域: %v", err)
 	}
 }
 

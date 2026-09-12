@@ -94,8 +94,7 @@ func modelActivations(p edgefactor.Params, rec Record) []edgefactor.FactorActiva
 	return out
 }
 
-// orderedDomains 返回权重键的确定顺序：默认域在前（按 DefaultDomains 的顺序），其余键按字典序
-// 追加。只返回**实际出现在 weights 里**的键，故不改变"哪些域参与聚合"的语义。
+// orderedDomains 返回权重键的确定顺序：**域名字典序**（与引擎装切片时的顺序一致）。
 //
 // 确定性契约（本方向的核心门禁「离线重算 ↔ 在线评分逐位一致」依赖它）：**同一输入必须给出
 // 逐位相同的结果**。Go 的 map 迭代序是随机的，直接 `range` 会让域分切片在末位抖动 1 ulp ——
@@ -104,31 +103,36 @@ func modelActivations(p edgefactor.Params, rec Record) []edgefactor.FactorActiva
 //
 // 顺序的消费者是 `score.go:engineDomainScores`：内仓 `SSAMV20Formula` 按域分切片顺序累加
 // `sum += ds.Score * w`（加法交换律保证数学语义不变，定序只把浮点舍入路径钉死）。
+//
+// **为什么是字典序而不是 `DefaultDomains` 的顺序**（Task 3B Step 2）：在线侧喂给公式的域分
+// 切片来自内仓 `ssam.ComputeDomainScoresBayes`，它对 activeDomains 做
+// `sort.Slice(results[i].Domain < results[j].Domain)` ⇒ **字典序**。离线此前按
+// `DefaultDomains`（`kernel_security` 在最后）装切片 ⇒ 两侧是两条不同的浮点累加路径。乘积项
+// 不可精确表示时（小数域分/权重）末位会差 1 ulp，而**落在取整半格上的 base** 会因此让
+// round2 差 0.01 —— spec §5.1 那组数（域分 82/75/68/71/55、权重 35/25/25/15/10、legacy 因子
+// 0.82·0.838、E=0.93/T=1.4）的 base 正是 `round2(73.2727…×0.82×0.838) = 50.35`，总分
+// raw = `8107.5 + 9.09e-13`（**离取整边界只有 1 ulp**，`Round(8107.5)=8108 ⇒ 81.08`，
+// `8107.4999… ⇒ 81.07`）。门禁的红必须是**数据缺陷**的红，而不是"累加顺序碰巧不同"的红；
+// 把顺序对齐到引擎，让"逐位一致"成为事实而不是巧合。
+//
+// 只返回**实际出现在 weights 里**的键，故不改变"哪些域参与聚合"的语义（权重 ≤ 0 的域仍由
+// `engineDomainScores` 跳过）。
 func orderedDomains(weights map[string]float64) []string {
 	out := make([]string, 0, len(weights))
-	known := make(map[string]bool, len(weights))
-	for _, d := range edgefactor.DefaultDomains() {
-		if _, ok := weights[d]; ok {
-			out = append(out, d)
-			known[d] = true
-		}
-	}
-	rest := make([]string, 0, len(weights))
 	for d := range weights {
-		if !known[d] {
-			rest = append(rest, d)
-		}
+		out = append(out, d)
 	}
 	// 先收集再排序：map 迭代序只影响收集顺序，不影响排序后的结果。
-	sort.Strings(rest)
-	return append(out, rest...)
+	sort.Strings(out)
+	return out
 }
 
 // validateDomainsCovered 校验记录**覆盖了本次评估用到的每个域**（评审 I2 的另一半）。
 //
-// 为什么这条检查在 Evaluate 而不在读取层：读取层看不到"评估时用了哪些域"——域权重是
-// `Evaluate` 的入参（读取层只能保证 `domain_scores` 非空，见 `internal/edgeexp.Record.Validate`，
-// 由 `load.go` 的 `LoadRecords` 转发调用）。
+// 为什么这条检查在 Evaluate 而不在读取层：读取层看不到"评估时用了哪些域"——域权重由
+// `Evaluate` 解析（**记录自带优先**，`-weights` 只是回退，Task 3B Step 1），读取层只能保证
+// `domain_scores` 非空（见 `internal/edgeexp.Record.Validate`，由 `load.go` 的
+// `LoadRecords` 转发调用）。
 // 缺域的危险是**静默压低**：引擎公式对缺失域取到 0，却仍把它那份额度计入分母（
 // `engineDomainScores` 会为该域装入一个 0 分），于是总分被无理由拉低、`acceptable` 判定随之
 // 翻转，而报告里看不出任何异常。
@@ -173,11 +177,15 @@ func Evaluate(records []Record, p edgefactor.Params, weights map[string]float64)
 	agree, fn, fp := 0, 0, 0
 
 	for _, rec := range records {
+		// 权重来源先解析（Task 3B Step 1）：**记录自带优先**，`weights` 只是回退表。
+		// 下面两条判据必须与实际参与聚合的域集**同源** —— 域覆盖判据若仍按 `-weights` 走，
+		// `-weights` 里多一个该部署没有聚合的域就会在**合法记录**上报"缺域"（门禁①）。
+		w := recordWeights(rec, weights)
 		// 先校验域覆盖（评审 I2）：缺域会被当作 0 聚合、静默扭曲主判据，必须在算分之前拒绝。
-		if err := validateDomainsCovered(rec, weights); err != nil {
+		if err := validateDomainsCovered(rec, w); err != nil {
 			return Metrics{}, err
 		}
-		score, err := OfflineScoreWithWeights(p, rec, weights)
+		score, err := OfflineScoreWithWeights(p, rec, w)
 		if err != nil {
 			// 返回零值 Metrics（而不是半填的 m）：错误必须让调用方无法把结果当成有效报告。
 			return Metrics{}, fmt.Errorf("edgecompare: scenario %s: %w", rec.ScenarioID, err)

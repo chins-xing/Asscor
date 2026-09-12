@@ -478,3 +478,137 @@ func mustTS(t *testing.T, v string) time.Time {
 	}
 	return ts
 }
+
+// ============================================================================
+// Task 3B：记录自带权重（spec §5.1 前提 2）与域累加顺序（与引擎同序）
+// ============================================================================
+
+// spec51Weights 是 spec §5.1 / 计划里那串 `-weights`（35/25/25/15/10，和 **110**）：
+// 它**不是**引擎生效的那张表（引擎会 `Normalize(100)`），正是"只凭 `-weights` 复算必然有
+// 系统偏差"的实证。
+func spec51Weights() map[string]float64 {
+	return map[string]float64{
+		"attack_surface": 35, "business_continuity": 25, "operation_trust": 25,
+		"resilience": 15, "kernel_security": 10,
+	}
+}
+
+// spec51RecordJSONL 是 Task 3B 的 round-trip 夹具 —— 用的就是 spec §5.1 的那组数
+// （域分 82/75/68/71/55、两个因子的观测值 0.82/0.838、E=0.93、T=1.4），外加**记录自带的
+// 生效权重表**（那串和 110 的表，键集 = 参与聚合的域）。
+//
+// `final_score` 取 **81.08** —— spec §5.1 自己记录的那个数（"同一份记录在出厂 `[weights]`
+// （35/25/25/15/10）下是 81.08"）；同一份域分在**五域等权**下是 80.02（= spec 示例里写的
+// `final_score`）。两个数不同 ⇒ 本夹具能区分"谁提供了权重表"。
+const spec51RecordJSONL = `{"scenario_id":"S2-selinux-apparmor-01","factors":["EF-SELINUX","EF-APPARMOR"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":82,"business_continuity":75,"operation_trust":68,"resilience":71,"kernel_security":55},"effective_weights":{"attack_surface":35,"business_continuity":25,"operation_trust":25,"resilience":15,"kernel_security":10},"final_score":81.08,"acceptable":true,"threshold":60,"spc_score":0.93,"threat_coeff":1.4,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:03Z"},{"factor":"EF-APPARMOR","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.838,"ts":"2026-09-08T10:00:03Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}`
+
+// spec51Params 是夹具的 legacy 候选（两个因子都建模，f 值即配置值；离线乘的是记录里
+// `effective_factor` 的观测值，参数里的 f 只作成员资格判定）。
+func spec51Params() edgefactor.Params {
+	return edgefactor.Params{Model: edgefactor.ModelLegacy, PFloor: 0.5,
+		Factors: map[string]float64{"EF-SELINUX": 0.80, "EF-APPARMOR": 0.82}}
+}
+
+// TestConsistencyGateRoundTripsARecordThatCarriesItsOwnWeights（Task 3B Step 1 的验收）：
+// **合法记录**上的 round-trip（门禁②：`|复算 − 记录| == 0`）必须由记录自带的权重表决定。
+//
+// 这正是 Task 3 复审实测出的规格-实现缺口：门禁② 此前从 `-weights` 取权重，而一条**合法**的
+// 记录（引擎按归一后的生效表算分）在这串"和 110"的表下复算不出 `final_score` ⇒ 门禁在合法
+// 记录上报红，看起来像数据缺陷。
+func TestConsistencyGateRoundTripsARecordThatCarriesItsOwnWeights(t *testing.T) {
+	recs, err := LoadRecords(writeJSONL(t, "spec51-weights.jsonl", spec51RecordJSONL+"\n"))
+	if err != nil {
+		t.Fatalf("LoadRecords: %v", err)
+	}
+	rec := recs[0]
+	if len(rec.Observed.EffectiveWeights) == 0 {
+		t.Fatal("夹具失效：记录必须自带生效权重表")
+	}
+
+	// 门禁② 的形态：调用方给的是**另一张**表（五域等权），复算仍必须等于记录里的 final_score。
+	equal := map[string]float64{}
+	for _, d := range edgefactor.DefaultDomains() {
+		equal[d] = 1
+	}
+	got, err := OfflineScoreWithWeights(spec51Params(), rec, equal)
+	if err != nil {
+		t.Fatalf("OfflineScoreWithWeights: %v", err)
+	}
+	if got != rec.Observed.FinalScore {
+		t.Errorf("round-trip 失败：复算 = %v，记录里写的是 %v —— 记录自带的生效权重没有生效",
+			got, rec.Observed.FinalScore)
+	}
+	// spec §5.1 记录的同一组数：这份域分 × 和 110 的权重表 ⇒ 81.08。
+	if rec.Observed.FinalScore != 81.08 {
+		t.Fatalf("夹具的 final_score 不是 spec §5.1 记录的那个数（%v）", rec.Observed.FinalScore)
+	}
+	// 反向对照：等权表算出的**另一个**数（80.02 = spec §5.1 示例里的 final_score）。
+	withoutWeights := rec
+	withoutWeights.Observed.EffectiveWeights = nil
+	fallback, err := OfflineScoreWithWeights(spec51Params(), withoutWeights, equal)
+	if err != nil {
+		t.Fatalf("OfflineScoreWithWeights(无生效权重): %v", err)
+	}
+	if fallback != 80.02 {
+		t.Errorf("等权回退值 = %v, want 80.02（spec §5.1 示例里的五域等权值）", fallback)
+	}
+	if fallback == rec.Observed.FinalScore {
+		t.Error("等权表与记录表给出同一个数 —— 本用例没有区分力")
+	}
+}
+
+// TestConsistencyGateDomainOrderMatchesTheEngine（Task 3B Step 2）：离线装域分切片的顺序必须
+// 与**引擎同序**，而不是"数学等价即可"。
+//
+// 为什么必须同序：内仓公式按切片顺序累加 `sum += ds.Score * w`；在线侧这个切片来自
+// `ssam.ComputeDomainScoresBayes`，它对 activeDomains 做 `sort.Slice(Domain <)` ⇒ **字典序**。
+// 离线此前按 `DefaultDomains` 的顺序装（`kernel_security` 排在最后）⇒ 两侧是两条不同的浮点
+// 累加路径：乘积项不可精确表示时末位会差 1 ulp，而**落在取整半格上的 base** 会因此让总分差 0.01。
+//
+// 边界有多窄（实测，不是推测）：spec §5.1 那组数（本文件 spec51RecordJSONL）的 base 是
+// `round2(73.2727…×0.82×0.838) = 50.35`，总分 raw = `8107.5 + 9.09e-13` —— 离取整边界**只有
+// 1 ulp**（`math.Round(8107.5)=8108` ⇒ 81.08，而 `8107.4999…` ⇒ 81.07）。故本用例钉的是
+// **结构性**的事实：顺序取自引擎自己，而不是靠"这组数恰好不受顺序影响"。
+// （实测补充：该夹具的乘积项都是整数、累加精确，两种顺序给出同一个总分；邻域 15125 组一位
+// 小数的组合里也没有一组能被顺序改变 —— 所以本任务不构造"半分位反例"，只留下这条边界记录。）
+func TestConsistencyGateDomainOrderMatchesTheEngine(t *testing.T) {
+	weights := spec51Weights()
+
+	// 对照物：引擎自己的域分切片顺序 —— 同一份权重表 + 每个域一条检查。
+	cfg := make([]ssam.WeightConfig, 0, len(weights))
+	checks := make([]ssam.CheckInput, 0, len(weights))
+	for d, w := range weights {
+		cfg = append(cfg, ssam.WeightConfig{Domain: d, Weight: w})
+		checks = append(checks, ssam.CheckInput{CheckID: "C-" + d, Domain: d, Delta: -1, Confidence: 1})
+	}
+	engineOrder := make([]string, 0, len(weights))
+	for _, ds := range ssam.ComputeDomainScoresBayes(cfg, checks, ssam.DefaultConfidencePolicy()) {
+		engineOrder = append(engineOrder, ds.Domain)
+	}
+	if len(engineOrder) != len(weights) {
+		t.Fatalf("夹具失效：引擎只为 %d 个域产出域分（want %d）", len(engineOrder), len(weights))
+	}
+	// 本用例的区分力来自"DefaultDomains 的顺序**确实**与引擎不同"：否则它抓不到这次漂移。
+	if reflect.DeepEqual(engineOrder, edgefactor.DefaultDomains()) {
+		t.Fatal("夹具失效：DefaultDomains 的顺序恰好等于引擎的字典序 ⇒ 本用例对 Step 2 无区分力")
+	}
+	if got := orderedDomains(weights); !reflect.DeepEqual(got, engineOrder) {
+		t.Errorf("离线装切片的顺序 %v ≠ 引擎 ComputeDomainScoresBayes 的输出顺序 %v —— "+
+			"两侧是两条不同的浮点累加路径，落在取整半格上的 base 会因此差 0.01", got, engineOrder)
+	}
+
+	// 离线**实际装出的**域分切片也必须按该序（顺序契约的消费者是 engineDomainScores）。
+	scores := map[string]float64{}
+	for d := range weights {
+		scores[d] = 1
+	}
+	got := engineDomainScores(scores, weights)
+	if len(got) != len(engineOrder) {
+		t.Fatalf("域分切片长度 = %d, want %d", len(got), len(engineOrder))
+	}
+	for i := range got {
+		if got[i].Domain != engineOrder[i] {
+			t.Fatalf("域分切片[%d] = %q, want %q（顺序必须与引擎一致）", i, got[i].Domain, engineOrder[i])
+		}
+	}
+}

@@ -649,9 +649,13 @@ func TestSimultaneousScenarioNeverMixesChainTimestamps(t *testing.T) {
 	if !seen {
 		t.Errorf("harness 的注入时刻必须仍然落在 checks[] 上（它是该检查的观测时刻），实际: %+v", rec.Observed.Checks)
 	}
-	// 来源必须留痕（记录里那句溯源注记要说明"注入时刻不用于链条目"）。
-	if !strings.Contains(rec.Meta.WeightSource, "链条目 ts") || !strings.Contains(rec.Meta.WeightSource, "同时注入") {
-		t.Errorf("链条目 ts 的来源必须写进记录的溯源注记，实际: %q", rec.Meta.WeightSource)
+	// 来源必须留痕（记录里那句溯源注记要说明"注入时刻不用于链条目"）—— Task 3B Step 3 起
+	// 它有自己的字段 `meta.ts_source`，而 `meta.weight_source` 回到只讲权重口径。
+	if !strings.Contains(rec.Meta.TSSource, "链条目 ts") || !strings.Contains(rec.Meta.TSSource, "同时注入") {
+		t.Errorf("链条目 ts 的来源必须写进记录（meta.ts_source），实际: %q", rec.Meta.TSSource)
+	}
+	if strings.Contains(rec.Meta.WeightSource, "链条目 ts") {
+		t.Errorf("meta.weight_source 必须只讲权重口径（ts 基准已迁到 meta.ts_source），实际: %q", rec.Meta.WeightSource)
 	}
 }
 
@@ -1261,7 +1265,14 @@ func TestCLIPlaybookHashOverride(t *testing.T) {
 // 于是任何漏字段都会让 `json.Marshal(sealed)` 与密封前的字节不同而立刻暴露。
 func TestSealingIsLosslessForEveryPopulatedField(t *testing.T) {
 	var full edgeexp.Record
-	fillExported(reflect.ValueOf(&full).Elem())
+	report := fillExported(reflect.ValueOf(&full).Elem())
+	if report.filled == 0 {
+		t.Fatal("填充器一个节点都没写 —— 本用例会退化成恒真（没有字段被真的填过）")
+	}
+	if len(report.missing) > 0 {
+		t.Fatalf("填充器遇到 %v 种未支持的字段类型 %v —— 这些字段在密封前后都是零值，本用例对它们**静默恒真**；"+
+			"新增字段类型时必须先扩展 fillExported（或在此显式声明豁免）", len(report.missing), report.missing)
+	}
 
 	before, err := json.Marshal(full)
 	if err != nil {
@@ -1286,9 +1297,38 @@ func TestSealingIsLosslessForEveryPopulatedField(t *testing.T) {
 	}
 }
 
-// fillExported 把结构体里每个**可写**字段填成该类型的非零值（递归，含切片/映射的元素）。
+// fillReport 是填充器的自检结果（Task 3B Step 4）：
+//   - filled  —— 真的被写成非零值的节点数（0 说明这次填充什么都没做 ⇒ 依赖它的断言恒真）；
+//   - missing —— 访问到却**没能**填充的 kind → 出现次数。调用方据此**硬失败**：
+//     静默跳过正是"新增字段类型 ⇒ 无损断言对该字段恒真"的成因。
+type fillReport struct {
+	filled  int
+	missing map[reflect.Kind]int
+}
+
+func (r *fillReport) note(kind reflect.Kind) {
+	if r.missing == nil {
+		r.missing = map[reflect.Kind]int{}
+	}
+	r.missing[kind]++
+}
+
+// fillExported 把结构体里每个**可写**字段填成该类型的非零值（递归，含切片/映射/数组/指针/
+// 空接口的元素），并报告"访问到却没填成非零"的 kind。
+//
+// 覆盖的 kind：String / Bool / Int* / Uint* / Float* / Complex* / Slice / Map / Array / Ptr /
+// Struct / 空 Interface（`interface{ ...方法 }` 无法凭空造出实现，如实记进 missing）。
+// 通道/函数等无法填充的 kind 同样记进 missing —— 覆盖不了的字段必须是**可观测的**，
+// 否则它就是"永远零值"的静默盲区。
 // 非导出字段（契约的字段存在性标记）不可写，自动跳过 —— 它们不参与序列化，也不需要填。
-func fillExported(v reflect.Value) {
+func fillExported(v reflect.Value) fillReport {
+	var rep fillReport
+	fillValue(v, &rep)
+	return rep
+}
+
+// fillValue 是 fillExported 的递归体（把自检结果带到底层）。
+func fillValue(v reflect.Value, rep *fillReport) {
 	switch v.Kind() {
 	case reflect.String:
 		v.SetString("x")
@@ -1296,26 +1336,134 @@ func fillExported(v reflect.Value) {
 		v.SetBool(true)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v.SetInt(1)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		v.SetUint(1)
 	case reflect.Float32, reflect.Float64:
 		v.SetFloat(1)
+	case reflect.Complex64, reflect.Complex128:
+		v.SetComplex(1)
 	case reflect.Slice:
 		elem := reflect.New(v.Type().Elem()).Elem()
-		fillExported(elem)
+		fillValue(elem, rep)
 		v.Set(reflect.Append(reflect.MakeSlice(v.Type(), 0, 1), elem))
+	case reflect.Array:
+		elem := reflect.New(v.Type().Elem()).Elem()
+		fillValue(elem, rep)
+		for i := 0; i < v.Len(); i++ {
+			v.Index(i).Set(elem)
+		}
 	case reflect.Map:
 		m := reflect.MakeMap(v.Type())
 		key := reflect.New(v.Type().Key()).Elem()
-		fillExported(key)
+		fillValue(key, rep)
 		val := reflect.New(v.Type().Elem()).Elem()
-		fillExported(val)
+		fillValue(val, rep)
 		m.SetMapIndex(key, val)
 		v.Set(m)
+	case reflect.Ptr:
+		p := reflect.New(v.Type().Elem())
+		fillValue(p.Elem(), rep)
+		v.Set(p)
+	case reflect.Interface:
+		if v.NumMethod() > 0 {
+			// 非空接口：没有可实例化的具体类型，只能如实上报（调用方会硬失败）。
+			rep.note(v.Kind())
+			return
+		}
+		v.Set(reflect.ValueOf("x"))
 	case reflect.Struct:
 		for i := 0; i < v.NumField(); i++ {
 			if !v.Field(i).CanSet() {
 				continue
 			}
-			fillExported(v.Field(i))
+			fillValue(v.Field(i), rep)
+		}
+	default:
+		// 通道 / 函数 / 不安全指针等：无法填充，如实上报而不是静默跳过。
+		rep.note(v.Kind())
+		return
+	}
+	rep.filled++
+}
+
+// zeroSettableNodes 递归统计**仍然为零值**的可写节点（填充器的对照组：
+// 填充器声称"每个访问到的字段都被写成非零"，这里独立地数一遍，出现 >0 即说明两者的覆盖对不上）。
+func zeroSettableNodes(v reflect.Value) int {
+	switch v.Kind() {
+	case reflect.Struct:
+		n := 0
+		for i := 0; i < v.NumField(); i++ {
+			if !v.Field(i).CanSet() {
+				continue
+			}
+			n += zeroSettableNodes(v.Field(i))
+		}
+		return n
+	case reflect.Ptr:
+		if v.IsNil() {
+			return 1
+		}
+		return zeroSettableNodes(v.Elem())
+	case reflect.Interface:
+		if v.IsNil() {
+			return 1
+		}
+		return 0
+	default:
+		if v.IsZero() {
+			return 1
+		}
+		return 0
+	}
+}
+
+// TestFillExportedCoversEveryKindAndReportsTheRest（Task 3B Step 4）：填充器的覆盖必须**有牙齿**。
+//
+// 为什么需要它（Task 3 复审建议 2）：`TestSealingIsLosslessForEveryPopulatedField` 的力气全部
+// 来自"每个字段都被填成非零"。填充器此前遇到未支持的 kind 时**静默跳过** —— 将来给契约加一个
+// `uint` / 指针 / 数组 / 接口字段时，那条无损断言对该字段**恒真**（密封前后都是零值，字节当然
+// 相同），而"字段加了却永远到不了磁盘"在其它所有门禁上都看不见。
+//
+// 两个方向都钉住：①Uint/Ptr/Array/Interface 等必须**真的**被填成非零（而不是被跳过）；
+// ②覆盖不了的 kind 必须被**报告**，让调用方硬失败，而不是让它静默通过。
+func TestFillExportedCoversEveryKindAndReportsTheRest(t *testing.T) {
+	type inner struct{ S string }
+	type sample struct {
+		U  uint32
+		P  *inner
+		A  [2]int
+		I  interface{}
+		C  complex128
+		M  map[string]inner
+		Sl []inner
+	}
+	var s sample
+	rep := fillExported(reflect.ValueOf(&s).Elem())
+	if len(rep.missing) != 0 {
+		t.Fatalf("Uint/Ptr/Array/Interface/Complex/Map/Slice 都应当被填充，missing = %v", rep.missing)
+	}
+	if rep.filled == 0 {
+		t.Fatal("一个节点都没被填 —— 依赖填充器的断言会恒真")
+	}
+	if s.U == 0 || s.P == nil || s.P.S == "" || s.A[0] == 0 || s.A[1] == 0 ||
+		s.I == nil || s.C == 0 || len(s.M) == 0 || len(s.Sl) == 0 {
+		t.Fatalf("填过之后仍有零值叶子: %+v", s)
+	}
+	if n := zeroSettableNodes(reflect.ValueOf(&s).Elem()); n != 0 {
+		t.Errorf("填充器漏了 %d 个可写节点（对照计数）: %+v", n, s)
+	}
+
+	// 反例方向：覆盖不了的 kind 必须被报告 —— 否则 `missing` 恒空，调用方的硬失败是摆设。
+	type unfillable struct {
+		Ch chan int
+		Fn func()
+		MI interface{ Close() error } // 非空接口：无法凭空造出实现
+	}
+	var u unfillable
+	rep = fillExported(reflect.ValueOf(&u).Elem())
+	for _, k := range []reflect.Kind{reflect.Chan, reflect.Func, reflect.Interface} {
+		if rep.missing[k] == 0 {
+			t.Errorf("kind %v 无法填充，必须被报告（实际 missing = %v）", k, rep.missing)
 		}
 	}
 }

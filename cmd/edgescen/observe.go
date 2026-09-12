@@ -352,7 +352,12 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 		Checks:          checkObservations(cfg, result, gt.Injections, collectedAt),
 		EdgeFactorChain: chain,
 	}
-	rec.Meta.WeightSource = provenanceNote(tsNote)
+	// 溯源注记分两个字段写（Task 3B Step 3）：`weight_source` 只讲权重口径（字段本来的语义），
+	// 链条目 ts 的基准进 `meta.ts_source`（`internal/edgeexp.Meta.TSSource`，本轮新增）。
+	// 此前两件事挤在 `weight_source` 一句里 —— 那是 `Meta.TSSource` 存在之前的既定 stopgap，
+	// 代价是"这份生效权重从哪来"的语义被稀释；现在它回到只有一个话题。
+	rec.Meta.WeightSource = weightSource
+	rec.Meta.TSSource = tsNote
 	contract, err := gt.recordGroundTruth()
 	if err != nil {
 		return fail("%v", err)
@@ -465,8 +470,9 @@ func recomputeFinalScore(rec edgeexp.Record) float64 {
 // 排好序，`SSAMV20Formula` 就按那个顺序累加 `sum += score*w`。IEEE754 加法不满足结合律，
 // 装入顺序不同会在末位差 1 ulp —— 若基准分恰好落在取整半格上（例如 x.xx5），这一点差异会
 // 把 `math.Round` 翻到另一格，让 round-trip 钉桩**误拒**一条完全合法的记录（评审 M7）。
-// 离线工具 `cmd/edgecompare/metrics.go` 用的是另一套顺序（默认域在前），那是它的既有约定；
-// 本函数只管采集器**同进程内**的复算，取与引擎一致的那一种才正确。
+// 离线工具 `cmd/edgecompare` 自 Task 3B Step 2 起**也**按字典序装域分切片（此前是
+// `DefaultDomains` 顺序）—— 两侧现在是同一条浮点累加路径，round-trip 门禁才真的在比"同一个量"。
+// 本函数与它各自独立实现（互不 import），但**顺序口径必须一致**：一处改、另一处跟着改。
 func orderedWeightDomains(weights map[string]float64) []string {
 	out := make([]string, 0, len(weights))
 	for d, w := range weights {
@@ -712,21 +718,11 @@ func chainSummary(chain []edgeexp.ChainObs) string {
 // （`ssam.ConfigToWeights` → `Engine.SetWeights`，见 effectiveWeights 的说明）。
 const weightSource = "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）"
 
-// provenanceNote 把"权重口径"与"链条目 ts 基准"合成一句溯源注记，写进 `meta.weight_source`。
-//
-// 为什么两件事挤在同一个字段：spec §5.1 的 `meta` 只有 `weight_source` / `assembly_error` 两个
-// 自由文本槽位，而 `internal/edgeexp/record.go` 在本轮**不得改动**（没有 `ts_source` 字段）。
-// 评审要求"ts 基准必须留痕、不能只活在日志里"，故这里用"分号分隔、每段自带标签"的写法：
-// 第一段是权重来源（字段本来的语义，保持不变），末段以 `链条目 ts = ` 开头、自成一句，
-// 读者一眼能分出哪段在说什么，而两段都是**这份记录的数据口径**的溯源，不是两回事。
-// 若主控希望有独立字段（`Meta.TSSource`），那是 record.go 的一行改动，可另开一轮 ——
-// 本函数就是那时的唯一改动点。
-func provenanceNote(tsNote string) string {
-	if strings.TrimSpace(tsNote) == "" {
-		return weightSource
-	}
-	return weightSource + "；" + tsNote
-}
+// provenanceNote 已被 Task 3B Step 3 **退役**：它把"权重口径"与"链条目 ts 基准"合成一句写进
+// `meta.weight_source`，那只是 `internal/edgeexp.Meta` 只有两个自由文本槽位时的既定 stopgap。
+// `Meta.TSSource`（`json:"ts_source,omitempty"`）落地后，两件事各回各自的字段 —— 见组装点里
+// 的两行赋值（`rec.Meta.WeightSource = weightSource` / `rec.Meta.TSSource = tsNote`）。
+// 两个字段都是**可选**的（读取层不要求），故既有数据集不受影响。
 
 // effectiveWeights 返回引擎**实际生效**的逐域权重，键集 = "参与聚合的域"。
 //

@@ -233,6 +233,8 @@ chain.window_seconds = 300
 > **示例里的每个值都必须自洽**：`factors` / `edge_factor_chain[].factor` 用**规范因子 ID**（`EF-SELINUX`，不是展示名 `selinux_disabled` —— 写错会让离线重算查不到 `Vectors` 而静默走"全 1"fallback，改变 V/G/C 的惩罚强度）；`trigger_check` 与该因子在**当前部署实际解析出的**触发检查一致（出厂表 `EF-SELINUX`/`EF-APPARMOR` 共用 `OT-005`，这正是 S2 组要建模的同源耦合；用 `trigger.<FACTOR-ID>` 覆盖过的部署以后者为准），且当 `c_trigger > 0` 时该检查必须以 `passed = false` 出现在 `checks[]` 里；`checks[].delta` 逐字取自登记表（`OT-005 = -15`）；`effective_factor` 是策略层衰减后的观测值（出厂 `f_selinux=0.80`、`f_apparmor=0.82`，`1−(1−f)·c` 取 `c=0.9` ⇒ 0.82 / 0.838）；`final_score = 80.02` 是在**五域等权**下由记录自身输入复算出来的（`docs_schema_test.go` 会对本示例做这条 round-trip 断言，数值自相矛盾即红）。
 >
 > **这些是"记录构造要求"，不是读取层契约**：`trigger_check` / `checks[]` / `delta` / `meta` 读取层都**不校验**，离线工具`Synthesize` 也**不消费** `trigger_check`（它只用于溯源）—— 写错不会有任何门禁报错，只会让报告与论文证据失真。故本节把它们写清楚，并由 `docs_schema_test.go` 对本示例逐条钉住。
+>
+> `meta` 的三个可选溯源字段（`omitempty`，读取层不要求，Task 3B 起）：`weight_source` 只讲**权重口径**（`observed.effective_weights` 从哪来，以 `config_hash` 为锚点）；`ts_source` 只讲**链条目 `ts` 的基准**（新增独立字段 —— 此前 ts 基准被续写在 `weight_source` 末段，一个字段讲两件事；混用基准会造出"没人设计、也没人报告"的顺序，而数据看起来完全正常，故它必须有自己的槽位）；`assembly_error` 记装配期的非致命异常。
 
 **必填字段（缺失即整条记录 fail-fast，读取层 `internal/edgeexp.Validate`）**
 
@@ -258,7 +260,7 @@ chain.window_seconds = 300
 **round-trip 的前提是"复算所用的输入全都确定"** —— 它包含三件事，缺任何一件"复算"就没有定义：
 
 1. **候选声明的因子集 == 记录里出现的因子集**：离线只惩罚候选（`params.Factors`）声明的因子，记录里有而候选没声明的会被**静默丢掉**（实测：同一条示例记录，只声明 `EF-SELINUX` 算出 84.68，声明两个才是 80.02）。这正是 CLI 的 `-factors` 覆盖校验存在的原因，也是采集器必须把每个场景实际激活的因子完整写进 `factors` / `edge_factor_chain` 的原因。
-2. **权重表（必须落进记录本体）**：记录里**没有**权重字段，而离线重算必须知道"哪些域参与聚合、各占多少权重"。Task 1 的实现者实测到两个坑：①legacy 的内在层加权用的是 `DynamicScoringEngine` 的**动态权重**（0 权重域会被填默认值并 `Normalize(100)`）⇒ "部分权重"配置下"配置权重 ≠ 生效权重"，只凭配置复算会有系统偏差；②`DomainScores` 的四个核心域字段恒存在，记录**无法区分**"该域参与聚合但值为 0"与"该域不在聚合里"，多域加权的浮点顺序因此不可完全复现。故采集器必须在记录里写出**引擎实际生效的逐域权重**（`observed.effective_weights`，键集即"参与聚合的域"），离线复算以它为准、不再依赖 `-weights` 猜；`meta.weight_source`（`config_hash` 为锚点）用于说明这份权重从哪来。这两条都是**记录构造要求**（读取层不校验）。
+2. **权重表（必须落进记录本体）**：记录里**没有**权重字段，而离线重算必须知道"哪些域参与聚合、各占多少权重"。Task 1 的实现者实测到两个坑：①legacy 的内在层加权用的是 `DynamicScoringEngine` 的**动态权重**（0 权重域会被填默认值并 `Normalize(100)`）⇒ "部分权重"配置下"配置权重 ≠ 生效权重"，只凭配置复算会有系统偏差；②`DomainScores` 的四个核心域字段恒存在，记录**无法区分**"该域参与聚合但值为 0"与"该域不在聚合里"，多域加权的浮点顺序因此不可完全复现。故采集器必须在记录里写出**引擎实际生效的逐域权重**（`observed.effective_weights`，键集即"参与聚合的域"），离线复算以它为准、不再依赖 `-weights` 猜；`meta.weight_source`（`config_hash` 为锚点）用于说明这份权重从哪来。这两条都是**记录构造要求**（读取层不校验）。**`cmd/edgecompare` 侧的落地口径（Task 3B）**：`-weights` 只是**回退表** —— 记录自带 `effective_weights` 时以记录为准（`recordWeights`），没带该字段时（历史数据集/手写夹具）才用它，且后者与消费该字段之前逐位一致。另一条同源口径：离线装域分切片的顺序取**域名字典序**，与在线 `ssam.ComputeDomainScoresBayes` 的输出顺序一致 —— 顺序漂移在不可精确表示的乘积上差 1 ulp，而落在取整半格上的 base 会因此让 `round2` 差 0.01（本节下面那组 35/25/25/15/10 的数就压在 `81.075` 这一半格上）。
    本节示例的 80.02 指的是**五域等权**下的值；同一份记录在出厂 `configs/config.ini` 的 `[weights]`（35/25/25/15/10）下是 **81.08**（注意这一组数值恰落在取整半格上，`81.075 → 81.08` 只差浮点噪声，故它只作示例说明、不作断言值）。
 3. **因子 ID 与触发关系自洽**：
    - `trigger_check` 必须是该因子在**当前部署实际解析出的**触发检查上，**不是**"出厂表值"——否则覆盖过的部署会被误判。**两条机制别混为一谈**：①**内置因子**（`EF-SELINUX` 等）经 `config.ResolveEdgeFactorTriggerMap` 解析 = 出厂表 + `[edge_factors.model]` 的 `trigger.<FACTOR-ID>` 覆盖；②`[edge_factors.custom]` 的自定义因子由 `[edge_factors.custom_triggers]` 提供其 `TriggerCheck`（`ConfigToEdgeFactors`），再被 `trigger.<FACTOR-ID>` 覆盖 —— 它们**不在** `ResolveEdgeFactorTriggerMap` 的表里。另注意：出厂 `config.ini` / `configs/*.ini` **没有** `[edge_factors.model]` 段，各配置里的触发值写在 `[edge_factors.custom_triggers]`（例如 `config.ini` 的 `EF-SELINUX = OT-005`），不要把这两处当成同一份覆盖；

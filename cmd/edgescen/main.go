@@ -206,8 +206,14 @@ func configHash(path string) (string, error) {
 // printSummary 打印自检摘要（场景 / 因子 / 权重来源 / 装配错误），让每一轮实验都在日志里留下
 // 可核对的痕迹 —— 只有"文件写出来了"不足以说明这次采集是完整的。
 //
-// "权重来源"一行直接打印 `meta.weight_source`（含末尾的链条目 ts 基准那一段）：它是记录里
-// 的那句话，不是另算的一份 —— 日志与记录因此永远同源（评审要求"ts 基准必须被报告"）。
+// "权重来源"一行直接打印 `meta.weight_source`：它是记录里的那句话，不是另算的一份 ——
+// 日志与记录因此永远同源。
+//
+// **口径变更（Task 3B Step 3，如实标注）**：`weight_source` 此前还被续写上"链条目 ts = …"那一段，
+// 故摘要里也能看到 ts 基准；`Meta.TSSource` 落地后 ts 基准只写在**记录**里（`meta.ts_source`），
+// 本摘要未再加一行打印它 —— 记录才是持久产物，且本轮的改动范围就限定在
+// "`Meta.TSSource` / `weight_source` 各回到自己的语义"。若评审要求日志侧也要看到 ts 基准，
+// 在下面加一行 `fmt.Fprintf(stdout, "  链条目 ts：%s\n", rec.Meta.TSSource)` 即可。
 func printSummary(stdout io.Writer, rec edgeexp.Record, configPath, outPath string, gt groundTruth) {
 	fmt.Fprintf(stdout, "edgescen: 场景 %s（表内共 %d 组场景）\n", rec.ScenarioID, len(scenarios))
 	fmt.Fprintf(stdout, "  因子 %d：%s\n", len(rec.Factors), orNone(strings.Join(rec.Factors, ", ")))

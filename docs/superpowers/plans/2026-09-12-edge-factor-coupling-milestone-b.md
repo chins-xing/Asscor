@@ -699,6 +699,8 @@ done
 ```
 Expected: 读出全部记录、无 fail-fast。
 
+> **`-weights` 只是回退表（Task 3B）**：`edgescen` 产出的记录自带 `observed.effective_weights`（引擎**归一后**的生效权重，键集 = 参与聚合的域），离线复算以**记录自带的那张**为准，故上面那串和 110 的表不会与引擎的生效比例冲突；`-weights` 只在"记录没带该字段"（历史数据集/手写夹具）时生效 —— 此时行为与消费该字段之前逐位一致。门禁① 的域覆盖判据同源：多写一个部署没聚合的域不再在合法记录上报"缺域"。
+
 > **`EF-3FA` 的处理必须等用户裁定 ④，不得静默塞进 `-factors`**（任务 3 评审实测的两条硬事实）：①采集器会**合法**把 `EF-3FA` 写进链（出厂配置的 `[edge_factors.custom]` 重复条目不是 `CascadeOnly`），于是 `-factors` 的覆盖校验会以"未覆盖记录里用到的因子 EF-3FA"**退出 1**；②若为了让校验通过而塞一个 `EF-3FA=<值>`，该因子会进入 `p.Factors`，而 V/G/C 会给它走 **"全 1" fallback 向量** ⇒ **凭空产生引擎从未施加的惩罚**、决策层指标被改。故在裁定 ④ 之前：**只运行覆盖得住的数据集**（或把含 `EF-3FA` 的记录单独列出并**如实标注"该子集待裁定后重跑"**），**禁止**用塞值的方式让命令过。
 
 **门禁② round-trip 钉桩（`spc_score`/`threat_coeff` 取值来源的唯一保障）**：对**每一条**采集记录，用**记录自身的输入**（域分 + `spc_score` + `threat_coeff` + 链上 `effective_factor`）离线复算 `final_score`，必须与记录里的值相等。这条就是"E/T 取错则门禁会红"的那道闸门 —— 评审实测过：字段取错时所有其它门禁都是绿的。
@@ -748,7 +750,7 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
   -weights attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10 \
   -report md -out fit-report.md
 ```
-（**候选名 = 模型名**；`-factors` 必须显式给出 —— 离线工具不读 `[edge_factors]`。）
+（**候选名 = 模型名**；`-factors` 必须显式给出 —— 离线工具不读 `[edge_factors]`。**`-weights` 同样只是回退表**（Task 3B）：记录自带的 `effective_weights` 优先，故这里的 35/25/25/15/10 只对"没带该字段的记录"生效。）
 - [ ] **Step 2: 拟合**（先验边集 ≤5、L1/L2、交叉验证、自助法）
 ```bash
 ./build/edgecompare -records <全量> -fit -prior-edges data/edgefactors/prior-edges.txt ... 

@@ -231,10 +231,15 @@ func (g GroundTruth) CompromisedSet() bool { return g.compromisedSet }
 
 // Meta 是记录的溯源信息。
 //
-// `WeightSource` / `AssemblyError` 是里程碑 B 新增的**可选**字段（`omitempty`），读取层
-// 不要求它们：
+// `WeightSource` / `TSSource` / `AssemblyError` 是里程碑 B 新增的**可选**字段（`omitempty`），
+// 读取层不要求它们：
 //   - `WeightSource` 说明 `observed.effective_weights` 是从哪来的（以 `config_hash` 为锚点），
 //     供 round-trip 门禁与论文证据链归因；
+//   - `TSSource` 说明**链条目 `ts` 的基准**（例如"全部取评估时刻"的评分时刻基准，或"按 harness
+//     注入时刻"）。它是独立字段而不是 `WeightSource` 的续句（Task 3B 之前是那样写的临时形态）：
+//     混用基准会造出**没人设计、也没人报告**的顺序（实测：非顺序场景里一部分条目取注入时刻、
+//     另一部分取评分时刻），而数据看起来完全正常 —— 留痕必须有自己的槽位，否则"这份权重从哪来"
+//     的语义会被稀释；
 //   - `AssemblyError` 记录装配期的非致命异常（例如某域权重被动态补齐），
 //     让"这份记录的权重口径不是纯配置值"这件事**留下痕迹**，而不是只在离线复算时表现为偏差。
 type Meta struct {
@@ -245,6 +250,7 @@ type Meta struct {
 	Timestamp    string `json:"timestamp"`
 
 	WeightSource  string `json:"weight_source,omitempty"`
+	TSSource      string `json:"ts_source,omitempty"`
 	AssemblyError string `json:"assembly_error,omitempty"`
 }
 

@@ -31,7 +31,9 @@ import (
 //
 //	域分        ：观测的 `domain_scores`（= 引擎输出的 DomainScores），按权重表的确定顺序
 //	              装入切片；未参与聚合（权重 ≤ 0）的域不进入切片。
-//	权重        ：`-weights` 表 → []ssam.WeightConfig（引擎用 cfg.Weights）。
+//	权重        ：**记录自带** `observed.effective_weights` 优先（键集 = 参与聚合的域），
+//	              记录没带该字段时回退到 `-weights`（= 本字段被消费之前的行为），
+//	              再看 recordWeights 的说明；两者都装成 []ssam.WeightConfig（引擎用 cfg.Weights）。
 //	风险上下文  ：`observed.spc_score` / `observed.threat_coeff` → RiskContext{Exposure, Threat}
 //	              （引擎用 output.SPCScore / output.ThreatCoeff；四层公式的 Intrinsic 层不入参）。
 //	因子结果    ：`observed.edge_factor_chain[].effective_factor` 就是引擎侧
@@ -99,6 +101,9 @@ func offlinePlan(p edgefactor.Params) (synthesizePlan, error) {
 // 因而是同一个量 —— 决策层可以拿它直接与 `observed.threshold` 比较（引擎的
 // `Acceptable = FinalScore >= Threshold`）。
 //
+// `weights` 是**回退表**：记录自带 `observed.effective_weights` 时以记录为准（spec §5.1
+// 前提 2，见 `recordWeights`），否则用它 —— 后者与本字段被消费之前的行为逐位一致。
+//
 // 本函数是**低阶原语**：不做域覆盖校验（见 metrics.go:validateDomainsCovered 的说明）。
 func OfflineScoreWithWeights(p edgefactor.Params, rec Record, weights map[string]float64) (float64, error) {
 	res, err := offlineFormulaResult(p, rec, weights)
@@ -113,6 +118,9 @@ func OfflineScoreWithWeights(p edgefactor.Params, rec Record, weights map[string
 // 语义与 `SSAMV20Formula` 的加权平均一致：权重表里出现的域若在记录中缺失，会以 0 计入
 // 并仍占一份权重。决策层入口 `Evaluate` 会对"有权重却无观测域分"的记录 fail-fast
 // （`validateDomainsCovered`），故主判据路径不受该语义影响。
+//
+// 注意（spec §5.1 前提 2）：这里的等权表同样是**回退表** —— 记录自带 `effective_weights`
+// 时以记录为准，等权只对"没带权重表的记录"生效。
 func OfflineScore(p edgefactor.Params, rec Record) (float64, error) {
 	weights := map[string]float64{}
 	for _, d := range edgefactor.DefaultDomains() {
@@ -126,7 +134,12 @@ func OfflineScore(p edgefactor.Params, rec Record) (float64, error) {
 // 单独暴露它的理由是可检验性：一致性门禁要断言的正是「离线算出的分数与总分 == 该公式对
 // 同一输入的结果」，而 `.Total` 与 `.Layers` 都来自内仓函数的返回值，不存在"离线自己再
 // 聚合一次"的中间步骤。
+//
+// 权重在这里**统一解析**（记录自带优先，见 recordWeights）：所有入口
+// （`OfflineScore` / `OfflineScoreWithWeights` / `Evaluate`）都经过它，故"用哪张权重表"只有
+// 一处判据，不会出现"某个入口按记录、另一个入口按 `-weights`"的分叉。
 func offlineFormulaResult(p edgefactor.Params, rec Record, weights map[string]float64) (ssam.FinalScore, error) {
+	weights = recordWeights(rec, weights)
 	plan, err := offlinePlan(p)
 	if err != nil {
 		return ssam.FinalScore{}, err
@@ -144,6 +157,30 @@ func offlineFormulaResult(p edgefactor.Params, rec Record, weights map[string]fl
 		ssam.RiskContext{Exposure: rec.Observed.SPCScore, Threat: rec.Observed.ThreatCoeff},
 		results,
 	), nil
+}
+
+// recordWeights 决定本次重算用哪张权重表：**记录自带优先**（spec §5.1 前提 2），
+// `fallback` 只是记录没有该字段时的回退。
+//
+// 为什么记录必须赢（而不是让 `-weights` 覆盖它）：记录里的那张表是引擎**归一化之后**的生效
+// 权重 —— `DynamicScoringEngine` 会给 0 权重域填默认值再 `Normalize(100)`，故"配置权重 ≠
+// 生效权重"，而**归一化不可逆**：只凭 `-weights` 复算不出引擎实际用的比例。工程实况就是
+// 计划里那串 `-weights`（35/25/25/15/10，和 **110**）与引擎归一后的比例不同。
+// 以 `-weights` 为准的后果是 round-trip 门禁（`|复算 − 记录| == 0`）在**合法记录**上变红，
+// 看起来像数据缺陷；而 `validateDomainsCovered` 还会因为 `-weights` 里多一个部署没聚合的域
+// 而报"缺域"。
+//
+// 回退分支（记录没带该字段）与它被消费之前的行为**逐位一致**：历史数据集与手写夹具里没有
+// `effective_weights`，它们仍然完全按 `-weights` 复算。
+//
+// 存在性判据是 `len(...) > 0`，**不是**"JSON 里有没有这个键"：nil map 会序列化成
+// `"effective_weights":null`（键在场、值为空），那是"未记录"的可见信号，见
+// `internal/edgeexp.Observed.EffectiveWeights`。
+func recordWeights(rec Record, fallback map[string]float64) map[string]float64 {
+	if len(rec.Observed.EffectiveWeights) > 0 {
+		return rec.Observed.EffectiveWeights
+	}
+	return fallback
 }
 
 // engineEdgeFactors 把记录里观测到的因子链还原成引擎侧的因子结果列表。
@@ -289,8 +326,9 @@ func activationsFromResults(p edgefactor.Params, results []ssam.EdgeFactorResult
 
 // engineDomainScores 把观测域分装成 `SSAMV20Formula` 的域分切片。
 //
-// 顺序取 `orderedDomains(weights)`（默认域在前、其余按字典序）：公式按切片顺序累加
-// `sum += ds.Score * w`，顺序漂移会在末位抖出 1 ulp，让"逐位一致"变成偶然。
+// 顺序取 `orderedDomains(weights)`（**域名字典序** = 引擎 `ComputeDomainScoresBayes` 输出切片
+// 的顺序）：公式按切片顺序累加 `sum += ds.Score * w`，顺序漂移会在末位抖出 1 ulp，让"逐位一致"
+// 变成偶然（Task 3B Step 2 之前这里按 `DefaultDomains` 顺序装，与引擎不同序）。
 //
 // 只装入**权重 > 0** 的域（公式对 w ≤ 0 的域本来就会跳过），未参与聚合的域不占分母 ——
 // 与内仓公式的 `if w, ok := wMap[ds.Domain]; ok && w > 0` 逐字同义。

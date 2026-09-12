@@ -394,6 +394,56 @@ func TestEffectiveWeightsJSONKey(t *testing.T) {
 	}
 }
 
+// TestMetaTSSourceIsOptionalWithItsOwnJSONKey（Task 3B Step 3）：`meta.ts_source` 是里程碑 B
+// 新增的**可选**字段（`omitempty`），读取层不要求它 —— 既有数据集里没有这个键，读取层不得
+// 因此变红。
+//
+// 为什么要有独立字段：链条目 `ts` 的**基准**（全部取评估时刻 vs 按 harness 注入时刻）此前被
+// 塞进 `meta.weight_source` 的末段（一个字段讲两件事的临时形态）。混用基准会造出"没人设计、
+// 也没人报告"的顺序，而数据看起来完全正常 —— 留痕是必须的，但它得有自己的槽位，否则
+// `weight_source` 的语义（这份生效权重从哪来）会被稀释。
+func TestMetaTSSourceIsOptionalWithItsOwnJSONKey(t *testing.T) {
+	// (a) 没有该字段的记录（既有数据集）必须仍被接受。
+	r := validRecord()
+	r.Meta.TSSource = ""
+	if err := r.Validate(); err != nil {
+		t.Fatalf("缺 meta.ts_source 的记录必须仍被读取层接受（既有数据集）：%v", err)
+	}
+	raw, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if bytes.Contains(raw, []byte("ts_source")) {
+		t.Fatalf("ts_source 是可选字段，空值不得出现在 JSON 里（omitempty）: %s", raw)
+	}
+
+	// (b) JSON 键必须**恰好**是 `ts_source`（Go 字段名是 TSSource，缩写全大写 ——
+	// 默认的键推导会给出 `TSSource`，故必须显式写 tag）。
+	note := "链条目 ts = 3/3 条按 harness 注入时刻（2 个注入阶段），其余 0 条取评估时刻"
+	r.Meta.TSSource = note
+	r.Meta.WeightSource = "config:[weights]+[extension_weights] via ssam.ConfigToWeights"
+	raw, err = json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !bytes.Contains(raw, []byte(`"ts_source":"`)) {
+		t.Fatalf("JSON 键不是 ts_source: %s", raw)
+	}
+	var back Record
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if back.Meta.TSSource != note {
+		t.Fatalf("ts_source 未往返: %q", back.Meta.TSSource)
+	}
+	if back.Meta.WeightSource != r.Meta.WeightSource {
+		t.Fatalf("weight_source 未往返: %q", back.Meta.WeightSource)
+	}
+	if err := back.Validate(); err != nil {
+		t.Fatalf("带 ts_source 的记录必须被接受：%v", err)
+	}
+}
+
 // ============================================================================
 // 记录构造要求（spec §5.1）：读取层**不**校验，生产者侧自检
 // ============================================================================
