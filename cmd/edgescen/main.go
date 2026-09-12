@@ -109,10 +109,10 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
-	if *listScenarios {
-		printScenarioTable(stdout)
-		return exitOK
-	}
+	// **`-emit-checks` 必须排在 `-list` 之前**（Fix round 1 / I-3）：此前 `-list` 分支先
+	// return，于是 `-emit-checks -list`（两种参数顺序都一样）**永远到不了**
+	// `rejectEmitChecksArgs` ⇒ 它不打印信封、而是打印场景表并 exit 0。那是一个可被参数顺序
+	// 绕过的入口守卫，也让下面那句"其它开关一律拒绝"的注释与事实不符。
 	if *emitChecks {
 		// 节点内进程的入口：只做一件事（跑本机登记表并输出），故调用方给的其它开关在这里
 		// 一律**拒绝**而不是忽略 —— 忽略会让"父进程以为它传了配置、节点内其实没读"这种事
@@ -130,6 +130,10 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "edgescen: 节点内写出检查结果:", err)
 			return exitFailure
 		}
+		return exitOK
+	}
+	if *listScenarios {
+		printScenarioTable(stdout)
 		return exitOK
 	}
 

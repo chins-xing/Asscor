@@ -126,10 +126,39 @@ func itoa(n int) string {
 	return string(buf)
 }
 
-// mustEnvelope 造一份节点内进程会输出的信封 JSON（单行）。
+// useFixtureNonce 把父进程的 nonce 生成器固定成 `fixtureNonce`（并返回清理函数）。
+//
+// 为什么需要它（Fix round 1 / I-2）：真实 nonce 每次运行随机，静态假 docker 无法预先知道它；
+// 用 `newNodeNonce` 这个接缝把两侧对齐之后，"信封该带什么 nonce"就变成测试可以写死的东西。
+// 这同时保证**生产路径**仍然是随机的（只有用例改写这个包级变量）。
+func useFixtureNonce(t *testing.T) {
+	t.Helper()
+	prev := newNodeNonce
+	newNodeNonce = func() (string, error) { return fixtureNonce, nil }
+	t.Cleanup(func() { newNodeNonce = prev })
+}
+
+// mustEnvelope 造一份节点内进程会输出的信封 JSON（单行），nonce = fixtureNonce。
+//
+// 与之配套的 `useFixtureNonce` 让父进程期望的也正是这个值。另外两条用例
+// （`…WrongNonce` / `…EnvelopeMustCarryNonce`）故意造错值/空值来证明这条绑定有牙。
 func mustEnvelope(t *testing.T, hostname string, checks []model.CheckResult) string {
 	t.Helper()
-	raw, err := json.Marshal(nodeCheckEnvelope{Marker: nodeEnvelopeMagic, Hostname: hostname, Checks: checks})
+	return mustEnvelopeWithNonce(t, hostname, fixtureNonce, checks)
+}
+
+// fixtureNonce 是测试夹具用的固定 nonce（长度与真实值无关，只要求非空且相等）。
+const fixtureNonce = "fixture-nonce"
+
+// mustEnvelopeWithNonce 同上，但 nonce 显式给出（用于"nonce 不匹配 / 缺失"这两条用例）。
+func mustEnvelopeWithNonce(t *testing.T, hostname, nonce string, checks []model.CheckResult) string {
+	t.Helper()
+	raw, err := json.Marshal(nodeCheckEnvelope{
+		Marker:   nodeEnvelopeMagic,
+		Nonce:    nonce,
+		Hostname: hostname,
+		Checks:   checks,
+	})
 	if err != nil {
 		t.Fatalf("造信封: %v", err)
 	}
@@ -147,11 +176,15 @@ func mustEnvelope(t *testing.T, hostname string, checks []model.CheckResult) str
 //  2. 整个过程**一个 docker 子进程都没起**（假 docker 的调用日志必须不存在）—— 只看第 1 条
 //     的话，"先起 docker 再退回本机结果"这种实现会通过，而它恰恰是最危险的形态：
 //     机器上有 docker 就采节点、没有就悄悄采宿主，同一轮实验里混着两种观测主体。
+//
+// **第 2 条必须真的装上假 docker**（Fix round 1 / I-1）：此前这个用例只把 PATH 指向一个**空**
+// 临时目录、从不调用 `writeDockerShim`，于是 `docker.done` 不可能存在 —— 断言恒真，任何
+// "先起一次 docker" 的变异都能通过（评审用 `go test -overlay` 实测）。现在 `log` 取自
+// `writeDockerShim` 的返回值：假 docker 真的在 PATH 上，只要被测代码起一次子进程就会留痕。
 func TestCollectChecksForTargetDefaultsToLocalHostChecks(t *testing.T) {
 	registerFixtureChecks()
-	dir := t.TempDir()
-	log := filepath.Join(dir, "docker.done")
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// 假 docker 必须**真的装上去**：它是"没起 docker"这条判据唯一的观测手段。
+	log := writeDockerShim(t, fakeDocker{stdout: "shim-not-used"})
 
 	got, observationTarget, err := collectChecksForTarget("")
 	if err != nil {
@@ -207,6 +240,7 @@ func TestDefaultPathRecordHasNoObservationTarget(t *testing.T) {
 // 记录的 checks[] 里就不会有 RS-006，这条用例立刻红。
 func TestTargetPathUsesNodeChecksAndRecordsObservationTarget(t *testing.T) {
 	registerFixtureChecks()
+	useFixtureNonce(t)
 	nodeChecks := hostChecksWithFailures("RS-006")
 	log := writeDockerShim(t, fakeDocker{stdout: mustEnvelope(t, "host1", nodeChecks)})
 
@@ -214,12 +248,13 @@ func TestTargetPathUsesNodeChecksAndRecordsObservationTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("节点内取数: %v", err)
 	}
-	// 传给 docker 的参数必须逐条正确 —— 尤其是 `-emit-checks` 的**前导 `-`**。
+	// 传给 docker 的参数必须逐条正确 —— 尤其是 `-emit-checks` 的**前导 `-`** 与 nonce 的 `-e`。
 	//
-	// 这条断言是实测踩坑换来的：`emitChecksFlag` 曾经少了那个连字符，节点内进程把
+	// 前一条断言是实测踩坑换来的：`emitChecksFlag` 曾经少了那个连字符，节点内进程把
 	// `emit-checks` 当成位置参数、`-scenario` 于是为空，它报用法错误退出 —— 而父进程只看到
 	// "docker exec 失败"，很容易被读成环境问题。原来的用例直接调用辅助函数，恰好绕过了这条
 	// 路径，故这里改为按**调用日志**断言，而不是只看返回值。
+	// 后一条（`-e`）是 Fix round 1 / I-2 的绑定在这条路径上的可观测证据。
 	invocations := readShimLog(t, log)
 	if len(invocations) != 2 {
 		t.Fatalf("节点内取数应当只起两个 docker 子进程（cp + exec），实际 %d 条: %v", len(invocations), invocations)
@@ -227,14 +262,22 @@ func TestTargetPathUsesNodeChecksAndRecordsObservationTarget(t *testing.T) {
 	if !strings.HasPrefix(invocations[0], "cp ") || !strings.Contains(invocations[0], "asc-asscor-host1:/tmp/edgescen-") {
 		t.Errorf("第一次调用必须是 `docker cp <本进程二进制> <容器>:/tmp/edgescen-<pid>`，实际 %q", invocations[0])
 	}
-	if !strings.HasPrefix(invocations[1], "exec asc-asscor-host1 /tmp/edgescen-") {
-		t.Errorf("第二次调用必须是 `docker exec <容器> <二进制> …`，实际 %q", invocations[1])
+	if !strings.HasPrefix(invocations[1], "exec -e "+nodeNonceEnv+"=") {
+		t.Errorf("第二次调用必须是 `docker exec -e %s=<nonce> <容器> <二进制> …`（nonce 经环境变量下发，不进参数位），实际 %q",
+			nodeNonceEnv, invocations[1])
+	}
+	if !strings.Contains(invocations[1], "asc-asscor-host1 /tmp/edgescen-") {
+		t.Errorf("第二次调用必须带上目标容器与容器内二进制路径，实际 %q", invocations[1])
 	}
 	if !strings.HasSuffix(invocations[1], " "+emitChecksFlag) {
 		t.Errorf("节点内进程的入口开关必须原样带上前导 `-`（%q），实际调用 %q", emitChecksFlag, invocations[1])
 	}
 	if strings.TrimPrefix(emitChecksFlag, "-") == emitChecksFlag {
 		t.Errorf("emitChecksFlag 少了前导 `-`：它会被 docker 原样交给节点内进程，而 Go 的 flag 包只认带 `-` 的开关")
+	}
+	// 下发的 nonce 必须就是本次生成的那个（不是空串、不是固定值）。
+	if !strings.Contains(invocations[1], nodeNonceEnv+"="+fixtureNonce) {
+		t.Errorf("下发的 nonce 必须是用例固定下来的 %q，实际调用 %q", fixtureNonce, invocations[1])
 	}
 
 	if len(host) != len(nodeChecks) {
@@ -272,6 +315,7 @@ func TestTargetPathUsesNodeChecksAndRecordsObservationTarget(t *testing.T) {
 // 消费者读回，且 `meta.observation_target` 说明它出自节点；摘要里要有一行观测主体。
 func TestCLIInNodeRunWritesNodeObservationTarget(t *testing.T) {
 	registerFixtureChecks()
+	useFixtureNonce(t)
 	dir := t.TempDir()
 	writeDockerShim(t, fakeDocker{stdout: mustEnvelope(t, "host1", hostChecksWithFailures("RS-006"))})
 
@@ -385,9 +429,22 @@ func TestNodeCollectionFailuresAreLoud(t *testing.T) {
 			docker:    fakeDocker{stdout: mustEnvelope(t, "", hostChecksWithFailures("RS-006"))},
 			wantInErr: "hostname",
 		},
+		{
+			// Fix round 1 / I-2 的第一条防线：nonce 不匹配（残留进程 / 另一次运行）。
+			name:      "信封的 nonce 不匹配",
+			docker:    fakeDocker{stdout: mustEnvelopeWithNonce(t, "host1", "another-runs-nonce", hostChecksWithFailures("RS-006"))},
+			wantInErr: "nonce",
+		},
+		{
+			// 第二道防线：没有 nonce 的信封（旧二进制 / 别人的输出）—— 与"不匹配"分开报。
+			name:      "信封没有 nonce",
+			docker:    fakeDocker{stdout: mustEnvelopeWithNonce(t, "host1", "", hostChecksWithFailures("RS-006"))},
+			wantInErr: "没有 nonce",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			useFixtureNonce(t)
 			writeDockerShim(t, tc.docker)
 			host, observationTarget, err := collectChecksForTarget("asc-asscor-host1")
 			if err == nil {
@@ -426,16 +483,23 @@ func TestTargetPathNeverFallsBackWhenDockerMissing(t *testing.T) {
 //
 // 为什么要拒绝而不是忽略其它开关：忽略会让"父进程以为配置被读过了"静默成立，而节点内进程
 // 其实什么都没读 —— 两边的数据看起来完全一样。
+//
+// 顺带钉住 I-2 的 nonce 回路（这一条是**真的走了一遍子进程**的：环境变量 → 信封 → 父进程校验）：
+// 下发 nonce ⇒ 信封回显它；**不下发** ⇒ 信封 nonce 为空并被父进程拒绝。
 func TestEmitChecksModeIsNodeOnlyEntry(t *testing.T) {
-	// 合法用法：只给 -emit-checks（父进程就是这么把节点内进程调起来的）。
+	// 合法用法：只给 -emit-checks（父进程就是这么把节点内进程调起来的），nonce 经环境变量下发。
+	t.Setenv(nodeNonceEnv, fixtureNonce)
 	var stdout, stderr strings.Builder
 	code := runCLI([]string{"-" + emitChecksFlag}, &stdout, &stderr)
 	if code != exitOK {
 		t.Fatalf("-emit-checks 退出码 = %d, want 0\nstderr:\n%s", code, stderr.String())
 	}
-	env, err := parseNodeEnvelope([]byte(stdout.String()))
+	env, err := parseNodeEnvelope([]byte(stdout.String()), fixtureNonce)
 	if err != nil {
 		t.Fatalf("节点内输出必须能被父进程解析: %v\nstdout:\n%s", err, stdout.String())
+	}
+	if env.Nonce != fixtureNonce {
+		t.Errorf("信封必须回显父进程下发的 nonce（%q），实际 %q", fixtureNonce, env.Nonce)
 	}
 	if env.Hostname == "" {
 		t.Error("信封必须带节点内进程自己报的 hostname（记录靠它说明观测出自哪台机器）")
@@ -444,35 +508,98 @@ func TestEmitChecksModeIsNodeOnlyEntry(t *testing.T) {
 		t.Error("信封必须带检查集（空集会让父进程把这条路径判失败）")
 	}
 
+	// 反方向：不给 nonce（模拟"父进程没下发"）⇒ 信封的 nonce 必须为空、父进程必须拒绝。
+	// 这条同时证明"信封的 nonce 真的来自环境变量"，而不是节点内进程自己编的固定值。
+	t.Setenv(nodeNonceEnv, "")
+	var out2, err2 strings.Builder
+	if code := runCLI([]string{"-" + emitChecksFlag}, &out2, &err2); code != exitOK {
+		t.Fatalf("-emit-checks（无 nonce）退出码 = %d, want 0\nstderr:\n%s", code, err2.String())
+	}
+	if _, err := parseNodeEnvelope([]byte(out2.String()), fixtureNonce); err == nil {
+		t.Error("没有下发 nonce 时，信封必须被父进程拒绝（否则这条绑定形同虚设）")
+	} else if !strings.Contains(err.Error(), "没有 nonce") {
+		t.Errorf("拒绝理由必须指向缺失的 nonce: %v", err)
+	}
+
 	// 非法用法：混进任何别的开关都必须被拒（退出码 2）。
 	for _, args := range [][]string{
 		{"-" + emitChecksFlag, "--scenario", "S0-baseline"},
 		{"-" + emitChecksFlag, "--config", "x.ini"},
 		{"-" + emitChecksFlag, "-" + nodeTargetFlag, "asc-asscor-host1"},
+		// I-3：`-list` 曾经因为在 `-emit-checks` 之前 return 而绕过这道守卫（实测两种参数顺序
+		// 都会打印场景表并 exit 0）。
+		{"-" + emitChecksFlag, "--list"},
+		{"--list", "-" + emitChecksFlag},
 	} {
 		var out, errOut strings.Builder
-		if code := runCLI(args, &out, &errOut); code != exitUsage {
+		code := runCLI(args, &out, &errOut)
+		if code != exitUsage {
 			t.Errorf("args=%v 退出码 = %d, want %d（用法错误）", args, code, exitUsage)
+		}
+		if strings.Contains(out.String(), "场景表") {
+			t.Errorf("args=%v 不得打印场景表（那是 -list 的行为，不是节点内进程的出口）:\n%s", args, out.String())
 		}
 	}
 }
 
-// TestParseNodeEnvelopePicksItsLine：信封必须能从**混着杂散输出**的 stdout 里被挑出来。
+// TestParseNodeEnvelopePicksItsLineAndRejectsDisplacement 是 I-2 的核心钉子：
+// 信封必须能从**混着杂散输出**的 stdout 里被挑出来，而且**不能被顶替**。
 //
-// 为什么较真：节点里跑的是同一份二进制，将来任何一行日志（运行时诊断、检查项自己打的字）
-// 都会进入同一个 stdout。把整个 stdout 赌成"就是那份 JSON"会让这类输出变成一次采集失败，
-// 或者更糟 —— 让父进程解析到别的东西。
-func TestParseNodeEnvelopePicksItsLine(t *testing.T) {
-	env := mustEnvelope(t, "host1", hostChecksWithFailures("RS-006"))
-	mixed := "some warning line\nanother line\n" + env + "\ntrailing noise\n"
-	got, err := parseNodeEnvelope([]byte(mixed))
-	if err != nil {
-		t.Fatalf("必须能从杂散输出里挑出信封: %v", err)
-	}
-	if got.Hostname != "host1" || len(got.Checks) == 0 {
-		t.Fatalf("解析结果不对: %+v", got)
-	}
-	if _, err := parseNodeEnvelope([]byte("nothing here\n")); err == nil {
+// 为什么较真：节点里跑的是同一份二进制，将来任何一行日志（运行时诊断、检查项自己打的字、
+// 残留进程的输出）都会进入同一个 stdout。旧实现取**第一个**带 marker 的 JSON 行 + 只核对
+// marker 字符串 —— 评审用离线夹具实测到的最坏形态是：真信封是**空集**（本该判失败），
+// 前面一行伪造信封带着 8 条检查，整轮被悄悄救成"一切正常"。
+//
+// 现在两条防线：`findEnvelopeLine` 取**最后一行**（3），nonce 绑定本次运行（1、2）。
+func TestParseNodeEnvelopePicksItsLineAndRejectsDisplacement(t *testing.T) {
+	real := mustEnvelope(t, "host1", hostChecksWithFailures("RS-006"))
+
+	t.Run("杂散行不影响挑出真信封", func(t *testing.T) {
+		mixed := "some warning line\nanother line\n" + real + "\ntrailing noise\n"
+		got, err := parseNodeEnvelope([]byte(mixed), fixtureNonce)
+		if err != nil {
+			t.Fatalf("必须能从杂散输出里挑出信封: %v", err)
+		}
+		if got.Hostname != "host1" || len(got.Checks) == 0 {
+			t.Fatalf("解析结果不对: %+v", got)
+		}
+	})
+
+	t.Run("伪造信封在前、真信封在后 ⇒ 取真的那条", func(t *testing.T) {
+		forged := mustEnvelope(t, "totally-not-host1", hostChecksWithFailures("RS-006", "RS-007"))
+		// 真信封是**空集**（本该被判失败的那一轮）。
+		emptyReal := mustEnvelope(t, "host1", nil)
+		got, err := parseNodeEnvelope([]byte(forged+"\nsome stray line\n"+emptyReal+"\n"), fixtureNonce)
+		if err == nil {
+			t.Fatalf("真信封是空集 ⇒ 必须报错；实际 picked hostname=%q checks=%d（伪造信封顶替成功）",
+				got.Hostname, len(got.Checks))
+		}
+		if !strings.Contains(err.Error(), "为空") {
+			t.Errorf("拒绝理由必须指向空检查集（说明解析到的是**真**信封、不是前面那条伪造的）: %v", err)
+		}
+	})
+
+	t.Run("只有伪造信封（nonce 不匹配）⇒ 必须拒绝", func(t *testing.T) {
+		forged := mustEnvelopeWithNonce(t, "totally-not-host1", "another-runs-nonce", hostChecksWithFailures("RS-006"))
+		if _, err := parseNodeEnvelope([]byte(forged+"\n"), fixtureNonce); err == nil {
+			t.Fatal("nonce 不匹配的信封必须被拒绝 —— 否则任何残留进程的输出都能顶替真信封")
+		} else if !strings.Contains(err.Error(), "nonce") {
+			t.Errorf("拒绝理由必须指向 nonce: %v", err)
+		}
+	})
+
+	t.Run("信封没有 nonce ⇒ 必须拒绝", func(t *testing.T) {
+		noNonce := mustEnvelopeWithNonce(t, "host1", "", hostChecksWithFailures("RS-006"))
+		err := func() error { _, e := parseNodeEnvelope([]byte(noNonce+"\n"), fixtureNonce); return e }()
+		if err == nil {
+			t.Fatal("没有 nonce 的信封必须被拒绝（旧二进制/别人的输出）")
+		}
+		if !strings.Contains(err.Error(), "没有 nonce") {
+			t.Errorf("拒绝理由必须与『nonce 不匹配』区分开: %v", err)
+		}
+	})
+
+	if _, err := parseNodeEnvelope([]byte("nothing here\n"), fixtureNonce); err == nil {
 		t.Fatal("没有信封时必须报错（绝不能当成空检查集）")
 	}
 }
