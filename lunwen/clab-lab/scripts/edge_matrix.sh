@@ -47,6 +47,93 @@ RECORDS="${EDGEEXP_RECORDS:-$DATA_DIR/records-$ENV_NAME-$TODAY.jsonl}"
 EDGESCEN="${EDGEEXP_EDGESCEN:-$REPO_ROOT/build/edgescen}"
 EDGECOMPARE="${EDGEEXP_EDGECOMPARE:-$REPO_ROOT/build/edgecompare}"
 
+# 【Fix round 3 / 第 2 项】**把记录文件钉死给整个运行**：子脚本会在 `edge_collect.sh` 里
+# 自己重算 `date -u +%Y%m%d`，而一次 3–7 小时的 sweep 很容易跨 00:00 UTC ⇒ 父脚本数今天的文件、
+# 子脚本写明天的文件：数据集被劈成两半，本轮的**记录条数门禁**会在跑完几小时之后才报错，
+# 而 run.json 只描述第一份文件。导出之后子脚本一律用这一个路径（`EDGEEXP_RECORDS` 本就是
+# 子脚本的既有开关，不需要改子脚本）。
+export EDGEEXP_RECORDS="$RECORDS"
+
+# --- 因子权重与权重表：从**采集配置**里解析（单一来源，不在脚本里抄第二份）--------
+# 定义成函数是为了让**干跑**也能打印这两张表（干跑在逐场景循环之前就退出，
+# 那时还没有 FACTORS_SPEC/WEIGHTS_SPEC 这两个变量）。调用点两处：干跑计划、门禁命令行。
+# `f_i` 的解析口径与引擎的 `ParamsFromConfig` 同构：
+#   · 内置六因子取 [edge_factors]，其中**只有** `two_factor_failure` 会被
+#     [edge_factors.level4_override] 覆盖（解析层那个分支只认这一个键）；
+#   · [edge_factors.custom] 里**不与内置同名**的条目进入因子集 —— 出厂模板里那 7 行
+#     （六个同名 + EF-3FA）因此只有 `EF-3FA=0.82` 是新的。
+# 这正是 review 的 I4 的那个修正：EF-3FA 是**普通因子**（四份模板都声明了 vector.EF-3FA），
+# 它必须进 -factors；"不写 EF-3FA"会让工具**静默丢弃**那条惩罚（分数被抬高、漏判率被低估）。
+# 禁止的动作只有一个：为了把门禁凑绿而静默塞值。
+derive_factors_spec() {
+  python3 - "$CONFIG" <<'PY'
+import sys
+sections, current = {}, 'global'
+for raw in open(sys.argv[1], encoding='utf-8'):
+    line = raw.strip()
+    if not line or line.startswith('#') or line.startswith(';'):
+        continue
+    if line.startswith('[') and line.endswith(']'):
+        current = line[1:-1].strip().lower(); sections.setdefault(current, {}); continue
+    if '=' not in line:
+        continue
+    k, v = line.split('=', 1)
+    sections.setdefault(current, {})[k.strip().lower()] = v.strip()
+ef = sections.get('edge_factors', {})
+lvl = sections.get('edge_factors.level4_override', {})
+custom = sections.get('edge_factors.custom', {})
+mapping = [('EF-002FA', 'two_factor_failure'), ('EF-SYNCOOKIE', 'syn_cookie_disabled'),
+           ('EF-SELINUX', 'selinux_disabled'), ('EF-APPARMOR', 'apparmor_disabled'),
+           ('EF-NO-SIEM', 'no_siem'), ('EF-NO-IDS', 'no_ids')]
+out, seen = [], set()
+for fid, key in mapping:
+    # 解析层**只对 `two_factor_failure`** 读 [edge_factors.level4_override]（config.go:290-294
+    # 那个分支写死了这一个键），其余五个键即使出现在该段里也不会被消费 —— 这里必须同构，
+    # 否则会算出一个引擎从不使用的 f（Fix round 2 指出的 I4 不精确处）。
+    val = lvl.get(key, ef.get(key)) if key == 'two_factor_failure' else ef.get(key)
+    if val is None:
+        raise SystemExit(f'edge_matrix: 配置 {sys.argv[1]} 缺 [edge_factors] {key}')
+    out.append(f'{fid}={val}')
+    seen.add(fid.upper())
+for raw_id, val in custom.items():
+    fid = raw_id.strip().upper()
+    if not fid or fid in seen:
+        continue
+    try:
+        f = float(val)
+    except ValueError:
+        raise SystemExit(f'edge_matrix: [edge_factors.custom] {raw_id} = {val!r} 不是数字')
+    out.append(f'{fid}={f}')
+    seen.add(fid)
+print(','.join(out))
+PY
+}
+
+# 生效权重表：四核心域取 [weights]，kernel_security 取 [extension_weights]（引擎的口径）。
+derive_weights_spec() {
+  python3 - "$CONFIG" <<'PY'
+import sys
+sections, current = {}, 'global'
+for raw in open(sys.argv[1], encoding='utf-8'):
+    line = raw.strip()
+    if not line or line.startswith('#') or line.startswith(';'):
+        continue
+    if line.startswith('[') and line.endswith(']'):
+        current = line[1:-1].strip().lower(); sections.setdefault(current, {}); continue
+    if '=' not in line:
+        continue
+    k, v = line.split('=', 1)
+    sections.setdefault(current, {})[k.strip().lower()] = v.strip()
+out = []
+for dom in ('attack_surface', 'business_continuity', 'operation_trust', 'resilience', 'kernel_security'):
+    for sec in ('weights', 'extension_weights'):
+        val = sections.get(sec, {}).get(dom)
+        if val is not None:
+            out.append(f'{dom}={val}'); break
+print(','.join(out))
+PY
+}
+
 # --- 场景名单（spec §5：S0–S5 = 22 组 + R = 3 组真实缺失对照，全列出，不留占位）----
 SCENARIOS=(
   S0-baseline
@@ -103,6 +190,38 @@ fi
 if [ "${EDGEEXP_RUN_INDEX:-1}" -gt 1 ] && [ -z "${EDGEEXP_ENV:-}" ]; then
   echo "edge_matrix: EDGEEXP_RUN_INDEX=${EDGEEXP_RUN_INDEX}（>1）必须显式给 EDGEEXP_ENV —— 否则重复样本会被打上默认标签 $ENV_NAME 混进主战场数据集" >&2
   exit 1
+fi
+
+# ---- 干跑（Fix round 3 / 第 3 项）-------------------------------------------
+# `EDGEEXP_RESUME=1` **不是**干跑：它跳过"文件里已有记录"的场景，而对**没有**记录的场景
+# 照样执行 reset+attack+collect（上一轮的 A5 就是这样误触发了一次真实复位）。真正"只看计划、
+# 什么都不做"的开关是下面这个：打印解析后的计划，并在**第一个 edge_reset.sh 之前**退出 0 ——
+# 不调用 clab、不碰 Caldera、不往数据目录写任何东西（连 `mkdir -p` 都还没发生）。
+if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
+  echo "edge_matrix: DRY RUN（只看计划：不做任何 lab 动作，不写任何文件）"
+  echo "  运行标识    : $RUN_ID（mode=$MODE）"
+  echo "  记录文件    : $RECORDS"
+  echo "  采集配置    : $CONFIG"
+  echo "  环境/重复号 : $ENV_NAME / run=${EDGEEXP_RUN_INDEX:-1}"
+  echo "  数据目录    : $DATA_DIR（干跑不创建、不清理）"
+  echo "  场景        : ${#SELECTED[@]} 个（声明的 ${#SCENARIOS[@]}）/ 名单核对已通过"
+  echo "  -factors    : $(derive_factors_spec)（来源：$CONFIG）"
+  echo "  -weights    : $(derive_weights_spec)"
+  # 子脚本继承校验：用**同一种机制**（bash 子进程继承导出的环境）确认它们看到的是同一个路径 ——
+  # 这正是"父子各自算 TODAY"会分叉、而跨 00:00 UTC 才暴露的那条路径。
+  echo "  子脚本继承  : EDGEEXP_RECORDS=$(bash -c 'printf "%s" "${EDGEEXP_RECORDS:-<未导出>}"')"
+  echo "  计划："
+  i=0
+  for s in "${SELECTED[@]}"; do
+    i=$((i + 1))
+    if [ -f "$RECORDS" ] && grep -qE "\"scenario_id\":\"$s" "$RECORDS"; then
+      printf '    [%2d/%2d] %-28s skip（文件里已有记录；仅当 EDGEEXP_RESUME=1 时才会真的跳过）\n' "$i" "${#SELECTED[@]}" "$s"
+    else
+      printf '    [%2d/%2d] %-28s collect（reset → attack → collect 三步都会跑）\n' "$i" "${#SELECTED[@]}" "$s"
+    fi
+  done
+  echo "edge_matrix: dry run 结束（exit 0）—— 真实运行请去掉 EDGEEXP_DRY_RUN"
+  exit 0
 fi
 
 mkdir -p "$RUN_D"
@@ -295,6 +414,19 @@ else:
 gate1 = frag('gate', 'gate1') or {}
 gate2_out = frag('gate', 'gate2') or {}
 
+# 父/子记录路径一致性（Fix round 3 / 第 2 项）：子脚本实际写入的路径必须等于父脚本解析出的路径。
+# 不一致说明继承链上有人改回了"各自解析"（跨 00:00 UTC 时它以"少一条记录"的形式在几小时后才暴露）。
+records_agreement = {'parent': state['records_file'], 'children': {}, 'ok': True}
+for scen_name in scen:
+    node = frag('collect', scen_name)
+    if not isinstance(node, dict):
+        continue
+    child_path = node.get('records_file')
+    if child_path:
+        records_agreement['children'][scen_name] = child_path
+        if child_path != state['records_file']:
+            records_agreement['ok'] = False
+
 # run 级输入指纹：拓扑哈希 / 剧本哈希 / 配置哈希 / 权重口径 —— 一次运行的全部输入必须能
 # 在这一个文件里查到，而不是散落在逐场景条目里（"这份记录是按哪个剧本采的"要能一眼回答）。
 inputs_path = os.path.join(run_d, 'gate-inputs.json')
@@ -356,7 +488,10 @@ run = {
                  '分数被抬高），而不是什么"fallback 向量惩罚"；禁止的只是"为让门禁变绿而静默塞值"。',
         'weights': '离线复算以记录自带的 observed.effective_weights 为准；-weights 只是回退表',
         'gate1_dataset': '门禁① 跑在**全量**记录上（不再按 EF-3FA 切子集）',
+        'records_file_pinned': '本脚本把解析出的记录路径 export 给子脚本（Fix round 3 / 第 2 项）：'
+                               '父子各自算 date +%Y%m%d 时，跨 00:00 UTC 的 sweep 会把数据集劈成两份',
     },
+    'records_file_agreement': records_agreement,
 }
 for path in (out_stable, out_copy):
     with open(path, 'w', encoding='utf-8') as fh:
@@ -366,6 +501,7 @@ print(f'edge_matrix: run.json → {out_stable}')
 print(f'edge_matrix: 记录条数 本次写入 {run["records_written_this_run"]}/{run["records_expected"]}｜'
       f'文件总行数 {run["records_file_total_lines"]}｜record_counts_ok={run["record_counts_ok"]}')
 print(f'edge_matrix: 因子集相等断言 all_ok={equality["all_ok"]}')
+print(f'edge_matrix: 父子记录路径一致={records_agreement["ok"]}（{state["records_file"]}）')
 print(f'edge_matrix: 门禁⓪ {gate0["verdict"]}')
 print(f'edge_matrix: 注入-采集时钟核对 all_ok={clock["all_ok"]}')
 if gate1:
@@ -459,80 +595,12 @@ if [ "$FILE_LINES" -ne "${#SELECTED[@]}" ]; then
 fi
 echo "edge_matrix: 记录条数门禁通过（$FILE_LINES 条 == 选中 ${#SELECTED[@]} 个场景）"
 
-# --- 因子权重与权重表：从**采集配置**里解析（单一来源，不在脚本里抄第二份）--------
-# `f_i` 的解析口径与引擎的 `ParamsFromConfig` 同构：
-#   · 内置六因子取 [edge_factors]，其中**只有** `two_factor_failure` 会被
-#     [edge_factors.level4_override] 覆盖（解析层那个分支只认这一个键）；
-#   · [edge_factors.custom] 里**不与内置同名**的条目进入因子集 —— 出厂模板里那 7 行
-#     （六个同名 + EF-3FA）因此只有 `EF-3FA=0.82` 是新的。
-# 这正是 review 的 I4 的那个修正：EF-3FA 是**普通因子**（四份模板都声明了 vector.EF-3FA），
-# 它必须进 -factors；此前"不写 EF-3FA"的理由（"会给 V/G/C 一个引擎从未施加的 fallback 向量
-# 惩罚"）不成立 —— 真正会发生的是**相反的**事：漏掉链上用到的因子会让工具**静默丢弃**那条
-# 惩罚（分数被抬高、漏判率被低估）。禁止的动作只有一个：为了把门禁凑绿而静默塞值。
-FACTORS_SPEC="$(python3 - "$CONFIG" <<'PY'
-import sys
-sections, current = {}, 'global'
-for raw in open(sys.argv[1], encoding='utf-8'):
-    line = raw.strip()
-    if not line or line.startswith('#') or line.startswith(';'):
-        continue
-    if line.startswith('[') and line.endswith(']'):
-        current = line[1:-1].strip().lower(); sections.setdefault(current, {}); continue
-    if '=' not in line:
-        continue
-    k, v = line.split('=', 1)
-    sections.setdefault(current, {})[k.strip().lower()] = v.strip()
-ef = sections.get('edge_factors', {})
-lvl = sections.get('edge_factors.level4_override', {})
-custom = sections.get('edge_factors.custom', {})
-mapping = [('EF-002FA', 'two_factor_failure'), ('EF-SYNCOOKIE', 'syn_cookie_disabled'),
-           ('EF-SELINUX', 'selinux_disabled'), ('EF-APPARMOR', 'apparmor_disabled'),
-           ('EF-NO-SIEM', 'no_siem'), ('EF-NO-IDS', 'no_ids')]
-out, seen = [], set()
-for fid, key in mapping:
-    # 解析层**只对 `two_factor_failure`** 读 [edge_factors.level4_override]（config.go:290-294
-    # 那个分支写死了这一个键），其余五个键即使出现在该段里也不会被消费 —— 这里必须同构，
-    # 否则会算出一个引擎从不使用的 f（Fix round 2 指出的 I4 不精确处）。
-    val = lvl.get(key, ef.get(key)) if key == 'two_factor_failure' else ef.get(key)
-    if val is None:
-        raise SystemExit(f'edge_matrix: 配置 {sys.argv[1]} 缺 [edge_factors] {key}')
-    out.append(f'{fid}={val}')
-    seen.add(fid.upper())
-for raw_id, val in custom.items():
-    fid = raw_id.strip().upper()
-    if not fid or fid in seen:
-        continue
-    try:
-        f = float(val)
-    except ValueError:
-        raise SystemExit(f'edge_matrix: [edge_factors.custom] {raw_id} = {val!r} 不是数字')
-    out.append(f'{fid}={f}')
-    seen.add(fid)
-print(','.join(out))
-PY
-)"
-WEIGHTS_SPEC="$(python3 - "$CONFIG" <<'PY'
-import sys
-sections, current = {}, 'global'
-for raw in open(sys.argv[1], encoding='utf-8'):
-    line = raw.strip()
-    if not line or line.startswith('#') or line.startswith(';'):
-        continue
-    if line.startswith('[') and line.endswith(']'):
-        current = line[1:-1].strip().lower(); sections.setdefault(current, {}); continue
-    if '=' not in line:
-        continue
-    k, v = line.split('=', 1)
-    sections.setdefault(current, {})[k.strip().lower()] = v.strip()
-out = []
-for dom in ('attack_surface', 'business_continuity', 'operation_trust', 'resilience', 'kernel_security'):
-    for sec in ('weights', 'extension_weights'):
-        val = sections.get(sec, {}).get(dom)
-        if val is not None:
-            out.append(f'{dom}={val}'); break
-print(','.join(out))
-PY
-)"
+# --- 因子权重与权重表（函数定义在脚本前部；干跑也要用它，见 EDGEEXP_DRY_RUN）------
+FACTORS_SPEC="$(derive_factors_spec)"
+WEIGHTS_SPEC="$(derive_weights_spec)"
+echo "edge_matrix: -factors $FACTORS_SPEC"
+echo "edge_matrix: -weights $WEIGHTS_SPEC"
+# 生效权重表由 derive_weights_spec() 给出（定义在脚本前部）。
 echo "edge_matrix: -factors $FACTORS_SPEC"
 echo "edge_matrix: -weights $WEIGHTS_SPEC"
 python3 - "$RUN_D/gate-inputs.json" "$CONFIG" "$FACTORS_SPEC" "$WEIGHTS_SPEC" "$ENV_NAME" <<'PY'

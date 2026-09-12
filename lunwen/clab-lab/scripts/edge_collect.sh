@@ -401,11 +401,20 @@ def body():
     dump_fragment(report)
 
     # --- 断言失败：留档被拒的那一行 + 请调用方回滚 --------------------------------
+    # 【Fix round 3 / 第 1 项】`report[key]` 有的键是 dict（带 `ok`），有的键**是列表**
+    # （`checks_ts_mismatch` / `injected_check_absent`）。此前无条件 `report[key]['ok'] = False`
+    # 对列表键会抛 `TypeError: list indices must be integers…` —— 异常被外层 except 兜住、
+    # 回滚照常发生（不会留下坏记录 ✓），但**恰好丢掉这条拒绝最需要的证据**：具体原因、
+    # 富片段（相等断言/门禁⓪/时钟条目）与 rejected 留档行。故这里按类型分派，
+    # 并**始终**把原因写进 `report['failures']`（不依赖键的形状）。
     def reject(key, msg):
         report['record_kept'] = False
         report['rolled_back'] = True
         report['rollback_reason'] = msg
-        report[key]['ok'] = False
+        entry = report.get(key)
+        if isinstance(entry, dict):
+            entry['ok'] = False
+        report.setdefault('failures', []).append({'key': key, 'reason': msg})
         dump_fragment(report)
         with open(os.environ['REJECTED_OUT'], 'a', encoding='utf-8') as fh:
             fh.write(last_line + '\n')

@@ -371,11 +371,16 @@ bash scripts/edge_collect.sh "$s" ../../configs/edgeexp/m0-baseline.ini \
 （路径从 `lunwen/clab-lab` 起算：配置在仓库根，故是 `../../configs/…`。）
 
 有用的开关（环境变量）：`EDGEEXP_RUN_ID`（运行标识，进 `run.json`）、`EDGEEXP_RECORDS`（记录文件，
-冒烟/重跑请换名）、`EDGEEXP_RESUME=1`（续跑：跳过目标文件里已有记录的场景，跳过的场景写进
-`run.json` 的 `scenarios_skipped_resume`）、`EDGEEXP_RUN_INDEX`（重复号，**>1 时必须同时显式给
-`EDGEEXP_ENV`**，否则 A-1 的重复样本会被打上 `wsl-clab-14` 混进主数据集）、`EDGEEXP_ATTACK_TIMEOUT_S`
-（等 operation 终态的上限，默认 1800）、`EDGEEXP_PHASE_GAP_S`（相位间隔，默认 3，**不得小于 1**）、
-`EDGEEXP_TARGET_HOST`（攻击目标节点，默认 `host1`）。
+冒烟/重跑请换名；**矩阵会把它钉死并导出给子脚本**，见 5.4.5 第 12 条）、
+**`EDGEEXP_DRY_RUN=1`（干跑：只打印计划、立即退出 0，不做任何 lab 动作、不写任何文件）**、
+`EDGEEXP_RESUME=1`（续跑：跳过目标文件里已有记录的场景，跳过的场景写进 `run.json` 的
+`scenarios_skipped_resume`；**它不是干跑** —— 对没有记录的场景照样跑三步，见 5.4.5 第 13 条）、
+`EDGEEXP_RUN_INDEX`（重复号，**>1 时必须同时显式给 `EDGEEXP_ENV`**，否则 A-1 的重复样本会被打上
+`wsl-clab-14` 混进主数据集）、`EDGEEXP_ATTACK_TIMEOUT_S`（等 operation 终态的上限，默认 1800）、
+`EDGEEXP_PHASE_GAP_S`（相位间隔，默认 3，**不得小于 1**）、`EDGEEXP_TARGET_HOST`（攻击目标节点，默认 `host1`）。
+想先看一遍"这轮到底会跑什么"，永远先跑
+`EDGEEXP_DRY_RUN=1 bash scripts/edge_matrix.sh`（它打印记录文件、配置、`-factors`/`-weights`、
+逐场景 collect/skip 与"子脚本继承到的 `EDGEEXP_RECORDS`"）。
 
 #### 5.4.5 纪律（每条都对应一次实测事故）
 
@@ -399,6 +404,9 @@ bash scripts/edge_collect.sh "$s" ../../configs/edgeexp/m0-baseline.ini \
    它会作为普通因子自己上链。故 `S5-cascade-3fa` 的期望集是 `{EF-3FA, EF-002FA}`、
    `S3-3fa-selinux-apparmor` 是 `{EF-3FA, EF-002FA, EF-SELINUX, EF-APPARMOR}`；"源"**只在配置真的
    声明了自定义 `EF-3FA` 时**才期望（把那条去掉后自动退回只有级联目标，不会变成镜像方向的误拒）。
+   **级联目标本身只有一份真源**（Fix round 3）：采集器 `edgescen -list` 直接输出
+   `级联目标=<CascadeTo>`，harness 消费它；本脚本里那张表退化为"旧二进制时的兜底"并会**响亮警告**，
+   两者冲突（都给出且不一致）则直接报错。
    查当前推导结果（只推导、不碰 Caldera 与拓扑）：
    `EDGEEXP_PRINT_EXPECTED=1 bash scripts/edge_attack.sh <scenario> /tmp/x.json`。
 5. **记录条数门禁判死整轮**：`文件总行数 == 本次选中场景数` 是**硬闸门**，不只是 `run.json` 里的一个
@@ -425,6 +433,15 @@ bash scripts/edge_collect.sh "$s" ../../configs/edgeexp/m0-baseline.ini \
 11. **shell 脚本必须 LF 检出**：仓库根有 `.gitattributes`（`*.sh text eol=lf`）。此前
     `core.autocrlf=true` 且无该文件，Windows 侧一次 checkout 就会把脚本写成 CRLF，
     含 `then/do/fi/done` 的脚本**直接解析失败**。改脚本前先 `git ls-files --eol <脚本>` 确认 `w/lf`。
+12. **整轮只写一份记录文件**：矩阵把解析出的记录路径 `export EDGEEXP_RECORDS` 给子脚本。
+    父子脚本各自算 `date -u +%Y%m%d` 时，一次跨 **00:00 UTC** 的 sweep（3–7 小时，很容易跨）
+    会让子脚本写明天的文件、父脚本数今天的文件 —— 数据集被劈成两半，而条数门禁要跑完几小时才报错。
+    `run.json` 的 `records_file_agreement` 会逐场景核对"子脚本实际写的路径 == 父脚本解析的路径"。
+13. **`EDGEEXP_RESUME` 不是干跑**：它只跳过"文件里已有记录"的场景，对**没有**记录的场景照样
+    执行 reset+attack+collect（曾因此误触发过一次真实复位）。先看计划请用
+    **`EDGEEXP_DRY_RUN=1`** —— 它打印记录文件、配置、`-factors`/`-weights`、逐场景 collect/skip
+    与子脚本继承到的 `EDGEEXP_RECORDS`，然后在第一个 `edge_reset.sh` **之前**退出 0，
+    不调用 `clab`、不碰 Caldera、不往数据目录写任何东西。
 
 #### 5.4.6 门禁
 

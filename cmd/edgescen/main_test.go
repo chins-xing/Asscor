@@ -1219,6 +1219,46 @@ func TestCLIListScenarios(t *testing.T) {
 	}
 }
 
+// TestCLIListEmitsCascadeTarget pin Fix round 3 的第 4 项：`--list` 必须把 `CascadeTo` 输出给
+// harness，让"哪个场景级联到哪个因子"只有**一份**真源（此前 harness 自己维护了一张表，
+// 只在一边加场景时会把一条合法的链判成多余项）。
+//
+// 判据双向：设了 `CascadeTo` 的场景必须带 `级联目标=`，没设的必须**不带** ——
+// 只查前者的话，"给所有场景都印一个级联目标"这种错会溜过去。
+func TestCLIListEmitsCascadeTarget(t *testing.T) {
+	var stdout, stderr strings.Builder
+	if code := runCLI([]string{"--list"}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("--list 退出码 = %d, want 0\n%s", code, stderr.String())
+	}
+	lines := map[string]string{}
+	for _, line := range strings.Split(stdout.String(), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && strings.HasPrefix(line, "  ") {
+			lines[fields[0]] = line
+		}
+	}
+	if len(lines) != len(scenarios) {
+		t.Fatalf("--list 输出的场景行数 = %d, want %d", len(lines), len(scenarios))
+	}
+	withCascade := 0
+	for name, spec := range scenarios {
+		line := lines[name]
+		if spec.CascadeTo == "" {
+			if strings.Contains(line, "级联目标=") {
+				t.Errorf("场景 %s 没有 CascadeTo，却打印了级联目标：%s", name, line)
+			}
+			continue
+		}
+		withCascade++
+		if want := "级联目标=" + spec.CascadeTo; !strings.Contains(line, want) {
+			t.Errorf("场景 %s 必须打印 %q，实际：%s", name, want, line)
+		}
+	}
+	if withCascade == 0 {
+		t.Fatal("场景表里一个带 CascadeTo 的场景都没有 —— 这条用例失去了意义（级联是 C 模型的现实依据）")
+	}
+}
+
 // TestCLIPlaybookHashOverride：`--playbook-hash` 覆盖 harness 产物里的剧本哈希，并落进
 // `meta.playbook_hash`。两种用途：harness 没写哈希时由脚本补，以及同一段剧本换哈希重跑
 // （评审 M12：这个开关此前没有任何用例碰过）。

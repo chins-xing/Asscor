@@ -232,6 +232,11 @@ func printSummary(stdout io.Writer, rec edgeexp.Record, configPath, outPath stri
 
 // printScenarioTable 打印场景表（Task 4 的矩阵脚本据此迭代，避免脚本里再抄一份场景名单 ——
 // 两份名单必然漂移，"少场景而人不知"就是这么发生的）。
+//
+// `级联目标=` 是 Fix round 3 加上的**additive** 字段（本轮评审的第 4 项）：在此之前 harness
+// （`edge_attack.sh`）自己维护了一张"哪个场景级联到哪个因子"的表，与这里的 `CascadeTo` 是
+// 两份真源 —— 只在一边加场景时，harness 的**相等**断言会拒绝一条完全合法的链。
+// 现在把 `CascadeTo` 直接输出给调用方消费，harness 的表退化为"旧二进制时的兜底"。
 func printScenarioTable(stdout io.Writer) {
 	fmt.Fprintf(stdout, "edgescen: 场景表（%d 组，spec §5：S0–S5 = 22 组 + R = 3 组真实缺失对照）\n", len(scenarios))
 	for _, name := range scenarioNames() {
@@ -242,6 +247,9 @@ func printScenarioTable(stdout io.Writer) {
 		}
 		if len(spec.RealMissing) > 0 {
 			fmt.Fprintf(stdout, " 真实缺失=%s", strings.Join(spec.RealMissing, ","))
+		}
+		if spec.CascadeTo != "" {
+			fmt.Fprintf(stdout, " 级联目标=%s", spec.CascadeTo)
 		}
 		fmt.Fprintln(stdout)
 	}

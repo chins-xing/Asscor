@@ -117,11 +117,18 @@ fi
 phase_count() { [ -z "$1" ] && echo 0 || echo "$1" | tr '|' '\n' | wc -l; }
 EXPECTED_PHASES=$(phase_count "$PHASES")
 
-# 级联目标：只有这两个场景的 `scenarioSpec.CascadeTo = EF-002FA`（与采集器同源）。
-CASCADE_TARGET=""
+# 级联目标的两级来源（Fix round 3 的第 4 项：不再维护第二份真源）：
+#   · **权威**：`edgescen -list` 输出的 `级联目标=<CascadeTo>`（本轮起该字段 additive 输出）；
+#   · **兜底**：本脚本的 LOCAL_CASCADE_TARGET 表 —— 只在 `-list` 没有该字段时使用（旧二进制），
+#     且会**响亮警告**（否则"两份真源"会以静默的方式重新长出来）。
+# 只在一边加了级联场景时：权威来源立即生效（不必改本脚本）；若本脚本的表与权威值**冲突**，
+# 直接报错 —— 那是"两份真源意见不一致"，不能猜。
+LOCAL_CASCADE_TARGET=""
 case "$SCENARIO" in
-  S3-3fa-selinux-apparmor|S5-cascade-3fa) CASCADE_TARGET="EF-002FA" ;;
+  S3-3fa-selinux-apparmor|S5-cascade-3fa) LOCAL_CASCADE_TARGET="EF-002FA" ;;
 esac
+LISTED_CASCADE_TARGET=""
+CASCADE_TARGET=""
 EXPECTED_CHAIN_FACTORS=""
 
 # 配置的 `[edge_factors.custom]` 里是否**还有**一条 EF-3FA（出厂模板刻意保留的那条重复项）。
@@ -158,6 +165,25 @@ emit_expected_factor() {
   esac
 }
 
+# 级联目标的来源裁决（**必须在展开之前调用**）：权威值优先；`-list` 没给该字段时退回本脚本的
+# 兜底表并响亮警告；两者都给出但**不一致**时直接报错 —— 那是"两份真源意见冲突"，
+# 猜哪一份都可能把一条合法的链判死。
+resolve_cascade_target() {
+  if [ -n "$LISTED_CASCADE_TARGET" ]; then
+    if [ -n "$LOCAL_CASCADE_TARGET" ] && [ "$LOCAL_CASCADE_TARGET" != "$LISTED_CASCADE_TARGET" ]; then
+      echo "edge_attack: 级联目标冲突：采集器声明 $SCENARIO → $LISTED_CASCADE_TARGET，而本脚本的兜底表写着 $LOCAL_CASCADE_TARGET ——" >&2
+      echo "  两份真源不一致，不能猜（请同步本脚本的兜底表；该表在 -list 提供 级联目标= 之后本就不该再被使用）。" >&2
+      exit 1
+    fi
+    CASCADE_TARGET="$LISTED_CASCADE_TARGET"
+    return 0
+  fi
+  CASCADE_TARGET="$LOCAL_CASCADE_TARGET"
+  if [ -n "$LOCAL_CASCADE_TARGET" ]; then
+    echo "edge_attack: 警告：edgescen -list 未提供 级联目标= 字段（旧二进制？）—— 退回本脚本的兜底表（$SCENARIO → $LOCAL_CASCADE_TARGET）；请重新构建 build/edgescen" >&2
+  fi
+}
+
 # --- 与采集器的场景表交叉核对 ------------------------------------------------
 if [ -x "$EDGESCEN" ]; then
   LIST="$("$EDGESCEN" -list)"
@@ -186,14 +212,19 @@ if [ -x "$EDGESCEN" ]; then
       exit 1
     }
   done
+  # 级联目标：**消费**采集器输出的 `级联目标=`（Fix round 3 的第 4 项），不再自己当第二份真源。
+  # 必须在展开 EXPECTED_CHAIN_FACTORS **之前**裁决（展开要用到 CASCADE_TARGET）。
+  LISTED_CASCADE_TARGET="$(echo "$LINE" | sed -n 's/.*级联目标=\([^ ]*\).*/\1/p')"
+  resolve_cascade_target
   # EXPECTED_CHAIN_FACTORS = 采集器声明的因子，逐个经 emit_expected_factor 展开
   # （`因子=` 是采集器自己的声明面，比在 harness 里重抄一份更不容易漂移）。
   EXPECTED_CHAIN_FACTORS="$(echo "$LINE" | sed -n 's/.*因子=\([^ ]*\).*/\1/p' | tr ',' '\n' \
     | while read -r f; do emit_expected_factor "$f"; done | sort -u | paste -sd, -)"
   EXPECTED_CHAIN_FACTORS_SET=1
-  EXPECTED_CHAIN_FACTORS_SOURCE="采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 CascadeTo 目标）"
+  EXPECTED_CHAIN_FACTORS_SOURCE="采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）"
 else
   echo "edge_attack: 警告：$EDGESCEN 不存在，跳过与采集器场景表的交叉核对" >&2
+  resolve_cascade_target
 fi
 
 # `edgescen` 不可用时的退化路径：用本脚本的相位表推导"期望上链的因子集"（同一套展开规则）。
