@@ -720,6 +720,51 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
 
 ---
 
+### Task 4C: 观察对象搬到节点内 + R 组条件探测真相源（不依赖 C1 的正确性修复）
+
+**为什么加这个任务**（C1 只读勘测实测，报告 `.superpowers/sdd/2026-09-12-edge-factor-coupling-milestone-b/c1-feasibility-survey.md`）：
+
+- **观察对象错位**：`cmd/edgescen` **没有** target/host 参数，`runHostChecks()` 跑的是**它自己所在宿主**的检查登记表，冒烟记录描述的因此是 **WSL 开发机**而不是**被攻击的节点**（输出路径 `/mnt/f/...` 是铁证）。C1 的两个候选分支（硬化基线 / 缩小矩阵）**都需要**这个修复 —— 否则"记录描述部署行为"这一前提不成立。
+- **R 组诚实性有洞**：`condition_holds()` / R 组"真实缺失"闸门探测的是**脚本宿主**，而 `attack-R-no-ids.json` 的 `condition_probes` 是**空数组** ⇒ "确实把 IDS 去掉了"这句话目前**没有节点侧证据**。
+- 勘测确认搬迁是机械工作：交叉编译同一二进制 → `docker cp` 进 host1 → `docker exec` 运行；平台门控没问题（容器是 Linux，75 项检查全部注册）；**`assembleRecord` 已接受外部检查切片 ⇒ 装配层不需要改动**。
+
+**Files:**
+- Modify: `cmd/edgescen/observe.go`（检查结果来源 + 目标口径；不改 `assembleRecord` 的签名语义）
+- Modify: `cmd/edgescen/{main.go,scenario.go}`（CLI：目标/运行位置参数与其校验；新增参数必须 additive、默认行为不变）
+- Modify: `lunwen/clab-lab/scripts/edge_collect.sh`（把二进制送进节点并取回结果；失败即非零、不留半条记录）
+- Modify: `lunwen/clab-lab/scripts/edge_attack.sh`（R 组条件探测改为**在节点上**执行并落进 `condition_probes`）
+- Modify: `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（§5.3/§5.4：观测对象口径 + 节点内评估与宿主评估的**已知差异**）
+- Test: `cmd/edgescen/main_test.go`（新参数的存在性与校验、默认路径不变）
+
+- [ ] **Step 1: 目标口径与默认路径不变**
+  - 新增参数（例如 `-target <container>` / `-in-node`，具体命名由实现者定）用于声明**评估发生在哪个节点**；**不传该参数时行为与今天逐位一致**（既有测试不改仍全绿）。
+  - 校验：目标不存在、`docker` 不可用、取回的检查结果为空 ⇒ **响亮失败**，不得退回本机评估（否则就是"看起来是节点数据、实际是宿主数据"的静默错误）。
+
+- [ ] **Step 2: 节点内评估**
+  - 采集脚本把同一二进制送进目标节点执行，把检查结果（含 `checks[]` 的 `ts`/`delta`/`confidence`）取回交给 `assembleRecord`；装配层与 JSONL 契约**不动**。
+  - 记录 `meta` 必须能让读者判断"这次评估发生在哪台机器"（用现有字段或 additive 字段；若需新字段，先说明为何 `config_hash`/`env` 不够）。
+
+- [ ] **Step 3: R 组条件探测在节点上执行**
+  - `condition_holds()` 改为在节点内探测（"IDS 是否真的不在"、"SIEM 是否真的缺"、"2FA 是否真的没配"），把结果写进 `attack-*.json` 的 `condition_probes`；**空数组必须变成"有证据"或明确报错**，不得再出现"探测列表为空却声称条件已满足"。
+
+- [ ] **Step 4: 用勘测给的最便宜实验验证（一次 exec、无攻击）**
+  - 把现有 `build/edgescen` 送进 host1、在里面跑一次 `S0-baseline`，**diff 节点内 vs 宿主机的失败检查清单**，并把差异如实写进 §5.4（勘测已预警：最小 108 包镜像无 `systemctl` ⇒ 批量检查可能由失败翻成通过、`RS-006` 失去 systemd 分支）。这属**已知差异的测前确认**，不是缺陷。
+  - 该实验只允许一次 `docker cp` + 一次 `docker exec`，**不跑攻击、不重建拓扑**。
+
+- [ ] **Step 5: 门禁与提交**
+```
+go build ./... && go vet ./internal/...
+go test -tags "expr,engine,checks" ./cmd/edgescen/
+go test -tags edgeexp ./cmd/edgecompare/
+bash -n lunwen/clab-lab/scripts/edge_collect.sh lunwen/clab-lab/scripts/edge_attack.sh
+gofmt -l <changed .go files>
+```
+Expected: 全绿；**默认（不带目标参数）路径逐位不变**有显式用例。
+
+**不做**：C1 的设计选择（不硬化镜像、不引入 force-pass 语义、不改 `injection` 枚举）；不跑全量扫描。
+
+---
+
 ### Task 5: A-1 重复性与方差（每场景 3 次）
 
 **Files:**
