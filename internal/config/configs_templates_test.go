@@ -83,6 +83,132 @@ func TestEdgeExpConfigTemplatesLoad(t *testing.T) {
 	}
 }
 
+// labKernelConfigPath 是实验域（`lunwen/`，只在 ASSCOR-Research-Core 分支被白名单追踪）
+// 里的 lab 内核配置。测试跑在本包目录下，故是三级相对路径。
+const labKernelConfigPath = "../../lunwen/clab-lab/kernel-config.ini"
+
+// TestLabKernelConfigDecisionKeysAreInEffect 防回归：lab 配置里"键写在解析器不读的段里"
+// 这一类缺陷 —— 与出厂模板把 `scoring_engine` 写进 `[extension_weights]` 是同一类（见本文件
+// 下半部那两条用例），只是这次出现在实验用的 lab 配置上。
+//
+// 实测（2026-09-12 探针，改动前）：`threshold = 80.0` 写在 `[weights]` 段，而解析器**只在**
+// `[acceptability]` 段读它（config.go 的 `sections["acceptability"]` 分支）⇒ 该键是**静默无效**的，
+// `cfg.Threshold` 之所以是 80.0 **只是因为 `Default()` 恰好也是 80.0**。把文件里的值原地改成
+// 61.5，解析结果仍然是 80.0 —— 这就是"值从未被应用"的证据。
+//
+// 这条用例刻意**不**写成 `cfg.Threshold == 80.0`：那个断言在缺陷存在时同样为真（巧合），
+// 正是它会让缺陷蒙混过关。判据分两层：
+//  1. **位置**：`threshold` 在文件里只能声明在 `[acceptability]` 段（解析器唯一读它的地方）；
+//  2. **等值探针**：把该键的取值原地改掉，解析结果必须**跟着变** —— 键真的在被读的段里，
+//     值就必然进得来。"这份文件能解析"从来不是判据（`Load` 一直成功）。
+func TestLabKernelConfigDecisionKeysAreInEffect(t *testing.T) {
+	raw, err := os.ReadFile(labKernelConfigPath)
+	if err != nil {
+		// main 分支完整忽略 lunwen/（只在本分支白名单追踪），故该文件可能不存在。
+		// 这是"测不到"，不是"测过了"：如实跳过并写明判据挂在哪棵树上是绿的。
+		t.Skipf("lab 配置不在本工作树（%s 分支白名单之外？）：%v —— 本用例只在追踪 lunwen/ 的分支上有约束力", labKernelConfigPath, err)
+	}
+	content := string(raw)
+	cfg, err := Load(labKernelConfigPath)
+	if err != nil {
+		t.Fatalf("lab 配置必须能加载: %v", err)
+	}
+
+	// ① 位置：解析器只在 [acceptability] 段读 threshold。写在别处 = 静默 no-op，
+	// 运营者改完以为生效了，实际退回内置默认 80.0（本次缺陷就是这么来的）。
+	sections := parseSections(content)
+	declaredIn := []string{}
+	for name, kv := range sections {
+		if _, ok := kv["threshold"]; ok {
+			declaredIn = append(declaredIn, name)
+		}
+	}
+	sort.Strings(declaredIn)
+	if len(declaredIn) != 1 || declaredIn[0] != "acceptability" {
+		t.Fatalf("lab 配置的 threshold 声明在 %v 段；解析器**只**从 [acceptability] 段读它（config.go 的 sections[\"acceptability\"] 分支）—— "+
+			"写在其它段里是静默 no-op（值被忽略、退回内置默认）。请把该键连同注释移回 [acceptability]", declaredIn)
+	}
+
+	// ② 等值探针：把声明处的取值改成 61.5（与文件现值、与内置默认 80.0 都不同），
+	// 解析结果必须变成 61.5。键被挪回解析器不读的段时，这里会读到 80.0 而红。
+	probeValue := "61.5"
+	probed, ok := rewriteKeyValue(content, "threshold", probeValue)
+	if !ok {
+		t.Fatalf("在 %s 里找不到**唯一**一处 threshold 声明（键名精确匹配，`beacon_threshold` 这类不算）—— 断言无法定位", labKernelConfigPath)
+	}
+	probeCfg, err := Parse(probed)
+	if err != nil {
+		t.Fatalf("探针内容必须能解析: %v", err)
+	}
+	if probeCfg.Threshold != 61.5 {
+		t.Errorf("把文件里的 threshold 改成 61.5 之后 cfg.Threshold = %v（期望 61.5）—— "+
+			"该键写在解析器不读的段里，取值被静默忽略；80.0 只是内置默认值的巧合", probeCfg.Threshold)
+	}
+
+	// ③ 文件声明的**意图**钉住（这些键本来就在解析器会读的段里，取值与内置默认不同，
+	// 因此它们"在生效"这件事本身可判）。阈值在本用例里固定为 80.0 是**文档化的部署判定线**
+	// （GB/T 22239-2019 Level 3）：实验里"全部记录落进不可接受"是**结论**，改阈值属于敏感性分析，
+	// 走 `edgecompare -threshold`（见 docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md §5.4.6），
+	// 不在这里把部署判定线改掉。
+	if cfg.Threshold != 80.0 {
+		t.Errorf("lab 配置的部署判定线 = %v，期望 80.0", cfg.Threshold)
+	}
+	for _, tc := range []struct {
+		name string
+		got  float64
+		want float64
+	}{
+		{"[weights] kernel_security", cfg.Weights.KernelSecurity, 10},
+		{"[edge_factors] two_factor_failure", cfg.EdgeFactors.TwoFactorFailure, 0.85},
+		{"[edge_factors] selinux_disabled", cfg.EdgeFactors.SELinuxDisabled, 0.85},
+		{"[edge_factors] apparmor_disabled", cfg.EdgeFactors.AppArmorDisabled, 0.85},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("%s = %v，期望 %v —— 该键没有被解析器读进去（或值被改了）", tc.name, tc.got, tc.want)
+		}
+	}
+	if cfg.DataDir != "/var/lib/asscor" {
+		t.Errorf("[global] data_dir = %q，期望 /var/lib/asscor", cfg.DataDir)
+	}
+
+	// ④ 同一类缺陷的**当前状态**：`[heartbeat] timeout_sec/enabled` 是解析层**任何段都不读**的键
+	// （Parse 里没有 heartbeat 分支，cfg.HeartbeatTimeoutSec 全程保持零值；唯一消费者
+	// internal/heartbeat/heartbeat.go 只在字段 > 0 时才覆盖内置的 60s 默认）。
+	// 它们**没法靠挪段救活**：挪到哪儿都一样无效，那是"解析层没实现"而不是"位置写错"。
+	// 把事实钉在这里：一旦有人给它接上解析，本断言会红，提醒改动者回头决定 lab 配置里那两行怎么处理
+	// （现值 60s/启用与内置默认巧合一致，因此今天改与不改的行为相同）。
+	if cfg.HeartbeatTimeoutSec != 0 {
+		t.Errorf("cfg.HeartbeatTimeoutSec = %v（此前解析层从不设置它）—— 解析器现在会读 heartbeat 超时了，"+
+			"请复核 %s 的 [heartbeat] 段该保留什么值", cfg.HeartbeatTimeoutSec, labKernelConfigPath)
+	}
+}
+
+// rewriteKeyValue 把 content 里**唯一**一处 `key = …` 声明的取值换成 probe，其余字节原样保留
+// （含行尾 CRLF）。定位口径与 parseSections 同构：注释行不算声明，键名大小写与空白不敏感。
+// 返回值 ok=false 表示没有找到**恰好一处**声明（0 处或重复声明），调用方应视为断言无法定位。
+func rewriteKeyValue(content, key, probe string) (string, bool) {
+	lines := strings.Split(content, "\n")
+	out := make([]string, 0, len(lines))
+	hits := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		parts := strings.SplitN(trimmed, "=", 2)
+		if len(parts) == 2 &&
+			!strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, ";") &&
+			strings.TrimSpace(strings.ToLower(parts[0])) == key {
+			eol := ""
+			if strings.HasSuffix(line, "\r") {
+				eol = "\r"
+			}
+			out = append(out, key+" = "+probe+eol)
+			hits++
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n"), hits == 1
+}
+
 // TestWeightsScoringEngineIsParsedFromWeights pins ①：键写在解析器**会读**的段里时，
 // 取值必须真的落到 cfg.ScoringEngine 上。
 //
