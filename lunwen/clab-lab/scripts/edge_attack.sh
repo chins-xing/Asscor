@@ -308,7 +308,7 @@ fi
 # `probe_condition_holds "$f"; rc=$?` 在 `set -e` 下会因 rc=1 直接把整个脚本带走
 # （实测过：探针循环静默停在那一行，调用方只看到一次没有诊断的"运行失败"）。
 probe_entry() {
-  local factor="$1" check="$2" phase="$3" rc holds
+  local factor="$1" check="$2" phase="${3:-null}" real_missing="${4:-false}" rc holds
   if probe_condition_holds "$factor"; then
     rc=0
   else
@@ -321,16 +321,22 @@ probe_entry() {
       echo "edge_attack: 探针 $factor 在节点 ${EDGEEXP_TARGET:-（未声明）} 内**没有跑成**（rc=$rc）—— 不得据此写任何结论" >&2
       exit 1 ;;
   esac
+  # `phase` 默认 `null`（JSON 的 null，不是 0）：R 组**没有相位**，写 0 会被读成"第 1 相位"
+  # （Fix round 1 / M-7）。R 组的条目另带 `real_missing: true` 与阶段语义区分开。
   python3 -c 'import json,sys;a=json.loads(sys.argv[1]);a.append(json.loads(sys.argv[2]));print(json.dumps(a))' \
-    "$PROBES_JSON" "{\"factor\":\"$factor\",\"check\":\"$check\",\"condition_holds\":$holds,\"phase\":$phase,\"probe_target\":\"${EDGEEXP_TARGET:-}\",\"probe_host\":\"$PROBE_HOST\"}"
+    "$PROBES_JSON" "{\"factor\":\"$factor\",\"check\":\"$check\",\"condition_holds\":$holds,\"phase\":$phase,\"real_missing\":$real_missing,\"probe_target\":\"${EDGEEXP_TARGET:-}\",\"probe_host\":\"$PROBE_HOST\"}"
 }
 
-# probe_entry_on_node 是"探针没执行时不留空条目"的守卫：S 组未声明目标节点时**如实**记下
-# 未执行（而不是写一个 `condition_holds: false` 的假结论），R 组则根本走不到这里（上面已失败）。
+# probe_skipped_entry 是"探针没执行时不留空条目"的守卫：S 组未声明目标节点时**如实**记下未执行
+# （而不是写一个 `condition_holds: false` 的假结论），R 组则根本走不到这里（上面已失败）。
+#
+# 名字里的 `skipped` 是关键字：条目里那三个字段（`condition_holds: null` / `phase: null` /
+# `skipped`）合起来表达"这条不是证据"。函数名在 Fix round 1 / M-8 之前写作
+# `probe_entry_on_node`，与实参语义不符（它恰恰是"**没**在节点上跑"的那条路径）。
 probe_skipped_entry() {
-  local factor="$1" check="$2" phase="$3"
+  local factor="$1" check="$2" phase="${3:-null}"
   python3 -c 'import json,sys;a=json.loads(sys.argv[1]);a.append(json.loads(sys.argv[2]));print(json.dumps(a))' \
-    "$PROBES_JSON" "{\"factor\":\"$factor\",\"check\":\"$check\",\"condition_holds\":null,\"phase\":$phase,\"probe_target\":\"\",\"probe_host\":\"\",\"skipped\":\"未声明 EDGEEXP_TARGET：探针不执行（S 组不阻断，但这条**不是**证据）\"}"
+    "$PROBES_JSON" "{\"factor\":\"$factor\",\"check\":\"$check\",\"condition_holds\":null,\"phase\":$phase,\"real_missing\":false,\"probe_target\":\"\",\"probe_host\":\"\",\"skipped\":\"未声明 EDGEEXP_TARGET：探针不执行（S 组不阻断，但这条**不是**证据）\"}"
 }
 
 # --- 相位推进 ---------------------------------------------------------------
@@ -395,7 +401,7 @@ if [ -n "$REAL_MISSING" ]; then
   # 只探这一次（探针在节点里真的执行一次 docker exec）：结论既落进 condition_probes，
   # 也直接决定本闸门。`probe_entry` 在 rc=2（探针没跑成）时自己**响亮退出** ——
   # 那种情况绝不能被当成"条件不成立"，更不能被当成"空缺即通过"。
-  PROBES_JSON="$(probe_entry "$probe_factor" "${TRIGGER[$probe_factor]:-}" 0)"
+  PROBES_JSON="$(probe_entry "$probe_factor" "${TRIGGER[$probe_factor]:-}" "null" "true")"
   # 判据用"JSON 里最后一次探针的 condition_holds 是不是真布尔 true"，而不是拿 shell 里的
   # 字符串跟 python 打印的 `True` 比 —— 后者大小写不同 ⇒ 闸门会把 rc=0（条件成立）
   # **误判成不成立**（本任务实测踩到过：探针明明通过，闸门却报"防护仍然在位"）。

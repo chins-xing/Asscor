@@ -264,7 +264,18 @@ def body():
         elif target not in record_target:
             observation['ok'] = False
             observation['reason'] = ('记录声称观测主体是 %r，而本轮声明的节点是 %s' % (record_target, target))
-        elif probe_targets and probe_targets != [target]:
+        elif not probe_targets:
+            # Fix round 1 / M-3：声明了目标、记录也带字段，但 harness 的探针**一条都没执行**
+            # （`condition_probes` 为空或全部 skipped）时会落进这里。旧实现直接放行 ⇒
+            # 文档 §5.3.1 第 3 条"同一轮数据必须来自同一台机器"对 S 组是**空真**。
+            # 触发场景现实存在：只给 edge_collect.sh 设了 EDGEEXP_TARGET，而 edge_attack.sh
+            # 是在（或没有）另一个环境下跑的。这里**拒绝**，并把两条出路写清楚。
+            observation['ok'] = False
+            observation['reason'] = ('声明了 EDGEEXP_TARGET=%s，但 harness 的 condition_probes 里没有任何 probe_target —— '
+                                     '本次采集没有节点侧探针证据。要么让 edge_attack.sh 在同一环境、同一 '
+                                     'EDGEEXP_TARGET 下重跑（它会在节点内探一次），要么显式声明这是'
+                                     '「本轮不做条件探针」的采集（当前没有这种开关：这是有意设计）' % target)
+        elif probe_targets != [target]:
             observation['ok'] = False
             observation['reason'] = ('harness 的条件探针在 %s 上执行，而本次观测主体是 %s —— '
                                      '同一轮数据来自两台机器' % (probe_targets, target))
@@ -272,7 +283,10 @@ def body():
         if record_target:
             observation['ok'] = False
             observation['reason'] = ('未声明 EDGEEXP_TARGET（默认=本机），而记录却带 observation_target=%r' % record_target)
-        if probe_targets:
+        # Fix round 1 / M-4：两条判据是**并列**的 if，后一条会把前一条的 reason 覆盖掉
+        # （离线夹具实测：操作者看到的提示指向 harness，而不是"记录却带字段"这条真正的反常）。
+        # 改成 elif：同一次判定只留一条、且是**最先命中**的那条。
+        elif probe_targets:
             observation['ok'] = False
             observation['reason'] = ('未声明 EDGEEXP_TARGET，而 harness 的探针却标称在 %s 上执行' % probe_targets)
 

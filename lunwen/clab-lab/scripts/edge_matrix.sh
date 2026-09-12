@@ -31,6 +31,14 @@
 #   EDGEEXP_RUN_INDEX   重复号（>1 = A-1 的重复样本；此时**必须**显式给 EDGEEXP_ENV）
 #   EDGEEXP_RESUME=1    续跑：跳过目标 JSONL 里已有记录的场景（幂等守卫不再把整轮判死）；
 #                       被跳过的场景计入 `scenarios_skipped_resume`，并在 run.json 里如实标出
+#   EDGEEXP_TARGET      **被攻节点的容器名**（Task 4C）：默认为 `asc-asscor-host1` 并 export 给
+#                       两个子脚本 —— 观测主体在节点内是本任务确立的**正确**形态（记录里的
+#                       `meta.observation_target` 是权威证据），默认开启可以消除"看起来是节点
+#                       数据、实际是宿主数据"这个最危险的静默形态；R 组（真实缺失对照）更是
+#                       **必须**声明它（否则整轮失败，见 edge_attack.sh）。置空（`EDGEEXP_TARGET=`）
+#                       即退回"在本机评估"的旧形态，但那时 R 组会硬失败。
+#                       注意与 `edge_reset.sh` 的 `EDGEEXP_TARGET_HOST` **不是一回事**：后者是
+#                       复位脚本的攻击目标（默认 `host1`），本变量是容器名（`asc-asscor-host1`）。
 # ============================================================================
 set -euo pipefail
 
@@ -46,6 +54,16 @@ CONFIG="${EDGEEXP_CONFIG:-$REPO_ROOT/configs/edgeexp/m0-baseline.ini}"
 RECORDS="${EDGEEXP_RECORDS:-$DATA_DIR/records-$ENV_NAME-$TODAY.jsonl}"
 EDGESCEN="${EDGEEXP_EDGESCEN:-$REPO_ROOT/build/edgescen}"
 EDGECOMPARE="${EDGEEXP_EDGECOMPARE:-$REPO_ROOT/build/edgecompare}"
+
+# 【Task 4C / I-9】**观测主体默认在节点内**：把被攻节点的容器名钉给整个运行。
+#
+# 为什么默认开启（而不是"可选增强"）：`edge_attack.sh` 对 R 组（真实缺失对照）**要求**声明它，
+# 而 `edge_collect.sh` 会把 `--target` 转成 `meta.observation_target` —— 那是"这条记录到底描述
+# 哪台机器"的唯一机器可读证据。默认开启后，一次照手册跑的全量矩阵不会在第一个 R 场景整轮失败，
+# 也不会产出"看起来是节点数据、实际是宿主数据"的记录。
+# 置空（`EDGEEXP_TARGET=`）退回旧形态：S 组照常（探针不执行、如实留空），R 组**硬失败**。
+TARGET="${EDGEEXP_TARGET-asc-asscor-host1}"
+export EDGEEXP_TARGET="$TARGET"
 
 # 【Fix round 3 / 第 2 项】**把记录文件钉死给整个运行**：子脚本会在 `edge_collect.sh` 里
 # 自己重算 `date -u +%Y%m%d`，而一次 3–7 小时的 sweep 很容易跨 00:00 UTC ⇒ 父脚本数今天的文件、
@@ -135,6 +153,14 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   echo "  记录文件    : $RECORDS"
   echo "  采集配置    : $CONFIG"
   echo "  环境/重复号 : $ENV_NAME / run=${EDGEEXP_RUN_INDEX:-1}"
+  # 观测主体必须在干跑里就看得见（Task 4C / I-9 第 2 条）：它是"这批记录描述哪台机器"的答案，
+  # 而默认值恰恰是本轮引入的 —— 操作者要能在跑之前就知道它、并知道怎么改。
+  if [ -n "$TARGET" ]; then
+    echo "  观测主体    : 节点内（EDGEEXP_TARGET=$TARGET；可用 EDGEEXP_TARGET=<容器名> 覆盖，置空=退回本机评估但 R 组会硬失败）"
+    echo "  观测主体继承: $(bash -c 'printf "EDGEEXP_TARGET=%s" "${EDGEEXP_TARGET:-<未导出>}"')"
+  else
+    echo "  观测主体    : 本机（EDGEEXP_TARGET 被显式置空）—— R 组的真实缺失对照会因此整轮失败；S 组的 condition_probes 会如实留空（不是证据）"
+  fi
   echo "  数据目录    : $DATA_DIR（干跑不创建、不清理）"
   echo "  场景        : ${#SELECTED[@]} 个（声明的 ${#SCENARIOS[@]}）/ 名单核对已通过"
   echo "  -factors    : $(derive_factors_spec "$CONFIG")（来源：$CONFIG）"
@@ -173,13 +199,16 @@ RUN_START_S=$(date -u +%s)
 
 # 运行状态（供 EXIT trap 汇总）：逐场景进度 + 退出码
 STATE="$RUN_D/.state.json"
-python3 - "$STATE" "$RUN_ID" "$ENV_NAME" "$MODE" "$RECORDS" "$CONFIG" "$RUN_STARTED" "$RUN_START_S" "${SELECTED[@]}" <<'PY'
+python3 - "$STATE" "$RUN_ID" "$ENV_NAME" "$MODE" "$RECORDS" "$CONFIG" "$RUN_STARTED" "$RUN_START_S" "$TARGET" "${SELECTED[@]}" <<'PY'
 import json, sys
 state = {
     'run_id': sys.argv[2], 'env': sys.argv[3], 'mode': sys.argv[4],
     'records_file': sys.argv[5], 'config': sys.argv[6],
     'started_at': sys.argv[7], 'start_s': int(sys.argv[8]),
-    'scenarios_selected': sys.argv[9:], 'completed': [], 'failed': None,
+    # 观测主体（Task 4C / I-9 第 2 条）：照 `env` 的先例在运行级产物里留痕 ——
+    # "这批记录描述哪台机器"必须能从 run.json 看出来，而不是只能去翻每条记录的 meta。
+    'observation_target': sys.argv[9],
+    'scenarios_selected': sys.argv[10:], 'completed': [], 'failed': None,
 }
 json.dump(state, open(sys.argv[1], 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 PY
@@ -389,6 +418,8 @@ if run_inputs.get('config_path'):
 run = {
     'run_id': state['run_id'],
     'env': state['env'],
+    # 观测主体（Task 4C / I-9）：空串 = 本机（旧形态、R 组会硬失败）。照 env 的先例放顶层。
+    'observation_target': state.get('observation_target', ''),
     'mode': state['mode'],
     'started_at': state['started_at'],
     'finished_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
