@@ -3,11 +3,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -145,12 +147,12 @@ func fixtureChainModel(t *testing.T) *config.Config {
 }
 
 // fixtureHostChecks 是"目标机真实检查结果"的夹具：登记表里六个触发检查 + 一个内核安全检查
-// + 一个业务连续性检查，全部**通过**（只看注入出来的失败）。ID/域/delta 逐字取自
+// + 一个业务连续性检查，全部**通过**（只看注入出来的失败）。ID/域/delta/名称逐字取自
 // `internal/checks/linux`：
 //
 //	EF-001 attack_surface 0｜EF-002 attack_surface 0｜OT-005 operation_trust -15
-//	RS-005 resilience -5｜RS-006 resilience -10｜RS-007 resilience -6｜KS-001 kernel_security
-//	BC-005 business_continuity
+//	RS-005 resilience -5｜RS-006 resilience -10｜RS-007 resilience -6
+//	KS-001 kernel_security -15｜BC-005 business_continuity -10
 //
 // 与真实登记表的**唯一**差异是 Platform 留空（真实条目写 "linux"）：部署目标机是 Linux，
 // 而单元测试要在开发机（Windows）上跑，`Register` 会按 Platform 过滤掉 linux 条目。
@@ -201,8 +203,12 @@ func fixtureCheckItems() []model.CheckItem {
 		{ID: "RS-005", Domain: model.DomainResilience, Name: "SYN Cookie防护", Delta: -5, Check: alwaysPass},
 		{ID: "RS-006", Domain: model.DomainResilience, Name: "HIDS/NIDS部署", Delta: -10, Check: alwaysPass},
 		{ID: "RS-007", Domain: model.DomainResilience, Name: "入侵告警配置", Delta: -6, Check: alwaysPass},
-		{ID: "KS-001", Domain: model.DomainKernelSecurity, Name: "内核加固", Delta: -10, Check: alwaysPass},
-		{ID: "BC-005", Domain: model.DomainBusinessContinuity, Name: "异地备份", Delta: -8, Check: alwaysPass},
+		// 末两项的 ID/域/**delta/名称**同样逐字取自 internal/checks/linux：
+		//   kernel_security.go 的 KS-001 "Kernel Version CVE Check" = -15
+		//   checks.go 的 BC-005 "备份机制" = -10
+		// （Fix round 1 / 评审 M5：此前写的 -10/-8 与登记表不符，而注释声称"逐字取自"。）
+		{ID: "KS-001", Domain: model.DomainKernelSecurity, Name: "Kernel Version CVE Check", Delta: -15, Check: alwaysPass},
+		{ID: "BC-005", Domain: model.DomainBusinessContinuity, Name: "备份机制", Delta: -10, Check: alwaysPass},
 	}
 }
 
@@ -285,7 +291,7 @@ func TestScenarioTableMatchesSpecMatrix(t *testing.T) {
 		if len(spec.Inject) > 1 {
 			distinct := map[string]bool{}
 			for _, phase := range spec.Inject {
-				for _, id := range resolvePhaseChecks(factorsOf(phase)) {
+				for _, id := range resolvePhaseChecks(phase) {
 					distinct[id] = true
 				}
 			}
@@ -296,9 +302,6 @@ func TestScenarioTableMatchesSpecMatrix(t *testing.T) {
 		}
 	}
 }
-
-// factorsOf 把注入阶段原样返回（让上面那段读起来是"阶段 → 检查"的两步）。
-func factorsOf(phase []string) []string { return phase }
 
 // canonicalFactorIDs 是 spec §5 因子集：六个直接触发因子 + 级联因子 EF-3FA。
 func canonicalFactorIDs() []string {
@@ -385,8 +388,10 @@ func TestScenarioInjectionProducesValidRecord(t *testing.T) {
 			failed[ck.ID] = true
 		}
 	}
-	pluginPath := rec.Observed.EdgeFactorChain // 采集器的插件路径记录
-	for _, ob := range pluginPath {
+	// 本采集器写出的记录都出自插件路径（未装载模型的记录在上游已被拒），故对这些条目逐条做交叉校验。
+	// 变量名不用 `pluginPath`：链不是"路径"（评审 M13 指出该名字会让读者以为它承载路径信息）。
+	pluginChainEntries := rec.Observed.EdgeFactorChain
+	for _, ob := range pluginChainEntries {
 		if ob.CTrigger > 0 && !failed[ob.TriggerCheck] {
 			t.Errorf("链上 %s 的 c_trigger = %v > 0，但 %s 不在失败检查里 —— 记录自相矛盾", ob.Factor, ob.CTrigger, ob.TriggerCheck)
 		}
@@ -591,10 +596,20 @@ func TestChainTimestampsComeFromHarnessInjections(t *testing.T) {
 	}
 }
 
-// TestSimultaneousInjectionKeepsOneTimestamp 是**反向证据**：同时注入（没有任何时间结构）的
-// 场景，链上时刻就必须是同一个 —— C 与 V 在这条数据上不可区分是**如实结果**，不是缺陷。
-// 若采集器"为了让 C 有东西可用"而自己造递增时间，本条立刻变红。
-func TestSimultaneousInjectionKeepsOneTimestamp(t *testing.T) {
+// TestSimultaneousScenarioNeverMixesChainTimestamps（Fix round 1 / 评审 Important 2 的钉子）
+//
+// 真机实测过的坏形态：非顺序场景里，"命中 harness 的条目拿注入时刻、其余沿用评分时刻"
+// 会产出**混用基准**的链（评审实测 11 条里 4 条带注入时刻、7 条带更晚的评分时刻）——
+// 那个"注入先、自然失败后"的顺序既不是实验设计的，也没有任何地方报告它。
+//
+// 本用例同时制造两类条目：`OT-005` 是**注入**的（harness 报了它的时刻），`RS-006` 是目标机
+// **自然失败**的（harness 不知道它）。断言：
+//   - 链上**没有任何**条目取 harness 的注入时刻；
+//   - 全部条目共用同一个时刻（= 评估时刻 ⇒ 无时间结构 ⇒ C 与 V 在这条数据上同分）；
+//   - harness 的注入时刻仍然照常进 `checks[]`（信息没丢，只是不当模型的入参）。
+//
+// 旧的"混用"实现会在这里红：EF-SELINUX 会带注入时刻、EF-NO-IDS 带评分时刻。
+func TestSimultaneousScenarioNeverMixesChainTimestamps(t *testing.T) {
 	registerFixtureChecks()
 	cfg := fixtureConfig(t)
 
@@ -602,17 +617,41 @@ func TestSimultaneousInjectionKeepsOneTimestamp(t *testing.T) {
 	gt := newGroundTruth(true, 213, 4, 3, false)
 	gt.Injections = map[string]time.Time{"OT-005": at}
 
-	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S2-selinux-apparmor"), gt, 1, fixtureHostChecks())
+	// RS-006 在目标机上自然失败（服务真的缺失）—— 它不在 harness 的注入清单里。
+	rec, err := assembleRecord(context.Background(), cfg, mustScenario(t, "S1-selinux"), gt, 1,
+		hostChecksWithFailures("RS-006"))
 	if err != nil {
 		t.Fatalf("assembleRecord: %v", err)
 	}
-	if len(rec.Observed.EdgeFactorChain) == 0 {
-		t.Fatal("链为空")
+	if !chainHasFactor(rec, "EF-SELINUX") || !chainHasFactor(rec, "EF-NO-IDS") {
+		t.Fatalf("夹具必须同时造出『注入激活』与『自然失败激活』两条链: %+v", rec.Observed.EdgeFactorChain)
 	}
+	harnessTS := at.Format(time.RFC3339)
+	distinct := map[string]bool{}
 	for _, ob := range rec.Observed.EdgeFactorChain {
-		if ob.TS != at.Format(time.RFC3339) {
-			t.Errorf("同时注入的检查（%s）必须全部取同一个注入时刻，得到 %q", ob.TriggerCheck, ob.TS)
+		if ob.TS == harnessTS {
+			t.Errorf("链上 %s（触发检查 %s）取了 harness 的注入时刻 —— 同时注入场景**一条都不该**取，"+
+				"混用会造出一个没人设计、也没人报告的顺序", ob.Factor, ob.TriggerCheck)
 		}
+		distinct[ob.TS] = true
+	}
+	if len(distinct) != 1 {
+		t.Fatalf("同时注入场景的链条目必须共用同一个时刻（无时间结构），实际: %v\n链: %+v",
+			distinct, rec.Observed.EdgeFactorChain)
+	}
+	// 注入时刻没有丢：它属于 checks[]（逐检查的观测时刻，不是模型入参）。
+	seen := false
+	for _, ck := range rec.Observed.Checks {
+		if ck.ID == "OT-005" && ck.TS == harnessTS {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Errorf("harness 的注入时刻必须仍然落在 checks[] 上（它是该检查的观测时刻），实际: %+v", rec.Observed.Checks)
+	}
+	// 来源必须留痕（记录里那句溯源注记要说明"注入时刻不用于链条目"）。
+	if !strings.Contains(rec.Meta.WeightSource, "链条目 ts") || !strings.Contains(rec.Meta.WeightSource, "同时注入") {
+		t.Errorf("链条目 ts 的来源必须写进记录的溯源注记，实际: %q", rec.Meta.WeightSource)
 	}
 }
 
@@ -748,10 +787,13 @@ func TestAssemblyFailureIsRecordedNotSilentlyDropped(t *testing.T) {
 		if rec.Meta.AssemblyError == "" {
 			t.Error("装配失败必须显式记进 meta.assembly_error")
 		}
-		// 主要保证在写出层：`runCLI` 只在 buildRecord 返回 nil error 时才碰输出文件
-		// （见 TestCLIRefusesToWriteOnAssemblyFailure）；这里只确认它确实没能自检通过。
-		if err := rec.Validate(); err == nil {
-			t.Error("被拒的记录不得通过读取层契约")
+		// 拒绝理由必须**指名道姓**：这条记录从未密封（`sealRecord` 在自检链里、失败即返回），
+		// 直接在它上面跑 Validate 只会报"observed.threshold 缺失"这种密封前的假象 ——
+		// 那既不是失败原因，也永远为真（评审 M1）。真正的保证在写出层：`runCLI` 只在
+		// buildRecord 返回 nil error 时才碰输出文件（见 TestCLIRefusesToWriteOnAssemblyFailure）。
+		// 这里改为断言错误的**内容**：必须指向"引擎未装载合成模型"这条真正的拒绝理由。
+		if !strings.Contains(err.Error(), "没有装载") && !strings.Contains(err.Error(), "溯源戳") {
+			t.Errorf("拒绝理由必须指向『引擎没有装载合成模型』: %v", err)
 		}
 	})
 
@@ -763,6 +805,26 @@ func TestAssemblyFailureIsRecordedNotSilentlyDropped(t *testing.T) {
 		}
 		if rec.Meta.AssemblyError == "" {
 			t.Error("装配失败必须显式记进 meta.assembly_error")
+		}
+		// 拒绝理由必须**针对 chain 本身**（Task 4 的 chain.ini 会撞上这一条）：笼统地说
+		// "必须声明 [edge_factors.model]" 会让操作者去改一行本来就写对了的配置。
+		if !strings.Contains(rec.Meta.AssemblyError, "chain") || !strings.Contains(rec.Meta.AssemblyError, "离线") {
+			t.Errorf("chain 模板的拒绝理由必须说明『chain 在线不可执行、由 edgecompare 离线评估』: %q", rec.Meta.AssemblyError)
+		}
+	})
+
+	t.Run("vector 没有声明任何 lambda", func(t *testing.T) {
+		// 另一个"引擎装了却没装载"的形态：V/G 没有 λ 就一个域都不会被修正 ⇒ 装配期拒绝装载
+		// （否则会出现『戳记写着 vector、评分却分毫未变』的假溯源）。提示必须指向 λ。
+		cfg := mustLoadConfig(t, "fixture-nolambda.ini",
+			strings.Replace(fixtureConfigINI, "[edge_factors.model]\nmodel = legacy\np_floor = 0.50",
+				"[edge_factors.model]\nmodel = vector\np_floor = 0.50", 1))
+		rec, err := buildRecord(context.Background(), "S1-selinux", cfg, newGroundTruth(true, 100, 2, 1, false), 1)
+		if err == nil {
+			t.Fatal("没有任何 lambda.<domain> 的 vector 模型不会被装载，必须拒绝写出")
+		}
+		if !strings.Contains(rec.Meta.AssemblyError, "lambda") {
+			t.Errorf("拒绝理由必须指向缺失的 lambda.<domain>: %q", rec.Meta.AssemblyError)
 		}
 	})
 
@@ -1115,7 +1177,10 @@ func TestCLIRefusesToWriteOnAssemblyFailure(t *testing.T) {
 	}
 }
 
-// TestCLIUsageErrors：缺必填开关、未知场景都属**用法错误**（退出码 2），且不产生任何产物。
+// TestCLIUsageErrors：缺必填开关、未知场景都属**用法错误**（退出码 2）。
+//
+// 本条只断言退出码（评审 M10：原文案声称"不产生任何产物"，而这里并没有断言产物不存在 ——
+// 那句"产物不存在"的保证由 `TestCLIRefusesToWriteOnAssemblyFailure` 用真实的输出路径断言）。
 func TestCLIUsageErrors(t *testing.T) {
 	cases := []struct {
 		name string
@@ -1146,6 +1211,111 @@ func TestCLIListScenarios(t *testing.T) {
 	for name := range scenarios {
 		if !strings.Contains(stdout.String(), name) {
 			t.Errorf("--list 必须列出场景 %s", name)
+		}
+	}
+}
+
+// TestCLIPlaybookHashOverride：`--playbook-hash` 覆盖 harness 产物里的剧本哈希，并落进
+// `meta.playbook_hash`。两种用途：harness 没写哈希时由脚本补，以及同一段剧本换哈希重跑
+// （评审 M12：这个开关此前没有任何用例碰过）。
+func TestCLIPlaybookHashOverride(t *testing.T) {
+	registerFixtureChecks()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "legacy.ini")
+	if err := os.WriteFile(cfgPath, []byte(fixtureConfigINI), 0o600); err != nil {
+		t.Fatalf("写配置: %v", err)
+	}
+	// harness 产物**故意不带** playbook_hash。
+	attackPath := filepath.Join(dir, "attack.json")
+	if err := os.WriteFile(attackPath, []byte(`{"scenario":"S2-selinux-apparmor","compromised":true,
+	  "time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false,
+	  "injections":[{"check":"OT-005","at":"2026-09-08T10:00:03Z"}]}`), 0o600); err != nil {
+		t.Fatalf("写 harness 产物: %v", err)
+	}
+	outPath := filepath.Join(dir, "records.jsonl")
+
+	var stdout, stderr strings.Builder
+	code := runCLI([]string{
+		"--scenario", "S2-selinux-apparmor", "--config", cfgPath, "--attack-out", attackPath,
+		"--out", outPath, "--run", "1", "--env", "wsl-clab-14", "--playbook-hash", "sha256:override",
+	}, &stdout, &stderr)
+	if code != exitOK {
+		t.Fatalf("退出码 = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, stdout.String(), stderr.String())
+	}
+	recs, err := edgeexp.LoadFileAs("test", outPath)
+	if err != nil {
+		t.Fatalf("读回: %v", err)
+	}
+	if recs[0].Meta.PlaybookHash != "sha256:override" {
+		t.Errorf("--playbook-hash 必须覆盖 harness 产物里的值（harness 没写时更必须落上），实际 %q", recs[0].Meta.PlaybookHash)
+	}
+}
+
+// TestSealingIsLosslessForEveryPopulatedField：把契约类型的**每个导出字段**都填成非零再密封，
+// 断言这次编解码逐字节无损。
+//
+// 为什么需要它（Fix round 1 / 评审的加固项）：`Observed` / `ChainObs` / `GroundTruth` 各自的
+// `UnmarshalJSON` 里有一份 aux **字段清单**，将来给这些类型加字段却忘了同步它，字段就会在密封处
+// 被吃掉 —— 而密封后的记录才是被自检、被写出的那一份 ⇒ "字段加了却永远到不了磁盘"这件事
+// 在其它所有门禁上都看不见（round-trip 钉桩也只看总分）。这里用反射把每个导出字段填满，
+// 于是任何漏字段都会让 `json.Marshal(sealed)` 与密封前的字节不同而立刻暴露。
+func TestSealingIsLosslessForEveryPopulatedField(t *testing.T) {
+	var full edgeexp.Record
+	fillExported(reflect.ValueOf(&full).Elem())
+
+	before, err := json.Marshal(full)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	sealed, err := sealRecord(full)
+	if err != nil {
+		t.Fatalf("密封必须无损（漏字段会在长度/字节断言处暴露）: %v", err)
+	}
+	after, err := json.Marshal(sealed)
+	if err != nil {
+		t.Fatalf("marshal sealed: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("密封前后记录字节不同 —— 契约类型的解码漏了字段：\n前: %s\n后: %s", before, after)
+	}
+	if len(sealed.Observed.EdgeFactorChain) != len(full.Observed.EdgeFactorChain) ||
+		len(sealed.Observed.Checks) != len(full.Observed.Checks) {
+		t.Fatalf("密封前后切片长度不一致: chain %d→%d, checks %d→%d",
+			len(full.Observed.EdgeFactorChain), len(sealed.Observed.EdgeFactorChain),
+			len(full.Observed.Checks), len(sealed.Observed.Checks))
+	}
+}
+
+// fillExported 把结构体里每个**可写**字段填成该类型的非零值（递归，含切片/映射的元素）。
+// 非导出字段（契约的字段存在性标记）不可写，自动跳过 —— 它们不参与序列化，也不需要填。
+func fillExported(v reflect.Value) {
+	switch v.Kind() {
+	case reflect.String:
+		v.SetString("x")
+	case reflect.Bool:
+		v.SetBool(true)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v.SetInt(1)
+	case reflect.Float32, reflect.Float64:
+		v.SetFloat(1)
+	case reflect.Slice:
+		elem := reflect.New(v.Type().Elem()).Elem()
+		fillExported(elem)
+		v.Set(reflect.Append(reflect.MakeSlice(v.Type(), 0, 1), elem))
+	case reflect.Map:
+		m := reflect.MakeMap(v.Type())
+		key := reflect.New(v.Type().Key()).Elem()
+		fillExported(key)
+		val := reflect.New(v.Type().Elem()).Elem()
+		fillExported(val)
+		m.SetMapIndex(key, val)
+		v.Set(m)
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			if !v.Field(i).CanSet() {
+				continue
+			}
+			fillExported(v.Field(i))
 		}
 	}
 }
@@ -1190,9 +1360,14 @@ func TestEdgeExpTemplatesAreConsumableWhenPresent(t *testing.T) {
 	}
 }
 
-// TestRecordGroundTruthMatchesHarnessBytes：记录里的 ground_truth 必须与 harness 产物逐字段一致
-// （join 的两个来源之间不得有第三种口径）。
-func TestRecordGroundTruthMatchesHarnessBytes(t *testing.T) {
+// TestGroundTruthMarshalsWithHarnessKeys：解析出来的客观结果**用 harness 产物的键名**序列化
+// （`compromised` / `time_to_compromise_s` …），两处导出一致 —— 这份 JSON 会进测试日志、
+// 也可能被后续工具再读一遍，键名漂了就会静默变成另一个形状。
+//
+// 本条不是"记录里的 ground_truth 与 harness 逐字段一致"的证明（那由 `recordGroundTruth` 的
+// JSON 往返与 `TestGroundTruthRecordFieldCarriesExplicitPresence` 负责；评审 M6 指出原名
+// `TestRecordGroundTruthMatchesHarnessBytes` 会误导读者以为它碰了 `edgeexp.Record`）。
+func TestGroundTruthMarshalsWithHarnessKeys(t *testing.T) {
 	path := writeFile(t, "attack.json", `{"compromised":true,"time_to_compromise_s":213,
 	  "ttps_achieved":4,"nodes_affected":3,"block_effective":false,"playbook_hash":"sha256:deadbeef",
 	  "injections":[{"check":"RS-006","at":"2026-09-08T10:00:11Z"}]}`)

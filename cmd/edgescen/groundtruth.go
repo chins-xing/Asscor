@@ -34,8 +34,15 @@ type harnessReport struct {
 
 	// PlaybookHash / TopologyHash 是溯源（拓扑与剧本入档，spec §5.3）。
 	// `PlaybookHash` 进 `meta.playbook_hash`；`TopologyHash` **不进记录**（spec §5.1 的 schema
-	// 没有这个槽位，它归 Task 4 的 run.json）—— 这里接受它是为了让 harness 产物的格式只有一份
-	// 声明面，拼错键或漏写时能被发现，而不是静默丢弃。
+	// 没有这个槽位，它归 Task 4 的 run.json）。这里声明它只为让"harness 产物的格式"在这份结构体
+	// 上有一处完整的声明面。
+	//
+	// **刻意不启用 `DisallowUnknownFields`**（评审 M4 问过）：`json.Unmarshal` 默认忽略未知键，
+	// 所以"键拼错了"这件事在这里**不是**靠字段清单发现的，而是靠上面那组**必填字段的指针解码**
+	// 发现的（键拼错 ⇒ 目标字段缺席 ⇒ 报出具体缺了哪个）。而一旦开了 DisallowUnknownFields，
+	// Task 4 的脚本往产物里多写任何一个字段（拓扑细节、时间线、退出码……）都会让**采集器直接
+	// 失败**——那是把"如实采集"换成了"格式洁癖"，代价远大于收益。真需要"格式只此一份"的话，
+	// 做法是给产物加版本号并在解析处校验它，而不是禁用未知键。
 	PlaybookHash string `json:"playbook_hash"`
 	TopologyHash string `json:"topology_hash"`
 

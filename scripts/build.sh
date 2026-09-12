@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ASSCOR Cross-Compilation Build Script
-# Builds all three binaries for Linux amd64
+# Builds every shipped binary for Linux amd64 (see BINARIES below)
 # Usage: ./scripts/build.sh [version]
 
 set -euo pipefail
@@ -13,7 +13,7 @@ BINARIES=(
     "cmd/kernel:ASSCOR-kernel-linux-amd64"
     "cmd/agent:ASSCOR-agent-linux-amd64"
     "cmd/asscor:ASSCOR-linux-amd64"
-    # 实验场景采集器（cmd/edgescen）：实验矩阵要在目标机上跑它，故与三个主二进制一起交叉编译。
+    # 实验场景采集器（cmd/edgescen）：实验矩阵要在目标机上跑它，故与主二进制一起交叉编译。
     # 它自己的最小 tag 集是 expr,engine,checks（见 cmd/edgescen/main.go 的文件头），
     # 这里沿用 MODULE_TAGS（超集）与 cmd/kernel 同款，避免脚本里再维护第二份 tag 清单。
     "cmd/edgescen:edgescen-linux-amd64"

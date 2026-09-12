@@ -129,7 +129,15 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	// 运行元数据（环境名、配置指纹）只有 CLI 知道，在写出前补进记录；它们都是可选字段，
 	// 不参与任何判据，故放在自检之后（自检失败时不会假装记录"已经完整"）。
 	rec.Meta.Env = *envName
-	rec.Meta.ConfigHash = configHash(*configPath)
+	hash, err := configHash(*configPath)
+	if err != nil {
+		// `meta.config_hash` 是溯源注记的锚点（"这份权重从哪来"就指着它）。读不出来时
+		// **不能**回落成空串静默写出 —— 一条 config_hash 为空的记录在报告里与"没记"同形，
+		// 而它恰恰是唯一能把记录归因到具体配置文件的东西（评审 M8）。
+		fmt.Fprintln(stderr, err)
+		return exitFailure
+	}
+	rec.Meta.ConfigHash = hash
 	if strings.TrimSpace(*playbookHash) != "" {
 		rec.Meta.PlaybookHash = strings.TrimSpace(*playbookHash)
 	}
@@ -179,24 +187,31 @@ func appendRecord(path string, line []byte) error {
 
 // configHash 是配置文件的指纹（sha256 前 16 位十六进制）。
 //
-// 它是 `meta.weight_source` 的锚点（spec §5.1 前提 2）：一份记录的权重口径必须能归因到
-// **具体哪一份配置**，否则"这份权重从哪来"只能靠猜。取文件字节而不是"解析后的结构体"，
-// 因为运营者要能拿它去比对文件（含注释与格式）。
-func configHash(path string) string {
+// 它是溯源注记的锚点（spec §5.1 前提 2）：一份记录的权重口径必须能归因到**具体哪一份配置**，
+// 否则"这份权重从哪来"只能靠猜。取文件字节而不是"解析后的结构体"，因为运营者要能拿它去比对
+// 文件（含注释与格式）。
+//
+// 读失败即报错（**不**回落成空串）：调用点刚成功装载过同一路径，此时读不到说明文件在中途被
+// 换掉/删掉（或权限变了）—— 那正是一次"配置在采集途中变了"的事故信号，空串会把它伪装成
+// "这条记录没记指纹"（评审 M8）。
+func configHash(path string) (string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("edgescen: 读配置 %s 计算指纹: %w（meta.config_hash 是溯源注记的锚点，不得留空）", path, err)
 	}
 	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:])[:16]
+	return hex.EncodeToString(sum[:])[:16], nil
 }
 
 // printSummary 打印自检摘要（场景 / 因子 / 权重来源 / 装配错误），让每一轮实验都在日志里留下
 // 可核对的痕迹 —— 只有"文件写出来了"不足以说明这次采集是完整的。
+//
+// "权重来源"一行直接打印 `meta.weight_source`（含末尾的链条目 ts 基准那一段）：它是记录里
+// 的那句话，不是另算的一份 —— 日志与记录因此永远同源（评审要求"ts 基准必须被报告"）。
 func printSummary(stdout io.Writer, rec edgeexp.Record, configPath, outPath string, gt groundTruth) {
 	fmt.Fprintf(stdout, "edgescen: 场景 %s（表内共 %d 组场景）\n", rec.ScenarioID, len(scenarios))
 	fmt.Fprintf(stdout, "  因子 %d：%s\n", len(rec.Factors), orNone(strings.Join(rec.Factors, ", ")))
-	fmt.Fprintf(stdout, "  权重来源：%s（%d 域）\n", rec.Meta.WeightSource, len(rec.Observed.EffectiveWeights))
+	fmt.Fprintf(stdout, "  权重来源：%d 域｜%s\n", len(rec.Observed.EffectiveWeights), rec.Meta.WeightSource)
 	fmt.Fprintf(stdout, "  注入：%s；注入时刻：%s\n", rec.Injection, gt.injectionSummary())
 	fmt.Fprintf(stdout, "  观测链 %d 条｜失败检查 %d 条｜总分 %.4g（阈值 %.4g，判 %v）｜配置 %s（指纹 %s）\n",
 		len(rec.Observed.EdgeFactorChain), len(rec.Observed.Checks),

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -290,7 +291,7 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 	// "有没有模型"，两者在 JSON 上因 omitempty 同形。戳记与观测链出自同一处、同一判据
 	// （adapter_engine.go），故"戳记在场"同时意味着"链是可信的"。
 	stamped := result.EdgeFactors.Model != "" || result.EdgeFactors.ParamsHash != ""
-	chain := recordChain(result, gt.Injections)
+	chain, tsNote := recordChain(result, spec, gt.Injections)
 	penalties := len(result.EdgeFactors.ActiveFactors())
 
 	// 裁定 5：拒绝"有惩罚、但链为空"的记录。
@@ -298,12 +299,23 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 	//   ⇒ 会产出"有惩罚、但链为空"的记录：离线复算必然失败，而且看起来像"这个场景没有因子生效"。
 	//   故先断言戳记存在（"没有模型"与"有模型但没激活"只能靠它区分），再断言"有惩罚就必须有链"。
 	//   反过来，**没有惩罚且链为空是合法观测**（S0 基线）：把判据写成"链必须非空"会把基线判死。
+	//
+	// 两个分支的**可达性**（Fix round 1 / 评审 M2 的更正）：
+	//   - `case !stamped` 是**实际拦下"有惩罚但链为空"的那一条**：未装载模型时
+	//     `EdgeFactorsToModel` 照常把六个权重填进 `result.EdgeFactors`（所以 `penalties > 0`），
+	//     而适配器把链写成 nil ⇒ 两条判据同时为真，按顺序由本分支报错（并且能给出针对性提示）。
+	//   - `case penalties > 0 && len(chain) == 0` 因此**今天不可达**：一旦戳记在场（模型真的装载了），
+	//     链与六个权重出自**同一份** `output.EdgeFactors` 结果集，任何 `Active` 因子都会上链；
+	//     而 `penalties > 0` 至少需要一个内置槽位里的 `Active` 因子 ⇒ 链非空。
+	//     它作为**防御**保留：这条不变量的两个端点（戳记判据、链回填判据）分别在
+	//     adapter_engine.go 与 observeEdgeFactorChain 里，将来任一处改宽（例如允许"未启用部署"
+	//     也盖戳、或按域过滤链）都会让它变成唯一能拦住坏记录的地方，而删掉它不会有任何门禁变红。
 	switch {
 	case !stamped:
 		return fail("引擎没有装载边缘因子合成模型（溯源戳为空）⇒ 观测链不会被回填、记录无法区分"+
 			"『未配置模型』与『有模型但没激活』；有惩罚时这条记录还会让离线复算凭空少掉全部因子惩罚。"+
 			"实验模板必须显式声明 [edge_factors.model]（M0 基线写 model = legacy：评分与『未配置』逐位一致，"+
-			"但只有装载过的路径才盖戳并输出观测链）%s", legacyScoringHint(cfg))
+			"但只有装载过的路径才盖戳并输出观测链）%s", assemblyHint(cfg))
 	case penalties > 0 && len(chain) == 0:
 		return fail("引擎实际乘进了 %d 个因子（有惩罚），观测链却是空的 —— 这类记录会让离线复算静默丢掉全部因子惩罚", penalties)
 	}
@@ -340,7 +352,7 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 		Checks:          checkObservations(cfg, result, gt.Injections, collectedAt),
 		EdgeFactorChain: chain,
 	}
-	rec.Meta.WeightSource = weightSource
+	rec.Meta.WeightSource = provenanceNote(tsNote)
 	contract, err := gt.recordGroundTruth()
 	if err != nil {
 		return fail("%v", err)
@@ -351,7 +363,7 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 	// `internal/edgeexp` 的非导出字段，**只由 UnmarshalJSON 设置** —— 直接在 Go 里拼结构体
 	// 字面量，无论字段写得多全，`Validate` 都会以「missing」拒绝（契约层刻意要求"显式出现"）。
 	// 故生产者必须让自己的载荷走一次编解码。这一步同时把"我们写出什么"与"读取层读到什么"
-	// 钉成同一份字节；除存在性标记外不引入任何信息（浮点与字符串都按最短精确表示往返）。
+	// 钉成同一份字节；`sealRecord` 里另有一条"编解码必须无损"的断言（见那里的说明）。
 	sealed, err := sealRecord(rec)
 	if err != nil {
 		return fail("%v", err)
@@ -374,10 +386,12 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 	// 直接激活）与级联写值，此时链上的 `trigger_check` 是"该因子**登记的**触发检查"、未必是
 	// 真正失败的那个检查 ⇒ 那里调用本条会拒掉真实数据。
 	//
-	// 本工具的插件路径判据 = **插件引擎真的装载了合成模型**（= 溯源戳在场，与观测链回填同一判据）。
+	// 判据是"插件引擎真的装载了合成模型"（`stamped`，与观测链回填同一判据）—— **不是**
+	// "走了插件引擎"这件事本身：装了适配器却没装载模型的部署同样走插件引擎，但它既没有戳记、
+	// 也没有链，与 legacy 无模型段路径在数据上同形（评审 M13：名字必须说清它区分的是什么）。
 	// 今天这条分支恒为真（未装载的记录已在上面被拒），但条件必须显式存在：判据一旦放宽
 	// （例如将来允许写"未启用部署"的记录），无条件调用会立刻把合法记录判死。
-	if pluginPath := stamped; pluginPath {
+	if modelLoaded := stamped; modelLoaded {
 		if err := rec.CheckTriggerCrossReference(); err != nil {
 			return fail("触发关系交叉校验（CheckTriggerCrossReference，仅插件路径）: %v", err)
 		}
@@ -444,43 +458,85 @@ func recomputeFinalScore(rec edgeexp.Record) float64 {
 		factors).Total
 }
 
-// orderedWeightDomains 给出域分的确定性装入顺序：默认域按 spec 附录 A 的固定顺序在前，
-// 其余域按字典序在后。顺序本身不改变"算了哪些域"，但会改变浮点累加的末位（IEEE754 不满足
-// 结合律），故必须**可复现**，不能依赖 map 迭代序。
+// orderedWeightDomains 给出域分的确定性装入顺序：**按域名升序**（字典序）。
+//
+// 为什么是字典序而不是 spec 附录 A 的域顺序：复算要与**引擎**逐位同口径，而引擎的域分切片
+// 由 `ssam.ComputeDomainScoresBayes` 产出并 **`sort.Slice(results, …results[i].Domain < …)`**
+// 排好序，`SSAMV20Formula` 就按那个顺序累加 `sum += score*w`。IEEE754 加法不满足结合律，
+// 装入顺序不同会在末位差 1 ulp —— 若基准分恰好落在取整半格上（例如 x.xx5），这一点差异会
+// 把 `math.Round` 翻到另一格，让 round-trip 钉桩**误拒**一条完全合法的记录（评审 M7）。
+// 离线工具 `cmd/edgecompare/metrics.go` 用的是另一套顺序（默认域在前），那是它的既有约定；
+// 本函数只管采集器**同进程内**的复算，取与引擎一致的那一种才正确。
 func orderedWeightDomains(weights map[string]float64) []string {
 	out := make([]string, 0, len(weights))
-	seen := make(map[string]bool, len(weights))
-	for _, d := range edgefactor.DefaultDomains() {
-		if w, ok := weights[d]; ok && w > 0 {
-			out = append(out, d)
-			seen[d] = true
-		}
-	}
-	rest := make([]string, 0, len(weights))
 	for d, w := range weights {
-		if w > 0 && !seen[d] {
-			rest = append(rest, d)
+		if w > 0 {
+			out = append(out, d)
 		}
 	}
-	sort.Strings(rest)
-	return append(out, rest...)
+	sort.Strings(out)
+	return out
 }
 
-// legacyScoringHint 在配置声明了 legacy 评分模式时给出更具体的提示。
+// assemblyHint 在装配失败时给出**针对性的**提示（`[weights] scoring_engine = legacy`、
+// `model = chain` 在线不可执行、λ 一个都没配 …… 这些形态的拒绝理由完全不同，
+// 笼统地说"必须声明 [edge_factors.model]"会让操作者去改一行本来就写对了的配置）。
 //
-// `[weights] scoring_engine = legacy` 与 `[edge_factors.model] model = legacy` 是**两回事**
-// （Task 7 评审 I1 的表述口径）：前者根本不装配插件引擎、走内置 DynamicScoringEngine，
-// 那条路径**永远**不盖戳；后者的评分与之逐位一致，但引擎真的装载了参数 ⇒ 会盖戳并输出观测链。
-// 把两者的区别写进拒绝理由，操作者才知道该改配置的哪一行。
-func legacyScoringHint(cfg *config.Config) string {
+// 实现的取巧之处：不去复述引擎内部的判定，而是**再问一次同一个入口**
+// （`enginessam.ParamsFromConfig`，与 `newSynthesizePlan` 同源），按它的返回值分派：
+//   - 报错 ⇒ 参数不可用，把那句话原样带出来（这是引擎 WARN 日志里那句的真正原因）；
+//   - 未启用 ⇒ 段缺席；
+//   - 启用了 ⇒ 看装载的是哪个模型（chain 在线不可执行 / V/G 没有 λ 就什么也修正不了）。
+//
+// 这些提示与 `internal/engine/ssam` 的判定**不构成第二份实现**：分派依据全部来自它的导出面
+// （`ParamsFromConfig` 的返回、`edgefactor.RequestedDomains`），没有一条判据是本工具自己重写的。
+func assemblyHint(cfg *config.Config) string {
 	if cfg != nil && strings.EqualFold(strings.TrimSpace(cfg.ScoringEngine), "legacy") {
 		return "。注意：本配置写着 [weights] scoring_engine = legacy —— 生产装配此时走内置 DynamicScoringEngine，" +
 			"它**永远**不盖溯源戳；要让 M0 基线也能采集，请改用 [edge_factors.model] 的 model = legacy（评分逐位一致，但会装载并盖戳）"
 	}
-	return ""
+	if cfg == nil {
+		return ""
+	}
+	params, enabled, err := enginessam.ParamsFromConfig(cfg)
+	if err != nil {
+		return fmt.Sprintf("。引擎侧装配错误（原样转述）: %v", err)
+	}
+	if !enabled {
+		return "。本配置没有 [edge_factors.model] 段：引擎走内仓默认的乘性路径、不装载参数，故既不盖戳也不回填链" +
+			"（注意区分 [weights] scoring_engine = legacy 与这里说的 [edge_factors.model] model = legacy）"
+	}
+	switch params.Model {
+	case edgefactor.ModelChain:
+		return "。本配置声明 [edge_factors.model] model = chain —— chain 是**离线专用**模型：" +
+			"在线结果类型没有时间字段（`ssam.EdgeFactorResult` 只有 ID/Factor/Active/TriggerConfidence），" +
+			"装配期即 fail-fast、不装载也不盖戳；chain 候选由 `cmd/edgecompare` 离线评估。" +
+			"在线采集请用 m0-baseline（显式 legacy）/vector/graph 模板"
+	case edgefactor.ModelVector, edgefactor.ModelGraph:
+		if len(edgefactor.RequestedDomains(params)) == 0 {
+			return fmt.Sprintf("。本配置声明 model = %s，但没有声明任何 lambda.<domain>："+
+				"一个域都不会被修正 ⇒ 装配期拒绝装载（否则会出现『戳记写着 %s、评分却分毫未变』的假溯源）",
+				params.Model, params.Model)
+		}
+	}
+	return "。配置里看似有可装载的模型参数，但引擎仍未装载 —— 这是内部不一致（请连同本轮的引擎 WARN 日志一起上报）"
 }
 
-// sealRecord 让记录带上契约的"字段存在性标记"（见 assembleRecord 里的说明）。
+// sealRecord 让记录带上契约的"字段存在性标记"，并断言这次编解码**无损**。
+//
+// 存在性标记（`spcScoreSet` / `cTriggerSet` / …）是非导出字段、只由 `UnmarshalJSON` 设置，
+// 故生产者必须让自己的载荷走一次编解码（见 assembleRecord 的说明）。但这一步同时引入一个
+// **静默丢字段**的风险：`Observed` / `ChainObs` / `GroundTruth` 各自的 `UnmarshalJSON` 里有一份
+// **第二字段清单**（aux 结构），将来给这些类型加字段却忘了同步 aux，数据就会在密封处被吃掉 ——
+// 而密封后的记录才是被自检、被写出的那一份，于是"字段加了但永远到不了磁盘"这件事
+// 在所有门禁上都看不见（评审的加固建议）。
+//
+// 两条断言，缺一不可：
+//  1. **切片长度逐项一致**（`edge_factor_chain` / `checks`）：最常见的形态就是整条条目被吃掉，
+//     长度断言给出的诊断比字节比较清楚；
+//  2. **整个记录逐字节往返**（更强的判据）：长度断言覆盖不到**标量**字段，而
+//     `json.Marshal(rec) → Unmarshal → Marshal` 只要丢了任何字段，第二次字节就不同。
+//     同一结构体的字段顺序与浮点最短表示都是确定的，故这个比较不会误报。
 func sealRecord(rec edgeexp.Record) (edgeexp.Record, error) {
 	raw, err := json.Marshal(rec)
 	if err != nil {
@@ -489,6 +545,20 @@ func sealRecord(rec edgeexp.Record) (edgeexp.Record, error) {
 	var sealed edgeexp.Record
 	if err := json.Unmarshal(raw, &sealed); err != nil {
 		return rec, fmt.Errorf("记录回读失败（生产者/消费者不同源）: %w", err)
+	}
+	if got, want := len(sealed.Observed.EdgeFactorChain), len(rec.Observed.EdgeFactorChain); got != want {
+		return rec, fmt.Errorf("密封前后观测链条目数不同（%d → %d）—— `edgeexp.ChainObs` 的 UnmarshalJSON 丢了字段，记录会带着残缺的链落盘", want, got)
+	}
+	if got, want := len(sealed.Observed.Checks), len(rec.Observed.Checks); got != want {
+		return rec, fmt.Errorf("密封前后失败检查条目数不同（%d → %d）—— `edgeexp.CheckObs` 的解码丢了字段，记录会带着残缺的 checks[] 落盘", want, got)
+	}
+	again, err := json.Marshal(sealed)
+	if err != nil {
+		return rec, fmt.Errorf("密封后编码失败: %w", err)
+	}
+	if !bytes.Equal(raw, again) {
+		return rec, fmt.Errorf("密封前后记录字节不同 —— 契约类型（Observed / ChainObs / GroundTruth）的 UnmarshalJSON 漏了字段，"+
+			"该字段会**永远到不了磁盘**且不会被任何门禁发现：\n 密封前: %s\n 密封后: %s", raw, again)
 	}
 	return sealed, nil
 }
@@ -504,25 +574,40 @@ func scenarioID(name string, run int) string {
 // 观测量
 // ============================================================================
 
-// recordChain 把引擎输出的观测链装成记录里的链，并**按 harness 的注入时刻逐条重写 `ts`**。
+// recordChain 把引擎输出的观测链装成记录里的链，并按**本次记录唯一的那个时间基准**回填 `ts`，
+// 同时返回一行"ts 从哪来"的来源说明（写进记录的溯源注记与自检摘要）。
 //
 // 裁定 3（Task 1 评审实测的硬要求）：引擎侧链上所有条目的 `ts` 是**同一个评分时刻**
 // （`adapter_engine.go`），而 chain 模型用 `from.ts.Before(to.ts)` 做严格时间窗 ⇒ 全同值会让
-// **所有有向耦合被跳过**、C 候选退化成 V。harness 知道每个检查的注入/采集时刻，故采集器按
-// "该因子触发检查的注入时刻"逐条回填。
+// **所有有向耦合被跳过**、C 候选退化成 V。harness 知道每个检查的注入/采集时刻，故顺序注入场景
+// 要按"该因子触发检查的注入时刻"逐条回填。
 //
-// 三条纪律：
-//   - **逐条不同、反映真实先后**：值逐位来自 harness，不做任何加工；
-//   - **绝不编造递增时间**：没有注入时刻的条目（级联激活的 c_trigger = 0 条目、自定义因子
-//     没有登记触发检查的条目）保留引擎的**评分时刻** —— 级联确实是在评分那一刻施加的，
-//     这是如实取值而不是补一个"看起来有序"的时间；
-//   - **链是列表不是映射**：同一因子 ID 出现多次时逐条处理，不做任何按 ID 的去重/建 map。
-func recordChain(result *model.AssessmentResult, injections map[string]time.Time) []edgeexp.ChainObs {
+// **一条记录只用一个基准，绝不混用**（Fix round 1 / 评审 Important 2 实测的真机形态）：
+// 此前的实现是"条目命中 harness 就回填、否则沿用评分时刻"，于是在真实主机上（很多检查本就会
+// 自然失败）产出过 **11 条里 4 条带注入时刻、7 条带更晚的评分时刻**的链 —— 那个"注入先、自然失败后"
+// 的顺序既不是实验设计的（同时注入场景的设计预期恰恰是"没有时间结构 ⇒ C ≡ V"），
+// 也没有任何地方报告它。裁定 3 禁止的是**编造**顺序，而混用是**悄悄继承**了一个顺序，同样不可接受。
+//
+// 故：
+//   - **顺序注入场景**（`len(Inject) > 1`）：按 harness 的注入时刻逐条回填 —— 那就是这个场景
+//     设计出来的可分辨时间结构；harness 没覆盖到的条目（自然失败激活的因子）取**评估时刻**，
+//     它们确实是在评估那一刻才被观测到的，晚于全部注入，故是如实取值而非补出来的顺序。
+//   - **同时注入场景**（单阶段）：**一条都不用** harness 时刻，全部取评估时刻 ⇒ 全部同值 ⇒
+//     没有时间结构 ⇒ C 与 V 在这条数据上同分。这正是"无时间结构时 C 不该凭空变好"的反向对照。
+//     harness 报出的注入时刻仍然照常用于 `checks[].ts`（那里是逐检查的观测时刻，不是模型的入参）。
+//
+// 另：**链是列表不是映射** —— 同一因子 ID 出现多次时逐条处理，不做任何按 ID 的去重/建 map。
+func recordChain(result *model.AssessmentResult, spec scenarioSpec, injections map[string]time.Time) ([]edgeexp.ChainObs, string) {
+	useHarness := spec.sequential()
 	chain := make([]edgeexp.ChainObs, 0, len(result.EdgeFactorChain))
+	covered := 0
 	for _, ob := range result.EdgeFactorChain {
 		ts := ob.TS
-		if at, ok := injections[ob.TriggerCheck]; ok && !at.IsZero() {
-			ts = at.UTC().Format(time.RFC3339)
+		if useHarness {
+			if at, ok := injections[ob.TriggerCheck]; ok && !at.IsZero() {
+				ts = at.UTC().Format(time.RFC3339)
+				covered++
+			}
 		}
 		chain = append(chain, edgeexp.ChainObs{
 			Factor:          ob.Factor,
@@ -532,7 +617,22 @@ func recordChain(result *model.AssessmentResult, injections map[string]time.Time
 			TS:              ts,
 		})
 	}
-	return chain
+	return chain, chainTSNote(useHarness, len(spec.Inject), len(injections), len(chain), covered)
+}
+
+// chainTSNote 是链条目 ts 来源的一行说明（进记录的溯源注记与自检摘要）。
+//
+// 为什么必须写出来：混用基准的旧形态"没人报告"正是它最难被发现的地方 —— 数据看起来完全正常，
+// 而链上藏着一个没人设计的顺序。故无论走哪个分支，来源都留痕。
+func chainTSNote(useHarness bool, phases, reported, total, covered int) string {
+	if !useHarness {
+		if reported > 0 {
+			return fmt.Sprintf("链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 %d 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）", reported)
+		}
+		return "链条目 ts = 全部取评估时刻（同时注入场景，无时间结构 ⇒ C 与 V 在这条数据上同分）"
+	}
+	return fmt.Sprintf("链条目 ts = %d/%d 条按 harness 注入时刻（%d 个注入阶段），其余 %d 条取评估时刻",
+		covered, total, phases, total-covered)
 }
 
 // checkObservations 落盘引擎的**全部失败检查**（穷尽性），并给每条检查一个诚实的时间戳：
@@ -611,6 +711,22 @@ func chainSummary(chain []edgeexp.ChainObs) string {
 // 它必须是**可归因的**：这份权重不是"从配置里猜的"，而是插件引擎装配时喂给内仓的同一张表
 // （`ssam.ConfigToWeights` → `Engine.SetWeights`，见 effectiveWeights 的说明）。
 const weightSource = "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）"
+
+// provenanceNote 把"权重口径"与"链条目 ts 基准"合成一句溯源注记，写进 `meta.weight_source`。
+//
+// 为什么两件事挤在同一个字段：spec §5.1 的 `meta` 只有 `weight_source` / `assembly_error` 两个
+// 自由文本槽位，而 `internal/edgeexp/record.go` 在本轮**不得改动**（没有 `ts_source` 字段）。
+// 评审要求"ts 基准必须留痕、不能只活在日志里"，故这里用"分号分隔、每段自带标签"的写法：
+// 第一段是权重来源（字段本来的语义，保持不变），末段以 `链条目 ts = ` 开头、自成一句，
+// 读者一眼能分出哪段在说什么，而两段都是**这份记录的数据口径**的溯源，不是两回事。
+// 若主控希望有独立字段（`Meta.TSSource`），那是 record.go 的一行改动，可另开一轮 ——
+// 本函数就是那时的唯一改动点。
+func provenanceNote(tsNote string) string {
+	if strings.TrimSpace(tsNote) == "" {
+		return weightSource
+	}
+	return weightSource + "；" + tsNote
+}
 
 // effectiveWeights 返回引擎**实际生效**的逐域权重，键集 = "参与聚合的域"。
 //
