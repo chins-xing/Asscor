@@ -289,6 +289,163 @@ chain.window_seconds = 300
 | WSL2 Containerlab（14 节点真实拓扑） | 主战场，22+3 场景 | `clab destroy+deploy`；`.wslconfig` 限内存 8GB |
 | A-1（Ubuntu，2c/3.4GB） | 重复性（每场景 3 次）+ 稳定性 | **agent ≤14**；曾因 24 进程压垮 sshd |
 
+### 5.4 实验执行手册（Task 4 交付）
+
+本节是**照着做就能复现**的执行面：脚本、参数、命令、门禁与失败语义。任何一条与脚本实现不一致，
+以脚本为准并回头改本节 —— 手册与实现漂移过一次就会让"这份记录是怎么采的"永远说不清。
+
+#### 5.4.1 交付物与落盘位置
+
+| 交付物 | 路径 | 说明 |
+|---|---|---|
+| 实验模板 ×4 | `configs/edgeexp/{m0-baseline,vector,graph,chain}.ini` | 四份**只差** `[edge_factors.model]` 段；采集恒用 `m0-baseline.ini` |
+| 复位脚本 | `lunwen/clab-lab/scripts/edge_reset.sh` | Caldera 就绪 + `clab destroy --cleanup` + `clab deploy` + sandcat agent 回连 |
+| 攻击脚本 | `lunwen/clab-lab/scripts/edge_attack.sh <scenario> <out.json>` | 相位推进 + 固定剧本 + 客观结果（ground truth 的唯一来源） |
+| 采集脚本 | `lunwen/clab-lab/scripts/edge_collect.sh <scenario> <config.ini> <attack.json> <run>` | 一条记录 + 门禁⓪ + 时钟核对 + 门禁② 残差 |
+| 矩阵驱动 | `lunwen/clab-lab/scripts/edge_matrix.sh [场景…]` | 25 场景全量（无参数）或冒烟子集（给了场景名） |
+| 记录 | `lunwen/clab-lab/data/edgefactors/records-<env>-<date>.jsonl` | 每场景**一条**；`.coverable.jsonl` / `.ef3fa.jsonl` 是门禁① 用的两个子集 |
+| 运行级证据 | `.../data/edgefactors/run.json`（+ `run-<run-id>.json` 副本） | 拓扑/剧本/配置哈希、权重口径、逐场景耗时、门禁⓪① ②、时钟核对、记录条数 |
+
+#### 5.4.2 前置条件
+
+1. **WSL2 `Containerlab` 发行版**：Docker + `clab`，拓扑 `lunwen/clab-lab/asscor.clab.yml`（24 个节点容器）。
+2. **Caldera v5** 在 `/opt/caldera`。`edge_reset.sh` 会自己**确保它在跑**：
+   `./venv/bin/python server.py --fresh -P sandcat,stockpile,atomic`。
+   `-P sandcat,stockpile,atomic` 必须显式给出 —— 缺插件列表时 `sandcat.go-linux` payload 不会被生成，
+   而"没有 payload"会在第 4 步以一个看起来像网络问题的错误出现。
+3. **两个 Linux 工具**（交叉编译，脚本默认读 `build/`）：
+   ```bash
+   GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags 'expr,engine,checks' -o build/edgescen  ./cmd/edgescen
+   GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags edgeexp                -o build/edgecompare ./cmd/edgecompare
+   ```
+   `edgescen` 的最小 tag 集是 **`expr,engine,checks`**（三个都不可省：`engine` 给评分链、`checks` 给真实
+   检查登记表、`expr` 是实验工具的构建约束）。
+4. **模板纳入回归门禁**：`go test ./internal/config/ -run TestEdgeExpConfigTemplatesLoad` 必须绿 ——
+   模板装不上要在 `go test` 阶段就红，而不是在 WSL 上跑完一轮采集之后。
+
+#### 5.4.3 四份模板只差模型段
+
+| 模板 | `model` | 该段额外内容 | 用途 |
+|---|---|---|---|
+| `m0-baseline.ini` | `legacy` | `p_floor`、λ、向量、`trigger.*` | **唯一用于采集**：让引擎装载模型、产出观测链（显式 legacy 与"不写段"评分逐位一致，但只有装载过的路径才盖溯源戳） |
+| `vector.ini` | `vector` | + 向量（逐域） | 离线候选 V |
+| `graph.ini` | `graph` | + 5 条**对称**先验边 | 离线候选 G |
+| `chain.ini` | `chain` | + 5 条**有向**先验边 + `chain.window_seconds = 300` | 离线候选 C（**在线不可执行**，装配期 fail-fast） |
+
+四份模板共享同一部署骨架（`[weights]`/`[extension_weights]`/`[acceptability]`/`[threat]`/`[edge_factors]`/
+`[edge_factors.custom]`/`[edge_factors.custom_triggers]`），因此候选之间的分数差异只能归因于模型参数。
+两条容易踩的键面纪律：
+
+- **`[weights] scoring_engine` 必须留空**。填 `legacy` 会关掉插件评分引擎的装配，而那条路径**永远不盖
+  溯源戳** ⇒ `edgescen` 以"引擎没有装载边缘因子合成模型"拒绝写出记录。这不是可以绕过的开关。
+- **`[edge_factors.custom]` 刻意保留出厂 `config.ini` 的同名重复条目**（内置六因子 + `EF-3FA` 又写一遍）。
+  删掉它们等于把门禁⓪ 要观测的现象从实验里剔除；副作用是 `EF-3FA` 不再是 `CascadeOnly` 的那一条，
+  会作为普通因子（0.82）上链 —— 见 5.4.6 的裁定 ④ 处理。
+
+#### 5.4.4 执行
+
+```bash
+# 全量 25 场景（S0–S5 = 22 + R = 3；矩阵脚本自带"场景数必须是 25"的断言，并与 edgescen -list 交叉核对）
+cd lunwen/clab-lab
+bash scripts/edge_matrix.sh
+
+# 冒烟子集（只跑列出的场景；用于管线自检与耗时测量，**不产生结论数据**）
+bash scripts/edge_matrix.sh S0-baseline S5-cascade-3fa R-no-ids
+```
+
+单场景三步（矩阵脚本内部就是这三条，可单独重跑）：
+
+```bash
+bash scripts/edge_reset.sh  "$s"                                          # 干净环境
+bash scripts/edge_attack.sh "$s" "data/edgefactors/attack-$s.json"        # 相位 + 攻击 + 客观结果
+bash scripts/edge_collect.sh "$s" ../../../configs/edgeexp/m0-baseline.ini \
+     "data/edgefactors/attack-$s.json" 1                                  # 一条记录 + 门禁
+```
+
+有用的开关（环境变量）：`EDGEEXP_RUN_ID`（运行标识，进 `run.json`）、`EDGEEXP_RECORDS`（记录文件，
+冒烟/重跑请换名）、`EDGEEXP_ATTACK_TIMEOUT_S`（等 operation 终态的上限，默认 1800）、
+`EDGEEXP_PHASE_GAP_S`（相位间隔，默认 3，**不得小于 1**）、`EDGEEXP_TARGET_HOST`（攻击目标节点，默认 `host1`）。
+
+#### 5.4.5 纪律（每条都对应一次实测事故）
+
+1. **每场景一条记录**。四个候选的差异**完全**由离线 `edgecompare` 覆盖（记录里的域分是域级修正前的
+   基分、链与 E/T 与候选无关、`Evaluate` 从不读 `final_score`），而 `chain` **在线不可执行** ——
+   拿 `chain.ini` 采集必然被拒。每场景采 4 次等于把同一个信息采 4 遍，只会让"记录条数 == 场景数"失去意义。
+2. **复位必须 `clab destroy --cleanup` + `clab deploy`，**不用** `--reconfigure`**（后者不重建 veth，
+   上一场景的接口状态会带进下一场景）。`destroy` 的失败被容忍（没部署过时本该失败），`deploy` 无容错。
+3. **失败要响亮**：`edgescen` 非零退出、记录增量 ≠ 1、注入时刻不早于采集时刻、顺序场景相位落在同一秒、
+   R 组真实缺失不成立、operation 一个 link 都没发出 —— 一律非零退出，**不跳过继续**。
+4. **幂等**：`edge_collect.sh` 发现目标 JSONL 里已有同场景记录时拒绝再写（重跑请换 `EDGEEXP_RECORDS`
+   或归档旧文件）。矩阵脚本每轮清空逐场景碎片，避免上一轮的片段混进本轮的 `run.json`。
+5. **时间结构**：顺序注入场景的相位间隔必须让注入时刻落在**不同秒** —— 链上 `ts` 由
+   `recordChain` 用 `time.RFC3339` 格式化（秒精度），秒内差异会被抹平，C 候选随之退化成 V，
+   而记录看起来完全正常。同时注入场景**不带**时间结构是设计（同刻注入 ⇒ C ≡ V，是反向对照，不是缺陷）。
+6. **注入时刻 < 采集时刻**由 `edge_collect.sh` 逐条核对并写进 `run.json`
+   （采集时间是记录装配时刻 `meta.timestamp`，这是记录里唯一的采集时间戳），同时逐条比对
+   "harness 报的注入时刻"与"记录 `checks[].ts`"是否逐位一致 —— 后者是"harness 的时间真的落进记录"的证据。
+
+#### 5.4.6 门禁
+
+**门禁⓪（重复因子条目，实测）**：按**归一化**因子 ID 统计每条真实记录链上的条目数，计数与具体 ID 写进
+`run.json`（`gate0_duplicate_factors`）与实验报告。只统计真实记录，**不做静态推断** —— 若某配置下没有
+重复条目，结论必须如实写成"未观察到重复条目"，不得据静态溯源宣称"引擎会重复乘"。
+
+**门禁①（离线工具读全量记录、无 fail-fast）**：
+
+```bash
+build/edgecompare -records data/edgefactors/records-wsl-clab-14-<date>.coverable.jsonl \
+  -candidate legacy=configs/edgeexp/m0-baseline.ini -candidate vector=configs/edgeexp/vector.ini \
+  -candidate graph=configs/edgeexp/graph.ini       -candidate chain=configs/edgeexp/chain.ini \
+  -factors "$(从模板的 [edge_factors] 解析，含 level4_override)" \
+  -weights "$(从模板解析的生效权重表)"
+```
+
+三条硬约束：**候选名必须是模型名**（`legacy|vector|graph|chain`，`report.go` 只接受这四个；
+`-candidate m0=…` 会报"未知模型"）；**`-factors` 必填**（空表会让链上每个因子被静默丢弃，
+决策层指标与任何真实部署都无关）；**含 `EF-3FA` 的记录不进本门禁** —— 见裁定 ④。
+
+**裁定 ④（`EF-3FA`）**：出厂 `[edge_factors.custom]` 的重复条目让采集器**合法地**把 `EF-3FA` 写进链，
+于是 `-factors` 的覆盖校验会以"未覆盖记录里用到的因子 EF-3FA"退出 1。**不得**为了让校验通过而塞一个
+`EF-3FA=<值>`：那会让 V/G/C 给它走"全 1" fallback 向量 ⇒ 凭空产生引擎从未施加的惩罚、决策层指标被改。
+在裁定之前：矩阵脚本自动把数据集切成 `.coverable.jsonl`（门禁① 只跑它）与 `.ef3fa.jsonl`
+（含 `EF-3FA`，逐条列出并标注**"待裁定后重跑"**）。若 `.coverable` 为空，门禁① 如实记为 `skipped`。
+
+**门禁②（round-trip）**：权威实现是 `edgescen` 装配点的**进程内自检** —— 用记录自身的输入
+（域分 + `observed.effective_weights` + `spc_score` + `threat_coeff` + 链上 `effective_factor`）
+复算 `final_score`，不通过即**拒绝写出该条记录**。故操作层面上它等价于"记录条数 == 场景数"，
+残差同时落进 `run.json` 的 `gate2_round_trip`（逐场景）与 `run.d/collect-*.json`。
+**门禁② 只在采集模型下执行**（`-candidate legacy=m0-baseline.ini`）：记录是用 legacy 采的，
+而 `vector/graph/chain` **合法地**给出不同分数 —— 对四个候选都跑门禁② 会在每一条合法记录上变红。
+跨候选的分数差异是**候选比较**要研究的东西，不是数据缺陷。
+离线复算的口径以**记录自带的** `observed.effective_weights` 为准，`-weights` 只是回退表
+（记录没带该字段时生效）。
+
+**阈值敏感性**：`[acceptability] threshold = 80.0` 是部署的真实判定线（GB/T 22239-2019 Level 3）。
+若该线让全部记录落进"不可接受"（漏判样本为 0 或误阻断样本为 0），报告必须**另附一行
+`threshold = 60.0`（设计文档示例值）的敏感性结果**并明确标注那是敏感性分析 —— 换阈值改结论这件事
+必须写在脸上，不能只报一组数字。
+
+#### 5.4.7 诚实边界（写进论文时必须保留）
+
+1. **S 组的因子激活是"检查失败代理"**（§2.3 的主方式）：harness 的相位只是**记录观测时刻并推进场景**，
+   它**不**去按场景把宿主上"非本场景"的检查弄成通过。宿主上本来就在失败的检查照样计入 —— 这是
+   "如实采集"的直接后果，也是这些记录能被复算的前提。
+2. **容器内 SELinux/AppArmor 无法真正关闭**（§2.3 明写）：相关场景只能由检查失败代理，
+   harness 会把该因子条件的真实探测结果（`condition_probes[].condition_holds`）如实写进 harness 产物，
+   S 组**不**因条件不成立而阻断（那正是代理关系本身）。
+3. **R 组（真实缺失）必须真的成立**：探针发现防护仍在位时**整轮失败**，不得用"注入失败"顶上
+   —— 那会把对照面变成伪造的 ground truth。
+4. **攻击剧本固定且哈希入档**：默认 `Discovery`（`0f4c3c67-845e-49a0-927e-90ed33c044e0`，
+   12 条 ability；剧本名与 ID 会对不上时报错）。客观结果的口径：
+   `compromised`/`block_effective` 按"观察窗内成功执行的 ability 数为 0 / > 0"（`link.status == 0`，
+   状态码语义取自 Caldera `c_link.py` 的 states 表：`SUCCESS=0`、`EXECUTE=-3`、`DISCARD=-2`、
+   `HIGH_VIZ=-5`、`ERROR=1`、`TIMEOUT=124`）。观察窗超时时 `operation.window_timeout = true`，
+   此时 `ttps_achieved` 是**窗内已达成**的下界，报告必须按这个口径写。
+5. **采集器评的是"跑 `edgescen` 的那台主机"**：真实检查结果来自 `internal/checks` 在本机的执行，
+   攻击侧（clab 节点上的 sandcat agent）只提供客观结果。故 R 组的"真实缺失"是在**采集主机**上核实的。
+6. **A-1 的 3 次重复**是排序层方差用的（§5.3），不属于本手册的四脚本管线；重复运行时请换
+   `EDGEEXP_RUN_INDEX`（`run` 号）与 `EDGEEXP_RECORDS`，让每轮的记录各自成文件。
+
 ---
 
 ## 6. 形式化验证与测试策略
