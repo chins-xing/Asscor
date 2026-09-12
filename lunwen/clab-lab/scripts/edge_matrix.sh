@@ -55,84 +55,16 @@ EDGECOMPARE="${EDGEEXP_EDGECOMPARE:-$REPO_ROOT/build/edgecompare}"
 export EDGEEXP_RECORDS="$RECORDS"
 
 # --- 因子权重与权重表：从**采集配置**里解析（单一来源，不在脚本里抄第二份）--------
+# 实现移入 `edge_spec_lib.sh`（与本脚本**共用的函数库**）：阈值敏感性行
+# （`edge_threshold_sensitivity.sh`，spec §5.4.6）必须用**同一份** `-factors`/`-weights`，
+# 而"两份报告只在阈值上不同"这句话只有在推导实现唯一时才能成立。两处各抄一份 Python，
+# 漂移就表现为"两份报告用了不同的因子权重"，从报告文本里看不出来。
 # 定义成函数是为了让**干跑**也能打印这两张表（干跑在逐场景循环之前就退出，
-# 那时还没有 FACTORS_SPEC/WEIGHTS_SPEC 这两个变量）。调用点两处：干跑计划、门禁命令行。
-# `f_i` 的解析口径与引擎的 `ParamsFromConfig` 同构：
-#   · 内置六因子取 [edge_factors]，其中**只有** `two_factor_failure` 会被
-#     [edge_factors.level4_override] 覆盖（解析层那个分支只认这一个键）；
-#   · [edge_factors.custom] 里**不与内置同名**的条目进入因子集 —— 出厂模板里那 7 行
-#     （六个同名 + EF-3FA）因此只有 `EF-3FA=0.82` 是新的。
-# 这正是 review 的 I4 的那个修正：EF-3FA 是**普通因子**（四份模板都声明了 vector.EF-3FA），
-# 它必须进 -factors；"不写 EF-3FA"会让工具**静默丢弃**那条惩罚（分数被抬高、漏判率被低估）。
-# 禁止的动作只有一个：为了把门禁凑绿而静默塞值。
-derive_factors_spec() {
-  python3 - "$CONFIG" <<'PY'
-import sys
-sections, current = {}, 'global'
-for raw in open(sys.argv[1], encoding='utf-8'):
-    line = raw.strip()
-    if not line or line.startswith('#') or line.startswith(';'):
-        continue
-    if line.startswith('[') and line.endswith(']'):
-        current = line[1:-1].strip().lower(); sections.setdefault(current, {}); continue
-    if '=' not in line:
-        continue
-    k, v = line.split('=', 1)
-    sections.setdefault(current, {})[k.strip().lower()] = v.strip()
-ef = sections.get('edge_factors', {})
-lvl = sections.get('edge_factors.level4_override', {})
-custom = sections.get('edge_factors.custom', {})
-mapping = [('EF-002FA', 'two_factor_failure'), ('EF-SYNCOOKIE', 'syn_cookie_disabled'),
-           ('EF-SELINUX', 'selinux_disabled'), ('EF-APPARMOR', 'apparmor_disabled'),
-           ('EF-NO-SIEM', 'no_siem'), ('EF-NO-IDS', 'no_ids')]
-out, seen = [], set()
-for fid, key in mapping:
-    # 解析层**只对 `two_factor_failure`** 读 [edge_factors.level4_override]（config.go:290-294
-    # 那个分支写死了这一个键），其余五个键即使出现在该段里也不会被消费 —— 这里必须同构，
-    # 否则会算出一个引擎从不使用的 f（Fix round 2 指出的 I4 不精确处）。
-    val = lvl.get(key, ef.get(key)) if key == 'two_factor_failure' else ef.get(key)
-    if val is None:
-        raise SystemExit(f'edge_matrix: 配置 {sys.argv[1]} 缺 [edge_factors] {key}')
-    out.append(f'{fid}={val}')
-    seen.add(fid.upper())
-for raw_id, val in custom.items():
-    fid = raw_id.strip().upper()
-    if not fid or fid in seen:
-        continue
-    try:
-        f = float(val)
-    except ValueError:
-        raise SystemExit(f'edge_matrix: [edge_factors.custom] {raw_id} = {val!r} 不是数字')
-    out.append(f'{fid}={f}')
-    seen.add(fid)
-print(','.join(out))
-PY
-}
+# 那时还没有 FACTORS_SPEC/WEIGHTS_SPEC 这两个变量）。调用点：干跑计划、门禁命令行、敏感性行。
+# 口径（EF-3FA 是**普通因子**、必须进 -factors 等）逐条写在那个库里。
+# shellcheck source=scripts/edge_spec_lib.sh
+. "$SCRIPT_DIR/edge_spec_lib.sh"
 
-# 生效权重表：四核心域取 [weights]，kernel_security 取 [extension_weights]（引擎的口径）。
-derive_weights_spec() {
-  python3 - "$CONFIG" <<'PY'
-import sys
-sections, current = {}, 'global'
-for raw in open(sys.argv[1], encoding='utf-8'):
-    line = raw.strip()
-    if not line or line.startswith('#') or line.startswith(';'):
-        continue
-    if line.startswith('[') and line.endswith(']'):
-        current = line[1:-1].strip().lower(); sections.setdefault(current, {}); continue
-    if '=' not in line:
-        continue
-    k, v = line.split('=', 1)
-    sections.setdefault(current, {})[k.strip().lower()] = v.strip()
-out = []
-for dom in ('attack_surface', 'business_continuity', 'operation_trust', 'resilience', 'kernel_security'):
-    for sec in ('weights', 'extension_weights'):
-        val = sections.get(sec, {}).get(dom)
-        if val is not None:
-            out.append(f'{dom}={val}'); break
-print(','.join(out))
-PY
-}
 
 # --- 场景名单（spec §5：S0–S5 = 22 组 + R = 3 组真实缺失对照，全列出，不留占位）----
 SCENARIOS=(
@@ -205,8 +137,14 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   echo "  环境/重复号 : $ENV_NAME / run=${EDGEEXP_RUN_INDEX:-1}"
   echo "  数据目录    : $DATA_DIR（干跑不创建、不清理）"
   echo "  场景        : ${#SELECTED[@]} 个（声明的 ${#SCENARIOS[@]}）/ 名单核对已通过"
-  echo "  -factors    : $(derive_factors_spec)（来源：$CONFIG）"
-  echo "  -weights    : $(derive_weights_spec)"
+  echo "  -factors    : $(derive_factors_spec "$CONFIG")（来源：$CONFIG）"
+  echo "  -weights    : $(derive_weights_spec "$CONFIG")"
+  # 干跑必须把"这一轮到底会不会跑敏感性行"也说清楚（§5.4.4 的承诺：先看计划）。
+  if [ -n "${EDGEEXP_SENSITIVITY_THRESHOLDS:-}" ]; then
+    echo "  阈值敏感性  : 启用（阈值 $EDGEEXP_SENSITIVITY_THRESHOLDS；产物 ${EDGEEXP_SENSITIVITY_DIR:-$DATA_DIR/sensitivity}）—— **非主对比**，见 §5.4.6"
+  else
+    echo "  阈值敏感性  : 未启用（默认路径不含它；需要时 EDGEEXP_SENSITIVITY_THRESHOLDS=60，见 §5.4.6）"
+  fi
   # 子脚本继承校验：用**同一种机制**（bash 子进程继承导出的环境）确认它们看到的是同一个路径 ——
   # 这正是"父子各自算 TODAY"会分叉、而跨 00:00 UTC 才暴露的那条路径。
   echo "  子脚本继承  : EDGEEXP_RECORDS=$(bash -c 'printf "%s" "${EDGEEXP_RECORDS:-<未导出>}"')"
@@ -413,6 +351,9 @@ else:
 
 gate1 = frag('gate', 'gate1') or {}
 gate2_out = frag('gate', 'gate2') or {}
+# 阈值敏感性行（spec §5.4.6）：**只在显式 opt-in 时**存在（EDGEEXP_SENSITIVITY_THRESHOLDS）。
+# 缺席如实写 null —— "没跑"与"跑了但没结果"必须能从 run.json 里区分开。
+sensitivity = frag('gate', 'sensitivity')
 
 # 父/子记录路径一致性（Fix round 3 / 第 2 项）：子脚本实际写入的路径必须等于父脚本解析出的路径。
 # 不一致说明继承链上有人改回了"各自解析"（跨 00:00 UTC 时它以"少一条记录"的形式在几小时后才暴露）。
@@ -477,6 +418,7 @@ run = {
     'gate1_offline_compare': gate1,
     'gate2_round_trip': gate2,
     'gate2_offline_compare': gate2_out,
+    'threshold_sensitivity': sensitivity,
     'injection_vs_collection': clock,
     'chain_ts_source': ts_source_summary,
     'per_scenario': per_scenario,
@@ -490,6 +432,10 @@ run = {
         'gate1_dataset': '门禁① 跑在**全量**记录上（不再按 EF-3FA 切子集）',
         'records_file_pinned': '本脚本把解析出的记录路径 export 给子脚本（Fix round 3 / 第 2 项）：'
                                '父子各自算 date +%Y%m%d 时，跨 00:00 UTC 的 sweep 会把数据集劈成两份',
+        'threshold_sensitivity': '阈值敏感性行（spec §5.4.6）**只在显式 opt-in 时**存在'
+                                 '（EDGEEXP_SENSITIVITY_THRESHOLDS=60…）：它覆盖部署判定线，'
+                                 '故其产物一律标注为敏感性分析、不得与主对比结论混排；'
+                                 '本键为 null = 本轮没有跑敏感性行（默认路径不变）',
     },
     'records_file_agreement': records_agreement,
 }
@@ -508,6 +454,12 @@ if gate1:
     print(f'edge_matrix: 门禁① exit={gate1.get("exit_code")}（{gate1.get("dataset","?")}，{gate1.get("records","?")} 条）')
 if gate2:
     print(f'edge_matrix: 门禁② 最大偏差 {gate2["max_abs_delta"]:.4g}（{len(gate2["per_scenario"])} 条）')
+if sensitivity:
+    print(f'edge_matrix: 阈值敏感性行 阈值 {sensitivity.get("thresholds")}'
+          f'（records={sensitivity.get("records")}，产物 {sensitivity.get("artifact_role")}）—— '
+          '引用时必须标注为敏感性分析')
+else:
+    print('edge_matrix: 阈值敏感性行 未启用（run.json threshold_sensitivity = null）')
 PY
 }
 
@@ -595,12 +547,9 @@ if [ "$FILE_LINES" -ne "${#SELECTED[@]}" ]; then
 fi
 echo "edge_matrix: 记录条数门禁通过（$FILE_LINES 条 == 选中 ${#SELECTED[@]} 个场景）"
 
-# --- 因子权重与权重表（函数定义在脚本前部；干跑也要用它，见 EDGEEXP_DRY_RUN）------
-FACTORS_SPEC="$(derive_factors_spec)"
-WEIGHTS_SPEC="$(derive_weights_spec)"
-echo "edge_matrix: -factors $FACTORS_SPEC"
-echo "edge_matrix: -weights $WEIGHTS_SPEC"
-# 生效权重表由 derive_weights_spec() 给出（定义在脚本前部）。
+# --- 因子权重与权重表（实现在共用的 edge_spec_lib.sh；干跑也要用它，见 EDGEEXP_DRY_RUN）---
+FACTORS_SPEC="$(derive_factors_spec "$CONFIG")"
+WEIGHTS_SPEC="$(derive_weights_spec "$CONFIG")"
 echo "edge_matrix: -factors $FACTORS_SPEC"
 echo "edge_matrix: -weights $WEIGHTS_SPEC"
 python3 - "$RUN_D/gate-inputs.json" "$CONFIG" "$FACTORS_SPEC" "$WEIGHTS_SPEC" "$ENV_NAME" <<'PY'
@@ -705,6 +654,32 @@ json.dump({
 }, open(sys.argv[1], 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 PY
   [ "$G2" -eq 0 ] || echo "edge_matrix: 警告：门禁②（离线复核）exit $G2 —— 见 $RUN_D/.gate2.err（记录本身已通过进程内自检）" >&2
+fi
+
+# --- 阈值敏感性行（**显式 opt-in**；spec §5.4.6）--------------------------------
+# 部署判定线（[acceptability] threshold）若让**全部**记录落进"不可接受"（漏判样本为 0 或
+# 误阻断样本为 0），报告必须**另附一行** `threshold = 60.0` 的敏感性结果并明确标注 ——
+# 换阈值改结论这件事必须写在脸上，不能只报一组数字。
+#
+# 默认**不跑**（默认路径与默认对比一字不变），只有显式给出 EDGEEXP_SENSITIVITY_THRESHOLDS
+# 才跑；此时它失败即整轮失败 —— 操作者明确要了这行产物，静默少一行比报错更糟。
+# 它只用记录 + 配置 + 离线工具（不碰 clab/Caldera），故这条行在任何时候都能补跑：
+#   EDGEEXP_SENSITIVITY_THRESHOLDS=60 bash scripts/edge_threshold_sensitivity.sh
+if [ -n "${EDGEEXP_SENSITIVITY_THRESHOLDS:-}" ]; then
+  SENS_DIR="${EDGEEXP_SENSITIVITY_DIR:-$DATA_DIR/sensitivity}"
+  echo "============================================================"
+  echo "edge_matrix: 阈值敏感性行（EDGEEXP_SENSITIVITY_THRESHOLDS=$EDGEEXP_SENSITIVITY_THRESHOLDS，**非主对比**）"
+  export EDGEEXP_RECORDS EDGEEXP_CONFIG="$CONFIG" EDGEEXP_RUN_ID="$RUN_ID"
+  export EDGEEXP_FACTORS_SPEC="$FACTORS_SPEC" EDGEEXP_WEIGHTS_SPEC="$WEIGHTS_SPEC"
+  export EDGEEXP_SENSITIVITY_DIR="$SENS_DIR"
+  FAIL_REASON="阈值敏感性行失败（阈值 ${EDGEEXP_SENSITIVITY_THRESHOLDS}；见上面的 stderr）"
+  bash "$SCRIPT_DIR/edge_threshold_sensitivity.sh"
+  FAIL_REASON=""
+  # 汇总并入 run.json（逐场景碎片的同一机制：gate-<名>.json）。
+  cp "$SENS_DIR/sensitivity.json" "$RUN_D/gate-sensitivity.json"
+  echo "edge_matrix: 阈值敏感性行完成（$SENS_DIR，汇总并入 run.json 的 threshold_sensitivity）"
+else
+  echo "edge_matrix: 阈值敏感性行未启用（默认路径不含它）—— 需要时显式开启：EDGEEXP_SENSITIVITY_THRESHOLDS=60（spec §5.4.6）"
 fi
 
 FINISHED=1

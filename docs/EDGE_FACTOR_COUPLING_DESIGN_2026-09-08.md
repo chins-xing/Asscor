@@ -303,9 +303,12 @@ chain.window_seconds = 300
 | 攻击脚本 | `lunwen/clab-lab/scripts/edge_attack.sh <scenario> <out.json>` | 相位推进 + 固定剧本 + 客观结果（ground truth 的唯一来源） |
 | 采集脚本 | `lunwen/clab-lab/scripts/edge_collect.sh <scenario> <config.ini> <attack.json> <run>` | 一条记录 + **因子集相等断言** + 门禁⓪ + 时钟核对 + 门禁② 残差 |
 | 矩阵驱动 | `lunwen/clab-lab/scripts/edge_matrix.sh [场景…]` | 25 场景全量（无参数）或冒烟子集（给了场景名）；名单与 `edgescen -list` 逐项核对 |
+| 阈值敏感性驱动 | `lunwen/clab-lab/scripts/edge_threshold_sensitivity.sh` | §5.4.6 的强制行；**只读**记录 + 配置 + 离线工具（不碰 clab/Caldera），故随时可补跑；**默认不跑**（`EDGEEXP_SENSITIVITY_THRESHOLDS` 显式开启） |
+| `-factors`/`-weights` 推导 | `lunwen/clab-lab/scripts/edge_spec_lib.sh` | 被矩阵与敏感性驱动**共用**的函数库（单一来源：不在两个脚本里各抄一份 Python，否则两份报告可能用了不同的因子权重而看不出来） |
 | 记录 | `lunwen/clab-lab/data/edgefactors/records-<env>-<date>.jsonl` | 每场景**一条**；门禁①/② 直接跑这份**全量**文件 |
 | 被拒记录留档 | `.../data/edgefactors/run.d/rejected-<scenario>.jsonl` | 断言失败时该条记录**从数据集回滚**、但必须留痕的那一行 |
-| 运行级证据 | `.../data/edgefactors/run.json`（+ `run-<run-id>.json` 副本） | 拓扑/剧本/配置哈希（两种精度）、权重口径、逐场景耗时、因子集相等断言、门禁⓪①②、时钟核对、记录条数（**含文件总行数**） |
+| 运行级证据 | `.../data/edgefactors/run.json`（+ `run-<run-id>.json` 副本） | 拓扑/剧本/配置哈希（两种精度）、权重口径、逐场景耗时、因子集相等断言、门禁⓪①②、时钟核对、记录条数（**含文件总行数**）、`threshold_sensitivity`（未跑时为 `null`） |
+| 阈值敏感性产物 | `.../data/edgefactors/sensitivity/{report-threshold-<T>.md, .raw.md, .log, sensitivity.json}` | **显式 opt-in**（`EDGEEXP_SENSITIVITY_THRESHOLDS=60`）才产生；覆盖部署判定线，**不是**主对比报告，见 §5.4.6 |
 
 #### 5.4.2 前置条件
 
@@ -377,7 +380,10 @@ bash scripts/edge_collect.sh "$s" ../../configs/edgeexp/m0-baseline.ini \
 `scenarios_skipped_resume`；**它不是干跑** —— 对没有记录的场景照样跑三步，见 5.4.5 第 13 条）、
 `EDGEEXP_RUN_INDEX`（重复号，**>1 时必须同时显式给 `EDGEEXP_ENV`**，否则 A-1 的重复样本会被打上
 `wsl-clab-14` 混进主数据集）、`EDGEEXP_ATTACK_TIMEOUT_S`（等 operation 终态的上限，默认 1800）、
-`EDGEEXP_PHASE_GAP_S`（相位间隔，默认 3，**不得小于 1**）、`EDGEEXP_TARGET_HOST`（攻击目标节点，默认 `host1`）。
+`EDGEEXP_PHASE_GAP_S`（相位间隔，默认 3，**不得小于 1**）、`EDGEEXP_TARGET_HOST`（攻击目标节点，默认 `host1`）、
+**`EDGEEXP_SENSITIVITY_THRESHOLDS`（阈值敏感性行：给定阈值列表才跑，例 `60` 或 `60,70`；**默认不跑**，
+默认路径与默认对比不受影响，见 §5.4.6）**、`EDGEEXP_SENSITIVITY_DIR`（敏感性产物目录，默认
+`data/edgefactors/sensitivity/`）。
 想先看一遍"这轮到底会跑什么"，永远先跑
 `EDGEEXP_DRY_RUN=1 bash scripts/edge_matrix.sh`（它打印记录文件、配置、`-factors`/`-weights`、
 逐场景 collect/skip 与"子脚本继承到的 `EDGEEXP_RECORDS`"）。
@@ -486,21 +492,61 @@ build/edgecompare -records data/edgefactors/records-wsl-clab-14-<date>.jsonl \
 离线的这一半（`edgecompare` 复核）失败只记 **warning**：记录根本写不出来就没得复核，
 门禁② 的实质已由进程内自检承担（`run.json` 的 `gate2_offline_compare` 如实标出）。
 
-**阈值敏感性**：`[acceptability] threshold = 80.0` 是部署的真实判定线（GB/T 22239-2019 Level 3）。
+**阈值敏感性**：`[acceptability] threshold = 80.0` 是部署的真实判定线（GB/T 22239-2019 Level 3）；
+lab 侧对应的键在 `lunwen/clab-lab/kernel-config.ini` 的 `[acceptability]` 段（**不是** `[weights]` 段 ——
+解析器只在 `[acceptability]` 里读它，写错段位是静默 no-op，见 §5.4.8）。
 若该线让全部记录落进"不可接受"（漏判样本为 0 或误阻断样本为 0），报告必须**另附一行
 `threshold = 60.0`（设计文档示例值）的敏感性结果**并明确标注那是敏感性分析 —— 换阈值改结论这件事
-必须写在脸上，不能只报一组数字。**执行方式**：`cmd/edgecompare` 提供 `-threshold <值>`
-（> 0；0 = 用记录自带的 `observed.threshold`），对**同一份数据**直接复现该行，不必手改 JSONL：
+必须写在脸上，不能只报一组数字。
+
+**执行方式（2026-09-12 起为可复现的一步）**：`cmd/edgecompare` 提供 `-threshold <值>`
+（> 0；0 = 用记录自带的 `observed.threshold`），而**驱动脚本**
+`lunwen/clab-lab/scripts/edge_threshold_sensitivity.sh` 把它变成本手册里的一条命令 ——
+同一份记录、同一组候选、**同一份** `-factors`/`-weights`（与门禁① 共用 `edge_spec_lib.sh` 的推导实现），
+只换判定线：
 
 ```bash
-# 敏感性行（覆盖判定线；只用于敏感性分析，不得作为选模默认路径的结论）
-build/edgecompare -records ...jsonl -candidate legacy=… -factors … -weights … \
-  -threshold 60 > report-threshold60.md
+# 敏感性行（唯一入口；只读记录 + 配置 + 离线工具，不调 clab、不碰 Caldera、不起容器）
+cd lunwen/clab-lab
+EDGEEXP_SENSITIVITY_THRESHOLDS=60 bash scripts/edge_threshold_sensitivity.sh
+
+# 多个阈值：EDGEEXP_SENSITIVITY_THRESHOLDS=60,70
+# 记录/配置/产物目录可覆盖：EDGEEXP_RECORDS=… EDGEEXP_CONFIG=… EDGEEXP_SENSITIVITY_DIR=…
 ```
 
-覆盖生效时报告头会写「**阈值 = 敏感性分析覆盖值 `-threshold = 60`**」（并**不再**打印"阈值 = 引擎
-决策线"那句 —— 两句同时出现会读成自相矛盾，而"这一行到底是不是部署判定线下的数字"正是读者最需要
-一眼看清的事），stderr 也会提示一次 —— 两份报告在文本上必须能区分（它们会被引用进论文的不同小节）。
+**三件事必须成立**（否则这条行会被误当成主结论）：
+
+1. **显式 opt-in，默认路径不变**：不给出 `EDGEEXP_SENSITIVITY_THRESHOLDS` 时，矩阵与离线比较的
+   行为与本文档改动前**逐项相同**（矩阵只在给出该开关时才调用它；`run.json` 的
+   `threshold_sensitivity` 为 `null` = 本轮没跑）。缺开关时脚本以**用法错误**（exit 2）拒绝，
+   不静默什么都不做 —— 静默 no-op 正是这一节要防的东西。
+2. **换阈值这件事写在脸上**：产物文件名带阈值（`report-threshold-60.md`），文件头有敏感性横幅
+   （声明它**不是**主对比报告），报告正文由工具打印「**阈值 = 敏感性分析覆盖值 `-threshold = 60`**」
+   （并**不再**打印"阈值 = 引擎决策线"，两句同时出现会读成自相矛盾），stderr 另提示一次。
+   汇总 `sensitivity.json` 带 `artifact_role: threshold-sensitivity` 与
+   `is_primary_comparison: false`。**主对比**是不带 `-threshold` 的那次运行（矩阵的
+   `run.d/gate-gate1.json` 与 `run.d/.gate1.out`）。
+3. **可核对"只差阈值"**：`sensitivity.json` 记下记录文件、条数、配置与其完整 sha256、
+   两个 spec 与逐阈值产物路径 —— 与门禁① 的输入逐项相同，唯一差别是判定线。
+
+**产物路径**（默认 `data/edgefactors/sensitivity/`）：
+
+| 文件 | 内容 |
+|---|---|
+| `report-threshold-<T>.md` | 敏感性横幅 + `edgecompare` **逐字**输出（引用用这一份） |
+| `report-threshold-<T>.raw.md` | 工具原始 stdout（不含横幅，逐字对照用） |
+| `report-threshold-<T>.log` | 工具 stderr（含"已覆盖 observed.threshold"提示） |
+| `sensitivity.json` | 汇总：run-id、记录/配置/指纹、两个 spec、逐阈值结果；**矩阵调用时并进 `run.json` 的 `threshold_sensitivity`** |
+
+**为什么这条行不是形式主义（2026-09-12 冒烟记录的实测）**：3 条冒烟记录全部
+`observed.threshold = 80`、`ground_truth.compromised = true`（正是 lab 配置的判定线）。
+**主对比（判定线 80）**：四个候选的决策层指标**逐位相同**（一致率 1.000／漏判率 0.000／误阻断率 0.000）
+⇒ 工具如实给出「**本次比较无区分力：未选模**」，没有任何模型被选中。
+**敏感性行（`-threshold 60`）**：`legacy` 一致率 1.000／漏判率 0.000，而 `vector`/`graph`/`chain`
+漏判率均为 **1.000** ⇒ 这一行**才**有区分力（选定 `legacy`）。
+也就是说：判定线不动时这段数据**什么都说明不了**，换一条线结论就出来了 —— 这恰好是"换阈值改结论
+必须写在脸上"的实证，也是这行必须在报告里另附（而非替换主行）的原因。
+
 该开关只在候选对比模式下有意义：配合 `-fit` 或自检模式使用是**用法错误**（不是静默忽略）。
 
 #### 5.4.7 诚实边界（写进论文时必须保留）
@@ -530,6 +576,27 @@ build/edgecompare -records ...jsonl -candidate legacy=… -factors … -weights 
    （既有的硬编码级联 `EF-3FA → EF-002FA`）。其余三条（`EF-NO-SIEM ↔ EF-NO-IDS`、
    `EF-SELINUX ↔ EF-002FA`、`EF-SYNCOOKIE ↔ EF-NO-IDS`）**是同域/同类的先验假设，尚无直接证据** ——
    报告与论文里必须这样标注，不得把它们写成"已证实存在的耦合"。
+
+#### 5.4.8 lab 配置的键位纪律（每个键都要写在解析器**会读**的段里）
+
+`lunwen/clab-lab/kernel-config.ini` 曾经把 `threshold = 80.0` 写在 `[weights]` 段，而该文件**没有**
+`[acceptability]` 段 —— 解析器只在 `[acceptability]` 里读这个键（`internal/config/config.go` 的
+`sections["acceptability"]` 分支），于是取值是**静默 no-op**：`cfg.Threshold` 之所以是 80.0，
+只是因为 `config.Default()` 恰好也是 80.0（把文件里的值原地改成 61.5，解析结果仍是 80.0 即证）。
+这与出厂模板把 `scoring_engine` 写进 `[extension_weights]` 是**同一类**缺陷（§5.4.6 的判定线就来自
+这个键，所以它落在实验的输入面上）。现已挪进 `[acceptability]`：**有效值改动前 = 内置默认 80.0
+（文件值从未被应用），改动后 = 文件值 80.0**，判定行为逐位不变。
+
+纪律与两道防线：
+
+- **判据是"值真的在生效"，不是"文件能解析"**。`TestLabKernelConfigDecisionKeysAreInEffect`
+  （`internal/config/configs_templates_test.go`）用**等值探针**：把文件里该键的取值原地改掉，
+  解析结果必须跟着变 —— 键被挪回解析器不读的段时它立刻红（并有"必须声明在 `[acceptability]`"
+  的位置断言）。改 lab 配置的键位前先跑 `go test ./internal/config/`。
+- **同类现状（未修，且挪段救不活）**：`[heartbeat]` 的 `timeout_sec`/`enabled` 在 `Parse` 的
+  **任何**段都不被读（`cfg.HeartbeatTimeoutSec` 全程为零值，唯一消费者 `internal/heartbeat`
+  只在字段 > 0 时才覆盖内置 60s）—— 那是"解析层没实现"，不是"位置写错"，挪到哪都一样无效。
+  测试里把它钉成断言：哪天接上解析就会红，提醒复核实验配置里那两行的去留。
 
 ---
 
