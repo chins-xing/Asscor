@@ -187,14 +187,18 @@ func RenderMarkdown(w io.Writer, rep Report) error {
 	// 判定口径必须写在报告头上（主控裁定 C1 第 5 条）：这张表里的"分数"与部署引擎的分数是
 	// **同一个量**（同一个 `ssam.SSAMV20Formula`），阈值就是引擎的决策线。少了这一行，
 	// 读者无法判断报告里的漏判率/误阻断率是不是部署行为 —— 而这正是里程碑 B 的全部意义。
+	//
+	// 阈值被覆盖时（spec §5.4 的敏感性分析）**不再打印"阈值 = 引擎决策线"那句**，改为直接
+	// 写覆盖值：两句话同时出现会读成自相矛盾（前半句说这是引擎决策线，后半句说它被覆盖了），
+	// 而"这一行到底是不是部署判定线下的数字"正是读者最需要一眼看清的事（Fix round 2 的 I5 项）。
 	b.WriteString("判定口径: 离线分数 = 引擎总分（`ssam.SSAMV20Formula`，与在线评分同一公式；")
 	b.WriteString("域级修正经 `RegisterDomainAdjust`/`RegisterEdgeFactorStrategy` 注入，legacy 零注册）；")
-	b.WriteString("阈值 = 引擎决策线（`Acceptable = 总分 ≥ threshold`）\n\n")
-	// 阈值被覆盖时**必须**在报告头点名（spec §5.4 的敏感性分析）：覆盖值一旦生效，表里的
-	// 漏判率/误阻断率就不再是部署判定线下的数字，而两份报告在字面上不能长得一样。
 	if rep.ThresholdOverride > 0 {
-		fmt.Fprintf(&b, "阈值口径: **敏感性分析覆盖值 `-threshold = %.4g`**（记录自带的 `observed.threshold` "+
-			"被忽略；这一行**不是**部署判定线下的结果，不得作为选模默认路径的结论）\n\n", rep.ThresholdOverride)
+		fmt.Fprintf(&b, "**阈值 = 敏感性分析覆盖值 `-threshold = %.4g`**（记录自带的 `observed.threshold` "+
+			"被忽略 ⇒ 本表的漏判率/误阻断率**不是**部署判定线下的结果，不得作为选模默认路径的结论）\n\n",
+			rep.ThresholdOverride)
+	} else {
+		b.WriteString("阈值 = 引擎决策线（`Acceptable = 总分 ≥ threshold`）\n\n")
 	}
 	// 权重口径同样必须写在报告头上（Task 3B Fix round 1 / Important 1）：`-weights` 在记录自带
 	// `observed.effective_weights` 时**不参与计算**，而它仍是必填参数 —— 少了这一行，两串比例

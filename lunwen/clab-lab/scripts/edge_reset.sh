@@ -90,14 +90,21 @@ ensure_caldera() {
 T0=$(now_s); ensure_caldera "$T0" || exit 1
 
 # 节点计数（`clab inspect --format json` 是权威视图，不是解析 yml 的缩进）。回显 "total up down"。
+# **inspect 本身失败时回显 `-1 -1 -1`**（而不是 0 0 0）：0 节点的含义是"拓扑已清空"，那是一条
+# 会被"destroy 之后断言拓扑为空"采信的结论 —— inspect 挂了却报 0 会让那条断言**空洞地通过**
+# （Fix round 2 的 I9 项）。等待循环只看 total > 0，-1 会被当作"还没就绪"继续等。
 clab_node_counts() {
   clab inspect -t "$TOPOLOGY" --format json > /tmp/edgeexp-clab-inspect.json 2>>/tmp/edgeexp-clab-inspect.log
-  python3 - <<'PY'
-import json
+  local rc=$?
+  python3 - "$rc" <<'PY'
+import json, sys
+rc = int(sys.argv[1])
+if rc != 0:
+    print(-1, -1, -1); raise SystemExit
 try:
     data = json.load(open('/tmp/edgeexp-clab-inspect.json'))
 except Exception:
-    print(0, 0, 0); raise SystemExit
+    print(-1, -1, -1); raise SystemExit
 # clab 的 --format json 是 {<lab 名>: [节点…]}（0.78 实测）；同时兼容 {containers:[…]} 形态
 nodes = []
 if isinstance(data, dict):
@@ -134,6 +141,12 @@ if [ "$DESTROY_TOLERATED" -eq 1 ]; then
   read -r LEFT_TOTAL LEFT_UP LEFT_DOWN <<EOF
 $(clab_node_counts)
 EOF
+  if [ "$LEFT_TOTAL" -lt 0 ]; then
+    echo "edge_reset: clab destroy 失败，而 \`clab inspect\` **本身也失败**（无法确定拓扑状态）——" >&2
+    echo "  '干净环境'的前提既没被证实也没被证伪，整轮失败（不能把'查不出来'当成'已清空'）。" >&2
+    echo "  见 /tmp/edgeexp-clab-destroy.log 与 /tmp/edgeexp-clab-inspect.log。" >&2
+    exit 1
+  fi
   if [ "$LEFT_TOTAL" -ne 0 ]; then
     echo "edge_reset: clab destroy 失败且拓扑里仍有 $LEFT_TOTAL 个节点（$LEFT_UP running）—— '干净环境'的前提不成立：" >&2
     echo "  deploy 可能只是对残留容器做 reconcile，上一场景的接口/路由状态会被带进本场景。整轮失败。" >&2
@@ -169,6 +182,10 @@ EOF
 done
 wait_s=$(( $(now_s) - T0 ))
 echo "edge_reset: 节点 $UP_NODES/$TOTAL_NODES running（等待 ${wait_s}s）"
+if [ "$TOTAL_NODES" -lt 0 ]; then
+  echo "edge_reset: \`clab inspect\` 失败，节点状态无法确定（见 /tmp/edgeexp-clab-inspect.log）—— 环境可用性未证实" >&2
+  exit 1
+fi
 [ "$TOTAL_NODES" -gt 0 ] || { echo "edge_reset: 拓扑里一个节点都没起来 —— 环境不可用" >&2; exit 1; }
 [ "$DOWN_NODES" -eq 0 ] || { echo "edge_reset: 有 $DOWN_NODES 个节点不是 running —— 环境不可用" >&2; exit 1; }
 

@@ -521,6 +521,11 @@ func TestCLIThresholdOverrideIsExplicitAndVisible(t *testing.T) {
 	if !strings.Contains(stderr, "已覆盖记录自带的 observed.threshold") {
 		t.Errorf("stderr 必须提示覆盖生效：%s", stderr)
 	}
+	// 覆盖生效时**不得**再打印"阈值 = 引擎决策线"那句：两句同时出现会读成自相矛盾
+	// （"前半句说这是引擎决策线、后半句说它被覆盖了"）—— 见 Fix round 2 的 I5 项。
+	if strings.Contains(stdout, "阈值 = 引擎决策线") {
+		t.Errorf("覆盖阈值时不得同时打印『阈值 = 引擎决策线』：\n%s", stdout)
+	}
 
 	// ③ 没有 -candidate：拟合/自检模式下该开关没有意义 ⇒ 用法错误（不是静默忽略）。
 	code, stdout, stderr = runCLIForTest(t, "-records", records, "-threshold", "100")

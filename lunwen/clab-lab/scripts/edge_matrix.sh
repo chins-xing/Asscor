@@ -218,7 +218,9 @@ for s in scen:
             gate2['max_abs_delta'] = max(gate2['max_abs_delta'], d)
         if collect.get('ts_source'):
             ts_sources.setdefault(collect['ts_source'], []).append(s)
-        if collect.get('record_added') == 1:
+        if collect.get('record_added') == 1 and not collect.get('rolled_back'):
+            # 回滚掉的记录**不算**"本次写入"（否则一次被回滚的采集会同时表现为"写了一条"
+            # 与"文件里没有"，两个数各自看都对、合起来是错的 —— Fix round 2 的 Minor 项）。
             records_expected += 1
 
 gate0['method'] = ('按归一化因子 ID 统计每条真实记录链上的条目数（只看记录，不做静态推断）；'
@@ -255,7 +257,11 @@ if os.path.exists(records_file):
             sid = rec.get('scenario_id')
             # 链条目 ts 的口径也顺手从记录本体读（续跑模式下没有 collect 碎片，而 ts_source
             # 本来就写在记录的 meta 里 —— 不读它就只能报 None）。
-            ts_from_dataset.setdefault((rec.get('meta') or {}).get('ts_source') or '(未注明)', []).append(sid)
+            # **只统计本次选中的场景**：整份文件里可能有别的场景行，把它们的口径算进来会得到
+            # 一个描述"文件"而不是"本轮"的汇总（Fix round 2 的 M2 项）。
+            if any(str(sid or '').startswith(name) for name in scen):
+                ts_from_dataset.setdefault(
+                    (rec.get('meta') or {}).get('ts_source') or '(未注明)', []).append(sid)
             gate0_dataset['per_record'][sid] = {'chain_entries': len(chain),
                                                 'distinct_ids': len(counts), 'duplicate_ids': dups}
             if dups:
@@ -324,7 +330,10 @@ run = {
     'records_expected': len(scen),
     'records_written_this_run': records_expected,
     'records_file_total_lines': file_lines,
-    'records_missing_for_selected': len(scen) - file_lines,
+    # 缺/多分开报（Fix round 2 的 Minor 项）：此前一个 `len(scen) - file_lines` 同时承担
+    # 两种含义，文件里**多**了别的场景行时会变成负数（看起来像"缺了 −2 条"）。
+    'records_missing_for_selected': max(0, len(scen) - file_lines),
+    'records_extra_in_file': max(0, file_lines - len(scen)),
     # 记录条数（I6）：判据要同时看两件事 —— ① 这份文件里**至少**有本次选中场景数那么多条记录
     # （只统计"本次写了几次"会漏掉文件里原有的别的场景行）；② 本次写入 + 续跑跳过 == 选中场景数
     # （续跑模式下本次写入可以是 0，那不是缺口）。只看 ① 会在"文件里有别的场景行"时误报通过，
@@ -416,19 +425,44 @@ PY
   t0=$(date -u +%s)
   # 一律用 `bash <script>` 调用（不依赖可执行位）：lab 目录在 /mnt/f（drvfs）上，
   # 可执行位由挂载选项决定，靠它会让"脚本本身没跑"伪装成"实验失败"。
+  # 每一步先写好兜底失败原因（含场景名与步骤名）：`set -e` 下子脚本失败会直接跳到 trap，
+  # 那时只有这里写下的原因是可归因的（Fix round 2 的 M4 项）。
+  FAIL_REASON="场景 $s 的 reset 步失败（见上面的 stderr）"
   bash "$SCRIPT_DIR/edge_reset.sh" "$s"
+  FAIL_REASON=""
   t1=$(date -u +%s); state_add "$s" reset $((t1 - t0))
+  FAIL_REASON="场景 $s 的 attack 步失败（见上面的 stderr）"
   bash "$SCRIPT_DIR/edge_attack.sh" "$s" "$DATA_DIR/attack-$s.json"
+  FAIL_REASON=""
   t2=$(date -u +%s); state_add "$s" attack $((t2 - t1))
+  FAIL_REASON="场景 $s 的 collect 步失败（记录已回滚；见上面的 stderr 与 run.d/rejected-$s.jsonl）"
   bash "$SCRIPT_DIR/edge_collect.sh" "$s" "$CONFIG" "$DATA_DIR/attack-$s.json" "${EDGEEXP_RUN_INDEX:-1}"
+  FAIL_REASON=""
   t3=$(date -u +%s); state_add "$s" collect $((t3 - t2))
   state_complete "$s"
   echo "edge_matrix: [$i/${#SELECTED[@]}] $s 完成（reset $((t1-t0))s / attack $((t2-t1))s / collect $((t3-t2))s）"
 done
 
+# --- 记录条数门禁（**判死整轮**，不只是一个上报字段）----------------------------
+# brief 的"记录条数 == 场景数"此前只是 run.json 里的一个布尔值：文件里少一条或多一条都不影响
+# 退出码（Fix round 2 的 Important 项后半句）。这里把它变成硬闸门：文件总行数必须**恰好**
+# 等于本次选中的场景数 —— 少一条说明有场景没采成，多一条说明文件里混进了别的场景
+# （续跑/换 run_id/共用文件），两种都会让"每场景一条"这句结论失效。
+FILE_LINES=0
+if [ -f "$RECORDS" ]; then FILE_LINES=$(grep -c . "$RECORDS" || true); fi
+if [ "$FILE_LINES" -ne "${#SELECTED[@]}" ]; then
+  echo "edge_matrix: 记录条数门禁未通过：$RECORDS 有 $FILE_LINES 条，本次选中 ${#SELECTED[@]} 个场景 —— 整轮失败" >&2
+  echo "  （少一条 = 有场景没采成；多一条 = 文件里混进了别的场景的记录。两者都会让\"每场景一条\"失效）" >&2
+  FAIL_REASON="记录条数门禁未通过：文件 $FILE_LINES 条 ≠ 选中 ${#SELECTED[@]} 个场景"
+  state_fail 1 "$FAIL_REASON" || true
+  exit 1
+fi
+echo "edge_matrix: 记录条数门禁通过（$FILE_LINES 条 == 选中 ${#SELECTED[@]} 个场景）"
+
 # --- 因子权重与权重表：从**采集配置**里解析（单一来源，不在脚本里抄第二份）--------
 # `f_i` 的解析口径与引擎的 `ParamsFromConfig` 同构：
-#   · 内置六因子取 [edge_factors]（EF-002FA 再被 [edge_factors.level4_override] 覆盖）；
+#   · 内置六因子取 [edge_factors]，其中**只有** `two_factor_failure` 会被
+#     [edge_factors.level4_override] 覆盖（解析层那个分支只认这一个键）；
 #   · [edge_factors.custom] 里**不与内置同名**的条目进入因子集 —— 出厂模板里那 7 行
 #     （六个同名 + EF-3FA）因此只有 `EF-3FA=0.82` 是新的。
 # 这正是 review 的 I4 的那个修正：EF-3FA 是**普通因子**（四份模板都声明了 vector.EF-3FA），
@@ -456,7 +490,10 @@ mapping = [('EF-002FA', 'two_factor_failure'), ('EF-SYNCOOKIE', 'syn_cookie_disa
            ('EF-NO-SIEM', 'no_siem'), ('EF-NO-IDS', 'no_ids')]
 out, seen = [], set()
 for fid, key in mapping:
-    val = lvl.get(key, ef.get(key))
+    # 解析层**只对 `two_factor_failure`** 读 [edge_factors.level4_override]（config.go:290-294
+    # 那个分支写死了这一个键），其余五个键即使出现在该段里也不会被消费 —— 这里必须同构，
+    # 否则会算出一个引擎从不使用的 f（Fix round 2 指出的 I4 不精确处）。
+    val = lvl.get(key, ef.get(key)) if key == 'two_factor_failure' else ef.get(key)
     if val is None:
         raise SystemExit(f'edge_matrix: 配置 {sys.argv[1]} 缺 [edge_factors] {key}')
     out.append(f'{fid}={val}')

@@ -393,23 +393,38 @@ bash scripts/edge_collect.sh "$s" ../../configs/edgeexp/m0-baseline.ini \
    因子"可以静默通过 —— 整轮实验的因子塌缩就是这样藏起来的。`edge_collect.sh` 现在要求
    链上的因子集（归一 ID）与场景声明的集合**逐项相等**，多一个少一个都整轮失败；断言在记录落盘之后
    才可能判，故失败时**回滚这一条**（文件回到采集前的行数）并把该行留档到 `run.d/rejected-*.jsonl`。
-5. **产物必须是本轮的**：`harness` 产物（注入时刻、剧本哈希、客观结果）要按 `attack.started_at/
-   finished_at` + 文件 mtime 核对是否产生于本轮（矩阵脚本会导出本轮起始时刻）。一份陈旧的
-   `attack-<scenario>.json` 会让所有证据都变成上一轮的，而时钟核对照样通过。
-6. **幂等**：`edge_collect.sh` 发现目标 JSONL 里已有同场景记录时拒绝再写（重跑请换 `EDGEEXP_RECORDS`
+   **级联场景的期望集必须同时含级联源与级联目标**（Fix round 2）：采集器那条"`EF-3FA` → 级联目标"
+   的替换规则是给**最小值**（⊇）用的，用作**相等**判据就会把合法的 `EF-3FA` 判成多余项 ——
+   出厂模板的 `[edge_factors.custom]` 里还有一条 `EF-3FA = 0.82`（**不是** `CascadeOnly`），
+   它会作为普通因子自己上链。故 `S5-cascade-3fa` 的期望集是 `{EF-3FA, EF-002FA}`、
+   `S3-3fa-selinux-apparmor` 是 `{EF-3FA, EF-002FA, EF-SELINUX, EF-APPARMOR}`；"源"**只在配置真的
+   声明了自定义 `EF-3FA` 时**才期望（把那条去掉后自动退回只有级联目标，不会变成镜像方向的误拒）。
+   查当前推导结果（只推导、不碰 Caldera 与拓扑）：
+   `EDGEEXP_PRINT_EXPECTED=1 bash scripts/edge_attack.sh <scenario> /tmp/x.json`。
+5. **记录条数门禁判死整轮**：`文件总行数 == 本次选中场景数` 是**硬闸门**，不只是 `run.json` 里的一个
+   布尔值 —— 少一条说明有场景没采成，多一条说明文件里混进了别的场景的记录，两者都会让
+   "每场景一条"这句结论失效。被回滚的记录**不计入**"本次写入"。
+6. **产物必须是本轮的、且必须齐**：`harness` 产物（`expected_chain_factors` / 注入时刻 / 剧本哈希 /
+   客观结果）在**调用 `edgescen` 之前**就做预检与新鲜度核对（`attack.started_at/finished_at` +
+   文件 mtime vs 矩阵导出的本轮起始时刻）—— 陈旧或缺字段的产物会静默提供上一轮的证据，
+   而时钟核对照样通过。采集前的失败**不写任何记录**；采集后的失败一律**回滚 + 留档**。
+7. **幂等**：`edge_collect.sh` 发现目标 JSONL 里已有同场景记录时拒绝再写（重跑请换 `EDGEEXP_RECORDS`
    或归档旧文件；**续跑整轮矩阵**用 `EDGEEXP_RESUME=1`）。矩阵脚本每轮清空逐场景碎片，
    避免上一轮的片段混进本轮的 `run.json`。
-7. **时间结构**：顺序注入场景的相位间隔必须让注入时刻落在**不同秒** —— 链上 `ts` 由
+8. **时间结构**：顺序注入场景的相位间隔必须让注入时刻落在**不同秒** —— 链上 `ts` 由
    `recordChain` 用 `time.RFC3339` 格式化（秒精度），秒内差异会被抹平，C 候选随之退化成 V，
    而记录看起来完全正常。同时注入场景**不带**时间结构是设计（同刻注入 ⇒ C ≡ V，是反向对照，不是缺陷）。
-8. **注入时刻 < 采集时刻**由 `edge_collect.sh` 逐条核对并写进 `run.json`
+9. **注入时刻 < 采集时刻**由 `edge_collect.sh` 逐条核对并写进 `run.json`
    （采集时间是记录装配时刻 `meta.timestamp`，这是记录里唯一的采集时间戳），同时逐条比对
    "harness 报的注入时刻"与"记录 `checks[].ts`"是否逐位一致 —— 后者是"harness 的时间真的落进记录"的证据。
    零注入场景（S0 / R 组）如实记为 `status: n/a`，**不写"通过"**（空集上的核对恒真，写通过会让人以为
    这里做过一次有效核对）。
-9. **shell 脚本必须 LF 检出**：仓库根新增 `.gitattributes`（`*.sh text eol=lf`）。此前
-   `core.autocrlf=true` 且无 `.gitattributes`，Windows 侧一次 checkout 就会把脚本写成 CRLF，
-   含 `then/do/fi/done` 的脚本**直接解析失败**。改脚本前先 `git ls-files --eol <脚本>` 确认 `w/lf`。
+10. **配置指纹**：记录 `meta.config_hash` 必须等于本次采集配置的 sha256 前 16 位（`run.json` 里另有
+    完整 64 位的 `config_hash_full`）—— "这份记录是这份配置采的"必须可核对，否则报告的权重口径
+    可能指向另一份配置；不等即回滚。
+11. **shell 脚本必须 LF 检出**：仓库根有 `.gitattributes`（`*.sh text eol=lf`）。此前
+    `core.autocrlf=true` 且无该文件，Windows 侧一次 checkout 就会把脚本写成 CRLF，
+    含 `then/do/fi/done` 的脚本**直接解析失败**。改脚本前先 `git ls-files --eol <脚本>` 确认 `w/lf`。
 
 #### 5.4.6 门禁
 
@@ -466,9 +481,10 @@ build/edgecompare -records ...jsonl -candidate legacy=… -factors … -weights 
   -threshold 60 > report-threshold60.md
 ```
 
-覆盖生效时报告头会写「**敏感性分析覆盖值 `-threshold = 60`**」、stderr 也会提示一次 ——
-两份报告在文本上必须能区分（它们会被引用进论文的不同小节）。该开关只在候选对比模式下有意义：
-配合 `-fit` 或自检模式使用是**用法错误**（不是静默忽略）。
+覆盖生效时报告头会写「**阈值 = 敏感性分析覆盖值 `-threshold = 60`**」（并**不再**打印"阈值 = 引擎
+决策线"那句 —— 两句同时出现会读成自相矛盾，而"这一行到底是不是部署判定线下的数字"正是读者最需要
+一眼看清的事），stderr 也会提示一次 —— 两份报告在文本上必须能区分（它们会被引用进论文的不同小节）。
+该开关只在候选对比模式下有意义：配合 `-fit` 或自检模式使用是**用法错误**（不是静默忽略）。
 
 #### 5.4.7 诚实边界（写进论文时必须保留）
 
