@@ -90,6 +90,23 @@ func quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// readShimLog 读回假 docker 记录的调用参数（每行一次调用），用于断言"到底传了什么给 docker"。
+func readShimLog(t *testing.T, path string) []string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("读假 docker 的调用日志 %s: %v", path, err)
+	}
+	var out []string
+	for _, line := range strings.Split(strings.TrimRight(string(raw), "\r\n"), "\n") {
+		line = strings.TrimRight(strings.TrimSpace(line), "\r")
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"
@@ -191,12 +208,35 @@ func TestDefaultPathRecordHasNoObservationTarget(t *testing.T) {
 func TestTargetPathUsesNodeChecksAndRecordsObservationTarget(t *testing.T) {
 	registerFixtureChecks()
 	nodeChecks := hostChecksWithFailures("RS-006")
-	writeDockerShim(t, fakeDocker{stdout: mustEnvelope(t, "host1", nodeChecks)})
+	log := writeDockerShim(t, fakeDocker{stdout: mustEnvelope(t, "host1", nodeChecks)})
 
 	host, observationTarget, err := collectChecksForTarget("asc-asscor-host1")
 	if err != nil {
 		t.Fatalf("节点内取数: %v", err)
 	}
+	// 传给 docker 的参数必须逐条正确 —— 尤其是 `-emit-checks` 的**前导 `-`**。
+	//
+	// 这条断言是实测踩坑换来的：`emitChecksFlag` 曾经少了那个连字符，节点内进程把
+	// `emit-checks` 当成位置参数、`-scenario` 于是为空，它报用法错误退出 —— 而父进程只看到
+	// "docker exec 失败"，很容易被读成环境问题。原来的用例直接调用辅助函数，恰好绕过了这条
+	// 路径，故这里改为按**调用日志**断言，而不是只看返回值。
+	invocations := readShimLog(t, log)
+	if len(invocations) != 2 {
+		t.Fatalf("节点内取数应当只起两个 docker 子进程（cp + exec），实际 %d 条: %v", len(invocations), invocations)
+	}
+	if !strings.HasPrefix(invocations[0], "cp ") || !strings.Contains(invocations[0], "asc-asscor-host1:/tmp/edgescen-") {
+		t.Errorf("第一次调用必须是 `docker cp <本进程二进制> <容器>:/tmp/edgescen-<pid>`，实际 %q", invocations[0])
+	}
+	if !strings.HasPrefix(invocations[1], "exec asc-asscor-host1 /tmp/edgescen-") {
+		t.Errorf("第二次调用必须是 `docker exec <容器> <二进制> …`，实际 %q", invocations[1])
+	}
+	if !strings.HasSuffix(invocations[1], " "+emitChecksFlag) {
+		t.Errorf("节点内进程的入口开关必须原样带上前导 `-`（%q），实际调用 %q", emitChecksFlag, invocations[1])
+	}
+	if strings.TrimPrefix(emitChecksFlag, "-") == emitChecksFlag {
+		t.Errorf("emitChecksFlag 少了前导 `-`：它会被 docker 原样交给节点内进程，而 Go 的 flag 包只认带 `-` 的开关")
+	}
+
 	if len(host) != len(nodeChecks) {
 		t.Fatalf("取回的检查集长度 = %d, want %d", len(host), len(nodeChecks))
 	}

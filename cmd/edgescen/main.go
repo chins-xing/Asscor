@@ -62,6 +62,8 @@ const (
 //
 // 单独抽成常量：它是**跨工具接口**（Go 侧与 `lunwen/clab-lab/scripts/*.sh` 两侧都要用同一个
 // 拼写），写错一处不会报错，只会让脚本以为自己在采集节点数据而实际采的是宿主数据。
+// **不带前导 `-`**：它是 flag 名（`-target` 的 name 部分），也用于 `flag.FlagSet.Visit`
+// 里的名字比较。
 const nodeTargetFlag = "target"
 
 // emitChecksFlag 是节点内进程的入口开关（父进程经 `docker exec` 传给它）。
@@ -69,7 +71,17 @@ const nodeTargetFlag = "target"
 // 它只在**目标节点内部**有意义：节点内进程不装载配置、不读 harness 产物、不评分，
 // 只把该机器检查登记表的原始结果以信封形式交回父进程 —— 评分与装配（也是本工具全部契约
 // 自检所在）仍由父进程执行，不在节点里重跑第二遍。
-const emitChecksFlag = "emit-checks"
+//
+// **必须带前导 `-`**：这个常量会**原样**成为 `docker exec` 的参数（见 `runNodeProcess`），
+// 而 Go 的 flag 包只认带 `-` 的开关。少一个连字符时的症状极其隐蔽：节点内进程会把
+// `emit-checks` 当成**位置参数**、`-scenario` 于是为空 ⇒ 它报用法错误退出，父进程看到的
+// 只是"docker exec 失败"，很容易被读成环境问题。Task 4C 第一次跑节点内评估时实测踩到，
+// 故这里除了修正常量，还在 `TestTargetPathUsesNodeChecks…` 里钉住"传给 docker 的参数
+// 必须带 `-`"（原来的用例直接调用辅助函数，恰好绕过了这条）。
+const emitChecksFlag = "-emit-checks"
+
+// emitChecksArg 是 `-emit-checks` 在 `flag.Visit` 里的**名字**（不带 `-`）。
+var emitChecksArg = strings.TrimPrefix(emitChecksFlag, "-")
 
 func main() {
 	os.Exit(runCLI(os.Args[1:], os.Stdout, os.Stderr))
@@ -92,7 +104,7 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	// 传了则改为在目标节点内跑同一份二进制取回检查结果 —— 失败一律报错，绝不退回本机
 	// （那正是"看起来是节点数据、实际是宿主数据"的静默错误）。
 	target := fs.String(nodeTargetFlag, "", "在哪个节点内做评估（容器名，经 docker exec 执行同一份二进制）；缺省=本机（与既有行为逐位一致）")
-	emitChecks := fs.Bool(emitChecksFlag, false, "**节点内进程入口**：把本机检查登记表的原始结果以信封形式写到 stdout 并退出（由父进程经 docker exec 调用，不要手工使用）")
+	emitChecks := fs.Bool(emitChecksArg, false, "**节点内进程入口**：把本机检查登记表的原始结果以信封形式写到 stdout 并退出（由父进程经 docker exec 调用，不要手工使用）")
 
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -210,7 +222,7 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 func rejectEmitChecksArgs(fs *flag.FlagSet, target string) error {
 	var bad []string
 	fs.Visit(func(f *flag.Flag) {
-		if f.Name == emitChecksFlag || f.Name == nodeTargetFlag {
+		if f.Name == emitChecksArg || f.Name == nodeTargetFlag {
 			return
 		}
 		bad = append(bad, "-"+f.Name)
