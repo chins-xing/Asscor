@@ -187,11 +187,42 @@ func countWeightSources(records []Record) WeightSourceCounts {
 	return c
 }
 
-// Evaluate 在同一份真实数据上重算并计算三层指标（spec §2.1）。
+// EvaluateOptions 承载"本次评估的显式覆盖项"。零值 = 一切按记录本体走（既有行为逐位不变）。
+//
+// 目前只有一个字段：阈值覆盖。它存在的唯一理由是**敏感性分析** —— spec §5.4 要求"若部署判定线
+// 下两类样本为空，必须另附一行 threshold = 60.0 的敏感性结果"，而在此之前该要求无法执行：
+// 阈值来自记录本体（`observed.threshold`），工具没有覆盖入口，操作者只能手改 JSONL 副本，
+// 而手改过的数据集**与原始数据不再逐字节可复现**。有了这个字段，"敏感性行"可以用一条命令、
+// 同一份数据复现，且覆盖值会写进报告头（`Report.ThresholdOverride`），读者一眼能看出
+// "这一行不是部署的判定线"。
+//
+// **不得用于选模的默认路径**：选模必须用部署的真实判定线（覆盖率与可复现性都指着它）。
+// CLI 侧对此有明确说明（`-threshold` 的 flag 文案），报告头也会带上"敏感性分析覆盖值"字样。
+type EvaluateOptions struct {
+	// ThresholdOverride > 0 时替代**每条记录**的 `observed.threshold`；0 = 不覆盖（缺省）。
+	ThresholdOverride float64
+}
+
+// thresholdOf 返回该记录本次评估实际使用的阈值（覆盖优先，且覆盖值本身已由 CLI 校验为正）。
+func thresholdOf(rec Record, opts EvaluateOptions) float64 {
+	if opts.ThresholdOverride > 0 {
+		return opts.ThresholdOverride
+	}
+	return rec.Observed.Threshold
+}
+
+// Evaluate 是 `EvaluateWith` 的缺省口径包装（不覆盖任何东西）。
+func Evaluate(records []Record, p edgefactor.Params, weights map[string]float64) (Metrics, error) {
+	return EvaluateWith(records, p, weights, EvaluateOptions{})
+}
+
+// EvaluateWith 在同一份真实数据上重算并计算三层指标（spec §2.1），并接受显式覆盖项
+// （目前只有阈值；见 `EvaluateOptions`）。
 //
 // 决策层对齐规则（模型判定 ↔ 客观结果）：
-//   - 模型判定：`acceptable = 重算分数 ≥ 记录阈值`。阈值取自观测记录，四个候选共用同一根
-//     判定线 —— 比较的是"同一份真实数据 + 同一判定线下谁的决定更接近现实"；
+//   - 模型判定：`acceptable = 重算分数 ≥ 本次阈值`。**缺省**阈值取自观测记录，四个候选共用
+//     同一根判定线 —— 比较的是"同一份真实数据 + 同一判定线下谁的决定更接近现实"；
+//     `opts.ThresholdOverride > 0` 时改用覆盖值（敏感性分析），此时"同一根线"依然成立。
 //   - 客观结果：`compromised` 来自 `ground_truth`（真实攻防实验的客观结论，与任何模型无关）；
 //   - 一致：`acceptable == !compromised`（判"可接受" ⇔ 客观未被攻陷）；
 //   - 漏判 FN：`acceptable && compromised`（模型放行、实际被攻陷）—— 主判据之一；
@@ -201,7 +232,8 @@ func countWeightSources(records []Record) WeightSourceCounts {
 //
 // 排序层用「模型分数 vs 客观严重度」，数值层用「危险度 (100−score) vs compromised」，
 // 两层都只是辅助证据，不参与选优（选优在 Task 9 的 Compare）。
-func Evaluate(records []Record, p edgefactor.Params, weights map[string]float64) (Metrics, error) {
+func EvaluateWith(records []Record, p edgefactor.Params, weights map[string]float64,
+	opts EvaluateOptions) (Metrics, error) {
 	var m Metrics
 	if len(records) == 0 {
 		return m, nil
@@ -231,7 +263,7 @@ func Evaluate(records []Record, p edgefactor.Params, weights map[string]float64)
 			// 返回零值 Metrics（而不是半填的 m）：错误必须让调用方无法把结果当成有效报告。
 			return Metrics{}, fmt.Errorf("edgecompare: scenario %s: %w", rec.ScenarioID, err)
 		}
-		acceptable := score >= rec.Observed.Threshold
+		acceptable := score >= thresholdOf(rec, opts)
 		compromised := rec.GroundTruth.Compromised
 		scores = append(scores, score)
 		severity = append(severity, severityOf(rec.GroundTruth))

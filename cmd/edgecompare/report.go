@@ -50,6 +50,13 @@ type Report struct {
 
 	// WeightSource 是记录集的权重口径分布（`Compare` 填；手搓 Report 留零值 ⇒ 渲染成"未注明"）。
 	WeightSource WeightSourceCounts `json:"weight_source"`
+
+	// ThresholdOverride 是本次评估的**阈值覆盖值**（0 = 用每条记录自带的 observed.threshold）。
+	//
+	// 它必须进报告本体的理由与 `WeightSource` 完全同类：覆盖值一旦生效，报告里的漏判率/误阻断率
+	// 就不再是部署判定线下的数字。少了这个字段，一份"敏感性分析"报告与一份"部署口径"报告在
+	// 字面上完全一样 —— 而它们会被贴进论文的不同小节。
+	ThresholdOverride float64 `json:"threshold_override"`
 }
 
 // Compare 在同一份真实数据上评估全部候选，并按决策层主判据选优（spec §2.1）。
@@ -62,6 +69,15 @@ type Report struct {
 // 求值顺序按候选**名字典序**（而不是 map 迭代序）：这样多个候选同时失败时报出来的第一个错误
 // 也是确定的 —— 同一份输入必须给出同一份报告，包括失败的形态。
 func Compare(records []Record, paramsByModel map[string]edgefactor.Params, weights map[string]float64) (Report, error) {
+	return CompareWith(records, paramsByModel, weights, EvaluateOptions{})
+}
+
+// CompareWith 是带显式覆盖项（阈值，见 `EvaluateOptions`）的对比入口；`Compare` 是它的零值包装。
+//
+// 覆盖项**必须**写进 `Report.ThresholdOverride`：否则"部署判定线"与"敏感性分析的覆盖线"两份
+// 报告在文本上无法区分，而它们会被引用进论文的不同小节（spec §5.4 的敏感性要求）。
+func CompareWith(records []Record, paramsByModel map[string]edgefactor.Params, weights map[string]float64,
+	opts EvaluateOptions) (Report, error) {
 	if len(paramsByModel) == 0 {
 		return Report{}, fmt.Errorf("edgecompare: 没有任何候选模型可对比 —— 空对比会产出一张空表外加一个不存在的『选定模型』")
 	}
@@ -79,9 +95,11 @@ func Compare(records []Record, paramsByModel map[string]edgefactor.Params, weigh
 		// 权重口径的分布只取决于**记录集**（与候选无关），故在候选循环外算一次：
 		// 报告头据此说明"这次用的是记录自带的表还是 `-weights`"（Important 1）。
 		WeightSource: countWeightSources(records),
+		// 阈值覆盖值同样在候选循环外：它对本报告里的每一个候选都生效（见 Report 的说明）。
+		ThresholdOverride: opts.ThresholdOverride,
 	}
 	for _, name := range sortedNames(paramsByModel) {
-		m, err := Evaluate(records, paramsByModel[name], weights)
+		m, err := EvaluateWith(records, paramsByModel[name], weights, opts)
 		if err != nil {
 			// 错误必须点名候选：四个候选共用同一份数据，只看 "scenario X: ..." 无法判断是
 			// 数据有问题还是某个候选的参数有问题。
@@ -172,6 +190,12 @@ func RenderMarkdown(w io.Writer, rep Report) error {
 	b.WriteString("判定口径: 离线分数 = 引擎总分（`ssam.SSAMV20Formula`，与在线评分同一公式；")
 	b.WriteString("域级修正经 `RegisterDomainAdjust`/`RegisterEdgeFactorStrategy` 注入，legacy 零注册）；")
 	b.WriteString("阈值 = 引擎决策线（`Acceptable = 总分 ≥ threshold`）\n\n")
+	// 阈值被覆盖时**必须**在报告头点名（spec §5.4 的敏感性分析）：覆盖值一旦生效，表里的
+	// 漏判率/误阻断率就不再是部署判定线下的数字，而两份报告在字面上不能长得一样。
+	if rep.ThresholdOverride > 0 {
+		fmt.Fprintf(&b, "阈值口径: **敏感性分析覆盖值 `-threshold = %.4g`**（记录自带的 `observed.threshold` "+
+			"被忽略；这一行**不是**部署判定线下的结果，不得作为选模默认路径的结论）\n\n", rep.ThresholdOverride)
+	}
 	// 权重口径同样必须写在报告头上（Task 3B Fix round 1 / Important 1）：`-weights` 在记录自带
 	// `observed.effective_weights` 时**不参与计算**，而它仍是必填参数 —— 少了这一行，两串比例
 	// 完全不同的 `-weights` 会产出**逐字节相同**的报告，计划里的复现命令会被误读、

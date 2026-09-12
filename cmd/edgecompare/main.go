@@ -80,6 +80,9 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	folds := fs.Int("folds", fitDefaultFolds, "交叉验证折数")
 	l2 := fs.Float64("l2", fitDefaultL2, "L2 相对收缩率：标准化后每一列收缩 1/(1+l2)（不是绝对脊参数，见 FitOptions.L2 注释）")
 	l1 := fs.Float64("l1", 0, "L1 正则系数（默认 0：稀疏化由先验边集上限承担）")
+	thresholdOverride := fs.Float64("threshold", 0,
+		"覆盖记录里的 observed.threshold（> 0；**仅用于敏感性分析**，0 = 用记录自带的判定线）。"+
+			"选模必须用部署的真实判定线，故该开关不得出现在默认路径上；使用时报告头会写明覆盖值")
 
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -93,6 +96,16 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	// 到底选了谁"无从解释 —— 用法错误，在读取任何文件之前就拒绝。
 	if *fitMode && len(candidateFlags) > 0 {
 		fmt.Fprintln(stderr, "edgecompare: -fit 与 -candidate 不能同时给出 —— 前者产出拟合参数段，后者产出候选对比报告，混在一起就无法归因")
+		return exitUsage
+	}
+	// -threshold 只改"决策层判定线"，只在候选对比模式下有意义：拟合模式选的是参数而不是判定线、
+	// 自检模式只逐条打印观测。写成用法错误而不是"静默忽略"，否则操作者会以为敏感性分析生效了。
+	if *thresholdOverride != 0 && !(len(candidateFlags) > 0 && !*fitMode) {
+		fmt.Fprintln(stderr, "edgecompare: -threshold 只在候选对比模式（-candidate）下有意义 —— 它改的是决策层判定线，拟合模式选的是参数、自检模式只逐条打印观测；静默忽略会让操作者以为敏感性分析已经生效")
+		return exitUsage
+	}
+	if *thresholdOverride < 0 {
+		fmt.Fprintln(stderr, "edgecompare: -threshold 必须 > 0（0 = 用记录自带的 observed.threshold）")
 		return exitUsage
 	}
 
@@ -175,7 +188,7 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 		return runFit(records, base, factors, edges,
 			FitOptions{L2: *l2, L1: *l1, Folds: *folds, Seed: *seed}, *outPath, stdout, stderr)
 	case len(candidateFlags) > 0:
-		return runCompare(records, weights, pairs, factors, *outPath, stdout, stderr)
+		return runCompare(records, weights, pairs, factors, *thresholdOverride, *outPath, stdout, stderr)
 	default:
 		return runSelfCheck(records, *verbose, stdout)
 	}
@@ -234,7 +247,7 @@ func runSelfCheck(records []Record, verbose bool, stdout io.Writer) int {
 // 失败路径的纪律：`Compare` 与 `RenderConfigSection` 的错误一律如实转述（退出码 1），
 // 且**在渲染全部成功之前不写任何东西** —— 失败时 stdout 为空、`-out` 文件不存在。
 func runCompare(records []Record, weights map[string]float64, pairs []candidateRef,
-	factors map[string]float64, outPath string, stdout, stderr io.Writer) int {
+	factors map[string]float64, thresholdOverride float64, outPath string, stdout, stderr io.Writer) int {
 
 	paramsByModel := make(map[string]edgefactor.Params, len(pairs))
 	for _, ref := range pairs {
@@ -258,10 +271,17 @@ func runCompare(records []Record, weights map[string]float64, pairs []candidateR
 		paramsByModel[ref.name] = p
 	}
 
-	rep, err := Compare(records, paramsByModel, weights)
+	rep, err := CompareWith(records, paramsByModel, weights, EvaluateOptions{ThresholdOverride: thresholdOverride})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitFailure
+	}
+	// 阈值被覆盖时必须在 stderr 上再喊一次（与"`-weights` 未参与计算"同款可见性纪律）：
+	// 敏感性分析的报告与部署口径的报告在正文里长得几乎一样，而它们会被贴进论文的不同小节。
+	if rep.ThresholdOverride > 0 {
+		fmt.Fprintf(stderr, "edgecompare: -threshold=%.4g 已覆盖记录自带的 observed.threshold —— "+
+			"本报告的漏判率/误阻断率**不是**部署判定线下的结果，仅供敏感性分析（不得作为选模默认路径的结论）\n",
+			rep.ThresholdOverride)
 	}
 	// `-weights` 是**回退表**（Task 3B）：记录自带 `observed.effective_weights` 时它根本不参与
 	// 计算。全部记录都自带时在 stderr 上说一句 —— 否则"改了 `-weights` 报告一字不变"没有任何

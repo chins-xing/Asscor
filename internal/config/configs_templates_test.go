@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -82,6 +84,99 @@ func TestEdgeExpConfigTemplatesLoad(t *testing.T) {
 }
 
 // TestWeightsScoringEngineIsParsedFromWeights pins ①：键写在解析器**会读**的段里时，
+// 取值必须真的落到 cfg.ScoringEngine 上。
+//
+// TestEdgeExpTemplatesShareDeploymentSkeleton 钉住"四份实验模板共享同一份部署骨架"这句话。
+//
+// 它此前**只是文档里的一句声明**（报告与 spec §5.4.3 都这么写），而 diff 并不支持它：注释与标题行
+// 在四份之间是不同的，只有**键值**相同。评审指出"声明与证据不符"之后，把它变成可执行断言 ——
+// 判据用 parseSections（与解析器同一份分段实现），比较除 `[edge_factors.model]` 之外**全部段的
+// 键值集**：任何一段在四份模板之间不一致，候选之间的分数差异就不再能归因于模型参数。
+func TestEdgeExpTemplatesShareDeploymentSkeleton(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join("..", "..", "configs", "edgeexp", "*.ini"))
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("no edge experiment templates (err=%v)", err)
+	}
+	// 基线取 m0-baseline.ini（M0 是"评分逐位一致"的那份，其余三份是它的模型段替换）。
+	var basePath string
+	for _, p := range paths {
+		if filepath.Base(p) == "m0-baseline.ini" {
+			basePath = p
+		}
+	}
+	if basePath == "" {
+		t.Fatalf("缺少 m0-baseline.ini：%v", paths)
+	}
+	if err := assertSkeletonEqual(basePath, basePath); err != nil {
+		t.Fatalf("基线与自身不一致（说明断言写错了）：%v", err)
+	}
+	for _, p := range paths {
+		if p == basePath {
+			continue
+		}
+		if err := assertSkeletonEqual(basePath, p); err != nil {
+			t.Errorf("部署骨架不一致：%v", err)
+		}
+	}
+}
+
+// assertSkeletonEqual 比较两份模板在 `[edge_factors.model]` 之外的**每个段的键值**。
+func assertSkeletonEqual(basePath, otherPath string) error {
+	read := func(path string) (map[string]map[string]string, error) {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		return parseSections(string(raw)), nil
+	}
+	base, err := read(basePath)
+	if err != nil {
+		return err
+	}
+	other, err := read(otherPath)
+	if err != nil {
+		return err
+	}
+	delete(base, "edge_factors.model")
+	delete(other, "edge_factors.model")
+	names := map[string]bool{}
+	for name := range base {
+		names[name] = true
+	}
+	for name := range other {
+		names[name] = true
+	}
+	sorted := make([]string, 0, len(names))
+	for name := range names {
+		sorted = append(sorted, name)
+	}
+	sort.Strings(sorted)
+	for _, name := range sorted {
+		b, okB := base[name]
+		o, okO := other[name]
+		if !okB || !okO {
+			return fmt.Errorf("%s 与 %s 的段集不同：段 [%s] 只出现在其中一份里",
+				filepath.Base(basePath), filepath.Base(otherPath), name)
+		}
+		if len(b) != len(o) {
+			return fmt.Errorf("%s[%s] 的键数不同：%d vs %d",
+				filepath.Base(otherPath), name, len(o), len(b))
+		}
+		for k, bv := range b {
+			ov, ok := o[k]
+			if !ok {
+				return fmt.Errorf("%s[%s] 缺键 %q（基线的值是 %q）", filepath.Base(otherPath), name, k, bv)
+			}
+			if ov != bv {
+				return fmt.Errorf("%s[%s] %s = %q，基线是 %q",
+					filepath.Base(otherPath), name, k, ov, bv)
+			}
+		}
+	}
+	return nil
+}
+
+// TestWeightsScoringEngineIsParsedFromWeights 钉住 ①：键写在解析器**会读**的段里时，
 // 取值必须真的落到 cfg.ScoringEngine 上。
 //
 // 这是出厂模板那处"静默 no-op"缺陷的正向一半：解析器只在 `[weights]` 段读这个键

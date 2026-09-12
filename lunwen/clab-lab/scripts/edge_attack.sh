@@ -117,6 +117,16 @@ fi
 phase_count() { [ -z "$1" ] && echo 0 || echo "$1" | tr '|' '\n' | wc -l; }
 EXPECTED_PHASES=$(phase_count "$PHASES")
 
+# 级联目标：只有这两个场景的 `scenarioSpec.CascadeTo = EF-002FA`（与采集器同源）。
+# EF-3FA 是 CascadeOnly —— 它自己**不**上链，上链的是它级联到的 EF-002FA；
+# 这条替换就是 `scenarioSpec.expectedChainFactors()` 的那一步，作用在下面的
+# EXPECTED_CHAIN_FACTORS（采集脚本用它对链做**相等**断言，见 edge_collect.sh）。
+CASCADE_TARGET=""
+case "$SCENARIO" in
+  S3-3fa-selinux-apparmor|S5-cascade-3fa) CASCADE_TARGET="EF-002FA" ;;
+esac
+EXPECTED_CHAIN_FACTORS=""
+
 # --- 与采集器的场景表交叉核对 ------------------------------------------------
 if [ -x "$EDGESCEN" ]; then
   LIST="$("$EDGESCEN" -list)"
@@ -145,9 +155,40 @@ if [ -x "$EDGESCEN" ]; then
       exit 1
     }
   done
+  # EXPECTED_CHAIN_FACTORS = 采集器声明的因子，按 expectedChainFactors 的规则把级联源替换成
+  # 级联目标（`因子=` 是采集器自己的声明面，比在 harness 里重抄一份更不容易漂移）。
+  EXPECTED_CHAIN_FACTORS="$(echo "$LINE" | sed -n 's/.*因子=\([^ ]*\).*/\1/p' | tr ',' '\n' | while read -r f; do
+    case "$f" in
+      ""|"(无)") continue ;;
+      EF-3FA) [ -n "$CASCADE_TARGET" ] && echo "$CASCADE_TARGET" || echo "EF-3FA" ;;
+      *) echo "$f" ;;
+    esac
+  done | sort -u | paste -sd, -)"
+  EXPECTED_CHAIN_FACTORS_SET=1
 else
   echo "edge_attack: 警告：$EDGESCEN 不存在，跳过与采集器场景表的交叉核对" >&2
 fi
+
+# `edgescen` 不可用时的退化路径：用本脚本的相位表推导"期望上链的因子集"（同样做级联替换）。
+# **必须留有这一手**，否则采集脚本的相等断言会在"工具没编译"时把每条记录都判死，
+# 而真正的原因（少了一个二进制）反而看不出来。代价如实写在 warning 里：此时相等断言的来源
+# 从"采集器的声明面"变成"harness 自己的相位表"，两处漂移时不再有交叉核对。
+if [ "${EXPECTED_CHAIN_FACTORS_SET:-0}" -eq 0 ]; then
+  echo "edge_attack: 警告：expected_chain_factors 退化用本脚本的相位表推导（无采集器声明面交叉核对）" >&2
+  DERIVED="$(echo "$PHASES" | tr '|,' '\n\n' | while read -r f; do
+    case "$f" in
+      ""|"(无)") continue ;;
+      EF-3FA) [ -n "$CASCADE_TARGET" ] && echo "$CASCADE_TARGET" || echo "EF-3FA" ;;
+      *) echo "$f" ;;
+    esac
+  done | sort -u | paste -sd, -)"
+  if [ -n "$REAL_FACTOR" ]; then
+    EXPECTED_CHAIN_FACTORS="$(printf '%s,%s\n' "$DERIVED" "$REAL_FACTOR" | tr ',' '\n' | grep -v '^$' | sort -u | paste -sd, -)"
+  else
+    EXPECTED_CHAIN_FACTORS="$DERIVED"
+  fi
+fi
+echo "edge_attack: 期望上链因子集 = [${EXPECTED_CHAIN_FACTORS:-（空集）}]（采集脚本用它做相等断言）"
 
 # --- 因子 -> 触发检查：从配置里解析，绝不在这里抄一份表 ----------------------
 # [edge_factors.model] 的 trigger.<ID> 是两份实验模板里显式写出的完整映射
@@ -279,7 +320,8 @@ fi
 TOPO_HASH="sha256:$(sha256sum "$TOPOLOGY" | awk '{print $1}')"
 export SCENARIO OUT TOPOLOGY TOPO_HASH CONFIG CALDERA_URL CALDERA_KEY
 export PLAYBOOK_ID PLAYBOOK_NAME ATTACK_TIMEOUT_S POLL_S PHASES_JSON PROBES_JSON
-export REAL_MISSING REAL_MISSING_AT PHASE_GAP_S EXPECTED_PHASES
+export REAL_MISSING REAL_MISSING_AT PHASE_GAP_S EXPECTED_PHASES EXPECTED_CHAIN_FACTORS
+export EXPECTED_CHAIN_FACTORS_SET
 python3 - <<'PY'
 import datetime, hashlib, json, os, sys, time, urllib.request, urllib.error
 
@@ -464,6 +506,13 @@ report = {
         for c in p['checks']
     ],
     # ---- 以下字段是诊断/溯源（读取层刻意忽略未知键），不参与 schema 必填项 ----
+    # expected_chain_factors 是**采集脚本做相等断言**的依据：链上出现的因子集必须与它逐项相等
+    # （不是"包含"）。采集器自己只要求 chain ⊇ expectedChainFactors，于是"声明空集却采到六个
+    # 因子"的 S0 基线可以静默通过 —— 那正是整轮实验的因子塌缩被藏起来的路径（Fix round 1 / C2）。
+    'expected_chain_factors': [f for f in os.environ.get('EXPECTED_CHAIN_FACTORS', '').split(',') if f],
+    'expected_chain_factors_source': ('采集器 edgescen -list 的声明面 + 级联替换（EF-3FA → CascadeTo）'
+                                      if os.environ.get('EXPECTED_CHAIN_FACTORS_SET', '0') == '1'
+                                      else '退化路径：本脚本相位表推导（edgescen 不可用）'),
     'playbook': {'id': PLAYBOOK_ID, 'name': PLAYBOOK_NAME, 'abilities': len(ordering)},
     'operation': {'id': op_id, 'state': state, 'finished': not window_timeout,
                   'timeout_s': TIMEOUT, 'chain_links': len(chain), 'status_counts': counts,

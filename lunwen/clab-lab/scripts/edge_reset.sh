@@ -89,32 +89,10 @@ ensure_caldera() {
 }
 T0=$(now_s); ensure_caldera "$T0" || exit 1
 
-# --- 2. destroy + deploy -----------------------------------------------------
-# destroy 的失败**不是**关键路径失败：没部署过任何容器时它本来就会报错，而那一趟的语义
-# 正是"从干净状态开始"。关键路径是 deploy —— 它没有任何容错。
-T0=$(now_s)
-if clab destroy -t "$TOPOLOGY" --cleanup >/tmp/edgeexp-clab-destroy.log 2>&1; then
-  echo "edge_reset: clab destroy 完成"
-else
-  echo "edge_reset: clab destroy 报错（多半是本来就没有部署，属幂等路径）—— 见 /tmp/edgeexp-clab-destroy.log"
-fi
-destroy_s=$(( $(now_s) - T0 ))
-
-T0=$(now_s)
-clab deploy -t "$TOPOLOGY"   # 关键路径：失败即整轮失败（不做 --reconfigure）
-deploy_s=$(( $(now_s) - T0 ))
-echo "edge_reset: clab deploy 完成（${deploy_s}s）"
-
-# --- 3. 等节点 running -------------------------------------------------------
-# 权威判据是 `clab inspect --format json`（拓扑自己的视图），不是解析 yml 的缩进，
-# 也不是"docker ps 里有多少个容器"。必须等到**全部**节点 running：clab deploy 返回时
-# 容器可能才刚创建，此时容器间的链路还没就绪，直接开打会得到与本实验无关的失败。
-T0=$(now_s)
-waited=0
-while :; do
+# 节点计数（`clab inspect --format json` 是权威视图，不是解析 yml 的缩进）。回显 "total up down"。
+clab_node_counts() {
   clab inspect -t "$TOPOLOGY" --format json > /tmp/edgeexp-clab-inspect.json 2>>/tmp/edgeexp-clab-inspect.log
-  read -r TOTAL_NODES UP_NODES DOWN_NODES <<EOF
-$(python3 - <<'PY'
+  python3 - <<'PY'
 import json
 try:
     data = json.load(open('/tmp/edgeexp-clab-inspect.json'))
@@ -134,7 +112,51 @@ elif isinstance(data, list):
 up = sum(1 for c in nodes if (c.get('state') or '').lower() in ('running', 'up'))
 print(len(nodes), up, len(nodes) - up)
 PY
-)
+}
+
+# --- 2. destroy + deploy -----------------------------------------------------
+# destroy 的失败**不是**关键路径失败：没部署过任何容器时它本来就会报错，而那一趟的语义
+# 正是"从干净状态开始"。关键路径是 deploy —— 它没有任何容错。
+T0=$(now_s)
+DESTROY_TOLERATED=0
+if clab destroy -t "$TOPOLOGY" --cleanup >/tmp/edgeexp-clab-destroy.log 2>&1; then
+  echo "edge_reset: clab destroy 完成"
+else
+  DESTROY_TOLERATED=1
+  echo "edge_reset: clab destroy 报错（多半是本来就没有部署，属幂等路径）—— 见 /tmp/edgeexp-clab-destroy.log"
+fi
+destroy_s=$(( $(now_s) - T0 ))
+
+# destroy 被容忍时**必须**补一条断言（I9）：只有"拓扑真的空了"才谈得上"从干净状态开始"。
+# 否则 destroy 因真实原因失败、deploy 只是对残留容器做 reconcile 时，整个复位的前提已经不成立，
+# 而后面每一步都会照常通过 —— 那是最难发现的一类环境污染。
+if [ "$DESTROY_TOLERATED" -eq 1 ]; then
+  read -r LEFT_TOTAL LEFT_UP LEFT_DOWN <<EOF
+$(clab_node_counts)
+EOF
+  if [ "$LEFT_TOTAL" -ne 0 ]; then
+    echo "edge_reset: clab destroy 失败且拓扑里仍有 $LEFT_TOTAL 个节点（$LEFT_UP running）—— '干净环境'的前提不成立：" >&2
+    echo "  deploy 可能只是对残留容器做 reconcile，上一场景的接口/路由状态会被带进本场景。整轮失败。" >&2
+    echo "  见 /tmp/edgeexp-clab-destroy.log；手工排障后重跑。" >&2
+    exit 1
+  fi
+  echo "edge_reset: destroy 虽报错但拓扑已空（0 节点）—— 干净环境前提成立，继续"
+fi
+
+T0=$(now_s)
+clab deploy -t "$TOPOLOGY"   # 关键路径：失败即整轮失败（不做 --reconfigure）
+deploy_s=$(( $(now_s) - T0 ))
+echo "edge_reset: clab deploy 完成（${deploy_s}s）"
+
+# --- 3. 等节点 running -------------------------------------------------------
+# 权威判据是 `clab inspect --format json`（拓扑自己的视图），不是解析 yml 的缩进，
+# 也不是"docker ps 里有多少个容器"。必须等到**全部**节点 running：clab deploy 返回时
+# 容器可能才刚创建，此时容器间的链路还没就绪，直接开打会得到与本实验无关的失败。
+T0=$(now_s)
+waited=0
+while :; do
+  read -r TOTAL_NODES UP_NODES DOWN_NODES <<EOF
+$(clab_node_counts)
 EOF
   if [ "$TOTAL_NODES" -gt 0 ] && [ "$DOWN_NODES" -eq 0 ]; then
     break

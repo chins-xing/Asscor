@@ -477,6 +477,67 @@ func TestCLIRendersNoSelectionWhenAllCandidatesTie(t *testing.T) {
 	}
 }
 
+// TestCLIThresholdOverrideIsExplicitAndVisible（Task 4 Fix round 1 / I5）钉住 `-threshold`。
+//
+// 为什么必须有这个开关：spec §5.4 要求"若部署判定线下两类样本为空，必须另附一行
+// threshold = 60.0 的敏感性结果"，而在加 `-threshold` 之前这条要求**无法执行** ——
+// 决策层判定的阈值只来自记录本体（`observed.threshold`），工具没有覆盖入口，操作者只能手改
+// JSONL 副本，而手改过的数据集与原始数据不再逐字节可复现（正是本方向最忌讳的假溯源）。
+//
+// 本用例钉住三件事：
+//  1. 覆盖值**真的**改判定线（同一条记录：60 下 acceptable，覆盖成 100 后不可接受）；
+//  2. 覆盖生效时报告头与 stderr 都点名"敏感性分析覆盖值" —— 敏感性报告与部署口径报告
+//     不能长得一样（它们会被引用进论文的不同小节）；
+//  3. 不带 `-candidate`（拟合/自检模式）时是**用法错误**，不是静默忽略。
+func TestCLIThresholdOverrideIsExplicitAndVisible(t *testing.T) {
+	cfg := writeConfig(t, "cand-legacy.ini", "[edge_factors.model]\nmodel = legacy\np_floor = 0.5\n")
+	records := writeJSONL(t, "threshold.jsonl", weightSourceRecord(t, "TH-1", true, false)+"\n")
+	base := []string{"-records", records, "-candidate", "legacy=" + cfg,
+		"-weights", "attack_surface=1", "-factors", "EF-SELINUX=0.8"}
+
+	// ① 缺省：阈值取记录自带的 60 ⇒ 复算 61 ≥ 60 ⇒ 判 acceptable、客观未攻陷 ⇒ 一致。
+	code, stdout, stderr := runCLIForTest(t, base...)
+	if code != 0 {
+		t.Fatalf("缺省：退出码 = %d, want 0；stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "| legacy | 1.000 | 0.000 | 0.000 |") {
+		t.Fatalf("缺省口径下这一行应为『一致率 1 / 漏判 0 / 误阻断 0』：\n%s", stdout)
+	}
+	if strings.Contains(stdout, "敏感性分析覆盖值") {
+		t.Errorf("没有给 -threshold 时报告不得出现覆盖口径行：\n%s", stdout)
+	}
+
+	// ② 覆盖成 100：同一条记录变成"模型阻断、实际未被攻陷" ⇒ 误阻断率 1、一致率 0。
+	code, stdout, stderr = runCLIForTest(t, append(append([]string{}, base...), "-threshold", "100")...)
+	if code != 0 {
+		t.Fatalf("覆盖：退出码 = %d, want 0；stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "| legacy | 0.000 | 0.000 | 1.000 |") {
+		t.Errorf("覆盖阈值必须真的改判定线（一致率 0 / 漏判 0 / 误阻断 1）：\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "敏感性分析覆盖值") || !strings.Contains(stdout, "-threshold = 100") {
+		t.Errorf("报告头必须点名覆盖值：\n%s", stdout)
+	}
+	if !strings.Contains(stderr, "已覆盖记录自带的 observed.threshold") {
+		t.Errorf("stderr 必须提示覆盖生效：%s", stderr)
+	}
+
+	// ③ 没有 -candidate：拟合/自检模式下该开关没有意义 ⇒ 用法错误（不是静默忽略）。
+	code, stdout, stderr = runCLIForTest(t, "-records", records, "-threshold", "100")
+	if code != 2 {
+		t.Fatalf("缺 -candidate：退出码 = %d, want 2；stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "-threshold 只在候选对比模式") {
+		t.Errorf("用法错误必须说明该开关的适用范围：%s", stderr)
+	}
+
+	// ④ 负值同样是用法错误（0 才是"不覆盖"）。
+	code, _, stderr = runCLIForTest(t, append(append([]string{}, base...), "-threshold", "-5")...)
+	if code != 2 || !strings.Contains(stderr, "-threshold 必须 > 0") {
+		t.Errorf("负阈值：退出码 = %d（want 2），stderr=%s", code, stderr)
+	}
+}
+
 // extractConfigSection 从 CLI 输出里取出参数段（`[edge_factors.model]` 起的全部行）。
 func extractConfigSection(t *testing.T, out string) map[string]map[string]string {
 	t.Helper()
