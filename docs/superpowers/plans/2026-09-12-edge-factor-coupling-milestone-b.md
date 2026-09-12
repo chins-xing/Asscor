@@ -703,7 +703,8 @@ Expected: 读出全部记录、无 fail-fast。
 
 > **`EF-3FA` 的处理必须等用户裁定 ④，不得静默塞进 `-factors`**（任务 3 评审实测的两条硬事实）：①采集器会**合法**把 `EF-3FA` 写进链（出厂配置的 `[edge_factors.custom]` 重复条目不是 `CascadeOnly`），于是 `-factors` 的覆盖校验会以"未覆盖记录里用到的因子 EF-3FA"**退出 1**；②若为了让校验通过而塞一个 `EF-3FA=<值>`，该因子会进入 `p.Factors`，而 V/G/C 会给它走 **"全 1" fallback 向量** ⇒ **凭空产生引擎从未施加的惩罚**、决策层指标被改。故在裁定 ④ 之前：**只运行覆盖得住的数据集**（或把含 `EF-3FA` 的记录单独列出并**如实标注"该子集待裁定后重跑"**），**禁止**用塞值的方式让命令过。
 
-**门禁② round-trip 钉桩（`spc_score`/`threat_coeff` 取值来源的唯一保障）**：对**每一条**采集记录，用**记录自身的输入**（域分 + `spc_score` + `threat_coeff` + 链上 `effective_factor`）离线复算 `final_score`，必须与记录里的值相等。这条就是"E/T 取错则门禁会红"的那道闸门 —— 评审实测过：字段取错时所有其它门禁都是绿的。
+**门禁② round-trip 钉桩（`spc_score`/`threat_coeff` 取值来源的唯一保障）**：对**每一条**采集记录，用**记录自身的输入**（域分 + `observed.effective_weights` + `spc_score` + `threat_coeff` + 链上 `effective_factor`）离线复算 `final_score`，必须与记录里的值相等。这条就是"E/T 取错则门禁会红"的那道闸门 —— 评审实测过：字段取错时所有其它门禁都是绿的。
+> **门禁② 必须用"采集时的那个模型"复算**（Task 3B 评审实测的运行陷阱）：记录是用 **`m0-baseline.ini`（legacy）** 采的，而 `vector/graph/chain` 候选**合法地**给出不同分数 ⇒ 若把门禁② 对四个候选都跑一遍，它会在**每一条合法记录**上红（记录里没有"采集模型"槽位，`meta.config_hash` 是唯一锚点）。故**门禁② 只在采集模型下执行**（`-candidate legacy=configs/edgeexp/m0-baseline.ini`）；它在采集侧已由 in-process 自检实现（不通过即拒绝写出 ⇒ 操作层面等价于"**记录条数 == 场景数**"）。跨候选的分数差异是**候选比较**要研究的东西，不是数据缺陷。若将来要让门禁② 自描述，最小改动是给 `meta` 加采集模型标记（deferred，等真实数据表明需要再加）。
 ```bash
 # 实现方式：edgescen 写完后立刻自检（同一进程内用同一公式重算），
 # 或在 edgecompare 的报告里输出逐条 |复算 − 记录| 的对比表并要求全零。
