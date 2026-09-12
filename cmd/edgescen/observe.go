@@ -238,7 +238,8 @@ func buildRecord(ctx context.Context, scenarioName string, cfg *config.Config, g
 // assembleRecord 是采集器的核心：把"场景 + 配置 + 客观结果 + 宿主检查集"装配成一条记录。
 //
 // `observationTarget` 说明这份检查集**出自哪台机器**（Task 4C）：空串 = 本机（与今天逐位一致），
-// 非空 = 由 `collectChecksForTarget` 给出的节点内自证串（进 `meta.observation_target`）。
+// 非空 = 由 `collectChecksForTarget` 给出的节点内自报串（进 `meta.observation_target`，
+// 在函数**入口处**赋值 —— 见那里的说明：失败路径也要带上它，评审 M-5）。
 // 它不参与任何判据，只解决"记录是宿主采的还是节点采的"这个问题（见 `edgeexp.Meta` 的说明）。
 //
 // 调用链（brief 指定的顺序，任何一步失败都**不写半条记录**）：
@@ -259,6 +260,14 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 			Timestamp:    time.Now().UTC().Format(time.RFC3339),
 		},
 	}
+	// 观测主体（Task 4C）：空串 = 本机（默认路径，字段因 omitempty 不出现在 JSON 里 ⇒ 与
+	// 今天写出的字节一致）；非空 = 节点内自报串。
+	//
+	// **写在第一个 `fail` 之前**（Fix round 1 / M-5）：此前它在装配链末尾赋值，于是任何早期
+	// 失败（上下文取消、场景名写错、配置为空……）返回的记录与打印的 stderr 都不带"这次评的是
+	// 哪台机器" —— 那与 `Meta.ObservationTarget` 的立意（失败时更要能归因）正好相反。
+	// 放在这里也保证"检查集的来源"与"记录里的观测主体"不可能分叉：它来自同一个入参。
+	rec.Meta.ObservationTarget = observationTarget
 	fail := func(format string, args ...any) (edgeexp.Record, error) {
 		reason := fmt.Sprintf(format, args...)
 		rec.Meta.AssemblyError = reason
@@ -370,11 +379,6 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 	// 代价是"这份生效权重从哪来"的语义被稀释；现在它回到只有一个话题。
 	rec.Meta.WeightSource = weightSource
 	rec.Meta.TSSource = tsNote
-	// 观测主体（Task 4C）：空串 = 本机（默认路径，字段因 omitempty 不出现在 JSON 里 ⇒ 与
-	// 今天写出的字节一致）；非空 = 节点内自证串。写在装配点而不是 CLI 里：它是**检查集**
-	// 的属性（谁采的），与 `-env`（操作者给的标签）是两回事 —— 把两者混在一个字段里，
-	// 将来任何人都无法从记录反推"这份数据到底出自哪台机器"。
-	rec.Meta.ObservationTarget = observationTarget
 	contract, err := gt.recordGroundTruth()
 	if err != nil {
 		return fail("%v", err)
