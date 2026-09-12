@@ -357,6 +357,25 @@ chain.window_seconds = 300
    检查登记表、`expr` 是实验工具的构建约束）。
 4. **模板纳入回归门禁**：`go test ./internal/config/ -run TestEdgeExpConfigTemplatesLoad` 必须绿 ——
    模板装不上要在 `go test` 阶段就红，而不是在 WSL 上跑完一轮采集之后。
+5. **观测主体：把被攻节点的容器名交给整条管线**（Task 4C / I-9）：
+
+   ```bash
+   export EDGEEXP_TARGET=asc-asscor-host1     # 拓扑默认 prefix=asc、agent 在 host1
+   ```
+
+   `edge_matrix.sh` **默认**就是它并 export 给两个子脚本；只有单独调 `edge_attack.sh` /
+   `edge_collect.sh` 时才需要手工 export（只给 `edge_collect.sh` 设而不给 `edge_attack.sh` 设
+   会被采集端的 `observation_subject` 门禁拒掉，见 §5.3.1 第 3 条）。
+
+   **它与 `EDGEEXP_TARGET_HOST` 不是一回事**（两个名字近似、含义与取值都不同，别混）：
+
+   | 变量 | 含义 | 取值 | 谁用 |
+   |---|---|---|---|
+   | `EDGEEXP_TARGET` | **观测主体**：评估在哪个**容器**内做 | 容器名 `asc-asscor-host1` | `edge_attack.sh`（节点内条件探针）、`edge_collect.sh`（`edgescen --target`） |
+   | `EDGEEXP_TARGET_HOST` | **复位脚本的攻击目标**：`edge_reset.sh` 把 agent 部到哪台**节点**上 | 节点名 `host1`（`edge_reset.sh:23,37`） | `edge_reset.sh` |
+
+   置空（`EDGEEXP_TARGET=`）即退回"在本机评估"的旧形态：S 组照常（`condition_probes` 如实留空，
+   **不是**证据），**R 组会硬失败**（它的语义就是"在目标节点上真的没有这个防护"）。
 
 #### 5.4.3 四份模板只差模型段
 
@@ -631,7 +650,9 @@ EDGEEXP_SENSITIVITY_THRESHOLDS=60 bash scripts/edge_threshold_sensitivity.sh
 | N-root（节点内） | `root` | `host1` 容器 | **55** |
 
 **权威的机器差异（身份同为 root，`H-root` vs `N-root`）**：共 80 条检查注册、两轮各 55 条失败，
-其中 46 条两边都失败，两边**各有 4 条**只在单侧失败 ——
+其中 **51 条**两边都失败，两边**各有 4 条**只在单侧失败（51 + 4 = 55 ✓；
+`46` 是**另一对**口径的交集 —— `H-clab ∩ N-root`，即 §5.2 那次"宿主 vs 节点"的实际比较，
+Fix round 1 / I-6 把它从本段移走）——
 
 | 只在宿主失败（节点内通过） | 实测成因 |
 |---|---|
@@ -647,11 +668,28 @@ EDGEEXP_SENSITIVITY_THRESHOLDS=60 bash scripts/edge_threshold_sensitivity.sh
 | `AS-009` 加密协议强制 | 节点**没有 `systemctl`** ⇒ `systemctl is-active sshd` 不命中 ⇒ "SSH未运行"判失败（宿主 `sshd` 为 `active`） |
 | `KS-006` 内核模块最小化 | 节点**没有 `lsmod`** ⇒ "无法执行 lsmod"判失败（宿主 18 个已加载模块，未超 150 的基线） |
 
-**身份差异（同一台机器，`clab` vs `root`）**：只 `clab` 失败 1 条（`AC-001`），只 `root` 失败
-7 条（`AC-002`/`AS-004`/`AS-012`/`BC-006`/`OT-004`/`OT-008`/`OT-020` —— 都是"作为 root 才能真的
-去看 `/root/...` 与系统配置，看了才发现没有"）。对 Step 4 那两次采集而言，交叉口径
-（`H-clab` vs `N-root`）因此是 **只在宿主失败 3 条**（`AS-005`/`OT-006`/`RS-013`）、
-**只在节点失败 9 条**（`AC-002`/`AS-003`/`AS-009`/`AS-012`/`BC-006`/`KS-006`/`OT-004`/`OT-008`/`OT-020`）。
+**身份差异（同一台机器，`clab` vs `root`）的机制**（Fix round 1 / I-6b 按实测改正）：
+
+只 `clab` 失败 1 条（`AC-001`），只 `root` 失败 7 条（`AC-002`/`AS-004`/`AS-012`/`BC-006`/
+`OT-004`/`OT-008`/`OT-020`）。这 7 条的机制**不是**"只有 root 才真的去看 `/root/...`、
+看了才发现没有"，而是 `internal/model/model.go:89-113` 的两条**通用**规则：
+
+1. `Privilege == PrivRoot && euid != 0` ⇒ `skipResult("skipped — requires root privileges")`，
+   而 `skipResult` 的 `Passed: true` —— **算通过**；
+2. 检查自身返回失败、但 detail 命中 `IsPermissionDeniedDetail` ⇒ 同样转成 `skipResult`
+   —— **也算通过**。
+
+实测（`isolation/H-clab.json`）**恰好 5 条**带 `skipped` 标记且都是 FAIL→PASS：
+`AC-002`/`AS-012`/`BC-006`/`OT-008`/`OT-020`（其中 `AS-012`/`OT-008`/`OT-020` 是规则 1
+根本没执行、`AC-002`/`BC-006` 是规则 2 把 EACCES 型失败转成跳过）；剩下 2 条
+（`OT-004`、`AS-004`）是检查**自有**的"工具不可用即通过"回退分支，不在 skipped 名单里。
+
+⇒ 正确口径：**非 root 运行时，`PrivRoot` 检查与"权限不足"型失败都会被静默计为"通过"**，
+于是 `H-clab` 的 49 条失败是**系统性少报**的。这比"看了才发现没有"更锋利，也把结论定死：
+**"宿主 vs 节点"必须在同一身份下比**，而"把宿主路径固定成 `sudo`"是**唯一可行**的做法
+（不是"二选一"）。对 Step 4 那两次采集而言，交叉口径（`H-clab` vs `N-root`）因此是
+**只在宿主失败 3 条**（`AS-005`/`OT-006`/`RS-013`）、**只在节点失败 9 条**
+（`AC-002`/`AS-003`/`AS-009`/`AS-012`/`BC-006`/`KS-006`/`OT-004`/`OT-008`/`OT-020`）。
 
 **逐条三态（唯一不会被分类措辞误导的形态）**：
 
@@ -659,9 +697,14 @@ EDGEEXP_SENSITIVITY_THRESHOLDS=60 bash scripts/edge_threshold_sensitivity.sh
 |---|---|---|---|---|
 | `AC-001` | 失败 | 通过 | 失败 | **交互项**：两边都失败但成因不同（clab 无权限 / 节点无 iptables） |
 | `AS-004` | 通过 | 失败 | 通过 | **交互项**：同一条 iptables 缺失让它在节点里走回退分支判通过 |
-| `AC-002` `AS-012` `BC-006` `OT-004` `OT-008` `OT-020` | 通过 | 失败 | 失败 | 纯身份效应（`/root` 可见性） |
+| `AC-002` `AS-012` `BC-006` `OT-008` `OT-020` | 通过 | 失败 | 失败 | **纯身份效应**（5 条：`PrivRoot` 跳过 / EACCES 转跳过 —— 都算通过） |
+| `OT-004` | 通过 | 失败 | 失败 | **纯身份效应**（1 条：检查自有的"npm 配置需 root 权限"分支） |
 | `AS-003` `AS-009` `KS-006` | 通过 | 通过 | 失败 | 纯机器效应（镜像更空 / 无 `systemctl`、`lsmod`） |
 | `AS-005` `OT-006` `RS-013` | 失败 | 失败 | 通过 | 纯机器效应（宿主有 docker.sock、对外监听、可读 `.git`） |
+
+⇒ 身份轴上是 **6 条纯身份 + 2 条交互（`AC-001`/`AS-004`）= 8 条**受影响
+（原始集合依据：`ident_root ∩ machine_host = {AS-004}`、`ident_clab ∩ machine_node = {AC-001}`；
+Fix round 1 / I-6 把这个数字从"7 纯身份 + 1 交互"改正 —— 后者与本表自己的标注相矛盾）。
 
 > ⚠️ **这两份差异不是正交分解**：`AC-001` 同时出现在"只在节点失败"与"只 clab 失败"里，
 > `AS-004` 同时出现在"只在宿主失败"与"只 root 失败"里。把"机器差异 4+4"与"身份差异 1+7"
@@ -680,9 +723,10 @@ EDGEEXP_SENSITIVITY_THRESHOLDS=60 bash scripts/edge_threshold_sensitivity.sh
    ⇒ 任何"硬化基线"的动作都必须同时补齐检查所依赖的工具（至少 `iptables`/`procps`/`iproute2`/
    `systemctl`），否则域分变化无法归因到安全姿态。
 3. **宿主路径的身份是实验设计的一部分，必须写清**：现有宿主路径以 `clab` 身份跑，
-   而那台机器上 8 条检查的结论在 root 下会翻转（7 条纯身份 + 1 条交互）。节点内路径以 `root` 跑。
-   两者比较时"49 vs 55"里混着身份效应 —— **要谈机器差异只能用身份对齐的 55 vs 55**
-   （失败数恰好相等是巧合：两边各有 4 条独有），或者把宿主路径也固定成与节点相同的身份。
+   而那台机器上 8 条检查的结论在 root 下会翻转（**6 条纯身份 + 2 条交互**，见上面的机制）。
+   节点内路径以 `root` 跑。两者比较时"49 vs 55"里混着身份效应 —— **要谈机器差异只能用身份对齐的
+   55 vs 55**（失败数恰好相等是巧合：两边各有 4 条独有），而"把宿主固定成 `sudo`"是**唯一可行**的
+   做法（不是"二选一"：`PrivRoot` 跳过这条机制无法靠文档声明消除）。
 4. **两边因子集与观测链条数一致**（11 条 / 6 个因子，H-clab 那一轮总分 52.65、N-root 52.13，
    域分 attack_surface 68/52、business_continuity 70/60、kernel_security 29/24、
    operation_trust 0/0、resilience 0/0）：换观测主体只改变**检查结果**，
@@ -696,6 +740,9 @@ EDGEEXP_SENSITIVITY_THRESHOLDS=60 bash scripts/edge_threshold_sensitivity.sh
 
 **未在本次实验中确定的事**：`RS-005`（`tcp_syncookies`）在容器内 `sysctl -w` 是否真的向下；
 攻击侧结果是否随观测主体改变；`KS-*` 系列在容器与 WSL 内核间的完整差异（只审了发生差异的 8 条）。
+另外，**未声明观测主体时 R 组的失败是有意设计**（Task 4C / I-9）：R 组的语义是"在目标节点上真的没有
+这个防护"，没有节点侧证据就不能声称已核实 —— 故照 §5.4.2 第 5 条 export `EDGEEXP_TARGET`
+（或直接用 `edge_matrix.sh` 的默认值 `asc-asscor-host1`）是跑 R 组的**前提**，不是可选项。
 
 #### 5.4.8 lab 配置的键位纪律（每个键都要写在解析器**会读**的段里）
 
