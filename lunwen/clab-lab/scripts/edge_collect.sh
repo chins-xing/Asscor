@@ -37,6 +37,11 @@
 #   EDGEEXP_EDGESCEN  edgescen 二进制，默认 <repo>/build/edgescen
 #   EDGEEXP_RUN_STARTED_AT  本轮运行的起始时刻（RFC3339，矩阵脚本导出）
 #   EDGEEXP_ATTACK_MAX_AGE_S 没有 RUN_STARTED_AT 时的产物年龄上限（秒，默认 3600）
+#   EDGEEXP_TARGET    被攻节点容器名（Task 4C：观测主体在它**内部**采样，默认空 = 本机）。
+#                     传了它，`edgescen --target` 在节点内跑同一份二进制取回检查结果；取不到
+#                     就**响亮失败**（绝不静默改用本机结果 —— 那会让记录看起来是节点数据、
+#                     实际是宿主数据）。它必须与 edge_attack.sh 的 EDGEEXP_TARGET 一致：
+#                     不一致时 condition_probes 的证据与 checks[] 的观测来自**两台机器**。
 # ============================================================================
 set -euo pipefail
 
@@ -60,6 +65,7 @@ RECORDS="${EDGEEXP_RECORDS:-$DATA_DIR/records-$ENV_NAME-$TODAY.jsonl}"
 EDGESCEN="${EDGEEXP_EDGESCEN:-$REPO_ROOT/build/edgescen}"
 RUN_STARTED_AT="${EDGEEXP_RUN_STARTED_AT:-}"
 MAX_AGE_S="${EDGEEXP_ATTACK_MAX_AGE_S:-3600}"
+TARGET="${EDGEEXP_TARGET:-}"
 
 mkdir -p "$RUN_D"
 FILLER="collect-$SCENARIO.json"
@@ -147,11 +153,15 @@ if [ -f "$RECORDS" ]; then
 fi
 
 # --- 4. 采集 -----------------------------------------------------------------
-echo "edge_collect: 采集场景 $SCENARIO（配置 $(basename "$CONFIG")，run=$RUN，env=$ENV_NAME）"
+echo "edge_collect: 采集场景 $SCENARIO（配置 $(basename "$CONFIG")，run=$RUN，env=$ENV_NAME，目标=${TARGET:-本机}）"
+# `--target` 只在真的声明了节点时才加上：不传时 `edgescen` 的取数路径与今天**逐位一致**
+# （本机登记表），而"显式传一个空 target"会让两份调用在日志上同形。
+TARGET_ARGS=()
+if [ -n "$TARGET" ]; then TARGET_ARGS=(--target "$TARGET"); fi
 T0=$(date -u +%s)
 set +e
 "$EDGESCEN" --scenario "$SCENARIO" --config "$CONFIG" \
-  --attack-out "$ATTACK" --out "$RECORDS" --run "$RUN" --env "$ENV_NAME" \
+  --attack-out "$ATTACK" --out "$RECORDS" --run "$RUN" --env "$ENV_NAME" "${TARGET_ARGS[@]}" \
   > "$RUN_D/.edgescen-$SCENARIO.out" 2> "$RUN_D/.edgescen-$SCENARIO.err"
 RC=$?
 set -e
@@ -173,6 +183,7 @@ if [ "$ADDED" -ne 1 ]; then
 fi
 
 export RECORDS SCENARIO ATTACK CONFIG ENV_NAME RUN ADDED ELAPSED TMP_OUT BEFORE AFTER
+export TARGET
 export EDGESCEN_OUT="$RUN_D/.edgescen-$SCENARIO.out"
 export REJECTED_OUT
 export CONFIG_HASH="$(sha256sum "$CONFIG" | awk '{print $1}')"
@@ -225,6 +236,66 @@ def body():
     checks = obs.get('checks') or []
     harness = json.load(open(os.environ['ATTACK'], encoding='utf-8'))
     config_hash = os.environ['CONFIG_HASH']
+
+    # --- 观测主体：这次评估到底在哪台机器上做的（Task 4C）------------------------
+    # 三条判据，缺一不可（勘测实测的缺陷正是"记录描述的是 WSL 开发机"而没人发现）：
+    #   1. 声明了 EDGEEXP_TARGET ⇒ 记录必须带 meta.observation_target，且它指的**就是这个节点**；
+    #   2. 没声明 ⇒ 记录不得带该字段（默认路径逐位不变，不写"本机"这种新值）；
+    #   3. harness 产物里的 condition_probes 若在**另一个**节点上探的，本轮数据自相矛盾
+    #      （R 组的证据与 checks[] 的观测来自两台机器）。
+    target = os.environ.get('TARGET') or ''
+    record_target = (rec.get('meta') or {}).get('observation_target') or ''
+    probes = harness.get('condition_probes') or []
+    probe_targets = sorted({(p.get('probe_target') or '') for p in probes if p.get('probe_target')})
+    observation = {
+        'target_declared': target,
+        'record_observation_target': record_target,
+        'harness_probe_targets': probe_targets,
+        'record_in_node': bool(record_target),
+        'ok': True,
+        'note': '观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；'
+                'condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）',
+    }
+    if target:
+        if not record_target:
+            observation['ok'] = False
+            observation['reason'] = ('声明了 EDGEEXP_TARGET=%s，但记录的 meta.observation_target 为空 —— '
+                                     '这条记录无法证明自己采自节点（可能静默采了宿主）' % target)
+        elif target not in record_target:
+            observation['ok'] = False
+            observation['reason'] = ('记录声称观测主体是 %r，而本轮声明的节点是 %s' % (record_target, target))
+        elif probe_targets and probe_targets != [target]:
+            observation['ok'] = False
+            observation['reason'] = ('harness 的条件探针在 %s 上执行，而本次观测主体是 %s —— '
+                                     '同一轮数据来自两台机器' % (probe_targets, target))
+    else:
+        if record_target:
+            observation['ok'] = False
+            observation['reason'] = ('未声明 EDGEEXP_TARGET（默认=本机），而记录却带 observation_target=%r' % record_target)
+        if probe_targets:
+            observation['ok'] = False
+            observation['reason'] = ('未声明 EDGEEXP_TARGET，而 harness 的探针却标称在 %s 上执行' % probe_targets)
+
+    # --- R 组：condition_probes 为空 ⇒ 不许声称"真实缺失已核实"（Task 4C Step 3）----
+    real_missing = (harness.get('real_missing') or '').strip()
+    real_missing_at = (harness.get('real_missing_verified_at') or '').strip()
+    probe_evidence = {
+        'real_missing': real_missing,
+        'real_missing_verified_at': real_missing_at,
+        'probe_count': len(probes),
+        'probes': probes,
+        'ok': True,
+        'note': 'R 组的"真实缺失"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空'
+                '（空数组却声称已核实，正是 Task 4C 之前的状态）',
+    }
+    if real_missing or real_missing_at:
+        if not probes:
+            probe_evidence['ok'] = False
+            probe_evidence['reason'] = ('本场景声称真实缺失（%s），而 harness 的 condition_probes 是空数组 —— '
+                                        '没有任何节点侧证据；不允许这种记录落盘' % (real_missing or '(未写)'))
+        elif not all((p.get('probe_host') or '').strip() for p in probes):
+            probe_evidence['ok'] = False
+            probe_evidence['reason'] = 'condition_probes 里有条目没有 probe_host —— 无法证明探针在节点内执行过'
 
     # --- 配置指纹（溯源）：记录里的 meta.config_hash 必须与本次配置一致 -----------
     record_config_hash = (rec.get('meta') or {}).get('config_hash') or ''
@@ -364,6 +435,8 @@ def body():
         'ts_source': rec.get('meta', {}).get('ts_source'),
         'collected_at': collected_at,
         'config_hash_match': config_hash_check,
+        'observation_subject': observation,
+        'real_missing_evidence': probe_evidence,
         'attack_product': {
             'path': os.environ['ATTACK'],
             'mtime': datetime.datetime.fromtimestamp(int(os.environ['ATTACK_MTIME']),
@@ -424,6 +497,13 @@ def body():
         reject('config_hash_match',
                '配置指纹不一致：记录 meta.config_hash=%s，本次配置=%s —— 这条记录不是这份配置采的'
                % (config_hash_check['record'] or '(空)', config_hash_check['expected']))
+    if not observation['ok']:
+        reject('observation_subject',
+               '观测主体不一致：%s（这条记录无法证明自己描述的是被攻节点，而"记录描述部署行为"'
+               '正是本实验的前提）' % observation['reason'])
+    if not probe_evidence['ok']:
+        reject('real_missing_evidence',
+               'R 组真实缺失缺节点侧证据：%s' % probe_evidence['reason'])
     if not equality['ok']:
         reject('chain_factor_set_equality',
                '因子集相等断言未通过：链上 = %s，场景声明 = %s（多出 %s；缺少 %s）—— '
@@ -437,6 +517,8 @@ def body():
         reject('injection_vs_collection', '注入时刻与采集时刻的核对未通过（见片段里的 entries）—— 时间结构不成立')
 
     print(f'edge_collect: 配置指纹一致（{config_hash_check["record"]}）')
+    print(f'edge_collect: 观测主体 {observation["record_observation_target"] or "本机（未声明 EDGEEXP_TARGET）"}'
+          + (f'｜探针节点 {probe_targets}' if probe_targets else ''))
     print(f'edge_collect: 因子集相等断言通过（链 {len(actual)} 个 ID = 场景声明）')
     print(f'edge_collect: 门禁⓪ {gate0["verdict"]}（链 {gate0["chain_entries"]} 条 / 去重 {gate0["distinct_ids"]} 个 ID）')
     if injections:

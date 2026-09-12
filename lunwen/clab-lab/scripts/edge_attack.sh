@@ -34,6 +34,9 @@
 #   EDGEEXP_PLAYBOOK_NAME 剧本名（默认 Discovery，用于核对 ID 没被换掉）
 #   EDGEEXP_ATTACK_TIMEOUT_S  等 operation 结束的上限，默认 1800（冒烟可用 300 缩短）
 #   EDGEEXP_PHASE_GAP_S   相位之间的最小间隔（秒），默认 3（必须 ≥ 1，见上）
+#   EDGEEXP_TARGET        **被攻节点容器名**（Task 4C：条件探针在它内部执行，默认空 = 不执行）。
+#                         R 组（真实缺失对照）**必须**给出：它的语义就是"目标节点上真的没有这个
+#                         防护"，没有节点侧证据的"已核实"不算证据。实现见 scripts/edge_probe.sh。
 # ============================================================================
 set -euo pipefail
 
@@ -267,61 +270,67 @@ while IFS='=' read -r k v; do
 done < <(grep -iE '^[[:space:]]*trigger\.[A-Za-z0-9_-]+[[:space:]]*=' "$CONFIG")
 [ "${#TRIGGER[@]}" -gt 0 ] || { echo "edge_attack: 配置 $CONFIG 里没有 trigger.<ID> 映射 —— 无法解析注入检查" >&2; exit 1; }
 
-# --- 真实条件探针 -----------------------------------------------------------
-# 返回 0 = 该防护在这台主机上**确实缺失**（条件成立）；1 = 条件不成立。
-# 探针逻辑逐条对齐 internal/checks/linux 的同名检查（记录构造要求：checks[] 是
-# 引擎真实失败的检查，所以"条件是否成立"必须用引擎的判据来问，不是另立一套）。
-condition_holds() {
-  local factor="$1"
-  case "$factor" in
-    EF-SELINUX|EF-APPARMOR)
-      # OT-005：SELinux 处于 Enforcing，或 AppArmor 已加载策略，则条件不成立
-      if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce 2>/dev/null | tr -d '[:space:]')" = "Enforcing" ]; then
-        return 1
-      fi
-      if command -v aa-status >/dev/null 2>&1 && aa-status 2>/dev/null | grep -q "profiles are loaded"; then
-        return 1
-      fi
-      return 0 ;;
-    EF-SYNCOOKIE)
-      if [ "$(cat /proc/sys/net/ipv4/tcp_syncookies 2>/dev/null | tr -d '[:space:]')" = "1" ]; then return 1; fi
-      return 0 ;;
-    EF-NO-IDS)
-      # RS-006：systemd 服务 active 或在跑的进程里出现任一 IDS 工具 ⇒ 条件不成立
-      local tool
-      for tool in wazuh-agent ossec-hids ossec-agent aide tripwire samhain rkhunter suricata snort snort3 zeek; do
-        if command -v systemctl >/dev/null 2>&1 && [ "$(systemctl is-active "$tool" 2>/dev/null || true)" = "active" ]; then
-          return 1
-        fi
-      done
-      local comm
-      while read -r comm; do
-        case "$comm" in
-          suricata|snort|snort3|zeek|wazuh-agent|ossec-agent|aide|tripwire|samhain) return 1 ;;
-        esac
-      done < <(ps -eo comm --no-headers 2>/dev/null || true)
-      return 0 ;;
-    EF-NO-SIEM)
-      # RS-007：三份告警配置文件的任一份存在且含 alert 关键字 ⇒ 条件不成立
-      local cfg
-      for cfg in /var/ossec/etc/ossec.conf /etc/wazuh-agent/ossec.conf /etc/aide/aide.conf; do
-        if [ -r "$cfg" ] && grep -qiE 'email|alert|notification' "$cfg"; then
-          return 1
-        fi
-      done
-      return 0 ;;
-    EF-002FA|EF-3FA)
-      # EF-001 / EF-002：PAM 里出现任何第二/第三因素模块 ⇒ 条件不成立
-      local pam
-      for pam in /etc/pam.d/sshd /etc/pam.d/common-auth /etc/pam.d/system-auth; do
-        if [ -r "$pam" ] && grep -qE 'pam_google_authenticator|pam_oath|pam_duo|pam_u2f|pam_pkcs11' "$pam"; then
-          return 1
-        fi
-      done
-      return 0 ;;
-    *)  echo "edge_attack: 因子 $factor 没有条件探针（新增因子时必须补一条，否则真实缺失对照会静默失效）" >&2
-        return 0 ;;
+# --- 真实条件探针（**在节点上**执行，Task 4C Step 3） -------------------------
+# 探针实现搬到了 `edge_probe.sh`：它用 `docker exec -i` 把判据送进**目标节点**执行，而不是在
+# 跑脚本的这台机器上跑。原因是勘测实测的洞：脚本在 WSL 宿主上跑、被攻节点是 host1 容器，
+# 而旧实现的 `cat /proc/sys/...` / `ps -eo comm` / `getenforce` 全部查的是本机 ——
+# 于是 R 组"我们真的把 IDS 去掉了"这句话探的是**另一台机器**；而 `attack-R-no-ids.json` 里
+# `condition_probes` 还是空数组（探针循环包在 `if [ -n "$PHASES" ]` 内，R 组的 PHASES 恒为空）
+# ⇒ "真实缺失已核实"在数据里没有任何节点侧证据。
+#
+# 三类退出码（`probe_condition_holds`）：
+#   0 = 条件成立（该防护在这台**节点**上确实缺失）  1 = 条件不成立  2 = 探针没跑成
+# 2 与 1 必须分开：把"探针根本没执行"读成"条件不成立"会制造一条无效的否定证据。
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/edge_probe.sh" "${EDGEEXP_TARGET:-}"
+PROBE_HOST=""
+if [ -n "${EDGEEXP_TARGET:-}" ]; then
+  probe_host_ready || exit 1
+  PROBE_HOST="$(probe_host)" || {
+    echo "edge_attack: 取不到节点 $EDGEEXP_TARGET 的 hostname —— 探针无从自证它在哪台机器上跑" >&2
+    exit 1
+  }
+  echo "edge_attack: 条件探针将在节点 $EDGEEXP_TARGET（hostname=$PROBE_HOST）内执行"
+else
+  echo "edge_attack: 警告：未声明目标节点（EDGEEXP_TARGET）—— 条件探针**不执行**，condition_probes 为空。" >&2
+  echo "  S 组是 spec §2.3 的『检查失败代理』，探针结果只记录不阻断，故这里不硬失败；" >&2
+  echo "  但 R 组（真实缺失对照）必须声明目标节点：没有节点侧证据的『真实缺失已核实』不算证据。" >&2
+  if [ -n "$REAL_MISSING" ]; then
+    echo "edge_attack: R 组 $SCENARIO 的语义是『在目标节点上真的没有这个防护』，而目标节点未声明 ——" >&2
+    echo "  旧实现此时探的是跑脚本的这台机器（勘测实测），那正是本任务要堵的洞。整轮失败。" >&2
+    exit 1
+  fi
+fi
+
+# probe_entry 取一次探针结论并落成 condition_probes 的一个条目。
+#
+# `if ...; then rc=0; else rc=$?; fi` 是本脚本取探针退出码的**必须**写法：
+# `probe_condition_holds "$f"; rc=$?` 在 `set -e` 下会因 rc=1 直接把整个脚本带走
+# （实测过：探针循环静默停在那一行，调用方只看到一次没有诊断的"运行失败"）。
+probe_entry() {
+  local factor="$1" check="$2" phase="$3" rc holds
+  if probe_condition_holds "$factor"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  case "$rc" in
+    0) holds="true" ;;
+    1) holds="false" ;;
+    *)
+      echo "edge_attack: 探针 $factor 在节点 ${EDGEEXP_TARGET:-（未声明）} 内**没有跑成**（rc=$rc）—— 不得据此写任何结论" >&2
+      exit 1 ;;
   esac
+  python3 -c 'import json,sys;a=json.loads(sys.argv[1]);a.append(json.loads(sys.argv[2]));print(json.dumps(a))' \
+    "$PROBES_JSON" "{\"factor\":\"$factor\",\"check\":\"$check\",\"condition_holds\":$holds,\"phase\":$phase,\"probe_target\":\"${EDGEEXP_TARGET:-}\",\"probe_host\":\"$PROBE_HOST\"}"
+}
+
+# probe_entry_on_node 是"探针没执行时不留空条目"的守卫：S 组未声明目标节点时**如实**记下
+# 未执行（而不是写一个 `condition_holds: false` 的假结论），R 组则根本走不到这里（上面已失败）。
+probe_skipped_entry() {
+  local factor="$1" check="$2" phase="$3"
+  python3 -c 'import json,sys;a=json.loads(sys.argv[1]);a.append(json.loads(sys.argv[2]));print(json.dumps(a))' \
+    "$PROBES_JSON" "{\"factor\":\"$factor\",\"check\":\"$check\",\"condition_holds\":null,\"phase\":$phase,\"probe_target\":\"\",\"probe_host\":\"\",\"skipped\":\"未声明 EDGEEXP_TARGET：探针不执行（S 组不阻断，但这条**不是**证据）\"}"
 }
 
 # --- 相位推进 ---------------------------------------------------------------
@@ -349,9 +358,11 @@ if [ -n "$PHASES" ]; then
         exit 1
       fi
       CHECK_AT["$check"]="$at"
-      holds="false"; if condition_holds "$f"; then holds="true"; fi
-      PROBES_JSON="$(python3 -c 'import json,sys;a=json.loads(sys.argv[1]);a.append(json.loads(sys.argv[2]));print(json.dumps(a))' \
-        "$PROBES_JSON" "{\"factor\":\"$f\",\"check\":\"$check\",\"condition_holds\":$holds,\"phase\":$idx}")"
+      if [ -n "${EDGEEXP_TARGET:-}" ]; then
+        PROBES_JSON="$(probe_entry "$f" "$check" "$idx")"
+      else
+        PROBES_JSON="$(probe_skipped_entry "$f" "$check" "$idx")"
+      fi
       phase_factors="$(python3 -c 'import json,sys;a=json.loads(sys.argv[1]);a.append(sys.argv[2]);print(json.dumps(a))' "$phase_factors" "$f")"
       phase_checks="$(python3 -c 'import json,sys;a=json.loads(sys.argv[1]);a.append(sys.argv[2]);print(json.dumps(a))' "$phase_checks" "$check")"
     done
@@ -372,14 +383,35 @@ if [ -n "$PHASES" ] && [ "${#PHASE_ARR[@]}" -gt 1 ]; then
   }
 fi
 
-# R 组的真实缺失必须**真的成立**（对照的意义就在这里）
+# R 组的真实缺失必须**真的成立**（对照的意义就在这里）—— 而且必须是在**目标节点上**成立。
+#
+# Task 4C 之前这里写的是 `if ! condition_holds "$probe_factor"`，而那段探针循环包在
+# `if [ -n "$PHASES" ]` 内、R 组的 PHASES 恒为空 ⇒ 本闸门**从未执行**，`condition_probes`
+# 也是空数组。现在探针无条件在节点内跑一次（无论 PHASES 是否为空），结论落进
+# `condition_probes`，闸门据此判定。
 if [ -n "$REAL_MISSING" ]; then
   probe_factor="$REAL_FACTOR"
-  if ! condition_holds "$probe_factor"; then
-    echo "edge_attack: R 组的真实缺失**不成立**：$REAL_MISSING 的防护在这台主机上仍然在位（探针对应 $probe_factor 的触发检查条件）—— 真实缺失对照不可得，整轮失败；不得用注入失败顶上（那就是伪造 ground truth 的对照面）" >&2
+  REAL_MISSING_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  # 只探这一次（探针在节点里真的执行一次 docker exec）：结论既落进 condition_probes，
+  # 也直接决定本闸门。`probe_entry` 在 rc=2（探针没跑成）时自己**响亮退出** ——
+  # 那种情况绝不能被当成"条件不成立"，更不能被当成"空缺即通过"。
+  PROBES_JSON="$(probe_entry "$probe_factor" "${TRIGGER[$probe_factor]:-}" 0)"
+  # 判据用"JSON 里最后一次探针的 condition_holds 是不是真布尔 true"，而不是拿 shell 里的
+  # 字符串跟 python 打印的 `True` 比 —— 后者大小写不同 ⇒ 闸门会把 rc=0（条件成立）
+  # **误判成不成立**（本任务实测踩到过：探针明明通过，闸门却报"防护仍然在位"）。
+  if ! python3 -c 'import json,sys;r=json.loads(sys.argv[1]);sys.exit(0 if r and r[-1].get("condition_holds") is True else 1)' "$PROBES_JSON"; then
+    echo "edge_attack: R 组的真实缺失**不成立**：$REAL_MISSING 的防护在节点 ${EDGEEXP_TARGET} 上仍然在位" >&2
+    echo "  （探针对应 $probe_factor 的触发检查条件）—— 真实缺失对照不可得，整轮失败；" >&2
+    echo "  不得用注入失败顶上（那就是伪造 ground truth 的对照面）。" >&2
     exit 1
   fi
-  echo "edge_attack: 真实缺失已核实（$REAL_MISSING → $probe_factor，$REAL_MISSING_AT）"
+  # 空数组必须变成"有证据"或明确报错 —— 这条守卫就是那句话的实现（旧实现在这里留了空数组）。
+  COUNT="$(python3 -c 'import json,sys;print(len(json.loads(sys.argv[1])))' "$PROBES_JSON")"
+  [ "$COUNT" -ge 1 ] || {
+    echo "edge_attack: R 组声称『真实缺失已核实』，而 condition_probes 是空数组 —— 不允许存在这种记录" >&2
+    exit 1
+  }
+  echo "edge_attack: 真实缺失已在节点 ${EDGEEXP_TARGET}（hostname=$PROBE_HOST）核实（$REAL_MISSING → $probe_factor，$REAL_MISSING_AT，$COUNT 条探针证据）"
 fi
 
 # --- 触发固定剧本并派生客观结果 ---------------------------------------------
@@ -587,9 +619,13 @@ report = {
                'techniques_achieved': sorted(techniques)},
     'phases': json.loads(os.environ['PHASES_JSON']),
     'condition_probes': json.loads(os.environ['PROBES_JSON']),
+    'condition_probes_note': ('每条探针都在**被攻节点内**执行（docker exec，判据与 internal/checks/linux '
+                              '的同名检查逐条对齐）；probe_host 是节点内进程自证的 hostname，'
+                              'probe_target 是容器名。condition_holds 为 null 表示**探针未执行**'
+                              '（未声明 EDGEEXP_TARGET），那**不是**"条件不成立"，也不是证据。'),
     'real_missing': os.environ['REAL_MISSING'],
     'real_missing_verified_at': os.environ['REAL_MISSING_AT'],
-    'probe_note': 'condition_holds = 该防护在这台主机上真的缺失（用引擎同名检查的判据探测）；S 组是 spec §2.3 的"检查失败代理"，探针结果只记录不阻断；R 组必须成立',
+    'probe_note': 'condition_holds = 该防护在**被攻节点内**真的缺失（用引擎同名检查的判据探测，见 condition_probes 的 probe_host）；S 组是 spec §2.3 的"检查失败代理"，探针结果只记录不阻断；R 组必须成立',
     'ground_truth_note': ('block_effective/compromised 的口径：观察窗内成功执行的 ability 数为 0 / > 0（link.status == 0，'
                           '状态码语义取自 Caldera c_link.py 的 states 表）。'
                           + ('本次观察窗**超时**（operation 未进终态）⇒ ttps_achieved 是"窗内已达成"的下界。' if window_timeout
