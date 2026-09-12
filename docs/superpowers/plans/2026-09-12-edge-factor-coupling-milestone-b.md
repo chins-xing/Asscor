@@ -543,6 +543,44 @@ git commit -F build/commit-msg.txt   # feat(edgescen): 场景采集器（注入�
 
 ---
 
+### Task 3B: 离线重算以记录自带权重为准 + 域累加顺序与引擎一致 + 两条已建议的加固
+
+**为什么加这个任务**（Task 3 复审实测出的**规格-实现缺口**，不是 Task 3 的缺陷）：spec §5.1 前提 2 说"离线复算以记录里的生效权重为准"，但 `cmd/edgecompare` **从不读** `observed.effective_weights`（该标识符与 JSON 键在包里零出现），两侧门禁都从 `-weights` 取权重。后果：①模板的生效权重与命令行 `-weights` 不一致时，门禁②（`|复算 − 记录| == 0`）会在**合法记录**上变红 —— 而计划里那串 `-weights`（35/25/25/15/10，和 **110**）与引擎 `Normalize(100)` 后的比例本就不同；②`validateDomainsCovered` 要求记录的 `domain_scores` 覆盖 `-weights` 的每个域，`-weights` 里多一个部署没聚合的域就会让门禁①报覆盖错误。
+
+**Files:**
+- Modify: `cmd/edgecompare/{score.go,metrics.go,load.go?}`（读取与优先使用 `Observed.EffectiveWeights`）
+- Modify: `cmd/edgecompare/metrics_test.go`（域累加顺序的既有断言随之更新）
+- Modify: `internal/edgeexp/record.go`（`Meta.TSSource string \`json:"ts_source,omitempty"\``）
+- Modify: `cmd/edgescen/observe.go`（`ts` 来源写进新字段，`weight_source` 回到只讲权重）
+- Test: `cmd/edgecompare/{metrics_test.go,consistency_test.go}`、`cmd/edgescen/main_test.go`
+
+- [ ] **Step 1: 离线工具优先使用记录自带的权重表**
+  - `offlinePlan`/`Evaluate`/`OfflineScoreWithWeights` 的权重来源改为：**记录里有 `effective_weights` 就用它**（键集即参与聚合的域），否则回退到 `-weights`（并保持既有行为，保证既有用例不破）。
+  - 新增用例：同一记录、两种权重输入（记录自带 vs 命令行不一致）⇒ 离线分数必须由**记录自带**那张决定；反向对照：记录**没有**该字段时回退到 `-weights`。
+  - 门禁①/②的命令行随之简化（`-weights` 变成"记录缺该字段时的回退"），plan 的命令示例同步更新。
+
+- [ ] **Step 2: 域累加顺序与引擎一致（消除半分边界的假红）**
+  - 引擎的 `ComputeDomainScoresBayes` 按**字母序**累加，而离线工具按 `DefaultDomains` 顺序 ⇒ 在恰好落在半分位的 base 上会差 1 ulp，进而 `round2` 差 0.01，让门禁②在**合法记录**上变红。
+  - 改为与引擎同序（字母序），并更新 `metrics_test.go` 里钉住旧顺序的断言；补一条"半分位 base 逐位一致"的用例。
+
+- [ ] **Step 3: `Meta.TSSource` 独立字段**（Task 3 复审建议 1）
+  - `record.go` 增 `TSSource string \`json:"ts_source,omitempty"\``（与 `WeightSource`/`AssemblyError` 同款可选、读取层不要求 ⇒ 不破坏既有数据集）；`cmd/edgescen` 把 `链条目 ts = …` 写进它，`weight_source` 回到只讲权重；spec §5.1 的 `meta` 说明补一行。
+
+- [ ] **Step 4: 反射填充器补类型**（Task 3 复审建议 2）
+  - `fillExported` 现已覆盖 String/Bool/Int*/Float*/Slice/Map/Struct；补 `Uint*`/`Ptr`/`Array`/`Interface`，或让填充器报告"是否真的写过某个叶子"并断言"每个访问到的叶子都非零"，避免将来出现新字段类型时该用例**静默变成恒真**。
+
+- [ ] **Step 5: 门禁**
+```
+go build ./... && go vet ./internal/...
+go test ./internal/edgeexp/...
+go test -tags "expr,engine,checks" ./cmd/edgescen/
+go test -tags edgeexp ./cmd/edgecompare/
+gofmt -l <changed files>
+```
+Expected: 全绿；既有 `cmd/edgecompare` 语义用例（除 Step 2 明确更新的顺序断言外）保持不变。
+
+---
+
 ### Task 4: 实验模板与场景矩阵脚本（WSL2 Containerlab，22+3 场景）
 
 **Files:**
@@ -727,6 +765,7 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
   - **可信度双衰减**（`c²`）若在实验中开启，必须在报告里标注"启用模型的惩罚强度显著强于历史路径"，并说明是否修正属独立决策；
   - **S5 级的读法**（Task 1 实测）：`EF-3FA` 的级联把 `EF-002FA` 压到 `0.82`，但该因子"仅由级联激活"⇒ `c_trigger = 0` ⇒ `EffectiveFactor(0.82, 0) = 1` ⇒ **V/G/C 下 `a = 0`（无惩罚），而 legacy 真的乘 0.82**。故 S5 的对照必须写成"**`c = 0` 的因子在可信度模型下不产生惩罚**"，**不得**写成"V/G/C 忽略了级联"——后者是错误结论（spec §10.2 已记）。
   - **C 与 V 不可区分时必须如实说**（Task 1 评审实测的时间结构问题）：若某场景的观测在时间上无先后（所有 `ts` 相同或先后不反映真实注入顺序），chain 的时间窗全部被跳过 ⇒ **C ≡ V**。此时报告必须写"**本数据集无法区分 C 与 V**"，**不得**因为 C 的某项指标略好就宣称 C 更优（那是浮点噪声或定序差异）。反向亦然：若 C 在**顺序注入**的场景上明显更差（时间窗把该有的耦合砍掉），那才是有信息量的结论。
+  - **必须显式写出的量化事实**（Task 3 复审实测）：**C 在 18 个非顺序场景上与 V 数值等价**（单条链只有一个 `ts` ⇒ `from.ts.Before(to.ts)` 恒假 ⇒ 耦合项全消失、`L_d = Σ a_i[d]`）⇒ **C 的全部信号只来自 7 个顺序场景**（`S5-cascade-3fa`、`S2-no-siem-no-ids`、`S2-selinux-no-siem`、`S2-syn-cookie-no-ids`、`S3-selinux-apparmor-2fa`、`S3-3fa-selinux-apparmor`、`S3-syn-cookie-no-siem-no-ids`）×（含 A-1 重复）；那 18 条记录是**对照**、不是信号。**顺序记录里"取评估时刻"的条目也不是设计顺序**（注入的在前、自然失败的在后是环境造成的，不是设计），报告不得把它们当级联时序证据；Task 4 的 harness 必须保证"注入时刻 < 采集时刻"这一前提并在 `run.json` 里核对。
   - **`EF-3FA` 子集的处理见 Task 4 Step 6 的裁定 ④ 注记**：含 `EF-3FA` 的记录**不得**用塞 `-factors` 的方式强行纳入比较（会给 V/G/C 凭空加上 fallback 向量的惩罚）；在用户裁定 ④ 之前，该子集必须**单独列出并标注"待裁定后重跑"**。
   - **拟合优化的是分数的线性化代理，不是分数本身**（里程碑 A 最终修复报告遗留疑虑 2，已核代码）：`design()` 用的是**标量汇总**特征 `a_i = (1−eff_i)·Σ_d v_i[d]`（`fit.go` 的 `vectorMass`），而真实评分是**逐域** `L_d`/`P_d` 再乘各域分 —— 两者不同源。故拟合出的 `c_ij` 只是候选参数的**生成器**，报告**不得**声称"拟合更优 ⇒ 决策层更好"；唯一权威判据是用该参数跑**离线重算**后比决策层指标，且必须写明这层近似。
   - **`RenderConfigSection` 不含 `f_i`**（另一已知边界）："贴回配置段 + 同一 JSONL"**不是**完整复现包，必须再给 `[edge_factors]` 表（就是下面这条三件套）。
