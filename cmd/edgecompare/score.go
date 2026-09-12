@@ -159,6 +159,21 @@ func offlineFormulaResult(p edgefactor.Params, rec Record, weights map[string]fl
 	), nil
 }
 
+// recordCarriesWeights 报告记录是否**自带**生效权重表（全仓唯一判据：`len(...) > 0`）。
+//
+// 单列一个函数是为了让"谁赢"（`recordWeights`）与"报告里怎么统计/点名权重来源"
+// （`countWeightSources` / `resolvedWeightSource`）用**同一条**判据 —— 三处各写一遍
+// `len(...) > 0` 迟早漂移。
+func recordCarriesWeights(rec Record) bool { return len(rec.Observed.EffectiveWeights) > 0 }
+
+// resolvedWeightSource 是诊断信息里对"这张权重表从哪来"的描述（判据同 recordCarriesWeights）。
+func resolvedWeightSource(rec Record) string {
+	if recordCarriesWeights(rec) {
+		return "记录自带 observed.effective_weights"
+	}
+	return "-weights（记录未带生效权重，走回退）"
+}
+
 // recordWeights 决定本次重算用哪张权重表：**记录自带优先**（spec §5.1 前提 2），
 // `fallback` 只是记录没有该字段时的回退。
 //
@@ -173,11 +188,17 @@ func offlineFormulaResult(p edgefactor.Params, rec Record, weights map[string]fl
 // 回退分支（记录没带该字段）与它被消费之前的行为**逐位一致**：历史数据集与手写夹具里没有
 // `effective_weights`，它们仍然完全按 `-weights` 复算。
 //
+// **回退表的域集必须是默认域的子集**（Fix round 1 / Minor 5，口径如实记录、本轮**不**放宽）：
+// CLI 的 `parseWeights` 拒绝任何非默认域的权重键（"非默认域的权重键不会被合成层理解，
+// 评估口径与参数口径会变成两套"）。故"多了一个加权域"的部署，其 `-weights` 只能写成默认域的
+// 子集 —— 那个多出来的域由**记录自带的生效权重表**表达（它没有这条限制，键集就是引擎实际
+// 聚合的域集）。这是"记录赢"的又一条现实理由。
+//
 // 存在性判据是 `len(...) > 0`，**不是**"JSON 里有没有这个键"：nil map 会序列化成
 // `"effective_weights":null`（键在场、值为空），那是"未记录"的可见信号，见
 // `internal/edgeexp.Observed.EffectiveWeights`。
 func recordWeights(rec Record, fallback map[string]float64) map[string]float64 {
-	if len(rec.Observed.EffectiveWeights) > 0 {
+	if recordCarriesWeights(rec) {
 		return rec.Observed.EffectiveWeights
 	}
 	return fallback

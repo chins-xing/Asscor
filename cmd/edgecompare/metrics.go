@@ -151,6 +151,42 @@ func validateDomainsCovered(rec Record, weights map[string]float64) error {
 	return nil
 }
 
+// validateWeightsUsable 拒绝**解析后**仍然没有任何正权重的表（Task 3B Fix round 1 / Minor 1）。
+//
+// 为什么要在 `Evaluate` 里再查一次：CLI 的 `-weights` 守卫（`main.go:parseWeights` 的"全零"分支）
+// 挡的是**命令行输入**；Task 3B 之后权重还可以来自**记录本身** —— 一条
+// `{"effective_weights":{"attack_surface":0}}` 的记录会绕过那道守卫、**赢过**合法的 `-weights`，
+// 然后产出一份"齐全、可信"的报告：聚合分母恒 0 ⇒ 引擎公式对每条记录都返回 Total=0 ⇒
+// 判定全是 not acceptable，决策层指标退化成"全阻断"，而报告上看不出任何异常。
+//
+// 判据与 CLI 同款：**存在 > 0 的权重**（空表 / 全零 / 全负一律拒绝）。诊断信息点名**权重来源**
+// （记录自带 vs 回退）—— 同一句话在两种来源下的修法完全不同。
+func validateWeightsUsable(rec Record, weights map[string]float64) error {
+	for _, w := range weights {
+		if w > 0 {
+			return nil
+		}
+	}
+	return fmt.Errorf("edgecompare: scenario %s: 生效权重表（%s）没有任何正权重 —— 聚合分母恒为 0，"+
+		"引擎公式对每条记录都返回 Total=0、判定退化为『全阻断』，而报告照常打印（看起来比过了）",
+		rec.ScenarioID, resolvedWeightSource(rec))
+}
+
+// countWeightSources 统计本次评估里权重表的来源分布（Task 3B Fix round 1 / Important 1）。
+//
+// 判据与"谁赢"同源（`recordCarriesWeights`），故报告里写的口径就是实际用的口径。
+func countWeightSources(records []Record) WeightSourceCounts {
+	var c WeightSourceCounts
+	for _, rec := range records {
+		if recordCarriesWeights(rec) {
+			c.RecordCarried++
+			continue
+		}
+		c.Fallback++
+	}
+	return c
+}
+
 // Evaluate 在同一份真实数据上重算并计算三层指标（spec §2.1）。
 //
 // 决策层对齐规则（模型判定 ↔ 客观结果）：
@@ -181,6 +217,11 @@ func Evaluate(records []Record, p edgefactor.Params, weights map[string]float64)
 		// 下面两条判据必须与实际参与聚合的域集**同源** —— 域覆盖判据若仍按 `-weights` 走，
 		// `-weights` 里多一个该部署没有聚合的域就会在**合法记录**上报"缺域"（门禁①）。
 		w := recordWeights(rec, weights)
+		// 解析后的表必须至少有一个正权重（Fix round 1 / Minor 1）：全零表绕过 CLI 守卫
+		// （它是记录自带的，不是命令行输入）后会让分母恒 0、指标退化成"全阻断"而报告照常打印。
+		if err := validateWeightsUsable(rec, w); err != nil {
+			return Metrics{}, err
+		}
 		// 先校验域覆盖（评审 I2）：缺域会被当作 0 聚合、静默扭曲主判据，必须在算分之前拒绝。
 		if err := validateDomainsCovered(rec, w); err != nil {
 			return Metrics{}, err

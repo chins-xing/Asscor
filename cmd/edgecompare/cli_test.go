@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -209,6 +210,85 @@ func TestCLICompareWritesReportAndSection(t *testing.T) {
 	}
 	if err := rebuilt.Validate(edgefactor.DefaultDomains()); err != nil {
 		t.Fatalf("导出的参数段过不了 Validate：%v", err)
+	}
+}
+
+// weightSourceRecord 造一条 T9 形态的单因子记录（legacy 可复算），可选带**记录自带**的
+// 生效权重表。用于钉住"权重口径必须写进报告头"（Task 3B Fix round 1 / Important 1）。
+func weightSourceRecord(t *testing.T, id string, withWeights, compromised bool) string {
+	t.Helper()
+	effective := ""
+	if withWeights {
+		effective = `"effective_weights":{"attack_surface":1},`
+	}
+	raw := fmt.Sprintf(`{"scenario_id":%q,"factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":55},%s"final_score":61,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"}]},"ground_truth":{"compromised":%t,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}`,
+		id, effective, compromised)
+	if _, err := LoadRecords(writeJSONL(t, id+".jsonl", raw+"\n")); err != nil {
+		t.Fatalf("夹具记录不合法: %v", err)
+	}
+	return raw
+}
+
+// TestCLIStatesTheWeightSourceInReportAndStderr（Task 3B Fix round 1 / Important 1）：
+// 报告头必须写明这次评估的**权重口径**，且"`-weights` 一次都没被用到"必须在 stderr 上说一句。
+//
+// 为什么必须有（评审实测）：`-weights` 在记录自带 `observed.effective_weights` 时**不参与计算**，
+// 而它仍是必填参数 —— 两串比例完全不同的 `-weights` 跑同一份真实记录会产出**逐字节相同**的报告
+// 而没有任何提示：计划里的复现命令会被读成"这次用的是那串权重"，Task 6 的权重消融实验会被读成
+// "权重无关"。这是**可见性**问题（不改任何计算），但足以让论文证据失真。
+func TestCLIStatesTheWeightSourceInReportAndStderr(t *testing.T) {
+	cfg := writeConfig(t, "cand-legacy.ini", "[edge_factors.model]\nmodel = legacy\np_floor = 0.5\n")
+
+	cases := []struct {
+		name         string
+		withWeights  []bool
+		wantHeader   []string
+		wantStderrNo bool // true ⇒ stderr **不得**出现"未参与计算"
+	}{
+		{name: "全部记录自带权重", withWeights: []bool{true, true},
+			wantHeader: []string{"权重口径: 2 条取记录自带 `observed.effective_weights`", "0 条回退 `-weights`", "（`-weights` 本次未参与计算）"}},
+		{name: "全部记录回退", withWeights: []bool{false, false},
+			wantHeader:   []string{"权重口径: 0 条取记录自带 `observed.effective_weights`", "2 条回退 `-weights`"},
+			wantStderrNo: true},
+		{name: "混合", withWeights: []bool{true, false},
+			wantHeader:   []string{"权重口径: 1 条取记录自带 `observed.effective_weights`", "1 条回退 `-weights`"},
+			wantStderrNo: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var lines []string
+			for i, with := range tc.withWeights {
+				lines = append(lines, weightSourceRecord(t, fmt.Sprintf("WS-R%d", i+1), with, i%2 == 0))
+			}
+			records := writeJSONL(t, "weight-source.jsonl", strings.Join(lines, "\n")+"\n")
+			out := filepath.Join(t.TempDir(), "report.md")
+			code, stdout, stderr := runCLIForTest(t,
+				"-records", records, "-candidate", "legacy="+cfg,
+				"-weights", "attack_surface=1", "-factors", "EF-SELINUX=0.8", "-out", out)
+			if code != 0 {
+				t.Fatalf("退出码 = %d, want 0；stderr=%s", code, stderr)
+			}
+			raw, err := os.ReadFile(out)
+			if err != nil {
+				t.Fatalf("读报告：%v", err)
+			}
+			text := string(raw)
+			for _, want := range tc.wantHeader {
+				if !strings.Contains(text, want) {
+					t.Errorf("报告头缺少权重口径片段 %q：\n%s", want, text)
+				}
+			}
+			if strings.TrimSpace(stdout) != "" {
+				t.Errorf("写出到 -out 时 stdout 必须为空：%s", stdout)
+			}
+			notified := strings.Contains(stderr, "未参与计算")
+			if tc.wantStderrNo && notified {
+				t.Errorf("有记录回退到 -weights 时不得声称『未参与计算』：%s", stderr)
+			}
+			if !tc.wantStderrNo && !notified {
+				t.Errorf("全部记录都自带权重时必须提示 -weights 未被使用：%s", stderr)
+			}
+		})
 	}
 }
 

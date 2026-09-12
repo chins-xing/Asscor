@@ -1141,7 +1141,7 @@ func TestCLIWritesOneRecordLine(t *testing.T) {
 	if rec.Meta.PlaybookHash != "sha256:deadbeef" {
 		t.Errorf("playbook_hash 必须从 harness 产物带过来: %q", rec.Meta.PlaybookHash)
 	}
-	for _, want := range []string{"场景", "因子", "权重来源", "装配错误"} {
+	for _, want := range []string{"场景", "因子", "权重来源", "链条目 ts", "装配错误"} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Errorf("自检摘要必须包含 %q:\n%s", want, stdout.String())
 		}
@@ -1273,6 +1273,11 @@ func TestSealingIsLosslessForEveryPopulatedField(t *testing.T) {
 		t.Fatalf("填充器遇到 %v 种未支持的字段类型 %v —— 这些字段在密封前后都是零值，本用例对它们**静默恒真**；"+
 			"新增字段类型时必须先扩展 fillExported（或在此显式声明豁免）", len(report.missing), report.missing)
 	}
+	// 独立对照组（Fix round 1 / Minor 2）：自己数一遍"填过之后还剩几个零值可写节点"。
+	// 与填充器的自述互补 —— 填充器说"我写过"，这里查"结果确实非零"，两者都覆盖不到时才叫盲区。
+	if n := zeroSettableNodes(reflect.ValueOf(&full).Elem()); n != 0 {
+		t.Fatalf("填过之后仍有 %d 个零值可写节点 —— 无损断言对这些字段恒真（先扩展 fillExported 或显式豁免）", n)
+	}
 
 	before, err := json.Marshal(full)
 	if err != nil {
@@ -1372,11 +1377,20 @@ func fillValue(v reflect.Value, rep *fillReport) {
 		}
 		v.Set(reflect.ValueOf("x"))
 	case reflect.Struct:
+		visited := 0
 		for i := 0; i < v.NumField(); i++ {
 			if !v.Field(i).CanSet() {
 				continue
 			}
+			visited++
 			fillValue(v.Field(i), rep)
+		}
+		if visited == 0 {
+			// **一个可写字段都没有**（例如 `time.Time`：字段全非导出）：这次填充对这个字段
+			// 什么也没写。若照样记一笔"填过"，密封前后的字节比较对它**恒真** ——
+			// 而"字段加了却永远到不了磁盘"正是本填充器要堵的那类盲区。如实上报。
+			rep.note(v.Kind())
+			return
 		}
 	default:
 		// 通道 / 函数 / 不安全指针等：无法填充，如实上报而不是静默跳过。
@@ -1388,15 +1402,24 @@ func fillValue(v reflect.Value, rep *fillReport) {
 
 // zeroSettableNodes 递归统计**仍然为零值**的可写节点（填充器的对照组：
 // 填充器声称"每个访问到的字段都被写成非零"，这里独立地数一遍，出现 >0 即说明两者的覆盖对不上）。
+//
+// 无可写字段的结构体计 1（而不是 0）：那个节点**无法被核实** —— 填充器写不进去、字节比较也
+// 看不出差别，把它算成"没问题"正是 Fix round 1 / Minor 2 指出的那个恒真盲区。
 func zeroSettableNodes(v reflect.Value) int {
 	switch v.Kind() {
 	case reflect.Struct:
-		n := 0
+		n, visited := 0, 0
 		for i := 0; i < v.NumField(); i++ {
 			if !v.Field(i).CanSet() {
 				continue
 			}
+			visited++
 			n += zeroSettableNodes(v.Field(i))
+		}
+		if visited == 0 {
+			// 无可写字段 ⇒ 这个节点**无法被核实**（填充器写不进去，字节比较也看不出差别）。
+			// 计 1 而不是 0：对照组必须能把这类盲区报出来（Fix round 1 / Minor 2）。
+			return 1
 		}
 		return n
 	case reflect.Ptr:
@@ -1465,6 +1488,20 @@ func TestFillExportedCoversEveryKindAndReportsTheRest(t *testing.T) {
 		if rep.missing[k] == 0 {
 			t.Errorf("kind %v 无法填充，必须被报告（实际 missing = %v）", k, rep.missing)
 		}
+	}
+
+	// 反例方向 ②（Fix round 1 / Minor 2）：**一个可写字段都没有**的结构体 —— 例如 `time.Time`
+	// （字段全非导出），或将来契约里任何"不透明"类型。填充器对它写不进任何东西；若只在 `Struct`
+	// 分支里走一圈就算"填过"，密封前后的字节比较对这个字段**恒真**，而它正是 Step 4 要堵的那类
+	// 盲区（例如将来给 `Meta` 加 `CollectedAt time.Time` 会被静默漏掉）。
+	type opaque struct{ T time.Time }
+	var o opaque
+	rep = fillExported(reflect.ValueOf(&o).Elem())
+	if rep.missing[reflect.Struct] == 0 {
+		t.Errorf("无可写字段的结构体必须被报告（实际 missing = %v）—— 否则该字段永远是零值而断言恒真", rep.missing)
+	}
+	if n := zeroSettableNodes(reflect.ValueOf(&o).Elem()); n == 0 {
+		t.Errorf("对照组必须把『无法核实的节点』计进来（实际 %d）—— 否则它对这类盲区同样恒真", n)
 	}
 }
 

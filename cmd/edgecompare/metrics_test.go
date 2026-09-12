@@ -636,6 +636,54 @@ func TestEvaluateDomainCoverageFollowsTheRecordWeights(t *testing.T) {
 	}
 }
 
+// TestEvaluateRejectsDegenerateResolvedWeightTable（Task 3B Fix round 1 / Minor 1）：
+// **解析后**的权重表若没有任何正权重，必须在 `Evaluate` 处拒绝。
+//
+// 为什么必须在 `Evaluate` 再查一次：CLI 的 `-weights` 守卫（`main.go:parseWeights`）挡的是
+// **命令行输入**，而 Task 3B 之后权重可以来自**记录本身** —— 一条
+// `{"effective_weights":{"attack_surface":0}}` 的记录会绕过那道守卫、**赢过**合法的 `-weights`，
+// 然后产出一份"齐全、可信"的报告：聚合分母恒 0 ⇒ 引擎公式对每条记录都返回 Total=0 ⇒
+// 判定全是 not acceptable，决策层指标退化成"全阻断"而看不出任何异常。
+func TestEvaluateRejectsDegenerateResolvedWeightTable(t *testing.T) {
+	degenerate := strings.Replace(recordWeightsJSONL,
+		`"effective_weights":{"attack_surface":3,"operation_trust":1}`,
+		`"effective_weights":{"attack_surface":0,"operation_trust":0}`, 1)
+	if degenerate == recordWeightsJSONL {
+		t.Fatal("夹具替换失败（recordWeightsJSONL 的生效权重表变了？）")
+	}
+	recs, err := LoadRecords(writeJSONL(t, "degenerate-record-weights.jsonl", degenerate+"\n"))
+	if err != nil {
+		t.Fatalf("LoadRecords: %v", err)
+	}
+	if len(recs[0].Observed.EffectiveWeights) == 0 {
+		t.Fatal("夹具失效：记录必须自带权重表（哪怕全是 0）")
+	}
+
+	// (a) 记录自带的表全为 0：它赢过了合法的 `-weights`，之后必须被拒，且点名来源。
+	_, err = Evaluate(recs, legacyParams(), callerWeightsForRecordWeights())
+	if err == nil {
+		t.Fatal("记录自带的权重表没有任何正权重时必须拒绝 —— 分母恒 0 会让每条记录都判 not acceptable，而报告照常打印")
+	}
+	if !strings.Contains(err.Error(), "记录自带") {
+		t.Errorf("错误必须点名权重来源（记录自带 vs 回退）: %v", err)
+	}
+
+	// (b) 回退路径同样拒绝：判据是"**解析后**的表"，不是"谁给的"。
+	recs[0].Observed.EffectiveWeights = nil
+	_, err = Evaluate(recs, legacyParams(), map[string]float64{"attack_surface": 0, "operation_trust": 0})
+	if err == nil {
+		t.Fatal("回退表的正权重之和为 0 时同样必须拒绝")
+	}
+	if !strings.Contains(err.Error(), "-weights") {
+		t.Errorf("回退分支的错误必须点名 -weights: %v", err)
+	}
+
+	// (c) 反向对照：只要有一个正权重就必须放行 —— 否则上面两条只证明"新判据什么都拒"。
+	if _, err := Evaluate(recs, legacyParams(), map[string]float64{"attack_surface": 1, "operation_trust": 0}); err != nil {
+		t.Fatalf("有正权重的表不得被拒: %v", err)
+	}
+}
+
 // vgcJSONL 是 V/G/C 确定性断言用的 5 域记录：两个因子共用触发检查 OT-005，
 // EF-SELINUX → EF-APPARMOR 级联（带时间戳，chain 候选要用），时间间隔 30s。
 const vgcJSONL = `{"scenario_id":"S5-cascade-vgc","factors":["EF-SELINUX","EF-APPARMOR"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"final_score":0,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"},{"factor":"EF-APPARMOR","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:30Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}`

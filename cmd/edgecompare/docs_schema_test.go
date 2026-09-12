@@ -163,7 +163,8 @@ func equalDomainWeights() map[string]float64 {
 //
 // 这条测试有**双重**作用：
 //  1. 落地 §5.1 里那句 round-trip 承诺 —— 示例的 `final_score` 必须能被 `cmd/edgecompare`
-//     用记录自身的输入（域分 + `spc_score`/`threat_coeff` + 链上 `effective_factor`）复算出来。
+//     用记录自身的输入（域分 + `observed.effective_weights`（缺省时回退 `-weights`） +
+//     `spc_score`/`threat_coeff` + 链上 `effective_factor`）复算出来。
 //     评审实测旧示例的 69.4 **在任何合法权重下都不可能**（base 是域分加权平均 ⇒ 与权重无关地
 //     ∈[55,82]，再乘因子、代入 `round2(0.5·base+30·E+20·T)` 后落在 [78.45,89.52]），而当时
 //     的门禁只查"能不能解析"，抓不到数值自相矛盾 —— 里程碑 B 的采集器照抄就会产出一批

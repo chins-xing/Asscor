@@ -24,6 +24,20 @@ import (
 // 空报告、与参数集不一致的模型名、漏域的向量、贴不回去的配置段 —— 一律 fail-fast，
 // 绝不渲染出一份看似完整的产物。
 
+// WeightSourceCounts 是本次评估里**权重表来源**的分布（Task 3B Fix round 1 / Important 1）。
+//
+// 为什么必须有它：`-weights` 在记录自带 `observed.effective_weights` 时**不参与计算**（记录赢，
+// spec §5.1 前提 2），而它仍是必填参数、仍被逐条校验 —— 没有这两个计数，报告读起来就像
+// "这次评估用的是命令行那串权重"。评审实测过：两串比例完全不同的 `-weights` 跑同一份真实记录
+// 产出**逐字节相同**的报告，没有任何提示；计划里的复现命令因此会被误读，Task 6 的权重消融
+// 实验会被读成"权重无关"。
+//
+// 它只做**可见性**，不改任何计算 —— 计数与"谁赢"共用同一条判据（`recordCarriesWeights`）。
+type WeightSourceCounts struct {
+	RecordCarried int `json:"record_carried"` // 取记录自带 observed.effective_weights 的记录数
+	Fallback      int `json:"fallback"`       // 回退到 -weights 的记录数
+}
+
 // Report 是一次四候选对比的结果快照。
 //
 // `Best` 是**模型名**（候选在 paramsByModel 里的键），不是 Params.Model —— 与 RenderConfigSection
@@ -33,6 +47,9 @@ type Report struct {
 	Records     int                `json:"records"`
 	Models      map[string]Metrics `json:"models"`
 	Best        string             `json:"best"`
+
+	// WeightSource 是记录集的权重口径分布（`Compare` 填；手搓 Report 留零值 ⇒ 渲染成"未注明"）。
+	WeightSource WeightSourceCounts `json:"weight_source"`
 }
 
 // Compare 在同一份真实数据上评估全部候选，并按决策层主判据选优（spec §2.1）。
@@ -59,6 +76,9 @@ func Compare(records []Record, paramsByModel map[string]edgefactor.Params, weigh
 		GeneratedAt: time.Now().UTC(),
 		Records:     len(records),
 		Models:      make(map[string]Metrics, len(paramsByModel)),
+		// 权重口径的分布只取决于**记录集**（与候选无关），故在候选循环外算一次：
+		// 报告头据此说明"这次用的是记录自带的表还是 `-weights`"（Important 1）。
+		WeightSource: countWeightSources(records),
 	}
 	for _, name := range sortedNames(paramsByModel) {
 		m, err := Evaluate(records, paramsByModel[name], weights)
@@ -125,8 +145,11 @@ func sortedNames[V any](m map[string]V) []string {
 // 列序（模型｜决策一致率｜漏判率｜误阻断率｜Spearman｜Kendall｜AUC｜N）与 spec §2.1 的三层指标
 // 顺序一致，且**不按选优判据重排**：报告是原始证据，判据顺序已经在结论行里写明。
 //
-// 表头之前先写一行**判定口径**（C1 第 5 条）：离线分数 = 引擎总分（同一公式），阈值 = 引擎
-// 决策线。这张表的全部价值在于"它描述的是部署行为"，口径不写明就无法被复核。
+// 表头之前先写两行口径：**判定口径**（C1 第 5 条）—— 离线分数 = 引擎总分（同一公式），阈值 =
+// 引擎决策线；**权重口径**（Task 3B Fix round 1 / Important 1）—— N 条取记录自带
+// `observed.effective_weights`／M 条回退 `-weights`（回退为 0 时注明"`-weights` 未参与计算"）。
+// 这张表的全部价值在于"它描述的是部署行为"，口径不写明就无法被复核 —— 权重口径尤其如此：
+// 它决定了读者是否该拿命令行那串权重去核对报告里的分数。
 //
 // 空候选集直接拒绝（而不是打印一张空表）：一份"表头齐全、零行、结论为空"的报告会被误读成
 // "比过了"。整篇文档先渲染进内存再一次性写出，故任何校验失败都不会留下半份报告。
@@ -149,6 +172,21 @@ func RenderMarkdown(w io.Writer, rep Report) error {
 	b.WriteString("判定口径: 离线分数 = 引擎总分（`ssam.SSAMV20Formula`，与在线评分同一公式；")
 	b.WriteString("域级修正经 `RegisterDomainAdjust`/`RegisterEdgeFactorStrategy` 注入，legacy 零注册）；")
 	b.WriteString("阈值 = 引擎决策线（`Acceptable = 总分 ≥ threshold`）\n\n")
+	// 权重口径同样必须写在报告头上（Task 3B Fix round 1 / Important 1）：`-weights` 在记录自带
+	// `observed.effective_weights` 时**不参与计算**，而它仍是必填参数 —— 少了这一行，两串比例
+	// 完全不同的 `-weights` 会产出**逐字节相同**的报告，计划里的复现命令会被误读、
+	// Task 6 的权重消融会被读成"权重无关"。只报事实，不改任何计算。
+	switch ws := rep.WeightSource; {
+	case ws.RecordCarried+ws.Fallback == 0:
+		// 手搓 Report（或未跑过 Compare 的调用方）：**不编** 0/0，如实写"未注明"。
+		b.WriteString("权重口径: 未注明（该 Report 未携带权重来源统计）\n\n")
+	case ws.Fallback == 0:
+		fmt.Fprintf(&b, "权重口径: %d 条取记录自带 `observed.effective_weights`／%d 条回退 `-weights`"+
+			"（`-weights` 本次未参与计算）\n\n", ws.RecordCarried, ws.Fallback)
+	default:
+		fmt.Fprintf(&b, "权重口径: %d 条取记录自带 `observed.effective_weights`／%d 条回退 `-weights`\n\n",
+			ws.RecordCarried, ws.Fallback)
+	}
 	b.WriteString("| 模型 | 决策一致率 | 漏判率 | 误阻断率 | Spearman | Kendall | AUC | N |\n")
 	b.WriteString("|---|---|---|---|---|---|---|---|\n")
 	for _, name := range sortedNames(rep.Models) {

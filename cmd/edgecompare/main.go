@@ -263,6 +263,15 @@ func runCompare(records []Record, weights map[string]float64, pairs []candidateR
 		fmt.Fprintln(stderr, err)
 		return exitFailure
 	}
+	// `-weights` 是**回退表**（Task 3B）：记录自带 `observed.effective_weights` 时它根本不参与
+	// 计算。全部记录都自带时在 stderr 上说一句 —— 否则"改了 `-weights` 报告一字不变"没有任何
+	// 提示（评审实测：两串比例完全不同的 `-weights` 产出逐字节相同的报告），计划里的复现命令
+	// 会被误读成"这次用的是那串权重"，Task 6 的权重消融实验会被读成"权重无关"。
+	// 报告头另有一行写明分布（`RenderMarkdown`），这里只是把"未被用到"这件事显式化。
+	if rep.WeightSource.Fallback == 0 && rep.WeightSource.RecordCarried > 0 {
+		fmt.Fprintf(stderr, "edgecompare: -weights 本次未参与计算（%d 条记录全部自带 observed.effective_weights，权重口径以记录为准）\n",
+			rep.WeightSource.RecordCarried)
+	}
 	var buf bytes.Buffer
 	if err := RenderMarkdown(&buf, rep); err != nil {
 		fmt.Fprintln(stderr, err)

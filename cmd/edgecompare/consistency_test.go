@@ -569,8 +569,10 @@ func TestConsistencyGateRoundTripsARecordThatCarriesItsOwnWeights(t *testing.T) 
 // `round2(73.2727…×0.82×0.838) = 50.35`，总分 raw = `8107.5 + 9.09e-13` —— 离取整边界**只有
 // 1 ulp**（`math.Round(8107.5)=8108` ⇒ 81.08，而 `8107.4999…` ⇒ 81.07）。故本用例钉的是
 // **结构性**的事实：顺序取自引擎自己，而不是靠"这组数恰好不受顺序影响"。
-// （实测补充：该夹具的乘积项都是整数、累加精确，两种顺序给出同一个总分；邻域 15125 组一位
-// 小数的组合里也没有一组能被顺序改变 —— 所以本任务不构造"半分位反例"，只留下这条边界记录。）
+// （实测补充：该夹具的乘积项都是整数、累加精确，两种顺序给出同一个总分；邻域扫描共 **15125** 组，
+// 轴 = 五个域各在 spec 值 ±1.0 内取一位小数（`attack_surface` / `business_continuity` 步长 0.2 各 11 档，
+// `operation_trust` / `resilience` / `kernel_security` 步长 0.5 各 5 档 ⇒ 11×11×5×5×5），
+// 其中**没有一组**能被两种顺序改变总分 —— 所以本任务不构造"半分位反例"，只留下这条边界记录。）
 func TestConsistencyGateDomainOrderMatchesTheEngine(t *testing.T) {
 	weights := spec51Weights()
 
