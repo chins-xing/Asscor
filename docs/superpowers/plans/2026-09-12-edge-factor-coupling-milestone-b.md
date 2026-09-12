@@ -505,6 +505,8 @@ Expected: FAIL —— `undefined: buildRecord`
 
 - `observe.go`：`runChecks()` 取该主机真实检查结果（复用 `internal/checks` + `internal/engine.Assessor.Assess`），再按场景规格**强制指定检查失败**（`Passed=false`、`Delta` 取自引擎登记表、`Confidence` 取自可信度解析结果），然后调用 `AssessFromResults` 取得 `*model.AssessmentResult`；从 `result.EdgeFactorChain`（Task 1 交付）读观测链。
   **`ts` 必须由采集器按"该因子的注入/采集时刻"重写**（Task 1 评审实测发现的硬要求）：引擎侧链上所有条目的 `ts` 是**同一个评分时刻**（`adapter_engine.go:128`），而 chain 模型要求相邻观测严格递增（`synthesize.go:161-171` 用 `from.ts.Before(to.ts)`）⇒ 全部同值会让**所有有向耦合被跳过、C 候选退化成 V**。harness 知道每个检查的注入时刻 ⇒ 采集器把 `ts` 写成"该因子触发检查的注入时刻"（逐条不同、且反映真实先后）；**不得**为了"让 C 有东西可用"而编造递增时间。
+  **`ts` 还必须"全有或全无"**（Task 3 评审实测的缺陷）：`recordChain` 只对"触发检查出现在注入表里"的条目回填 harness 时刻，其余条目保留**评分时刻** ⇒ 实测一条 11 条目的链里有 4 条拿到 harness 时刻、7 条拿到**更晚**的评分时刻，于是**自然失败**的因子在时间上排在**被注入**的因子之后 —— 一个没人设计过的顺序，而且既不报错也不披露。修法：非顺序场景要么**全部**条目都用 harness 时刻（每条都能追到注入/采集时刻），要么**一条都不用**并在 `meta` 里记录每条 `ts` 的来源；**禁止混合**。顺序场景仍按阶段强制"至少 N 个不同时刻"。
+  **S5 的时间窗不得当作"级联时序"证据**（同一条实测）：`S5-cascade-3fa` 里 `EF-002FA` 的**值**来自第一阶段的级联，而它的 `ts` 落在第二阶段 —— 报告若用 S5 的时间窗论证级联时序，就是错的。
   **`spc_score` / `threat_coeff` 的取值有唯一正确来源**（评审的越界观察，必须钉住）：**只允许**取 `result.SPCScore` 与 `result.ThreatCoeff` —— 它们就是引擎传给评分公式的 `RiskContext.Exposure` / `.Threat`（`internal/engine/ssam/engine.go` 的 `RiskContext{Exposure: output.SPCScore, Threat: output.ThreatCoeff}`）。**禁止**从 `internal/attck` 的 `predictedRisk.EnhancedThreat`（`internal/attck/attck.go:526` 恰好也叫 `threat_coeff`，但那是**另一个量**）取，也禁止自己算 —— 取错会让离线分数整体偏移而**所有门禁全绿**。为此实现一条**round-trip 钉桩**（见 Step 5 的门禁②）。
 - `groundtruth.go`：解析攻击 harness 产物得到 `compromised`/`ttc`/`ttps`/`nodes`/`block_effective`；**`ttc` 缺失即报错**（M3 的数据侧处理）。
 - `main.go`：装配 `edgeexp.Record`，调用链**必须**是 `Validate()`（读取层口径：存在性 + 值域，**不含**重复/折叠判据）→ `ValidateConstruction()`（记录构造：**规范因子 ID**）→ `CheckTriggerCrossReference()`（**仅插件路径记录**）→ `CheckEffectiveWeightsRecorded()`（非空且键 ⊆ `domain_scores`）→ `MarshalRecord()`（也会跑生效权重自检）追加写出；任何一步失败都**不写半条记录**并返回非零退出码。**四条 Task 1 实测出来的硬要求**：
@@ -649,14 +651,17 @@ done
 
 **门禁⓪ 重复因子条目的实测核对**（Task 2 评审留下的唯一未在**执行层**确证的结论）：出厂 `configs/*.ini` 的 `[edge_factors.custom]` 与内置因子同名 ⇒ 引擎应当为同一因子乘两次、链上出现**两条同 ID 条目**（`EF-SELINUX` 等）。这条此前只有静态溯源 + 记录层探针；**Task 4 必须在真实记录上把它落成事实**：统计每条记录的链里"规范化 ID 出现 ≥2 次的因子"个数与具体 ID，写进 `run.json` 与实验报告。若真实链里**没有**任何重复（说明该配置未产生重复条目），结论要如实写成"未观察到重复条目"，**不得**据静态溯源宣称"引擎会重复乘"。
 
-**门禁①** 工具能读全量记录、无 fail-fast（**候选名必须写模型名**：`-candidate` 的名字会被当模型名校验，`report.go` 只接受 `legacy|vector|graph|chain` —— 任务 3 实测 `-candidate m0=…` 会报 `未知模型 "m0"`）：
+**门禁①** 工具能读全量记录、无 fail-fast（**候选名必须写模型名**：`-candidate` 的名字会被当模型名校验，`report.go` 只接受 `legacy|vector|graph|chain` —— 任务 3 实测 `-candidate m0=…` 会报 `未知模型 "m0"`；**且 `-factors` 是必填项**：不给会直接退出 2）：
 ```bash
 ./build/edgecompare -records data/edgefactors/records-wsl-clab-14.jsonl \
   -candidate legacy=configs/edgeexp/m0-baseline.ini -candidate vector=configs/edgeexp/vector.ini \
   -candidate graph=configs/edgeexp/graph.ini -candidate chain=configs/edgeexp/chain.ini \
+  -factors EF-002FA=0.75,EF-SYNCOOKIE=0.75,EF-SELINUX=0.80,EF-APPARMOR=0.82,EF-NO-SIEM=0.90,EF-NO-IDS=0.88 \
   -weights attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10
 ```
 Expected: 读出全部记录、无 fail-fast。
+
+> **`EF-3FA` 的处理必须等用户裁定 ④，不得静默塞进 `-factors`**（任务 3 评审实测的两条硬事实）：①采集器会**合法**把 `EF-3FA` 写进链（出厂配置的 `[edge_factors.custom]` 重复条目不是 `CascadeOnly`），于是 `-factors` 的覆盖校验会以"未覆盖记录里用到的因子 EF-3FA"**退出 1**；②若为了让校验通过而塞一个 `EF-3FA=<值>`，该因子会进入 `p.Factors`，而 V/G/C 会给它走 **"全 1" fallback 向量** ⇒ **凭空产生引擎从未施加的惩罚**、决策层指标被改。故在裁定 ④ 之前：**只运行覆盖得住的数据集**（或把含 `EF-3FA` 的记录单独列出并**如实标注"该子集待裁定后重跑"**），**禁止**用塞值的方式让命令过。
 
 **门禁② round-trip 钉桩（`spc_score`/`threat_coeff` 取值来源的唯一保障）**：对**每一条**采集记录，用**记录自身的输入**（域分 + `spc_score` + `threat_coeff` + 链上 `effective_factor`）离线复算 `final_score`，必须与记录里的值相等。这条就是"E/T 取错则门禁会红"的那道闸门 —— 评审实测过：字段取错时所有其它门禁都是绿的。
 ```bash
@@ -722,6 +727,7 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
   - **可信度双衰减**（`c²`）若在实验中开启，必须在报告里标注"启用模型的惩罚强度显著强于历史路径"，并说明是否修正属独立决策；
   - **S5 级的读法**（Task 1 实测）：`EF-3FA` 的级联把 `EF-002FA` 压到 `0.82`，但该因子"仅由级联激活"⇒ `c_trigger = 0` ⇒ `EffectiveFactor(0.82, 0) = 1` ⇒ **V/G/C 下 `a = 0`（无惩罚），而 legacy 真的乘 0.82**。故 S5 的对照必须写成"**`c = 0` 的因子在可信度模型下不产生惩罚**"，**不得**写成"V/G/C 忽略了级联"——后者是错误结论（spec §10.2 已记）。
   - **C 与 V 不可区分时必须如实说**（Task 1 评审实测的时间结构问题）：若某场景的观测在时间上无先后（所有 `ts` 相同或先后不反映真实注入顺序），chain 的时间窗全部被跳过 ⇒ **C ≡ V**。此时报告必须写"**本数据集无法区分 C 与 V**"，**不得**因为 C 的某项指标略好就宣称 C 更优（那是浮点噪声或定序差异）。反向亦然：若 C 在**顺序注入**的场景上明显更差（时间窗把该有的耦合砍掉），那才是有信息量的结论。
+  - **`EF-3FA` 子集的处理见 Task 4 Step 6 的裁定 ④ 注记**：含 `EF-3FA` 的记录**不得**用塞 `-factors` 的方式强行纳入比较（会给 V/G/C 凭空加上 fallback 向量的惩罚）；在用户裁定 ④ 之前，该子集必须**单独列出并标注"待裁定后重跑"**。
   - **拟合优化的是分数的线性化代理，不是分数本身**（里程碑 A 最终修复报告遗留疑虑 2，已核代码）：`design()` 用的是**标量汇总**特征 `a_i = (1−eff_i)·Σ_d v_i[d]`（`fit.go` 的 `vectorMass`），而真实评分是**逐域** `L_d`/`P_d` 再乘各域分 —— 两者不同源。故拟合出的 `c_ij` 只是候选参数的**生成器**，报告**不得**声称"拟合更优 ⇒ 决策层更好"；唯一权威判据是用该参数跑**离线重算**后比决策层指标，且必须写明这层近似。
   - **`RenderConfigSection` 不含 `f_i`**（另一已知边界）："贴回配置段 + 同一 JSONL"**不是**完整复现包，必须再给 `[edge_factors]` 表（就是下面这条三件套）。
   - **共线性与罚项都会影响边系数**（Task 10 Fix round 1 实测）：22 个真实场景下特征列高度相关，`c_ij` 的点估计不能直接读作"耦合强度"；报告必须同时给出**点估计、自助法区间、以及"该边是否可辨识"的判断**（不可辨识要明说），并注明 `-l1`/`l2` 的取值对系数的影响方向不保证单调。
