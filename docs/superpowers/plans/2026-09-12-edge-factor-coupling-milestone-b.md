@@ -765,6 +765,35 @@ Expected: 全绿；**默认（不带目标参数）路径逐位不变**有显式
 
 ---
 
+### Task 4D: 实验基质搬到 A-1（LXD）—— C1 裁定后的执行面
+
+**为什么加这个任务**（用户裁定 2026-09-12 + 控制侧实测）：
+
+- 用户裁定：**"放到 A-1 远程服务器里面跑，那里面有我装好的 LXD，虽然配置是 2 核 CPU ＋ 4GB 内存但是环境是真实的，我需要用时间换工程质量"**；门禁语义一并裁定：**"因子集相等"断言的声明面改为「基线活跃集 ∪ 注入集」，基线集显式声明（或按宿主机实测）**。
+- 控制侧在 A-1 上建了一个 LXD 容器（Ubuntu 24.04）跑 `build/edgescen -emit-checks`，结论**推翻**了 WSL2 勘测的硬约束：容器内 `lsm: …apparmor`、`apparmor_enabled=Y`、`aa-status` 报 **117 profiles loaded** ⇒ **`OT-005` 通过**（"AppArmor 已加载策略"）、`RS-005` 也通过（syncookies=1）；其余四个（IDS/SIEM/2FA/3FA）可控（`suricata`/`snort`/`zeek`/`aide`/`tripwire` **均可 apt 装**，SIEM 写文件、2FA/3FA 是 PAM 子串）。⇒ **六个因子都可以在基线上处于"存在态"**，C1 的分数侧问题在 A-1 上直接解决。
+- 因此 C1 不再是"D2/D3 二选一"，而是**换基质**；代价是拓扑/目标执行/攻击 harness/脚本路径从 WSL2+Containerlab 搬到 A-1 的 LXD。
+
+**约束（实测）**：A-1 = Ubuntu 24.04.2、kernel 6.8、2 vCPU、3.5 GB 内存（available ≈2.0 GB）；容器根盘 = ZFS 池 **8.3 GiB**（余 7.8 GB）；`lxc 5.21.7`；`lxdbr0` = 10.217.208.1/24；外网可达；**无 docker / containerlab / Caldera**。⇒ **不搬 18 节点拓扑**（放不下，且方向②里 `nodes_affected ≡ 1`，拓扑规模与研究问题无关）。
+
+**Files:**
+- Modify: `cmd/edgescen/{nodecollect.go,main.go}`（节点驱动抽象：既有 docker 路径**逐位不变**，新增 LXD 驱动）
+- Create: `lunwen/clab-lab/scripts/edge_lab.sh`（**基质抽象**：`up`/`down`/`exec`/`push`/`ip`/`inspect`，由 `EDGEEXP_SUBSTRATE=clab|lxd` 选择）
+- Modify: `lunwen/clab-lab/scripts/{edge_reset,edge_attack,edge_collect,edge_matrix}.sh`（**只替换基质调用点**；门禁、注入、记录构造逻辑一行不动）
+- Create: `lunwen/clab-lab/a1/`（A-1 侧清单：容器创建、控制安装（硬化基线）、Caldera 安装与 agent 部署、路径约定）
+- Modify: `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（§5.3 环境分工 + §5.4 手册：A-1/LXD 为实验主场，WSL2 退为开发与离线）
+
+- [ ] **Step 1 基质抽象**（**行为不变**是最硬的门禁）：把"建/毁拓扑、在目标内执行、把文件送进目标、取目标 IP"四件事收进 `edge_lab.sh`；`clab` 分支必须先证明与今天**逐位等价**（同一命令、同一顺序、同一错误串），既有干跑与离线夹具全绿。
+- [ ] **Step 2 LXD 节点驱动**：`edgescen -target` 接受 `docker:<容器>`（缺省，行为不变）与 `lxd:<实例>`；失败形态与 docker 路径**同粒度响亮**（实例不存在 / `lxc` 不可用 / 信封缺失 / 检查集为空 / nonce 不匹配），并复用 Task 4C 的 nonce 绑定。
+- [ ] **Step 3 硬化基线容器 + 基线记录**：建 `asc-tgt-1`（Ubuntu 24.04），装 NIDS（`suricata`，若服务起不来就如实记录为代理）、SIEM 告警文件、PAM 2FA/3FA 子串；`OT-005`/`RS-005` 天然满足。**门禁**：采集一条基线记录并断言**六个因子全部不激活**（链为空或只含基线声明项），且域分/总分与"全在缺失态"的今天**明显不同**（这正是 C1 要的方差来源）。
+- [ ] **Step 4 攻击 harness**：A-1 上装 Caldera（与论文同源，`-P sandcat,stockpile,atomic`），把 sandcat agent 经 `lxc exec` 部署进目标容器；`edge_attack.sh` 的 `clab`/docker 假设换成基质调用。
+- [ ] **Step 5 D2 试点（**决策点**）**：跑 2–3 个场景（含一个"卸掉某控制"的场景），回答**两个只能实测的问题**：① `compromised` 是否真的出现 `false`（标签摆脱单类别）；② 分数是否出现第三个数据点。**试点结论必须如实写进 §5.4**，并据此决定全量扫（Task 5/6）还是把决策层主张降级。
+- [ ] **Step 6 门禁与提交**：`go build ./...`、`go vet ./internal/...`、`go test -tags "expr,engine,checks" ./cmd/edgescen/`、`-tags edgeexp ./cmd/edgecompare/`、`internal/edgeexp`、`gofmt`、`bash -n` + `shellcheck` 全部脚本；**默认（docker/clab）路径逐位不变**必须有显式证据。
+
+**不做**：不搬 18 节点拓扑；不改评分与 `internal/edgefactor`/内仓；不为了让场景通过而弱化门禁（"注入真的生效"这条牙齿必须保留，声明面按用户裁定的"基线活跃集 ∪ 注入集"扩展）。
+**影响**：Task 5 的"A-1 重复"此刻变成"**同一基质上的 run=1,2,3 重复**"（A-1 既是实验主场也是重复基质）；Task 6 的数据来源随之改为 A-1 采集的记录。
+
+---
+
 ### Task 5: A-1 重复性与方差（每场景 3 次）
 
 **Files:**
