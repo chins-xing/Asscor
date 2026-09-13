@@ -194,15 +194,48 @@ func (c ChainObs) EffectiveFactorSet() bool { return c.effectiveFactorSet }
 // `Compromised` 保持 `bool`（下游直接消费该字段），但**必须显式出现**：用 `compromisedSet`
 // 标记区分"写了 false"与"没写"。两者若不加区分，缺失会被读成 false，
 // 该场景就被静默标成"未攻陷"，直接扭曲漏判率（分子分母同时被动）。
+//
+// **`Basis` 是用户 2026-09-12 裁定的 L2 语义所需的标签依据（Task 4D Step 3B，可选字段）**：
+//
+//	`targeted_ttp`   —— `compromised` 说的是"**该场景的目标 TTP 是否成功**"
+//	                    （例如"AppArmor 自定义限制策略 + 撞策略的那条 ability"）；
+//	`recon_playbook` —— 跑的是**侦察剧本**（固定剧本 `Discovery`），它成功只说明"侦察拦不住"，
+//	                    **不是**"主机被攻陷"。
+//
+// 为什么这个字段必须存在（A-1 实测）：在六个控制全在的硬化容器上跑固定剧本 `Discovery` 仍有
+// **13/14** 条 link 成功 ⇒ 如果 `compromised` 由侦察剧本的成功推导，那么"硬化"这个自变量
+// **不产生任何标签方差**（每个场景都是 compromised=true），决策层指标（漏判率/误阻断率）
+// 就退化成一个与实验条件无关的常数。故 L2 裁定把 `compromised` 的语义钉在"目标 TTP 是否成功"，
+// 并要求**每一条记录自己说明它用的是哪一种依据** —— 否则读数据的人无法区分"侦察成功"与
+// "目标 TTP 成功"，而两者在 `ground_truth` 里长得一模一样。
+//
+// `Validate` **不要求**它（与 `meta.observation_target` 同款：既有夹具与里程碑 B 之前已落盘的
+// 记录都没有这个字段，硬性要求会把它们全部判死）；但**写了就必须是上面两个值之一**
+// （值域校验见 `Validate`）—— 空值不等于"任意"：报告里凡引用 `compromised` 的数字，
+// 都必须能追到那条记录的 `basis`。
 type GroundTruth struct {
 	Compromised       bool    `json:"compromised"`
 	TimeToCompromiseS float64 `json:"time_to_compromise_s"`
 	TTPsAchieved      int     `json:"ttps_achieved"`
 	NodesAffected     int     `json:"nodes_affected"`
 	BlockEffective    bool    `json:"block_effective"`
+	// Basis 是标签依据（`targeted_ttp` / `recon_playbook`），空 = 未声明（既不判死、也不假装知道）。
+	Basis string `json:"basis,omitempty"`
 
 	compromisedSet bool
 }
+
+// 标签依据的两个合法取值（L2 裁定，spec §5.1 的 `ground_truth.basis` 行）。
+//
+// 它们是**常量而不是自由字符串**：报告与论文里"决策层指标只吃哪一类"这句话要靠一个唯一的拼写
+// 来支撑，两处各写一份字面量迟早会漂移成 `targeted-ttp` / `targeted_ttp` 两种形态 ——
+// 那种漂移在数据上表现为"一半记录没有依据"，而看起来只是命名风格不同。
+const (
+	// BasisTargetedTTP = 该场景的**目标 TTP** 成败（决策层指标只吃这一类）。
+	BasisTargetedTTP = "targeted_ttp"
+	// BasisReconPlaybook = 固定侦察剧本（`Discovery`）的结果，任何姿态下都成功，只作背景测量。
+	BasisReconPlaybook = "recon_playbook"
+)
 
 // UnmarshalJSON 记录 `compromised` 是否显式出现（理由见类型注释与 Validate）。
 func (g *GroundTruth) UnmarshalJSON(data []byte) error {
@@ -212,6 +245,7 @@ func (g *GroundTruth) UnmarshalJSON(data []byte) error {
 		TTPsAchieved      int     `json:"ttps_achieved"`
 		NodesAffected     int     `json:"nodes_affected"`
 		BlockEffective    bool    `json:"block_effective"`
+		Basis             string  `json:"basis"`
 	}{}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
@@ -223,6 +257,7 @@ func (g *GroundTruth) UnmarshalJSON(data []byte) error {
 	g.TTPsAchieved = aux.TTPsAchieved
 	g.NodesAffected = aux.NodesAffected
 	g.BlockEffective = aux.BlockEffective
+	g.Basis = aux.Basis
 	return nil
 }
 
@@ -394,6 +429,19 @@ func LoadFileAs(tool, path string) ([]Record, error) {
 //     **任何消费者都不得用 `trigger_check` 反推 `checks[]`**。
 //   - `observed.effective_weights` 是否存在（既有夹具里没有它）。
 func (r Record) Validate() error {
+	// `ground_truth.basis` **不要求**（与 `meta.observation_target` 同款：既有夹具与里程碑 B 之前
+	// 已落盘的记录都没有它）。但**写了必须是两个合法值之一** —— 值域校验不是"要求"，
+	// 而是"不许写错"：一个拼错的 basis 会让报告里的标签依据指向一个不存在的类别，
+	// 而它与合法值在数据上看起来一样（都是非空字符串）。
+	//
+	// **它刻意排在本函数的第一个判据**（Fix round 1 / Step 3B 的实测教训）：这一层的其它判据
+	// 都会在字段缺失时**先**报错（例如空记录的 `missing scenario_id`），于是"值写错了"这件事被
+	// 那些更早的错误盖住 —— 操作者只能反推。值域错是**独立**的一类错，它不该排队。
+	if b := strings.TrimSpace(r.GroundTruth.Basis); b != "" && b != BasisTargetedTTP && b != BasisReconPlaybook {
+		return fmt.Errorf("ground_truth.basis = %q 不是已知取值（只认 %q / %q；空 = 未声明，允许）—— "+
+			"写错会让『这条标签从哪来』指向一个不存在的类别，而决策层指标只吃 %s 那一类",
+			r.GroundTruth.Basis, BasisTargetedTTP, BasisReconPlaybook, BasisTargetedTTP)
+	}
 	if r.ScenarioID == "" {
 		return fmt.Errorf("missing scenario_id")
 	}

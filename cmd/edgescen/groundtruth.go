@@ -32,6 +32,14 @@ type harnessReport struct {
 	NodesAffected     *int     `json:"nodes_affected"`
 	BlockEffective    *bool    `json:"block_effective"`
 
+	// Basis 是标签依据（`targeted_ttp` / `recon_playbook`，Task 4D Step 3B / 用户 L2 裁定）。
+	//
+	// **指针解码：缺失 ⇒ 记录里也缺席**（不写一个猜出来的默认值）。为什么不做"缺省填
+	// recon_playbook"：那会把"这份产物没声明依据"伪装成"它是侦察剧本"，而记录一旦落盘就
+	// 无法再区分 —— 依据是**标签的语义**，不是可以补的默认值。写错（非两个合法值）在
+	// `edgeexp.Validate` 处被拒（值域校验不是"要求"，是"不许写错"）。
+	Basis *string `json:"basis"`
+
 	// PlaybookHash / TopologyHash 是溯源（拓扑与剧本入档，spec §5.3）。
 	// `PlaybookHash` 进 `meta.playbook_hash`；`TopologyHash` **不进记录**（spec §5.1 的 schema
 	// 没有这个槽位，它归 Task 4 的 run.json）。这里声明它只为让"harness 产物的格式"在这份结构体
@@ -69,6 +77,9 @@ type groundTruth struct {
 	TTPsAchieved      int     `json:"ttps_achieved"`
 	NodesAffected     int     `json:"nodes_affected"`
 	BlockEffective    bool    `json:"block_effective"`
+
+	// Basis 是标签依据（空 = harness 没说 ⇒ 记录里也缺席，见 harnessReport.Basis）。
+	Basis string `json:"basis,omitempty"`
 
 	PlaybookHash string               `json:"playbook_hash"`
 	Injections   map[string]time.Time `json:"injections"`
@@ -129,12 +140,18 @@ func loadGroundTruth(path, scenario string) (groundTruth, error) {
 		injections[check] = at.UTC()
 	}
 
+	basis := ""
+	if rep.Basis != nil {
+		basis = strings.TrimSpace(*rep.Basis)
+	}
+
 	return groundTruth{
 		Compromised:       *rep.Compromised,
 		TimeToCompromiseS: *rep.TimeToCompromiseS,
 		TTPsAchieved:      *rep.TTPsAchieved,
 		NodesAffected:     *rep.NodesAffected,
 		BlockEffective:    *rep.BlockEffective,
+		Basis:             basis,
 		PlaybookHash:      rep.PlaybookHash,
 		Injections:        injections,
 	}, nil
@@ -153,12 +170,14 @@ func (g groundTruth) recordGroundTruth() (edgeexp.GroundTruth, error) {
 		TTPsAchieved      int     `json:"ttps_achieved"`
 		NodesAffected     int     `json:"nodes_affected"`
 		BlockEffective    bool    `json:"block_effective"`
+		Basis             string  `json:"basis,omitempty"`
 	}{
 		Compromised:       g.Compromised,
 		TimeToCompromiseS: g.TimeToCompromiseS,
 		TTPsAchieved:      g.TTPsAchieved,
 		NodesAffected:     g.NodesAffected,
 		BlockEffective:    g.BlockEffective,
+		Basis:             strings.TrimSpace(g.Basis),
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {

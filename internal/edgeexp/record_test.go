@@ -86,6 +86,76 @@ func TestValidateAcceptsValidRecord(t *testing.T) {
 	}
 }
 
+// TestGroundTruthBasisIsOptionalButMustBeKnown 钉住 Task 4D Step 3B 的 additive 契约：
+// `ground_truth.basis` **可选**（缺失必须放行 —— 既有夹具与里程碑 B 之前落盘的记录都没有它），
+// 但**写了必须是两个合法值之一**（值域校验不是"要求"，是"不许写错"）。
+//
+// 为什么值域校验值得单列一条：一个拼错的 basis（`targeted-ttp` / `TargetedTTP`）与合法值在数据上
+// 完全同形（都是非空字符串），而它会让"这条标签从哪来"指向一个不存在的类别 —— 决策层指标
+// 只吃 `targeted_ttp` 那一类，拼错就等于把该记录**静默排除出决策层样本**，或（更坏）让它混进
+// 侦察剧本那一类。空值与拼错值必须被区别对待：前者是"没声明"，后者是"写错了"。
+func TestGroundTruthBasisIsOptionalButMustBeKnown(t *testing.T) {
+	// ① 缺失（零值）⇒ 放行。
+	r := validRecord()
+	r.GroundTruth.Basis = ""
+	if err := r.Validate(); err != nil {
+		t.Fatalf("basis 缺失必须放行（可选字段）: %v", err)
+	}
+	// ② 两个合法值 ⇒ 放行。
+	for _, b := range []string{BasisTargetedTTP, BasisReconPlaybook} {
+		r = validRecord()
+		r.GroundTruth.Basis = b
+		if err := r.Validate(); err != nil {
+			t.Errorf("合法 basis %q 被拒: %v", b, err)
+		}
+	}
+	// ③ 拼错/未知 ⇒ 拒绝，且错误必须指出合法取值（否则读者只知道"错了"、不知道改成什么）。
+	for _, b := range []string{"targeted-ttp", "TargetedTTP", "recon"} {
+		r = validRecord()
+		r.GroundTruth.Basis = b
+		mustReject(t, r, "basis", BasisTargetedTTP, BasisReconPlaybook)
+	}
+	// ③b 末尾空白**不算写错**（TrimSpace 后是合法值）—— 与"值域校验"分开表达，
+	// 否则夹具自己会把 `targeted_ttp `（一个真实存在的复制粘贴产物）误判成未知值。
+	r = validRecord()
+	r.GroundTruth.Basis = BasisTargetedTTP + " "
+	if err := r.Validate(); err != nil {
+		t.Errorf("末尾空白应被 trim 而不是判为未知取值: %v", err)
+	}
+}
+
+// TestGroundTruthBasisRoundTripsAndOmitsWhenEmpty：`basis` 的**落盘形状**必须与契约一致：
+// 写了就写出来、没写就缺席（`omitempty`）—— "缺席"与"空串"在报告里是同一个意思，
+// 但字节不同；既有记录不得因为新增字段而改变字节。
+func TestGroundTruthBasisRoundTripsAndOmitsWhenEmpty(t *testing.T) {
+	// 没写 ⇒ JSON 里不得出现 basis 键（既有记录的字节不变）。
+	gt := validRecord().GroundTruth
+	raw, err := json.Marshal(gt)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(raw), "basis") {
+		t.Errorf("未声明的 basis 不得出现在 JSON 里（omitempty）: %s", raw)
+	}
+	// 写了 ⇒ 能被回读（存在性标记仍由 UnmarshalJSON 设置，别被新字段带坏）。
+	gt.Basis = BasisTargetedTTP
+	raw, err = json.Marshal(gt)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var back GroundTruth
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if back.Basis != BasisTargetedTTP {
+		t.Errorf("basis 回读 = %q, want %q", back.Basis, BasisTargetedTTP)
+	}
+	// 回归钉子：新字段不得影响 `compromised` 的存在性标记（它决定"缺失被拒"那条判据）。
+	if !back.CompromisedSet() {
+		t.Error("带 basis 的记录回读后 compromisedSet 丢了 —— 新字段不得影响既有存在性标记")
+	}
+}
+
 // TestValidateRejectsMissingScenarioID：缺 scenario_id 的记录无法定位，必须拒绝。
 func TestValidateRejectsMissingScenarioID(t *testing.T) {
 	r := validRecord()

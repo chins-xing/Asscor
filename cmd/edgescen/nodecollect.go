@@ -302,17 +302,28 @@ func observationTargetNode(nt nodeTarget, hostname string) string {
 	return fmt.Sprintf("node:%s (substrate=%s, hostname=%s)", nt.Node, nt.Substrate, host)
 }
 
+// osExecutable 是本进程可执行文件路径的来源。
+//
+// 它是**包级变量**（同 `newNodeNonce` 的接缝手法）：`os.Executable()` 失败在实际运行里几乎不可达，
+// 而"取不到路径时那句话必须与 Task 4C 逐字同形"这条判据只能靠注入被真正执行到 ——
+// 上一轮那条期望值就是因为**没有断言**才允许了"抄错方向"（复审 Minor-新-1）。生产代码从不改写它。
+var osExecutable = os.Executable
+
 // fetchNodeChecks 把**本进程自己的可执行文件**送进目标节点执行，取回该节点的检查结果。
 //
 // 为什么送二进制而不是"在节点里另装一个工具"：同一份二进制 ⇒ 会话里的评分链、检查登记表、
 // 甚至检查实现都与宿主路径是同一份代码，唯一变量是**运行位置**。任何"节点里跑另一个版本"
 // 的形态都会让两份数据不可比，而差异看起来只是"节点更严格"。
 func fetchNodeChecks(nt nodeTarget) (nodeCheckEnvelope, error) {
-	bin, err := os.Executable()
+	bin, err := osExecutable()
 	if err != nil {
-		// 措辞按基质分派：docker 侧保持 Task 4C 的字面量（`docker 内采集：…`），lxd 侧说 `lxc`
-		// —— 见 runNodeCLI 里关于"为什么错误串要逐字分辨"的说明。
-		return nodeCheckEnvelope{}, fmt.Errorf("%s 内采集：取本进程可执行文件路径失败: %w", nt.binary(), err)
+		// **逐字恢复 97581d8 的字面量**（复审 Minor-新-1）：上一轮我按基质分派成了
+		// `%s 内采集：…`（⇒ 实际产出 `docker 内采集：…`），而 Task 4C 的原文是 `节点内采集：…`
+		// —— 那条"唯一没恢复的错误串"当时还被注释与文档声称"已逐字恢复"（声称比事实更强的典型）。
+		// 现在回到原文：`os.Executable()` 失败与基质**种类**无关（取不到的是父进程自己的可执行文件
+		// 路径），故两种基质下这句话本来就该是同一句。断言见
+		// `TestDockerErrorStringsMatchTask4CBytes/取本进程可执行文件路径失败`。
+		return nodeCheckEnvelope{}, fmt.Errorf("节点内采集：取本进程可执行文件路径失败: %w", err)
 	}
 	// 一次性 nonce（Fix round 1 / I-2）：本次运行生成、只经环境变量交给**本次**节点执行命令，
 	// 故它同时把"不是本次运行的信封"排除掉（残留二进制、另一次运行、别人打的 JSON 行）。
@@ -392,9 +403,8 @@ func runNodeProcess(nt nodeTarget, containerPath, emitFlag, nonce string) ([]byt
 }
 
 // runDocker 执行一次 docker 子命令（stdout/stderr 分开收集）。
-// runDocker 执行一次 docker 子命令（stdout/stderr 分开收集）。
 //
-// **错误串与 Task 4C（提交 97581d8）**逐字相同** —— 见 runNodeCLI 的说明：那是本工具唯一
+// **错误串与 Task 4C（提交 97581d8）逐字相同** —— 见 runNodeCLI 的说明：那是本工具唯一
 // 面向 docker 的取数入口，操作者日志与既有断言都按它的字面量写。
 func runDocker(args ...string) ([]byte, error) {
 	return runNodeCLI("docker", args...)

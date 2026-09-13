@@ -478,15 +478,20 @@ func TestLXDTargetRefusesToWriteWhenEnvelopeIsForged(t *testing.T) {
 //	"节点内采集：docker cp %s 失败: %s"        （args[2] = 本地文件）
 //	"节点内采集：docker exec %s %s 失败: %s"   （args[1] = "-e"、args[2] = "EDGESCEN_NODE_NONCE=<nonce>"）
 //	"节点内采集：docker %s 失败: %s"           （兜底，整条 argv）
-//	"docker 内采集：取本进程可执行文件路径失败: %w"
+//	"节点内采集：取本进程可执行文件路径失败: %w"（`os.Executable()` 失败；**两种基质共用同一句**）
+//
+// 最后那条是复审 Minor-新-1 抓到的：上一轮它被写成 `docker 内采集：…`（从**当前实现**反推），
+// 而且**没有任何断言** —— 注释却声称"逐字抄自 97581d8"。现在它回到 97581d8 的原文，
+// 并有第四条子用例钉住（`os.Executable()` 失败在实际运行里几乎不可达，所以它只能靠这类
+// 主动断言被保护；这也正是"没断言的期望值"为什么危险）。
 //
 // 顺带证明 lxd 侧**不受**这条约束（它没有"不许变"的历史包袱，说得更准才有用）：同一个假 CLI
 // 以 lxc 形态失败时，错误串按 `lxc file push <本地> → <实例><目标>` 报。
 func TestDockerErrorStringsMatchTask4CBytes(t *testing.T) {
 	registerFixtureChecks()
-	useFixtureNonce(t)
 
 	t.Run("docker cp 失败（97581d8 的字面量）", func(t *testing.T) {
+		useFixtureNonce(t)
 		writeDockerShim(t, fakeDocker{exitCode: 1, dockerErr: "Error response from daemon: No such container: nope"})
 		_, _, err := collectChecksForTarget("docker:nope")
 		if err == nil {
@@ -499,6 +504,7 @@ func TestDockerErrorStringsMatchTask4CBytes(t *testing.T) {
 	})
 
 	t.Run("docker exec 失败（97581d8 的字面量：args[1] 与 args[2] 两个占位）", func(t *testing.T) {
+		useFixtureNonce(t)
 		dir := t.TempDir()
 		// cp 必须成功、exec 必须失败：用一个按子命令分派的假 docker。
 		script := "#!/bin/sh\n" +
@@ -526,6 +532,7 @@ func TestDockerErrorStringsMatchTask4CBytes(t *testing.T) {
 	})
 
 	t.Run("lxd 侧不受 docker 字面量约束（按 file push 的形状报）", func(t *testing.T) {
+		useFixtureNonce(t)
 		writeLXCShim(t, fakeDocker{exitCode: 1, dockerErr: "Error: Instance not found"})
 		_, _, err := collectChecksForTarget("lxd:nope")
 		if err == nil {
@@ -533,6 +540,26 @@ func TestDockerErrorStringsMatchTask4CBytes(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "lxc file push ") || !strings.Contains(err.Error(), " → ") {
 			t.Errorf("lxd 的错误串应报出 `file push <本地> → <实例><目标>`；实际: %v", err)
+		}
+	})
+
+	t.Run("取本进程可执行文件路径失败（97581d8 的字面量；两种基质共用同一句）", func(t *testing.T) {
+		// 这一条靠**注入**测：真实 `os.Executable()` 几乎不可能失败，故它只能被主动断言保护
+		// —— 而这正是复审 Minor-新-1 指出的缺口（那条期望值上一轮既没断言、又抄错了方向）。
+		prev := osExecutable
+		osExecutable = func() (string, error) { return "", errFixtureExecutable }
+		t.Cleanup(func() { osExecutable = prev })
+
+		for _, target := range []string{"docker:nope", "lxd:nope"} {
+			_, _, err := collectChecksForTarget(target)
+			if err == nil {
+				t.Fatalf("target=%s：取不到可执行文件路径时必须报错", target)
+			}
+			want := "节点内采集：取本进程可执行文件路径失败: "
+			if !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("target=%s：错误串必须与 97581d8 逐字同形（`%s…`，**不是** `docker 内采集：…`）；实际: %v",
+					target, want, err)
+			}
 		}
 	})
 }

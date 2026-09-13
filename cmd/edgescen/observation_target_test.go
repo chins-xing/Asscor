@@ -13,6 +13,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -185,6 +186,13 @@ func mustEnvelope(t *testing.T, hostname string, checks []model.CheckResult) str
 
 // fixtureNonce 是测试夹具用的固定 nonce（长度与真实值无关，只要求非空且相等）。
 const fixtureNonce = "fixture-nonce"
+
+// errFixtureExecutable 是"取不到本进程可执行文件路径"这条**注入路径**用的错误。
+//
+// 为什么要注入（Step 3B / 复审 Minor-新-1）：`os.Executable()` 失败在实际运行里几乎不可达，
+// 于是"那一刻的错误串长什么样"这件事**只能**靠主动注入被测到 —— 上一轮那条期望值恰好就是
+// 因为没有任何断言，才允许了"注释声称逐字抄自 97581d8、实际是从当前实现反推"的偏差。
+var errFixtureExecutable = errors.New("fixture: executable path unavailable")
 
 // mustEnvelopeWithNonce 同上，但 nonce 显式给出（用于"nonce 不匹配 / 缺失"这两条用例）。
 func mustEnvelopeWithNonce(t *testing.T, hostname, nonce string, checks []model.CheckResult) string {
