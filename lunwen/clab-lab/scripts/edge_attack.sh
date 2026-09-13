@@ -521,8 +521,18 @@ if [ "$lab_substrate" = "clab" ]; then
   SUBSTRATE_IDENTITY='{}'
 else
   TOPO_HASH=""
+  # `SUBSTRATE_IDENTITY` 是**一个字面 JSON 串**（`\"` 正是要产出的引号：它经环境变量交给 python 的
+  # `json.loads` 解析，产物里的 `substrate_identity` 是合法 JSON —— 实测过）。shellcheck 的
+  # SC2089/SC2090（"引号/反斜杠会被按字面处理"）在这里是**误报**：按字面处理正是本行的意图。
+  # 显式关掉并写明理由（Task 4D Fix round 2 / Minor-5）：否则"抽象前后同为 2 条告警"这条既有
+  # 不变量会被这 2 条打破，读者无法判断那是不是新引入的问题。
+  # shellcheck disable=SC2089,SC2090
   SUBSTRATE_IDENTITY="{\"substrate\":\"lxd\",\"instance\":\"${EDGEEXP_TARGET:-${EDGEEXP_TARGET_HOST:-}}\",\"policy_on\":\"${EDGEEXP_POLICY_ON:-0}\"}"
 fi
+# 同一件事的**第二半**：SC2090 报在下面那行 `export` 的变量名上（不是上面的赋值行）——
+# 同一个理由（按字面处理正是本行的意图），故在同一处再关一次；两处都关掉之后，
+# "抽象前后同为 SC2034/SC2155 两条"这条既有不变量才恢复。
+# shellcheck disable=SC2090
 export SCENARIO OUT TOPOLOGY TOPO_HASH CONFIG CALDERA_URL CALDERA_KEY SUBSTRATE_IDENTITY
 export PLAYBOOK_ID PLAYBOOK_NAME ATTACK_TIMEOUT_S POLL_S PHASES_JSON PROBES_JSON
 export REAL_MISSING REAL_MISSING_AT PHASE_GAP_S EXPECTED_PHASES EXPECTED_CHAIN_FACTORS
@@ -698,7 +708,11 @@ if BASIS == 'targeted_ttp':
         if not group_alive:
             fail(f'basis=targeted_ttp 且声明了投送组 {ATTACK_GROUP}，但该组里没有一只活 agent '
                  f'（判据 `(host, 容器内活 pid)` 且 last_seen ≤ {AGENT_FRESH_S}s）—— '
-                 f'operation 会打空，零 link 会被读成"被拦住"')
+                 f'operation 会打空，零 link 会被读成"被拦住"。'
+                 f'先跑 edge_reset.sh（它经 edge_target_prepare.sh 拉起目标 agent）；'
+                 f'并注意**组名只有一处来源**：prepare 拉起 agent 时用的也是 EDGEEXP_ATTACK_GROUP '
+                 f'（默认 t4d-ttp），本脚本收到的则是 {ATTACK_GROUP!r} —— 两侧必须是同一个值，'
+                 f'否则 agent 在别的组里活着、而 operation 指向本组')
         off_host = [(a.get('paw'), a.get('host')) for a in group_alive if a.get('host') != ATTACK_HOST]
         if off_host:
             fail(f'basis=targeted_ttp：投送组 {ATTACK_GROUP} 里还有**非目标主机** {ATTACK_HOST} 的活 agent {off_host} —— '
@@ -709,7 +723,8 @@ if BASIS == 'targeted_ttp':
             fail('basis=targeted_ttp 但未声明 EDGEEXP_ATTACK_GROUP：operation 的 group=\'\'（全体 agent），'
                  f'而别的机器上还有 trusted+心跳新鲜 的 agent {[(a.get("paw"), a.get("host")) for a in others]} —— '
                  '投送范围不可证明只到目标机，目标 TTP 的 link 可能来自别的机器。'
-                 '请用 `--group` 拉起目标 agent 的 sandcat 并声明 EDGEEXP_ATTACK_GROUP')
+                 '处置：给目标 agent 单独分组（`edge_reset.sh` → `edge_target_prepare.sh` 用 '
+                 '`EDGEEXP_ATTACK_GROUP=<组名>` 拉起），并在本脚本声明**同一个** EDGEEXP_ATTACK_GROUP')
 
 attack_started_at = now()
 start_epoch = time.time()

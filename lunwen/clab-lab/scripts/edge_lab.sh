@@ -29,6 +29,7 @@
 #   lab_node_pids <node> <comm>     取目标内**当前活着**的进程 PID（每行一个）
 #   lab_instance_exists <node>      目标存在吗（只管存在性，不管在不在跑）
 #   lab_node_running <node>         实例在跑吗（true/false；不存在则非零）
+#   lab_wait_node_exec <node> <秒>  等"这个节点真的能执行命令"（rc=0 就绪；超时 rc=1）
 #   lab_inspect <node>              取目标的基质视图（存在性/状态的权威判据）
 #   lab_list                        列出目标（每行一个名字）
 #   lab_node_counts                 回显 "total up down"（失败回显 "-1 -1 -1"）
@@ -41,6 +42,7 @@
 #   EDGEEXP_LAB_TARGET_BIN     目标级 CLI 的可执行文件（离线夹具用；clab 下默认 = DOCKER_BIN）
 #   EDGEEXP_DOCKER_BIN         **抽象前就有的**接缝：目标级的 `docker`（`edge_probe.sh` 用它）
 #   EDGEEXP_LXC_BIN            lxd 基质的 `lxc`
+#   EDGEEXP_LAB_WAIT_STEP       `lab_wait_node_exec` 的轮询间隔（秒，默认 3；**只给离线夹具缩短用**）
 #
 # **clab 分支逐位等价**是最硬的门禁：函数体里每一条命令、参数顺序、重定向目标、日志文件名都
 # 与抽象**之前**的调用点逐字相同（日志仍叫 `/tmp/edgeexp-clab-*.log` —— 名字里的 clab 只是历史
@@ -415,6 +417,29 @@ lab_node_pids() {
       | awk -v p="$pattern" '$2 ~ p {print $1}' | sort -n
     ;;
   esac
+}
+# lab_wait_node_exec <node> <秒> —— 等"这个节点真的能执行命令"（rc=0 = 就绪；rc=1 = 超时）。
+#
+# **为什么把"等就绪"收进基质层**（Task 4D Fix round 2 / Minor-6 的钉子）：`lab_node_running` 的取值
+# 打在 **stdout**（`true`/`false`），rc 只表达"问得到/问不到"。调用方一旦写成
+# `until lab_node_running "$node" >/dev/null 2>&1; do …` 就把**值**丢掉了 —— 而 **STOPPED 的实例
+# 同样能应答**（`lxc info` 照常返回），于是那个循环 **0 秒就认为"已就绪"**。
+# 实测（Step 4-B2）：`lxc restart` 刚发起时容器还是 RUNNING ⇒ 检查通过，随后的 `exec` 正好落在
+# 停/起之间（`Error: Instance is not running`），而调用方是 `set -uo pipefail`（**没有 -e**）⇒
+# 那行错被咽下去，整轮以"agent 180s 没回连"收场（真正的错因埋在中间一行里）。
+#
+# 就绪的唯一判据是"节点内 `true` 的 rc=0"（真正的能力），不是"某个状态的字符串" ——
+# 这也顺带盖住了"状态已 RUNNING 但 exec 仍短暂失败"的窗口。
+lab_wait_node_exec() {
+  local node="$1" limit="${2:-120}" step="${EDGEEXP_LAB_WAIT_STEP:-3}" waited=0
+  while ! lab_target_exec "$node" true >/dev/null 2>&1; do
+    if [ "$waited" -ge "$limit" ]; then
+      return 1
+    fi
+    sleep "$step"
+    waited=$((waited + step))
+  done
+  return 0
 }
 #
 # 两种基质的取值手段不同、形状也不同（clab: `docker inspect -f {{.State.Running}}`；
