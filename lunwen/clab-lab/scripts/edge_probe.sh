@@ -179,35 +179,33 @@ for pam in /etc/pam.d/sshd /etc/pam.d/common-auth /etc/pam.d/system-auth; do
 done
 if [ "$present" -eq 1 ]; then echo DEFENSE_PRESENT; else echo DEFENSE_ABSENT; fi' ;;
     EF-3FA)
-      # EF-002（checks.go 的 ef002）—— **按类计数**，三类各计一次，`factorCount >= 3` 才通过：
+      # EF-002（`checks.go` 的 `ef002`）—— **按文件累加**，`factorCount >= 3` 才通过：
+      #   对三个 PAM 文件各走一遍，每类在该文件里至多 +1（同类命中多个子串不重复计分）：
       #   ① pam_google_authenticator | pam_oath   ② pam_u2f | pam_pkcs11
       #   ③ pam_fprintd | pam_biometric
+      #   文件读不到（不存在/不可读）⇒ `continue`（+0），与引擎的 `os.ReadFile` 失败分支一致。
+      #
       # Fix round 1 / I-4：旧探针在这里复用 EF-001 的判据（"出现任一 2FA 子串即在位"），
-      # 完全没有第三类 —— 于是一台只装了 pam_u2f 的节点上，引擎 EF-002 判**失败**、
-      # 探针却报"防护在位"，S5-cascade-3fa 的 condition_probes 与 checks[] 方向相反。
+      # 完全没有第三类 —— 一台只装了 `pam_u2f` 的节点上引擎判**失败**、探针却报"在位"。
       #
-      # 计数口径：**按类取并集**（同一类在多个 PAM 文件里命中只算一次）。
-      #
-      # 与引擎的分叉点（Fix round 2 复审构造出的反例）：引擎**按文件累计** ——
-      # `sshd` 里的 `pam_google_authenticator` 与 `common-auth` 里的 `pam_oath` 是同一类 ①
-      # 命中两个文件 ⇒ 引擎记 2 分，再叠一类 ② 就凑够 3 ⇒ **引擎判通过**；而本探针的并集只有
-      # 2 ⇒ **判缺失**。方向是**单向保守**：并集 ≥ 3 必然蕴含"某文件族凑够 3 类"⇒ 引擎必通过；
-      # 反过来不成立。于是"探针说在位"永远可信、"探针说缺失"可能比引擎更严 —— 对 R 组的用途
-      # （要求"真的缺失"）这是安全的一侧（不会凭空声称防护存在）。
-      # **真机对照未做**：引擎侧那条反例是读 `checks.go` + 复算得出的，没有在节点里构造过。
+      # 计数口径改成与引擎**同构的按文件累加**（Fix round 2 残余 I-4）：
+      # 此前的"三类**并集**"（同一类跨两个文件只算一类）会造出**单向保守的假缺失** ——
+      # `pam_google_authenticator` 同时在 `/etc/pam.d/sshd` 与 `/etc/pam.d/common-auth`（同类 ①
+      # 命中两个文件）再叠一类 ② ⇒ 引擎 `factorCount = 3` **通过**，而并集只看到 2 类 ⇒ 探针报
+      # "缺失"，`S5-cascade-3fa` 的节点侧证据与 `checks[]` 又一次**反向**。
+      # 现在两侧同构 ⇒ 同一份 PAM 布局必然得到**同一个结论**（不再有"更严/更宽"的方向差）。
       #
       # 逐子串用 `grep -c` 而不是 `grep -q`：`-q` 命中即退出会让上游命令吃到 SIGPIPE
       # （实测：文件写入端被杀 ⇒ 哨兵没打出来 ⇒ 整轮被判"没跑到底"）。
       body='
-hit_otp=0; hit_u2f=0; hit_bio=0
+factor_count=0
 for pam in /etc/pam.d/sshd /etc/pam.d/common-auth /etc/pam.d/system-auth; do
   [ -r "$PROBE_ROOT$pam" ] || continue
-  [ "$(grep -cE "pam_google_authenticator|pam_oath" "$PROBE_ROOT$pam")" -gt 0 ] && hit_otp=1
-  [ "$(grep -cE "pam_u2f|pam_pkcs11" "$PROBE_ROOT$pam")" -gt 0 ] && hit_u2f=1
-  [ "$(grep -cE "pam_fprintd|pam_biometric" "$PROBE_ROOT$pam")" -gt 0 ] && hit_bio=1
+  [ "$(grep -cE "pam_google_authenticator|pam_oath" "$PROBE_ROOT$pam")" -gt 0 ] && factor_count=$((factor_count + 1))
+  [ "$(grep -cE "pam_u2f|pam_pkcs11" "$PROBE_ROOT$pam")" -gt 0 ] && factor_count=$((factor_count + 1))
+  [ "$(grep -cE "pam_fprintd|pam_biometric" "$PROBE_ROOT$pam")" -gt 0 ] && factor_count=$((factor_count + 1))
 done
-count=$((hit_otp + hit_u2f + hit_bio))
-if [ "$count" -ge 3 ]; then echo DEFENSE_PRESENT; else echo DEFENSE_ABSENT; fi' ;;
+if [ "$factor_count" -ge 3 ]; then echo DEFENSE_PRESENT; else echo DEFENSE_ABSENT; fi' ;;
     *)
       echo "edge_probe: 因子 $factor 没有条件探针（新增因子时必须补一条，否则真实缺失对照会静默失效）" >&2
       return 2 ;;
