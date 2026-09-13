@@ -427,7 +427,10 @@ bash scripts/edge_collect.sh "$s" ../../configs/edgeexp/m0-baseline.ini \
 `scenarios_skipped_resume`；**它不是干跑** —— 对没有记录的场景照样跑三步，见 5.4.5 第 13 条）、
 `EDGEEXP_RUN_INDEX`（重复号，**>1 时必须同时显式给 `EDGEEXP_ENV`**，否则 A-1 的重复样本会被打上
 `wsl-clab-14` 混进主数据集）、`EDGEEXP_ATTACK_TIMEOUT_S`（等 operation 终态的上限，默认 1800）、
-`EDGEEXP_PHASE_GAP_S`（相位间隔，默认 3，**不得小于 1**）、`EDGEEXP_TARGET_HOST`（攻击目标节点，默认 `host1`）、
+`EDGEEXP_PHASE_GAP_S`（相位间隔，默认 3，**不得小于 1**）、
+**`EDGEEXP_TARGET`（观测主体：被攻节点的容器名，矩阵默认 `asc-asscor-host1`；置空 = 本机评估，
+此时 R 组会硬失败 —— 与下面那个 `EDGEEXP_TARGET_HOST` **不是一回事**，对照表见 §5.4.2 第 5 条）**、
+`EDGEEXP_TARGET_HOST`（**复位脚本的**攻击目标节点，默认 `host1`）、
 **`EDGEEXP_SENSITIVITY_THRESHOLDS`（阈值敏感性行：给定阈值列表才跑，例 `60` 或 `60,70`；**默认不跑**，
 默认路径与默认对比不受影响，见 §5.4.6）**、`EDGEEXP_SENSITIVITY_DIR`（敏感性产物目录，默认
 `data/edgefactors/sensitivity/`）。
