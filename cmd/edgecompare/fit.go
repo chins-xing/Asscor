@@ -55,6 +55,23 @@ type FitOptions struct {
 	L1         float64 // 标准化尺度上的绝对 L1 罚项，默认 0
 	Folds      int
 	Seed       int64
+
+	// AllowMixedBasis / AssumeBasis 与 `EvaluateOptions` 的**同名字段同一套口径**
+	// （Task 4D Fix round 2 / Important-1）。
+	//
+	// 为什么拟合也必须过标签依据守卫：拟合的标签向量就是 `ground_truth.compromised`
+	// （`design` 里的 `y = append(y, rec.GroundTruth.Compromised)`），而 `targeted_ttp`
+	// （"目标 TTP 是否成功"）与 `recon_playbook`（"任意 link 是否成功、任何姿态下都成立"）
+	// 不是同一个量 ⇒ 把两类混进同一个似然里，估出来的系数**没有可解释的口径**，
+	// 而报告与 `[edge_factors.model]` 参数段会照常产出。
+	//
+	// 上一版只把守卫接在候选对比路径上，于是 `-fit` 对四种依据形态（全 targeted / 全 recon /
+	// 混装 / 全缺席）**一律 rc=0**，连这两个开关都被**静默忽略**（既不生效也不报错）——
+	// "用一批没有依据/混了两种依据的记录拟合出来的模型"正是里程碑 B 的选模交付物。
+	AllowMixedBasis bool
+	// AssumeBasis 见 `EvaluateOptions.AssumeBasis`（给缺依据的历史记录补一个显式假设；
+	// 空串 = 不假设 ⇒ 缺依据即报错）。假设的条数进 `FitReport.BasisAssumed`。
+	AssumeBasis string
 }
 
 // FitReport 是一次拟合的数值证据。四张表都必须非空 —— 返回零值会被读成"测过了"。
@@ -73,6 +90,21 @@ type FitReport struct {
 	EdgeCoefficients map[string]float64    `json:"edge_coefficients"`
 	CVErr            float64               `json:"cv_err"`
 	Bootstrap        map[string][2]float64 `json:"bootstrap"`
+
+	// 标签依据口径（Task 4D Fix round 2 / Important-1）—— 字段语义与 `Metrics` 的同名项**逐条一致**
+	// （两边都取自同一个 `applyBasisGuard`），因为拟合报告的读者要回答的问题与对比报告相同：
+	// "这次用的标签是哪一类、被丢掉了多少条、有多少条是假设来的"。
+	//
+	//	N            参与拟合的记录条数（= 过滤后、设计矩阵的行数）
+	//	RecordsTotal 过滤前的记录总数（= N + Σ BasisSkipped）
+	//	Basis        参与拟合那部分的**生效依据**分布（`--assume-basis` 归类的算在假设那一类）
+	//	BasisSkipped 被丢出拟合的条数（侦察口径 = 背景测量，其 compromised 不是同一口径）
+	//	BasisAssumed 本次按 `--assume-basis` 补的依据覆盖了多少条
+	N            int            `json:"n"`
+	RecordsTotal int            `json:"records_total"`
+	Basis        map[string]int `json:"basis"`
+	BasisSkipped map[string]int `json:"basis_skipped,omitempty"`
+	BasisAssumed int            `json:"basis_assumed,omitempty"`
 }
 
 const (
@@ -175,6 +207,33 @@ func couplingFromCoefficient(beta float64) (float64, bool) {
 // `base` 绝不会被就地修改（Caller 从配置装载它，随后还要用它）。
 func Fit(records []Record, base edgefactor.Params, opts FitOptions) (edgefactor.Params, FitReport, error) {
 	opts = normaliseFitOptions(opts)
+	// **标签依据守卫排在一切之前**（Task 4D Fix round 2 / Important-1）：与对比路径共用
+	// `applyBasisGuard`（同一套判据、同一套计数来源），故"缺依据 ⇒ 报错 / 侦察口径 ⇒ 丢出并记账 /
+	// 逃生开关下混装 ⇒ 报错"在两条路径上**逐字同源**。放在 `validateFitRequest` 之前还有一层
+	// 意义：单类别标签、折数 > 样本数这些检查必须对着**真正参与拟合的那批记录**做，否则
+	// "过滤后只剩一类标签"会被"过滤前两类都在"掩盖过去。
+	guard, err := applyBasisGuard(records, EvaluateOptions{
+		AllowMixedBasis: opts.AllowMixedBasis, AssumeBasis: opts.AssumeBasis})
+	if err != nil {
+		return edgefactor.Params{}, FitReport{}, err
+	}
+	basisRep := FitReport{
+		N:            len(guard.kept),
+		RecordsTotal: len(records),
+		Basis:        guard.keptCounts,
+		BasisSkipped: guard.skipped,
+		BasisAssumed: guard.assumed,
+	}
+	// 过滤后一条都不剩 ⇒ **不给结论**（Task 4D Fix round 2 / M-3 的同一纪律）：这与"零记录"
+	// 是两回事 —— 记录是有的，只是它们的标签口径不该被放进同一个似然里。单候选/单类别的
+	// 情形同理，`validateFitRequest` 会在下面接着拒（`validateLabelVariation`）。
+	if len(guard.kept) == 0 {
+		return edgefactor.Params{}, FitReport{}, fmt.Errorf("edgecompare: 过滤后没有任何记录进入拟合 —— "+
+			"过滤前 %d 条、**跳过 %s**（侦察口径的记录是背景测量，其 compromised 与『目标 TTP 是否成功』"+
+			"不是同一个量）。没有可用的标签就没有可拟合的量，故不产出任何参数（不是『拟合失败』，是**不可算**）",
+			len(records), fmtBasisCountsOrNone(guard.skipped))
+	}
+	records = guard.kept
 	if err := validateFitRequest(records, base, opts); err != nil {
 		return edgefactor.Params{}, FitReport{}, err
 	}
@@ -188,12 +247,11 @@ func Fit(records []Record, base edgefactor.Params, opts FitOptions) (edgefactor.
 	if err != nil {
 		return edgefactor.Params{}, FitReport{}, err
 	}
-	rep := FitReport{
-		Coefficients:     make(map[string]float64, len(d.names)),
-		EdgeCoefficients: make(map[string]float64, len(d.edges)),
-		CVErr:            cvErr,
-		Bootstrap:        bootstrapCoefficients(d.X, d.y, d.names, opts, d.coef, d.means, d.scales),
-	}
+	rep := basisRep
+	rep.Coefficients = make(map[string]float64, len(d.names))
+	rep.EdgeCoefficients = make(map[string]float64, len(d.edges))
+	rep.CVErr = cvErr
+	rep.Bootstrap = bootstrapCoefficients(d.X, d.y, d.names, opts, d.coef, d.means, d.scales)
 	for i, name := range d.names {
 		rep.Coefficients[name] = beta[i]
 	}
@@ -1031,8 +1089,21 @@ func RenderFitReport(w io.Writer, p edgefactor.Params, rep FitReport) error {
 	var b strings.Builder
 	b.WriteString("# 边缘因子拟合报告\n\n")
 	fmt.Fprintf(&b, "交叉验证平均对数损失（k 折）: %.6f\n", rep.CVErr)
-	fmt.Fprintf(&b, "模型: %s｜p_floor = %s｜先验边: %s\n\n",
-		p.Model, formatParam(p.PFloor), edgeSummary(rep.EdgeCoefficients))
+	fmt.Fprintf(&b, "模型: %s｜p_floor = %s｜先验边: %s\n", p.Model, formatParam(p.PFloor), edgeSummary(rep.EdgeCoefficients))
+	// **标签依据口径必须写在报告头上**（与对比报告的同一行同款：Task 4D Fix round 2 / Important-1）：
+	// 拟合的标签就是 `compromised`，而 `N` 会因为"丢掉侦察口径的记录"而变小 —— 不写清过滤前后
+	// 各多少，两份风格完全一样的拟合报告在字面上无法区分，而它们的系数不可比。
+	if rep.RecordsTotal > 0 || len(rep.BasisSkipped) > 0 {
+		fmt.Fprintf(&b, "标签依据口径: 参与拟合 %d 条（%s）", rep.N, fmtBasisCountsOrNone(rep.Basis))
+		if n := sumBasisSkipped(rep.BasisSkipped); n > 0 {
+			fmt.Fprintf(&b, "｜**跳过 %d 条**（%s，侦察口径=背景测量、不是标签）", n, fmtBasisCountsOrNone(rep.BasisSkipped))
+		}
+		if rep.BasisAssumed > 0 {
+			fmt.Fprintf(&b, "｜其中 **%d 条按 `--assume-basis` 归类**（记录本体未被改写）", rep.BasisAssumed)
+		}
+		fmt.Fprintf(&b, "｜过滤前共 %d 条\n", rep.RecordsTotal)
+	}
+	b.WriteString("\n")
 
 	b.WriteString("| 列 | 系数 β | 自助法 95% 区间 | 折回的参数 |\n")
 	b.WriteString("|---|---|---|---|\n")

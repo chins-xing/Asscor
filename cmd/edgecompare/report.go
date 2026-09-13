@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/edgeexp"
 	"github.com/chins-xing/asscor/internal/edgefactor"
 )
 
@@ -108,6 +109,24 @@ func CompareWith(records []Record, paramsByModel map[string]edgefactor.Params, w
 		rep.Models[name] = m
 	}
 	rep.Best = pickBest(rep.Models)
+	// **过滤后 `N == 0` 同样不给结论**（Task 4D Fix round 2 / Minor-3）。
+	//
+	// 上面那道闸门查的是**过滤前**的 `len(records)`，而决策层指标的标签依据守卫会把侦察口径的
+	// 记录丢出去 ⇒ "单候选 + 全部是侦察口径"时每个候选的 `N` 都是 0、三层指标全是零值，而
+	// `Best`（单候选时无需比较）与一整段参数照样被打印出来 —— 读者看到的是一份"选定了模型"的
+	// 报告，实际这条数据**没有可算的决策层标签**。
+	//
+	// 这不是假想形态（评审与 Task 5 都会撞上）：22 个非 AppArmor 场景没有目标 TTP ⇒ 它们的记录
+	// 必然是 `recon_playbook`，一旦整批里没有 `targeted_ttp`，决策层就只剩 N=0。此时唯一正确的
+	// 输出是**不给结论并说清为什么**（用户裁定的 (a) 口径：决策层只覆盖 AppArmor 耦合对）。
+	if best := rep.Models[rep.Best]; best.N == 0 {
+		return Report{}, fmt.Errorf("edgecompare: 过滤后没有任何记录进入决策层指标（过滤前 %d 条；"+
+			"**跳过 %s**）—— 决策层指标与选模都无从计算，故不给出结论。"+
+			"缺省口径下侦察口径（%s）的记录是背景测量、不进决策层；"+
+			"本轮的记录里没有一条 %s 口径的标签时，请按『分数侧』口径报告、不要在这里选模",
+			best.RecordsTotal, fmtBasisCountsOrNone(best.BasisSkipped),
+			edgeexp.BasisReconPlaybook, edgeexp.BasisTargetedTTP)
+	}
 	return rep, nil
 }
 
@@ -242,6 +261,19 @@ func RenderMarkdown(w io.Writer, rep Report) error {
 	if rep.Records == 0 {
 		b.WriteString("\n**无有效记录：未选模**（场景数为 0；零记录下三层指标全为零值，")
 		b.WriteString("「最优候选」只会是模型名字典序的产物，故不给出结论）\n")
+		_, err := io.WriteString(w, b.String())
+		return err
+	}
+	// **过滤后 `N == 0`：同样不给结论**（Task 4D Fix round 2 / Minor-3，与 `CompareWith` 那道
+	// 闸门独立）。两个原因都要摆出来：①场景数不为 0，所以上面那条零记录分支拦不到它；
+	// ②`RenderMarkdown` 是导出函数，可能被别的调用方直接喂一份手搓 `Report`，只靠 `CompareWith`
+	// 等于把"不给伪结论"这条纪律绑在某一个调用点上。判据取**参与决策层的条数**（`N`），
+	// 而不是过滤前的 `Records` —— 后者在"全部记录都是侦察口径"时是正数。
+	if basisM.N == 0 {
+		fmt.Fprintf(&b, "\n**过滤后无可算的决策层标签：未选模**（过滤前 %d 条，跳过 %s；",
+			basisM.RecordsTotal, fmtBasisCountsOrNone(basisM.BasisSkipped))
+		b.WriteString("侦察口径的记录是背景测量、不进决策层指标，而删除它们之后没有剩下任何")
+		b.WriteString("『目标 TTP 是否成功』口径的标签 ⇒ 三层指标与「最优候选」都无从计算）\n")
 		_, err := io.WriteString(w, b.String())
 		return err
 	}

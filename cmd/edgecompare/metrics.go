@@ -45,8 +45,11 @@ type Metrics struct {
 	// 字面完全一样，而它们的漏判率/误阻断率不可比。缺省口径下这个 map 只会有一个键
 	// （`targeted_ttp`）；`--allow-mixed-basis` 时才可能有两个。
 	Basis map[string]int `json:"basis"`
-	// BasisSkipped 是被**过滤掉**的记录数（按依据计数）。缺省口径下恒为空：
-	// 缺依据/混类都直接报错，而不是静默丢样本。
+	// BasisSkipped 是被**过滤掉**（不参与决策层指标）的记录数，按依据计数。
+	//
+	// 缺省口径下**非空是常态**：侦察口径（`recon_playbook`）的记录是背景测量，一律被丢出决策层
+	// 指标（`--allow-mixed-basis` 才让它们参与计算）；缺依据的记录在缺省口径下**报错**而不是被
+	// 静默丢样本（只有打开逃生开关时才会以 `(未声明)` 记在这里）。
 	BasisSkipped map[string]int `json:"basis_skipped,omitempty"`
 	// RecordsTotal 是**过滤前**的记录总数（= `N + Σ BasisSkipped`）。
 	RecordsTotal int `json:"records_total"`
@@ -224,14 +227,18 @@ type EvaluateOptions struct {
 
 	// AllowMixedBasis 允许把 `recon_playbook` 口径的记录也吃进决策层指标（Task 4D Step 4）。
 	//
-	// **缺省是 false，且缺省口径下"缺依据"与"两类混在一起"都直接报错** —— 理由见
-	// `applyBasisGuard`：旧数据集没有 `ground_truth.basis`，静默把它们算进决策层指标，
-	// 等于把"目标 TTP 是否成功"与"任意 link 是否成功"两种标签混进同一个漏判率里，
+	// **缺省是 false**，缺省口径下：**缺依据 ⇒ 报错**；**两类混在一起 ⇒ 侦察口径的记录被自动
+	// 丢出**决策层/拟合（条数写进 `BasisSkipped` 与报告头），**不报错** —— 那批记录本来就不该
+	// 参与决策层，用剩下那一类算就是了（Fix round 2 / Minor-1：此前这里的注释与 flag 文案都写成
+	// "两类混在一起也报错"，与实现不符）。**打开本开关才是让两类都进** ⇒ 那时混装报错（混算的
+	// 漏判率没有定义）。理由见 `applyBasisGuard`：旧数据集没有 `ground_truth.basis`，静默把它们
+	// 算进决策层指标，等于把"目标 TTP 是否成功"与"任意 link 是否成功"两种标签混进同一个漏判率里，
 	// 而报告上看不出任何异常。
 	//
 	// 打开它同时意味着**接受"缺依据的记录按旧口径（recon_playbook）理解"** —— 那正是这批历史
 	// 数据的事实（里程碑 B 之前 `compromised` 由"任意 link 成功"算出来），而缺依据的计数仍会
-	// 如实写进 `BasisSkipped["(未声明)"]`，不会被静默吞掉。
+	// 如实写进 `BasisSkipped["(未声明)"]`，不会被静默吞掉；它们同样**不进**决策层指标
+	// （缺依据 ≠ 目标 TTP 口径），故"全缺席 + 本开关"会因为过滤后为空而 fail-fast。
 	AllowMixedBasis bool
 
 	// AssumeBasis 是给**没有 `basis` 的记录**补一个显式假设（`targeted_ttp` / `recon_playbook`）。
@@ -245,23 +252,48 @@ type EvaluateOptions struct {
 	AssumeBasis string
 }
 
-// applyBasisGuard 是**决策层指标的标签依据守卫**（Task 4D Step 4，用户裁定的 L2）。
+// basisGuardOutcome 是 `applyBasisGuard` 的结果。
+//
+// 为什么把原来的五元组收成命名结构（Task 4D Fix round 2）：调用方现在有**两条路径**
+// （决策层指标与拟合），而"参与/跳过/假设"这三个计数必须**逐字同源** —— 五元组在第二个
+// 调用点手抄一遍位置，任何一处顺序错位都会静默把"跳过"读成"参与"。字段名即语义。
+type basisGuardOutcome struct {
+	// kept 是**参与决策层**的记录（已按依据过滤，顺序与输入一致）。
+	kept []Record
+	// determined 是**逐条判定**的依据分布：含被丢的（侦察口径）与按假设归类的。
+	// 它的用途是审计"这批数据本来是什么口径" —— 不参与报告头的"参与 N 条（…）"。
+	determined map[string]int
+	// keptCounts 是**参与决策层那部分**的依据分布（生效依据：`--assume-basis` 归类的记录算在
+	// 假设的那一类，而不是落在空串键上）。报告头与 `Metrics.Basis` 用的是它。
+	keptCounts map[string]int
+	// skipped 是被丢出决策层指标的条数（按依据计数）。
+	skipped map[string]int
+	// assumed 是按 `--assume-basis` 补的依据覆盖了多少条。
+	assumed int
+}
+
+// applyBasisGuard 是**决策层标签的依据守卫**（Task 4D Step 4，用户裁定的 L2）。
+//
+// **两条路径共用**（Task 4D Fix round 2 / Important-1）：候选对比（`EvaluateWith` → `CompareWith`）
+// 与参数拟合（`Fit`）都从这里过。上一轮只在对比路径上接了守卫，而拟合的标签向量正是
+// `ground_truth.compromised` ⇒ 混类/缺依据的记录照样进拟合，且 `--allow-mixed-basis` /
+// `--assume-basis` 在拟合路径上**被静默忽略**（既不生效也不报错）。守卫是"这批数据的标签能不能
+// 放在一起算"的前置问题，与"用这些标签算指标还是拟合系数"无关。
 //
 // 判据（缺省口径）：
 //  1. 每条参与决策层的记录都必须**显式声明** `ground_truth.basis`（缺 ⇒ 报错并给出计数）；
 //  2. 依据只能取 `targeted_ttp` / `recon_playbook`（走 `edgeexp.Validate` 的值域校验，这里不重抄）；
-//  3. **两类混在一起 ⇒ 报错**：`targeted_ttp` 与 `recon_playbook` 的 `compromised` 不是同一个量
-//     （前者"目标 TTP 是否成功"，后者"任意 link 是否成功、在任何姿态下都成立"），
-//     混算出来的漏判率没有定义。
+//  3. **两类混在一起**：缺省口径下侦察口径的记录被**自动丢出**决策层指标（条数记进
+//     `skipped`）；打开 `AllowMixedBasis` 让两类**都进**时才是真矛盾 ⇒ 报错（混算的漏判率没有定义）。
 //
-// `opts.AllowMixedBasis` 是**显式逃生开关**（敏感性/历史对比用）：它放开第 3 条，并把"缺依据"
-// 的记录按**旧口径**（`recon_playbook`）理解 —— 那是这批历史数据的事实（里程碑 B 之前
+// `opts.AllowMixedBasis` 是**显式逃生开关**（敏感性/历史对比用）：它让侦察口径的记录参与计算，
+// 并把"缺依据"的记录按**旧口径**（`recon_playbook`）理解 —— 那是这批历史数据的事实（里程碑 B 之前
 // `compromised` 由"任意 link 成功"算出），而不是一句方便的假设。缺依据/被丢的条数会如实写进
 // 指标本体（`BasisSkipped` / `RecordsTotal` / `BasisAssumed`），报告头必须打印出来。
-func applyBasisGuard(records []Record, opts EvaluateOptions) ([]Record, map[string]int, map[string]int, int, error) {
+func applyBasisGuard(records []Record, opts EvaluateOptions) (basisGuardOutcome, error) {
 	if a := strings.TrimSpace(opts.AssumeBasis); a != "" &&
 		a != edgeexp.BasisTargetedTTP && a != edgeexp.BasisReconPlaybook {
-		return nil, nil, nil, 0, fmt.Errorf("edgecompare: --assume-basis 的取值 %q 不是已知依据（只认 %q / %q）—— "+
+		return basisGuardOutcome{}, fmt.Errorf("edgecompare: --assume-basis 的取值 %q 不是已知依据（只认 %q / %q）—— "+
 			"拼错的假设会把整批记录标成错误的依据，而它与合法值在数据上完全同形",
 			opts.AssumeBasis, edgeexp.BasisTargetedTTP, edgeexp.BasisReconPlaybook)
 	}
@@ -273,8 +305,9 @@ func applyBasisGuard(records []Record, opts EvaluateOptions) ([]Record, map[stri
 	// 先报混类再过滤，会把"本来就要被丢掉的那几条"当成错误（实测踩到：2 条目标 + 2 条侦察的
 	// 数据集在缺省口径下被拒，而正确行为是"用那 2 条目标算"）。
 	kept := make([]Record, 0, len(records))
-	counts := map[string]int{}  // 逐条判定的依据分布（含被丢的与假设的）
-	skipped := map[string]int{} // 被丢出决策层指标的条数
+	counts := map[string]int{}     // 逐条判定的依据分布（含被丢的与假设的）
+	keptCounts := map[string]int{} // **参与决策层**那部分的依据分布（生效依据）
+	skipped := map[string]int{}    // 被丢出决策层指标的条数
 	assumed := 0
 	for _, rec := range records {
 		b := strings.TrimSpace(rec.GroundTruth.Basis)
@@ -299,7 +332,7 @@ func applyBasisGuard(records []Record, opts EvaluateOptions) ([]Record, map[stri
 		switch b {
 		case edgeexp.BasisTargetedTTP, edgeexp.BasisReconPlaybook:
 		default:
-			return nil, nil, nil, 0, fmt.Errorf("edgecompare: 记录里出现未知的 ground_truth.basis = %q —— "+
+			return basisGuardOutcome{}, fmt.Errorf("edgecompare: 记录里出现未知的 ground_truth.basis = %q —— "+
 				"决策层指标只吃 %q 那一类；未知值不得被当成某一类静默算进去（那会让漏判率的口径无法追溯）",
 				b, edgeexp.BasisTargetedTTP)
 		}
@@ -309,13 +342,18 @@ func applyBasisGuard(records []Record, opts EvaluateOptions) ([]Record, map[stri
 			continue
 		}
 		counts[b]++
+		// 报告头那一格（`参与决策层 N 条（…）`）统计的是**生效依据**：按 `--assume-basis` 归类的
+		// 记录算在**假设的那一类**，而不是落在空串键上（Fix round 2 / Minor-2：上一版从记录原字段
+		// 统计 ⇒ 报告头打印 `参与决策层 4 条（=4）`，JSON 里是 `"basis": {"": 4}`，那一格正好
+		// 失去了"是哪一类"——而它是给人看的口径行）。
+		keptCounts[b]++
 		kept = append(kept, rec)
 	}
 
 	// 第二步：**缺依据 ⇒ 报错**（缺省口径）。它排在过滤之后：被丢掉的侦察口径记录不该让整批失败
 	// （它们本来就不参与决策层指标）。
 	if counts["(未声明)"] > 0 && assume == "" && !opts.AllowMixedBasis {
-		return nil, nil, nil, 0, fmt.Errorf("edgecompare: %d/%d 条记录没有 ground_truth.basis —— 决策层指标无从判断这些标签是"+
+		return basisGuardOutcome{}, fmt.Errorf("edgecompare: %d/%d 条记录没有 ground_truth.basis —— 决策层指标无从判断这些标签是"+
 			"『目标 TTP 是否成功』还是『任意 link 是否成功』（两者在数据上同形，而漏判率的口径由它决定）。"+
 			"三条出路：用带 basis 的采集产物重采（Task 4D 起 edge_attack.sh 会写它）；"+
 			"用 --assume-basis %s 显式声明这批记录的标签口径（假设的条数会写进指标本体）；"+
@@ -331,7 +369,7 @@ func applyBasisGuard(records []Record, opts EvaluateOptions) ([]Record, map[stri
 	//     （`skipped` 里有它们），故"混类"**不是**错误 —— 用剩下的那一类算就是了；
 	//   · 逃生开关（`AllowMixedBasis=true`）⇒ 两类都要进指标 ⇒ 那才是真矛盾（混算的漏判率没有定义）。
 	if counts[edgeexp.BasisTargetedTTP] > 0 && counts[edgeexp.BasisReconPlaybook] > 0 && opts.AllowMixedBasis {
-		return nil, nil, nil, 0, fmt.Errorf("edgecompare: 记录里混了两种标签依据（%s=%d 条、%s=%d 条），"+
+		return basisGuardOutcome{}, fmt.Errorf("edgecompare: 记录里混了两种标签依据（%s=%d 条、%s=%d 条），"+
 			"而 `--allow-mixed-basis` 让**两类都要进**决策层指标 —— 它们的 compromised 不是同一个量"+
 			"（前者『目标 TTP 是否成功』、后者『任意 link 是否成功且在任何姿态下都成立』），混算出来的漏判率没有定义。"+
 			"请只保留一类：去掉 `--allow-mixed-basis`（侦察口径的记录会被自动丢出决策层指标），"+
@@ -339,7 +377,8 @@ func applyBasisGuard(records []Record, opts EvaluateOptions) ([]Record, map[stri
 			edgeexp.BasisTargetedTTP, counts[edgeexp.BasisTargetedTTP],
 			edgeexp.BasisReconPlaybook, counts[edgeexp.BasisReconPlaybook])
 	}
-	return kept, counts, skipped, assumed, nil
+	return basisGuardOutcome{kept: kept, determined: counts, keptCounts: keptCounts,
+		skipped: skipped, assumed: assumed}, nil
 }
 
 // thresholdOf 返回该记录本次评估实际使用的阈值（覆盖优先，且覆盖值本身已由 CLI 校验为正）。
@@ -388,21 +427,22 @@ func EvaluateWith(records []Record, p edgefactor.Params, weights map[string]floa
 	}
 	// 标签依据守卫**排在一切计算之前**（Task 4D Step 4）：它是"这批数据的标签能不能放在一起算"
 	// 的前置问题，先于"分数算得对不对"。过滤后为空 ⇒ 退回零值（与空输入同款：调用方
-	// `CompareWith` 已在**过滤前**拒过零记录，这里的空只可能来自"全部记录都是侦察口径"）。
-	kept, basisCounts, basisSkipped, basisAssumed, err := applyBasisGuard(records, opts)
+	// `CompareWith` 已在**过滤前**拒过零记录，这里的空只可能来自"全部记录都是侦察口径"，
+	// 而 `CompareWith` 另有一道"过滤后 N == 0 也不给结论"的闸门 —— Fix round 2 / Minor-3）。
+	guard, err := applyBasisGuard(records, opts)
 	if err != nil {
 		return Metrics{}, err
 	}
-	if len(kept) == 0 {
-		return Metrics{Basis: basisCounts, BasisSkipped: basisSkipped, RecordsTotal: len(records)}, nil
+	basisCounts, basisSkipped, basisAssumed := guard.keptCounts, guard.skipped, guard.assumed
+	if len(guard.kept) == 0 {
+		return Metrics{BasisSkipped: basisSkipped, RecordsTotal: len(records)}, nil
 	}
-	records = kept
-	m.RecordsTotal = len(kept) + sumCounts(basisSkipped)
+	records = guard.kept
+	m.RecordsTotal = len(records) + sumCounts(basisSkipped)
 	m.BasisAssumed = basisAssumed
-	m.Basis = map[string]int{}
-	for _, rec := range records {
-		m.Basis[strings.TrimSpace(rec.GroundTruth.Basis)]++
-	}
+	// `Basis` = **参与决策层那部分**的生效依据分布（口径见 `Metrics.Basis` 与
+	// `basisGuardOutcome.keptCounts`）：按 `--assume-basis` 归类的记录算在假设的那一类。
+	m.Basis = basisCounts
 	m.BasisSkipped = basisSkipped
 	m.N = len(records)
 	scores := make([]float64, 0, len(records))

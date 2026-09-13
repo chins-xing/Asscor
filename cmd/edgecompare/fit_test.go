@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/edgeexp"
 	"github.com/chins-xing/asscor/internal/edgefactor"
 )
 
@@ -103,6 +104,11 @@ func generateSyntheticRecords(t *testing.T, c float64, seed int64, n int) []Reco
 		}
 		z := fitTruthBeta0 + fitTruthBetaA*aA + fitTruthBetaB*aB + c*aA*aB
 		rec.GroundTruth.Compromised = rng.Float64() < 1/(1+math.Exp(-z))
+		// **标签依据必须显式声明**（Task 4D Fix round 2 / Important-1）：拟合路径现在与对比路径
+		// 共用同一个依据守卫，缺依据的记录会直接被拒。合成夹具的标签语义就是 L2 那一类
+		// （"目标 TTP 是否成功"），故如实声明 `targeted_ttp` —— 这正是新守卫要求的形态，
+		// 也让"夹具跑得通"这件事本身成为一条证据：带依据的拟合路径不被新守卫拦。
+		rec.GroundTruth.Basis = edgeexp.BasisTargetedTTP
 		if rec.GroundTruth.Compromised {
 			rec.GroundTruth.TTPsAchieved = 3
 			rec.GroundTruth.NodesAffected = 2

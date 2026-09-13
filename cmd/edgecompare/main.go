@@ -85,13 +85,15 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 		"覆盖记录里的 observed.threshold（> 0；**仅用于敏感性分析**，0 = 用记录自带的判定线）。"+
 			"选模必须用部署的真实判定线，故该开关不得出现在默认路径上；使用时报告头会写明覆盖值")
 	allowMixedBasis := fs.Bool("allow-mixed-basis", false,
-		"**标签依据逃生开关**（Task 4D Step 4）：允许把 recon_playbook 口径的记录也吃进决策层指标。"+
-			"缺省口径下：缺 ground_truth.basis 或两类混在一起都直接报错（它们的 compromised 不是同一个量，"+
-			"混算出来的漏判率没有定义）；打开本开关后侦察口径的记录会参与计算，报告头与指标本体会写明过滤前后条数")
+		"**标签依据逃生开关**（Task 4D Step 4）：允许把 recon_playbook 口径的记录也吃进决策层指标"+
+			"（对比模式）与拟合的标签向量（-fit 模式）。缺省口径下：**缺 ground_truth.basis ⇒ 直接报错**；"+
+			"两类依据混装 ⇒ recon_playbook（侦察口径）的记录被**自动丢出**决策层指标/拟合，"+
+			"条数写进 basis_skipped 与报告头（它们的 compromised 与 targeted_ttp 不是同一个量，不该混算）。"+
+			"打开本开关才让两类**都进** —— 那才是真正的混算，此时若两类都在 ⇒ 报错（混算的漏判率没有定义）")
 	assumeBasis := fs.String("assume-basis", "",
 		"**给没有 `ground_truth.basis` 的历史记录补一个显式假设**（targeted_ttp | recon_playbook；空 = 不假设 ⇒ 缺依据即报错）。"+
-			"旧数据集确实没有这个字段，而『这批 compromised 是旧口径算的』是一个可以如实声明的事实 —— "+
-			"假设的条数会写进指标的 basis_assumed 与报告头（不写就分不清『数据本来如此』与『我们假设如此』）")
+			"对比模式与拟合模式（-fit）**共用**该开关。旧数据集确实没有这个字段，而『这批 compromised 是旧口径算的』是一个可以如实声明的事实 —— "+
+			"假设的条数会写进指标的 basis_assumed / 拟合报告的 basis_assumed 与报告头（不写就分不清『数据本来如此』与『我们假设如此』）")
 
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -195,7 +197,9 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 			return exitFailure
 		}
 		return runFit(records, base, factors, edges,
-			FitOptions{L2: *l2, L1: *l1, Folds: *folds, Seed: *seed}, *outPath, stdout, stderr)
+			FitOptions{L2: *l2, L1: *l1, Folds: *folds, Seed: *seed,
+				AllowMixedBasis: *allowMixedBasis, AssumeBasis: *assumeBasis},
+			*outPath, stdout, stderr)
 	case len(candidateFlags) > 0:
 		return runCompare(records, weights, pairs, factors, *thresholdOverride, *allowMixedBasis,
 			*assumeBasis, *outPath, stdout, stderr)
@@ -283,6 +287,31 @@ func sumBasisSkipped(m map[string]int) int {
 	return total
 }
 
+// describeBasisFiltering 把"依据过滤发生了什么事"按**同一套措辞**报到 stderr（两条路径共用）。
+//
+// 为什么必须共用（Task 4D Fix round 2 / Important-1）：上一轮只有对比路径会喊这几句，而拟合路径
+// 连守卫都没走 —— 两份报告在"依据被过滤过"这件事上因此**字面完全不同**，读者会以为拟合用的是
+// 全部记录。参数的来源（N/跳过/假设）由调用方从各自的报告结构里取，措辞只此一份。
+func describeBasisFiltering(w io.Writer, path string, n, recordsTotal int,
+	basis, skipped map[string]int, assumed int, allowMixed bool, assume string) {
+
+	if len(skipped) > 0 {
+		fmt.Fprintf(w, "edgecompare: %s：决策层标签已按依据过滤 —— 参与 %d 条（%s），"+
+			"**跳过** %d 条（%s，侦察口径=背景测量、不是标签）；总记录 %d 条。"+
+			"缺省口径下侦察口径的记录不进决策层，报告头与 `basis*` 计数都记着这两个数\n",
+			path, n, fmtBasisCounts(basis), sumBasisSkipped(skipped), fmtBasisCounts(skipped), recordsTotal)
+	}
+	if assumed > 0 {
+		fmt.Fprintf(w, "edgecompare: %s：--assume-basis %s 生效 —— 有 %d 条记录**没有** ground_truth.basis，"+
+			"本次按该假设归类（记录本体未被改写；计数里的 basis_assumed=%d 就是它）\n", path, assume, assumed, assumed)
+	}
+	if allowMixed && (basis[edgeexp.BasisReconPlaybook] > 0 || basis["(未声明)"] > 0) {
+		fmt.Fprintf(w, "edgecompare: %s：--allow-mixed-basis 已开启 —— 本次把 `%s` 口径的记录也吃进了决策层；"+
+			"它与 `%s` 的 compromised 不是同一个量，结论只能作敏感性/历史对比用，不得当作部署口径的主结论\n",
+			path, edgeexp.BasisReconPlaybook, edgeexp.BasisTargetedTTP)
+	}
+}
+
 // runCompare 评估全部候选、按决策层主判据选优、导出胜出候选的参数段。
 //
 // 失败路径的纪律：`Compare` 与 `RenderConfigSection` 的错误一律如实转述（退出码 1），
@@ -322,22 +351,10 @@ func runCompare(records []Record, weights map[string]float64, pairs []candidateR
 	}
 	// **过滤器必须可见**（Task 4D Step 4）：决策层指标的分母 `N` 会因为"丢掉了侦察口径的记录"
 	// 而变小；不把过滤前后条数喊出来，两份报告在字面上完全一样而它们的漏判率不可比。
-	if bs := rep.Models[rep.Best].BasisSkipped; len(bs) > 0 {
-		fmt.Fprintf(stderr, "edgecompare: 决策层指标已按标签依据过滤 —— 参与 %d 条（%s），"+
-			"**跳过** %d 条（%s，侦察口径=背景测量、不是标签）；总记录 %d 条。缺省口径下侦察口径的记录不进决策层指标，"+
-			"报告头与 `metrics.basis*` 都记着这两个数\n",
-			rep.Models[rep.Best].N, fmtBasisCounts(rep.Models[rep.Best].Basis),
-			sumBasisSkipped(bs), fmtBasisCounts(bs), rep.Models[rep.Best].RecordsTotal)
-	}
-	if ba := rep.Models[rep.Best].BasisAssumed; ba > 0 {
-		fmt.Fprintf(stderr, "edgecompare: --assume-basis %s 生效 —— 有 %d 条记录**没有** ground_truth.basis，"+
-			"本次按该假设归类（记录本体未被改写；指标里的 basis_assumed=%d 就是它）\n", assumeBasis, ba, ba)
-	}
-	if allowMixedBasis {
-		fmt.Fprintf(stderr, "edgecompare: --allow-mixed-basis 已开启 —— 本次把 `%s` 口径的记录也吃进了决策层指标；"+
-			"它与 `%s` 的 compromised 不是同一个量，结论只能作敏感性/历史对比用，不得当作部署口径的主结论\n",
-			edgeexp.BasisReconPlaybook, edgeexp.BasisTargetedTTP)
-	}
+	// 措辞与拟合路径共用（`describeBasisFiltering`），否则两条路径对同一件事各说一套。
+	best := rep.Models[rep.Best]
+	describeBasisFiltering(stderr, "决策层指标", best.N, best.RecordsTotal,
+		best.Basis, best.BasisSkipped, best.BasisAssumed, allowMixedBasis, assumeBasis)
 	// 阈值被覆盖时必须在 stderr 上再喊一次（与"`-weights` 未参与计算"同款可见性纪律）：
 	// 敏感性分析的报告与部署口径的报告在正文里长得几乎一样，而它们会被贴进论文的不同小节。
 	if rep.ThresholdOverride > 0 {
@@ -394,6 +411,12 @@ func runFit(records []Record, base edgefactor.Params, factors map[string]float64
 	if err := RenderFitReport(&buf, fitted, rep); err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitFailure
+	}
+	// 拟合路径的"依据过滤"同样必须喊出来（Task 4D Fix round 2 / Important-1）：措辞与对比路径
+	// 共用同一个函数，参数取自拟合报告本体（两条路径的计数都来自同一个 `applyBasisGuard`）。
+	if opts.AllowMixedBasis || opts.AssumeBasis != "" || len(rep.BasisSkipped) > 0 {
+		describeBasisFiltering(stderr, "拟合", rep.N, rep.RecordsTotal,
+			rep.Basis, rep.BasisSkipped, rep.BasisAssumed, opts.AllowMixedBasis, opts.AssumeBasis)
 	}
 	buf.WriteString("\n")
 	// 拟合产物的**唯一用途**是回填：这里直接走 Task 9 的导出器（它本身带"渲染后重解析 + Validate"
