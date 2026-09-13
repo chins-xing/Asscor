@@ -1,0 +1,11 @@
+# shell 脚本必须以 LF 存储与检出。
+#
+# 背景（Task 4 Fix round 1 / I3）：本仓 `core.autocrlf=true` 且此前没有 .gitattributes，
+# 于是 Windows 侧的一次 `git checkout` 会把 `*.sh` 写成 CRLF —— 含 `then`/`do`/`fi`/`done`
+# 这类行尾关键字（大写）的脚本会**直接解析失败**（`bash: $'\r': command not found`），
+# 而这不是"某个脚本写错了"，是每个 shell 脚本都会中的环境陷阱（评测方用同仓的一个 CRLF
+# 脚本复现过）。
+#
+# 作用域刻意只到 shell 脚本：Go 文件的行尾是否归一留给维护者决定（既有 CRLF 的旧文件
+# 会让 `gofmt -l` 假报，改动面比本任务大）。
+*.sh text eol=lf
