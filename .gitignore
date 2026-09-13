@@ -64,6 +64,11 @@ lunwen/attachment/paper/
 !lunwen/clab-lab/data/
 lunwen/clab-lab/data/*
 !lunwen/clab-lab/data/experiments-final/
+# Containerlab 的**生成目录**（destroy/deploy 时重建）：含 `.state.clab.yaml`、
+# `topology-data.json`、ansible/nornir 清单，以及 `.tls/ca/ca.key`（**CA 私钥**）
+# ⇒ 一律不入库。此前它"看不见"只是因为白名单被下方整目录规则误杀；
+# 白名单修好后会重新出现为未跟踪文件，故在这里**显式**排除（把偶然变成明文）。
+lunwen/clab-lab/clab-asscor/
 # redundant zip copy of the final JSONL (the JSONL themselves are tracked)
 lunwen/clab-lab/data/experiments-final/*.zip
 # top-level zips (atomic-red-team, caldera) are large external assets: local only
@@ -77,8 +82,15 @@ lunwen?*/
 # Paper bundle (lunwen): local-only assets on main. Selective tracking
 # (whitelist) lives on the ASSCOR-Research-Core branch; main ignores the
 # whole bundle including the "lunwen - 副本" backup (lunwen*/ matches both).
-lunwen/
-lunwen*/
+#
+# ⚠️ 本分支（ASSCOR-Research-Core）**不得**再用 `lunwen/` 或 `lunwen*/` 整目录排除：
+# git 无法在"父目录被排除"之后再 `!` 回某个文件（见上面第 49-50 行的白名单注释），
+# 而 `lunwen*/` 也会匹配 `lunwen/` 本身 ⇒ 白名单**整体失效**，表现为
+# "目录里新加的文件静默不被跟踪"。2026-09-12 Task 4D 实测：新增
+# `lunwen/clab-lab/scripts/edge_lab.sh` 只能靠 `git add -f` 入库；
+# 同类事故见下方 2026-09-08 的 `Asscor/` 条目（38fab56 的门控文件从未入库）。
+# 备份目录 `lunwen - 副本/` 已由上面的 `lunwen?*/` 覆盖，第三方案例由 `lunwen/references/` 覆盖。
+
 
 #.kilo
 .kilo/
