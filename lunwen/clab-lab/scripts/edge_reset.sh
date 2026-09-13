@@ -104,6 +104,63 @@ ensure_caldera() {
 }
 T0=$(now_s); ensure_caldera "$T0" || exit 1
 
+# ============================================================================
+# **lxd 基质：复位 = "把既有实例准备成实验条件"**（Task 4D Step 4-B）
+# ============================================================================
+# 与 clab 的语义差别（必须显式写清，否则读者会以为 lxd 侧"跳过了复位"）：
+#   · clab 的复位是"毁掉再建拓扑"（`lab_down` + `lab_up`）—— 每次都是全新的容器集合；
+#   · LXD 上没有拓扑对象，A-1 上的实验环境是**既有实例集合**（且控制侧裁定不得删改
+#     `probe-ot005` 这类对照容器）⇒ 复位只能是"把目标实例准备成实验条件"：六个控制 +
+#     策略在/不在 + 活得着的 sandcat agent，每一步都**先查后做**（幂等）。
+# 因此这里**直接调用** `edge_target_prepare.sh` 并在它成功后收敛，不再走下面 clab 的
+# destroy/deploy/节点等待/agent 部署那几段（那几段在 lxd 下会依次以"不适用"失败 —— 那是
+# 刻意的，见 edge_lab.sh 对 lab_up/lab_down 的说明）。
+# shellcheck disable=SC2154  # lab_substrate 由 source edge_lab.sh 赋值
+if [ "$lab_substrate" = "lxd" ]; then
+  PREPARE="$SCRIPT_DIR/edge_target_prepare.sh"
+  [ -f "$PREPARE" ] || { echo "edge_reset: 缺少 lxd 侧的复位脚本 $PREPARE" >&2; exit 1; }
+  TARGET_NODE="${EDGEEXP_TARGET:-${EDGEEXP_TARGET_HOST:-}}"
+  [ -n "$TARGET_NODE" ] || {
+    echo "edge_reset: lxd 基质下必须给 EDGEEXP_TARGET=<实例名> —— 复位要作用在**某一个实例**上" >&2
+    exit 1
+  }
+  # `probe-ot005` 是控制侧的对照容器：复位**不得**把它当目标（判据写在最前面，避免"跑错了才发现"）
+  if [ "$TARGET_NODE" = "${EDGEEXP_CONTROL_INSTANCE:-probe-ot005}" ]; then
+    echo "edge_reset: 目标实例 $TARGET_NODE 是控制侧的对照容器（EDGEEXP_CONTROL_INSTANCE）——" >&2
+    echo "  复位不得作用在它上面（它必须保持原状以作对照）；请用实验目标实例（如 asc-tgt-1）。" >&2
+    exit 1
+  fi
+  T0=$(now_s)
+  if ! EDGEEXP_TARGET="$TARGET_NODE" bash "$PREPARE"; then
+    echo "edge_reset: 目标实例 $TARGET_NODE 没有准备成功（见上面的输出）—— 环境可用性未证实，整轮失败" >&2
+    exit 1
+  fi
+  prepare_s=$(( $(now_s) - T0 ))
+  # 复位留痕：与 clab 分支同形状的 run.d/reset-<scenario>.json（字段按 lxd 的语义给，
+  # 不写"拓扑/节点数"这些在 LXD 上不存在的量 —— 写了就是编造）。
+  FINISHED_AT=$(now_rfc3339)
+  TOTAL_S=$(( $(now_s) - START_S ))
+  cat > "$TMP_OUT" <<EOF
+{
+  "scenario": "${SCENARIO}",
+  "phase": "reset",
+  "env": "${EDGEEXP_ENV:-a1-lxd}",
+  "substrate": "lxd",
+  "started_at": "$STARTED_AT",
+  "finished_at": "$FINISHED_AT",
+  "elapsed_s": $TOTAL_S,
+  "instance": "$TARGET_NODE",
+  "policy_on": "${EDGEEXP_POLICY_ON:-0}",
+  "policy_rule": "${EDGEEXP_POLICY_RULE:-audit deny /etc/shadow r,}",
+  "timings_s": {"caldera": $caldera_s, "prepare": $prepare_s},
+  "note": "lxd 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+}
+EOF
+  mv "$TMP_OUT" "$RUN_D/$FILLER"
+  echo "edge_reset: 复位完成（lxd，总 ${TOTAL_S}s，prepare ${prepare_s}s）→ $RUN_D/$FILLER"
+  exit 0
+fi
+
 # 节点计数（基质的拓扑视图是权威视图，不是解析 yml 的缩进）。回显 "total up down"。
 # 实现在 `edge_lab.sh` 的 `lab_node_counts`（clab 分支与抽象前逐字等价）。
 # **inspect 本身失败时回显 `-1 -1 -1`**（而不是 0 0 0）：0 节点的含义是"拓扑已清空"，那是一条

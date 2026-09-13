@@ -28,6 +28,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC2154  # lab_target_bin/lab_substrate 由下面那行 source 赋值
 . "$SCRIPT_DIR/edge_lab.sh"
 
+# shellcheck disable=SC2154  # lab_target_bin 由 source edge_lab.sh 赋值
 command -v "$lab_target_bin" >/dev/null 2>&1 || { echo "edge_lab_pids: 找不到 $lab_target_bin" >&2; exit 2; }
 
 out="$(lab_node_pids "$NODE" "$PATTERN")" || { echo "edge_lab_pids: 取 $NODE 的进程表失败" >&2; exit 2; }
