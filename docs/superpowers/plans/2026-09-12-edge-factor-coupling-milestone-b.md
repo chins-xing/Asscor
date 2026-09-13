@@ -784,9 +784,17 @@ Expected: 全绿；**默认（不带目标参数）路径逐位不变**有显式
 
 - [ ] **Step 1 基质抽象**（**行为不变**是最硬的门禁）：把"建/毁拓扑、在目标内执行、把文件送进目标、取目标 IP"四件事收进 `edge_lab.sh`；`clab` 分支必须先证明与今天**逐位等价**（同一命令、同一顺序、同一错误串），既有干跑与离线夹具全绿。
 - [ ] **Step 2 LXD 节点驱动**：`edgescen -target` 接受 `docker:<容器>`（缺省，行为不变）与 `lxd:<实例>`；失败形态与 docker 路径**同粒度响亮**（实例不存在 / `lxc` 不可用 / 信封缺失 / 检查集为空 / nonce 不匹配），并复用 Task 4C 的 nonce 绑定。
-- [ ] **Step 3 硬化基线容器 + 基线记录**：建 `asc-tgt-1`（Ubuntu 24.04），装 NIDS（`suricata`，若服务起不来就如实记录为代理）、SIEM 告警文件、PAM 2FA/3FA 子串；`OT-005`/`RS-005` 天然满足。**门禁**：采集一条基线记录并断言**六个因子全部不激活**（链为空或只含基线声明项），且域分/总分与"全在缺失态"的今天**明显不同**（这正是 C1 要的方差来源）。
-- [ ] **Step 4 攻击 harness**：A-1 上装 Caldera（与论文同源，`-P sandcat,stockpile,atomic`），把 sandcat agent 经 `lxc exec` 部署进目标容器；`edge_attack.sh` 的 `clab`/docker 假设换成基质调用。
-- [ ] **Step 5 D2 试点（**决策点**）**：跑 2–3 个场景（含一个"卸掉某控制"的场景），回答**两个只能实测的问题**：① `compromised` 是否真的出现 `false`（标签摆脱单类别）；② 分数是否出现第三个数据点。**试点结论必须如实写进 §5.4**，并据此决定全量扫（Task 5/6）还是把决策层主张降级。
+- [ ] **Step 3 硬化基线容器 + 基线记录**：建 `asc-tgt-1`（Ubuntu 24.04），装 NIDS（`suricata`：**已实测** `systemctl is-active suricata` 为 `active` 且 `Suricata-Main` 真在跑）、SIEM 告警文件（`/etc/aide/aide.conf` 里的 report/alert 配置）、PAM 2FA/3FA 子串（`pam_google_authenticator` + `pam_u2f` + `pam_fprintd`，三类齐备才会让引擎 `EF-002` 通过）；`OT-005`（AppArmor 已加载）与 `RS-005`（syncookies=1）**天然满足**。**门禁**：采集一条基线记录并断言**六个因子全部不激活**（链为空或只含基线声明项），且域分/总分与"全在缺失态"的今天**明显不同**（这正是 C1 要的方差来源）。控制侧已在 A-1 上把这条路径**走通一遍**（失败检查 48 → 42、六个触发检查全绿，见 ledger），实现者应复现而不是重新发明。
+- [ ] **Step 3B 目标 TTP 与真实 AppArmor 控制（用户裁定 L2 的实现）**：
+  - 在 `asc-tgt-1` 上加一条**真实的自定义 AppArmor 限制策略**（例如禁止某二进制读 `/etc/shadow`、或禁止某类 `mount`），并用 `aa-status`/审计日志证明它**真的在 enforce**；
+  - 选/造一条**会撞该策略**的目标 TTP（Caldera ability，随场景装载）：策略卸载 ⇒ 该 ability `status == 0`（成功）；策略加载 ⇒ 该 ability `status != 0`（被拒）。**判据**：至少各跑一次，把两种 link 状态与容器侧 AppArmor 拒绝痕迹一起贴进报告；
+  - **不得**用"只改标签"的方式产生方差（那会让 `compromised` 变成编造的字段）。
+- [ ] **Step 4 攻击 harness**：A-1 上装 Caldera（与论文同源，`-P sandcat,stockpile,atomic`；控制侧已实测可用：2043 abilities / 28 adversaries、API `:8888`、`sandcat.go-linux` 载荷在仓库里可直接 `lxc file push`），把 agent 经 `lxc exec` 部署进目标容器并**验证 trusted**；`edge_attack.sh` 的 `clab`/docker 假设换成基质调用。
+- [ ] **Step 5 D2 试点（**决策点**）**：跑 2–3 个场景（含"策略卸载"与"策略加载"两侧），回答三个只能实测的问题：① 目标 TTP 的成败是否**真的**随 AppArmor 策略翻转（⇒ `compromised` 出现 `false`）；② 分数是否出现第三个数据点；③ 固定剧本 `Discovery` 作为**背景测量**是否如实测那样恒为成功（**必须如实写**：控制侧已在硬化容器上实测 `links=14 / status={0:13,-3:1}` ⇒ `compromised=True`、`block_effective=False`，证明"只读侦察型攻击在任何姿态下都成功"）。**结论口径（用户裁定 L2，必须逐条写进 §5.4 与报告）**：
+  - `compromised` 的语义是"**该场景的目标 TTP 是否成功**"，**不是**"主机被攻陷"；
+  - 决策层指标（漏判率/误阻断率/AUC）**只对带目标 TTP 的记录可算**；其余因子的场景**只作分数侧**，其标签**不得**用"侦察剧本恒真"顶替；
+  - 分数侧的 `OT-005` 失败仍是**合成注入**（容器内 `aa-status` 恒报 profiles loaded）⇒ **不得**写成"真机上该检查翻了"；
+  - 记录里加**标签依据**标记（additive，建议 `ground_truth.basis` ∈ {`targeted_ttp`, `recon_playbook`}），Task 6 只吃 `targeted_ttp`。
 - [ ] **Step 6 门禁与提交**：`go build ./...`、`go vet ./internal/...`、`go test -tags "expr,engine,checks" ./cmd/edgescen/`、`-tags edgeexp ./cmd/edgecompare/`、`internal/edgeexp`、`gofmt`、`bash -n` + `shellcheck` 全部脚本；**默认（docker/clab）路径逐位不变**必须有显式证据。
 
 **不做**：不搬 18 节点拓扑；不改评分与 `internal/edgefactor`/内仓；不为了让场景通过而弱化门禁（"注入真的生效"这条牙齿必须保留，声明面按用户裁定的"基线活跃集 ∪ 注入集"扩展）。
