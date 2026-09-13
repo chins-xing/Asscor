@@ -463,6 +463,81 @@ func TestLXDTargetRefusesToWriteWhenEnvelopeIsForged(t *testing.T) {
 }
 
 // ============================================================================
+// M-1：docker 路径的错误串必须与 Task 4C（97581d8）**逐字相同**
+// ============================================================================
+
+// TestDockerErrorStringsMatchTask4CBytes 把"抽象前那几条错误串"钉成字面量。
+//
+// 为什么必须有这一条（Fix round 1 / M-1）：写"逐位不变"的钉子如果只比较**两条新路径**
+// （`docker:x` vs 裸名字），它抓不到"两条路径一起变了"的情形 —— 而 Step 2 泛化 `runDocker`
+// 时恰好就是这样：错误串被统一成 `docker exec 失败（<整条 argv>）`，与 97581d8 的
+// `docker exec %s %s 失败` **不同**。评审用一条 overlay 检查读出了这个差异。
+//
+// 这里的期望值**逐字抄自 97581d8 的 `runDocker`**（不是从当前实现反推的）：
+//
+//	"节点内采集：docker cp %s 失败: %s"        （args[2] = 本地文件）
+//	"节点内采集：docker exec %s %s 失败: %s"   （args[1] = "-e"、args[2] = "EDGESCEN_NODE_NONCE=<nonce>"）
+//	"节点内采集：docker %s 失败: %s"           （兜底，整条 argv）
+//	"docker 内采集：取本进程可执行文件路径失败: %w"
+//
+// 顺带证明 lxd 侧**不受**这条约束（它没有"不许变"的历史包袱，说得更准才有用）：同一个假 CLI
+// 以 lxc 形态失败时，错误串按 `lxc file push <本地> → <实例><目标>` 报。
+func TestDockerErrorStringsMatchTask4CBytes(t *testing.T) {
+	registerFixtureChecks()
+	useFixtureNonce(t)
+
+	t.Run("docker cp 失败（97581d8 的字面量）", func(t *testing.T) {
+		writeDockerShim(t, fakeDocker{exitCode: 1, dockerErr: "Error response from daemon: No such container: nope"})
+		_, _, err := collectChecksForTarget("docker:nope")
+		if err == nil {
+			t.Fatal("必须报错")
+		}
+		if !strings.Contains(err.Error(), "节点内采集：docker cp ") ||
+			!strings.Contains(err.Error(), " 失败: Error response from daemon: No such container: nope") {
+			t.Errorf("docker cp 的错误串必须与 Task 4C 逐字同形（`节点内采集：docker cp <本地> 失败: <stderr>`）；实际: %v", err)
+		}
+	})
+
+	t.Run("docker exec 失败（97581d8 的字面量：args[1] 与 args[2] 两个占位）", func(t *testing.T) {
+		dir := t.TempDir()
+		// cp 必须成功、exec 必须失败：用一个按子命令分派的假 docker。
+		script := "#!/bin/sh\n" +
+			"if [ \"$1\" = \"cp\" ]; then exit 0; fi\n" +
+			"echo 'Error response from daemon: No such container: nope' 1>&2\nexit 1\n"
+		if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(script), 0o755); err != nil {
+			t.Fatalf("写假 docker: %v", err)
+		}
+		bat := "@echo off\r\nif \"%1\"==\"cp\" exit /b 0\r\n" +
+			"echo Error response from daemon: No such container: nope 1>&2\r\nexit /b 1\r\n"
+		if err := os.WriteFile(filepath.Join(dir, "docker.bat"), []byte(bat), 0o755); err != nil {
+			t.Fatalf("写假 docker.bat: %v", err)
+		}
+		t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+		_, _, err := collectChecksForTarget("nope")
+		if err == nil {
+			t.Fatal("必须报错")
+		}
+		// 97581d8 的形状：`docker exec <args[1]> <args[2]> 失败`，即 `-e` 与 `NONCE=…` 各占一格。
+		wantPrefix := "节点内采集：docker exec -e " + nodeNonceEnv + "=" + fixtureNonce + " 失败: "
+		if !strings.HasPrefix(err.Error(), wantPrefix) {
+			t.Errorf("docker exec 的错误串必须与 Task 4C 逐字同形（`%s…`）；实际: %v", wantPrefix, err)
+		}
+	})
+
+	t.Run("lxd 侧不受 docker 字面量约束（按 file push 的形状报）", func(t *testing.T) {
+		writeLXCShim(t, fakeDocker{exitCode: 1, dockerErr: "Error: Instance not found"})
+		_, _, err := collectChecksForTarget("lxd:nope")
+		if err == nil {
+			t.Fatal("必须报错")
+		}
+		if !strings.Contains(err.Error(), "lxc file push ") || !strings.Contains(err.Error(), " → ") {
+			t.Errorf("lxd 的错误串应报出 `file push <本地> → <实例><目标>`；实际: %v", err)
+		}
+	})
+}
+
+// ============================================================================
 // 变异：把 lxd 侧的 lxc 换成 docker ⇒ 用例**必须**红
 // ============================================================================
 

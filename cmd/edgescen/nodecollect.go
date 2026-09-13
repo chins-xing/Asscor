@@ -85,6 +85,17 @@ type nodeTarget struct {
 	Node      string
 }
 
+// binary 是这条目标路径**实际执行**的节点侧 CLI（仅用于诊断串：同一个 `No such container`
+// 在两种基质上的排障动作不同，而"到底是哪个 CLI 说的"必须能从报错里读出来）。
+func (nt nodeTarget) binary() string {
+	switch nt.Substrate {
+	case substrateLXD:
+		return "lxc"
+	default:
+		return "docker"
+	}
+}
+
 // parseNodeTarget 解析 `-target`，语法三种（`-h` 文案与错误串里必须写明同一套）：
 //
 //	""                 ⇒ 由调用方处理（collectChecksForTarget 的默认路径 = 本机）
@@ -299,7 +310,9 @@ func observationTargetNode(nt nodeTarget, hostname string) string {
 func fetchNodeChecks(nt nodeTarget) (nodeCheckEnvelope, error) {
 	bin, err := os.Executable()
 	if err != nil {
-		return nodeCheckEnvelope{}, fmt.Errorf("%s 内采集：取本进程可执行文件路径失败: %w", nt.Substrate, err)
+		// 措辞按基质分派：docker 侧保持 Task 4C 的字面量（`docker 内采集：…`），lxd 侧说 `lxc`
+		// —— 见 runNodeCLI 里关于"为什么错误串要逐字分辨"的说明。
+		return nodeCheckEnvelope{}, fmt.Errorf("%s 内采集：取本进程可执行文件路径失败: %w", nt.binary(), err)
 	}
 	// 一次性 nonce（Fix round 1 / I-2）：本次运行生成、只经环境变量交给**本次**节点执行命令，
 	// 故它同时把"不是本次运行的信封"排除掉（残留二进制、另一次运行、别人打的 JSON 行）。
@@ -379,6 +392,10 @@ func runNodeProcess(nt nodeTarget, containerPath, emitFlag, nonce string) ([]byt
 }
 
 // runDocker 执行一次 docker 子命令（stdout/stderr 分开收集）。
+// runDocker 执行一次 docker 子命令（stdout/stderr 分开收集）。
+//
+// **错误串与 Task 4C（提交 97581d8）**逐字相同** —— 见 runNodeCLI 的说明：那是本工具唯一
+// 面向 docker 的取数入口，操作者日志与既有断言都按它的字面量写。
 func runDocker(args ...string) ([]byte, error) {
 	return runNodeCLI("docker", args...)
 }
@@ -393,12 +410,21 @@ var runLXC = func(args ...string) ([]byte, error) {
 	return runNodeCLI("lxc", args...)
 }
 
-// runNodeCLI 是节点侧 CLI 的**唯一**执行点（Task 4D Step 2 把 docker 专用实现泛化到这里）。
+// runNodeCLI 是节点侧 CLI 的执行点（Task 4D Step 2 把 docker 专用实现泛化到这里）。
 //
 // 失败时把子进程的 stderr **原样带进错误**：目标不存在、容器没在跑、CLI 不在 PATH
 // —— 这三种情况的处置完全不同，笼统地说"节点采集失败"会让操作者去查错的东西。
-// 诊断串里带上**是哪一种基质**（`docker` / `lxc`）：同一个 `No such container` 在两种基质上
-// 的排障动作不同，而错误信息是同一条（那正是最容易被读成"环境问题"的形态）。
+//
+// **错误串按基质分派，且 docker 那几条逐字保持 Task 4C 的取值**（Fix round 1 / M-1）：
+// 泛化时曾统一成 `%s exec 失败（整条 argv）`，于是 `docker:` 路径的错误信息与抽象前**不同**了
+// —— 而 brief 与报告写的是"`docker:` 路径不得改变任何字节"。评审用一条 overlay 检查把它读出来：
+// ```
+// 97581d8: 节点内采集：docker exec %s %s 失败: %s   （args[1]="-e"、args[2]="EDGESCEN_NODE_NONCE=<nonce>"）
+// 泛化后 : 节点内采集：docker exec 失败（exec -e EDGESCEN_NODE_NONCE=<nonce> <容器> <二进制> -emit-checks）: …
+// ```
+// 现在两条路径各有自己的措辞：docker 保留字面量（**含那个把 `-e` / `NONCE=…` 当参数打印的形状**，
+// 它是既有日志的形态，不是本次引入的），lxc 用按实例与目标路径报错的说法（`file push <本地> → <实例><目标>`
+// 与完整的 `exec` 命令）—— 后者是**新**基质，没有"不许变"的历史包袱，说得更准才有用。
 func runNodeCLI(bin string, args ...string) ([]byte, error) {
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(bin, args...)
@@ -412,23 +438,29 @@ func runNodeCLI(bin string, args ...string) ([]byte, error) {
 		if len(args) == 0 {
 			return nil, fmt.Errorf("节点内采集：%s 失败（无参数）: %s", bin, detail)
 		}
+		if bin == "lxc" {
+			switch args[0] {
+			case "file":
+				// `lxc file push <本地> <实例><目标>`：报出**本地文件**与**目标**，两者都是排障要的信息。
+				if len(args) >= 4 {
+					return nil, fmt.Errorf("节点内采集：lxc file push %s → %s 失败: %s", args[2], args[3], detail)
+				}
+			case "exec":
+				return nil, fmt.Errorf("节点内采集：lxc exec 失败（%s）: %s", strings.Join(args, " "), detail)
+			}
+			return nil, fmt.Errorf("节点内采集：lxc %s 失败: %s", strings.Join(args, " "), detail)
+		}
 		switch args[0] {
 		case "cp":
 			if len(args) >= 3 {
-				return nil, fmt.Errorf("节点内采集：%s cp %s 失败: %s", bin, args[2], detail)
-			}
-		case "file":
-			// `lxc file push <本地> <实例><目标>`：报出**本地文件**与**目标**，两者都是排障要的信息。
-			if len(args) >= 4 {
-				return nil, fmt.Errorf("节点内采集：%s file push %s → %s 失败: %s", bin, args[2], args[3], detail)
+				return nil, fmt.Errorf("节点内采集：docker cp %s 失败: %s", args[2], detail)
 			}
 		case "exec":
-			// docker: `exec <容器> <二进制> …`；lxc: `exec [--env K=V] <实例> -- <二进制> …`。
-			// 这里刻意**不猜**参数位（两种基质的形状不同），统一报完整命令 —— 逐位对齐的猜测
-			// 一旦猜错，错误信息会指向错的那个参数，比不猜更坏。
-			return nil, fmt.Errorf("节点内采集：%s exec 失败（%s）: %s", bin, strings.Join(args, " "), detail)
+			if len(args) >= 3 {
+				return nil, fmt.Errorf("节点内采集：docker exec %s %s 失败: %s", args[1], args[2], detail)
+			}
 		}
-		return nil, fmt.Errorf("节点内采集：%s %s 失败: %s", bin, strings.Join(args, " "), detail)
+		return nil, fmt.Errorf("节点内采集：docker %s 失败: %s", strings.Join(args, " "), detail)
 	}
 	return stdout.Bytes(), nil
 }
