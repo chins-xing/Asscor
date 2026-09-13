@@ -262,6 +262,7 @@ chain.window_seconds = 300
 | `observed.edge_factor_chain[].effective_factor` | `(0,1]` | 0 是 `Synthesize` 的"未提供"哨兵 ⇒ 静默回落到配置权重 |
 | `observed.edge_factor_chain[].ts` / `observed.checks[].ts` | 空串合法（= 缺席）；非空必须 **RFC3339** | 非空但解析不了一律拒绝（`"..."` 这种占位写法会被拒）；`ts` 是 chain 模型的**唯一**时间来源 — 在线引擎的结果类型没有时间字段，故 chain 只能离线评估（spec §10.1） |
 | `ground_truth.compromised` | 必须显式出现 | 缺失 ⇒ 标签静默当成"未攻陷" |
+| `ground_truth.basis` | **additive、可选**（Task 4D Step 5）；取值 `targeted_ttp` / `recon_playbook` | 说明这条标签**从哪来**：`targeted_ttp` = 该场景的**目标 TTP** 成败（**决策层指标只吃这一类**）、`recon_playbook` = 固定侦察剧本 `Discovery` 的结果（在任何姿态下都成功，只作背景测量）。**不得**给没有目标 TTP 的场景编造标签，也不得让两类混进同一个指标集（spec §2.1 的 L2 口径） |
 
 `spc_score` / `threat_coeff` 的来源是引擎 `AssessmentOutput.SPCScore` 与 `[threat] coefficient`（引擎总分 = `round2(0.5·base + 30·E + 20·T)`）。**注意**：仓内 `internal/attck/attck.go` 中存在同名字段但写的是 `predictedRisk.EnhancedThreat`（**另一个量**），采集器取错会让离线分数整体偏移而门禁全绿 —— 故本节的示例记录带一条 round-trip 钉桩（`observed.final_score` 必须能被 `cmd/edgecompare` 用记录自身输入复算出来，已验证），采集器落地时必须对自采数据做同样的事。
 
