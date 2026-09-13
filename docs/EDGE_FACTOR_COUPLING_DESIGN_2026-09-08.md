@@ -293,21 +293,36 @@ chain.window_seconds = 300
 
 ### 5.3 环境分工
 
+> **2026-09-12 用户裁定（Task 4D 起生效）**：实验基质搬到 **A-1 远程服务器（LXD，环境真实）**
+> ——"我需要用时间换工程质量"。下表已按这次裁定重排：**A-1/LXD 是实验主场**，
+> WSL2 Containerlab 退为**开发与离线**（门禁、离线夹具、离线比较、论文复算都在那里做）。
+> 脚本侧的唯一开关是 `EDGEEXP_SUBSTRATE=clab|lxd`（默认 `clab` = 今天的行为，见 §5.4.2）。
+
 | 环境 | 角色 | 注意 |
 |---|---|---|
-| WSL2 Containerlab（14 节点真实拓扑） | 主战场，22+3 场景 | `clab destroy+deploy`；`.wslconfig` 限内存 8GB |
-| A-1（Ubuntu，2c/3.4GB） | 重复性（每场景 3 次）+ 稳定性 | **agent ≤14**；曾因 24 进程压垮 sshd |
+| **A-1（Ubuntu 24.04 / LXD 5.21.7 LTS）** | **实验主场**：22+3 场景 + 每场景 3 次重复 | 基质 `lxd`；既有实例集合（**不建/不毁拓扑**，见 §5.4.2 第 6 条）；存储池 zfs 8.23 GiB、网桥 `lxdbr0` = `10.217.208.1/24` |
+| WSL2 Containerlab（14 节点拓扑） | **开发与离线**：门禁、离线夹具、`edgecompare` 离线比较、论文复算 | 基质 `clab`；`clab destroy+deploy` 只在这里；`.wslconfig` 限内存 8GB |
 
-#### 5.3.1 观测主体（Task 4C：评估必须发生在被攻节点内）
+两条环境的**共同前提**：门禁与判据只有一份实现（`edge_lab.sh` 是唯一的基质调用点，
+`cmd/edgescen` 的 `-target` 是唯一的取数入口）—— 换基质只换"命令发到哪"，不换"什么算成功"。
+A-1 上**不要**跑的：攻击（Caldera 已在跑，`/opt/caldera`，API `:8888`，**不得重启/重装**）、
+对 `probe-ot005` 的任何配置改动（它是控制侧的对照容器）。
+
+#### 5.3.1 观测主体（Task 4C 建立，Task 4D 扩到两种基质）
 
 **口径**：一条记录里的 `observed.checks[]` 描述的是**哪台机器**，必须能被记录本身判定 ——
-因为被攻节点是拓扑里的 `host1` 容器（ground truth 的 `compromised` 来自它上面的 Caldera agent），
-而采集器默认跑在 WSL 宿主上。
+因为被攻节点是被测目标（ground truth 的 `compromised` 来自它上面的 Caldera agent），
+而采集器默认跑在宿主上。
 
 | 项 | 取值 | 落盘位置 |
 |---|---|---|
 | 默认（不声明目标） | **本机**（跑 `edgescen` 的那台）—— 与 2026-09 之前逐位一致 | `meta.observation_target` **缺席**（`omitempty`，记录字节不变） |
-| 节点内（`--target <容器>`） | 该容器内部（同一份二进制经 `docker cp` + `docker exec` 执行） | `meta.observation_target = "node:<容器> (hostname=<节点内 hostname>)"` |
+| 容器内（`--target <容器名>` 或 `--target docker:<容器>`） | 该容器内部（同一份二进制经 `docker cp` + `docker exec` 执行） | `meta.observation_target = "node:<容器> (hostname=<节点内 hostname>)"`（**逐字不变**） |
+| LXD 实例内（`--target lxd:<实例>`，Task 4D） | A-1 上的既有实例内部（同一份二进制经 `lxc file push` + `lxc exec --env … --` 执行） | `meta.observation_target = "node:<实例> (substrate=lxd, hostname=<节点内 hostname>)"` |
+
+为什么 lxd 侧**多印** `substrate=lxd`、而 docker 侧一个字节都不动：`docker exec host1` 与
+`lxc exec host1 --` 两种观测在数据上本来完全同形，而"这批数据采自哪种基质"正是 Task 4D 要回答的
+问题；反过来，docker 是默认基质，改它的取值会让 Task 4C 已落盘的记录与既有断言全部失效。
 
 为什么必须是新字段而不是复用现有的：`meta.env` 是**操作者手填的标签**（默认值 `wsl-clab-14`，
 与"这份检查集真的来自那台机器"无关 —— 采错机器时它恰恰会照抄那个默认值），`meta.config_hash`
@@ -315,15 +330,19 @@ chain.window_seconds = 300
 2026-09 的一次真实冒烟就采成了 WSL 开发机（输出路径 `/mnt/f/...` 是铁证），而记录字段完全正常
 —— 那次事故在本表的口径下**会**被 `edge_collect.sh` 的 `observation_subject` 核对拦下。
 
-三条纪律：
+四条纪律（Task 4D 起，第 4 条是新的）：
 
 1. **默认路径逐位不变**：不声明目标时不传 `--target`，取数仍走 `runHostChecks()`（有显式用例钉住：
    逐要素相等 + "一个 docker 子进程都没起"）。
-2. **绝不静默回落本机**：目标缺失、`docker` 不可用、取回的检查集为空、信封标记/主机名缺失
+2. **绝不静默回落本机**：目标缺失、基质 CLI 不可用、取回的检查集为空、信封标记/主机名缺失
    —— 一律响亮失败。回落是最危险的形态：记录看起来是节点数据、实际是宿主数据。
 3. **同一轮数据必须来自同一台机器**：`edge_collect.sh` 会核对"harness 产物里
    `condition_probes[].probe_target`"与"记录 `meta.observation_target`"是否指向同一个节点
    （R 组的证据与 `checks[]` 的观测分属两台机器时整轮失败）。
+4. **绝不静默换成另一种基质**（Task 4D）：`-target` 的基质前缀只认 `docker:` / `lxd:`，
+   裸名字按 `docker` 处理；看着像基质前缀却不在白名单（`unknown:host1`）**在起任何子进程之前**
+   报错。把 `lxd:probe-ot005` 当容器名交给 docker，会以 `No such container: lxd:probe-ot005`
+   失败 —— 错误指向一个不存在的容器，而真正的原因（基质拼错）完全看不出来。
 
 ### 5.4 实验执行手册（Task 4 交付）
 
@@ -335,11 +354,12 @@ chain.window_seconds = 300
 | 交付物 | 路径 | 说明 |
 |---|---|---|
 | 实验模板 ×4 | `configs/edgeexp/{m0-baseline,vector,graph,chain}.ini` | 四份**只差** `[edge_factors.model]` 段；采集恒用 `m0-baseline.ini` |
-| 复位脚本 | `lunwen/clab-lab/scripts/edge_reset.sh` | Caldera 就绪 + `clab destroy --cleanup` + `clab deploy` + sandcat agent 回连 |
+| 复位脚本 | `lunwen/clab-lab/scripts/edge_reset.sh` | Caldera 就绪 + 毁/建拓扑（`clab` 基质：`clab destroy --cleanup` + `clab deploy`）+ sandcat agent 回连。**lxd 基质下建/毁拓扑不适用**（A-1 上不建不毁，见 §5.4.2 第 6 条） |
 | 攻击脚本 | `lunwen/clab-lab/scripts/edge_attack.sh <scenario> <out.json>` | 相位推进 + 固定剧本 + 客观结果（ground truth 的唯一来源）；`EDGEEXP_TARGET` 声明被攻节点后，条件探针在**该节点内**执行 |
-| 节点内条件探针 | `lunwen/clab-lab/scripts/edge_probe.sh <容器名>` | 被 `edge_attack.sh` source；**在节点内**执行 §5.4.7 的六因子条件判据（`docker exec -i`），退出码 0=条件成立 / 1=不成立 / **2=探针没跑成**。见 §5.3.1 与 §5.4.9 |
+| 节点内条件探针 | `lunwen/clab-lab/scripts/edge_probe.sh <节点名>` | 被 `edge_attack.sh` source；**在节点内**执行 §5.4.7 的六因子条件判据（经基质层下发，见下一行），退出码 0=条件成立 / 1=不成立 / **2=探针没跑成**。见 §5.3.1 与 §5.4.9 |
+| **基质层**（Task 4D） | `lunwen/clab-lab/scripts/edge_lab.sh` | **唯一**的基质调用点（被上面四个脚本 source）：`EDGEEXP_SUBSTRATE=clab|lxd` 选择；接口 `lab_up`/`lab_down`/`lab_target_exec(_detached)`/`lab_push`/`lab_node_ip`/`lab_node_running`/`lab_inspect`/`lab_list`/`lab_node_counts`/`lab_target_spec`。调用脚本里**不得**再出现 `clab`/`docker`/`lxc` 命令字面 |
 | 采集脚本 | `lunwen/clab-lab/scripts/edge_collect.sh <scenario> <config.ini> <attack.json> <run>` | 一条记录 + **因子集相等断言** + 门禁⓪ + 时钟核对 + 门禁② 残差 + **观测主体核对**（`EDGEEXP_TARGET` ⇒ 记录必须带 `meta.observation_target`，且与 harness 的探针节点一致） |
-| 矩阵驱动 | `lunwen/clab-lab/scripts/edge_matrix.sh [场景…]` | 25 场景全量（无参数）或冒烟子集（给了场景名）；名单与 `edgescen -list` 逐项核对 |
+| 矩阵驱动 | `lunwen/clab-lab/scripts/edge_matrix.sh [场景…]` | 25 场景全量（无参数）或冒烟子集（给了场景名）；名单与 `edgescen -list` 逐项核对；干跑（`EDGEEXP_DRY_RUN=1`）会打印**基质**与解析后的 `-target` 语法 |
 | 阈值敏感性驱动 | `lunwen/clab-lab/scripts/edge_threshold_sensitivity.sh` | §5.4.6 的强制行；**只读**记录 + 配置 + 离线工具（不碰 clab/Caldera），故随时可补跑；**默认不跑**（`EDGEEXP_SENSITIVITY_THRESHOLDS` 显式开启） |
 | `-factors`/`-weights` 推导 | `lunwen/clab-lab/scripts/edge_spec_lib.sh` | 被矩阵与敏感性驱动**共用**的函数库（单一来源：不在两个脚本里各抄一份 Python，否则两份报告可能用了不同的因子权重而看不出来） |
 | 记录 | `lunwen/clab-lab/data/edgefactors/records-<env>-<date>.jsonl` | 每场景**一条**；门禁①/② 直接跑这份**全量**文件 |
@@ -349,30 +369,51 @@ chain.window_seconds = 300
 
 #### 5.4.2 前置条件
 
-1. **WSL2 `Containerlab` 发行版**：Docker + `clab`，拓扑 `lunwen/clab-lab/asscor.clab.yml`
+0. **先选基质**（Task 4D 起，两种基质的"环境"完全不同，只有产物的**门禁**是同一套）：
+
+   | 基质 | 怎么选 | 环境是什么 | 干什么 |
+   |---|---|---|---|
+   | `clab`（默认，= 今天的行为） | 什么都不用设，或显式 `export EDGEEXP_SUBSTRATE=clab` | WSL2 的 Containerlab 拓扑（14 节点） | **开发与离线**：离线夹具、门禁、`edgecompare` 离线比较、论文复算 |
+   | `lxd`（A-1） | `export EDGEEXP_SUBSTRATE=lxd`（+ 按第 6 条给 `EDGEEXP_LXC_BIN`） | A-1 上**既有的 LXD 实例集合** | **实验主场**：22+3 场景 + 每场景 3 次重复 |
+
+   两条配套纪律：**① 基质名拼错会直接失败**（`EDGEEXP_SUBSTRATE=clabb` 在 source 基质层时就中止，
+   不静默退回 `clab` —— 一次"以为在 A-1 上跑、其实在 WSL 上跑"的整轮矩阵，记录里的 `env` 标签
+   看起来完全正常）；**② `-target` 的语法由基质决定**，调用脚本只给**节点名**
+   （`EDGEEXP_TARGET`），前缀由 `lab_target_spec` 唯一地加（clab: 裸容器名；lxd: `lxd:<实例>`）——
+   两处各拼一次前缀会让 `observation_subject` 门禁以"记录声称 X、声明 Y"的名义把每条记录判死。
+
+1. **（clab 基质）WSL2 `Containerlab` 发行版**：Docker + `clab`，拓扑 `lunwen/clab-lab/asscor.clab.yml`
    —— 实测 **18 个节点容器**（`asc-asscor-{edge0,host1..host12,r1..r5}`，拓扑里 `prefix: asc`）。
    **攻击侧只部署一个 sandcat agent（默认 `host1`）**，这直接决定了客观结果的口径：
    `nodes_affected ≡ 1`（多节点横向不在本手册的范围内）。
-2. **Caldera v5** 在 `/opt/caldera`。`edge_reset.sh` 会自己**确保它在跑**：
+2. **（lxd 基质）A-1 上的既有实例**：LXD `5.21.7 LTS`、storage pool `default`（zfs）、
+   网桥 `lxdbr0` = `10.217.208.1/24`。**两个已实测的坑**：
+   - **镜像必须用 `lxc launch ubuntu:24.04`**，`lxc launch images:ubuntu/24.04` **会失败**
+     （`images:` remote 已不再提供该别名）；
+   - `ssh_exec` 在 **~600 s** 会打断前台长命令（`lxc launch` 就这么失败过一次）⇒ **长操作一律
+     `nohup … > /root/x.log 2>&1 &` + 轮询日志**，不要指望一次前台 ssh 调用能等完。
+3. **Caldera v5** 在 `/opt/caldera`。`edge_reset.sh` 会自己**确保它在跑**：
    `./venv/bin/python server.py --fresh -P sandcat,stockpile,atomic`。
    `-P sandcat,stockpile,atomic` 必须显式给出 —— 缺插件列表时 `sandcat.go-linux` payload 不会被生成，
    而"没有 payload"会在第 4 步以一个看起来像网络问题的错误出现。
-3. **两个 Linux 工具**（交叉编译，脚本默认读 `build/`）：
+   **A-1 上它已经在跑**（API `http://127.0.0.1:8888`，key `ADMIN123`）：**不要重启、不要重装**。
+4. **两个 Linux 工具**（交叉编译，脚本默认读 `build/`）：
    ```bash
    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags 'expr,engine,checks' -o build/edgescen  ./cmd/edgescen
    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags edgeexp                -o build/edgecompare ./cmd/edgecompare
    ```
    `edgescen` 的最小 tag 集是 **`expr,engine,checks`**（三个都不可省：`engine` 给评分链、`checks` 给真实
-   检查登记表、`expr` 是实验工具的构建约束）。
-4. **模板纳入回归门禁**：`go test ./internal/config/ -run TestEdgeExpConfigTemplatesLoad` 必须绿 ——
-   模板装不上要在 `go test` 阶段就红，而不是在 WSL 上跑完一轮采集之后。
-5. **观测主体：把被攻节点的容器名交给整条管线**（Task 4C / I-9）：
+   检查登记表、`expr` 是实验工具的构建约束）。A-1 上只需要 `edgescen`（`edgecompare` 是离线工具）。
+5. **模板纳入回归门禁**：`go test ./internal/config/ -run TestEdgeExpConfigTemplatesLoad` 必须绿 ——
+   模板装不上要在 `go test` 阶段就红，而不是在 lab 上跑完一轮采集之后。
+6. **观测主体：把被攻节点的名字交给整条管线**（Task 4C / I-9）：
 
    ```bash
-   export EDGEEXP_TARGET=asc-asscor-host1     # 拓扑默认 prefix=asc、agent 在 host1
+   export EDGEEXP_TARGET=asc-asscor-host1     # clab：容器名（拓扑默认 prefix=asc、agent 在 host1）
+   export EDGEEXP_TARGET=probe-ot005          # lxd：实例名（前缀由 lab_target_spec 加）
    ```
 
-   `edge_matrix.sh` **默认**就是它并 export 给两个子脚本；只有单独调 `edge_attack.sh` /
+   `edge_matrix.sh` **默认**就是 clab 的那个名字并 export 给子脚本；只有单独调 `edge_attack.sh` /
    `edge_collect.sh` 时才需要手工 export（只给 `edge_collect.sh` 设而不给 `edge_attack.sh` 设
    会被采集端的 `observation_subject` 门禁拒掉，见 §5.3.1 第 3 条）。
 
@@ -380,8 +421,8 @@ chain.window_seconds = 300
 
    | 变量 | 含义 | 取值 | 谁用 |
    |---|---|---|---|
-   | `EDGEEXP_TARGET` | **观测主体**：评估在哪个**容器**内做 | 容器名 `asc-asscor-host1` | `edge_attack.sh`（节点内条件探针）、`edge_collect.sh`（`edgescen --target`） |
-   | `EDGEEXP_TARGET_HOST` | **复位脚本的攻击目标**：`edge_reset.sh` 把 agent 部到哪台**节点**上 | 节点名 `host1`（`edge_reset.sh:23,37`） | `edge_reset.sh` |
+   | `EDGEEXP_TARGET` | **观测主体**：评估在哪个**节点**内做 | clab: 容器名 `asc-asscor-host1`；lxd: 实例名 `probe-ot005` | `edge_attack.sh`（节点内条件探针）、`edge_collect.sh`（`edgescen --target`） |
+   | `EDGEEXP_TARGET_HOST` | **复位脚本的攻击目标**：`edge_reset.sh` 把 agent 部到哪台**节点**上 | 节点名 `host1`（`edge_reset.sh`） | `edge_reset.sh`（**只在 clab 基质下有"部 agent"这个动作**） |
 
    置空（`EDGEEXP_TARGET=`）即退回"在本机评估"的旧形态：S 组照常（`condition_probes` 如实留空，
    **不是**证据），**R 组会硬失败**（它的语义就是"在目标节点上真的没有这个防护"）。
@@ -553,7 +594,7 @@ build/edgecompare -records data/edgefactors/records-wsl-clab-14-<date>.jsonl \
 
 **阈值敏感性**：`[acceptability] threshold = 80.0` 是部署的真实判定线（GB/T 22239-2019 Level 3）；
 lab 侧对应的键在 `lunwen/clab-lab/kernel-config.ini` 的 `[acceptability]` 段（**不是** `[weights]` 段 ——
-解析器只在 `[acceptability]` 里读它，写错段位是静默 no-op，见 §5.4.8）。
+解析器只在 `[acceptability]` 里读它，写错段位是静默 no-op，见 §5.4.11）。
 若该线让全部记录落进"不可接受"（漏判样本为 0 或误阻断样本为 0），报告必须**另附一行
 `threshold = 60.0`（设计文档示例值）的敏感性结果**并明确标注那是敏感性分析 —— 换阈值改结论这件事
 必须写在脸上，不能只报一组数字。
@@ -756,7 +797,44 @@ Fix round 1 / I-6 把这个数字从"7 纯身份 + 1 交互"改正 —— 后者
 这个防护"，没有节点侧证据就不能声称已核实 —— 故照 §5.4.2 第 5 条 export `EDGEEXP_TARGET`
 （或直接用 `edge_matrix.sh` 的默认值 `asc-asscor-host1`）是跑 R 组的**前提**，不是可选项。
 
-#### 5.4.8 lab 配置的键位纪律（每个键都要写在解析器**会读**的段里）
+#### 5.4.9B A-1/LXD 基质的取数实测（Task 4D Step 1/2，**只完成取数这一半**）
+
+**这一节只写实测确证的事实**；§5.4.10 列出还**没有**跑过的部分（Step 3/3B/4/5 另批派发）。
+实验日期 2026-09-13（UTC），目标实例 `probe-ot005`（A-1 上控制侧的**对照容器**：已装六个控制 +
+一个 sandcat agent；本次只做 `lxc file push` + `lxc exec` 这类只读取数，**未改它的配置、未重启**）。
+
+| 判据 | 实测结果 |
+|---|---|
+| 同一份二进制送进实例并取回检查集 | `lxc file push` → `lxc exec --env EDGESCEN_NODE_NONCE=<32 位 hex> <实例> -- /tmp/edgescen-<pid> -emit-checks`，信封可用 |
+| 信封 `hostname` | **`probe-ot005`**（节点内进程自报） |
+| 信封 `checks` 条数（注册） | **80** |
+| 信封中 `passed=false` 条数（失败） | **42** |
+| 六个触发检查 | `OT-005`/`RS-005`/`RS-006`/`RS-007`/`EF-001`/`EF-002` **全部 `passed=True`** ⇒ 该基线记录里六个因子**全不激活**（与控制侧实测一致） |
+| 记录侧（`--target lxd:probe-ot005` 走完整 CLI） | `meta.observation_target = "node:probe-ot005 (substrate=lxd, hostname=probe-ot005)"`；`checks[]` = **42** 条；总分 **68.78**（阈值 80）；round-trip 复算 = 记录（残差 0） |
+| 实例不存在（`lxd:no-such-instance-4d`） | rc=1，stderr = `…lxc file push … 失败: Error: Failed to fetch instance "no-such-instance-4d" …: Instance not found`，**不写记录** |
+| nonce 不匹配（旁路把下发的 nonce 换成别次运行的值） | rc=1，stderr = `节点内进程回显的 nonce 与本次运行下发的不同（本次请求 32 字节）—— 这份信封来自另一次运行/另一个进程，不能当作本次观测`，**不写记录** |
+| 未知基质前缀（`unknown:probe-ot005`） | rc=1，在起任何子进程之前报错，**不写记录** |
+| 裸名字在 A-1 上（= docker 语义、该机没有 docker） | rc=1，`exec: "docker": executable file not found in $PATH`，**不写记录**（不静默回落本机） |
+
+**这一节**证明的是"取数这条路径在真实 LXD 上真的能用、失败真的响亮"；
+**它不证明** §5.3 那张表的其余部分（建/毁环境、攻击、矩阵、重复样本）在 A-1 上成立 —— 那些动作
+在本次任务里**没有跑**（见 §5.4.10）。
+
+#### 5.4.10 A-1/LXD 上**尚未跑过**的部分（如实列出，不得按"已验证"引用）
+
+Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 驱动）。下面这些**全部未跑**
+（Step 3/3B/4/5 另批派发），任何报告与论文引用都必须按"未跑"写：
+
+| 未跑的事 | 为什么现在还不能跑 |
+|---|---|
+| `EDGEEXP_SUBSTRATE=lxd` 的完整矩阵（reset → attack → collect） | `lab_up`/`lab_down` 在 lxd 基质下**故意响亮失败**（A-1 上不建/不毁实例）；A-1 侧的"环境"该是什么样子（哪几个实例、装什么控制、谁来铺 TTP）是 Step 3/3B 的交付 |
+| `edge_reset.sh` 的 lxd 路径（Caldera 就绪 + 部 sandcat agent） | 同上：`lab_target_exec_detached` 的 lxd 分支（`nohup` 脱离）**只做过静态检查与假 CLI 用例，没有在真实实例上验证过"进程在 exec 会话断开后仍在跑"** |
+| `edge_probe.sh` 的 lxd 路径（六因子条件探针在实例内执行） | 探针判据体依赖节点内的 `bash`/`grep`/`iptables` 等工具；A-1 实例上是否齐备属 Step 3 的硬化基线 |
+| 攻击（Caldera operation）与 R 组（真实缺失对照）在 A-1 上的成立性 | 用户裁定"矩阵/攻击/采集都在 A-1 跑"，但攻击侧在 A-1 上的落地（哪个实例当被攻目标、Caldera 的 agent 从哪来）尚未设计 |
+| 每场景 3 次重复样本（`EDGEEXP_RUN_INDEX>1` + `EDGEEXP_ENV`） | 依赖上面几项 |
+| `edgecompare` 离线比较在 LXD 记录上的行为 | 离线工具与基质无关，但**尚未拿 A-1 的记录跑过一次** |
+
+#### 5.4.11 lab 配置的键位纪律（每个键都要写在解析器**会读**的段里）
 
 `lunwen/clab-lab/kernel-config.ini` 曾经把 `threshold = 80.0` 写在 `[weights]` 段，而该文件**没有**
 `[acceptability]` 段 —— 解析器只在 `[acceptability]` 里读这个键（`internal/config/config.go` 的
