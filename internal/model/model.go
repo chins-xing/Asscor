@@ -88,7 +88,7 @@ type CheckItem struct {
 
 func (c CheckItem) Run() CheckResult {
 	if c.Privilege == PrivRoot && os.Geteuid() != 0 {
-		return c.skipResult("skipped — requires root privileges")
+		return c.skipResult(skipDetailPrefix)
 	}
 
 	var passed bool
@@ -109,7 +109,7 @@ func (c CheckItem) Run() CheckResult {
 	// "insufficient privilege" skip. Convert it so non-root agents do not get
 	// penalized for checks they cannot perform.
 	if !passed && IsPermissionDeniedDetail(detail) {
-		return c.skipResult("skipped — requires root privileges (" + detail + ")")
+		return c.skipResult(skipDetailPrefix + " (" + detail + ")")
 	}
 
 	return CheckResult{
@@ -137,6 +137,22 @@ func (c CheckItem) skipResult(detail string) CheckResult {
 		ComplianceRef: c.ComplianceRef,
 		Source:        c.Source,
 	}
+}
+
+// skipDetailPrefix 是**所有** skip 详情的公共前缀（唯一来源）。
+//
+// 为什么要写成常量：`skipResult` 有两个调用点（非 root 的兜底、以及"只因权限被拒而失败"的转换），
+// 而消费侧（`cmd/edgescen` 把被跳过的检查写进 `meta.skipped_checks`）**必须**能认出它们。
+// 两处各写一遍字符串字面量，改一处就会让"被跳过的检查"在记录里静默消失 —— 那正是本轮要堵的
+// 形态（记录里看不出"评估器变瞎"）。
+const skipDetailPrefix = "skipped — requires root privileges"
+
+// IsSkippedDetail reports whether a check detail string is one produced by
+// `skipResult`（即"这条检查没有给出结论"，而不是"它通过了"）。
+//
+// 它同时是**消费侧的唯一判据**：`meta.skipped_checks` 由它挑出来（见 cmd/edgescen）。
+func IsSkippedDetail(detail string) bool {
+	return strings.HasPrefix(strings.TrimSpace(detail), skipDetailPrefix)
 }
 
 // IsPermissionDeniedDetail reports whether a check detail string indicates the

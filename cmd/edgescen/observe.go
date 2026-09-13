@@ -268,6 +268,10 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 	// 哪台机器" —— 那与 `Meta.ObservationTarget` 的立意（失败时更要能归因）正好相反。
 	// 放在这里也保证"检查集的来源"与"记录里的观测主体"不可能分叉：它来自同一个入参。
 	rec.Meta.ObservationTarget = observationTarget
+	// 被跳过的检查同样写在第一个 `fail` 之前（Task 4D Fix round 2；理由与上一行同款：
+	// 装配失败时"这台机器的证据面到底长什么样"更该留下，而不是只在成功路径上才有）。
+	// 判据见 `skippedChecks`：它把"评估器变瞎"与"安全变好"分开 —— 没有它，两者在记录里同形。
+	rec.Meta.SkippedChecks = skippedChecks(host)
 	fail := func(format string, args ...any) (edgeexp.Record, error) {
 		reason := fmt.Sprintf(format, args...)
 		rec.Meta.AssemblyError = reason
@@ -690,6 +694,27 @@ func checkObservations(cfg *config.Config, result *model.AssessmentResult, injec
 			Confidence: enginessam.NormalizeConfidence(c.Confidence, policy),
 			TS:         ts,
 		})
+	}
+	return out
+}
+
+// skippedChecks 把**被跳过的检查**从节点/本机的检查结果里挑出来（Task 4D Fix round 2）。
+//
+// 为什么必须有它（与 `checkObservations` 的分工）：`checks[]` 只落盘**失败**检查，而框架会把
+// "只因读不到证据而失败"的检查转成 skip（`passed=true`、`Δ=0`，见 `internal/model` 的
+// `skipResult` / `IsSkippedDetail`）。于是"某个条件让证据读不到 ⇒ 检查被跳过 ⇒ **分数被推高**"
+// 在记录里**完全不可见** —— 而它与"安全真的变好"在数据上同形（A-1 实测：AppArmor 拒读
+// `/etc/shadow` ⇒ `AS-012` 被跳过 ⇒ 失败 42→41、总分 68.78→69.72）。
+//
+// 判据只有一处实现（`model.IsSkippedDetail`），故"哪条检查算被跳过"不会在这里与别处漂移。
+// 没有跳过项时返回 nil（`omitempty` ⇒ 字段不出现在 JSON 里，旧夹具与既有记录逐字节不变）。
+func skippedChecks(host []model.CheckResult) []edgeexp.SkippedCheck {
+	var out []edgeexp.SkippedCheck
+	for _, c := range host {
+		if !model.IsSkippedDetail(c.Detail) {
+			continue
+		}
+		out = append(out, edgeexp.SkippedCheck{ID: c.CheckID, Reason: strings.TrimSpace(c.Detail)})
 	}
 	return out
 }

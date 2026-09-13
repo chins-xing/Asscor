@@ -242,7 +242,21 @@ chain.window_seconds = 300
 >
 > **这些是"记录构造要求"，不是读取层契约**：`trigger_check` / `checks[]` / `delta` / `meta` 读取层都**不校验**，离线工具`Synthesize` 也**不消费** `trigger_check`（它只用于溯源）—— 写错不会有任何门禁报错，只会让报告与论文证据失真。故本节把它们写清楚，并由 `docs_schema_test.go` 对本示例逐条钉住。
 >
-> `meta` 的三个可选溯源字段（`omitempty`，读取层不要求，Task 3B 起）：`weight_source` 只讲**权重口径**（`observed.effective_weights` 从哪来，以 `config_hash` 为锚点）；`ts_source` 只讲**链条目 `ts` 的基准**（新增独立字段 —— 此前 ts 基准被续写在 `weight_source` 末段，一个字段讲两件事；混用基准会造出"没人设计、也没人报告"的顺序，而数据看起来完全正常，故它必须有自己的槽位）；`assembly_error` 记装配期的非致命异常。
+> `meta` 的四个可选溯源字段（`omitempty`，读取层不要求）：`weight_source` 只讲**权重口径**（`observed.effective_weights` 从哪来，以 `config_hash` 为锚点）；`ts_source` 只讲**链条目 `ts` 的基准**（独立字段 —— 此前 ts 基准被续写在 `weight_source` 末段，一个字段讲两件事；混用基准会造出"没人设计、也没人报告"的顺序，而数据看起来完全正常，故它必须有自己的槽位）；`assembly_error` 记装配期的非致命异常；`observation_target` 记**这次评估发生在哪台机器**（Task 4C，见 §5.3.1）。
+>
+> **`meta.skipped_checks`（Task 4D Fix round 2，additive）**：`[{id, reason}]`，由采集器写，
+> 列出**被跳过的检查** —— 即框架把"**只因读不到证据**（EACCES/EPERM）而失败"的检查转成的
+> skip（`passed=true`、`Δ=0`；`internal/model` 的 `skipResult` / `IsSkippedDetail`）。
+> `reason` 存的是**检查自己给出的原文**（例如 `skipped — requires root privileges (无法读取/etc/shadow:
+> open /etc/shadow: permission denied)`），不是自编的分类 —— 排障需要"哪条路径读不到、被谁拒的"。
+> **用途（引用时必须照此）**：把"**评估器变瞎**"与"**安全变好**"分开。`observed.checks[]` 只落
+> **失败**项（语义未改），而"条件（策略/权限/文件存在性）让证据读不到 ⇒ 该检查被跳过 ⇒ **不扣分**
+> ⇒ 分数被推高"这件事在记录里原本**完全不可见**：A-1 的实测里 AppArmor 拒读 `/etc/shadow` 使
+> `AS-012`（Δ=−6）被跳过 ⇒ 失败检查 42→41、总分 68.78→69.72，而两条记录的 `checks[]` 看不出差别。
+> 因此：**任何"条件 ⇒ 分数上升"的结论都必须并排给出"失败集 + 跳过集"**；只有当跳过集在两组之间
+> 不变时，"分数上升"才可以被读成安全姿态的变化；跳过集出现差异时，分数差里混着"评估器可观测性"
+> 这一项，**不得**当作安全提升。该字段**不参与任何判据**（非必填、不进评分、`Validate` 不校验），
+> 缺席时 JSON 里不出现（`omitempty` ⇒ 既有记录与夹具逐字节不变）。
 
 **必填字段（缺失即整条记录 fail-fast，读取层 `internal/edgeexp.Validate`）**
 
@@ -803,6 +817,13 @@ Fix round 1 / I-6 把这个数字从"7 纯身份 + 1 交互"改正 —— 后者
 6. **记录写不出失败原因**：`observed.checks[]` 只有 `id/domain/passed/delta/confidence/ts`，
    检查的 `detail`（"无法执行 lsmod"这类）**没有落盘** ⇒ 本节的成因必须靠另跑 `-emit-checks`
    或直接探输入才能确认。要在报告里逐条解释成因，得先补这个字段。
+   > **【Task 4D Fix round 2 的部分收口】** 与"失败原因"相邻、但后果更严重的一类已经补上：
+   > **被跳过的检查**现在写进 `meta.skipped_checks`（`[{id, reason}]`，additive、`omitempty`；
+   > 见 §5.1 的字段说明）。它解决的不是"失败为什么失败"，而是"**这条检查压根没给结论**" ——
+   > 框架把"只因读不到证据而失败"转成 skip（`passed=true`、`Δ=0`），于是"条件让证据读不到 ⇒
+   > 分数被推高"与"安全真的变好"在记录里原本**完全同形**（A-1 实测：AppArmor 拒读 `/etc/shadow`
+   > ⇒ `AS-012` 被跳过 ⇒ 总分 68.78→69.72）。`observed.checks[]` 的语义（只落失败项）**没有改**，
+   > 那份 `detail` 仍然不落盘。
 
 **未在本次实验中确定的事**：`RS-005`（`tcp_syncookies`）在容器内 `sysctl -w` 是否真的向下；
 攻击侧结果是否随观测主体改变；`KS-*` 系列在容器与 WSL 内核间的完整差异（只审了发生差异的 8 条）。
@@ -981,6 +1002,12 @@ Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 
 
 另有一条**不是坑但极易读错**的事：策略在时 `compromised=false` 与"宿主更安全"是两回事 ——
 分数侧同时被"检查被跳过"推高（见上面口径 5）。
+
+> **【Fix round 2 的收口】** 口径 5 说的那件事**在记录里已经可见**：`meta.skipped_checks`
+> （`[{id, reason}]`，additive）由采集器写出被跳过的检查；`cmd/edgescen` 侧有两条用例钉住
+> "进 `meta`、不进 `checks[]`、对分数零影响、缺席时字段不出现、编解码往返不丢"。详见 §5.1。
+> **仍未跑**：A-1 上**重新采一条**带该字段的记录（本轮 A-1 只读）；故"真实记录的字段长什么样"
+> 目前只有离线证据（assembly 级 + 往返级），没有新的真机记录 —— 按"未跑"引用。
 
 #### 5.4.14 Step 4-B2/B3 的 lxd 端到端落地（reset → attack → collect 在 A-1 上真跑通）
 

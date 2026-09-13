@@ -311,6 +311,34 @@ type Meta struct {
 	TSSource          string `json:"ts_source,omitempty"`
 	AssemblyError     string `json:"assembly_error,omitempty"`
 	ObservationTarget string `json:"observation_target,omitempty"`
+
+	// SkippedChecks 是**被跳过的检查**（Task 4D Fix round 2，additive；`omitempty`，读取层不要求）。
+	//
+	// **为什么它必须存在**：`observed.checks[]` 只落盘**失败**的检查（那条语义有硬门禁，不许改），
+	// 而框架会把"**只因读不到证据**而失败"的检查转成 skip（`passed=true`、`Δ=0`，
+	// 见 `internal/model` 的 `skipResult`/`IsPermissionDeniedDetail`）。于是"策略/权限让某个文件
+	// 读不到 ⇒ 该检查被跳过 ⇒ **分数被推高**"这件事在记录里**完全不可见** —— 事后只能靠
+	// "失败集差 + 域分差 + 总分差"反推，而 **"评估器变瞎"与"安全变好"在数据上同形**。
+	// A-1 的实测就是这一形态：AppArmor 拒读 `/etc/shadow` ⇒ `AS-012`（幽灵账户检测，Δ=−6）被跳过
+	// ⇒ 失败检查 42→41、总分 68.78→69.72，而两条记录里看不出任何差别。
+	//
+	// 用途（写进论文与扫描协议时必须照此）：任何"条件 ⇒ 分数上升"的结论都要**并排**给出
+	// "失败集 + 跳过集"；只有当跳过集在两组之间不变时，"分数上升"才可以被读成安全姿态的变化。
+	// 反过来，跳过集出现差异时，分数差里混着"评估器可观测性"这一项，不得当作安全提升。
+	//
+	// 它**不参与任何判据**（不是必填、不进评分、不影响 `Validate`）：它是**证据**而不是输入。
+	SkippedChecks []SkippedCheck `json:"skipped_checks,omitempty"`
+}
+
+// SkippedCheck 是一条被跳过的检查。
+//
+// `Reason` 存的是**检查自己给出的原文**（例如
+// `skipped — requires root privileges (无法读取/etc/shadow: open /etc/shadow: permission denied)`）：
+// 为什么不是自己编一个分类（如 `permission_denied`）：分类会丢掉"是哪一条路径读不到、被谁拒的"
+// 这两个排障必需的信息，而它们正是区分"评估器权限不足"与"策略真的拦住了攻击者"的依据。
+type SkippedCheck struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // LoadFile 读取实验 JSONL（spec §5.1 schema），错误前缀为本包名。
