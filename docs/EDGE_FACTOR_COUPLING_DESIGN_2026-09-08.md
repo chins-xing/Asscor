@@ -832,6 +832,12 @@ Fix round 1 / I-6 把这个数字从"7 纯身份 + 1 交互"改正 —— 后者
 Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 驱动）。下面这些**全部未跑**
 （Step 3/3B/4/5 另批派发），任何报告与论文引用都必须按"未跑"写：
 
+> **【Step 3/3B 更新（2026-09-13）】** 第二批已交付 Step 3（`asc-tgt-1` 硬化基线 + 基线记录）
+> 与 Step 3B（真实 AppArmor 策略 + 目标 TTP 两侧对照）—— 见 §5.4.13。下表里"未跑"的两行
+> （`edge_reset.sh` 的 lxd 路径、`edge_probe.sh` 的 lxd 路径）**仍然未跑**；新增两条已知限制：
+> ①A-1 无 auditd ⇒ 内核 AppArmor 拒绝记录默认被丢弃（要临时放宽 `printk_ratelimit` 才看得到）；
+> ②Step 3B 的目标 TTP 是**自建 ability**（如实记录在报告里），不是现成剧本里的一条。
+
 | 未跑的事 | 为什么现在还不能跑 |
 |---|---|
 | `EDGEEXP_SUBSTRATE=lxd` 的完整矩阵（reset → attack → collect） | `lab_up`/`lab_down` 在 lxd 基质下**故意响亮失败**（A-1 上不建/不毁实例）；A-1 侧的"环境"该是什么样子（哪几个实例、装什么控制、谁来铺 TTP）是 Step 3/3B 的交付 |
@@ -868,14 +874,56 @@ Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 
 
 | 范围 | 结论 | 证据 |
 |---|---|---|
-| `edge_reset.sh`（clab 基质） | **脚本级逐行等价**：四个场景（正常 / I9 拒绝 / agent 超时 / 拓扑缺失）下"假 CLI 调用序列 + stdout + stderr + 退出码 + 产物"逐行相同 | `build/lab-diff.sh`：`git archive 97581d8` 取**真基线**整棵树、两侧跑**真脚本**、同一份假 CLI、私有 `/tmp` 命名空间 |
-| `edge_matrix.sh` 干跑 | 除新增基质行与一处已声明措辞外**逐字等价** | 同上（干跑差分） |
+| `edge_reset.sh`（clab 基质） | **脚本级逐行等价**：五个场景（正常 / I9 拒绝 / agent 超时 / **deploy 失败** / 拓扑缺失）下"假 CLI 调用序列 + stdout + stderr + 退出码 + 产物"逐行相同 | `build/lab-diff.sh`：`git archive 97581d8` 取**真基线**整棵树、两侧跑**真脚本**、同一份假 CLI、私有 `/tmp` 命名空间 |
+| `edge_matrix.sh` 干跑 | 除新增基质行与一处已声明措辞外**逐字等价** | **另行的手工干跑差分产出**（`EDGEEXP_DRY_RUN=1`，正常化运行标识后逐行 diff；评审独立复现过）。**`lab-diff.sh` 不跑干跑** —— 它只跑 `edge_reset.sh` 的五个场景，这一格以前错指向了它（复审 §6 已点出） |
 | `edge_probe.sh` | **不是**"逐位不变"：它的假 CLI 注入方式由 `EDGEEXP_LAB_BIN` 改为 `EDGEEXP_DOCKER_BIN`（I-1 的修复），且三处错误串措辞随基质改写、`probe_host_ready` 的预检对象从 `lab_bin` 改为真正执行的 `lab_target_bin` | 20 项既有夹具无回归 + 新增判据（覆盖生效、不泄漏） |
-| Go 侧 `-target` | 命令与观测主体**逐字不变**；错误串在 Step 2 一度变过，Fix round 1 已**逐字恢复**并加钉子 | `TestDockerErrorStringsMatchTask4CBytes`（期望值抄自 97581d8） |
+| Go 侧 `-target` | 命令与观测主体**逐字不变**；错误串在 Step 2 一度变过，Fix round 1 已**逐字恢复**并加钉子（含 `os.Executable()` 失败那条 —— 复审 Minor-新-1） | `TestDockerErrorStringsMatchTask4CBytes`（四条子用例，期望值抄自 97581d8） |
 
 为什么范围必须写清（评审 §1.1/§6.3 的教训）：**"既有夹具全绿"与"某个路径逐位不变"是两件事** ——
 旧的等价性夹具是**手抄**基准（没有 git），且只跑成功路径；新夹具从 `git archive` 取基准、跑真脚本、
-覆盖失败处置，那条教训才算被吸收。
+覆盖失败处置（含 `deploy` 失败这条"关键路径不做任何容错"的钉子），那条教训才算被吸收。
+
+#### 5.4.13 Step 3 / Step 3B 的真机落地（A-1：硬化目标容器 + 真实 AppArmor 目标 TTP）
+
+**Step 3（硬化目标容器）**：A-1 上新建 `asc-tgt-1`（`lxc launch ubuntu:24.04`，**不要**用控制侧的
+`probe-ot005`），按下表装六个控制（**这一份是实测通过的配方，不是照抄文档**）：
+
+| 控制 | 装法 | 实测注意事项 |
+|---|---|---|
+| IDS | `apt-get install -y suricata` + `systemctl enable --now suricata` | `systemctl is-active suricata` 必须是 `active`（RS-006 的 systemctl 分支） |
+| SIEM 代理判据 | `aide` 的 `/etc/aide/aide.conf` 里要有能命中 `email|alert|notification` 的**真实告警配置** | **实测坑**：只追加 `report_level`/`report_url` 两行**不命中**该正则（控制侧的容器里恰好有一行含 `alert` 的注释才通过）。本步补的是 `mail_command`/`report_email`/`alert_notification=email` 三行 —— 那是真正的告警通知配置，不是为过门禁塞的词 |
+| 2FA / 3FA | `apt-get install -y libpam-google-authenticator libpam-u2f libpam-fprintd` + 往 `/etc/pam.d/sshd` 追加三类模块各一行 | EF-001（任一子串）与 EF-002（**三类各≥1**，按文件累加）判据不同，见 §5.4.7 |
+| AppArmor 已加载（OT-005）与 `tcp_syncookies=1`（RS-005） | A-1 上**天然满足** | —— |
+
+实测结果：`-emit-checks` 给出**注册 80 条 / 失败 42 条**，**六个触发检查全部 `passed=True`**；
+不注入任何失败采一条基线记录 ⇒ **六个因子全不激活**（链 0 条、`factors` 为 null、总分 68.78/阈值 80）。
+⇒ **观测主体 `node:asc-tgt-1 (substrate=lxd, hostname=asc-tgt-1)`**。
+
+**Step 3B（真实 AppArmor 限制策略 + 撞它的目标 TTP）**：
+
+- **策略**：`lxc config set asc-tgt-1 raw.apparmor 'audit deny /etc/shadow r,'`（选它是因为判据链条最短：
+  一条 `head -1 /etc/shadow` 就能把一个真实的安全属性映射成一个可观测的退出码）。
+  `raw.apparmor` 需要**重启容器**才生效。
+- **两侧判据（都是实测）**：
+
+  | 条件 | 容器内命令 | 宿主侧 AppArmor | 目标 TTP 的 link status |
+  |---|---|---|---|
+  | 策略在 | `head -1 /etc/shadow` ⇒ **rc=1 + `Permission denied`** | `apparmor="DENIED" … name="/etc/shadow" … denied_mask="r"`（profile 处于 `(enforce)`） | **`status=1`（ERROR）** |
+  | 策略不在（`lxc config unset` + 重启） | 同一条命令 ⇒ **rc=0** 并打出第一行 | 无新 DENIED | **`status=0`（SUCCESS）** |
+
+  ⇒ **这就是 L2 的标签方差来源**：同一条 TTP、同一台目标，只改"策略在/不在"，link 的 status 在
+  `!=0` 与 `==0` 之间翻转。
+- **宿主侧拒绝痕迹的一个实测坑**（不写成"看不到"就够诚实）：A-1 **没有 auditd**（`no auditd binary`），
+  内核 audit 队列无人排空 ⇒ `kauditd_printk_skb: N callbacks suppressed`，`dmesg`/`journalctl -k`/
+  `/var/log/kern.log` 里**默认查不到** DENIED。临时放宽 `kernel.printk_ratelimit`（跑完还原 5/10）
+  之后即可查到完整记录。这一条限制了"事后从内核日志取证"的可用性，写进 §5.4.10 的未跑/已知限制。
+- **口径（不许含糊）**：
+  1. `compromised` = **该场景的目标 TTP 是否成功**（L2），**不是**"主机被攻陷"；
+  2. 按 harness 今天的口径，`compromised = (成功 link 数 > 0)` —— 所以**对照 ability 的成功也会被算进去**。
+     实测：策略在时"对照 status=0 + 目标 status=1"⇒ harness 口径给 `compromised=true`，
+     而 **L2 口径是 `false`**。两者在 Step 4 落地 harness 时必须分开（`ground_truth.basis` 就是为这件事加的）；
+  3. 分数侧的 `OT-005` 在 A-1 上**不会**翻成失败（容器共享宿主 AppArmor，`aa-status` 恒报 profiles loaded）
+     ⇒ 场景"该防护缺失"仍是**合成注入**，**不得**写成"真机上那条检查真的失败了"。
 
 ---
 
