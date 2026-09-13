@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
+	"github.com/chins-xing/asscor/internal/edgeexp"
 	"github.com/chins-xing/asscor/internal/edgefactor"
 )
 
@@ -35,6 +37,24 @@ type Metrics struct {
 	Kendall           float64 `json:"kendall"`
 	AUC               float64 `json:"auc"`
 	N                 int     `json:"n"`
+
+	// Basis 是本次评估**实际吃进决策层**的记录按依据的计数（Task 4D Step 4）。
+	//
+	// 为什么它必须进指标本体（而不只是报告头的一段话）：`N` 是分母，而 `N` 会因为
+	// "过滤掉了侦察口径的记录"而变小 —— 不写清过滤前后各多少，同一份报告在不同过滤设置下
+	// 字面完全一样，而它们的漏判率/误阻断率不可比。缺省口径下这个 map 只会有一个键
+	// （`targeted_ttp`）；`--allow-mixed-basis` 时才可能有两个。
+	Basis map[string]int `json:"basis"`
+	// BasisSkipped 是被**过滤掉**的记录数（按依据计数）。缺省口径下恒为空：
+	// 缺依据/混类都直接报错，而不是静默丢样本。
+	BasisSkipped map[string]int `json:"basis_skipped,omitempty"`
+	// RecordsTotal 是**过滤前**的记录总数（= `N + Σ BasisSkipped`）。
+	RecordsTotal int `json:"records_total"`
+	// BasisAssumed 是本次按 `--assume-basis` **补的依据**覆盖了多少条记录（0 = 全部记录自带依据）。
+	//
+	// 为什么必须报出来：那些记录在数据里**没有** basis，是"这次评估假设它们是什么口径"；
+	// 不写这个数，报告里就分不清"这批数据本来就是目标 TTP 口径"与"我们假设它是"。
+	BasisAssumed int `json:"basis_assumed,omitempty"`
 }
 
 // activationsOf 把 JSONL 的因子链换算成合成层的输入项（Task 10 的拟合也用它）。
@@ -201,6 +221,125 @@ func countWeightSources(records []Record) WeightSourceCounts {
 type EvaluateOptions struct {
 	// ThresholdOverride > 0 时替代**每条记录**的 `observed.threshold`；0 = 不覆盖（缺省）。
 	ThresholdOverride float64
+
+	// AllowMixedBasis 允许把 `recon_playbook` 口径的记录也吃进决策层指标（Task 4D Step 4）。
+	//
+	// **缺省是 false，且缺省口径下"缺依据"与"两类混在一起"都直接报错** —— 理由见
+	// `applyBasisGuard`：旧数据集没有 `ground_truth.basis`，静默把它们算进决策层指标，
+	// 等于把"目标 TTP 是否成功"与"任意 link 是否成功"两种标签混进同一个漏判率里，
+	// 而报告上看不出任何异常。
+	//
+	// 打开它同时意味着**接受"缺依据的记录按旧口径（recon_playbook）理解"** —— 那正是这批历史
+	// 数据的事实（里程碑 B 之前 `compromised` 由"任意 link 成功"算出来），而缺依据的计数仍会
+	// 如实写进 `BasisSkipped["(未声明)"]`，不会被静默吞掉。
+	AllowMixedBasis bool
+
+	// AssumeBasis 是给**没有 `basis` 的记录**补一个显式假设（`targeted_ttp` / `recon_playbook`）。
+	//
+	// 为什么需要它（而不是只有"报错"与"全局放宽"两个选项）：历史数据集确实没有这个字段，
+	// 而"这批数据的 compromised 是旧口径（任意 link 成功）算出来的"是一个**可以如实声明**的事实。
+	// `--allow-mixed-basis` 解决不了它 —— 那个开关只放开"两类混算"，缺依据的记录仍然被拒。
+	//
+	// **空串 = 不假设**（缺依据 ⇒ 报错）。取值只能是两个合法值之一（由 `applyBasisGuard` 校验）——
+	// 一个拼错的假设会把整批记录标成错误的依据，而它与合法值在数据上完全同形。
+	AssumeBasis string
+}
+
+// applyBasisGuard 是**决策层指标的标签依据守卫**（Task 4D Step 4，用户裁定的 L2）。
+//
+// 判据（缺省口径）：
+//  1. 每条参与决策层的记录都必须**显式声明** `ground_truth.basis`（缺 ⇒ 报错并给出计数）；
+//  2. 依据只能取 `targeted_ttp` / `recon_playbook`（走 `edgeexp.Validate` 的值域校验，这里不重抄）；
+//  3. **两类混在一起 ⇒ 报错**：`targeted_ttp` 与 `recon_playbook` 的 `compromised` 不是同一个量
+//     （前者"目标 TTP 是否成功"，后者"任意 link 是否成功、在任何姿态下都成立"），
+//     混算出来的漏判率没有定义。
+//
+// `opts.AllowMixedBasis` 是**显式逃生开关**（敏感性/历史对比用）：它放开第 3 条，并把"缺依据"
+// 的记录按**旧口径**（`recon_playbook`）理解 —— 那是这批历史数据的事实（里程碑 B 之前
+// `compromised` 由"任意 link 成功"算出），而不是一句方便的假设。缺依据/被丢的条数会如实写进
+// 指标本体（`BasisSkipped` / `RecordsTotal` / `BasisAssumed`），报告头必须打印出来。
+func applyBasisGuard(records []Record, opts EvaluateOptions) ([]Record, map[string]int, map[string]int, int, error) {
+	if a := strings.TrimSpace(opts.AssumeBasis); a != "" &&
+		a != edgeexp.BasisTargetedTTP && a != edgeexp.BasisReconPlaybook {
+		return nil, nil, nil, 0, fmt.Errorf("edgecompare: --assume-basis 的取值 %q 不是已知依据（只认 %q / %q）—— "+
+			"拼错的假设会把整批记录标成错误的依据，而它与合法值在数据上完全同形",
+			opts.AssumeBasis, edgeexp.BasisTargetedTTP, edgeexp.BasisReconPlaybook)
+	}
+	assume := strings.TrimSpace(opts.AssumeBasis)
+
+	// 第一步：**逐条判依据**（"这条记录的标签是什么口径"），并**先过滤后判混类** ——
+	// 顺序不能反：`targeted_ttp` 与 `recon_playbook` 同时存在时，侦察口径的记录本来就**不进**
+	// 决策层指标（它们是背景测量），于是"混类"不是问题；真正的问题只在**都进指标**时（= 逃生开关）。
+	// 先报混类再过滤，会把"本来就要被丢掉的那几条"当成错误（实测踩到：2 条目标 + 2 条侦察的
+	// 数据集在缺省口径下被拒，而正确行为是"用那 2 条目标算"）。
+	kept := make([]Record, 0, len(records))
+	counts := map[string]int{}  // 逐条判定的依据分布（含被丢的与假设的）
+	skipped := map[string]int{} // 被丢出决策层指标的条数
+	assumed := 0
+	for _, rec := range records {
+		b := strings.TrimSpace(rec.GroundTruth.Basis)
+		if b == "" {
+			switch {
+			case assume != "":
+				// **不改记录本体**（记录是证据），只在本次评估的**指标**里按假设归类 ——
+				// 假设必须可见（`Metrics.BasisAssumed`），否则"这批记录的标签口径是假设来的"
+				// 这件事会静默消失。
+				b, assumed = assume, assumed+1
+			case opts.AllowMixedBasis:
+				// 逃生开关：缺依据按**旧口径**理解（里程碑 B 之前 compromised 由"任意 link 成功"算出），
+				// 且它仍会被当作侦察口径丢出决策层指标 —— 条数如实记进 `(未声明)`。
+				skipped["(未声明)"]++
+				counts["(未声明)"]++
+				continue
+			default:
+				counts["(未声明)"]++
+				continue
+			}
+		}
+		switch b {
+		case edgeexp.BasisTargetedTTP, edgeexp.BasisReconPlaybook:
+		default:
+			return nil, nil, nil, 0, fmt.Errorf("edgecompare: 记录里出现未知的 ground_truth.basis = %q —— "+
+				"决策层指标只吃 %q 那一类；未知值不得被当成某一类静默算进去（那会让漏判率的口径无法追溯）",
+				b, edgeexp.BasisTargetedTTP)
+		}
+		if b == edgeexp.BasisReconPlaybook && !opts.AllowMixedBasis {
+			skipped[edgeexp.BasisReconPlaybook]++
+			counts[b]++
+			continue
+		}
+		counts[b]++
+		kept = append(kept, rec)
+	}
+
+	// 第二步：**缺依据 ⇒ 报错**（缺省口径）。它排在过滤之后：被丢掉的侦察口径记录不该让整批失败
+	// （它们本来就不参与决策层指标）。
+	if counts["(未声明)"] > 0 && assume == "" && !opts.AllowMixedBasis {
+		return nil, nil, nil, 0, fmt.Errorf("edgecompare: %d/%d 条记录没有 ground_truth.basis —— 决策层指标无从判断这些标签是"+
+			"『目标 TTP 是否成功』还是『任意 link 是否成功』（两者在数据上同形，而漏判率的口径由它决定）。"+
+			"三条出路：用带 basis 的采集产物重采（Task 4D 起 edge_attack.sh 会写它）；"+
+			"用 --assume-basis %s 显式声明这批记录的标签口径（假设的条数会写进指标本体）；"+
+			"或用 --allow-mixed-basis 接受旧口径（缺依据的记录会被当作 %s 理解，条数如实记进 basis_skipped）",
+			counts["(未声明)"], len(records), edgeexp.BasisTargetedTTP, edgeexp.BasisReconPlaybook)
+	}
+
+	// 第三步：**混类**。
+	//
+	// 两条互斥的分支（写成一条会把条件写反 —— 本轮实测踩到过：错误信息里声称
+	// "`--allow-mixed-basis` 已开启"，而那一轮根本没开，读者据此会去关一个没开的东西）：
+	//   · 缺省口径（`AllowMixedBasis=false`）⇒ 侦察口径的记录**已经**在上面的循环里被丢出指标
+	//     （`skipped` 里有它们），故"混类"**不是**错误 —— 用剩下的那一类算就是了；
+	//   · 逃生开关（`AllowMixedBasis=true`）⇒ 两类都要进指标 ⇒ 那才是真矛盾（混算的漏判率没有定义）。
+	if counts[edgeexp.BasisTargetedTTP] > 0 && counts[edgeexp.BasisReconPlaybook] > 0 && opts.AllowMixedBasis {
+		return nil, nil, nil, 0, fmt.Errorf("edgecompare: 记录里混了两种标签依据（%s=%d 条、%s=%d 条），"+
+			"而 `--allow-mixed-basis` 让**两类都要进**决策层指标 —— 它们的 compromised 不是同一个量"+
+			"（前者『目标 TTP 是否成功』、后者『任意 link 是否成功且在任何姿态下都成立』），混算出来的漏判率没有定义。"+
+			"请只保留一类：去掉 `--allow-mixed-basis`（侦察口径的记录会被自动丢出决策层指标），"+
+			"或先用 `--assume-basis` / 重采把这类记录的口径统一",
+			edgeexp.BasisTargetedTTP, counts[edgeexp.BasisTargetedTTP],
+			edgeexp.BasisReconPlaybook, counts[edgeexp.BasisReconPlaybook])
+	}
+	return kept, counts, skipped, assumed, nil
 }
 
 // thresholdOf 返回该记录本次评估实际使用的阈值（覆盖优先，且覆盖值本身已由 CLI 校验为正）。
@@ -214,6 +353,15 @@ func thresholdOf(rec Record, opts EvaluateOptions) float64 {
 // Evaluate 是 `EvaluateWith` 的缺省口径包装（不覆盖任何东西）。
 func Evaluate(records []Record, p edgefactor.Params, weights map[string]float64) (Metrics, error) {
 	return EvaluateWith(records, p, weights, EvaluateOptions{})
+}
+
+// sumCounts 是 map[string]int 的求和（`BasisSkipped` 的条数）。
+func sumCounts(m map[string]int) int {
+	total := 0
+	for _, n := range m {
+		total += n
+	}
+	return total
 }
 
 // EvaluateWith 在同一份真实数据上重算并计算三层指标（spec §2.1），并接受显式覆盖项
@@ -238,6 +386,24 @@ func EvaluateWith(records []Record, p edgefactor.Params, weights map[string]floa
 	if len(records) == 0 {
 		return m, nil
 	}
+	// 标签依据守卫**排在一切计算之前**（Task 4D Step 4）：它是"这批数据的标签能不能放在一起算"
+	// 的前置问题，先于"分数算得对不对"。过滤后为空 ⇒ 退回零值（与空输入同款：调用方
+	// `CompareWith` 已在**过滤前**拒过零记录，这里的空只可能来自"全部记录都是侦察口径"）。
+	kept, basisCounts, basisSkipped, basisAssumed, err := applyBasisGuard(records, opts)
+	if err != nil {
+		return Metrics{}, err
+	}
+	if len(kept) == 0 {
+		return Metrics{Basis: basisCounts, BasisSkipped: basisSkipped, RecordsTotal: len(records)}, nil
+	}
+	records = kept
+	m.RecordsTotal = len(kept) + sumCounts(basisSkipped)
+	m.BasisAssumed = basisAssumed
+	m.Basis = map[string]int{}
+	for _, rec := range records {
+		m.Basis[strings.TrimSpace(rec.GroundTruth.Basis)]++
+	}
+	m.BasisSkipped = basisSkipped
 	m.N = len(records)
 	scores := make([]float64, 0, len(records))
 	severity := make([]float64, 0, len(records))

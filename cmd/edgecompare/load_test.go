@@ -32,7 +32,7 @@ import (
 //	base        = round2(90 × 0.82) = 73.8
 //	总分        = round2(0.5×73.8 + 30×0.8 + 20×0.7) = round2(36.9 + 24 + 14) = 74.9
 //	判定        = 74.9 ≥ 60 ⇒ acceptable=true，而客观被攻陷 ⇒ 漏判（FN）
-const sampleJSONL = `{"scenario_id":"S1-selinux","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":90,"operation_trust":90},"final_score":74.9,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"checks":[{"id":"OT-005","domain":"operation_trust","passed":false,"delta":-8,"confidence":0.9}],"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","playbook_hash":"abc","config_hash":"def","run":1}}`
+const sampleJSONL = `{"scenario_id":"S1-selinux","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":90,"operation_trust":90},"final_score":74.9,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"checks":[{"id":"OT-005","domain":"operation_trust","passed":false,"delta":-8,"confidence":0.9}],"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false,"basis":"targeted_ttp"},"meta":{"env":"wsl-clab-14","playbook_hash":"abc","config_hash":"def","run":1}}`
 
 func writeSample(t *testing.T) string {
 	t.Helper()

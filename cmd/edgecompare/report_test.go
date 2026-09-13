@@ -67,10 +67,10 @@ import (
 // 记录里的 `final_score` / `acceptable` 是在线 legacy 的观测值；离线 legacy 必须**复现**它们
 // （与在线同一个公式、同一次衰减，见 TestT9FixtureMatchesOnlineObservations）。
 
-const t9FixtureJSONL = `{"scenario_id":"T9-R1","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":55},"final_score":61,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}
-{"scenario_id":"T9-R2","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":45},"final_score":57,"acceptable":false,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:01Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":600,"ttps_achieved":2,"nodes_affected":1,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}
-{"scenario_id":"T9-R3","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":75},"final_score":69,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:02Z"}]},"ground_truth":{"compromised":false,"time_to_compromise_s":0,"ttps_achieved":0,"nodes_affected":0,"block_effective":true},"meta":{"env":"wsl-clab-14","run":1}}
-{"scenario_id":"T9-R4","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":58},"final_score":62.2,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:03Z"}]},"ground_truth":{"compromised":false,"time_to_compromise_s":0,"ttps_achieved":0,"nodes_affected":0,"block_effective":true},"meta":{"env":"wsl-clab-14","run":1}}
+const t9FixtureJSONL = `{"scenario_id":"T9-R1","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":55},"final_score":61,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false,"basis":"targeted_ttp"},"meta":{"env":"wsl-clab-14","run":1}}
+{"scenario_id":"T9-R2","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":45},"final_score":57,"acceptable":false,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:01Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":600,"ttps_achieved":2,"nodes_affected":1,"block_effective":false,"basis":"targeted_ttp"},"meta":{"env":"wsl-clab-14","run":1}}
+{"scenario_id":"T9-R3","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":75},"final_score":69,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:02Z"}]},"ground_truth":{"compromised":false,"time_to_compromise_s":0,"ttps_achieved":0,"nodes_affected":0,"block_effective":true,"basis":"targeted_ttp"},"meta":{"env":"wsl-clab-14","run":1}}
+{"scenario_id":"T9-R4","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":58},"final_score":62.2,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:03Z"}]},"ground_truth":{"compromised":false,"time_to_compromise_s":0,"ttps_achieved":0,"nodes_affected":0,"block_effective":true,"basis":"targeted_ttp"},"meta":{"env":"wsl-clab-14","run":1}}
 `
 
 // t9LegacyMultiplier = 记录里的 effective_factor = 0.8（引擎的默认策略直接乘它，
@@ -376,9 +376,16 @@ func TestEmptyDatasetTieIsDecidedAtTheMetricLayer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Evaluate(nil): %v", err)
 	}
-	if legacyM != (Metrics{}) || vectorM != (Metrics{}) {
-		t.Fatalf("零记录应给出零值指标：legacy=%+v vector=%+v", legacyM, vectorM)
+	// Metrics 现在含 map 字段（`Basis`/`BasisSkipped`，Task 4D Step 4）⇒ 结构体不再可比较，
+	// 逐字段断言（判据不变：零记录 ⇒ 三层全平 + N=0）。
+	zero := func(m Metrics, who string) {
+		if m.N != 0 || m.DecisionAgreement != 0 || m.FalseNegativeRate != 0 ||
+			m.FalsePositiveRate != 0 || m.Spearman != 0 || m.Kendall != 0 || m.AUC != 0 {
+			t.Fatalf("零记录应给出零值指标（%s）：%+v", who, m)
+		}
 	}
+	zero(legacyM, "legacy")
+	zero(vectorM, "vector")
 	if got := pickBest(map[string]Metrics{"legacy": legacyM, "vector": vectorM}); got != "legacy" {
 		t.Errorf("pickBest = %q, want legacy（三层全平 ⇒ 名字字典序靠前者）", got)
 	}

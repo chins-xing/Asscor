@@ -221,7 +221,7 @@ func weightSourceRecord(t *testing.T, id string, withWeights, compromised bool) 
 	if withWeights {
 		effective = `"effective_weights":{"attack_surface":1},`
 	}
-	raw := fmt.Sprintf(`{"scenario_id":%q,"factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":55},%s"final_score":61,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"}]},"ground_truth":{"compromised":%t,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}`,
+	raw := fmt.Sprintf(`{"scenario_id":%q,"factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":55},%s"final_score":61,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.75,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"}]},"ground_truth":{"compromised":%t,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false,"basis":"targeted_ttp"},"meta":{"env":"wsl-clab-14","run":1}}`,
 		id, effective, compromised)
 	if _, err := LoadRecords(writeJSONL(t, id+".jsonl", raw+"\n")); err != nil {
 		t.Fatalf("夹具记录不合法: %v", err)

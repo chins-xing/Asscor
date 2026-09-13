@@ -215,6 +215,22 @@ func RenderMarkdown(w io.Writer, rep Report) error {
 		fmt.Fprintf(&b, "权重口径: %d 条取记录自带 `observed.effective_weights`／%d 条回退 `-weights`\n\n",
 			ws.RecordCarried, ws.Fallback)
 	}
+	// **标签依据口径必须写在报告头上**（Task 4D Step 4）：决策层指标的 N 会因为"丢掉了侦察口径
+	// 的记录"而变小，而 `targeted_ttp`（目标 TTP 是否成功）与 `recon_playbook`（任意 link 是否成功，
+	// 任何姿态下都成立）的 `compromised` **不是同一个量**。少了这一行，两份报告在字面上完全一样
+	// 而它们的漏判率不可比 —— 这正是 L2 裁定要堵的形态。
+	basisM := rep.Models[rep.Best]
+	switch {
+	case basisM.RecordsTotal == 0 && len(basisM.BasisSkipped) == 0:
+		b.WriteString("标签依据口径: 未注明（该 Report 未携带依据统计）\n\n")
+	default:
+		fmt.Fprintf(&b, "标签依据口径: 参与决策层 %d 条（%s）",
+			basisM.N, fmtBasisCountsOrNone(basisM.Basis))
+		if n := sumBasisSkipped(basisM.BasisSkipped); n > 0 {
+			fmt.Fprintf(&b, "｜**跳过 %d 条**（%s，侦察口径=背景测量、不是标签）", n, fmtBasisCountsOrNone(basisM.BasisSkipped))
+		}
+		fmt.Fprintf(&b, "｜过滤前共 %d 条\n\n", basisM.RecordsTotal)
+	}
 	b.WriteString("| 模型 | 决策一致率 | 漏判率 | 误阻断率 | Spearman | Kendall | AUC | N |\n")
 	b.WriteString("|---|---|---|---|---|---|---|---|\n")
 	for _, name := range sortedNames(rep.Models) {

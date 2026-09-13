@@ -37,6 +37,7 @@ import (
 	"strings"
 
 	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/edgeexp"
 	"github.com/chins-xing/asscor/internal/edgefactor"
 )
 
@@ -83,6 +84,14 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	thresholdOverride := fs.Float64("threshold", 0,
 		"覆盖记录里的 observed.threshold（> 0；**仅用于敏感性分析**，0 = 用记录自带的判定线）。"+
 			"选模必须用部署的真实判定线，故该开关不得出现在默认路径上；使用时报告头会写明覆盖值")
+	allowMixedBasis := fs.Bool("allow-mixed-basis", false,
+		"**标签依据逃生开关**（Task 4D Step 4）：允许把 recon_playbook 口径的记录也吃进决策层指标。"+
+			"缺省口径下：缺 ground_truth.basis 或两类混在一起都直接报错（它们的 compromised 不是同一个量，"+
+			"混算出来的漏判率没有定义）；打开本开关后侦察口径的记录会参与计算，报告头与指标本体会写明过滤前后条数")
+	assumeBasis := fs.String("assume-basis", "",
+		"**给没有 `ground_truth.basis` 的历史记录补一个显式假设**（targeted_ttp | recon_playbook；空 = 不假设 ⇒ 缺依据即报错）。"+
+			"旧数据集确实没有这个字段，而『这批 compromised 是旧口径算的』是一个可以如实声明的事实 —— "+
+			"假设的条数会写进指标的 basis_assumed 与报告头（不写就分不清『数据本来如此』与『我们假设如此』）")
 
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -188,7 +197,8 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 		return runFit(records, base, factors, edges,
 			FitOptions{L2: *l2, L1: *l1, Folds: *folds, Seed: *seed}, *outPath, stdout, stderr)
 	case len(candidateFlags) > 0:
-		return runCompare(records, weights, pairs, factors, *thresholdOverride, *outPath, stdout, stderr)
+		return runCompare(records, weights, pairs, factors, *thresholdOverride, *allowMixedBasis,
+			*assumeBasis, *outPath, stdout, stderr)
 	default:
 		return runSelfCheck(records, *verbose, stdout)
 	}
@@ -242,12 +252,44 @@ func runSelfCheck(records []Record, verbose bool, stdout io.Writer) int {
 // 对比模式（Task 9）
 // ============================================================================
 
+// fmtBasisCounts 把依据计数排成 `targeted_ttp=3` 这样的**稳定**字符串（map 迭代序不可用）。
+func fmtBasisCounts(m map[string]int) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", k, m[k]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// fmtBasisCountsOrNone 与 `fmtBasisCounts` 同款，但空 map 打印 `未注明`（报告头可读性）。
+func fmtBasisCountsOrNone(m map[string]int) string {
+	if len(m) == 0 {
+		return "未注明"
+	}
+	return fmtBasisCounts(m)
+}
+
+// sumBasisSkipped 是被过滤掉的记录条数（`BasisSkipped` 求和）。
+func sumBasisSkipped(m map[string]int) int {
+	total := 0
+	for _, n := range m {
+		total += n
+	}
+	return total
+}
+
 // runCompare 评估全部候选、按决策层主判据选优、导出胜出候选的参数段。
 //
 // 失败路径的纪律：`Compare` 与 `RenderConfigSection` 的错误一律如实转述（退出码 1），
 // 且**在渲染全部成功之前不写任何东西** —— 失败时 stdout 为空、`-out` 文件不存在。
 func runCompare(records []Record, weights map[string]float64, pairs []candidateRef,
-	factors map[string]float64, thresholdOverride float64, outPath string, stdout, stderr io.Writer) int {
+	factors map[string]float64, thresholdOverride float64, allowMixedBasis bool,
+	assumeBasis, outPath string, stdout, stderr io.Writer) int {
 
 	paramsByModel := make(map[string]edgefactor.Params, len(pairs))
 	for _, ref := range pairs {
@@ -271,10 +313,30 @@ func runCompare(records []Record, weights map[string]float64, pairs []candidateR
 		paramsByModel[ref.name] = p
 	}
 
-	rep, err := CompareWith(records, paramsByModel, weights, EvaluateOptions{ThresholdOverride: thresholdOverride})
+	rep, err := CompareWith(records, paramsByModel, weights,
+		EvaluateOptions{ThresholdOverride: thresholdOverride, AllowMixedBasis: allowMixedBasis,
+			AssumeBasis: assumeBasis})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitFailure
+	}
+	// **过滤器必须可见**（Task 4D Step 4）：决策层指标的分母 `N` 会因为"丢掉了侦察口径的记录"
+	// 而变小；不把过滤前后条数喊出来，两份报告在字面上完全一样而它们的漏判率不可比。
+	if bs := rep.Models[rep.Best].BasisSkipped; len(bs) > 0 {
+		fmt.Fprintf(stderr, "edgecompare: 决策层指标已按标签依据过滤 —— 参与 %d 条（%s），"+
+			"**跳过** %d 条（%s，侦察口径=背景测量、不是标签）；总记录 %d 条。缺省口径下侦察口径的记录不进决策层指标，"+
+			"报告头与 `metrics.basis*` 都记着这两个数\n",
+			rep.Models[rep.Best].N, fmtBasisCounts(rep.Models[rep.Best].Basis),
+			sumBasisSkipped(bs), fmtBasisCounts(bs), rep.Models[rep.Best].RecordsTotal)
+	}
+	if ba := rep.Models[rep.Best].BasisAssumed; ba > 0 {
+		fmt.Fprintf(stderr, "edgecompare: --assume-basis %s 生效 —— 有 %d 条记录**没有** ground_truth.basis，"+
+			"本次按该假设归类（记录本体未被改写；指标里的 basis_assumed=%d 就是它）\n", assumeBasis, ba, ba)
+	}
+	if allowMixedBasis {
+		fmt.Fprintf(stderr, "edgecompare: --allow-mixed-basis 已开启 —— 本次把 `%s` 口径的记录也吃进了决策层指标；"+
+			"它与 `%s` 的 compromised 不是同一个量，结论只能作敏感性/历史对比用，不得当作部署口径的主结论\n",
+			edgeexp.BasisReconPlaybook, edgeexp.BasisTargetedTTP)
 	}
 	// 阈值被覆盖时必须在 stderr 上再喊一次（与"`-weights` 未参与计算"同款可见性纪律）：
 	// 敏感性分析的报告与部署口径的报告在正文里长得几乎一样，而它们会被贴进论文的不同小节。

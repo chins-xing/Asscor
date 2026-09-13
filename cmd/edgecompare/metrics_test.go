@@ -147,7 +147,7 @@ func TestLegacyAppliesMultiplierToAggregatedTotal(t *testing.T) {
 // 未配 λ 的域**不做**域级修正，但它在聚合里仍应使用**观测值**
 // （在线 DomainAdjust 对不在计划内的域原样放行），不能被当成 0。
 func TestVectorTrimsToLambdaDomainsAndPassesThroughOthers(t *testing.T) {
-	const rec = `{"scenario_id":"S2-partial","factors":["EF-SELINUX"],"observed":{"domain_scores":{"attack_surface":90,"operation_trust":60,"resilience":30},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true}}`
+	const rec = `{"scenario_id":"S2-partial","factors":["EF-SELINUX"],"observed":{"domain_scores":{"attack_surface":90,"operation_trust":60,"resilience":30},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"basis":"targeted_ttp"}}`
 	recs, err := LoadRecords(writeJSONL(t, "partial.jsonl", rec+"\n"))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
@@ -265,7 +265,7 @@ func TestChainWithoutTimestampFailsFast(t *testing.T) {
 // TestActivationsOfNormalizesAndConverts：链条目 → 合成层输入的换算点。
 // ID 归一（消费侧口径，须与 ssam.NormalizeFactorID 一致）与可信度双衰减都在这里发生。
 func TestActivationsOfNormalizesAndConverts(t *testing.T) {
-	const rec = `{"scenario_id":"S1-lowercase","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"  ef-selinux  ","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:03Z"}]},"ground_truth":{"compromised":true}}`
+	const rec = `{"scenario_id":"S1-lowercase","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"  ef-selinux  ","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:03Z"}]},"ground_truth":{"compromised":true,"basis":"targeted_ttp"}}`
 	recs, err := LoadRecords(writeJSONL(t, "lower.jsonl", rec+"\n"))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
@@ -304,7 +304,7 @@ func TestActivationsOfNormalizesAndConverts(t *testing.T) {
 // 数值层：AUC 以 (100−score) 为危险度 ⇒ 0.5（两类各两例、且危险度完全重合）。
 func TestEvaluateThreeLayers(t *testing.T) {
 	rec := func(id string, as float64, compromised bool, ttc float64, ttps, nodes int) string {
-		return fmt.Sprintf(`{"scenario_id":%q,"factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":%v},"final_score":0,"acceptable":true,"threshold":50,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":%t,"time_to_compromise_s":%v,"ttps_achieved":%d,"nodes_affected":%d,"block_effective":false},"meta":{"env":"test","run":1}}`, id, as, compromised, ttc, ttps, nodes)
+		return fmt.Sprintf(`{"scenario_id":%q,"factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":%v},"final_score":0,"acceptable":true,"threshold":50,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":%t,"time_to_compromise_s":%v,"ttps_achieved":%d,"nodes_affected":%d,"block_effective":false,"basis":"targeted_ttp"},"meta":{"env":"test","run":1}}`, id, as, compromised, ttc, ttps, nodes)
 	}
 	content := strings.Join([]string{
 		rec("R1", 90, true, 213, 4, 3),
@@ -345,9 +345,9 @@ func TestEvaluateThreeLayers(t *testing.T) {
 // "作用于全部域、强度 1"计入惩罚，让一个未建模的因子凭空产生比配置更强的惩罚。
 // 对照组（EF-SYNCOOKIE 在候选的 Factors 里）必须**改变**分数，证明过滤器不是把因子全丢了。
 func TestUnmodeledFactorIsDropped(t *testing.T) {
-	const content = `{"scenario_id":"A","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8}]},"ground_truth":{"compromised":true}}
-{"scenario_id":"B","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-3FA","c_trigger":1.0,"effective_factor":0.5}]},"ground_truth":{"compromised":true}}
-{"scenario_id":"C","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-SYNCOOKIE","c_trigger":1.0,"effective_factor":0.5}]},"ground_truth":{"compromised":true}}
+	const content = `{"scenario_id":"A","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8}]},"ground_truth":{"compromised":true,"basis":"targeted_ttp"}}
+{"scenario_id":"B","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-3FA","c_trigger":1.0,"effective_factor":0.5}]},"ground_truth":{"compromised":true,"basis":"targeted_ttp"}}
+{"scenario_id":"C","observed":{"domain_scores":{"attack_surface":90},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","c_trigger":1.0,"effective_factor":0.8},{"factor":"EF-SYNCOOKIE","c_trigger":1.0,"effective_factor":0.5}]},"ground_truth":{"compromised":true,"basis":"targeted_ttp"}}
 `
 	recs, err := LoadRecords(writeJSONL(t, "unmodeled.jsonl", content))
 	if err != nil {
@@ -472,7 +472,7 @@ func TestDomainAggregationIsBitwiseDeterministic(t *testing.T) {
 // TestEvaluateIsBitwiseDeterministic：整条离线重算路径（引擎公式 + 钩子注入 + 三层指标）
 // 也必须逐位可复现 —— 报告与门禁都建立在这个契约上。
 func TestEvaluateIsBitwiseDeterministic(t *testing.T) {
-	const rec = `{"scenario_id":"S2-all-domains","factors":["EF-SELINUX"],"observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3}}`
+	const rec = `{"scenario_id":"S2-all-domains","factors":["EF-SELINUX"],"observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"basis":"targeted_ttp"}}`
 	recs, err := LoadRecords(writeJSONL(t, "determinism.jsonl", rec+"\n"))
 	if err != nil {
 		t.Fatalf("LoadRecords: %v", err)
@@ -545,7 +545,7 @@ func TestEvaluateRejectsWeightsForMissingDomains(t *testing.T) {
 //	调用方表 ⇒ (90×1 + 30×1)/2 = 60
 //
 // 两个数刻意不同 ⇒ "谁赢"是可观测的，而不是"两张表恰好同值"。
-const recordWeightsJSONL = `{"scenario_id":"S2-record-weights","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":90,"operation_trust":30},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"effective_weights":{"attack_surface":3,"operation_trust":1},"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}`
+const recordWeightsJSONL = `{"scenario_id":"S2-record-weights","factors":["EF-SELINUX"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":90,"operation_trust":30},"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"effective_weights":{"attack_surface":3,"operation_trust":1},"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false,"basis":"targeted_ttp"},"meta":{"env":"wsl-clab-14","run":1}}`
 
 // recordWeightsRecords 读回上面的夹具。
 func recordWeightsRecords(t *testing.T) []Record {
@@ -686,7 +686,7 @@ func TestEvaluateRejectsDegenerateResolvedWeightTable(t *testing.T) {
 
 // vgcJSONL 是 V/G/C 确定性断言用的 5 域记录：两个因子共用触发检查 OT-005，
 // EF-SELINUX → EF-APPARMOR 级联（带时间戳，chain 候选要用），时间间隔 30s。
-const vgcJSONL = `{"scenario_id":"S5-cascade-vgc","factors":["EF-SELINUX","EF-APPARMOR"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"final_score":0,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"},{"factor":"EF-APPARMOR","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:30Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false},"meta":{"env":"wsl-clab-14","run":1}}`
+const vgcJSONL = `{"scenario_id":"S5-cascade-vgc","factors":["EF-SELINUX","EF-APPARMOR"],"injection":"check_fail","observed":{"domain_scores":{"attack_surface":0.1,"business_continuity":0.2,"operation_trust":0.3,"resilience":71.7,"kernel_security":55.1},"final_score":0,"acceptable":true,"threshold":60,"spc_score":0.8,"threat_coeff":0.7,"edge_factor_chain":[{"factor":"EF-SELINUX","trigger_check":"OT-005","c_trigger":1.0,"effective_factor":0.8,"ts":"2026-09-08T10:00:00Z"},{"factor":"EF-APPARMOR","trigger_check":"OT-005","c_trigger":0.9,"effective_factor":0.82,"ts":"2026-09-08T10:00:30Z"}]},"ground_truth":{"compromised":true,"time_to_compromise_s":213,"ttps_achieved":4,"nodes_affected":3,"block_effective":false,"basis":"targeted_ttp"},"meta":{"env":"wsl-clab-14","run":1}}`
 
 // vgcParams 返回同一套参数下的 graph / chain 两个候选。
 func vgcParams() []struct {
