@@ -1,9 +1,4 @@
 #!/bin/bash
-# shellcheck disable=SC2154
-#
-# ↑ 文件级豁免 SC2154（"引用了但没赋值"）：`lab_*` 由 `. edge_lab.sh` 在 source 时赋值，
-#   而 shellcheck 不跨文件跟踪变量。代价：本文件里拼错的 `$lab_xxx` 也不会被报出来
-#   （ShellCheck 0.9 不支持按名字限定豁免）—— 基质的离线用例负责兜住这件事。
 # ============================================================================
 # edge_matrix.sh —— 场景矩阵驱动 + 数据集门禁（spec §5 / §5.4）
 # ============================================================================
@@ -60,6 +55,7 @@ REPO_ROOT="$(cd "$LAB_DIR/../.." && pwd)"
 # shellcheck source=scripts/edge_lab.sh
 . "$SCRIPT_DIR/edge_lab.sh"
 # 子脚本（各自 source 同一份 edge_lab.sh）必须看到**同一个**基质选择：export 一次，别处不再解析。
+# shellcheck disable=SC2154  # lab_substrate 由上面那行 source 赋值
 export EDGEEXP_SUBSTRATE="$lab_substrate"
 DATA_DIR="${EDGEEXP_DATA_DIR:-$LAB_DIR/data/edgefactors}"
 RUN_D="$DATA_DIR/run.d"
@@ -172,7 +168,10 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   # 基质必须在干跑里就看得见（Task 4D Step 1）：它决定"环境怎么建/毁、目标怎么被 exec、
   # `-target` 长什么样"，而默认值 clab = 今天的行为。换基质是**显式**动作，不是隐式继承。
   echo "  基质        : $lab_substrate（clab = 今天的行为；lxd = A-1 上的既有实例，见 edge_lab.sh）"
-  echo "  基质命令    : $lab_bin｜拓扑 $lab_topology"
+  # 两层 CLI 分别打印（Fix round 1 / M-2）：上一版只打一个 `$lab_bin`，读者看不出"拓扑级用哪个、
+  # 容器级用哪个"——而那条区分正是 I-1 的根因（一个变量两义）。现在两个名字各打一个。
+  # shellcheck disable=SC2154  # lab_topology_bin / lab_target_bin 由 source edge_lab.sh 赋值
+  echo "  基质命令    : 拓扑级 $lab_topology_bin｜目标级 $lab_target_bin｜拓扑 $lab_topology"
   # 观测主体必须在干跑里就看得见（Task 4C / I-9 第 2 条）：它是"这批记录描述哪台机器"的答案，
   # 而默认值恰恰是本轮引入的 —— 操作者要能在跑之前就知道它、并知道怎么改。
   if [ -n "$TARGET" ]; then

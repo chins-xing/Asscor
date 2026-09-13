@@ -1,9 +1,4 @@
 #!/bin/bash
-# shellcheck disable=SC2154
-#
-# ↑ 文件级豁免 SC2154（"引用了但没赋值"）：`lab_*` 由 `. edge_lab.sh` 在 source 时赋值，
-#   而 shellcheck 不跨文件跟踪变量。代价：本文件里拼错的 `$lab_xxx` 也不会被报出来
-#   （ShellCheck 0.9 不支持按名字限定豁免）—— 基质的离线用例负责兜住这件事。
 # ============================================================================
 # edge_probe.sh —— **节点内**真实条件探针（Task 4C Step 3）
 # ============================================================================
@@ -44,8 +39,15 @@ probe_target="${1:-${EDGEEXP_TARGET:-}}"
 
 # probe_docker_bin 允许覆盖 docker 可执行文件（测试用；默认 PATH 上的 docker）。
 #
-# 它同时是**基质层**的 CLI：下面把它钉进 `EDGEEXP_LAB_BIN` 再 source `edge_lab.sh`，
-# 于是"假 docker"这类既有夹具仍然只需替换一个可执行文件，不必知道基质层存在（Task 4D Step 1）。
+# 它就是**基质层** clab 分支的目标级 CLI：下面把它交给 `EDGEEXP_DOCKER_BIN`（基质层读这个变量
+# 得到 `lab_target_bin`）再 source `edge_lab.sh`，于是"假 docker"这类既有夹具仍然只需替换一个
+# 可执行文件，不必知道基质层存在。
+#
+# **Fix round 1 / I-1**：修复前这里钉的是 `EDGEEXP_LAB_BIN`，而那个名字只被**拓扑级**函数
+# （`lab_up`/`lab_down`/`lab_node_counts`）读 —— 于是两件事同时错：容器级命令（`exec`/`cp`/
+# `inspect`）在 clab 分支里写死 `docker`，**根本看不到这个覆盖**；而拓扑级命令反而被带偏，
+# 去调 `docker inspect -t <拓扑>`。现在两层 CLI 各有名字，`EDGEEXP_DOCKER_BIN` 只管容器级，
+# 与抽象前 `probe_docker_bin` 的效力逐条一致（评审用两个可分辨的假 docker 复现过那条差异）。
 probe_docker_bin="${EDGEEXP_DOCKER_BIN:-docker}"
 
 # --- 基质层（Task 4D Step 1）----------------------------------------------------
@@ -53,9 +55,9 @@ probe_docker_bin="${EDGEEXP_DOCKER_BIN:-docker}"
 # edge_reset/attack/collect 走同一个基质调用点：`docker exec`/`docker cp` 曾在这里各写死一处，
 # 换基质（A-1/LXD）时"探针还在 WSL 的 docker 上跑"而记录看起来完全正常 —— 那是最危险的形态。
 #
-# 覆盖规则：`EDGEEXP_LAB_BIN` 取 `probe_docker_bin`（默认 docker），`EDGEEXP_SUBSTRATE` 取
+# 覆盖规则：`EDGEEXP_DOCKER_BIN` 取 `probe_docker_bin`（默认 docker），`EDGEEXP_SUBSTRATE` 取
 # 调用方给的值（默认 clab ⇒ 与抽象前逐字等价：同一条 `docker exec` / `docker cp`）。
-export EDGEEXP_LAB_BIN="$probe_docker_bin"
+export EDGEEXP_DOCKER_BIN="$probe_docker_bin"
 # shellcheck source=scripts/edge_lab.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/edge_lab.sh"
 
@@ -91,13 +93,18 @@ probe_host() {
   printf '%s\n' "$(printf '%s' "$out" | tr -d '[:space:]')"
 }
 
-# probe_host_ready 在**任何**探针之前调用：docker 不可用 / 容器不存在或不在跑 ⇒ 响亮失败。
+# probe_host_ready 在**任何**探针之前调用：目标级 CLI 不可用 / 节点不存在或不在跑 ⇒ 响亮失败。
 #
 # 为什么不能省：探针没跑成与"条件不成立"在退出码上必须分开（见文件头），而"容器根本没起"
 # 是这两种情况里最难在数据上看出来的 —— 记录里只会少几条 condition_probes。
 #
 # 说明：这里用**基质视图**判"在不在跑"，用 `lab_target_exec` 判"能不能在里面执行"
 # （一个停掉的实例其视图仍然存在，而 exec 会失败）—— 两条都要过。
+#
+# 前置检查的对象必须是**它真正会执行的那一个二进制**（Fix round 1 / I-1）：修复前这里检查的是
+# `lab_bin`（= `EDGEEXP_LAB_BIN`，拓扑级名字），而随后真正执行的是写死的 `docker` ——
+# "检查"与"使用"不是同一个东西：覆盖值指向一个存在的假 CLI 时，预检通过、却去跑了 PATH 上的
+# `docker`（真 docker 下就是一次真 `docker exec`）。现在检查 `lab_target_bin`，与使用完全一致。
 probe_host_ready() {
   if [ -z "$probe_target" ]; then
     echo "edge_probe: 没有声明目标节点 —— R 组的真实缺失探针必须**在节点上**执行" >&2
@@ -105,8 +112,9 @@ probe_host_ready() {
     echo "  不得退回本机探针：那正是『探的是跑脚本的这台机器』这个缺陷的形态。" >&2
     return 2
   fi
-  command -v "$lab_bin" >/dev/null 2>&1 || {
-    echo "edge_probe: 找不到基质命令 $lab_bin（基质 $lab_substrate）—— 无法在节点 $probe_target 内执行探针" >&2
+  # shellcheck disable=SC2154  # lab_target_bin / lab_substrate 由 source edge_lab.sh 赋值
+  command -v "$lab_target_bin" >/dev/null 2>&1 || {
+    echo "edge_probe: 找不到基质命令 $lab_target_bin（基质 $lab_substrate）—— 无法在节点 $probe_target 内执行探针" >&2
     echo "  探针没跑成不等于条件成立；整轮失败，不得退回本机探针。" >&2
     return 2
   }
@@ -323,7 +331,7 @@ probe_condition_holds() {
   # 留下任何变量**（旧的 `PROBE_LAST_OUTPUT` 全局已删除）。
   if ! printf '%s\n' "$out" | grep -qx "$probe_sentinel"; then
     if [ "$dc" -ne 0 ]; then
-      echo "edge_probe: 探针 $factor 在节点 $probe_target 内没有跑成（docker exec 退出码 $dc）——" >&2
+      echo "edge_probe: 探针 $factor 在节点 $probe_target 内没有跑成（$lab_target_bin exec 退出码 $dc）——" >&2
       printf '%s\n' "$probe_err" | tail -n 3 | sed 's/^/  │ /' >&2
     else
       echo "edge_probe: 探针 $factor 在节点 $probe_target 内没有跑到底（没看到哨兵 $probe_sentinel）——" >&2

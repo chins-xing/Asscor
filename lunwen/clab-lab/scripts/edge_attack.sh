@@ -632,9 +632,10 @@ report = {
                'techniques_achieved': sorted(techniques)},
     'phases': json.loads(os.environ['PHASES_JSON']),
     'condition_probes': json.loads(os.environ['PROBES_JSON']),
-    'condition_probes_note': ('每条探针都在**被攻节点内**执行（docker exec，判据与 internal/checks/linux '
+    'condition_probes_note': ('每条探针都在**被攻节点内**执行（经基质层下发：clab 基质是 docker exec、'
+                              'lxd 基质是 lxc exec；判据与 internal/checks/linux '
                               '的同名检查逐条对齐）；probe_host 是节点内进程自证的 hostname，'
-                              'probe_target 是容器名。condition_holds 为 null 表示**探针未执行**'
+                              'probe_target 是节点名（clab: 容器名；lxd: 实例名）。condition_holds 为 null 表示**探针未执行**'
                               '（未声明 EDGEEXP_TARGET），那**不是**"条件不成立"，也不是证据。'),
     'real_missing': os.environ['REAL_MISSING'],
     'real_missing_verified_at': os.environ['REAL_MISSING_AT'],

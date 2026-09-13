@@ -1,9 +1,4 @@
 #!/bin/bash
-# shellcheck disable=SC2154
-#
-# ↑ 文件级豁免 SC2154（"引用了但没赋值"）：`lab_*` 由 `. edge_lab.sh` 在 source 时赋值，
-#   而 shellcheck 不跨文件跟踪变量。代价：本文件里拼错的 `$lab_xxx` 也不会被报出来
-#   （ShellCheck 0.9 不支持按名字限定豁免）—— 基质的离线用例负责兜住这件事。
 # ============================================================================
 # edge_collect.sh —— 单场景采集：把"配置 + 客观结果 + 宿主真实检查"join 成一条记录
 # ============================================================================
@@ -163,7 +158,11 @@ if [ -f "$RECORDS" ]; then
 fi
 
 # --- 4. 采集 -----------------------------------------------------------------
-echo "edge_collect: 采集场景 $SCENARIO（配置 $(basename "$CONFIG")，run=$RUN，env=$ENV_NAME，基质=$lab_substrate，目标=${TARGET:-本机}）"
+# 这一行**是对日志的新增**（Task 4D）：它把"这一轮跑在哪种基质上、观测主体会被翻成什么语法"
+# 打在每一条采集的日志里。上一版还引用了 `$lab_substrate`（由基质层赋值，shellcheck 因此要为
+# 整个文件豁免 SC2154）—— Fix round 1 把那半个引用也换成 `lab_target_spec` 的结果，于是本文件
+# **不再需要**那条文件级豁免，非默认基质的存在由 `-target` 的取值本身表达。
+echo "edge_collect: 采集场景 $SCENARIO（配置 $(basename "$CONFIG")，run=$RUN，env=$ENV_NAME，目标=${TARGET:-本机}）"
 # `--target` 只在真的声明了节点时才加上：不传时 `edgescen` 的取数路径与今天**逐位一致**
 # （本机登记表），而"显式传一个空 target"会让两份调用在日志上同形。
 #
@@ -176,7 +175,7 @@ if [ -n "$TARGET" ]; then
   TARGET_SPEC="$(lab_target_spec "$TARGET")"
   TARGET_ARGS=(--target "$TARGET_SPEC")
 fi
-echo "edge_collect: edgescen 观测主体 target=${TARGET_SPEC:-（不传 = 本机）}（EDGEEXP_TARGET=${TARGET:-未声明}，基质 $lab_substrate）"
+echo "edge_collect: edgescen 观测主体 target=${TARGET_SPEC:-（不传 = 本机）}（EDGEEXP_TARGET=${TARGET:-未声明}）"
 T0=$(date -u +%s)
 set +e
 "$EDGESCEN" --scenario "$SCENARIO" --config "$CONFIG" \

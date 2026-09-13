@@ -1,11 +1,4 @@
 #!/bin/bash
-# shellcheck disable=SC2154
-#
-# ↑ 文件级豁免 SC2154（"引用了但没赋值"）。原因：基质层的变量（`lab_substrate` / `lab_bin` /
-#   `lab_topology` / `lab_inspect_json`）由 `. edge_lab.sh` 在 source 时赋值，而 shellcheck
-#   不跨文件跟踪变量 —— 不豁免就会把**抽象本身**报成缺陷。代价如实写在这里：本文件里将来手打
-#   一个拼错的 `$lab_xxx` 也不会被 shellcheck 报出来。ShellCheck 0.9 不支持按名字限定豁免，
-#   故这件事改由**测试**兜住（`build/test-edge-lab.sh` 会断言"基质调用序列逐条相等"）。
 # ============================================================================
 # edge_reset.sh —— 每个场景的"干净环境"复位（spec §5 / §5.3）
 # ============================================================================
@@ -50,6 +43,7 @@ RUN_D="$DATA_DIR/run.d"
 . "$SCRIPT_DIR/edge_lab.sh"
 # 拓扑路径的**唯一来源**是基质层（`edge_lab.sh` 按自己的位置解析），这里只是取个短名字 ——
 # 两份各自解析会在 EDGEEXP_TOPOLOGY 未设时给出同一个值，但真源只有一个。
+# shellcheck disable=SC2154  # lab_topology 由上面那行 source 赋值（shellcheck 不跨文件跟踪变量）
 TOPOLOGY="$lab_topology"
 TARGET="${EDGEEXP_TARGET_HOST:-host1}"
 CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
@@ -66,16 +60,10 @@ TMP_OUT="$RUN_D/.$FILLER.tmp"
 for bin in curl python3 sha256sum; do
   command -v "$bin" >/dev/null 2>&1 || { echo "edge_reset: 缺少必需命令 $bin" >&2; exit 1; }
 done
-# 基质的 CLI 由 `edge_lab.sh` 决定（clab 基质要 clab+docker；lxd 基质要 lxc）。检查放在基质层
-# 里做，是为了让"哪条命令缺失"这句话只有一份实现 —— 而它缺失时的症状（命令找不到）在两种
-# 基质上一模一样，正是最容易被读成"环境问题"的那一类。
-case "$lab_substrate" in
-  clab) NEED_BINS=(clab docker) ;;
-  lxd)  NEED_BINS=("$lab_bin") ;;
-esac
-for bin in "${NEED_BINS[@]}"; do
-  command -v "$bin" >/dev/null 2>&1 || { echo "edge_reset: 缺少必需命令 $bin（基质 $lab_substrate）" >&2; exit 1; }
-done
+# 基质的 CLI 由 `edge_lab.sh` 决定（clab 基质要拓扑级 + 目标级两个；lxd 基质要 `lxc`）。清单搬进
+# 基质层是**单一来源**的要求：调用脚本里不再出现 `clab`/`docker`/`lxc` 命令字面（Fix round 1 / M-2，
+# 评审指出 `NEED_BINS=(clab docker)` 与文档"调用脚本里不得再出现基质命令字面"的断言不符）。
+lab_require_bins || exit 1
 [ -f "$TOPOLOGY" ] || { echo "edge_reset: 拓扑文件不存在: $TOPOLOGY" >&2; exit 1; }
 
 now_rfc3339() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -197,6 +185,7 @@ fi
 # 容器名 = <拓扑 prefix>-<lab 名>-<节点名>（本拓扑 prefix=asc ⇒ asc-asscor-host1）。
 # prefix 由拓扑自己声明，脚本**不硬编码**：从 `clab inspect` 的视图里按后缀取节点名，
 # 拓扑改 prefix 时这里不会变成一次"目标节点不存在"的假故障。
+# shellcheck disable=SC2154  # lab_inspect_json 由 source edge_lab.sh 赋值
 NODE="$(python3 - "$TARGET" "$lab_inspect_json" <<'PY'
 import json, sys
 target = sys.argv[1]
