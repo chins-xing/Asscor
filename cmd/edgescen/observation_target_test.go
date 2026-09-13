@@ -48,38 +48,74 @@ type fakeDocker struct {
 // 一个只在测试里有人用的接缝"（那种接缝会让生产路径与测试路径悄悄分叉）。
 func writeDockerShim(t *testing.T, d fakeDocker) string {
 	t.Helper()
-	dir := t.TempDir()
-	log := filepath.Join(dir, "docker.done")
+	return writeCLIShim(t, "docker", d)
+}
 
-	// POSIX 分支（Linux CI / WSL）：每一行参数都追加进日志，然后打印预设 stdout。
+// writeLXCShim 与 writeDockerShim 同款，但放的是假 **lxc**（Task 4D Step 2 的 lxd 基质）。
+//
+// 它同时是"docker 与 lxd 两条路径**不能互相顶替**"这条判据的观测手段：被测代码走哪一条，
+// 哪一个假 CLI 的日志才会出现。
+func writeLXCShim(t *testing.T, d fakeDocker) string {
+	t.Helper()
+	return writeCLIShim(t, "lxc", d)
+}
+
+// writeCLIShim 是节点侧 CLI 夹具的**唯一**实现（Task 4D Step 2 把 docker 专用版泛化到这里）。
+//
+// 两个假可执行文件（`<bin>` 与 `<bin>.bat`）都必须装上去：
+//
+// POSIX 分支（Linux CI / WSL）：带 +x 的 `sh` 脚本；
+// Windows 分支：Go 在 Windows 上按 PATHEXT 找 `<bin>.bat`（本机开发就是这条路径）。
+//
+// （同 node_target_lxd_test.go 的约定：条目式注释不写成 gofmt 认得的列表，避免 go1.26 的
+// gofmt 把它们重排成 `//\t· …`；本仓既有注释都是这个风格。）
+//
+// stderr 一律丢掉（`2>/dev/null`）：本机（Windows）上没有真 lxc，若某个用例断言"没有起 lxc
+// 子进程"，而实现又不小心起了一次，那么 Windows 的 CREATE_NO_WINDOW 查找失败会在 stderr 上
+// 打一行 `'lxc' is not recognized…` —— 那行噪声会让**测试输出**看起来像实现有问题，而真正的
+// 判据（日志文件存不存在）反而被淹没。
+func writeCLIShim(t *testing.T, cli string, d fakeDocker) string {
+	t.Helper()
+	dir := t.TempDir()
+	log := filepath.Join(dir, cli+".done")
+
 	posix := "#!/bin/sh\n" +
-		"printf '%s\\n' \"$*\" >> " + quote(posixLogRef(log)) + "\n" +
+		"printf '%s\\n' \"$*\" >> " + quote(posixLogRef(log)) + " 2>/dev/null\n" +
 		"printf '%s\\n' " + quote(d.stdout) + "\n"
 	if d.exitCode != 0 {
 		posix += "printf '%s\\n' " + quote(d.dockerErr) + " 1>&2\nexit " + itoa(d.exitCode) + "\n"
 	} else {
 		posix += "exit 0\n"
 	}
-	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(posix), 0o755); err != nil {
-		t.Fatalf("写假 docker: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, cli), []byte(posix), 0o755); err != nil {
+		t.Fatalf("写假 %s: %v", cli, err)
 	}
 
-	// Windows 分支：Go 在 Windows 上按 PATHEXT 找 `docker.bat`。
-	// 只用 `echo` 与重定向：信封 JSON 里不含 `<`/`>`/`|`/`&`/`%`，无需转义。
 	bat := "@echo off\r\n" +
-		"echo %*>> \"" + log + "\"\r\n" +
+		"echo %*>> \"" + log + "\" 2>nul\r\n" +
 		"echo " + d.stdout + "\r\n"
 	if d.exitCode != 0 {
 		bat += "echo " + d.dockerErr + " 1>&2\r\nexit /b " + itoa(d.exitCode) + "\r\n"
 	} else {
 		bat += "exit /b 0\r\n"
 	}
-	if err := os.WriteFile(filepath.Join(dir, "docker.bat"), []byte(bat), 0o755); err != nil {
-		t.Fatalf("写假 docker.bat: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, cli+".bat"), []byte(bat), 0o755); err != nil {
+		t.Fatalf("写假 %s.bat: %v", cli, err)
 	}
 
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return log
+}
+
+// shimLogAbsent 报告某个假 CLI **一次都没被调用过**（判据是它的调用日志文件不存在）。
+//
+// 断言写成"日志不存在"而不是"日志内容为空"：假 CLI 是每次调用追加一行的，故文件一旦被创建
+// 就说明真的起过子进程 —— 而"内容为空"在夹具写坏时也会成立（那正是 Fix round 1 / I-1 的形态：
+// 断言恒真）。
+func shimLogAbsent(t *testing.T, path string) bool {
+	t.Helper()
+	_, err := os.Stat(path)
+	return os.IsNotExist(err)
 }
 
 // posixLogRef 只为了让上面的字符串拼接读起来清楚（shell 里的路径也要引号）。

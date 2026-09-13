@@ -103,8 +103,13 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	// Task 4C Step 1：**additive** 开关。不传时取数路径与今天逐位一致（本机登记表）；
 	// 传了则改为在目标节点内跑同一份二进制取回检查结果 —— 失败一律报错，绝不退回本机
 	// （那正是"看起来是节点数据、实际是宿主数据"的静默错误）。
-	target := fs.String(nodeTargetFlag, "", "在哪个节点内做评估（容器名，经 docker exec 执行同一份二进制）；缺省=本机（与既有行为逐位一致）")
-	emitChecks := fs.Bool(emitChecksArg, false, "**节点内进程入口**：把本机检查登记表的原始结果以信封形式写到 stdout 并退出（由父进程经 docker exec 调用，不要手工使用）")
+	//
+	// Task 4D Step 2 把它扩成**带基质前缀**的语法：`docker:<容器>`（= 今天的行为）、
+	// `lxd:<实例>`（A-1 的 LXD），**裸名字按 docker 处理**（向后兼容）。文案必须把三种写法都
+	// 写出来：语法只在一处实现（nodecollect.go 的 parseNodeTarget），而 `-h` 是操作者看到的
+	// 唯一说明 —— 少写一种，操作者就会用第三种写法去猜。
+	target := fs.String(nodeTargetFlag, "", "在哪个节点内做评估：<容器名>（=docker，向后兼容）| docker:<容器> | lxd:<实例>（A-1 的 LXD，经 lxc exec 执行同一份二进制）；缺省=本机（与既有行为逐位一致）")
+	emitChecks := fs.Bool(emitChecksArg, false, "**节点内进程入口**：把本机检查登记表的原始结果以信封形式写到 stdout 并退出（由父进程经 docker exec / lxc exec 调用，不要手工使用）")
 
 	if err := fs.Parse(args); err != nil {
 		return exitUsage

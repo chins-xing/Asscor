@@ -13,12 +13,18 @@
 //  1. **additive**：不传 `-target` 时取数路径与今天**逐位一致**（同一个 `runHostChecks()`、
 //     同一个切片原样交给装配层），且这条有显式用例钉住（main_test.go 的
 //     `TestCollectChecksForTargetDefaultsToLocalHostChecks`）。
-//  2. **绝不静默回落到本机**：目标缺失、docker 不可用、节点内进程失败、取回的检查集为空
+//  2. **绝不静默回落到本机**：目标缺失、基质 CLI 不可用、节点内进程失败、取回的检查集为空
 //     —— 一律报错退出，绝不"改用本机结果继续跑"。那正是今天这个缺陷最危险的形态：
 //     记录看起来是节点数据，实际是宿主数据。
 //  3. **同一份二进制**：节点里跑的就是本进程自己（`os.Executable()`），不是另一个工具 ——
 //     "节点内评估"与"宿主评估"因此只差**运行位置**这一个变量，检查登记表、引擎版本、
 //     注入逻辑完全相同。`-emit-checks` 是那个二进制在节点内的入口（只读、只输出检查结果）。
+//
+// Task 4D Step 2 起，本文件同时是**两种基质**的取数实现（`-target docker:<容器>` / `lxd:<实例>`）：
+// 上面三条纪律在两种基质上逐条成立。基质只决定两件事 —— 怎么把文件送进去（`docker cp` vs
+// `lxc file push`）、怎么让它执行（`docker exec -e` vs `lxc exec --env … --`）；**nonce 绑定、
+// 信封解析（取最后一行）、失败一律响亮**这些性质全部共用同一份实现，不存在"lxd 侧另有一套
+// 判据"（那种分叉迟早会让其中一边退化，而从数据上看不出来）。
 package main
 
 import (
@@ -46,8 +52,98 @@ const nodeEnvelopeMagic = "edgescen.node-checks.v1"
 //
 // 为什么用环境变量而不是 `-emit-checks <nonce>`：`-emit-checks` 只接受空参数集这条性质
 // 本身是一道守卫（见 main.go 的 rejectEmitChecksArgs），把 nonce 塞进参数位就等于给它开了
-// 一个"合法参数"，那道守卫立刻退化成"有一个例外"。`docker exec -e` 不改 argv，两件事互不干扰。
+// 一个"合法参数"，那道守卫立刻退化成"有一个例外"。`docker exec -e`（lxd 侧是
+// `lxc exec --env`）不改 argv，两件事互不干扰。
 const nodeNonceEnv = "EDGESCEN_NODE_NONCE"
+
+// nodeSubstrate 是节点采集的**基质**（Task 4D Step 2）：同一份二进制在这两种基质上都能跑，
+// 区别只有"怎么把文件送进去、怎么让它执行"。
+type nodeSubstrate string
+
+const (
+	// substrateDocker = 今天的基质（Docker/ContainerLab 容器）—— `docker cp` + `docker exec -e`。
+	// 裸节点名（不带前缀）也走这条，保持向后兼容。
+	substrateDocker nodeSubstrate = "docker"
+	// substrateLXD = A-1 上的 LXD 实例 —— `lxc file push` + `lxc exec --env … --`。
+	// 用户 2026-09-12 裁定实验基质搬到 A-1（LXD，环境真实），这是那条路径的入口。
+	substrateLXD nodeSubstrate = "lxd"
+)
+
+// targetPrefixDocker / targetPrefixLXD 是 `-target` 的**基质前缀**（`docker:<名>` / `lxd:<名>`）。
+//
+// 为什么要有前缀（而不是一个 `-substrate` 开关）：观测主体是**每一条记录**的属性，而不是
+// 整个进程的属性 —— 一个进程内混采两种基质时，开关式的写法会让"这条记录采自哪里"取决于
+// 调用顺序。前缀把它绑在目标本身（`-target lxd:probe-ot005`），跨工具也就一个拼写。
+const (
+	targetPrefixDocker = string(substrateDocker) + ":"
+	targetPrefixLXD    = string(substrateLXD) + ":"
+)
+
+// nodeTarget 是解析后的 `-target`：**基质 + 节点名**。
+type nodeTarget struct {
+	Substrate nodeSubstrate
+	Node      string
+}
+
+// parseNodeTarget 解析 `-target`，语法三种（`-h` 文案与错误串里必须写明同一套）：
+//
+//	""                 ⇒ 由调用方处理（collectChecksForTarget 的默认路径 = 本机）
+//	<裸名字>            ⇒ docker（**向后兼容**：Task 4C 以来的语义，逐位不变）
+//	docker:<容器>       ⇒ docker（与裸名字等价，只是把基质显式写出来）
+//	lxd:<实例>          ⇒ lxd（新）
+//
+// 为什么"未知前缀"必须报错而不是当成裸名字：`lxd:probe-ot005` 里的名字若被当成
+// **docker 容器名**，docker 会以 `No such container: lxd:probe-ot005` 失败 —— 那条错误指向
+// 一个不存在的容器，而真正的原因是基质名拼错。判据是"冒号**前面**那一段是否像一个基质名"
+// （`[A-Za-z0-9_-]+`）且冒号后面还有名字：**看着像基质前缀却不在白名单**一律报错
+// （`foo:bar` 里的 `foo` 完全可能是个拼错的基质名，报出来比让它变成一次"容器不存在"有用得多）。
+// 只有"冒号前面不像标识符"（例如路径或 IPv6 里的冒号）才继续按今天的裸名字语义走 docker。
+func parseNodeTarget(target string) (nodeTarget, error) {
+	raw := strings.TrimSpace(target)
+	if raw == "" {
+		return nodeTarget{}, fmt.Errorf("节点内采集：target 为空（空串的语义是『本机』，由调用方处理）")
+	}
+	switch {
+	case strings.HasPrefix(raw, targetPrefixDocker):
+		node := strings.TrimSpace(strings.TrimPrefix(raw, targetPrefixDocker))
+		if node == "" {
+			return nodeTarget{}, fmt.Errorf("节点内采集：target %q 缺少节点名（用法：%s<容器名>）", raw, targetPrefixDocker)
+		}
+		return nodeTarget{Substrate: substrateDocker, Node: node}, nil
+	case strings.HasPrefix(raw, targetPrefixLXD):
+		node := strings.TrimSpace(strings.TrimPrefix(raw, targetPrefixLXD))
+		if node == "" {
+			return nodeTarget{}, fmt.Errorf("节点内采集：target %q 缺少实例名（用法：%s<实例名>）", raw, targetPrefixLXD)
+		}
+		return nodeTarget{Substrate: substrateLXD, Node: node}, nil
+	}
+	if i := strings.Index(raw, ":"); i >= 0 {
+		prefix := raw[:i]
+		// 只有"像一个基质前缀"时才报错：前缀是纯字母/数字/下划线/连字符（即一个标识符）而后面
+		// 还有名字。`foo:bar` 因此仍然按今天的裸名字走 docker，不会因本次改动改变语义。
+		if isIdentifier(prefix) && strings.TrimSpace(raw[i+1:]) != "" {
+			return nodeTarget{}, fmt.Errorf("节点内采集：target %q 的基质前缀 %q 未知（只认 %q 与 %q；"+
+				"不带前缀的裸名字按 %s 处理）", raw, prefix, strings.TrimPrefix(targetPrefixDocker, ":"),
+				strings.TrimPrefix(targetPrefixLXD, ":"), substrateDocker)
+		}
+	}
+	return nodeTarget{Substrate: substrateDocker, Node: raw}, nil
+}
+
+// isIdentifier 判断一段文本是否"像一个基质名"（`[A-Za-z0-9_-]+`）。
+func isIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
 
 // nodeCheckEnvelope 是节点内进程交给父进程的载荷：**节点内进程自报的运行位置**
 // （hostname 来自节点内进程自己的 `os.Hostname()`）+ 该节点上登记表的全部检查结果。
@@ -151,35 +247,48 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// collectChecksForTarget 是本工具的**唯一取数分派点**。
+// collectChecksForTarget 是本工具的**唯一取数分派点**（Task 4D Step 2 起 target 带基质前缀）。
 //
 // target 为空 ⇒ 与今天逐位一致：`runHostChecks()` 的结果原样返回（同一个切片、同一个顺序）。
-// target 非空 ⇒ 在目标节点内跑同一份二进制取回检查集；任何一种失败都返回错误，
-// **绝不**退回本机结果。
+// target 非空 ⇒ 解析出**基质**（docker|lxd）与节点名，在目标节点内跑同一份二进制取回检查集；
+// 任何一种失败都返回错误，**绝不**退回本机结果。
 func collectChecksForTarget(target string) ([]model.CheckResult, string, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return runHostChecks(), "", nil
 	}
-	env, err := fetchNodeChecks(target)
+	nt, err := parseNodeTarget(target)
 	if err != nil {
 		return nil, "", err
 	}
-	return env.Checks, observationTargetNode(target, env.Hostname), nil
+	env, err := fetchNodeChecks(nt)
+	if err != nil {
+		return nil, "", err
+	}
+	return env.Checks, observationTargetNode(nt, env.Hostname), nil
 }
 
 // observationTargetNode 是记录里"这次评估发生在哪台机器"的取值（进 `meta.observation_target`）。
 //
-// 同时带上容器名与容器内 hostname：前者是操作者用来复现的那把钥匙（`docker exec <name>`），
-// 后者是**节点内进程自己报的** —— 它是"节点侧自报"而不是"自证"（I-2）：被控节点上的进程
-// 本来就能报出任何 hostname。它的价值在于**事故性**区分（本机路径 vs 节点路径、
-// 哪个容器名被真的 `docker exec` 过），不构成密码学证据。
+// 同时带上**节点名**与节点内 hostname：前者是操作者用来复现的那把钥匙
+// （`docker exec <容器>`），后者是**节点内进程自己报的** —— 它是"节点侧自报"而不是"自证"
+// （I-2）：被控节点上的进程本来就能报出任何 hostname。它的价值在于**事故性**区分
+// （本机路径 vs 节点路径、哪个节点被真的 exec 过），不构成密码学证据。
+//
+// **docker 的取值逐字不变**（Task 4D Step 2 钉住）：裸名字与 `docker:<容器>` 都产出
+// `node:<容器> (hostname=…)` —— 上一个任务已经落盘的记录、以及所有既有断言都按这个形状写。
+// 只有 lxd 基质额外印出 `substrate=lxd`：非默认基质必须能从记录里看出来，否则
+// `docker exec host1` 与 `lxc exec host1 --` 两种观测在数据上完全同形。
 //
 // hostname 为空的情形已经在 `parseNodeEnvelope` 被拒（那里有独立诊断），故这里不再有
 // "回退成 node:<target>" 的分支 —— 那种回退一旦可达就会产出一条**更弱**的取值
 // （丢掉节点自报的 hostname），恰是本函数最该避免的"看起来正常但没有机器证据"的形态。
-func observationTargetNode(target, hostname string) string {
-	return fmt.Sprintf("node:%s (hostname=%s)", target, strings.TrimSpace(hostname))
+func observationTargetNode(nt nodeTarget, hostname string) string {
+	host := strings.TrimSpace(hostname)
+	if nt.Substrate == substrateDocker {
+		return fmt.Sprintf("node:%s (hostname=%s)", nt.Node, host)
+	}
+	return fmt.Sprintf("node:%s (substrate=%s, hostname=%s)", nt.Node, nt.Substrate, host)
 }
 
 // fetchNodeChecks 把**本进程自己的可执行文件**送进目标节点执行，取回该节点的检查结果。
@@ -187,22 +296,22 @@ func observationTargetNode(target, hostname string) string {
 // 为什么送二进制而不是"在节点里另装一个工具"：同一份二进制 ⇒ 会话里的评分链、检查登记表、
 // 甚至检查实现都与宿主路径是同一份代码，唯一变量是**运行位置**。任何"节点里跑另一个版本"
 // 的形态都会让两份数据不可比，而差异看起来只是"节点更严格"。
-func fetchNodeChecks(target string) (nodeCheckEnvelope, error) {
+func fetchNodeChecks(nt nodeTarget) (nodeCheckEnvelope, error) {
 	bin, err := os.Executable()
 	if err != nil {
-		return nodeCheckEnvelope{}, fmt.Errorf("节点内采集：取本进程可执行文件路径失败: %w", err)
+		return nodeCheckEnvelope{}, fmt.Errorf("%s 内采集：取本进程可执行文件路径失败: %w", nt.Substrate, err)
 	}
-	// 一次性 nonce（Fix round 1 / I-2）：本次运行生成、只经环境变量交给**本次** `docker exec`，
+	// 一次性 nonce（Fix round 1 / I-2）：本次运行生成、只经环境变量交给**本次**节点执行命令，
 	// 故它同时把"不是本次运行的信封"排除掉（残留二进制、另一次运行、别人打的 JSON 行）。
 	nonce, err := newNodeNonce()
 	if err != nil {
 		return nodeCheckEnvelope{}, err
 	}
-	containerPath, err := copyBinaryIntoNode(target, bin)
+	containerPath, err := copyBinaryIntoNode(nt, bin)
 	if err != nil {
 		return nodeCheckEnvelope{}, err
 	}
-	stdout, err := runDockerExec(target, containerPath, emitChecksFlag, nonce)
+	stdout, err := runNodeProcess(nt, containerPath, emitChecksFlag, nonce)
 	if err != nil {
 		return nodeCheckEnvelope{}, err
 	}
@@ -212,7 +321,7 @@ func fetchNodeChecks(target string) (nodeCheckEnvelope, error) {
 // newNodeNonce 生成一次性 nonce（16 字节随机、hex 编码）。
 //
 // 它是**包级变量**而不是直接调用 `rand.Read`，唯一目的是给用例一个接缝：真实 nonce 每次运行
-// 都不同，静态夹具（假 docker 的固定 stdout）无法预先知道它。用该接缝，用例就能造出"nonce
+// 都不同，静态夹具（假 CLI 的固定 stdout）无法预先知道它。用该接缝，用例就能造出"nonce
 // 匹配"的信封（正常路径），并另行构造"错值/空值"两种信封来证明这条绑定有牙。
 // 生产代码从不改写它。
 var newNodeNonce = func() (string, error) {
@@ -224,38 +333,75 @@ var newNodeNonce = func() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-// copyBinaryIntoNode 把二进制 `docker cp` 进节点并返回容器内路径。
+// copyBinaryIntoNode 把二进制送进节点并返回节点内路径。
 //
 // 覆盖容器的 `/tmp/edgescen-<pid>`：**每次采集都重新送**，绝不复用节点里可能残留的旧二进制
 // —— 旧二进制会让"同一份二进制"这条前提静默失效（节点里跑的是上一次修复前的版本，
 // 而数据看起来只是一点点不同）。
-func copyBinaryIntoNode(target, localPath string) (string, error) {
+func copyBinaryIntoNode(nt nodeTarget, localPath string) (string, error) {
 	dest := fmt.Sprintf("/tmp/edgescen-%d", os.Getpid())
-	if _, err := runDocker("cp", localPath, target+":"+dest); err != nil {
-		return "", err
+	switch nt.Substrate {
+	case substrateDocker:
+		if _, err := runDocker("cp", localPath, nt.Node+":"+dest); err != nil {
+			return "", err
+		}
+	case substrateLXD:
+		// `lxc file push <本地> <实例><目标路径>`（**没有** `docker cp` 的冒号分隔符）。
+		if _, err := runLXC("file", "push", localPath, nt.Node+dest); err != nil {
+			return "", err
+		}
+	default:
+		return "", fmt.Errorf("节点内采集：未知基质 %q", nt.Substrate)
 	}
 	return dest, nil
 }
 
-// runDockerExec 在目标节点内执行刚送进去的二进制，返回它的 stdout。
+// runNodeProcess 在目标节点内执行刚送进去的二进制，返回它的 stdout。
 //
 // 只传 `-emit-checks`：节点内进程不装载配置、不读 harness 产物、不评分，只把**登记表的
 // 原始检查结果**交出来（评分与装配仍由父进程做 —— 那是本工具的全部契约与自检所在，
 // 不能在节点里重跑第二遍）。因此也就不需要把配置/harness 产物也送进容器。
 //
-// nonce 经 `-e <ENV>=<nonce>`（环境变量）而不是参数位下发：`-emit-checks` 只接受空参数集
-// 这条性质要保住（见 nodeNonceEnv 的说明）。`-i` 留给探针脚本那条路径用，这里不需要 stdin。
-func runDockerExec(target, containerPath, emitFlag, nonce string) ([]byte, error) {
-	return runDocker("exec", "-e", nodeNonceEnv+"="+nonce, target, containerPath, emitFlag)
+// nonce 经**环境变量**下发（docker: `-e <ENV>=<nonce>`；lxd: `--env <ENV>=<nonce>`）而不是
+// 参数位：`-emit-checks` 只接受空参数集这条性质要保住（见 nodeNonceEnv 的说明）。两种基质的
+// 开关拼写不同（`-e` vs `--env`），但**语义同一件事**：给节点内进程设一个只属于本次运行的值。
+func runNodeProcess(nt nodeTarget, containerPath, emitFlag, nonce string) ([]byte, error) {
+	switch nt.Substrate {
+	case substrateDocker:
+		return runDocker("exec", "-e", nodeNonceEnv+"="+nonce, nt.Node, containerPath, emitFlag)
+	case substrateLXD:
+		// `--` 把命令与 lxc 自己的开关分开：`lxc exec <实例> -- <cmd…>`。少了它，以 `-` 开头的
+		// 命令串（这里就是 `-emit-checks`）会被 lxc 当成自己的参数而报错（实测 rc=1）。
+		return runLXC("exec", "--env", nodeNonceEnv+"="+nonce, nt.Node, "--", containerPath, emitFlag)
+	default:
+		return nil, fmt.Errorf("节点内采集：未知基质 %q", nt.Substrate)
+	}
 }
 
 // runDocker 执行一次 docker 子命令（stdout/stderr 分开收集）。
-//
-// 失败时把 docker 的 stderr **原样带进错误**：目标不存在、容器没在跑、docker 不在 PATH
-// —— 这三种情况的处置完全不同，笼统地说"节点采集失败"会让操作者去查错的东西。
 func runDocker(args ...string) ([]byte, error) {
+	return runNodeCLI("docker", args...)
+}
+
+// runLXC 执行一次 lxc 子命令（stdout/stderr 分开收集）。
+//
+// 它是**包级变量**而不是普通函数，唯一的目的是给用例一个接缝（与 `newNodeNonce` 同一个手法）：
+// 判据要求"把假 lxc 换成假 docker 的等价变异必须让用例红" —— 有接缝时这条可以在**同一份源码**
+// 上被证明（用例把 `runLXC` 指到 `runDocker`，也就是"基质前缀认了、但二进制还是 docker"这个
+// 最像的错法），而不必依赖 `go test -overlay` 之类的源码改写。生产代码从不改写它。
+var runLXC = func(args ...string) ([]byte, error) {
+	return runNodeCLI("lxc", args...)
+}
+
+// runNodeCLI 是节点侧 CLI 的**唯一**执行点（Task 4D Step 2 把 docker 专用实现泛化到这里）。
+//
+// 失败时把子进程的 stderr **原样带进错误**：目标不存在、容器没在跑、CLI 不在 PATH
+// —— 这三种情况的处置完全不同，笼统地说"节点采集失败"会让操作者去查错的东西。
+// 诊断串里带上**是哪一种基质**（`docker` / `lxc`）：同一个 `No such container` 在两种基质上
+// 的排障动作不同，而错误信息是同一条（那正是最容易被读成"环境问题"的形态）。
+func runNodeCLI(bin string, args ...string) ([]byte, error) {
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command("docker", args...)
+	cmd := exec.Command(bin, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -263,13 +409,26 @@ func runDocker(args ...string) ([]byte, error) {
 		if detail == "" {
 			detail = err.Error()
 		}
+		if len(args) == 0 {
+			return nil, fmt.Errorf("节点内采集：%s 失败（无参数）: %s", bin, detail)
+		}
 		switch args[0] {
 		case "cp":
-			return nil, fmt.Errorf("节点内采集：docker cp %s 失败: %s", args[2], detail)
+			if len(args) >= 3 {
+				return nil, fmt.Errorf("节点内采集：%s cp %s 失败: %s", bin, args[2], detail)
+			}
+		case "file":
+			// `lxc file push <本地> <实例><目标>`：报出**本地文件**与**目标**，两者都是排障要的信息。
+			if len(args) >= 4 {
+				return nil, fmt.Errorf("节点内采集：%s file push %s → %s 失败: %s", bin, args[2], args[3], detail)
+			}
 		case "exec":
-			return nil, fmt.Errorf("节点内采集：docker exec %s %s 失败: %s", args[1], args[2], detail)
+			// docker: `exec <容器> <二进制> …`；lxc: `exec [--env K=V] <实例> -- <二进制> …`。
+			// 这里刻意**不猜**参数位（两种基质的形状不同），统一报完整命令 —— 逐位对齐的猜测
+			// 一旦猜错，错误信息会指向错的那个参数，比不猜更坏。
+			return nil, fmt.Errorf("节点内采集：%s exec 失败（%s）: %s", bin, strings.Join(args, " "), detail)
 		}
-		return nil, fmt.Errorf("节点内采集：docker %s 失败: %s", strings.Join(args, " "), detail)
+		return nil, fmt.Errorf("节点内采集：%s %s 失败: %s", bin, strings.Join(args, " "), detail)
 	}
 	return stdout.Bytes(), nil
 }
