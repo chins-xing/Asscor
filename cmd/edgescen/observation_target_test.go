@@ -487,6 +487,14 @@ func TestTargetPathNeverFallsBackWhenDockerMissing(t *testing.T) {
 // 顺带钉住 I-2 的 nonce 回路（这一条是**真的走了一遍子进程**的：环境变量 → 信封 → 父进程校验）：
 // 下发 nonce ⇒ 信封回显它；**不下发** ⇒ 信封 nonce 为空并被父进程拒绝。
 func TestEmitChecksModeIsNodeOnlyEntry(t *testing.T) {
+	// **本用例必须自己把夹具检查装进注册表**（Fix round 2 / 新 Important-1）：
+	// `emitChecksPayload` 跑的是**进程级全局注册表**，而此前这条用例依赖**别的用例**
+	// （`main_test.go` 里 19 处调用、`fixtureOnce sync.Once`）泄漏进来的夹具。单跑
+	// （`go test -run TestEmitChecksModeIsNodeOnlyEntry`）时注册表为空（Windows 上没有任何
+	// Linux 检查被注册）⇒ 信封的 `checks:[]` 为空 ⇒ 下面那条 Fatal 先炸，**根本走不到**
+	// `-list` 那几条断言 ⇒ 评审用"单跑这条用例变红"当 I-3 的判据时先被骗了一次
+	// （"守卫被拆"与"注册表为空"在那条输出上无法区分）。加上这一行，用例才是自足的。
+	registerFixtureChecks()
 	// 合法用法：只给 -emit-checks（父进程就是这么把节点内进程调起来的），nonce 经环境变量下发。
 	t.Setenv(nodeNonceEnv, fixtureNonce)
 	var stdout, stderr strings.Builder
@@ -521,7 +529,7 @@ func TestEmitChecksModeIsNodeOnlyEntry(t *testing.T) {
 		t.Errorf("拒绝理由必须指向缺失的 nonce: %v", err)
 	}
 
-	// 非法用法：混进任何别的开关都必须被拒（退出码 2）。
+	// 非法用法：混进任何别的开关**或位置参数**都必须被拒（退出码 2）。
 	for _, args := range [][]string{
 		{"-" + emitChecksFlag, "--scenario", "S0-baseline"},
 		{"-" + emitChecksFlag, "--config", "x.ini"},
@@ -530,6 +538,10 @@ func TestEmitChecksModeIsNodeOnlyEntry(t *testing.T) {
 		// 都会打印场景表并 exit 0）。
 		{"-" + emitChecksFlag, "--list"},
 		{"--list", "-" + emitChecksFlag},
+		// Minor-新-1：位置参数此前被静默忽略（`fs.Visit` 只遍历显式 flag）。判据是"参数集为空"，
+		// 不是"没有多余的 flag"。
+		{"-" + emitChecksFlag, "stray"},
+		{"-" + emitChecksFlag, "--", "stray"},
 	} {
 		var out, errOut strings.Builder
 		code := runCLI(args, &out, &errOut)
@@ -538,6 +550,9 @@ func TestEmitChecksModeIsNodeOnlyEntry(t *testing.T) {
 		}
 		if strings.Contains(out.String(), "场景表") {
 			t.Errorf("args=%v 不得打印场景表（那是 -list 的行为，不是节点内进程的出口）:\n%s", args, out.String())
+		}
+		if !strings.Contains(errOut.String(), "只接受空参数集") {
+			t.Errorf("args=%v stderr 必须说明这道守卫的口径（只接受空参数集）:\n%s", args, errOut.String())
 		}
 	}
 }

@@ -238,23 +238,45 @@ def body():
     config_hash = os.environ['CONFIG_HASH']
 
     # --- 观测主体：这次评估到底在哪台机器上做的（Task 4C）------------------------
-    # 三条判据，缺一不可（勘测实测的缺陷正是"记录描述的是 WSL 开发机"而没人发现）：
+    # 四条判据（勘测实测的缺陷正是"记录描述的是 WSL 开发机"而没人发现）：
     #   1. 声明了 EDGEEXP_TARGET ⇒ 记录必须带 meta.observation_target，且它指的**就是这个节点**；
     #   2. 没声明 ⇒ 记录不得带该字段（默认路径逐位不变，不写"本机"这种新值）；
-    #   3. harness 产物里的 condition_probes 若在**另一个**节点上探的，本轮数据自相矛盾
+    #   3. **本场景应当有探针**（有相位或有真实缺失）却没探到 ⇒ 拒绝；
+    #   4. harness 产物里的探针若在**另一个**节点上探的，本轮数据自相矛盾
     #      （R 组的证据与 checks[] 的观测来自两台机器）。
     target = os.environ.get('TARGET') or ''
     record_target = (rec.get('meta') or {}).get('observation_target') or ''
     probes = harness.get('condition_probes') or []
     probe_targets = sorted({(p.get('probe_target') or '') for p in probes if p.get('probe_target')})
+    # Fix round 2 / 新 Important-2：**"没有探针"分两种**，判据必须先把它们分开。
+    #
+    #   · `probes_expected` = 本场景**应当**有探针：`edge_attack.sh` 只有两个探针产生点 ——
+    #     相位循环（有 `PHASES` 才进）与 R 组闸门（有 `REAL_MISSING` 才进）。
+    #     ⇒ `S0-baseline` 是**唯一**两者都没有的场景（`edge_attack.sh:81`），它必然产出
+    #     `condition_probes: []`（作者自己的 `attack-S0-baseline.json` 就是这个形状）。
+    #   · 旧的 M-3 判据只看"没有 probe_target"就拒绝 ⇒ 它会把 **S0 拒掉**，而 I-9 又让矩阵
+    #     **默认**声明 `EDGEEXP_TARGET` ⇒ 按新默认路径跑全量矩阵会在**第一个场景**整轮失败
+    #     （§9 的复现命令同样失败）。那是把"本来就该是空的"误判成"该有却没有"。
+    #   ⇒ 现在只在"该有探针却没有"时拒绝，并把 `probes_expected` 写进片段 ——
+    #     "这次为什么没有探针"因此成为**显式记录的事实**，而不是靠放行。
+    phases = harness.get('phases') or []
+    # `real_missing` 在这里先取（它在下面 R 组证据块里还要用一次）：`probes_expected` 依赖它，
+    # 而"该不该有探针"这条判据必须在观测主体判定**之前**算出来（Fix round 2 / 新 Important-2）。
+    real_missing = (harness.get('real_missing') or '').strip()
+    real_missing_at = (harness.get('real_missing_verified_at') or '').strip()
+    probes_expected = bool(phases) or bool(real_missing)
     observation = {
         'target_declared': target,
         'record_observation_target': record_target,
         'harness_probe_targets': probe_targets,
         'record_in_node': bool(record_target),
+        'probes_expected': probes_expected,
+        'phases': len(phases),
         'ok': True,
         'note': '观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；'
-                'condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）',
+                'condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。'
+                'probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，'
+                '此时 condition_probes 为空是如实结果、不是缺陷',
     }
     if target:
         if not record_target:
@@ -264,18 +286,21 @@ def body():
         elif target not in record_target:
             observation['ok'] = False
             observation['reason'] = ('记录声称观测主体是 %r，而本轮声明的节点是 %s' % (record_target, target))
-        elif not probe_targets:
-            # Fix round 1 / M-3：声明了目标、记录也带字段，但 harness 的探针**一条都没执行**
-            # （`condition_probes` 为空或全部 skipped）时会落进这里。旧实现直接放行 ⇒
-            # 文档 §5.3.1 第 3 条"同一轮数据必须来自同一台机器"对 S 组是**空真**。
-            # 触发场景现实存在：只给 edge_collect.sh 设了 EDGEEXP_TARGET，而 edge_attack.sh
-            # 是在（或没有）另一个环境下跑的。这里**拒绝**，并把两条出路写清楚。
+        elif not probe_targets and probes_expected:
+            # 声明了目标、记录也带字段，但 harness 的探针**该有却没有**（`condition_probes` 为空
+            # 或全部 skipped）。触发场景现实存在：只给 edge_collect.sh 设了 EDGEEXP_TARGET，
+            # 而 edge_attack.sh 是在（或没有）另一个环境下跑的。这里**拒绝**，并把出路写清楚。
             observation['ok'] = False
-            observation['reason'] = ('声明了 EDGEEXP_TARGET=%s，但 harness 的 condition_probes 里没有任何 probe_target —— '
-                                     '本次采集没有节点侧探针证据。要么让 edge_attack.sh 在同一环境、同一 '
-                                     'EDGEEXP_TARGET 下重跑（它会在节点内探一次），要么显式声明这是'
-                                     '「本轮不做条件探针」的采集（当前没有这种开关：这是有意设计）' % target)
-        elif probe_targets != [target]:
+            observation['reason'] = ('声明了 EDGEEXP_TARGET=%s，且本场景**应当**有探针（phases=%d），'
+                                     '但 harness 的 condition_probes 里没有任何 probe_target —— '
+                                     '本次采集没有节点侧探针证据。请让 edge_attack.sh 在同一环境、同一 '
+                                     'EDGEEXP_TARGET 下重跑（它会在节点内探一次）'
+                                     % (target, len(phases)))
+        elif probe_targets and probe_targets != [target]:
+            # `probe_targets` 为空时**不走这条**（Fix round 2）：空集与"在别的节点上探"是两件事，
+            # 前者已由上面那条"该有却没有"处理，后者才是真矛盾。少了 `probe_targets and`
+            # 这个前提，S0 那种"本来就没有探针"的场景会被这条误报成"同一轮数据来自两台机器"
+            # （离线夹具 G 用例实测到的形态）。
             observation['ok'] = False
             observation['reason'] = ('harness 的条件探针在 %s 上执行，而本次观测主体是 %s —— '
                                      '同一轮数据来自两台机器' % (probe_targets, target))
@@ -291,8 +316,7 @@ def body():
             observation['reason'] = ('未声明 EDGEEXP_TARGET，而 harness 的探针却标称在 %s 上执行' % probe_targets)
 
     # --- R 组：condition_probes 为空 ⇒ 不许声称"真实缺失已核实"（Task 4C Step 3）----
-    real_missing = (harness.get('real_missing') or '').strip()
-    real_missing_at = (harness.get('real_missing_verified_at') or '').strip()
+    # （`real_missing`/`real_missing_at` 在上面观测主体判定处已经取过，这里直接复用。）
     probe_evidence = {
         'real_missing': real_missing,
         'real_missing_verified_at': real_missing_at,

@@ -215,10 +215,15 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
-// rejectEmitChecksArgs 拒绝 `-emit-checks` 模式下除 `target` 之外的**显式**开关。
+// rejectEmitChecksArgs 拒绝 `-emit-checks` 模式下除 `target` 之外的**显式**开关与**位置参数**。
 //
-// 只拒绝显式给出的：`--env`/`--run` 这类有默认值的开关在不传时也会出现在 `fs` 里，
+// 只拒绝显式给出的开关：`--env`/`--run` 这类有默认值的开关在不传时也会出现在 `fs` 里，
 // 按"值非空"判断会把节点内进程误判成用法错误。
+//
+// **位置参数也要拒**（Fix round 2 / Minor-新-1）：`fs.Visit` 只遍历**显式给出的 flag**，
+// `edgescen -emit-checks stray` 里的 `stray` 既不是 flag 也不在 `bad` 里 ⇒ 会被静默忽略，
+// 与"只接受空参数集"的字面承诺不符。今天它不构成绕过（nonce 走环境变量、不进参数位），
+// 但这道守卫的判据应当是"参数集为空"，而不是"没有多余的 flag"。
 //
 // `target` 是唯一允许（且必须为空）的一个：父进程已经在容器里了，节点内进程**再**去
 // docker exec 一层只会把 x 变成 `docker exec host1 /tmp/edgescen --target host1`（容器里
@@ -233,6 +238,9 @@ func rejectEmitChecksArgs(fs *flag.FlagSet, target string) error {
 	})
 	if strings.TrimSpace(target) != "" {
 		bad = append(bad, "-"+nodeTargetFlag)
+	}
+	if leftovers := fs.Args(); len(leftovers) > 0 {
+		bad = append(bad, fmt.Sprintf("位置参数[%s]", strings.Join(leftovers, " ")))
 	}
 	if len(bad) > 0 {
 		sort.Strings(bad)
