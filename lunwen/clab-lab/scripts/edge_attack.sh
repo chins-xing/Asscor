@@ -41,6 +41,13 @@
 #                         发基质命令（节点内动作全部在 edge_probe.sh 里经基质层下发），但它
 #                         **必须**校验这个名字：拼错的基质名若被静默降级，探针会在另一种基质上
 #                         跑，而 condition_probes 里的 probe_host 看起来仍然正常。
+#
+#   ---- Task 4D Step 4：L2 标签口径（用户 2026-09-12 裁定）----
+#   EDGEEXP_BASIS             `targeted_ttp`（默认，当声明了目标 ability）| `recon_playbook`
+#   EDGEEXP_TARGET_ABILITY    目标 TTP 的 **ability_id**（L2：`compromised` 只由它决定）
+#   EDGEEXP_TARGET_ABILITY_NAME  目标 ability 的名字（可选，仅用于**核对** ID 没被换掉）
+#   EDGEEXP_CONTROL_ABILITY   对照/通道健康度 ability 的 id（可选，只用于归类与报告）
+#   EDGEEXP_AGENT_FRESH_S      agent 新鲜度上限（秒，默认 180）：见下方"陈旧 agent"两条判据
 # ============================================================================
 set -euo pipefail
 
@@ -56,6 +63,7 @@ LAB_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(cd "$LAB_DIR/../.." && pwd)"
 # 基质层：本脚本不直接调它，但**要在最前面把基质名校验掉**（见上面 EDGEEXP_SUBSTRATE 的说明）。
 # shellcheck source=scripts/edge_lab.sh
+# shellcheck disable=SC2154  # lab_substrate/lab_target_bin 由下面那行 source 赋值
 . "$SCRIPT_DIR/edge_lab.sh"
 TOPOLOGY="${EDGEEXP_TOPOLOGY:-$LAB_DIR/asscor.clab.yml}"
 CONFIG="${EDGEEXP_CONFIG:-$REPO_ROOT/configs/edgeexp/m0-baseline.ini}"
@@ -67,6 +75,10 @@ ATTACK_TIMEOUT_S="${EDGEEXP_ATTACK_TIMEOUT_S:-1800}"
 POLL_S="${EDGEEXP_POLL_S:-10}"
 PHASE_GAP_S="${EDGEEXP_PHASE_GAP_S:-3}"
 EDGESCEN="${EDGEEXP_EDGESCEN:-$REPO_ROOT/build/edgescen}"
+TARGET_ABILITY="${EDGEEXP_TARGET_ABILITY:-}"
+TARGET_ABILITY_NAME="${EDGEEXP_TARGET_ABILITY_NAME:-}"
+CONTROL_ABILITY="${EDGEEXP_CONTROL_ABILITY:-}"
+AGENT_FRESH_S="${EDGEEXP_AGENT_FRESH_S:-180}"
 
 for bin in curl python3 sha256sum; do
   command -v "$bin" >/dev/null 2>&1 || { echo "edge_attack: 缺少必需命令 $bin" >&2; exit 1; }
@@ -74,6 +86,51 @@ done
 [ -f "$CONFIG" ] || { echo "edge_attack: 配置不存在: $CONFIG" >&2; exit 1; }
 [ -f "$TOPOLOGY" ] || { echo "edge_attack: 拓扑不存在: $TOPOLOGY" >&2; exit 1; }
 [ "$PHASE_GAP_S" -ge 1 ] || { echo "edge_attack: EDGEEXP_PHASE_GAP_S 必须 ≥ 1（链上 ts 只有秒精度）" >&2; exit 1; }
+
+# ---------------------------------------------------------------------------
+# L2 标签依据：**目标 TTP 与对照分开计**（Task 4D Step 4，用户 2026-09-12 裁定）
+# ---------------------------------------------------------------------------
+# 旧口径是"**任意** link 成功即 compromised=true"，而对照/侦察 ability 的成功也会被算进去 ——
+# 两者在数据上同形：一条"目标被拦住、对照照常成功"的链与一条"目标达成"的链都落在 true 上。
+# 现在的口径：
+#   · `compromised`       := **目标 TTP** 的 link 里**存在** status == 0；
+#   · `block_effective`   := **目标 TTP** 的 link **全部**未成功；
+#   · 对照/侦察的 link 只用来回答"通道与执行器健不健康"，另存 `control`，**不参与标签**。
+#
+# **默认值的选择（要写清，否则会静默改变既有的 clab 矩阵行为）**：`EDGEEXP_TARGET_ABILITY`
+# 未声明时 basis 只能是 `recon_playbook`（旧行为：任意 link 成功即 true），并**响亮警告** ——
+# 那种记录**不得**进决策层指标（`cmd/edgecompare` 有依据守卫，见 metrics.go）。
+# 两种组合都不许含糊：
+#   · basis=targeted_ttp  ⇒ **必须**声明目标 ability（没有目标的"目标 TTP"是自相矛盾）；
+#   · basis=recon_playbook ⇒ **不得**声明目标 ability（声明了却按侦察口径算 = 口径不一致）。
+BASIS="${EDGEEXP_BASIS:-}"
+if [ -z "$BASIS" ]; then
+  if [ -n "$TARGET_ABILITY" ]; then BASIS="targeted_ttp"; else BASIS="recon_playbook"; fi
+fi
+LAB_PIDS_HELPER="$LAB_DIR/scripts/edge_lab_pids.sh"
+[ -f "$LAB_PIDS_HELPER" ] || { echo "edge_attack: 缺少基质层 PID 助手 $LAB_PIDS_HELPER" >&2; exit 1; }
+# ATTACK_HOST 是"agent 应该跑在哪台机器上"（= 被攻节点）。空 ⇒ 判据退化成"任意 host 的活 agent"，
+# 那正是"打到别的容器上的 agent"这一形态；故与 EDGEEXP_TARGET 一起声明是本脚本的**正确**用法。
+ATTACK_HOST="${EDGEEXP_ATTACK_HOST:-${EDGEEXP_TARGET:-}}"
+case "$BASIS" in
+  targeted_ttp)
+    [ -n "$TARGET_ABILITY" ] || {
+      echo "edge_attack: basis=targeted_ttp 但没给 EDGEEXP_TARGET_ABILITY —— 没有目标的『目标 TTP』是自相矛盾的，整轮失败" >&2
+      exit 1
+    } ;;
+  recon_playbook)
+    [ -z "$TARGET_ABILITY" ] || {
+      echo "edge_attack: basis=recon_playbook 却给了 EDGEEXP_TARGET_ABILITY=$TARGET_ABILITY —— 口径不一致（侦察口径不得被当成目标 TTP），整轮失败" >&2
+      exit 1
+    }
+    echo "edge_attack: 警告：本轮的标签依据是 recon_playbook（未声明 EDGEEXP_TARGET_ABILITY）——" >&2
+    echo "  compromised 将是『任意 link 成功』的旧口径，**不得**进决策层指标（见 spec §2.1 的 L2）。" >&2 ;;
+  *)
+    echo "edge_attack: EDGEEXP_BASIS 只认 targeted_ttp | recon_playbook，收到 '$BASIS'" >&2
+    exit 1 ;;
+esac
+export BASIS TARGET_ABILITY TARGET_ABILITY_NAME CONTROL_ABILITY AGENT_FRESH_S
+export ATTACK_HOST LAB_PIDS_HELPER
 
 # ---------------------------------------------------------------------------
 # 场景相位表
@@ -434,7 +491,7 @@ export PLAYBOOK_ID PLAYBOOK_NAME ATTACK_TIMEOUT_S POLL_S PHASES_JSON PROBES_JSON
 export REAL_MISSING REAL_MISSING_AT PHASE_GAP_S EXPECTED_PHASES EXPECTED_CHAIN_FACTORS
 export EXPECTED_CHAIN_FACTORS_SET EXPECTED_CHAIN_FACTORS_SOURCE
 python3 - <<'PY'
-import datetime, hashlib, json, os, sys, time, urllib.request, urllib.error
+import datetime, hashlib, json, os, subprocess, sys, time, urllib.request, urllib.error
 
 API = os.environ['CALDERA_URL'].rstrip('/') + '/api/v2'
 KEY = os.environ['CALDERA_KEY']
@@ -478,6 +535,23 @@ def fail(msg):
     sys.exit(1)
 
 
+def link_ability_id(l):
+    """这条 link 属于哪条 ability（`ability.ability_id`，缺失 ⇒ 空串）。"""
+    return ((l.get('ability') or {}).get('ability_id') or '').strip()
+
+
+def link_ability_name(l):
+    return ((l.get('ability') or {}).get('name') or '').strip()
+
+
+def link_time(l):
+    """这条 link 的"发生时刻"（按 collect → finish → decide 的优先级取第一个有值的）。"""
+    for k in ('collect', 'finish', 'decide'):
+        if l.get(k):
+            return l[k]
+    return None
+
+
 # --- 固定剧本：定义 + 哈希 + 名字核对 ----------------------------------------
 try:
     advs = api('/adversaries')
@@ -494,19 +568,70 @@ canonical = '|'.join([PLAYBOOK_ID, PLAYBOOK_NAME] + ordering)
 playbook_hash = 'sha256:' + hashlib.sha256(canonical.encode()).hexdigest()
 
 # --- 触发 ---------------------------------------------------------------------
+# 参数：目标 TTP / 对照 / 依据 / agent 新鲜度 —— 由 shell 侧经环境变量传进来（都已校验过）。
+BASIS = os.environ['BASIS']
+TARGET_ABILITY = (os.environ.get('TARGET_ABILITY') or '').strip()
+TARGET_ABILITY_NAME = (os.environ.get('TARGET_ABILITY_NAME') or '').strip()
+CONTROL_ABILITY = (os.environ.get('CONTROL_ABILITY') or '').strip()
+AGENT_FRESH_S = int(os.environ.get('AGENT_FRESH_S') or 180)
+ATTACK_HOST = (os.environ.get('ATTACK_HOST') or '').strip()
+
 agents = api('/agents')
-# "有一个 agent"不够：Caldera 会保留已销毁容器的 agent 条目（last_seen 停留在容器消失那一刻），
-# 用陈旧条目开打会让整个操作悬在 EXECUTE 上、最后以"零成功"结束 —— 那会被误读成"攻击被拦住"。
-# 故只认 180s 内真的跳过心跳的条目。
-_live = [a for a in agents if (parse_ts(a.get('last_seen')) or 0) >= time.time() - 180]
-if not _live:
-    fail(f'Caldera 里没有 180s 内回过心跳的 agent（共有 {len(agents)} 条，多为陈旧条目）—— 攻击侧不可用（先跑 edge_reset.sh）')
+
+
+# **陈旧 agent 的判据（已知坑 2，Step 4 把它变成硬闸门）**
+#
+# Caldera 会保留已死 agent 的条目（`trusted=true`、`last_seen` 停在容器消失那一刻）。
+# 只按"trusted"或"180 s 内有心跳"挑人都不够 —— 实测：`asc-tgt-1` 有过 8 条条目、只有 1 条
+# 与容器内**当前活着的 pid** 一致。打到死 agent 上会得到 `status=-3`（EXECUTE），
+# 而 `-3` **看起来像"被拦住"** —— 那正是本步要堵的形态。
+#
+# 三层判据（缺一层就有一种"看起来正常"的错法）：
+#   ① `host` == 攻击目标（不然可能打到别的容器上的 agent）；
+#   ② agent 的 `pid` **出现在目标内当前进程表里**（活着的才是活的）；
+#   ③ `last_seen` 在 `AGENT_FRESH_S` 之内（pid 命中但心跳停了 ⇒ agent 卡死）。
+def live_sandcat_pids():
+    """目标内当前活着的 sandcat PID 集合（取不到 ⇒ 空集，调用方会据此响亮失败）。"""
+    try:
+        out = subprocess.run(['bash', os.environ['LAB_PIDS_HELPER'], ATTACK_HOST, 'sandcat'],
+                             capture_output=True, text=True, timeout=30)
+    except Exception:
+        return set()
+    return {int(x) for x in out.stdout.split() if x.strip().isdigit()}
+
+
+def agent_alive(a, live_pids):
+    if ATTACK_HOST and a.get('host') != ATTACK_HOST:
+        return False
+    pid = a.get('pid')
+    if pid is None or int(pid) not in live_pids:
+        return False
+    seen = parse_ts(a.get('last_seen')) or 0
+    return seen >= time.time() - AGENT_FRESH_S
+
+
+def fail_if_no_live_agent(agents, stage):
+    """攻击侧可用性的**唯一判据**：目标上有一只 `(host, 活 pid)` 且心跳新鲜的 agent。"""
+    live_pids = live_sandcat_pids()
+    alive = [a for a in agents if agent_alive(a, live_pids)]
+    if not alive:
+        fail(f'{stage}：目标 {ATTACK_HOST or "(未声明 EDGEEXP_TARGET)"} 上没有活着的 agent —— '
+             f'判据是 `(host, 容器内活 pid)` 且 last_seen ≤ {AGENT_FRESH_S}s；'
+             f'Caldera 共 {len(agents)} 条条目、容器内活 sandcat pid={sorted(live_pids)}。'
+             f'攻击侧不可用（先跑 edge_reset.sh；注意"edget trusted=true 的陈旧条目"不算）')
+    return alive
+
+
+if not agents:
+    fail(f'Caldera 里一条 agent 都没有（{API}/agents）—— 攻击侧不可用（先跑 edge_reset.sh）')
+_alive = fail_if_no_live_agent(agents, '触发前')
+
 attack_started_at = now()
 start_epoch = time.time()
 body = {
     'name': f'edgeexp-{SCENARIO}-{int(start_epoch)}',
     'adversary': {'adversary_id': PLAYBOOK_ID},
-    'group': '',
+    'group': '',                  # 空 = 全体 agent；活 agent 的判据在下方用 (host, pid) 检查
     'state': 'running',
     'auto_close': True,
     'planner': {'planner_id': 'atomic'},
@@ -548,7 +673,6 @@ chain = (op or {}).get('chain') or []
 # --- 派生客观结果（状态码语义取自 c_link.py 的 states 表）--------------------
 STATES = {'-5': 'high_viz', '-4': 'untrusted', '-3': 'execute', '-2': 'discard',
           '-1': 'pause', '0': 'success', '1': 'error', '124': 'timeout'}
-successes = [l for l in chain if l.get('status') == 0]
 counts = {}
 for l in chain:
     counts[STATES.get(str(l.get('status')), 'unknown')] = counts.get(STATES.get(str(l.get('status')), 'unknown'), 0) + 1
@@ -556,37 +680,84 @@ for l in chain:
 if not chain:
     fail(f'operation {op_id} 一个 link 都没发出（state={state}）—— 攻击侧没跑起来；这不能让 block_effective 静默变成 true')
 
-# "零成功"必须与"攻击根本没跑起来"区分开：前者是 block_effective=true 的依据，后者是
-# 一次失败 —— 两者在链上都表现为"没有 status == 0 的 link"，而记录里只会写 block_effective。
-# 两条判据（都对"零成功"生效）：
-#   · 所有 link 都被 DISCARD/HIGH_VIZ ⇒ 没有任何 ability 真正尝试执行（平台没有可用 executor），
-#     客观结果无意义；
-#   · 目标 agent 在攻击结束时已失联（last_seen 太旧）⇒ 这不是"被拦住"。
-attempted = [l for l in chain if l.get('status') not in (-2, -5)]
+# 攻击结束时再确认一次"agent 还活着"（判据同触发前，见 live_sandcat_pids 的说明）。
+agents_at_end = api('/agents')
+live_pids_at_end = live_sandcat_pids()
+alive_at_end = [a for a in agents_at_end if agent_alive(a, live_pids_at_end)]
 paws = {l.get('paw') for l in chain if l.get('paw')}
-live_cutoff = time.time() - 180
-agents_live = []
-try:
-    for a in api('/agents'):
-        seen = parse_ts(a.get('last_seen'))
-        if a.get('paw') in paws and seen is not None and seen >= live_cutoff:
-            agents_live.append(a['paw'])
-except Exception:
-    agents_live = []
+agents_live = sorted({a['paw'] for a in alive_at_end if a.get('paw') in paws})
 
-if not successes:
-    if not attempted:
-        fail(f'operation {op_id} 的所有 link 都是 DISCARD/HIGH_VIZ（{counts}）—— 没有任何 ability 真正尝试执行，'
-             f'这条客观结果无从解释为"被拦住"')
-    if not agents_live:
-        fail(f'operation {op_id} 零成功，且目标 agent 在攻击结束时已失联（paws={sorted(paws)}）—— '
-             f'这不是"攻击被拦住"，而是攻击没跑起来；不得据此写 block_effective=true')
+
+def statuses(links):
+    c = {}
+    for l in links:
+        c[STATES.get(str(l.get('status')), 'unknown')] = c.get(STATES.get(str(l.get('status')), 'unknown'), 0) + 1
+    return c
+# ---- 目标 TTP 与对照分开计（L2 口径；这是本文件 Step 4 的全部要点）-------------
+target_links = [l for l in chain if TARGET_ABILITY and link_ability_id(l) == TARGET_ABILITY]
+control_links = [l for l in chain if not (TARGET_ABILITY and link_ability_id(l) == TARGET_ABILITY)
+                 and (not CONTROL_ABILITY or link_ability_id(l) == CONTROL_ABILITY)]
+# 既不是目标也不是对照的 link（例如剧本里混进了别的 ability）：**单独列出来**而不是悄悄并进
+# 对照 —— 混进对照会虚高"通道健康度"，而它可能只是另一个同样撞墙的 ability。
+other_links = [l for l in chain if l not in target_links and l not in control_links]
+target_successes = [l for l in target_links if l.get('status') == 0]
+control_successes = [l for l in control_links if l.get('status') == 0]
+successes = [l for l in chain if l.get('status') == 0]
+attempted = [l for l in chain if l.get('status') not in (-2, -5)]
+
 
 def link_time(l):
     for k in ('collect', 'finish', 'decide'):
         if l.get(k):
             return l[k]
     return None
+
+
+# `status = -3`（EXECUTE）**绝不算"被拦住"**：它的含义是"这条 link 挂在那里没有决定"，
+# 最常见的原因是 agent 已死（陈旧条目）或执行器不可用 —— 那是**攻击没跑起来**，不是防护起作用。
+# 旧实现的兜底只看"整条链有没有成功 link"，于是"目标 -3 + 对照 0"会被读成"目标被拦住"。
+target_execute_links = [l for l in target_links if l.get('status') == -3]
+if target_execute_links and not target_successes:
+    fail(f'operation {op_id} 的目标 link 全部停在 EXECUTE（status=-3，{len(target_execute_links)} 条）—— '
+         f'那是"没有决定"，最常见的原因是 agent 已死/执行器不可用，**不是**"被防护拦住"；'
+         f'不得据此写 block_effective=true（判据：目标上的活 agent 与 link 的 paw 是否一致）')
+
+# 目标 TTP 判定（**唯一决定 compromised 的东西**）
+if BASIS == 'targeted_ttp':
+    if not target_links:
+        fail(f'operation {op_id} 的链里**没有**目标 ability（{TARGET_ABILITY}）的 link —— '
+             f'剧本里没跑它 / ability id 写错 / 计划器把它跳过了；'
+             f'链上的 ability id = {sorted({link_ability_id(l) for l in chain})}。'
+             f'没有目标 link 就无从谈"目标 TTP 是否成功"，不得写任何标签')
+    compromised = len(target_successes) > 0
+    block_effective = len(target_successes) == 0
+    # 名字核对（可选）：防止"ID 没变但内容被换"或"声明与剧本不一致"
+    if TARGET_ABILITY_NAME:
+        got = {link_ability_name(l) for l in target_links}
+        if got and TARGET_ABILITY_NAME not in got:
+            fail(f'目标 ability {TARGET_ABILITY} 现在的名字是 {sorted(got)}，'
+                 f'与 EDGEEXP_TARGET_ABILITY_NAME={TARGET_ABILITY_NAME!r} 不符 —— 剧本/ability 漂移，拒绝采集')
+    # 零成功时必须排除"攻击没跑起来"（与旧实现的同一条纪律，但现在**逐目标 link** 判）
+    if not target_successes:
+        if all(l.get('status') in (-2, -5) for l in target_links):
+            fail(f'operation {op_id} 的目标 link 全是 DISCARD/HIGH_VIZ（{statuses(target_links)}）—— '
+                 f'没有任何目标 ability 真正尝试执行，这条客观结果无从解释为"被拦住"')
+        if not agents_live:
+            fail(f'operation {op_id} 目标零成功，且目标 agent 在攻击结束时已失联/已死'
+                 f'（链上的 paws={sorted(paws)}，容器内活 sandcat pid={sorted(live_pids_at_end)}）—— '
+                 f'这不是"攻击被拦住"，而是攻击没跑起来；不得据此写 block_effective=true')
+else:
+    # recon_playbook：旧口径（任意 link 成功即 true），但**必须在产物里留下依据**，
+    # 且消费侧（cmd/edgecompare）默认拒绝把它算进决策层指标。
+    compromised = len(successes) > 0
+    block_effective = len(successes) == 0
+    if not successes:
+        if not attempted:
+            fail(f'operation {op_id} 的所有 link 都是 DISCARD/HIGH_VIZ（{counts}）—— 没有任何 ability 真正尝试执行，'
+                 f'这条客观结果无从解释为"被拦住"')
+        if not agents_live:
+            fail(f'operation {op_id} 零成功，且目标 agent 在攻击结束时已失联（paws={sorted(paws)}）—— '
+                 f'这不是"攻击被拦住"，而是攻击没跑起来；不得据此写 block_effective=true')
 
 ttc = 0
 if successes:
@@ -601,14 +772,44 @@ for l in successes:
     for f in (l.get('facts') or []):
         if f.get('technique_id'):
             techniques.add(f['technique_id'])
+target_techniques = sorted({f['technique_id'] for l in target_successes
+                            for f in (l.get('facts') or []) if f.get('technique_id')})
 
 report = {
     'scenario': SCENARIO,
-    'compromised': len(successes) > 0,
+    # **L2 口径**：这两个字段只由**目标 TTP** 的 link 决定（basis=targeted_ttp 时）。
+    # basis=recon_playbook 时它们是旧口径（任意 link），而 `basis` 字段会如实写明 ——
+    # 消费侧（cmd/edgecompare）默认**拒绝**把侦察口径的记录算进决策层指标。
+    'compromised': compromised,
     'time_to_compromise_s': ttc,
+    # `ttps_achieved` 是"链上成功的 ability 条数"（含对照）——它是**过程量**，不是标签。
+    # 标签只看 `compromised`/`block_effective`（上面那一对）。
     'ttps_achieved': len(successes),
     'nodes_affected': len({l.get('paw') for l in successes if l.get('paw')}),
-    'block_effective': len(successes) == 0,
+    'block_effective': block_effective,
+    'basis': BASIS,
+    'target_ttp': {
+        'ability_id': TARGET_ABILITY or None,
+        'ability_name': TARGET_ABILITY_NAME or None,
+        'links': len(target_links),
+        'success_links': len(target_successes),
+        'status_counts': statuses(target_links),
+        'techniques_achieved': target_techniques,
+        'note': ('目标 TTP：`compromised`/`block_effective` **只**由这组 link 决定（L2 口径）。'
+                 '`status=-3`（EXECUTE）**不算**被拦住 —— 脚本在"目标 link 全为 -3 且零成功"时直接失败。'
+                 if BASIS == 'targeted_ttp' else
+                 '未声明目标 ability ⇒ 本轮是侦察口径（basis=recon_playbook），这组统计为空。'),
+    },
+    'control': {
+        'ability_id': CONTROL_ABILITY or None,
+        'links': len(control_links),
+        'success_links': len(control_successes),
+        'status_counts': statuses(control_links),
+        'note': ('对照/通道健康度：回答"通道与执行器能不能干活"，**不参与标签**。'
+                 '实测用途：策略在时"对照 0 + 目标非 0"才排除了"command 被拒是 agent/执行器坏了"这一解释。'),
+    },
+    'other_links': {'count': len(other_links), 'status_counts': statuses(other_links),
+                    'ability_ids': sorted({link_ability_id(l) for l in other_links})},
     'playbook_hash': playbook_hash,
     'topology_hash': os.environ['TOPO_HASH'],
     'injections': [
@@ -629,7 +830,11 @@ report = {
     'attack': {'started_at': attack_started_at, 'finished_at': attack_finished_at,
                'agents_available': len(agents), 'success_links': len(successes),
                'agents_live_at_end': sorted(agents_live), 'attempted_links': len(attempted),
-               'techniques_achieved': sorted(techniques)},
+               'techniques_achieved': sorted(techniques),
+               'agent_pid_at_end': sorted(live_pids_at_end),
+               'agent_alive_judgement': ('`(host, 容器内活 pid)` 且 last_seen ≤ %ds（Task 4D Step 4）：'
+                                         'Caldera 保留已死 agent 条目，只看 trusted 会把 operation 打到死 agent 上，'
+                                         '得到 status=-3 而**看起来像被拦住**' % AGENT_FRESH_S)},
     'phases': json.loads(os.environ['PHASES_JSON']),
     'condition_probes': json.loads(os.environ['PROBES_JSON']),
     'condition_probes_note': ('每条探针都在**被攻节点内**执行（经基质层下发：clab 基质是 docker exec、'
@@ -640,8 +845,11 @@ report = {
     'real_missing': os.environ['REAL_MISSING'],
     'real_missing_verified_at': os.environ['REAL_MISSING_AT'],
     'probe_note': 'condition_holds = 该防护在**被攻节点内**真的缺失（用引擎同名检查的判据探测，见 condition_probes 的 probe_host）；S 组是 spec §2.3 的"检查失败代理"，探针结果只记录不阻断；R 组必须成立',
-    'ground_truth_note': ('block_effective/compromised 的口径：观察窗内成功执行的 ability 数为 0 / > 0（link.status == 0，'
-                          '状态码语义取自 Caldera c_link.py 的 states 表）。'
+    'ground_truth_note': ('口径（Task 4D Step 4 / 用户裁定的 L2）：`compromised` = **目标 TTP 是否成功**'
+                          '（basis=targeted_ttp 时只由目标 ability 的 link 决定，`status == 0` 才算成功），'
+                          '`block_effective` = 目标 link **全部**未成功；`status=-3`（EXECUTE）**不算**被拦住。'
+                          '对照/侦察 link 只作通道健康度，见 `control`。'
+                          'basis=recon_playbook 时是旧口径（任意 link 成功即 true），**不得**进决策层指标。'
                           + ('本次观察窗**超时**（operation 未进终态）⇒ ttps_achieved 是"窗内已达成"的下界。' if window_timeout
                              else 'operation 已进终态，客观结果完整。')),
 }
@@ -653,7 +861,12 @@ with open(tmp, 'w', encoding='utf-8') as fh:
 os.replace(tmp, OUT)
 print(f'edge_attack: 客观结果 compromised={report["compromised"]} ttc={ttc}s ttps={report["ttps_achieved"]} '
       f'nodes={report["nodes_affected"]} block_effective={report["block_effective"]} '
-      f'(state={state}, links={len(chain)}, counts={counts})')
+      f'(basis={BASIS}, 目标 link {len(target_links)}/{len(target_successes)} 成功, 对照 link {len(control_links)}/{len(control_successes)}, '
+      f'state={state}, links={len(chain)}, counts={counts})')
+print(f'edge_attack: 目标 TTP ability={TARGET_ABILITY or "（未声明 ⇒ 侦察口径）"} '
+      f'name={TARGET_ABILITY_NAME or "（未注明）"}')
+print(f'edge_attack: agent 判据 (host={ATTACK_HOST or "任意"}, 活 pid={sorted(live_pids_at_end)}, ≤{AGENT_FRESH_S}s) '
+      f'⇒ 结束时活着 {len(alive_at_end)} 只')
 print(f'edge_attack: 剧本 {PLAYBOOK_NAME}/{PLAYBOOK_ID} abilities={len(ordering)} hash={playbook_hash[:23]}…')
 print(f'edge_attack: 写出 {OUT}')
 PY

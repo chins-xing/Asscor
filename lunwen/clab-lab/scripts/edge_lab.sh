@@ -26,6 +26,7 @@
 #   lab_target_exec_detached <node> <cmd…>  在目标内起一个不随连接结束而退出的进程
 #   lab_push <local> <node> <dest>  把文件送进目标
 #   lab_node_ip <node> <iface>      取目标某接口的 CIDR（无则空、返回非零）
+#   lab_node_pids <node> <comm>     取目标内**当前活着**的进程 PID（每行一个）
 #   lab_node_running <node>         实例在跑吗（true/false；不存在则非零）
 #   lab_inspect <node>              取目标的基质视图（存在性/状态的权威判据）
 #   lab_list                        列出目标（每行一个名字）
@@ -356,7 +357,29 @@ lab_node_ip() {
   esac
 }
 
-# lab_node_running <node> —— 实例在跑吗：打印 `true`/`false`，**实例不存在则非零退出**。
+# lab_node_pids <node> <comm-regex> —— 目标内**当前活着**的进程 PID（每行一个，按 PID 升序）。
+#
+# 为什么需要它（Task 4D Step 4 / 已知坑 2）：Caldera **保留已死 agent 的条目**（`trusted=true`
+# 但 `last_seen` 停在容器消失那一刻）。攻击脚本若只按"有心跳的 agent"挑人，就可能把 operation
+# 打到一只**已经死掉的** agent 上 —— 链里出现 `status=-3`（EXECUTE），而 `-3` **看起来像"被拦住"**。
+# 正确的判据是 **`(host, 容器内当前活着的 pid)`**：先问目标"你里面现在有哪些 pid"，再去 agent
+# 表里按 `(host, pid)` 精确匹配。
+#
+# `comm-regex` 过滤进程名（例如 `sandcat`）；`ps` 的 comm 字段被内核截断到 15 字符，故用 `grep -E`
+# 做子串匹配而不是精确相等。取不到（实例不存在/ps 不可用）⇒ **非零退出**，调用方据此响亮失败。
+lab_node_pids() {
+  local node="$1" pattern="${2:-.}"
+  case "$lab_substrate" in
+  clab)
+    "$lab_target_bin" exec "$node" ps -eo pid,comm --no-headers 2>/dev/null \
+      | awk -v p="$pattern" '$2 ~ p {print $1}' | sort -n
+    ;;
+  lxd)
+    "$lab_target_bin" exec "$node" -- ps -eo pid,comm --no-headers 2>/dev/null \
+      | awk -v p="$pattern" '$2 ~ p {print $1}' | sort -n
+    ;;
+  esac
+}
 #
 # 两种基质的取值手段不同、形状也不同（clab: `docker inspect -f {{.State.Running}}`；
 # lxd: `lxc info` 的 `Status:` 行），这正是本层要收口的东西：调用方（探针）只问"能不能在里面执行"，

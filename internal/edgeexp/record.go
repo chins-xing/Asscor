@@ -221,8 +221,22 @@ type GroundTruth struct {
 	BlockEffective    bool    `json:"block_effective"`
 	// Basis 是标签依据（`targeted_ttp` / `recon_playbook`），空 = 未声明（既不判死、也不假装知道）。
 	Basis string `json:"basis,omitempty"`
+	// TargetAbility 是**哪条 ability 是目标**（Task 4D Step 4）：没有它，报告里那句
+	// "compromised = 目标 TTP 是否成功"在事后**不可复核** —— 读数据的人无法知道当初把谁当成了
+	// 目标，而同一个剧本里可能有多条 ability（实测：Step 3B 的对照 ability 成功会与目标成功同形）。
+	// 可选（旧记录没有它），但 basis=targeted_ttp 时**应当**有。
+	TargetAbility *TargetAbility `json:"target_ability,omitempty"`
 
 	compromisedSet bool
+}
+
+// TargetAbility 是"该场景的目标 TTP"的标识（L2 标签的锚点）。
+//
+// 为什么只记 id 与 name、**不记"是否成功"**：成功与否已经在 `compromised` 里了，再抄一份就是
+// 两个可能漂移的真源（而漂移时的表现是"记录自相矛盾"）。本结构只回答"**谁**是目标"。
+type TargetAbility struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
 }
 
 // 标签依据的两个合法取值（L2 裁定，spec §5.1 的 `ground_truth.basis` 行）。
@@ -240,12 +254,13 @@ const (
 // UnmarshalJSON 记录 `compromised` 是否显式出现（理由见类型注释与 Validate）。
 func (g *GroundTruth) UnmarshalJSON(data []byte) error {
 	aux := struct {
-		Compromised       *bool   `json:"compromised"`
-		TimeToCompromiseS float64 `json:"time_to_compromise_s"`
-		TTPsAchieved      int     `json:"ttps_achieved"`
-		NodesAffected     int     `json:"nodes_affected"`
-		BlockEffective    bool    `json:"block_effective"`
-		Basis             string  `json:"basis"`
+		Compromised       *bool          `json:"compromised"`
+		TimeToCompromiseS float64        `json:"time_to_compromise_s"`
+		TTPsAchieved      int            `json:"ttps_achieved"`
+		NodesAffected     int            `json:"nodes_affected"`
+		BlockEffective    bool           `json:"block_effective"`
+		Basis             string         `json:"basis"`
+		TargetAbility     *TargetAbility `json:"target_ability"`
 	}{}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
@@ -258,6 +273,7 @@ func (g *GroundTruth) UnmarshalJSON(data []byte) error {
 	g.NodesAffected = aux.NodesAffected
 	g.BlockEffective = aux.BlockEffective
 	g.Basis = aux.Basis
+	g.TargetAbility = aux.TargetAbility
 	return nil
 }
 

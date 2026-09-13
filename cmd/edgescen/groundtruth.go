@@ -39,6 +39,12 @@ type harnessReport struct {
 	// 无法再区分 —— 依据是**标签的语义**，不是可以补的默认值。写错（非两个合法值）在
 	// `edgeexp.Validate` 处被拒（值域校验不是"要求"，是"不许写错"）。
 	Basis *string `json:"basis"`
+	// TargetTTP 是 harness 产物的目标 TTP 段（`{ability_id, ability_name, …}`，Task 4D Step 4）。
+	//
+	// 记录里只取"**谁**是目标"（id/name）—— 成功与否已经在 `compromised` 里了，再抄一份就是
+	// 两个可能漂移的真源。而"谁"必须留痕：没有它，报告里那句"compromised = 目标 TTP 是否成功"
+	// 事后**不可复核**（同一个剧本里可能有多条 ability，实测对照 ability 的成功与目标成功同形）。
+	TargetTTP *harnessTargetTTP `json:"target_ttp"`
 
 	// PlaybookHash / TopologyHash 是溯源（拓扑与剧本入档，spec §5.3）。
 	// `PlaybookHash` 进 `meta.playbook_hash`；`TopologyHash` **不进记录**（spec §5.1 的 schema
@@ -66,6 +72,16 @@ type harnessInjection struct {
 	At    string `json:"at"`
 }
 
+// harnessTargetTTP 是 harness 产物里"目标 TTP"那一段（Task 4D Step 4）。
+//
+// 只声明本工具真正消费的两个字段：`ability_id` / `ability_name`。其余（`links`/`success_links`/
+// `status_counts`/`note`…）留在产物里供人看，采集器**不解释**它们 —— 那是 harness 的判据，
+// 在这里再抄一遍就等于两份真源（判据漂移时记录与产物会各说各话）。
+type harnessTargetTTP struct {
+	AbilityID   string `json:"ability_id"`
+	AbilityName string `json:"ability_name"`
+}
+
 // groundTruth 是采集器内部的客观结果（与任何模型无关）。
 //
 // 为什么不是直接复用 `edgeexp.GroundTruth`：契约类型的"字段存在性标记"（`compromised` 是否
@@ -80,6 +96,8 @@ type groundTruth struct {
 
 	// Basis 是标签依据（空 = harness 没说 ⇒ 记录里也缺席，见 harnessReport.Basis）。
 	Basis string `json:"basis,omitempty"`
+	// TargetAbility 是"哪条 ability 是目标"（空 = 未声明；见 harnessReport.TargetTTP）。
+	TargetAbility *edgeexp.TargetAbility `json:"target_ability,omitempty"`
 
 	PlaybookHash string               `json:"playbook_hash"`
 	Injections   map[string]time.Time `json:"injections"`
@@ -144,6 +162,13 @@ func loadGroundTruth(path, scenario string) (groundTruth, error) {
 	if rep.Basis != nil {
 		basis = strings.TrimSpace(*rep.Basis)
 	}
+	var targetAbility *edgeexp.TargetAbility
+	if rep.TargetTTP != nil {
+		id := strings.TrimSpace(rep.TargetTTP.AbilityID)
+		if id != "" {
+			targetAbility = &edgeexp.TargetAbility{ID: id, Name: strings.TrimSpace(rep.TargetTTP.AbilityName)}
+		}
+	}
 
 	return groundTruth{
 		Compromised:       *rep.Compromised,
@@ -152,6 +177,7 @@ func loadGroundTruth(path, scenario string) (groundTruth, error) {
 		NodesAffected:     *rep.NodesAffected,
 		BlockEffective:    *rep.BlockEffective,
 		Basis:             basis,
+		TargetAbility:     targetAbility,
 		PlaybookHash:      rep.PlaybookHash,
 		Injections:        injections,
 	}, nil
@@ -165,12 +191,13 @@ func loadGroundTruth(path, scenario string) (groundTruth, error) {
 // 这件事已在 `loadGroundTruth` 处以指针解码 + 明确错误拦住了，故这里不会把缺失伪装成在场。
 func (g groundTruth) recordGroundTruth() (edgeexp.GroundTruth, error) {
 	payload := struct {
-		Compromised       bool    `json:"compromised"`
-		TimeToCompromiseS float64 `json:"time_to_compromise_s"`
-		TTPsAchieved      int     `json:"ttps_achieved"`
-		NodesAffected     int     `json:"nodes_affected"`
-		BlockEffective    bool    `json:"block_effective"`
-		Basis             string  `json:"basis,omitempty"`
+		Compromised       bool                   `json:"compromised"`
+		TimeToCompromiseS float64                `json:"time_to_compromise_s"`
+		TTPsAchieved      int                    `json:"ttps_achieved"`
+		NodesAffected     int                    `json:"nodes_affected"`
+		BlockEffective    bool                   `json:"block_effective"`
+		Basis             string                 `json:"basis,omitempty"`
+		TargetAbility     *edgeexp.TargetAbility `json:"target_ability,omitempty"`
 	}{
 		Compromised:       g.Compromised,
 		TimeToCompromiseS: g.TimeToCompromiseS,
@@ -178,6 +205,7 @@ func (g groundTruth) recordGroundTruth() (edgeexp.GroundTruth, error) {
 		NodesAffected:     g.NodesAffected,
 		BlockEffective:    g.BlockEffective,
 		Basis:             strings.TrimSpace(g.Basis),
+		TargetAbility:     g.TargetAbility,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
