@@ -12,13 +12,16 @@
 #
 # 顺序（**采集前能判的一律在采集前判**，Fix round 2 / Important 项）：
 #   0. run 号与环境标识必须成对（run>1 要求显式 EDGEEXP_ENV）；
-#   1. harness 产物**预检**：必须是合法 JSON、必须带 `expected_chain_factors`（相等断言的依据）；
+#   1. harness 产物**预检**：必须是合法 JSON、必须带 `expected_chain_factors`（注入集 —— 相等断言的
+#      依据之一，另一依据是同一产物里的 `expected_baseline_factors`，见下面的声明面说明）；
 #   2. harness 产物**新鲜度**：mtime ≥ 本轮起始（`EDGEEXP_RUN_STARTED_AT`）或年龄 ≤ 上限 ——
 #      陈旧产物会静默提供旧的注入时刻/哈希/客观结果，而时钟核对照样通过；
 #   3. 幂等守卫：同一场景在目标 JSONL 里已有记录时拒绝再写；
 #   4. 调 `edgescen` 采集**一条**记录；
 #   5. 采集后核对（写进 `run.d/collect-<scenario>.json`）：
-#      · **因子集相等断言**：链上因子集（归一 ID）== 场景声明集（S0 ⇒ 空集）；
+#      · **因子集相等断言**：链上因子集（归一 ID）== **声明面**（基线活跃集 ∪ 注入集，
+#        Task 4D Step 4-B3 的裁定；基线集来自 harness 产物的 `expected_baseline_factors`，
+#        注入集来自 `expected_chain_factors`；两条牙分别抓"因子塌缩"与"声明与现实不符"）；
 #      · **配置指纹**：记录 `meta.config_hash` == 本次配置的指纹（"这份记录是这份配置采的"）；
 #      · **门禁⓪**：链上重复因子条目（按归一 ID 计数）—— 只看真实记录，不做静态推断；
 #      · **注入时刻 < 采集时刻** + harness 时刻确实落进了 `checks[]`（注入检查缺席即失败）；
@@ -367,22 +370,46 @@ def body():
     # 采集器只要求 chain ⊇ expectedChainFactors（S0 的期望集是空集），故"声明空集却采到六个因子"
     # 的基线与"单因子场景采到全因子"都能静默通过 —— 一轮冒烟下来没人发现整批数据的因子向量相同。
     # 这里改成**相等**：多一个少一个都整轮失败。
-    expected_raw = harness.get('expected_chain_factors')
-    if expected_raw is None:
+    #
+    # **声明面（Task 4D Step 4-B3，用户 2026-09-12 裁定）**：相等断言的右边从"注入集"扩成
+    # **基线活跃集 ∪ 注入集**。理由是一句实测：链 = 这台宿主上**自然活跃**的因子 ∪ 场景**注入**的
+    # 因子，而旧声明面只写注入集 ⇒ 在未硬化宿主上 S0（声明空集）会被**每一条**记录都拒掉
+    # （实测发生过）。扩展声明面**必须**保住牙齿，故三条判据分开算、分开报：
+    #   · 注入集必须真的出现在链上（缺 ⇒ 失败）—— 这条抓的是**因子塌缩**，是整轮实验最该防的错；
+    #   · 基线集也必须出现在链上（缺 ⇒ 失败）—— 基线集是"声明/实测出来的一事实"，
+    #     声明了却不在链上就是**声明与现实不符**，不能靠放宽判据把它盖过去；
+    #   · 链上不得有既不在基线集也不在注入集里的因子（多 ⇒ 失败）—— 那是"还有别的检查自然失败
+    #     而没人声明"，本场景的数据与其他场景不可区分。
+    # 基线集的来源进片段（`expected_baseline_factors_source`），空基线集也必须**明确写出来**
+    # （"没有声明"与"声明为空"在数据上必须能分开读）。
+    injected = {norm(f) for f in (harness.get('expected_chain_factors') or []) if norm(f)}
+    if harness.get('expected_chain_factors') is None:
+        # 第二道防线（预检拦过，但这里必须独立成立：判据不能只靠另一段代码"先跑过"）：
+        # 缺注入集 ⇒ 声明面只剩基线集，"注入真的生效"这条牙齿会**静默失效**。
         fail('harness 产物缺 expected_chain_factors（预检应在采集前拦下，这是第二道防线）', rollback=True)
-    expected = {norm(f) for f in expected_raw if norm(f)}
+    baseline = {norm(f) for f in (harness.get('expected_baseline_factors') or []) if norm(f)}
+    expected = injected | baseline
     actual = {norm(ob.get('factor')) for ob in chain if norm(ob.get('factor'))}
+    missing_injected = sorted(injected - actual)
+    missing_baseline = sorted(baseline - actual)
     missing = sorted(expected - actual)
     extra = sorted(actual - expected)
     equality = {
         'ok': not missing and not extra,
+        'declaration_face': '基线活跃集 ∪ 注入集',
+        'expected_injected': sorted(injected),
+        'expected_baseline': sorted(baseline),
+        'expected_baseline_source': harness.get('expected_baseline_factors_source') or '未提供（视为空基线集）',
         'expected': sorted(expected),
         'actual': sorted(actual),
         'missing': missing,
+        'missing_injected': missing_injected,
+        'missing_baseline': missing_baseline,
         'extra': extra,
         'source': harness.get('expected_chain_factors_source', '未注明'),
-        'note': '链上的因子集必须与场景声明**相等**（不是包含）：多出来的因子说明这台宿主上还有'
-                '别的检查在自然失败，本场景的数据与其他场景不可区分（见 spec §5.4.7 的诚实边界）',
+        'note': '链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：'
+                '注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有'
+                '别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）',
     }
 
     # --- 门禁⓪：链上重复因子条目（按归一 ID） -----------------------------------
@@ -562,9 +589,11 @@ def body():
                'R 组真实缺失缺节点侧证据：%s' % probe_evidence['reason'])
     if not equality['ok']:
         reject('chain_factor_set_equality',
-               '因子集相等断言未通过：链上 = %s，场景声明 = %s（多出 %s；缺少 %s）—— '
-               '这台宿主上还有别的检查在自然失败，本场景与其他场景的数据不可区分'
-               % (equality['actual'], equality['expected'], equality['extra'] or '无', equality['missing'] or '无'))
+               '因子集相等断言未通过（声明面 = 基线活跃集 ∪ 注入集）：链上 = %s，声明 = %s；'
+               '注入集缺少 %s（因子塌缩）｜基线集缺少 %s（声明与现实不符）｜多出 %s（无人声明的自然失败）'
+               % (equality['actual'], equality['expected'],
+                  equality['missing_injected'] or '无', equality['missing_baseline'] or '无',
+                  equality['extra'] or '无'))
     if absent:
         reject('injected_check_absent', '注入检查没有出现在记录的 checks[] 里：' + ','.join(absent))
     if mismatch:
@@ -575,7 +604,8 @@ def body():
     print(f'edge_collect: 配置指纹一致（{config_hash_check["record"]}）')
     print(f'edge_collect: 观测主体 {observation["record_observation_target"] or "本机（未声明 EDGEEXP_TARGET）"}'
           + (f'｜探针节点 {probe_targets}' if probe_targets else ''))
-    print(f'edge_collect: 因子集相等断言通过（链 {len(actual)} 个 ID = 场景声明）')
+    print(f'edge_collect: 因子集相等断言通过（链 {len(actual)} 个 ID = 声明面：注入 {len(injected)} 个 '
+          f'∪ 基线 {len(baseline)} 个）')
     print(f'edge_collect: 门禁⓪ {gate0["verdict"]}（链 {gate0["chain_entries"]} 条 / 去重 {gate0["distinct_ids"]} 个 ID）')
     if injections:
         print(f'edge_collect: 注入时刻核对通过（{len(injections)} 条，全部早于 {collected_at}）')

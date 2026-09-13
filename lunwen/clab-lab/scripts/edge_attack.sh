@@ -48,6 +48,10 @@
 #   EDGEEXP_TARGET_ABILITY_NAME  目标 ability 的名字（可选，仅用于**核对** ID 没被换掉）
 #   EDGEEXP_CONTROL_ABILITY   对照/通道健康度 ability 的 id（可选，只用于归类与报告）
 #   EDGEEXP_AGENT_FRESH_S      agent 新鲜度上限（秒，默认 180）：见下方"陈旧 agent"两条判据
+#   EDGEEXP_ATTACK_GROUP       operation 的投送范围（`group`）。basis=targeted_ttp 时**必须**声明它
+#                              （或证明别处没有活 agent）：空组的语义是"全体 agent"，而 A-1 上控制侧
+#                              的对照容器 `probe-ot005` 也有一个活 agent（组 red）—— 目标 TTP 在别的
+#                              机器上成功会与"目标机被攻陷"在派生代码里同形。
 # ============================================================================
 set -euo pipefail
 
@@ -84,7 +88,14 @@ for bin in curl python3 sha256sum; do
   command -v "$bin" >/dev/null 2>&1 || { echo "edge_attack: 缺少必需命令 $bin" >&2; exit 1; }
 done
 [ -f "$CONFIG" ] || { echo "edge_attack: 配置不存在: $CONFIG" >&2; exit 1; }
-[ -f "$TOPOLOGY" ] || { echo "edge_attack: 拓扑不存在: $TOPOLOGY" >&2; exit 1; }
+# 拓扑文件只有 **clab 基质**读得到（`topology`/`topology_hash` 是"拓扑对象"的量）。lxd 基质上不存在
+# 拓扑对象（环境是既有实例集合，见 edge_reset.sh 的 lxd 分支）—— 这里若无条件判存在，会把 lxd 上的
+# 攻击**拦在脚本第一段**（实测：`/root/asscor/asscor.clab.yml` 不存在 ⇒ rc=1），而这个错与"攻击侧
+# 不可用"同形、排障方向完全错。判据跟着基质走。
+# shellcheck disable=SC2154  # lab_substrate 由上面 source edge_lab.sh 赋值
+if [ "$lab_substrate" = "clab" ]; then
+  [ -f "$TOPOLOGY" ] || { echo "edge_attack: 拓扑不存在: $TOPOLOGY" >&2; exit 1; }
+fi
 [ "$PHASE_GAP_S" -ge 1 ] || { echo "edge_attack: EDGEEXP_PHASE_GAP_S 必须 ≥ 1（链上 ts 只有秒精度）" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
@@ -112,6 +123,20 @@ LAB_PIDS_HELPER="$LAB_DIR/scripts/edge_lab_pids.sh"
 # ATTACK_HOST 是"agent 应该跑在哪台机器上"（= 被攻节点）。空 ⇒ 判据退化成"任意 host 的活 agent"，
 # 那正是"打到别的容器上的 agent"这一形态；故与 EDGEEXP_TARGET 一起声明是本脚本的**正确**用法。
 ATTACK_HOST="${EDGEEXP_ATTACK_HOST:-${EDGEEXP_TARGET:-}}"
+# ATTACK_GROUP 是**投送范围**（operation 的 `group` 字段）。为什么在 lxd 基质的 Step 4 必须声明它：
+# A-1 上不止一个 agent —— 控制侧的对照容器 `probe-ot005` 也有一个 trusted、心跳新鲜的 agent
+# （组 `red`），而 operation 的 `group=''` 表示**全体 agent**。若目标 TTP 在**别的机器**上成功，
+# 落在链里的那条 `status=0` 与"目标机上被拦住"同形 ⇒ `compromised` 会被别的机器写脏。
+# 因此 basis=targeted_ttp 时，本脚本要求投送范围**可被证明只到目标机**（判据见下面的三处闸门），
+# 途径就是给目标 agent 单独分组并在 `edge_target_prepare.sh` 用 `--group` 拉起它。
+ATTACK_GROUP="${EDGEEXP_ATTACK_GROUP:-}"
+# BASELINE_FACTORS 是**基线活跃集**（这台宿主上"不看场景也该在链上"的因子），Task 4D Step 4-B3。
+# 它进 harness 产物的 `expected_baseline_factors`，采集脚本的相等断言据此把右边从"注入集"扩成
+# "基线活跃集 ∪ 注入集"（用户 2026-09-12 裁定；理由与保住的牙齿见 edge_collect.sh 那段）。
+# 默认空集：**空必须是被显式声明出来的空**（产物里带 `expected_baseline_factors_source`），
+# 否则读数据的人分不清"这台宿主没有自然活跃因子"与"没人想过这件事"。
+BASELINE_FACTORS="${EDGEEXP_BASELINE_FACTORS:-}"
+BASELINE_FACTORS_SOURCE="${EDGEEXP_BASELINE_FACTORS_SOURCE:-未声明（默认空基线集）}"
 case "$BASIS" in
   targeted_ttp)
     [ -n "$TARGET_ABILITY" ] || {
@@ -130,7 +155,8 @@ case "$BASIS" in
     exit 1 ;;
 esac
 export BASIS TARGET_ABILITY TARGET_ABILITY_NAME CONTROL_ABILITY AGENT_FRESH_S
-export ATTACK_HOST LAB_PIDS_HELPER
+export ATTACK_HOST ATTACK_GROUP LAB_PIDS_HELPER
+export BASELINE_FACTORS BASELINE_FACTORS_SOURCE
 
 # ---------------------------------------------------------------------------
 # 场景相位表
@@ -485,8 +511,19 @@ if [ -n "$REAL_MISSING" ]; then
 fi
 
 # --- 触发固定剧本并派生客观结果 ---------------------------------------------
-TOPO_HASH="sha256:$(sha256sum "$TOPOLOGY" | awk '{print $1}')"
-export SCENARIO OUT TOPOLOGY TOPO_HASH CONFIG CALDERA_URL CALDERA_KEY
+# `topology_hash` 是**拓扑对象**的哈希：clab 基质下就是拓扑文件；lxd 基质下没有拓扑对象，因此
+# **不留一个编造的值**（拿实例名去 sha256 出一个"拓扑哈希"是给读者一个假的可复核锚点）。
+# 换留**基质身份**：这一轮环境里真正可复核的量是"哪个实例、什么实验条件（策略在不在）"——
+# 与 `edge_reset.sh` 的 lxd 留痕字段同一套口径（两处必须是同一套，否则复位与攻击各说各话）。
+# shellcheck disable=SC2154  # lab_substrate 由上面 source edge_lab.sh 赋值
+if [ "$lab_substrate" = "clab" ]; then
+  TOPO_HASH="sha256:$(sha256sum "$TOPOLOGY" | awk '{print $1}')"
+  SUBSTRATE_IDENTITY='{}'
+else
+  TOPO_HASH=""
+  SUBSTRATE_IDENTITY="{\"substrate\":\"lxd\",\"instance\":\"${EDGEEXP_TARGET:-${EDGEEXP_TARGET_HOST:-}}\",\"policy_on\":\"${EDGEEXP_POLICY_ON:-0}\"}"
+fi
+export SCENARIO OUT TOPOLOGY TOPO_HASH CONFIG CALDERA_URL CALDERA_KEY SUBSTRATE_IDENTITY
 export PLAYBOOK_ID PLAYBOOK_NAME ATTACK_TIMEOUT_S POLL_S PHASES_JSON PROBES_JSON
 export REAL_MISSING REAL_MISSING_AT PHASE_GAP_S EXPECTED_PHASES EXPECTED_CHAIN_FACTORS
 export EXPECTED_CHAIN_FACTORS_SET EXPECTED_CHAIN_FACTORS_SOURCE
@@ -575,6 +612,7 @@ TARGET_ABILITY_NAME = (os.environ.get('TARGET_ABILITY_NAME') or '').strip()
 CONTROL_ABILITY = (os.environ.get('CONTROL_ABILITY') or '').strip()
 AGENT_FRESH_S = int(os.environ.get('AGENT_FRESH_S') or 180)
 ATTACK_HOST = (os.environ.get('ATTACK_HOST') or '').strip()
+ATTACK_GROUP = (os.environ.get('ATTACK_GROUP') or '').strip()
 
 agents = api('/agents')
 
@@ -622,16 +660,63 @@ def fail_if_no_live_agent(agents, stage):
     return alive
 
 
+def other_host_live_agents(agents):
+    """**非攻击目标主机**上"看起来活着"的 agent（trusted 且心跳新鲜）。
+
+    这里刻意用"trusted + 心跳新鲜"而**不是** `(host, 活 pid)`（那个判据需要进目标容器问进程表，
+    对别的机器问不到）。对**安全闸门**来说这两种判据的误判方向不同：这里宁可误报也不放过 ——
+    放过的代价是"目标 TTP 的成功来自别的机器"，那会直接把 `compromised` 写脏，而误报只是让调用方
+    显式声明投送范围（一行环境变量）。
+    """
+    out = []
+    for a in agents:
+        host = a.get('host')
+        if not host or host == ATTACK_HOST:
+            continue
+        if not a.get('trusted'):
+            continue
+        if (parse_ts(a.get('last_seen')) or 0) >= time.time() - AGENT_FRESH_S:
+            out.append(a)
+    return out
+
+
 if not agents:
     fail(f'Caldera 里一条 agent 都没有（{API}/agents）—— 攻击侧不可用（先跑 edge_reset.sh）')
 _alive = fail_if_no_live_agent(agents, '触发前')
+
+# --- 投送范围闸门（basis=targeted_ttp 时）---------------------------------------------------
+# 为什么必须在这里拦：`compromised` 的定义是"**该场景的目标 TTP** 是否成功"，而链上的成功 link
+# 只带 `paw`（agent），不带"机器"这个维度 —— 若 operation 能打到目标机以外的 agent，一条"别的机器
+# 上成功"的 link 与"目标机被攻陷"在派生代码里**完全同形**。三处闸门分别堵三种形态：
+#   ① 声明了组：组里必须有活 agent（否则 operation 打空 ⇒ 零 link，"被拦住"是假的）；
+#   ② 声明了组：组里**不得**有非目标主机的活 agent（投送范围漏到别的机器）；
+#   ③ 没声明组：此时 `group=''` = 全体 agent ⇒ 只要**别处还有 trusted+新鲜**的 agent，
+#      投送范围就不可证明只到目标机 —— 直接失败，让调用方去分组（而不是"小心地用"）。
+if BASIS == 'targeted_ttp':
+    if ATTACK_GROUP:
+        group_alive = [a for a in agents if a.get('group') == ATTACK_GROUP and agent_alive(a, live_sandcat_pids())]
+        if not group_alive:
+            fail(f'basis=targeted_ttp 且声明了投送组 {ATTACK_GROUP}，但该组里没有一只活 agent '
+                 f'（判据 `(host, 容器内活 pid)` 且 last_seen ≤ {AGENT_FRESH_S}s）—— '
+                 f'operation 会打空，零 link 会被读成"被拦住"')
+        off_host = [(a.get('paw'), a.get('host')) for a in group_alive if a.get('host') != ATTACK_HOST]
+        if off_host:
+            fail(f'basis=targeted_ttp：投送组 {ATTACK_GROUP} 里还有**非目标主机** {ATTACK_HOST} 的活 agent {off_host} —— '
+                 f'目标 TTP 的成功可能来自别的机器，标签会失效')
+    else:
+        others = other_host_live_agents(agents)
+        if others:
+            fail('basis=targeted_ttp 但未声明 EDGEEXP_ATTACK_GROUP：operation 的 group=\'\'（全体 agent），'
+                 f'而别的机器上还有 trusted+心跳新鲜 的 agent {[(a.get("paw"), a.get("host")) for a in others]} —— '
+                 '投送范围不可证明只到目标机，目标 TTP 的 link 可能来自别的机器。'
+                 '请用 `--group` 拉起目标 agent 的 sandcat 并声明 EDGEEXP_ATTACK_GROUP')
 
 attack_started_at = now()
 start_epoch = time.time()
 body = {
     'name': f'edgeexp-{SCENARIO}-{int(start_epoch)}',
     'adversary': {'adversary_id': PLAYBOOK_ID},
-    'group': '',                  # 空 = 全体 agent；活 agent 的判据在下方用 (host, pid) 检查
+    'group': ATTACK_GROUP,        # 空 = 全体 agent（仅 basis=recon_playbook 允许，见投送范围闸门）
     'state': 'running',
     'auto_close': True,
     'planner': {'planner_id': 'atomic'},
@@ -811,7 +896,9 @@ report = {
     'other_links': {'count': len(other_links), 'status_counts': statuses(other_links),
                     'ability_ids': sorted({link_ability_id(l) for l in other_links})},
     'playbook_hash': playbook_hash,
-    'topology_hash': os.environ['TOPO_HASH'],
+    # lxd 基质下 `topology_hash` 为 null（没有拓扑对象，见上面的分支）；基质身份另给一栏。
+    'topology_hash': os.environ['TOPO_HASH'] or None,
+    'substrate_identity': json.loads(os.environ.get('SUBSTRATE_IDENTITY') or '{}'),
     'injections': [
         {'check': c, 'at': p['at']}
         for p in json.loads(os.environ['PHASES_JSON'])
@@ -823,6 +910,10 @@ report = {
     # 因子"的 S0 基线可以静默通过 —— 那正是整轮实验的因子塌缩被藏起来的路径（Fix round 1 / C2）。
     'expected_chain_factors': [f for f in os.environ.get('EXPECTED_CHAIN_FACTORS', '').split(',') if f],
     'expected_chain_factors_source': os.environ.get('EXPECTED_CHAIN_FACTORS_SOURCE') or '未注明',
+    # 声明面的另一半（Task 4D Step 4-B3）：**基线活跃集**。采集脚本的相等断言用的是
+    # `expected_chain_factors ∪ expected_baseline_factors`；来源必须一起给出（空集也要写出来）。
+    'expected_baseline_factors': [f for f in os.environ.get('BASELINE_FACTORS', '').split(',') if f],
+    'expected_baseline_factors_source': os.environ.get('BASELINE_FACTORS_SOURCE') or '未声明（默认空基线集）',
     'playbook': {'id': PLAYBOOK_ID, 'name': PLAYBOOK_NAME, 'abilities': len(ordering)},
     'operation': {'id': op_id, 'state': state, 'finished': not window_timeout,
                   'timeout_s': TIMEOUT, 'chain_links': len(chain), 'status_counts': counts,
@@ -832,6 +923,9 @@ report = {
                'agents_live_at_end': sorted(agents_live), 'attempted_links': len(attempted),
                'techniques_achieved': sorted(techniques),
                'agent_pid_at_end': sorted(live_pids_at_end),
+               'dispatch_group': ATTACK_GROUP or '(空 = 全体 agent)',
+               'dispatch_scope_note': ('投送范围：operation 的 `group` 字段。basis=targeted_ttp 时脚本要求'
+                                       '投送范围可被证明只到目标机（见门禁 ①②③），空组在别处还有活 agent 时直接失败。'),
                'agent_alive_judgement': ('`(host, 容器内活 pid)` 且 last_seen ≤ %ds（Task 4D Step 4）：'
                                          'Caldera 保留已死 agent 条目，只看 trusted 会把 operation 打到死 agent 上，'
                                          '得到 status=-3 而**看起来像被拦住**' % AGENT_FRESH_S)},

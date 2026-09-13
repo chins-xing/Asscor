@@ -64,14 +64,28 @@ done
 # 基质层是**单一来源**的要求：调用脚本里不再出现 `clab`/`docker`/`lxc` 命令字面（Fix round 1 / M-2，
 # 评审指出 `NEED_BINS=(clab docker)` 与文档"调用脚本里不得再出现基质命令字面"的断言不符）。
 lab_require_bins || exit 1
-[ -f "$TOPOLOGY" ] || { echo "edge_reset: 拓扑文件不存在: $TOPOLOGY" >&2; exit 1; }
+# 拓扑文件存在性与它的哈希**只有 clab 分支读**（`topology`/`topology_hash` 两个字段只在下面 clab 的
+# 复位留痕里出现；lxd 的留痕按 lxd 的语义给，根本不写这两个量）。抽象前它们无条件执行，搬到 lxd 后
+# 实测变成了**拦在基质分支之前**的门：A-1 上 `/root/asscor/` 没有 yml，复位以
+# `拓扑文件不存在: /root/asscor/asscor.clab.yml` rc=1 结束，lxd 分支一行都没跑到。
+# 但不能简单下移到 lxd 早退之后 —— 那会让 clab 侧的调用序列变化（notopo 场景实测：Caldera 探测
+# 插到拓扑检查之前，`build/lab-diff.sh` 的"调用序列逐行相同"断言变红）。因此判据跟着基质走：
+# clab 保持在**原位置原顺序**，lxd 一句都不做。
+# shellcheck disable=SC2154  # lab_substrate 由上面 source edge_lab.sh 赋值
+if [ "$lab_substrate" = "clab" ]; then
+  [ -f "$TOPOLOGY" ] || { echo "edge_reset: 拓扑文件不存在: $TOPOLOGY" >&2; exit 1; }
+fi
 
 now_rfc3339() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 now_s() { date -u +%s; }
 
 START_S=$(now_s)
 STARTED_AT=$(now_rfc3339)
-TOPO_HASH="sha256:$(sha256sum "$TOPOLOGY" | awk '{print $1}')"
+TOPO_HASH=""
+# shellcheck disable=SC2154
+if [ "$lab_substrate" = "clab" ]; then
+  TOPO_HASH="sha256:$(sha256sum "$TOPOLOGY" | awk '{print $1}')"
+fi
 
 # --- 1. Caldera --------------------------------------------------------------
 caldera_s=0
