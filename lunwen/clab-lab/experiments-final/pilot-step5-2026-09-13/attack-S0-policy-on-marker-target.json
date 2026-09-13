@@ -1,0 +1,87 @@
+{
+  "scenario": "S0-baseline",
+  "compromised": true,
+  "time_to_compromise_s": 36,
+  "ttps_achieved": 1,
+  "nodes_affected": 1,
+  "block_effective": false,
+  "basis": "targeted_ttp",
+  "target_ttp": {
+    "ability_id": "a5c0ffee-0000-4000-8000-0000000003c1",
+    "ability_name": "T4D Step 3B control: write marker (no policy collision)",
+    "links": 1,
+    "success_links": 1,
+    "status_counts": {
+      "success": 1
+    },
+    "techniques_achieved": [],
+    "note": "目标 TTP：`compromised`/`block_effective` **只**由这组 link 决定（L2 口径）。`status=-3`（EXECUTE）**不算**被拦住 —— 脚本在\"目标 link 全为 -3 且零成功\"时直接失败。"
+  },
+  "control": {
+    "ability_id": "a5c0ffee-0000-4000-8000-0000000003b1",
+    "links": 1,
+    "success_links": 0,
+    "status_counts": {
+      "error": 1
+    },
+    "note": "对照/通道健康度：回答\"通道与执行器能不能干活\"，**不参与标签**。实测用途：策略在时\"对照 0 + 目标非 0\"才排除了\"command 被拒是 agent/执行器坏了\"这一解释。"
+  },
+  "other_links": {
+    "count": 0,
+    "status_counts": {},
+    "ability_ids": []
+  },
+  "playbook_hash": "sha256:e585b8465faab05d236e39b19cc99addfbf4adc0fa2fc8891c4ee278bef60f19",
+  "topology_hash": null,
+  "substrate_identity": {
+    "substrate": "lxd",
+    "instance": "asc-tgt-1",
+    "policy_on": "1"
+  },
+  "injections": [],
+  "expected_chain_factors": [],
+  "expected_chain_factors_source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）",
+  "expected_baseline_factors": [],
+  "expected_baseline_factors_source": "未声明（默认空基线集）",
+  "playbook": {
+    "id": "a5c0ffee-0000-4000-8000-0000000003c2",
+    "name": "T4D Step 3B pair (control + target TTP)",
+    "abilities": 2
+  },
+  "operation": {
+    "id": "c60ba25e-1e15-4f4e-b3dc-ef991d355ceb",
+    "state": "finished",
+    "finished": true,
+    "timeout_s": 300,
+    "chain_links": 2,
+    "status_counts": {
+      "success": 1,
+      "error": 1
+    },
+    "window_timeout": false
+  },
+  "attack": {
+    "started_at": "2026-09-13T09:48:52Z",
+    "finished_at": "2026-09-13T09:50:15Z",
+    "agents_available": 12,
+    "success_links": 1,
+    "agents_live_at_end": [
+      "mbhoqr"
+    ],
+    "attempted_links": 2,
+    "techniques_achieved": [],
+    "agent_pid_at_end": [
+      1998
+    ],
+    "dispatch_group": "t4d-ttp",
+    "dispatch_scope_note": "投送范围：operation 的 `group` 字段。basis=targeted_ttp 时脚本要求投送范围可被证明只到目标机（见门禁 ①②③），空组在别处还有活 agent 时直接失败。",
+    "agent_alive_judgement": "`(host, 容器内活 pid)` 且 last_seen ≤ 180s（Task 4D Step 4）：Caldera 保留已死 agent 条目，只看 trusted 会把 operation 打到死 agent 上，得到 status=-3 而**看起来像被拦住**"
+  },
+  "phases": [],
+  "condition_probes": [],
+  "condition_probes_note": "每条探针都在**被攻节点内**执行（经基质层下发：clab 基质是 docker exec、lxd 基质是 lxc exec；判据与 internal/checks/linux 的同名检查逐条对齐）；probe_host 是节点内进程自证的 hostname，probe_target 是节点名（clab: 容器名；lxd: 实例名）。condition_holds 为 null 表示**探针未执行**（未声明 EDGEEXP_TARGET），那**不是**\"条件不成立\"，也不是证据。",
+  "real_missing": "",
+  "real_missing_verified_at": "",
+  "probe_note": "condition_holds = 该防护在**被攻节点内**真的缺失（用引擎同名检查的判据探测，见 condition_probes 的 probe_host）；S 组是 spec §2.3 的\"检查失败代理\"，探针结果只记录不阻断；R 组必须成立",
+  "ground_truth_note": "口径（Task 4D Step 4 / 用户裁定的 L2）：`compromised` = **目标 TTP 是否成功**（basis=targeted_ttp 时只由目标 ability 的 link 决定，`status == 0` 才算成功），`block_effective` = 目标 link **全部**未成功；`status=-3`（EXECUTE）**不算**被拦住。对照/侦察 link 只作通道健康度，见 `control`。basis=recon_playbook 时是旧口径（任意 link 成功即 true），**不得**进决策层指标。operation 已进终态，客观结果完整。"
+}
