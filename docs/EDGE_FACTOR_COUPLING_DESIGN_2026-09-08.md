@@ -672,6 +672,12 @@ EDGEEXP_SENSITIVITY_THRESHOLDS=60 bash scripts/edge_threshold_sensitivity.sh
    状态码语义取自 Caldera `c_link.py` 的 states 表：`SUCCESS=0`、`EXECUTE=-3`、`DISCARD=-2`、
    `HIGH_VIZ=-5`、`ERROR=1`、`TIMEOUT=124`）。观察窗超时时 `operation.window_timeout = true`，
    此时 `ttps_achieved` 是**窗内已达成**的下界，报告必须按这个口径写。
+   > **⚠️ 这里写的"任意 link 成功即 compromised"是 L2 裁定之前的旧口径（Minor ③）**：2026-09-12 起
+   > `compromised` 的判据改为「**该场景的目标 TTP 是否成功**」，对照/侦察 link 只进 `control`
+   > （通道健康度）**不参与标签**；记录带 `ground_truth.basis`（`targeted_ttp` / `recon_playbook`），
+   > 决策层指标只对前者可算。**现行口径以 §5.4.13（口径 1/2）为准**，本项保留只为说明 harness 的
+   > 历史行为 —— 引用"任意 link 成功"这句话时必须同时标注它已被取代，且 `Discovery` 这类固定剧本
+   > 的记录（`basis=recon_playbook`）**不得**进决策层指标。
 5. **采集器评的是"`meta.observation_target` 指出的那台机器"**（Task 4C 起可声明，见 §5.3.1）：
    真实检查结果来自 `internal/checks` 在**该机器上**的执行 —— 声明 `--target <容器>` 时就是在被攻
    节点内部（同一份二进制经 `docker cp`/`docker exec` 跑），不声明时是跑 `edgescen` 的这台主机。
@@ -827,7 +833,7 @@ Fix round 1 / I-6 把这个数字从"7 纯身份 + 1 交互"改正 —— 后者
 **它不证明** §5.3 那张表的其余部分（建/毁环境、攻击、矩阵、重复样本）在 A-1 上成立 —— 那些动作
 在本次任务里**没有跑**（见 §5.4.10）。
 
-#### 5.4.10 A-1/LXD 上**尚未跑过**的部分（如实列出，不得按"已验证"引用）
+#### 5.4.10 A-1/LXD 上的跑通状态（逐项如实标注；"未跑"不得按"已验证"引用）
 
 Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 驱动）。下面这些**全部未跑**
 （Step 3/3B/4/5 另批派发），任何报告与论文引用都必须按"未跑"写：
@@ -837,15 +843,22 @@ Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 
 > （`edge_reset.sh` 的 lxd 路径、`edge_probe.sh` 的 lxd 路径）**仍然未跑**；新增两条已知限制：
 > ①A-1 无 auditd ⇒ 内核 AppArmor 拒绝记录默认被丢弃（要临时放宽 `printk_ratelimit` 才看得到）；
 > ②Step 3B 的目标 TTP 是**自建 ability**（如实记录在报告里），不是现成剧本里的一条。
+>
+> **【Step 4-B2/B3 更新（2026-09-13）】** 下表**逐行**按实测改写（见 §5.4.14）：单场景
+> **reset → attack → collect 已在 A-1 的 LXD 基质上真跑通**（三个条件、三条记录），
+> `edge_reset.sh` 的 lxd 路径**已跑通**（含"会话断开后进程仍在跑"这一条：`setsid` 拉起的 sandcat
+> 跨了三轮脚本退出仍在跳），攻击与 `(host, 活 pid)` 判据**已在 A-1 上成立**。
+> **仍然未跑**的：完整 22 场景矩阵、`edge_probe.sh` 的 lxd 路径（S0 无注入 ⇒ 没触发探针）、
+> R 组（真实缺失对照）在 A-1 上、每场景 3 次重复样本、`edgecompare` 拿 A-1 记录跑一次。
 
-| 未跑的事 | 为什么现在还不能跑 |
-|---|---|
-| `EDGEEXP_SUBSTRATE=lxd` 的完整矩阵（reset → attack → collect） | `lab_up`/`lab_down` 在 lxd 基质下**故意响亮失败**（A-1 上不建/不毁实例）；A-1 侧的"环境"该是什么样子（哪几个实例、装什么控制、谁来铺 TTP）是 Step 3/3B 的交付 |
-| `edge_reset.sh` 的 lxd 路径（Caldera 就绪 + 部 sandcat agent） | 同上：`lab_target_exec_detached` 的 lxd 分支**曾经压平 argv（评审用假 CLI 复现：节点内命令变形/没跑，而调用点返回 0）**；Fix round 1 已改成 `sh -c 'nohup "$@" … &' _ "$@"`（argv 逐条保真，两种基质同语义）并有假 CLI 判据钉住，但**"会话断开后进程仍在跑"仍未在真实 LXD 实例上验证**（那需要真机预算，属 Step 3/4） |
-| `edge_probe.sh` 的 lxd 路径（六因子条件探针在实例内执行） | 探针判据体依赖节点内的 `bash`/`grep`/`iptables` 等工具；A-1 实例上是否齐备属 Step 3 的硬化基线 |
-| 攻击（Caldera operation）与 R 组（真实缺失对照）在 A-1 上的成立性 | 用户裁定"矩阵/攻击/采集都在 A-1 跑"，但攻击侧在 A-1 上的落地（哪个实例当被攻目标、Caldera 的 agent 从哪来）尚未设计 |
-| 每场景 3 次重复样本（`EDGEEXP_RUN_INDEX>1` + `EDGEEXP_ENV`） | 依赖上面几项 |
-| `edgecompare` 离线比较在 LXD 记录上的行为 | 离线工具与基质无关，但**尚未拿 A-1 的记录跑过一次** |
+| 状态 | 原来的"未跑"项 | 现状 / 为什么 |
+|---|---|---|
+| ✅ 已跑通（单场景） | `EDGEEXP_SUBSTRATE=lxd` 的 **reset → attack → collect** | A-1 上真跑通（`S0-baseline` × 3 个条件、3 条记录）；`lab_up`/`lab_down` 在 lxd 下仍**故意响亮失败**（不建/不毁实例），复位语义改为"把既有实例准备成实验条件"（§5.4.13/§5.4.14）。**完整 22 场景矩阵仍未跑** |
+| ✅ 已跑通 | `edge_reset.sh` 的 lxd 路径（Caldera 就绪 + 部 sandcat agent） | 已跑通，且**"会话断开后进程仍在跑"这条已在真实 LXD 实例上验证**（`setsid` 拉起的 sandcat 跨了三轮脚本退出仍在跳）；过程中修掉 4 处实测缺陷（§5.4.14） |
+| ❌ 未跑 | `edge_probe.sh` 的 lxd 路径（六因子条件探针在实例内执行） | S0-baseline **无注入相位 ⇒ 没有探针可做**，本轮的三个条件一次都没触发它 ⇒ **仍未跑**（判据体依赖节点内 `bash`/`grep`/`iptables`，需一个 S1/S2 场景才会被执行到） |
+| ⚠️ 部分已跑 | 攻击（Caldera operation）在 A-1 上的成立性 | **攻击侧已成立**（自建 pair adversary，策略在/不在两侧的 link status 实测翻转）；**R 组（真实缺失对照）仍未跑** |
+| ❌ 未跑 | 每场景 3 次重复样本（`EDGEEXP_RUN_INDEX>1` + `EDGEEXP_ENV`） | 依赖完整矩阵 |
+| ❌ 未跑 | `edgecompare` 离线比较在 LXD 记录上的行为 | 离线工具与基质无关，A-1 的（真实）记录**尚未拿 `edgecompare` 跑过一次** —— 试点只做了单条记录的分数/标签读数 |
 
 #### 5.4.11 lab 配置的键位纪律（每个键都要写在解析器**会读**的段里）
 
@@ -899,6 +912,13 @@ Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 
 不注入任何失败采一条基线记录 ⇒ **六个因子全不激活**（链 0 条、`factors` 为 null、总分 68.78/阈值 80）。
 ⇒ **观测主体 `node:asc-tgt-1 (substrate=lxd, hostname=asc-tgt-1)`**。
 
+> **"48 → 42"这个数字的留痕与更正（Task 4D Step 4-D 补，Minor ①）**：`48` 是**控制侧一次性容器
+> `probe-ot005`** 上的一次探针数字，照本表配方实测其实是 **43 → 42**（43 那一次 `RS-007` **仍然失败**）。
+> 也就是说：`48 → 42` 里 `RS-007` 那一格是**偶然**过的 —— 控制侧那份 `aide.conf` 恰好有一行含
+> `alert` 的注释命中了正则，而那一行**从来没进过配方**。⇒ 两个数字都不得当作"配方正确"的证据：
+> 能当证据的只有"**按配方补 `mail_command`/`report_email`/`alert_notification` 之后 `RS-007` 才过**"
+> 这一条实测（43 → 42 的方向），以及"控制侧手跑成功 ≠ 配方可复现"这条教训。
+
 **Step 3B（真实 AppArmor 限制策略 + 撞它的目标 TTP）**：
 
 - **策略**：`lxc config set asc-tgt-1 raw.apparmor 'audit deny /etc/shadow r,'`（选它是因为判据链条最短：
@@ -923,7 +943,73 @@ Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 
      实测：策略在时"对照 status=0 + 目标 status=1"⇒ harness 口径给 `compromised=true`，
      而 **L2 口径是 `false`**。两者在 Step 4 落地 harness 时必须分开（`ground_truth.basis` 就是为这件事加的）；
   3. 分数侧的 `OT-005` 在 A-1 上**不会**翻成失败（容器共享宿主 AppArmor，`aa-status` 恒报 profiles loaded）
-     ⇒ 场景"该防护缺失"仍是**合成注入**，**不得**写成"真机上那条检查真的失败了"。
+     ⇒ 场景"该防护缺失"仍是**合成注入**，**不得**写成"真机上那条检查真的失败了"；
+  4. **陈旧 agent 的判据（Minor ②，从报告的"坑 2"提升到本节的口径列表）**：Caldera **保留已死 agent
+     的条目**（`trusted=true` 但 `last_seen` 停在容器消失那一刻），而打到死 agent 上的 link 会得到
+     `status=-3`（EXECUTE）—— **`-3` 不是"被拦住"**。harness 挑人/判定一律按三层判据
+     「① `host` == 攻击目标 ② agent 的 `pid` **出现在目标内当前进程表里**（`lab_node_pids`）
+     ③ `last_seen ≤ EDGEEXP_AGENT_FRESH_S`」；目标 link 全为 `-3` 且零成功 ⇒ **整轮失败**
+     （不得写 `block_effective=true`）。实测：`asc-tgt-1` 上有过 8 条条目、只有 1 条与容器内活 pid 一致。
+     采集/复位侧同一判据也各有一份实现（`edge_target_prepare.sh` 的 agent 就绪判定同源）；
+     **Step 4-B2 实测到这条判据自己曾经是坏的**（python 同时用 stdin 读程序与 pid 列表 ⇒ 恒为空集，
+     见 §5.4.14），修好之后"目标上有没有活着的 agent"才真的会拦住重拉。
+  5. **策略在/不在会经"检查被跳过"影响分数侧（Step 5 试点实测，必须写进论文）**：策略在 ⇒ 检查
+     `AS-012`（幽灵账户检测，`Delta=-6`）读不到 `/etc/shadow`，而框架把"**只因权限被拒而失败**"的检查
+     转成 **skip（`passed=true`、`Delta=0`）**（`internal/model/model.go` 的 `IsPermissionDeniedDetail`
+     分支，设计意图是非 root agent 不被扣分）⇒ 同一台机器上 **总分从 68.78 升到 69.72**，
+     而 `compromised` 同时在翻转。⇒ **两个量在这次试点里是被同一条件用不同机制推动的**：
+     标签靠目标 TTP 的 link status，分数靠"证据读不到 ⇒ 不扣分"。报告与论文里**不得**把这 0.94 分
+     写成"硬化提升了安全分"，也不得用它当"标签与分数耦合"的证据。
+
+**"策略在/不在"这个实验条件是怎么落到环境里的（Step 4-B2 实测口径）**
+
+它不是注入、不是开关，而是**实例本身的一个属性**，因此由复位脚本落到环境上（脚本见 §5.4.14）：
+
+1. 条件写进 `lxc config set asc-tgt-1 raw.apparmor '<规则>'`（卸下则 `config unset`）；
+2. **只有重启实例才生效** ⇒ 复位脚本在"条件变了"时才重启，并在**节点内**自证两条方向都成立
+   （策略在 ⇒ 读 `/etc/shadow` 必须 rc≠0；策略不在 ⇒ 必须 rc=0）——"我设了 config"不是证据；
+3. 每个条件**一条记录**（`meta.env` 例如 `a1-lxd` / `a1-lxd-off`，各自成文件），场景名不变
+   —— 试点里同一场景 `S0-baseline` 因此在两个环境标识下各有记录，比较按 `meta.env` 做。
+
+**三个已知坑（都是实测，任何复现都要先读这三条）**：
+
+| 坑 | 形态 | 处置 |
+|---|---|---|
+| ① 重启清空 `/tmp` | sandcat 载荷放 `/tmp` 时重启后消失，`nohup: failed to run command '/tmp/sandcat': No such file or directory` | 载荷固定放 **`/root/sandcat`**；重启后重新拉起（`setsid`，否则 exec 通道一断进程被带走） |
+| ② Caldera 保留已死 agent | 8 条 `trusted=true` 条目只有 1 条与容器内活 pid 一致；打到死条目上的 link 是 **`status=-3`，看起来像"被拦住"** | 判据 = `(host, 容器内活 pid)` + 心跳新鲜（见上面口径 4）；`-3` 既不算成功也不算被拦 |
+| ③ A-1 无 auditd | 内核 audit 队列无人排空 ⇒ `kauditd_printk_skb: N callbacks suppressed`，`dmesg` 默认查不到 AppArmor DENIED | 临时放宽 `kernel.printk_ratelimit`（跑完**还原 5/10**）；这一条限制了"事后从内核日志取证" |
+
+另有一条**不是坑但极易读错**的事：策略在时 `compromised=false` 与"宿主更安全"是两回事 ——
+分数侧同时被"检查被跳过"推高（见上面口径 5）。
+
+#### 5.4.14 Step 4-B2/B3 的 lxd 端到端落地（reset → attack → collect 在 A-1 上真跑通）
+
+Step 4-B1 的脚本是**离线**写完的（`bash -n` + lab-diff 夹具全绿）；第一次在 A-1 上真跑时**一步都没走通**，
+而且四处失败都**不是**报错形态，是"看起来正常"（超时、空日志、`trusted=false`、`status=-3`）。
+这四条已修复并落进提交 `ccc36e0`，此处只记**判据与代价**（复现的人会踩同样的坑）：
+
+| 缺陷 | 形态（为什么不像错） | 判据 |
+|---|---|---|
+| clab 拓扑文件被无条件判存在（`edge_reset.sh`/`edge_attack.sh`） | A-1 上没有 `asscor.clab.yml` ⇒ 复位/攻击 `rc=1` 死在**基质分支之前**，看起来像"环境问题" | 判据跟着基质走；**不能**下移到 lxd 早退之后（那会改 clab 的调用序列，lab-diff 实测变红） |
+| C2 地址给错机器 | 默认 `http://127.0.0.1:8888` 是**宿主**地址 ⇒ 沙箱里 sandcat 一直连自己：进程活着、`/tmp/sandcat.log` **空文件**、Caldera 里条目**全 `trusted=false`**（与"agent 起不来"同形） | 取**容器内默认网关**（实测 `10.217.208.1`；容器内 `curl …/api/v2/abilities` → 200，`127.0.0.1:8888` → rc=7）+ 拉起**之前**的容器内可达性自证 + `EDGEEXP_C2_HOST` 覆盖 |
+| "重启完成"等错对象 | `lab_node_running` 的判据打在 **stdout**（`true`/`false`），`until … >/dev/null` 把值丢掉 ⇒ STOPPED 也立刻通过；`lxc restart` 刚发起时容器还是 RUNNING ⇒ 后续 exec 落在停/起之间（`Error: Instance is not running`） | 先等 restart **子进程自己退出**，再等"节点内真能执行命令"；实例存在但 STOPPED ⇒ `lxc start` |
+| agent 就绪判据**恒为否** | pid 列表走 **stdin**，而程序本体是 `python3 - <<'PY'` 也从 stdin 读 ⇒ 同一路 stdin 用两次，`sys.stdin.read()` 永远是空串 ⇒ 该判据**从来匹配不到任何 agent**（实测 `printf '886\n1096' \| live_agent_paws` 回空行） | pid 列表改走**第 5 个 argv**；这条判据是"别把 operation 打到死 agent 上"的唯一闸门（口径 4） |
+| push 失败被咽下去 | 本脚本是 `set -uo pipefail`（**没有 `-e`**）；覆盖正在运行的 `/root/sandcat` 以 `sftp: … text file busy` 失败而脚本继续 ⇒ 最后以"agent 180s 没回连"收场 | 先 push 到 `.new` 再 `mv`（rename 对正在执行的旧文件合法）+ 每步显式判失败 + 超时打全三条自证证据 |
+
+**B3：因子集相等断言的声明面改为「基线活跃集 ∪ 注入集」（用户 2026-09-12 裁定）**。链 = 宿主上
+**自然活跃**的因子 ∪ 场景**注入**的因子，而旧声明面只写注入集 ⇒ 在未硬化宿主上 S0（声明空集）会被
+**每一条**记录拒掉。扩展后三条牙**分开算**：注入集缺席 = **因子塌缩**（失败）｜基线集缺席 =
+**声明与现实不符**（失败）｜链上多出 = 无人声明的自然失败（失败）。基线集由 `edge_attack.sh` 的
+`EDGEEXP_BASELINE_FACTORS` 写进产物（`expected_baseline_factors` + `_source`），**空集也必须显式写出**；
+旧产物缺该字段按"未提供（视为空基线集）"处理（行为与今天一致）。实测双向：声明一个不在链上的基线
+因子（`EF-NO-IDS`）⇒ 精确报出"基线集缺少 `['EF-NO-IDS']`"并回滚；显式空基线集 ⇒ 通过。
+
+**Step 4-B2 的验收实测（A-1，单场景端到端）**：复位幂等（策略已在 ⇒ 5s 不重启；条件变更 ⇒ 18s，
+`重启过=1`）→ 攻击（`compromised=false` `block_effective=true`，`basis=targeted_ttp`，目标 link 1/0 成功、
+对照 1/1）→ 采集（观测主体 `node:asc-tgt-1 (substrate=lxd, hostname=asc-tgt-1)`、门禁② 残差 **+0**、
+记录落盘）。**Step 5 试点（3 个条件）的读数见报告**，本设计文档只钉住一条结论：`compromised` 在**同一
+宿主状态**下取到过两个真值（策略在：目标=读 `/etc/shadow` ⇒ `false`；目标=写 marker ⇒ `true`）
+⇒ 标签跟的是**目标 TTP**，不是"策略在不在"。
 
 ---
 
