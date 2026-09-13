@@ -11,8 +11,7 @@ import (
 // 本包是拓扑感知能力的底层数据模型与实现（零依赖，被 kernel 与插件
 // 消费）：类型定义 (TopoNode/TopoEdge/TopoEvent) 与 Registry 实现。
 // kernel 侧只持有引用本包类型的 TopologyInterface 契约（微内核边界），
-// 见 internal/kernel/topo_types.go 与
-// docs/TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md。
+// 见 internal/kernel/topo_types.go。
 
 // TopoEventType 描述拓扑状态变化的事件类别。事件是生命周期（M1）的
 // 核心载体：节点注册/更新/注销、链路 up/down 均以事件形式发布。

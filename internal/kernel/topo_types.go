@@ -7,8 +7,7 @@ import "github.com/chins-xing/asscor/internal/topology"
 // 本文件定义拓扑感知能力的微内核接口契约。类型定义在底层包
 // internal/topology（kernel 已依赖该包，见 locator.go），此处只声明
 // 接口，供 build-tag 可选模块实现与 kernel 侧消费，避免实现细节渗入
-// 内核。契约先于实现落地，供社区基于接口演进（见
-// docs/TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md）。
+// 内核。契约先于实现落地，供社区基于接口演进。
 
 // TopologyInterface 是拓扑感知能力的微内核契约。
 //
