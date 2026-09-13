@@ -1,4 +1,9 @@
 #!/bin/bash
+# shellcheck disable=SC2154
+#
+# ↑ 文件级豁免 SC2154（"引用了但没赋值"）：`lab_*` 由 `. edge_lab.sh` 在 source 时赋值，
+#   而 shellcheck 不跨文件跟踪变量。代价：本文件里拼错的 `$lab_xxx` 也不会被报出来
+#   （ShellCheck 0.9 不支持按名字限定豁免）—— 基质的离线用例负责兜住这件事。
 # ============================================================================
 # edge_probe.sh —— **节点内**真实条件探针（Task 4C Step 3）
 # ============================================================================
@@ -38,7 +43,21 @@
 probe_target="${1:-${EDGEEXP_TARGET:-}}"
 
 # probe_docker_bin 允许覆盖 docker 可执行文件（测试用；默认 PATH 上的 docker）。
+#
+# 它同时是**基质层**的 CLI：下面把它钉进 `EDGEEXP_LAB_BIN` 再 source `edge_lab.sh`，
+# 于是"假 docker"这类既有夹具仍然只需替换一个可执行文件，不必知道基质层存在（Task 4D Step 1）。
 probe_docker_bin="${EDGEEXP_DOCKER_BIN:-docker}"
+
+# --- 基质层（Task 4D Step 1）----------------------------------------------------
+# 本脚本是**节点内**执行最多的那一处（探针的每次判定都在目标内跑），故它必须与
+# edge_reset/attack/collect 走同一个基质调用点：`docker exec`/`docker cp` 曾在这里各写死一处，
+# 换基质（A-1/LXD）时"探针还在 WSL 的 docker 上跑"而记录看起来完全正常 —— 那是最危险的形态。
+#
+# 覆盖规则：`EDGEEXP_LAB_BIN` 取 `probe_docker_bin`（默认 docker），`EDGEEXP_SUBSTRATE` 取
+# 调用方给的值（默认 clab ⇒ 与抽象前逐字等价：同一条 `docker exec` / `docker cp`）。
+export EDGEEXP_LAB_BIN="$probe_docker_bin"
+# shellcheck source=scripts/edge_lab.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/edge_lab.sh"
 
 # probe_root 是判据体的**根路径**（默认 `/`，节点内就是它自己的根）。
 #
@@ -67,7 +86,7 @@ probe_tmp_prefix="/tmp/edge_probe"
 # 失败时**非零退出**：调用方据此判定"探针没跑成"。
 probe_host() {
   local out rc
-  out="$("$probe_docker_bin" exec "$probe_target" hostname 2>/dev/null)" && rc=0 || rc=$?
+  out="$(lab_target_exec "$probe_target" hostname 2>/dev/null)" && rc=0 || rc=$?
   [ "$rc" -eq 0 ] || return 2
   printf '%s\n' "$(printf '%s' "$out" | tr -d '[:space:]')"
 }
@@ -77,8 +96,8 @@ probe_host() {
 # 为什么不能省：探针没跑成与"条件不成立"在退出码上必须分开（见文件头），而"容器根本没起"
 # 是这两种情况里最难在数据上看出来的 —— 记录里只会少几条 condition_probes。
 #
-# 说明：这里用 `docker inspect` 判"在不在跑"，用 `docker exec` 判"能不能在里面执行"
-# （一个 exited 的容器 inspect 也会返回，而 exec 会失败）—— 两条都要过。
+# 说明：这里用**基质视图**判"在不在跑"，用 `lab_target_exec` 判"能不能在里面执行"
+# （一个停掉的实例其视图仍然存在，而 exec 会失败）—— 两条都要过。
 probe_host_ready() {
   if [ -z "$probe_target" ]; then
     echo "edge_probe: 没有声明目标节点 —— R 组的真实缺失探针必须**在节点上**执行" >&2
@@ -86,14 +105,14 @@ probe_host_ready() {
     echo "  不得退回本机探针：那正是『探的是跑脚本的这台机器』这个缺陷的形态。" >&2
     return 2
   fi
-  command -v "$probe_docker_bin" >/dev/null 2>&1 || {
-    echo "edge_probe: 找不到 docker（$probe_docker_bin）—— 无法在节点 $probe_target 内执行探针" >&2
+  command -v "$lab_bin" >/dev/null 2>&1 || {
+    echo "edge_probe: 找不到基质命令 $lab_bin（基质 $lab_substrate）—— 无法在节点 $probe_target 内执行探针" >&2
     echo "  探针没跑成不等于条件成立；整轮失败，不得退回本机探针。" >&2
     return 2
   }
   local running
-  running="$("$probe_docker_bin" inspect -f '{{.State.Running}}' "$probe_target" 2>/dev/null)" || {
-    echo "edge_probe: 目标节点 $probe_target 不存在（docker inspect 失败）—— 探针无从执行" >&2
+  running="$(lab_node_running "$probe_target" 2>/dev/null)" || {
+    echo "edge_probe: 目标节点 $probe_target 不存在（基质 $lab_substrate 的 inspect 失败）—— 探针无从执行" >&2
     return 2
   }
   [ "$running" = "true" ] || {
@@ -279,15 +298,15 @@ probe_condition_holds() {
     local body_file="$probe_tmp_prefix.$factor.$instance.sh"
     local container_file="$probe_tmp_prefix.$instance.sh"
     if printf '%s\n' "$body" > "$body_file" &&
-      "$probe_docker_bin" cp "$body_file" "$probe_target:$container_file" >/dev/null 2>&1; then
+      lab_push "$body_file" "$probe_target" "$container_file" >/dev/null 2>&1; then
       script_in_container="$container_file"
-      out="$("$probe_docker_bin" exec "$probe_target" bash "$script_in_container" 2>&1)"
+      out="$(lab_target_exec "$probe_target" bash "$script_in_container" 2>&1)"
       dc=$?
       probe_err="$out"
-      "$probe_docker_bin" exec "$probe_target" rm -f "$script_in_container" >/dev/null 2>&1
+      lab_target_exec "$probe_target" rm -f "$script_in_container" >/dev/null 2>&1
     else
       dc=2
-      probe_err="判据体没能送进节点（写 $body_file 或 docker cp 失败）"
+      probe_err="判据体没能送进节点（写 $body_file 或基质 lab_push 失败）"
     fi
     rm -f "$body_file"
   else

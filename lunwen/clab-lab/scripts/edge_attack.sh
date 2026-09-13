@@ -34,9 +34,13 @@
 #   EDGEEXP_PLAYBOOK_NAME 剧本名（默认 Discovery，用于核对 ID 没被换掉）
 #   EDGEEXP_ATTACK_TIMEOUT_S  等 operation 结束的上限，默认 1800（冒烟可用 300 缩短）
 #   EDGEEXP_PHASE_GAP_S   相位之间的最小间隔（秒），默认 3（必须 ≥ 1，见上）
-#   EDGEEXP_TARGET        **被攻节点容器名**（Task 4C：条件探针在它内部执行，默认空 = 不执行）。
+#   EDGEEXP_TARGET        **被攻节点名**（Task 4C：条件探针在它内部执行，默认空 = 不执行）。
 #                         R 组（真实缺失对照）**必须**给出：它的语义就是"目标节点上真的没有这个
 #                         防护"，没有节点侧证据的"已核实"不算证据。实现见 scripts/edge_probe.sh。
+#   EDGEEXP_SUBSTRATE     实验基质：clab（默认）| lxd（A-1，见 edge_lab.sh）。本脚本自己不直接
+#                         发基质命令（节点内动作全部在 edge_probe.sh 里经基质层下发），但它
+#                         **必须**校验这个名字：拼错的基质名若被静默降级，探针会在另一种基质上
+#                         跑，而 condition_probes 里的 probe_host 看起来仍然正常。
 # ============================================================================
 set -euo pipefail
 
@@ -50,6 +54,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(cd "$LAB_DIR/../.." && pwd)"
+# 基质层：本脚本不直接调它，但**要在最前面把基质名校验掉**（见上面 EDGEEXP_SUBSTRATE 的说明）。
+# shellcheck source=scripts/edge_lab.sh
+. "$SCRIPT_DIR/edge_lab.sh"
 TOPOLOGY="${EDGEEXP_TOPOLOGY:-$LAB_DIR/asscor.clab.yml}"
 CONFIG="${EDGEEXP_CONFIG:-$REPO_ROOT/configs/edgeexp/m0-baseline.ini}"
 PLAYBOOK_ID="${EDGEEXP_PLAYBOOK_ID:-0f4c3c67-845e-49a0-927e-90ed33c044e0}"

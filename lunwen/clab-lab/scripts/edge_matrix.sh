@@ -1,4 +1,9 @@
 #!/bin/bash
+# shellcheck disable=SC2154
+#
+# ↑ 文件级豁免 SC2154（"引用了但没赋值"）：`lab_*` 由 `. edge_lab.sh` 在 source 时赋值，
+#   而 shellcheck 不跨文件跟踪变量。代价：本文件里拼错的 `$lab_xxx` 也不会被报出来
+#   （ShellCheck 0.9 不支持按名字限定豁免）—— 基质的离线用例负责兜住这件事。
 # ============================================================================
 # edge_matrix.sh —— 场景矩阵驱动 + 数据集门禁（spec §5 / §5.4）
 # ============================================================================
@@ -31,20 +36,31 @@
 #   EDGEEXP_RUN_INDEX   重复号（>1 = A-1 的重复样本；此时**必须**显式给 EDGEEXP_ENV）
 #   EDGEEXP_RESUME=1    续跑：跳过目标 JSONL 里已有记录的场景（幂等守卫不再把整轮判死）；
 #                       被跳过的场景计入 `scenarios_skipped_resume`，并在 run.json 里如实标出
-#   EDGEEXP_TARGET      **被攻节点的容器名**（Task 4C）：默认为 `asc-asscor-host1` 并 export 给
+#   EDGEEXP_TARGET      **被攻节点的名字**（Task 4C）：默认为 `asc-asscor-host1` 并 export 给
 #                       两个子脚本 —— 观测主体在节点内是本任务确立的**正确**形态（记录里的
 #                       `meta.observation_target` 是权威证据），默认开启可以消除"看起来是节点
 #                       数据、实际是宿主数据"这个最危险的静默形态；R 组（真实缺失对照）更是
 #                       **必须**声明它（否则整轮失败，见 edge_attack.sh）。置空（`EDGEEXP_TARGET=`）
 #                       即退回"在本机评估"的旧形态，但那时 R 组会硬失败。
 #                       注意与 `edge_reset.sh` 的 `EDGEEXP_TARGET_HOST` **不是一回事**：后者是
-#                       复位脚本的攻击目标（默认 `host1`），本变量是容器名（`asc-asscor-host1`）。
+#                       复位脚本的攻击目标（默认 `host1`），本变量是基质层的节点名。
+#   EDGEEXP_SUBSTRATE   实验基质：clab（默认，今天的行为）| lxd（A-1，见 edge_lab.sh）。它决定
+#                       `edgescen -target` 的**语法**（见 edge_lab.sh 的 `lab_target_spec`）；
+#                       `EDGEEXP_TARGET` 本身始终是基质层的节点名（clab: `asc-asscor-host1`；
+#                       lxd: `probe-ot005`）。本脚本把它 export 给三个子脚本 —— 「这一轮跑在哪种
+#                       基质上」必须只有一处解析。
 # ============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(cd "$LAB_DIR/../.." && pwd)"
+# 基质层（Task 4D Step 1）：干跑要**在跑之前**把"这一轮跑在哪种基质上、观测主体会被翻成什么
+# 语法"说清楚 —— 那正是"默认值是本轮引入的"这类变化最容易在几小时之后才暴露的地方。
+# shellcheck source=scripts/edge_lab.sh
+. "$SCRIPT_DIR/edge_lab.sh"
+# 子脚本（各自 source 同一份 edge_lab.sh）必须看到**同一个**基质选择：export 一次，别处不再解析。
+export EDGEEXP_SUBSTRATE="$lab_substrate"
 DATA_DIR="${EDGEEXP_DATA_DIR:-$LAB_DIR/data/edgefactors}"
 RUN_D="$DATA_DIR/run.d"
 ENV_NAME="${EDGEEXP_ENV:-wsl-clab-14}"
@@ -153,11 +169,16 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   echo "  记录文件    : $RECORDS"
   echo "  采集配置    : $CONFIG"
   echo "  环境/重复号 : $ENV_NAME / run=${EDGEEXP_RUN_INDEX:-1}"
+  # 基质必须在干跑里就看得见（Task 4D Step 1）：它决定"环境怎么建/毁、目标怎么被 exec、
+  # `-target` 长什么样"，而默认值 clab = 今天的行为。换基质是**显式**动作，不是隐式继承。
+  echo "  基质        : $lab_substrate（clab = 今天的行为；lxd = A-1 上的既有实例，见 edge_lab.sh）"
+  echo "  基质命令    : $lab_bin｜拓扑 $lab_topology"
   # 观测主体必须在干跑里就看得见（Task 4C / I-9 第 2 条）：它是"这批记录描述哪台机器"的答案，
   # 而默认值恰恰是本轮引入的 —— 操作者要能在跑之前就知道它、并知道怎么改。
   if [ -n "$TARGET" ]; then
-    echo "  观测主体    : 节点内（EDGEEXP_TARGET=$TARGET；可用 EDGEEXP_TARGET=<容器名> 覆盖，置空=退回本机评估但 R 组会硬失败）"
-    echo "  观测主体继承: $(bash -c 'printf "EDGEEXP_TARGET=%s" "${EDGEEXP_TARGET:-<未导出>}"')"
+    echo "  观测主体    : 节点内（EDGEEXP_TARGET=$TARGET；可用 EDGEEXP_TARGET=<节点名> 覆盖，置空=退回本机评估但 R 组会硬失败）"
+    echo "  观测主体继承: EDGEEXP_TARGET=$(bash -c 'printf "%s" "${EDGEEXP_TARGET:-<未导出>}"')"
+    echo "  -target 语法: $(lab_target_spec "$TARGET")（由基质 $lab_substrate 决定；见 edge_lab.sh 的 lab_target_spec）"
   else
     echo "  观测主体    : 本机（EDGEEXP_TARGET 被显式置空）—— R 组的真实缺失对照会因此整轮失败；S 组的 condition_probes 会如实留空（不是证据）"
   fi

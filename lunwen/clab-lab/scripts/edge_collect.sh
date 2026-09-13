@@ -1,4 +1,9 @@
 #!/bin/bash
+# shellcheck disable=SC2154
+#
+# ↑ 文件级豁免 SC2154（"引用了但没赋值"）：`lab_*` 由 `. edge_lab.sh` 在 source 时赋值，
+#   而 shellcheck 不跨文件跟踪变量。代价：本文件里拼错的 `$lab_xxx` 也不会被报出来
+#   （ShellCheck 0.9 不支持按名字限定豁免）—— 基质的离线用例负责兜住这件事。
 # ============================================================================
 # edge_collect.sh —— 单场景采集：把"配置 + 客观结果 + 宿主真实检查"join 成一条记录
 # ============================================================================
@@ -37,11 +42,14 @@
 #   EDGEEXP_EDGESCEN  edgescen 二进制，默认 <repo>/build/edgescen
 #   EDGEEXP_RUN_STARTED_AT  本轮运行的起始时刻（RFC3339，矩阵脚本导出）
 #   EDGEEXP_ATTACK_MAX_AGE_S 没有 RUN_STARTED_AT 时的产物年龄上限（秒，默认 3600）
-#   EDGEEXP_TARGET    被攻节点容器名（Task 4C：观测主体在它**内部**采样，默认空 = 本机）。
+#   EDGEEXP_TARGET    被攻节点名（Task 4C：观测主体在它**内部**采样，默认空 = 本机）。
 #                     传了它，`edgescen --target` 在节点内跑同一份二进制取回检查结果；取不到
 #                     就**响亮失败**（绝不静默改用本机结果 —— 那会让记录看起来是节点数据、
 #                     实际是宿主数据）。它必须与 edge_attack.sh 的 EDGEEXP_TARGET 一致：
 #                     不一致时 condition_probes 的证据与 checks[] 的观测来自**两台机器**。
+#   EDGEEXP_SUBSTRATE 实验基质：clab（默认）| lxd（A-1，见 edge_lab.sh）。它决定本脚本交给
+#                     `edgescen` 的 target **语法**（`lab_target_spec`：clab 保持裸容器名，
+#                     lxd 出 `lxd:<实例>`）—— 而 EDGEEXP_TARGET 始终是**基质层的节点名**。
 # ============================================================================
 set -euo pipefail
 
@@ -57,6 +65,8 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(cd "$LAB_DIR/../.." && pwd)"
+# shellcheck source=scripts/edge_lab.sh
+. "$SCRIPT_DIR/edge_lab.sh"
 DATA_DIR="${EDGEEXP_DATA_DIR:-$LAB_DIR/data/edgefactors}"
 RUN_D="$DATA_DIR/run.d"
 ENV_NAME="${EDGEEXP_ENV:-wsl-clab-14}"
@@ -153,11 +163,20 @@ if [ -f "$RECORDS" ]; then
 fi
 
 # --- 4. 采集 -----------------------------------------------------------------
-echo "edge_collect: 采集场景 $SCENARIO（配置 $(basename "$CONFIG")，run=$RUN，env=$ENV_NAME，目标=${TARGET:-本机}）"
+echo "edge_collect: 采集场景 $SCENARIO（配置 $(basename "$CONFIG")，run=$RUN，env=$ENV_NAME，基质=$lab_substrate，目标=${TARGET:-本机}）"
 # `--target` 只在真的声明了节点时才加上：不传时 `edgescen` 的取数路径与今天**逐位一致**
 # （本机登记表），而"显式传一个空 target"会让两份调用在日志上同形。
+#
+# 传的值是 **`lab_target_spec`**（clab 基质 = 裸容器名，逐位不变；lxd 基质 = `lxd:<实例>`）——
+# `edgescen -target` 的语法由基质决定，别处不得再拼一次前缀（两处口径分叉会让观测主体断言
+# 以"记录声称 X、声明 Y"的名义把每条记录判死）。
 TARGET_ARGS=()
-if [ -n "$TARGET" ]; then TARGET_ARGS=(--target "$TARGET"); fi
+TARGET_SPEC=""
+if [ -n "$TARGET" ]; then
+  TARGET_SPEC="$(lab_target_spec "$TARGET")"
+  TARGET_ARGS=(--target "$TARGET_SPEC")
+fi
+echo "edge_collect: edgescen 观测主体 target=${TARGET_SPEC:-（不传 = 本机）}（EDGEEXP_TARGET=${TARGET:-未声明}，基质 $lab_substrate）"
 T0=$(date -u +%s)
 set +e
 "$EDGESCEN" --scenario "$SCENARIO" --config "$CONFIG" \
