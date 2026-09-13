@@ -324,6 +324,12 @@ A-1 上**不要**跑的：攻击（Caldera 已在跑，`/opt/caldera`，API `:88
 `lxc exec host1 --` 两种观测在数据上本来完全同形，而"这批数据采自哪种基质"正是 Task 4D 要回答的
 问题；反过来，docker 是默认基质，改它的取值会让 Task 4C 已落盘的记录与既有断言全部失效。
 
+**"逐字不变"的准确范围（Fix round 1 收窄）**：docker 侧**命令序列与 `meta.observation_target`
+逐字不变**（`docker cp` / `docker exec -e` 的参数、顺序、观测主体字符串都有用例钉住，其中一条
+期望值逐字抄自 `97581d8`）；**错误串在 Step 2 一度变过、Fix round 1 已逐字恢复**，并由
+`TestDockerErrorStringsMatchTask4CBytes` 钉住 —— 该用例的期望值同样抄自 97581d8 的字面量
+（不是从当前实现反推），因此能抓住"两条路径一起变"的情形。
+
 为什么必须是新字段而不是复用现有的：`meta.env` 是**操作者手填的标签**（默认值 `wsl-clab-14`，
 与"这份检查集真的来自那台机器"无关 —— 采错机器时它恰恰会照抄那个默认值），`meta.config_hash`
 是**配置文件**的指纹、`meta.playbook_hash`/`timestamp`/`run` 同理，都与运行位置正交。
@@ -357,7 +363,7 @@ A-1 上**不要**跑的：攻击（Caldera 已在跑，`/opt/caldera`，API `:88
 | 复位脚本 | `lunwen/clab-lab/scripts/edge_reset.sh` | Caldera 就绪 + 毁/建拓扑（`clab` 基质：`clab destroy --cleanup` + `clab deploy`）+ sandcat agent 回连。**lxd 基质下建/毁拓扑不适用**（A-1 上不建不毁，见 §5.4.2 第 6 条） |
 | 攻击脚本 | `lunwen/clab-lab/scripts/edge_attack.sh <scenario> <out.json>` | 相位推进 + 固定剧本 + 客观结果（ground truth 的唯一来源）；`EDGEEXP_TARGET` 声明被攻节点后，条件探针在**该节点内**执行 |
 | 节点内条件探针 | `lunwen/clab-lab/scripts/edge_probe.sh <节点名>` | 被 `edge_attack.sh` source；**在节点内**执行 §5.4.7 的六因子条件判据（经基质层下发，见下一行），退出码 0=条件成立 / 1=不成立 / **2=探针没跑成**。见 §5.3.1 与 §5.4.9 |
-| **基质层**（Task 4D） | `lunwen/clab-lab/scripts/edge_lab.sh` | **唯一**的基质调用点（被上面四个脚本 source）：`EDGEEXP_SUBSTRATE=clab|lxd` 选择；接口 `lab_up`/`lab_down`/`lab_target_exec(_detached)`/`lab_push`/`lab_node_ip`/`lab_node_running`/`lab_inspect`/`lab_list`/`lab_node_counts`/`lab_target_spec`。调用脚本里**不得**再出现 `clab`/`docker`/`lxc` 命令字面 |
+| **基质层**（Task 4D） | `lunwen/clab-lab/scripts/edge_lab.sh` | **唯一**的基质调用点（被上面四个脚本 source）：`EDGEEXP_SUBSTRATE=clab|lxd` 选择；接口 `lab_up`/`lab_down`/`lab_target_exec(_detached)`/`lab_push`/`lab_node_ip`/`lab_node_running`/`lab_inspect`/`lab_list`/`lab_node_counts`/`lab_target_spec`/`lab_require_bins`。调用脚本的**代码位置**不得再出现 `clab`/`docker`/`lxc` 命令字面（日志与错误消息里的 `clab destroy 完成` 这类词保留 —— 它们是既有排障手册的锚点）；两层 CLI 各有名字：拓扑级 `lab_topology_bin`、目标级 `lab_target_bin`（Fix round 1 / I-1：一个变量两义会让覆盖失效并带偏另一层） |
 | 采集脚本 | `lunwen/clab-lab/scripts/edge_collect.sh <scenario> <config.ini> <attack.json> <run>` | 一条记录 + **因子集相等断言** + 门禁⓪ + 时钟核对 + 门禁② 残差 + **观测主体核对**（`EDGEEXP_TARGET` ⇒ 记录必须带 `meta.observation_target`，且与 harness 的探针节点一致） |
 | 矩阵驱动 | `lunwen/clab-lab/scripts/edge_matrix.sh [场景…]` | 25 场景全量（无参数）或冒烟子集（给了场景名）；名单与 `edgescen -list` 逐项核对；干跑（`EDGEEXP_DRY_RUN=1`）会打印**基质**与解析后的 `-target` 语法 |
 | 阈值敏感性驱动 | `lunwen/clab-lab/scripts/edge_threshold_sensitivity.sh` | §5.4.6 的强制行；**只读**记录 + 配置 + 离线工具（不碰 clab/Caldera），故随时可补跑；**默认不跑**（`EDGEEXP_SENSITIVITY_THRESHOLDS` 显式开启） |
@@ -376,7 +382,8 @@ A-1 上**不要**跑的：攻击（Caldera 已在跑，`/opt/caldera`，API `:88
    | `clab`（默认，= 今天的行为） | 什么都不用设，或显式 `export EDGEEXP_SUBSTRATE=clab` | WSL2 的 Containerlab 拓扑（14 节点） | **开发与离线**：离线夹具、门禁、`edgecompare` 离线比较、论文复算 |
    | `lxd`（A-1） | `export EDGEEXP_SUBSTRATE=lxd`（+ 按第 6 条给 `EDGEEXP_LXC_BIN`） | A-1 上**既有的 LXD 实例集合** | **实验主场**：22+3 场景 + 每场景 3 次重复 |
 
-   两条配套纪律：**① 基质名拼错会直接失败**（`EDGEEXP_SUBSTRATE=clabb` 在 source 基质层时就中止，
+   两条配套纪律：**① 基质名拼错会直接失败**（`EDGEEXP_SUBSTRATE=clabb` 在 source 基质层时中止
+   调用方，**带不带 `set -e` 都一样**（Fix round 1 / M-4：非交互 shell 下库会结束调用方的 shell），
    不静默退回 `clab` —— 一次"以为在 A-1 上跑、其实在 WSL 上跑"的整轮矩阵，记录里的 `env` 标签
    看起来完全正常）；**② `-target` 的语法由基质决定**，调用脚本只给**节点名**
    （`EDGEEXP_TARGET`），前缀由 `lab_target_spec` 唯一地加（clab: 裸容器名；lxd: `lxd:<实例>`）——
@@ -828,7 +835,7 @@ Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 
 | 未跑的事 | 为什么现在还不能跑 |
 |---|---|
 | `EDGEEXP_SUBSTRATE=lxd` 的完整矩阵（reset → attack → collect） | `lab_up`/`lab_down` 在 lxd 基质下**故意响亮失败**（A-1 上不建/不毁实例）；A-1 侧的"环境"该是什么样子（哪几个实例、装什么控制、谁来铺 TTP）是 Step 3/3B 的交付 |
-| `edge_reset.sh` 的 lxd 路径（Caldera 就绪 + 部 sandcat agent） | 同上：`lab_target_exec_detached` 的 lxd 分支（`nohup` 脱离）**只做过静态检查与假 CLI 用例，没有在真实实例上验证过"进程在 exec 会话断开后仍在跑"** |
+| `edge_reset.sh` 的 lxd 路径（Caldera 就绪 + 部 sandcat agent） | 同上：`lab_target_exec_detached` 的 lxd 分支**曾经压平 argv（评审用假 CLI 复现：节点内命令变形/没跑，而调用点返回 0）**；Fix round 1 已改成 `sh -c 'nohup "$@" … &' _ "$@"`（argv 逐条保真，两种基质同语义）并有假 CLI 判据钉住，但**"会话断开后进程仍在跑"仍未在真实 LXD 实例上验证**（那需要真机预算，属 Step 3/4） |
 | `edge_probe.sh` 的 lxd 路径（六因子条件探针在实例内执行） | 探针判据体依赖节点内的 `bash`/`grep`/`iptables` 等工具；A-1 实例上是否齐备属 Step 3 的硬化基线 |
 | 攻击（Caldera operation）与 R 组（真实缺失对照）在 A-1 上的成立性 | 用户裁定"矩阵/攻击/采集都在 A-1 跑"，但攻击侧在 A-1 上的落地（哪个实例当被攻目标、Caldera 的 agent 从哪来）尚未设计 |
 | 每场景 3 次重复样本（`EDGEEXP_RUN_INDEX>1` + `EDGEEXP_ENV`） | 依赖上面几项 |
@@ -854,6 +861,21 @@ Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 
   **任何**段都不被读（`cfg.HeartbeatTimeoutSec` 全程为零值，唯一消费者 `internal/heartbeat`
   只在字段 > 0 时才覆盖内置 60s）—— 那是"解析层没实现"，不是"位置写错"，挪到哪都一样无效。
   测试里把它钉成断言：哪天接上解析就会红，提醒复核实验配置里那两行的去留。
+
+#### 5.4.12 基质抽象（Task 4D Step 1）的等价性**范围**与判据（Fix round 1 收窄）
+
+"clab 分支逐位等价"这句话必须带范围，否则就是一句过强的话：
+
+| 范围 | 结论 | 证据 |
+|---|---|---|
+| `edge_reset.sh`（clab 基质） | **脚本级逐行等价**：四个场景（正常 / I9 拒绝 / agent 超时 / 拓扑缺失）下"假 CLI 调用序列 + stdout + stderr + 退出码 + 产物"逐行相同 | `build/lab-diff.sh`：`git archive 97581d8` 取**真基线**整棵树、两侧跑**真脚本**、同一份假 CLI、私有 `/tmp` 命名空间 |
+| `edge_matrix.sh` 干跑 | 除新增基质行与一处已声明措辞外**逐字等价** | 同上（干跑差分） |
+| `edge_probe.sh` | **不是**"逐位不变"：它的假 CLI 注入方式由 `EDGEEXP_LAB_BIN` 改为 `EDGEEXP_DOCKER_BIN`（I-1 的修复），且三处错误串措辞随基质改写、`probe_host_ready` 的预检对象从 `lab_bin` 改为真正执行的 `lab_target_bin` | 20 项既有夹具无回归 + 新增判据（覆盖生效、不泄漏） |
+| Go 侧 `-target` | 命令与观测主体**逐字不变**；错误串在 Step 2 一度变过，Fix round 1 已**逐字恢复**并加钉子 | `TestDockerErrorStringsMatchTask4CBytes`（期望值抄自 97581d8） |
+
+为什么范围必须写清（评审 §1.1/§6.3 的教训）：**"既有夹具全绿"与"某个路径逐位不变"是两件事** ——
+旧的等价性夹具是**手抄**基准（没有 git），且只跑成功路径；新夹具从 `git archive` 取基准、跑真脚本、
+覆盖失败处置，那条教训才算被吸收。
 
 ---
 
