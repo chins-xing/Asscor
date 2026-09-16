@@ -52,17 +52,20 @@
 | `.github/workflows/` | CI（**内容有意不同**，见 §3） |
 | `.gitattributes`（`*.sh text eol=lf`）、`.gitignore` | 行尾与忽略规则（`.gitignore` **内容必然不同**，见 §3） |
 | `ssam-lib/`、`prism-lib/` | 两个内嵌独立仓库**的产品侧文件**（外层只跟踪快照；内仓各自维护） |
-| `README.md`、`README_EN.md`、`LICENSE`、`CONTRIBUTING.md` | 门面与许可 |
+| `LICENSE`、`CONTRIBUTING.md` | 许可与贡献指南 |
 | `docs/audits/`（82）、`docs/superpowers/specs/`（2）、`docs/superpowers/plans/2026-08-21-secure-mode.md`、`docs/CONFIDENCE_MODEL_DESIGN_2026-09-08.md`、`docs/asscor-architecture-review.md` 与 `-zh` | 审计/债务记录、产品特性设计、架构评审（用户裁定**留 main**） |
+| ~~`README.md`、`README_EN.md`~~ | **2026-09-13 起改为按分支表述** ⇒ 移入 §3.1 有意差异（原本两侧同一份文本，但通篇按研究线口径写，在 main 上是错的） |
 
 ---
 
 ## 3. 有意差异清单（两分支**共有但内容不同**，逐条登记）
 
-### 3.1 底座路径内（进 `main-base-drift-manifest.txt`，共 14 条 = 以下 10 条 + §1 里那 4 个新测试）
+### 3.1 底座路径内（进 `main-base-drift-manifest.txt`，共 16 条 = 以下 12 条 + §1 里那 4 个新测试）
 
 | 路径 | 差异内容 | 引入提交 |
 |---|---|---|
+| `README.md` | 仅**横幅与结构树**按分支表述：ARC 列研究线资产（`cmd/edgescen/`、`cmd/edgecompare/`、`configs/edgeexp/`、`lunwen/`、`internal/edgeexp/`），main 列产品线并说明研究内容不在本分支；其余内容（四条目分支规则、"论文"中性措辞、社区模式段）**逐字相同** | `0affc73`(ARC) + `5efdf49`(main) |
+| `README_EN.md` | 同上（英文版） | 同上 |
 | `internal/model/model.go` | 新增 `EdgeFactorObservation` 类型 + `AssessmentResult.EdgeFactorChain`（`omitempty`） | `304bbd6` |
 | `internal/engine/assessor.go` | legacy 评分路径 `evaluateEdgeFactorChain` 回填观测链 | `304bbd6` |
 | `internal/engine/ssam/adapter_engine.go` | 插件路径在与溯源戳**同处、同判据**回填观测链 | `304bbd6` |
@@ -106,10 +109,10 @@ BASE_REF=main \
 | 输出 | 含义 | 处置 |
 |---|---|---|
 | **绿 exit=0** | 底座路径两侧**逐字节相同**（清单为空或全部已同步） | 可以继续 |
-| **黄 exit=3** | 清单外逐字节一致；清单内 14 条有意差异，**两侧均与登记一致** | **裁定「乙」的合格终态** |
+| **黄 exit=3** | 清单外逐字节一致；清单内 16 条有意差异，**两侧均与登记一致** | **裁定「乙」的合格终态** |
 | **红 exit=1** | ①出现**清单之外**的漂移 ②ARC 侧与登记不符 ③**main 侧与登记不符**（被改写 / 凭空出现）④清单行缺 main 侧登记 | 要么**消除**漂移（按规则② 上 main），要么**登记**（按规则④ 写理由与引入提交） |
 
-**当前实测状态（2026-09-13）**：`清单条目=14 active=14 stale=0`、`登记失效 ARC 侧=0 / main 侧=0`、**清单外未解释 = 0** ⇒ **黄 exit=3**。
+**当前实测状态（2026-09-13）**：`清单条目=16 active=16 stale=0`、`登记失效 ARC 侧=0 / main 侧=0`、**清单外未解释 = 0** ⇒ **黄 exit=3**。
 （对照分叉前的 `df8342e` 会报 22 个漂移、其中 8 个未解释 ⇒ 红；那 8 个正是已按规则② 上 main 的 A 类产品侧修复。）
 
 ---
@@ -117,5 +120,6 @@ BASE_REF=main \
 ## 5. 已知边界与前瞻
 
 - **`docs/` 不在底座检查范围内**：§3.2 的两个文档差异不会被该检查发现 ⇒ 依赖本表逐条登记。
-- **未覆盖**：`README*.md`、`optional/adversary/packages/acl/README.md`、`scripts/acl-pack.sh` 目前两侧相同；若将来因分叉需要各自改写，会**新增**有意差异条目，按同一口径登记。
+- **`README.md`/`README_EN.md` 自 2026-09-13 起按分支表述**（§3.1 已登记）：两份文件的差异被刻意压到最小——只有**横幅**与**结构树**不同，其余段落两分支逐字相同；将来若还要改 README，请**两侧同改**（除横幅/结构树），改完更新清单里那两个 sha。
+- **其他未覆盖**：`optional/adversary/packages/acl/README.md`、`scripts/acl-pack.sh` 目前两侧相同；若将来因分叉需要各自改写，会**新增**有意差异条目，按同一口径登记。
 - **不要做的事**：不要用 `git merge ASSCOR-Research-Core`（会把 ARC 特有的 353 个文件一次性带回 main，`.gitignore` 挡不住）；要按点名 **cherry-pick/移植**。
