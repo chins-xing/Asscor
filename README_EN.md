@@ -1,20 +1,25 @@
 # ASSCOR — Security Acceptability Assessment Runtime
 
-> **Branch:** `ASSCOR-Research-Core` (research-specialized branch; not merged
-> into `main`).
+> **Branch:** `ASSCOR-Research-Core` (research line; formally forked from
+> `main`, never fully synced).
 >
-> This branch carries two research directions on top of the stable main
-> baseline (v0.2.x):
+> This branch carries research content on top of the `main` product line:
+> - **Direction ② — edge-factor coupling & vectorisation:** experiment tooling
+>   and assets (`cmd/edgescen/`, `cmd/edgecompare/`, `configs/edgeexp/`,
+>   `lunwen/clab-lab/`); design in
+>   [docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md](docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md);
 > - **Topology / propagation research** — M0–M2 milestones (graph-model
 >   foundation → lifecycle → semantic propagation); see
 >   [docs/ASSCOR-Research-Core.md](docs/ASSCOR-Research-Core.md) and
 >   `lunwen/research-core/`;
-> - **Secure Mode** — an experimental module behind the `securemode` build
->   tag (see the Secure Mode chapter below).
+> - **Paper and experiment data:** `lunwen/paper/`, `lunwen/clab-lab/data/`.
 >
-> Difference from `main`: this branch contains the `securemode` experimental
-> module and topology-research assets; `main` does not. When the research
-> matures it flows back to `main` as documentation / a standalone module.
+> **Branch rules and asset ownership** live in
+> [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md): the two branches are
+> formally forked and never fully synced; debt / vulnerability / audit fixes
+> go to `main` **first**; the shared **base (product foundation)** must stay
+> identical; research-driven edits to base files stay here and are registered
+> as **intentional differences**.
 
 > **ASSCOR** (**ASS**ess + **COR**e) is an open-source, production-oriented
 > security acceptability assessment platform. It does **not** replace
@@ -254,9 +259,10 @@ installed as self-contained bundles with a `package.json` manifest.
 
 ## 10. Secure Mode (experimental, build-tag: securemode)
 
-> This branch-only experimental module (`internal/securemode/`) protects the
-> static security of `config.ini` and `agent.ini`. Design & implementation
-> records: [docs/superpowers/specs/2026-08-21-secure-mode-design.md](docs/superpowers/specs/2026-08-21-secure-mode-design.md);
+> An **optional** module (`internal/securemode/`, build-tag `securemode`;
+> **not part of the default build**) that protects the static security of
+> `config.ini` and `agent.ini`. Design & implementation records:
+> [docs/superpowers/specs/2026-08-21-secure-mode-design.md](docs/superpowers/specs/2026-08-21-secure-mode-design.md);
 > summary below.
 
 ### Features
@@ -313,11 +319,13 @@ go build -tags securemode ./cmd/kernel ./cmd/agent
 
 ### Research paper
 
-This branch also hosts the manuscript **"Attacker Cognitive Loop: An
-Interpretable Rule-Based Engine for Estimating, Predicting, and Engaging
-Adaptive Attackers"** (Jiahao Lai) in `lunwen/paper/`, together with the
-24-node Containerlab experiment campaign (E1–E9) and its reviewer
-attachment bundle. See the paper's own documentation for details.
+The manuscript **"Attacker Cognitive Loop: An Interpretable Rule-Based Engine
+for Estimating, Predicting, and Engaging Adaptive Attackers"** (Jiahao Lai)
+and the Containerlab experiment campaign (E1–E9) with its reviewer attachment
+bundle live on the **`ASSCOR-Research-Core`** branch, under `lunwen/` — they
+are intentionally **not** part of `main` (see
+[docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)). See the paper's own
+documentation for details.
 
 ## 11. Build & quick start
 
@@ -328,7 +336,7 @@ CGO_ENABLED=0).
 # build the default kernel + agent
 go build ./cmd/kernel ./cmd/agent
 
-# build with all functional modules (incl. securemode on this branch)
+# build with all functional modules (incl. the optional securemode module)
 go build -tags "heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine,securemode" ./cmd/kernel ./cmd/agent
 
 # run the test suite
@@ -350,11 +358,11 @@ See the [User Manual](docs/ASSCOR%20%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
 
 ```
 .
-├── cmd/                 # binaries: kernel, agent, asscor (tag-gated)
+├── cmd/                 # binaries: kernel, agent, asscor (tag-gated); plus edgescen / edgecompare (research line)
 ├── internal/            # kernel + core modules (build-tag gated)
 │   ├── kernel/          # microkernel core (DI, bus, lifecycle, contracts)
 │   ├── engine/          # SSAM + SRD adapters
-│   ├── securemode/      # Secure Mode module (tag: securemode, this branch)
+│   ├── securemode/      # Secure Mode module (tag: securemode; not in default build)
 │   ├── comms/           # gRPC + JSONRPC servers (tag: comms)
 │   ├── agent/           # agent runtime (checks, CPE, heartbeat)
 │   ├── cli/             # interactive + socket CLI
@@ -363,10 +371,10 @@ See the [User Manual](docs/ASSCOR%20%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
 ├── prism-lib/           # Prism / SRD standalone engine (zero external deps)
 ├── optional/            # build-tag plug-ins (adversary packages, pkgmgr)
 ├── api/v1/              # protocol messages (pure PB; gRPC bindings are tag-gated)
-├── configs/             # industry configuration templates
+├── configs/             # industry configuration templates (+ edgeexp/: research templates)
 ├── deploy/              # Makefile, docker compose, deployment scripts
 ├── docs/                # documentation (see §13)
-├── lunwen/              # paper assets (this branch; reviewer-facing parts tracked)
+├── lunwen/              # paper + experiment assets (research line; see docs/ASSET_OWNERSHIP.md)
 └── build/               # local build output (git-ignored)
 ```
 
