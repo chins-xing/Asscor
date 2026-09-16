@@ -1,12 +1,12 @@
 # ASSCOR — 安全可接受性评估运行时
 
-> 🧪 **分支：`ASSCOR-Research-Core`（研究特化分支，不并入 main）**
+> 🧪 **分支：`main`（产品线与发布分支）**
 >
-> 本分支在 main 稳定基线（v0.2.x）之上承载两个研究方向：
-> - **拓扑/传播层研究**：M0–M2 里程碑（图模型地基 → 生命周期 → 语义传播），见 [docs/ASSCOR-Research-Core.md](docs/ASSCOR-Research-Core.md) 与 `lunwen/research-core/`
-> - **Secure Mode 实验模块**：build-tag `securemode`（见下文 Secure Mode 章节）
+> 本分支是**可构建、可测试、可发布**的产品线：研究内容（论文、实验工具与实验数据、研究计划）
+> **不在本分支**，它们位于 `ASSCOR-Research-Core` 分支。
 >
-> 与 main 的区别：本分支含 `securemode` 实验模块与拓扑研究资产，main 不含；研究成熟后以文档/独立模块形式回流 main。
+> **分支规则与资产归属**见 [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)：两分支正式分叉、永不整体同步；
+> 债务清偿／漏洞／审计修复**第一时间进 main**；两分支的**底座保持一致**；研究接线类底座改动留 ARC 并登记为**有意差异**。
 
 > **ASSCOR**（**ASS**ess + **COR**e）是一个开源的、面向生产的安全可接受性评估平台。
 > 它不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系统的**"安全可接受性"聚合判断层**，
@@ -24,7 +24,7 @@
 > （位于 `prism-lib/`），同样为零外部依赖。ASSCOR 平台通过薄适配层委托给这两个独立库。
 
 **算法版本：** SSAM 2.0 | **项目版本：** ASSCOR v0.2.3  
-**日期：** 2026-08-16  
+**日期：** 2026-09-13  
 **状态：** 发布  
 **许可证：** [Apache License 2.0](LICENSE)
 
@@ -282,7 +282,7 @@ compliance_framework = GB/T 22239-2019 Level 3
 
 ## Secure Mode（实验性，build-tag：securemode）
 
-> 本分支独有的实验性模块（`internal/securemode/`），保护 `config.ini` 与 `agent.ini` 的静态安全。设计与实现记录见 [docs/superpowers/specs/2026-08-21-secure-mode-design.md](docs/superpowers/specs/2026-08-21-secure-mode-design.md)；以下为总览。
+> 可选模块（`internal/securemode/`，build-tag `securemode`；**默认构建不含**）。保护 `config.ini` 与 `agent.ini` 的静态安全。设计与实现记录见 [docs/superpowers/specs/2026-08-21-secure-mode-design.md](docs/superpowers/specs/2026-08-21-secure-mode-design.md)；以下为总览。
 
 ### 功能
 
@@ -320,10 +320,10 @@ go build -tags securemode ./cmd/kernel ./cmd/agent
 - **登记表持久化**：内核把 `指纹 → agent_id → 密码` 登记表以运行模式密钥加密落盘（`.asscor-secrets.enc`），kernel 重启（run 模式解锁）时自动解密恢复；kernel 密码轮换时同步重加密，退出运行模式时移除。
 - **fail-closed**：模式标记缺失 ≠ 损坏；标记损坏拒绝静默降级为明文模式（疑似篡改）。
 
-### 与 main 的区别
+### 与其他分支的关系
 
-- **本分支**：含 `securemode` build-tag 模块（main 无）与拓扑研究资产（`docs/ASSCOR-Research-Core.md`、`lunwen/research-core/`）。
-- **main**：稳定基线 v0.2.x，不编译 securemode，行为与旧版一致；本分支实验成熟后以文档/独立模块形式回流。
+- 模块代码（`internal/securemode/`）在两条分支上**都在**；差别只在**默认构建是否启用该 build-tag**（默认不含）。
+- 两分支的分工、资产归属与「有意差异」清单见 [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)。
 
 ## 11. 项目结构
 
@@ -392,7 +392,8 @@ ASSCOR/
 │   ├── extmgr/        # 扩展管理器（安装/卸载/生命周期/安全执行）
 │   ├── agent/         # Agent 核心模块
 │   ├── securemode/    # 安全模式（build-tag: securemode）— 默认/运行双模式配置保护、登记表持久化
-│   ├── model/         # 数据模型定义
+│   ├── model/         # 数据模型定义（含边缘因子观测链字段）
+│   ├── edgefactor/    # 边缘因子向量/图/链框架与参数模型（tag `engine` 线；两分支共有）
 │   ├── config/        # 配置解析器（INI 格式，支持行业模板覆盖）
 │   └── version/       # 版本信息
 ├── optional/           # 可选扩展模块与扩展包 (v0.2.3)
@@ -829,4 +830,4 @@ ASSCOR 采用 **[Apache License 2.0](LICENSE)** —— 宽松许可证，允许�
 | **独立开发者** | 直接 Fork 后自由分支发展，可独立分发/商业化，无需等待上游合入 |
 | **维护者** | 保持 `main` 分支稳定，控制上游演进节奏 |
 
-`main` 分支始终为可构建、可测试、可发布状态（CI 全绿）；任何实验性方向（如 `ASSCOR-Research-Core` 研究分支的拓扑/传播层研究，研究资产见 `lunwen/research-core/`）不进 `main`，以可选模块/扩展包形式存在。
+`main` 分支始终为可构建、可测试、可发布状态（CI 全绿）；研究线内容（论文、实验工具与数据、研究计划）留在 `ASSCOR-Research-Core` 分支。两分支**正式分叉、永不整体同步**：只有维护者点名的改动才逐个 cherry-pick／移植上 `main`（**不要** `git merge` 研究分支——那会把研究线资产一次性带回）。资产归属、底座一致性与「有意差异」清单见 [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)。
