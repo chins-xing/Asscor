@@ -44,6 +44,27 @@
 #                       `EDGEEXP_TARGET` 本身始终是基质层的节点名（clab: `asc-asscor-host1`；
 #                       lxd: `probe-ot005`）。本脚本把它 export 给三个子脚本 —— 「这一轮跑在哪种
 #                       基质上」必须只有一处解析。
+#
+#   ---- Task 5 / Step 0：按场景驱动的**实验条件**（本步新增）----
+#   背景（控制侧 2026-09-17 实测 + 复审 7.4 独立复核）：本脚本此前对
+#   `EDGEEXP_BASIS|POLICY_ON|TARGET_ABILITY|ATTACK_GROUP` **零命中** ⇒ 25 个场景的"条件"
+#   全是同一个值（甚至因为 `EDGEEXP_BASIS` 未设而**每个场景都 exit 1**）⇒ 耦合对的"条件 ⇒ 分数"
+#   在矩阵层根本不成立。现在按**场景声明的注入因子集**（取自 `edgescen -list`，现成解析点）分类：
+#     · 注入集含 `EDGEEXP_TTP_FACTORS`（默认 `EF-SELINUX,EF-APPARMOR`）⇒ **目标 TTP 口径**：
+#       `EDGEEXP_BASIS=targeted_ttp` + 目标/对照 ability + pair 剧本 + `EDGEEXP_POLICY_ON=0`
+#       （该场景声明"这个控制缺失"⇒ 真实策略也要卸掉，标签才与声明一致）；
+#     · 其余场景 ⇒ `EDGEEXP_BASIS=recon_playbook`（**不得**带 target ability，逐场景 unset），
+#       `EDGEEXP_POLICY_ON=1`（控制齐备的基线条件）。
+#   三个开关（`TARGET_ABILITY` / `basis` / `POLICY_ON`）**逐场景成对设置**，不全局设一个 ——
+#   这正是复审"开工必带"第 3 条要求的配对。配置项（在本脚本里是**输入**，不是每场景变量）：
+#     EDGEEXP_TTP_TARGET_ABILITY       目标 TTP 的 ability id（读 /etc/shadow）
+#     EDGEEXP_TTP_TARGET_ABILITY_NAME  它的名字（仅用于核对 ID 没被换掉）
+#     EDGEEXP_TTP_CONTROL_ABILITY      对照 ability id（写 marker，不撞策略）
+#     EDGEEXP_TTP_PLAYBOOK_ID          pair 剧本（adversary）id
+#     EDGEEXP_TTP_PLAYBOOK_NAME        它的名字
+#     EDGEEXP_TTP_GROUP                agent 分组名（默认 t4d-ttp；与 edge_target_prepare.sh 同源）
+#     EDGEEXP_TTP_FACTORS              触发"目标 TTP 口径"的因子集（默认 EF-SELINUX,EF-APPARMOR）
+#   选了目标 TTP 场景却没给 ability/剧本 ⇒ **干跑前就响亮失败**（不许跑到一半才发现条件缺项）。
 # ============================================================================
 set -euo pipefail
 
@@ -125,27 +146,139 @@ done
 
 # 场景名单必须与采集器的场景表**逐项相等**（不是包含）：两份名单漂移过就会"少场景而人不知"。
 # 判据取 `edgescen -list`（采集器自己的视图），不是再抄一份 —— 这正是把它放在这里的原因。
+#
+# **Task 5 / Step 0**：同一个解析点顺便取回**每场景的注入因子集**（`-list` 已经打印 `因子=…`），
+# 后面按它给每个场景分类条件。少写一个"因子表"的第二份真源 —— 矩阵的因子视图与采集器同源。
+SCEN_FACTORS_RAW=""
 if [ -x "$EDGESCEN" ]; then
-  python3 - "$EDGESCEN" "${SCENARIOS[@]}" <<'PY'
+  SCEN_FACTORS_RAW="$(python3 - "$EDGESCEN" "${SCENARIOS[@]}" <<'PY'
 import subprocess, sys
 binary, declared = sys.argv[1], sys.argv[2:]
 out = subprocess.run([binary, '-list'], capture_output=True, text=True, check=True).stdout
-listed = []
+listed, factors = [], {}
 for line in out.splitlines():
     if not line.startswith('  '):
         continue
-    name = line.strip().split()[0] if line.strip() else ''
-    if name:
-        listed.append(name)
+    parts = line.strip().split()
+    if not parts:
+        continue
+    name = parts[0]
+    listed.append(name)
+    # `-list` 的既定形状：`<名> 注入=<kind> 因子=<A,B> [阶段=N] [级联目标=X]`；
+    # 空因子表打印 `因子=(无)` ⇒ 归一成空串（"没有注入因子"是一等公民，不是解析失败）。
+    fac = ''
+    for tok in parts[1:]:
+        if tok.startswith('因子='):
+            fac = tok[len('因子='):]
+    if fac in ('(无)', '-', ''):
+        fac = ''
+    factors[name] = fac
 d, l = set(declared), set(listed)
 if d != l:
     print('edge_matrix: 场景名单与采集器不一致 —— 只在本清单里的: %s；只在采集器里的: %s'
           % (sorted(d - l) or '无', sorted(l - d) or '无'), file=sys.stderr)
     sys.exit(1)
-print(f'edge_matrix: 场景名单与采集器 edgescen -list 逐项相等（{len(d)} 组）')
+print(f'edge_matrix: 场景名单与采集器 edgescen -list 逐项相等（{len(d)} 组）', file=sys.stderr)
+for name in declared:
+    print('%s\t%s' % (name, factors.get(name, '')))
 PY
+)" || exit 1
 else
-  echo "edge_matrix: 警告：$EDGESCEN 不存在，跳过与采集器场景表的名单核对" >&2
+  echo "edge_matrix: 警告：$EDGESCEN 不存在，跳过与采集器场景表的名单核对（也拿不到每场景的注入因子集 ⇒ 条件分类无从进行）" >&2
+fi
+declare -A SCEN_FACTORS=()
+if [ -n "$SCEN_FACTORS_RAW" ]; then
+  while IFS=$'\t' read -r _n _f; do
+    [ -n "${_n:-}" ] || continue
+    SCEN_FACTORS["$_n"]="${_f:-}"
+  done <<< "$SCEN_FACTORS_RAW"
+fi
+
+# --- Task 5 / Step 0：把"每场景的实验条件"收在一处（分类规则 + 逐场景导出）------
+# 分类与导出**只有这一处实现**：干跑用它打印计划，逐场景循环用它设环境 ——
+# 两处各写一份分类，就会出现"干跑看到的条件"与"实际跑的条件"不一致（那正是本步要挡的形态）。
+TTP_FACTORS_CSV="${EDGEEXP_TTP_FACTORS:-EF-SELINUX,EF-APPARMOR}"
+TTP_TARGET_ABILITY="${EDGEEXP_TTP_TARGET_ABILITY:-}"
+TTP_TARGET_ABILITY_NAME="${EDGEEXP_TTP_TARGET_ABILITY_NAME:-}"
+TTP_CONTROL_ABILITY="${EDGEEXP_TTP_CONTROL_ABILITY:-}"
+TTP_PLAYBOOK_ID="${EDGEEXP_TTP_PLAYBOOK_ID:-}"
+TTP_PLAYBOOK_NAME="${EDGEEXP_TTP_PLAYBOOK_NAME:-}"
+TTP_GROUP="${EDGEEXP_TTP_GROUP:-t4d-ttp}"
+
+# scenario_is_targeted <场景名> —— 注入因子集里是否出现任一"目标 TTP 触发因子"。
+scenario_is_targeted() {
+  local csv=",${SCEN_FACTORS[$1]:-},"
+  local f
+  local IFS=','
+  for f in $TTP_FACTORS_CSV; do
+    f="$(printf '%s' "$f" | tr -d '[:space:]')"
+    [ -n "$f" ] || continue
+    case "$csv" in *",$f,"*) return 0 ;; esac
+  done
+  return 1
+}
+
+# scenario_condition_line <场景名> —— 人类可读的一行（干跑与逐场景循环共用，措辞只此一份）。
+scenario_condition_line() {
+  local s="$1" factors="${SCEN_FACTORS[$1]:-}"
+  if scenario_is_targeted "$s"; then
+    printf 'basis=%-14s policy=%-3s 目标=%s 对照=%s 剧本=%s 组=%s 因子=%s' \
+      "targeted_ttp" "0" "${TTP_TARGET_ABILITY:-(未给)}" "${TTP_CONTROL_ABILITY:-(未给)}" \
+      "${TTP_PLAYBOOK_ID:-(未给)}" "$TTP_GROUP" "${factors:-（无）}"
+  else
+    printf 'basis=%-14s policy=%-3s 目标=%s 对照=%s 剧本=%s 组=%s 因子=%s' \
+      "recon_playbook" "1" "(不适用)" "(不适用)" "Discovery（脚本缺省）" "$TTP_GROUP" "${factors:-（无）}"
+  fi
+}
+
+# apply_scenario_conditions <场景名> —— **导出**该场景的条件（三个开关逐场景成对设置）。
+#
+# 两条纪律：
+#   · `recon_playbook` 场景**必须 unset** target/control/剧本 变量（`edge_attack.sh` 对
+#     "声明了侦察口径却给了目标 ability"是**响亮失败**；靠"全局设一个值"会让 14 个非 AppArmor
+#     场景直接判死或悄悄带上目标口径）—— 这就是复审"开工必带"第 3 条的落地；
+#   · `EDGEEXP_ATTACK_GROUP` **两类都设**：投送范围钉在目标 agent 那一组，别的机器上的 agent
+#     （A-1 上控制侧 `probe-ot005` 也有活 agent）不会执行本轮的剧本 ⇒ `nodes_affected` 不被污染。
+#     闸门只在 basis=targeted_ttp 时**要求**它，但"条件里没有别的机器"对两类都是更好的实验。
+apply_scenario_conditions() {
+  local s="$1"
+  if scenario_is_targeted "$s"; then
+    export EDGEEXP_BASIS="targeted_ttp"
+    export EDGEEXP_TARGET_ABILITY="$TTP_TARGET_ABILITY"
+    export EDGEEXP_TARGET_ABILITY_NAME="$TTP_TARGET_ABILITY_NAME"
+    export EDGEEXP_CONTROL_ABILITY="$TTP_CONTROL_ABILITY"
+    export EDGEEXP_PLAYBOOK_ID="$TTP_PLAYBOOK_ID"
+    export EDGEEXP_PLAYBOOK_NAME="$TTP_PLAYBOOK_NAME"
+    export EDGEEXP_POLICY_ON=0
+    SCEN_BASIS_NOW="targeted_ttp"; SCEN_POLICY_NOW=0; SCEN_ABILITY_NOW="$TTP_TARGET_ABILITY"
+  else
+    export EDGEEXP_BASIS="recon_playbook"
+    unset EDGEEXP_TARGET_ABILITY EDGEEXP_TARGET_ABILITY_NAME EDGEEXP_CONTROL_ABILITY
+    unset EDGEEXP_PLAYBOOK_ID EDGEEXP_PLAYBOOK_NAME
+    export EDGEEXP_POLICY_ON=1
+    SCEN_BASIS_NOW="recon_playbook"; SCEN_POLICY_NOW=1; SCEN_ABILITY_NOW=""
+  fi
+  export EDGEEXP_ATTACK_GROUP="$TTP_GROUP"
+  # 攻击目标主机 = 观测主体（同一台机器）：`edge_attack.sh` 的 `(host, 活 pid)` 判据与投送范围
+  # 闸门都用它。A-1 上两者都是实例名（`asc-tgt-1`）。
+  export EDGEEXP_ATTACK_HOST="$TARGET"
+}
+
+# 目标 TTP 场景缺配置 ⇒ **干跑就失败**（不许跑到一半才发现条件缺项）。判据只看**选中的**场景：
+# 只跑侦察场景时不该因为"没给 ability"而拒绝。
+TARGETED_SELECTED=0
+for s in "${SELECTED[@]}"; do
+  scenario_is_targeted "$s" && TARGETED_SELECTED=$((TARGETED_SELECTED + 1))
+done
+if [ "${TARGETED_SELECTED:-0}" -gt 0 ]; then
+  [ -n "$TTP_TARGET_ABILITY" ] || {
+    echo "edge_matrix: 选中的场景里有 $TARGETED_SELECTED 个目标 TTP 场景（注入因子含 $TTP_FACTORS_CSV），却没给 EDGEEXP_TTP_TARGET_ABILITY —— 目标 TTP 口径没有目标 ability 是自相矛盾的（edge_attack.sh 也会拒绝），整轮失败" >&2
+    exit 2
+  }
+  [ -n "$TTP_PLAYBOOK_ID" ] || {
+    echo "edge_matrix: 选中的场景里有 $TARGETED_SELECTED 个目标 TTP 场景，却没给 EDGEEXP_TTP_PLAYBOOK_ID（pair 剧本）—— 缺省剧本是固定的 Discovery（侦察口径），与 basis=targeted_ttp 不一致，整轮失败" >&2
+    exit 2
+  }
 fi
 
 # run>1 是 A-1 的重复样本：env 仍是默认值时重复样本会被打上 wsl-clab-14 混进主数据集。
@@ -183,6 +316,10 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   fi
   echo "  数据目录    : $DATA_DIR（干跑不创建、不清理）"
   echo "  场景        : ${#SELECTED[@]} 个（声明的 ${#SCENARIOS[@]}）/ 名单核对已通过"
+  # **按场景驱动的实验条件**必须在干跑里逐场景看得见（Task 5 / Step 0 的判据）：复审 7.6 第 1 条
+  # 要求"每个场景那一行能看出 basis/policy 两列，且两列都不是常量"。
+  echo "  条件分类    : 注入因子含 $TTP_FACTORS_CSV ⇒ targeted_ttp + POLICY_ON=0；其余 ⇒ recon_playbook + POLICY_ON=1"
+  echo "  目标 TTP    : ability=${TTP_TARGET_ABILITY:-(未给)}（${TTP_TARGET_ABILITY_NAME:-未给名字}）｜对照=${TTP_CONTROL_ABILITY:-(未给)}｜剧本=${TTP_PLAYBOOK_ID:-(未给)}（${TTP_PLAYBOOK_NAME:-未给名字}）｜组=$TTP_GROUP"
   echo "  -factors    : $(derive_factors_spec "$CONFIG")（来源：$CONFIG）"
   echo "  -weights    : $(derive_weights_spec "$CONFIG")"
   # 干跑必须把"这一轮到底会不会跑敏感性行"也说清楚（§5.4.4 的承诺：先看计划）。
@@ -194,16 +331,28 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   # 子脚本继承校验：用**同一种机制**（bash 子进程继承导出的环境）确认它们看到的是同一个路径 ——
   # 这正是"父子各自算 TODAY"会分叉、而跨 00:00 UTC 才暴露的那条路径。
   echo "  子脚本继承  : EDGEEXP_RECORDS=$(bash -c 'printf "%s" "${EDGEEXP_RECORDS:-<未导出>}"')"
-  echo "  计划："
+  echo "  计划（逐场景条件由本脚本按注入因子集决定；两列都必须不是常量）："
   i=0
+  TGT=0; REC=0
   for s in "${SELECTED[@]}"; do
     i=$((i + 1))
+    if scenario_is_targeted "$s"; then TGT=$((TGT + 1)); else REC=$((REC + 1)); fi
     if [ -f "$RECORDS" ] && grep -qE "\"scenario_id\":\"$s" "$RECORDS"; then
-      printf '    [%2d/%2d] %-28s skip（文件里已有记录；仅当 EDGEEXP_RESUME=1 时才会真的跳过）\n' "$i" "${#SELECTED[@]}" "$s"
+      printf '    [%2d/%2d] %-28s %s ｜skip（文件里已有记录；仅当 EDGEEXP_RESUME=1 时才会真的跳过）\n' \
+        "$i" "${#SELECTED[@]}" "$s" "$(scenario_condition_line "$s")"
     else
-      printf '    [%2d/%2d] %-28s collect（reset → attack → collect 三步都会跑）\n' "$i" "${#SELECTED[@]}" "$s"
+      printf '    [%2d/%2d] %-28s %s ｜collect（reset → attack → collect 三步都会跑）\n' \
+        "$i" "${#SELECTED[@]}" "$s" "$(scenario_condition_line "$s")"
     fi
   done
+  echo "  条件分布    : targeted_ttp=$TGT 个 ｜ recon_playbook=$REC 个 ｜ 合计 $((TGT + REC)) 个（必须 == ${#SELECTED[@]}）"
+  [ "$((TGT + REC))" -eq "${#SELECTED[@]}" ] || { echo "edge_matrix: 条件分类没有覆盖全部选中场景（这是干跑门禁）" >&2; exit 3; }
+  if [ "${#SELECTED[@]}" -gt 1 ]; then
+    [ "$TGT" -gt 0 ] && [ "$REC" -gt 0 ] || {
+      echo "edge_matrix: 选中的 ${#SELECTED[@]} 个场景里 basis/policy 是**常量**（targeted=$TGT recon=$REC）—— 实验条件没有方差，多场景扫描会产出条件无方差的数据（这是干跑门禁，见复审 7.6 第 1 条）" >&2
+      exit 3
+    }
+  fi
   echo "edge_matrix: dry run 结束（exit 0）—— 真实运行请去掉 EDGEEXP_DRY_RUN"
   exit 0
 fi
@@ -250,6 +399,17 @@ p, scen = sys.argv[1], sys.argv[2]
 s = json.load(open(p, encoding='utf-8'))
 if scen not in s['completed']:
     s['completed'].append(scen)
+json.dump(s, open(p, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+PY
+}
+state_condition() { # state_condition <scenario> <basis> <policy_on> <ability>
+  python3 - "$STATE" "$1" "$2" "$3" "$4" <<'PY'
+import json, sys
+p, scen, basis, policy, ability = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+s = json.load(open(p, encoding='utf-8'))
+s.setdefault('conditions', {})[scen] = {
+    'basis': basis, 'policy_on': int(policy), 'target_ability': ability or None,
+}
 json.dump(s, open(p, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 PY
 }
@@ -490,6 +650,22 @@ run = {
     },
     'records_file_agreement': records_agreement,
 }
+# **条件台账**（Task 5 / Step 0）：逐场景的 basis/policy/目标 ability 进 run.json ——
+# 决策层的记账判据（`参与决策层 == 带目标场景数 × 重复数`）必须能从运行级产物里**算出来**，
+# 而不是靠读日志。`condition_summary` 给出两类的场景数与策略在/不在的场景数（都必须非零）。
+run['conditions'] = state.get('conditions', {})
+_conds = run['conditions']
+run['condition_summary'] = {
+    'targeted_ttp_scenarios': sum(1 for v in _conds.values() if v.get('basis') == 'targeted_ttp'),
+    'recon_playbook_scenarios': sum(1 for v in _conds.values() if v.get('basis') == 'recon_playbook'),
+    'policy_on_scenarios': sum(1 for v in _conds.values() if v.get('policy_on') == 1),
+    'policy_off_scenarios': sum(1 for v in _conds.values() if v.get('policy_on') == 0),
+}
+run['notes']['scenario_conditions'] = (
+    'Task 5 / Step 0：逐场景条件由 edge_matrix.sh 按 edgescen -list 的注入因子集决定 —— '
+    '含 TTP 触发因子（默认 EF-SELINUX/EF-APPARMOR）⇒ basis=targeted_ttp + POLICY_ON=0 + 目标/对照 ability；'
+    '其余 ⇒ basis=recon_playbook + POLICY_ON=1（不得带 target ability）。'
+    'condition_summary 的两类之和必须 == scenarios_selected 数（干跑门禁也查这一点）。')
 for path in (out_stable, out_copy):
     with open(path, 'w', encoding='utf-8') as fh:
         json.dump(run, fh, ensure_ascii=False, indent=2)
@@ -561,6 +737,11 @@ PY
   fi
   echo "============================================================"
   echo "edge_matrix: [$i/${#SELECTED[@]}] 场景 $s"
+  # **按场景设条件**（Task 5 / Step 0）：三个开关逐场景成对设置，并在同一行打印出来 ——
+  # 日志里能看到"这个场景用的是什么条件"，而不是只能事后去翻记录。
+  apply_scenario_conditions "$s"
+  echo "edge_matrix: [$i/${#SELECTED[@]}] $s 条件 $(scenario_condition_line "$s")"
+  state_condition "$s" "$SCEN_BASIS_NOW" "$SCEN_POLICY_NOW" "$SCEN_ABILITY_NOW" || true
   t0=$(date -u +%s)
   # 一律用 `bash <script>` 调用（不依赖可执行位）：lab 目录在 /mnt/f（drvfs）上，
   # 可执行位由挂载选项决定，靠它会让"脚本本身没跑"伪装成"实验失败"。
