@@ -833,7 +833,10 @@ if [ "$RECORD_COUNT" -gt 0 ]; then
     tail -20 "$RUN_D/.gate1.out"
     if [ -s "$RUN_D/.gate1.err" ]; then tail -5 "$RUN_D/.gate1.err" >&2; fi
     python3 - "$RUN_D/gate-gate1.json" "$G1" "$RECORDS" "$RECORD_COUNT" "$FACTORS_SPEC" "$WEIGHTS_SPEC" <<'PY'
-import json, sys, time
+# `os` 必须显式 import（Task 5 Step 0 实测踩到）：这个块里读 `os.environ['CANDIDATE_DIR']`，
+# 而它在加 `candidate_dir` 之前只 import 了 json/sys/time ⇒ 门禁① 的**碎片文件写不出来**，
+# `set -e` 下那一轮的 EXIT trap 就把整轮记成失败（而 edgecompare 本身其实是 rc=0）。
+import json, os, sys, time
 json.dump({
     'dataset': 'all-records', 'records': int(sys.argv[4]), 'records_file': sys.argv[3],
     'exit_code': int(sys.argv[2]), 'factors_spec': sys.argv[5], 'weights_spec': sys.argv[6],
