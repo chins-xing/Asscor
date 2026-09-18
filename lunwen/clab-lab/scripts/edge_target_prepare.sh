@@ -31,6 +31,8 @@
 #   EDGEEXP_CALDERA_URL       Caldera API（默认 http://127.0.0.1:8888；**这是宿主上**调 API 的地址）
 #   EDGEEXP_CALDERA_KEY       API key（默认 ADMIN123）
 #   EDGEEXP_C2_HOST           容器侧可达的宿主地址（默认取容器内默认网关；覆盖见"地址给错了机器"那段）
+#   EDGEEXP_C2_HOST_WAIT_S    取默认路由的重试窗口（秒，默认 90）：重启后 DHCP 未完成时容器内没有
+#                             默认路由，一次取不到就判死会把"网络还没起来"报成"环境不可用"
 #   EDGEEXP_SANDCAT_PAYLOAD   sandcat 载荷路径（默认 /opt/caldera/plugins/sandcat/payloads/sandcat.go-linux）
 #   EDGEEXP_AGENT_WAIT_S      等 agent 回连的上限（秒，默认 180）
 #   EDGEEXP_ATTACK_GROUP      agent 的**分组名**（默认 t4d-ttp）。它与攻击侧的投送范围
@@ -274,13 +276,27 @@ PY
 #   容器内 `ip route show default` → `default via 10.217.208.1 dev eth0`；
 #   容器内 `curl http://10.217.208.1:8888/api/v2/abilities` → 200；`127.0.0.1:8888` → rc=7。
 # 允许 `EDGEEXP_C2_HOST` 显式覆盖；两条路都拿不到 ⇒ **响亮失败**（静默回落到 127.0.0.1 等于注定死 agent）。
+#
+# **重试到默认路由出现为止**（Task 5 Step 0 实测踩到的第二条同类竞态）：容器刚 `lxc restart` 完时，
+# `wait_for_exec` 已经通过、策略自证也通过（`lxc exec` 能跑），而容器内 `ip route show default`
+# **还是空的** —— DHCP 尚未完成。一次取不到就判死会把"网络还没起来"报成"环境不可用"，
+# 而后者看起来像实例坏了。窗口给 `EDGEEXP_C2_HOST_WAIT_S`（默认 90s），期间每次重问一次。
+C2_HOST_WAIT_S="${EDGEEXP_C2_HOST_WAIT_S:-90}"
 C2_HOST="${EDGEEXP_C2_HOST:-}"
 if [ -z "$C2_HOST" ]; then
-  C2_HOST="$(lab_target_exec "$TARGET" sh -c 'ip route show default 2>/dev/null | awk "/^default/ {print \$3; exit}"' 2>/dev/null || true)"
+  c2_waited=0
+  while [ -z "$C2_HOST" ]; do
+    C2_HOST="$(lab_target_exec "$TARGET" sh -c 'ip route show default 2>/dev/null | awk "/^default/ {print \$3; exit}"' 2>/dev/null || true)"
+    C2_HOST="$(printf '%s' "$C2_HOST" | tr -d '[:space:]')"
+    [ -n "$C2_HOST" ] && break
+    [ "$c2_waited" -ge "$C2_HOST_WAIT_S" ] && break
+    sleep 3; c2_waited=$((c2_waited + 3))
+  done
+  [ -n "$C2_HOST" ] && echo "edge_target_prepare: C2 主机 = 容器内默认网关 $C2_HOST（等待 ${c2_waited}s；重启后 DHCP 未完成时会有这个窗口）"
 fi
 C2_HOST="$(printf '%s' "$C2_HOST" | tr -d '[:space:]')"
 [ -n "$C2_HOST" ] || {
-  echo "edge_target_prepare: 取不到容器侧可达的 C2 地址（容器内没有默认路由？）——" >&2
+  echo "edge_target_prepare: 取不到容器侧可达的 C2 地址（容器内 ${C2_HOST_WAIT_S}s 内都没有默认路由）——" >&2
   echo "  请用 EDGEEXP_C2_HOST=<宿主在容器网段的地址，如 10.217.208.1> 显式指定。" >&2
   exit 1
 }

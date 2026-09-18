@@ -84,6 +84,11 @@ ENV_NAME="${EDGEEXP_ENV:-wsl-clab-14}"
 TODAY="$(date -u +%Y%m%d)"
 RUN_ID="${EDGEEXP_RUN_ID:-$TODAY-$$}"
 CONFIG="${EDGEEXP_CONFIG:-$REPO_ROOT/configs/edgeexp/m0-baseline.ini}"
+# **候选模板目录**（Task 5 Step 0 实测新增）：门禁①/② 要按四份模板各装一次候选，而 A-1 侧
+# `$REPO_ROOT` 解析成 `/`（A-1 上只有 `/root/asscor` 这一份工作区）⇒ `$REPO_ROOT/configs/edgeexp/*.ini`
+# 在 A-1 上是 `//configs/...`，实测报 `装载配置 //configs/edgeexp/chain.ini: no such file or directory`
+# 而把**整轮判死**（门禁① 是硬闸门）。故候选目录可显式声明；默认仍是仓内 `configs/edgeexp`（本地不变）。
+CANDIDATE_DIR="${EDGEEXP_CANDIDATE_DIR:-$REPO_ROOT/configs/edgeexp}"
 RECORDS="${EDGEEXP_RECORDS:-$DATA_DIR/records-$ENV_NAME-$TODAY.jsonl}"
 EDGESCEN="${EDGEEXP_EDGESCEN:-$REPO_ROOT/build/edgescen}"
 EDGECOMPARE="${EDGEEXP_EDGECOMPARE:-$REPO_ROOT/build/edgecompare}"
@@ -425,7 +430,7 @@ PY
 
 # --- run.json 汇总（EXIT trap 里无条件写；写不出来要**响亮地**说出来 ------------
 write_run_json() {
-  export RUN_D STATE DATA_DIR ENV_NAME TODAY RUN_ID RECORDS CONFIG REPO_ROOT EDGESCOMPARE
+  export RUN_D STATE DATA_DIR ENV_NAME TODAY RUN_ID RECORDS CONFIG REPO_ROOT EDGESCOMPARE CANDIDATE_DIR
   export DECLARED_COUNT="${#SCENARIOS[@]}"
   python3 - "$RUN_D" "$DATA_DIR/run.json" "$DATA_DIR/run-$RUN_ID.json" <<'PY'
 import glob, json, os, sys, time
@@ -818,9 +823,9 @@ if [ "$RECORD_COUNT" -gt 0 ]; then
     set +e
     "$EDGECOMPARE" -records "$RECORDS" \
       -candidate "legacy=$CONFIG" \
-      -candidate "vector=$REPO_ROOT/configs/edgeexp/vector.ini" \
-      -candidate "graph=$REPO_ROOT/configs/edgeexp/graph.ini" \
-      -candidate "chain=$REPO_ROOT/configs/edgeexp/chain.ini" \
+      -candidate "vector=$CANDIDATE_DIR/vector.ini" \
+      -candidate "graph=$CANDIDATE_DIR/graph.ini" \
+      -candidate "chain=$CANDIDATE_DIR/chain.ini" \
       -factors "$FACTORS_SPEC" -weights "$WEIGHTS_SPEC" \
       > "$RUN_D/.gate1.out" 2> "$RUN_D/.gate1.err"
     G1=$?
@@ -834,6 +839,7 @@ json.dump({
     'exit_code': int(sys.argv[2]), 'factors_spec': sys.argv[5], 'weights_spec': sys.argv[6],
     'candidates': {'legacy': 'm0-baseline.ini（= 采集模型）', 'vector': 'vector.ini',
                    'graph': 'graph.ini', 'chain': 'chain.ini'},
+    'candidate_dir': os.environ.get('CANDIDATE_DIR', ''),
     'ran_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
     'note': '跑在全量记录上（不再切 EF-3FA 子集）；候选名必须是模型名（legacy|vector|graph|chain）；'
             '-factors 必填且必须覆盖链上用到的每个因子（含 EF-3FA=0.82）',

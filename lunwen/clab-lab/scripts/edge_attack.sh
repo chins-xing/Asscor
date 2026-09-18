@@ -450,6 +450,21 @@ if [ -n "$PHASES" ]; then
       check="${TRIGGER[$f]:-}"
       [ -n "$check" ] || { echo "edge_attack: 因子 $f 在 $CONFIG 里没有解析出触发检查" >&2; exit 1; }
       if [ -n "${CHECK_AT[$check]:-}" ]; then
+        # **同一相位内的同一触发检查 = 一次注入事件、多个因子**（Task 5 Step 0 实测踩到）：
+        # `EF-SELINUX` 与 `EF-APPARMOR` 在出厂表里**共用触发检查 `OT-005`**（spec §5.4.7 第 7 条
+        # 把它记为**唯一有直接证据**的那条耦合），于是 `S2-selinux-apparmor` 这类场景的相位表
+        # `EF-SELINUX,EF-APPARMOR` 会让同一个检查在同一时刻被排两次 —— 旧实现在这里**直接报错**
+        # （"一个检查只能有一个注入时刻"），把"两个因子由同一次检查失败同时激活"这个**正是要建模的
+        # 形态**判成了错误（实测：`S2-selinux-apparmor` 在 Step 0 的真实运行里 exit 1）。
+        #
+        # 处置：**同刻去重**——因子照记（`phase_factors` 两个都在），检查只排一次、探针只跑一次。
+        # 跨相位（`at` 不同）的重复**仍然响亮失败**：那才是真矛盾（一个检查两个注入时刻，
+        # `injections` 唯一性会被破坏，而且"哪个时刻该写进 checks[].ts"无从决定）。
+        if [ "${CHECK_AT[$check]}" = "$at" ]; then
+          echo "edge_attack: 检查 $check 在同一相位内被多个因子共用（$f 与先到的因子都指向它）⇒ 记为**一次**注入（$at，因子各自入链）"
+          phase_factors="$(python3 -c 'import json,sys;a=json.loads(sys.argv[1]);a.append(sys.argv[2]);print(json.dumps(a))' "$phase_factors" "$f")"
+          continue
+        fi
         echo "edge_attack: 检查 $check 被两个相位注入（已排在 ${CHECK_AT[$check]}，现在又想排 $at）—— 一个检查只能有一个注入时刻，否则 injections 唯一性不成立" >&2
         exit 1
       fi
