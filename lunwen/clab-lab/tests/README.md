@@ -23,5 +23,11 @@ bash lunwen/clab-lab/tests/run-all.sh edge-lab # 只跑一组（名字取文件�
 `lab-diff.sh` 需要一个 git 仓库（它用 `git archive` 取真基线）；默认 `base = 97581d8`，
 可用 `bash …/lab-diff.sh <commit>` 换基线。
 
+**夹具链**（`fixtures/chains/`）：`test-chain-derivation.sh` 用**两条真实 operation chain**
+（Step 3B 的 `7795106f-…` 策略在 / `2b839421-…` 策略不在）跑 L2 判据块；它们此前只躺在被忽略的
+`build/chains/` 里 ⇒ 全新克隆里这条判据会以"缺夹具链"直接 `exit 2`（实测：4 组过、这组红）。
+`synthetic` 的第三条（`op-target-execute.json`，`-3` 变体）由夹具自己从策略在那条**生成**，
+不进仓。`T4D_CHAINS_DIR` 可覆盖夹具链目录。
+
 **与 `build/` 的关系**：开发机上 `build/` 里仍有同名副本（历史习惯路径）。**判据的权威版本是这里**；
 两边同时改就会漂移，故只在 `build/` 留一份薄壳（`build/<name>.sh` → 转发到本目录）。

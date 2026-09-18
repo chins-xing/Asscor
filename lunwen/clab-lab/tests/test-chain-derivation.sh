@@ -23,7 +23,10 @@ set -uo pipefail
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-$(cd "$TESTS_DIR/../../.." && pwd)}"
 ATTACK="$REPO/lunwen/clab-lab/scripts/edge_attack.sh"
-CHAINS="${T4D_CHAINS_DIR:-$REPO/build/chains}"
+# 夹具链的**权威位置**是本目录下的 `fixtures/chains/`（仓内可跟踪）：这两条是 Step 3B 的**真实**
+# operation chain（策略在 / 策略不在），此前只躺在被忽略的 `build/chains/` 里 ⇒ 全新克隆里
+# 这条判据直接 `exit 2`（实测：4 组过、这组报"缺夹具链"）。`T4D_CHAINS_DIR` 仍可覆盖。
+CHAINS="${T4D_CHAINS_DIR:-$TESTS_DIR/fixtures/chains}"
 WORK="${HOME:-/root}/t4d-chain-fixture"
 rm -rf "$WORK"; mkdir -p "$WORK"
 PASS=0; FAIL=0

@@ -1,0 +1,75 @@
+{
+  "state": "finished",
+  "group": "t4d-ttp",
+  "finish": null,
+  "paw": null,
+  "start": "2026-09-13T08:28:26Z",
+  "id": "2b839421-74e1-4487-b677-d76590372e5a",
+  "chain": [
+    {
+      "status": -3,
+      "paw": "rofvkm",
+      "ability": {
+        "ability_id": "a5c0ffee-0000-4000-8000-0000000003c1",
+        "name": "T4D Step 3B control: write marker (no policy collision)",
+        "tactic": "execution",
+        "technique_id": "T1059.004"
+      },
+      "command": "echo t4d-control-ok > /tmp/t4d-control-marker && cat /tmp/t4d-control-marker",
+      "plaintext_command": "echo t4d-control-ok > /tmp/t4d-control-marker && cat /tmp/t4d-control-marker",
+      "collect": null,
+      "finish": null,
+      "decide": "2026-09-13T08:28:26Z",
+      "output": "False"
+    },
+    {
+      "status": 0,
+      "paw": "sujlkd",
+      "ability": {
+        "ability_id": "a5c0ffee-0000-4000-8000-0000000003c1",
+        "name": "T4D Step 3B control: write marker (no policy collision)",
+        "tactic": "execution",
+        "technique_id": "T1059.004"
+      },
+      "command": "echo t4d-control-ok > /tmp/t4d-control-marker && cat /tmp/t4d-control-marker",
+      "plaintext_command": "echo t4d-control-ok > /tmp/t4d-control-marker && cat /tmp/t4d-control-marker",
+      "collect": "2026-09-13T08:28:53Z",
+      "finish": "2026-09-13T08:28:53Z",
+      "decide": "2026-09-13T08:28:26Z",
+      "output": "True"
+    },
+    {
+      "status": 0,
+      "paw": "sujlkd",
+      "ability": {
+        "ability_id": "a5c0ffee-0000-4000-8000-0000000003b1",
+        "name": "T4D Step 3B: read /etc/shadow (AppArmor target TTP)",
+        "tactic": "credential-access",
+        "technique_id": "T1003.008"
+      },
+      "command": "head -1 /etc/shadow",
+      "plaintext_command": "head -1 /etc/shadow",
+      "collect": "2026-09-13T08:30:32Z",
+      "finish": "2026-09-13T08:30:32Z",
+      "decide": "2026-09-13T08:30:27Z",
+      "output": "True"
+    }
+  ],
+  "adversary": {
+    "adversary_id": "a5c0ffee-0000-4000-8000-0000000003c2",
+    "name": "T4D Step 3B pair (control + target TTP)",
+    "description": "两条 ability 的同一条 operation：先写标记（对照），再读 /etc/shadow（目标 TTP）。",
+    "atomic_ordering": [
+      "a5c0ffee-0000-4000-8000-0000000003c1",
+      "a5c0ffee-0000-4000-8000-0000000003b1"
+    ],
+    "objective": "495a9828-cab1-44dd-a0ca-66e58177d8cc",
+    "tags": [
+      "t4d-step3b",
+      "pair"
+    ],
+    "has_repeatable_abilities": false,
+    "plugin": ""
+  },
+  "name": "t4d-step3b-policy-off-pair-1789288106"
+}
