@@ -51,8 +51,12 @@ print('抽出判据块 %d 字节（从 %r 到 %r 之前）' % (j - i, start_mark
 PY
 
 # --- 跑一条链，返回派生出的关键字段 ------------------------------------------
-run_case() { # $1=链文件 $2=basis $3=target_id $4=target_name $5=control_id $6=agent_import(0/1)
-  python3 - "$WORK/derive.py" "$CHAINS/$1" "$2" "$3" "$4" "$5" "$6" <<'PY'
+run_case() { # $1=链文件（夹具目录里的名字 **或** 绝对路径） $2=basis $3=target_id $4=target_name $5=control_id $6=agent_import(0/1)
+  # 变异链（`-3` 变体）由本夹具**生成到 $WORK**，不是夹具的一部分 ⇒ 支持绝对路径，
+  # 否则"派生文件写进仓内夹具目录"会把仓库弄脏（实测：一次运行就把生成物带进了提交）。
+  local chain_file="$1"
+  case "$chain_file" in /*) : ;; *) chain_file="$CHAINS/$chain_file" ;; esac
+  python3 - "$WORK/derive.py" "$chain_file" "$2" "$3" "$4" "$5" "$6" <<'PY'
 import json, os, sys, time
 from datetime import datetime, timezone
 
@@ -179,7 +183,10 @@ PY
 
 echo
 echo "############ 3) 目标 -3 且零成功 ⇒ 响亮失败（-3 不算被拦住）"
-python3 - "$CHAINS/op-policy-on.json" "$CHAINS/op-target-execute.json" <<'PY'
+# **变异链写到工作目录**（`$WORK`），不写进夹具目录：夹具链目录现在是**仓内可跟踪**的
+# `tests/fixtures/chains/`，把派生文件写在那里会让每次跑夹具都把仓库弄脏（实测：一次运行就
+# 多出一个 `op-target-execute.json` 被 `git add` 带进提交）。派生文件不是夹具的一部分。
+python3 - "$CHAINS/op-policy-on.json" "$WORK/op-target-execute.json" <<'PY'
 import json, sys
 # 直接改一条链：把目标 link 的 status 改成 -3（模拟"打到死 agent"）
 op = json.load(open(sys.argv[1], encoding='utf-8'))
@@ -190,7 +197,7 @@ for l in op['chain']:
 json.dump(op, open(sys.argv[2], 'w'), ensure_ascii=False, indent=2)
 print('  造出变异链:', sys.argv[2])
 PY
-OUT_STALE="$(run_case op-target-execute.json targeted_ttp "$TID" "$TNAME" "$CID" 1 2>/dev/null || true)"
+OUT_STALE="$(run_case "$WORK/op-target-execute.json" targeted_ttp "$TID" "$TNAME" "$CID" 1 2>/dev/null || true)"
 echo "  派生：$OUT_STALE"
 python3 - "$OUT_STALE" <<'PY'
 import json, sys
