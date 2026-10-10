@@ -1183,7 +1183,93 @@ Step 4-B1 的脚本是**离线**写完的（`bash -n` + lab-diff 夹具全绿）
 - **阈值敏感性（含一处实测纠正）**：记录里的 `threshold` 来自部署配置（冒烟为 80.0，全部记录判"不可接受"）。**实测纠正**：该退化并**不**表现为"误阻断率 → 100 %" —— 冒烟三条记录**全部** `compromised=true`（**没有负类** ⇒ `fp` 计数恒为 0），故漏判率与误阻断率**都**是 0.000，退化表现为**"本次比较无区分力：未选模"**。**措辞精确化（配置清理评审 Q6/M6，已核 `cmd/edgecompare/metrics.go:281-283`）**：不得写成"误阻断率分母为零" —— 两个率都是 `计数 / N`（`N` = 记录数，恒不为零），0.000 是**良定义**值；真正的问题是**该指标在这份数据上没有信息量**（无负类样本 ⇒ `fp` 恒为 0）。更值得注意的是：在该数据集上按漏判率排序会**奖励"全都阻断"**的策略（`-threshold 60` 的敏感性行给出 legacy 漏判率 0、其余候选 1.000 ⇒ 工具"选定 legacy"）—— 这正是**缺少负类样本**时的退化最优，也是"标签必须有方差"的又一实证理由。`cmd/edgecompare -threshold` 提供**显式**敏感性覆盖（`0` = 用记录自带；>0 覆盖并在报告头/stderr 标注为敏感性值），**不得**把它当默认路径。
 
 
+### 10.4 基质口径：基线活跃集的「**按基质如实声明**」（Task 7，用户 2026-10-10 裁定）
+
+**一句话**：链上的因子集 = **这台基质上自然活跃的因子** ∪ **场景注入的因子**。前一半**按基质**声明，
+后一半来自场景。相等断言的右边因此是
+
+> **声明面 = 基线活跃集 ∪ 注入集**
+
+#### 结论一：dl360gen9 的 **PVE CT** 基质的基线活跃集 = `{EF-SELINUX, EF-APPARMOR}`
+
+**为什么（结构性的，不是这一台机器的偶然）**：
+
+- `OT-005`（强制执行的可见性）在 PVE CT 里**不可观测** —— LXC 的 apparmor 命名空间不向容器
+  暴露 profile：`aa-status` 报 `Failed to get profiles: 2`、可见策略数 0。**装包解决不了**。
+- 而附录 B 的触发表里 `trigger.EF-SELINUX` 与 `trigger.EF-APPARMOR` **都指向 `OT-005`**
+  ⇒ 只要 `OT-005` 在这台基质上必然失败，这两个因子就**恒在链上**，**与场景无关**。
+
+**处置（用户裁定）**：**如实声明**，而不是去改 `internal/checks` 让 `OT-005` 在 CT 里"可测"
+—— 那条路要动**底座文件**，会影响 main/ARC 的一致性审计，用户已明确否决。
+
+**机制的落点**：`lunwen/clab-lab/scripts/edge_lab.sh` 的**基质层**在 `pve` 下自动设好并**导出**
+`EDGEEXP_BASELINE_FACTORS=EF-SELINUX,EF-APPARMOR` 与
+`EDGEEXP_BASELINE_FACTORS_SOURCE=<为什么>`；`clab` / `lxd` **不设、不导出**（一个字节不动）。
+放在基质层的理由：一条"基线活跃集"说的是"**这个基质**能不能观测到某条检查"，而
+"当前是哪一种基质"只有基质层知道 —— 放别处就会出现第二份真源。
+**声明本身零新增机制**（`edge_attack.sh` 的 `EDGEEXP_BASELINE_FACTORS*` 是 Task 4D Step 4-B3 就做好的）。
+
+#### 结论二：`OT-005` / `KS-012` 记为「**此基质不可观测**」
+
+- 它们是**测量伪影**的来源：分数侧那个固定 **−30** 在**所有**记录上是**常量** ⇒
+  它**不产生方差**（不影响耦合分析的可辨识性），但**污染绝对分数**。
+  **拿该基质的绝对分与其他基质/历史数据直接比较是错的。**
+- **措辞禁令**（论文、报告、图注、结论一律适用）：
+  **不得**写成"该机器真的没有 AppArmor / SELinux"，**不得**写成"硬化提升了安全分"
+  （或任何方向相反的暗示）。正确表述是
+  「**该控制在此基质上不可观测，其判据的惩罚是测量伪影**」。
+- **待办的机制（不阻塞扫描）**：把它们也记进 `meta.skipped_checks`。现状是
+  `meta.skipped_checks` **只由采集器按真实的 skip 产生**（实测：`AS-012` 走的就是它，
+  原因是"读不了 `/etc/shadow`"），而 `OT-005` 是 **fail 不是 skip** ——
+  要让它以"不可观测"的身份进那一栏，需要新机制，**不在 Task 7 范围内**。
+
+#### 结论三：R 组三个场景在此基质上**结构性不可达**
+
+`R-no-2fa` / `R-no-ids` / `R-no-siem` 的语义是"目标机上**真的**缺该控制"，而
+`edge_target_prepare.sh`（复位的一部分）**幂等地**把六个控制装齐
+（`suricata` / `aide` / 三个 PAM 包），`edge_attack.sh` 的 `real_missing` 探针会因此**响亮失败**。
+实测原文：
+
+```
+edge_attack: R 组的真实缺失**不成立**：ids 的防护在节点 asc-tgt-c2 上仍然在位
+  （探针对应 EF-NO-IDS 的触发检查条件）—— 真实缺失对照不可得，整轮失败；
+  不得用注入失败顶上（那就是伪造 ground truth 的对照面）。
+```
+
+⇒ **记为不可达，不得伪造**。要让它可达必须**改实验定义**（换一种对照形态），
+那是设计决策，不是本口径能定的。
+
+#### 结论四：四条可检验的口径
+
+1. **声明面 = 基线活跃集 ∪ 注入集**（**相等**，不是包含）—— 由 `edge_collect.sh` 的
+   **因子集相等断言**执行；三条子判据分开报：注入集缺席 = **因子塌缩**；
+   基线集缺席 = **声明与现实不符**；多出来的因子 = **还有别的检查在自然失败而无人声明**。
+2. 基线集**按基质声明**，**来源必须与它一起写出来**（`expected_baseline_factors_source`）。
+   非空声明却缺来源时，基质层**响亮警告** —— 否则产物里的来源会退化成
+   `未声明（默认空基线集）`，与**真的**空基线集在数据上无法区分
+   （"声明了但没写为什么"与"没声明"必须能分开读）。
+3. 断言失败时**整轮失败并回滚该条记录**（`rejected-<场景>.jsonl` 留档）——
+   **不是**安静地写一条脏记录。故"忘记声明"的形态本来就是**响亮**的。
+4. 跑批**前**先编出 `build/edgescen`；否则矩阵只打一行警告就把 25 个场景
+   **全规划成 `recon_playbook policy=1`**（连 S2 也是）—— 那是**安静的错误**，必须先堵。
+
+**场景 × 可达性普查表（25 行，独立复核）见 附录 D。**
+
+### 10.5 Task 6 复审 Important-1 登记：`${Status}` 的修复**落在 lxd 分支内**
+**背景**：Task 6（`pve` 基质驱动）独立复审判 Approved（Critical 0 / **Important 1** / Minor 1）。
+Important-1 指出一处**字面违反硬不变式**的改动，复审判**可接受**但**必须登记到可跟踪处**
+（此前只写在 gitignored 的 `.superpowers/sdd/` 报告第 11.3 节里 ⇒ 等于没有披露）。此处即为登记。
+
+| 项 | 内容 |
+|---|---|
+| **改的是什么** | `lunwen/clab-lab/scripts/edge_target_prepare.sh` 的"六控制装完了吗"两处轮询判据：`lab_target_exec "$TARGET" sh -c 'dpkg-query -W -f="${Status}" <包> …'` → `lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' <包> …`（判据串抽成常量 `PKG_INSTALLED_STATUS`）。<br>**只有"怎么把 `-f` 交给 `dpkg-query`"这一件事变了**；循环的时序、超时、退出码、错误串**逐字未变**。 |
+| **为什么必须改** | 这是**既有缺陷**，不是 Task 6 引入的：那段字符串由宿主用**单引号**交给容器内的 `sh -c`，而**容器里的 sh 会展开** `${Status}` —— 那里没有这个变量 ⇒ 展开成空串 ⇒ `dpkg-query: error in show format: may not be empty string`（rc=1）⇒ `grep -q "install ok installed"` **永远不匹配** ⇒ 轮询循环**永远不会 break**，只会一路跑到 `APT_TIMEOUT_S` 再报"apt 没装完"。**失败形态与"包装得很慢"完全同形**。<br>基线 `0a05b7d` 的 **160-162 行（lxd 路径）** 就是这个写法；它在 A-1 上从未暴露，因为那里的控制包**早就装好了**（`MISSING` 为空 ⇒ 那段根本不进来）。 |
+| **对 lxd 路径的实际影响范围** | **两处**轮询（lxd 的 apt 路径 + pve 的本地镜像路径）都改了，净效果是把**"永远超时失败"变成"装完即通过"**；A-1 上因控制包早已到位而观测不到差别。lxd 的**其余**路径（`lxc launch/start/config`、`raw.apparmor`、agent 落地）**一字未动**。 |
+| **机器证据** | Task 7 复核时重跑：`lab-diff`（`git archive 97581d8` 的**真基线差分**，`edge_target_prepare.sh` 不在它的场景里但 `edge_lab.sh`/`edge_reset.sh` 在）仍是 **31**；`test-edge-lab` 的 B/F/G 段全绿。两处改动都不在 clab 路径上。 |
+| **登记的意义** | "lxd 分支不变"是硬不变式；这处修复**字面**动了 lxd 分支内的代码。判可接受的理由是"改的是**既有缺陷**、且行为是**修复**方向"，但它必须**在册** —— 以后审计"ARC 到底动了 lxd 路径哪些地方"时要能一眼查到。 |
+
 ---
+
 
 ## 附录 A：域顺序（`v_i[d]` 向量顺序）
 
@@ -1216,3 +1302,88 @@ Step 4-B1 的脚本是**离线**写完的（`bash -n` + lab-diff 夹具全绿）
 | `v_i[d]` | 未配置 = 代码 fallback（全 1，不写配置）；配置时必须 `Σ_d v_i[d] ≤ 1` | 归一化写典型值 0.2/域 |
 | `c_ij` | 0 | 仅 `graph`/`chain` 且必须显式给出 |
 | `chain.window_seconds` | 300 | 级联时序窗口 |
+
+## 附录 D：场景 × 可达因子普查表（dl360gen9 的 **PVE CT** 基质）
+
+**口径**（见 §10.4）：`声明面 = 基线活跃集 B ∪ 注入集`，其中本基质 **B = {EF-SELINUX, EF-APPARMOR}**；
+本基质上的**链** = `B ∪ 实际注入的因子集 I`（自然失败里只有 `OT-005` 能点亮因子 —— 实测：
+CT 904 上 44 项检查失败，而 `EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007` **全部通过**）。
+
+**判定三选一**：
+- **可达** = 本基质上链与声明面相等（声明后能写出合法记录）；
+- **需改机器状态** = 要靠改机器状态才成立；
+- **结构性不可达** = 改机器状态也不成立。
+
+**复算方法**（全部离线，可复现）：读 `edgescen -list` 拿场景声明因子集；
+对每个场景跑 `EDGEEXP_PRINT_EXPECTED=1 bash edge_attack.sh <场景> /tmp/x.json` 拿产物里的
+`expected_chain_factors`；注入集 I 从 `edge_attack.sh` 的**相位表用 sed 抽**（不手抄）。
+
+| # | 场景 | 注入方式 | 声明面 B∪E | 不设基线声明时（反证） | 判定 |
+|---|---|---|---|---|---|
+| 1 | `R-no-2fa` | real_missing | EF-002FA,EF-APPARMOR,EF-SELINUX | 先被 `real_missing` 探针拦下 | **结构性不可达** |
+| 2 | `R-no-ids` | real_missing | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | 先被 `real_missing` 探针拦下 | **结构性不可达** |
+| 3 | `R-no-siem` | real_missing | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX | 先被 `real_missing` 探针拦下 | **结构性不可达** |
+| 4 | `S0-baseline` | none | EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+| 5 | `S1-2fa` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+| 6 | `S1-apparmor` | check_fail | EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-SELINUX） | 可达 |
+| 7 | `S1-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+| 8 | `S1-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+| 9 | `S1-selinux` | check_fail | EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
+| 10 | `S1-syn-cookie` | check_fail | EF-APPARMOR,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+| 11 | `S2-2fa-selinux` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
+| 12 | `S2-apparmor-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | **被打回**（多出 EF-SELINUX） | 可达 |
+| 13 | `S2-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+| 14 | `S2-selinux-apparmor` | check_fail | EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达 |
+| 15 | `S2-selinux-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
+| 16 | `S2-selinux-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
+| 17 | `S2-syn-cookie-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+| 18 | `S2-syn-cookie-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+| 19 | `S3-3fa-selinux-apparmor` | check_fail | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | **被打回**（缺 EF-002FA） | **预期失败**（见下） |
+| 20 | `S3-selinux-apparmor-2fa` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达 |
+| 21 | `S3-selinux-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
+| 22 | `S3-syn-cookie-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+| 23 | `S4-all` | check_fail | EF-002FA,EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | 仍通过（本来就声明了那两个因子） | 可达 |
+| 24 | `S5-2fa-only` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+| 25 | `S5-cascade-3fa` | check_fail | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
+
+**统计**：**可达 21 ｜ 需改机器状态 0 ｜ 结构性不可达 3 ｜ 另有 1 个"预期失败"**（＝ 25）。
+
+### D.1 与控制侧给的 `4 / 18 / 3` 的复核结论
+
+控制侧的划分口径是"**声明面是否天然吻合**"，本表独立复算的结果是：
+
+| 划分 | 控制侧 | 本次独立复算 | 一致？ |
+|---|---|---|---|
+| 声明面天然吻合（场景本身就声明了 B 的两个因子） | **4** | **4**：`S2-selinux-apparmor` / `S3-3fa-selinux-apparmor` / `S3-selinux-apparmor-2fa` / `S4-all` | ✅ 完全一致 |
+| 声明面漏了那两个天然因子（**需基线声明**才不被相等断言打回） | **18** | **18**（22 个 S 场景 − 上述 4） | ✅ 完全一致 |
+| 结构性不可达（R 组） | **3** | **3**：`R-no-2fa` / `R-no-ids` / `R-no-siem` | ✅ 完全一致 |
+
+⇒ **`4 / 18 / 3` 复核通过**（同一口径、独立算的，逐场景名字也对得上）。
+
+**但独立复核多出一条控制侧没有的信息**（下表第 19 行）：
+
+> **`S3-3fa-selinux-apparmor` 在"可达性"这条轴上**不是"没问题"，而是**预期会被打回**，
+> 且原因与基线集**无关**：它的产物 `expected_chain_factors` 是
+> `{EF-002FA, EF-3FA, EF-APPARMOR, EF-SELINUX}`（`edge_attack.sh` 的级联展开
+> `EF-3FA → EF-002FA` 加上了级联目标），而该场景的**注入相位只注入 `EF-3FA` 与
+> `EF-SELINUX,EF-APPARMOR`**（`scenarios["S3-3fa-selinux-apparmor"].Inject`）——
+> **没有人让 `EF-002FA` 的触发检查 `EF-001` 失败**。而这台 CT 上 `EF-001` **自然通过**
+> （实测），也没有任何相位注入它 ⇒ **`EF-002FA` 不可能上链** ⇒ 相等断言以
+> `missing_injected = [EF-002FA]` 失败。
+> 对照 `S5-cascade-3fa`：它的相位是 `EF-3FA|EF-002FA`，**两个都注入**，故 `EF-002FA` 上链、通过。
+>
+> **这条与"按基质声明基线集"是两件事**：声明基线集**修不了**它（那是"多出因子"的问题，
+> 这里是"缺因子"）。**它不是本基质独有的**：任何 `EF-001` 自然通过的宿主都会撞上。
+> 处置需要**改场景定义或期望集推导**（例如给 S3-3fa 的相位补上 `EF-002FA`，
+> 或让期望集对该场景退回 `Factors`），**属设计决策，不在 Task 7 范围内**。
+
+### D.2 "需改机器状态"为什么是 0
+
+逐个排除：
+- 22 个 S 场景的触发检查（`EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007`/`OT-005`）**都在** CT 的
+  检查登记表里（实测：44 项检查含全部 6 个触发检查），且 `check_fail` 注入是**强制翻转**
+  `Passed`（`edgescen` 的 `resolveInjections` + `collectChecks`），**不依赖机器本来是什么状态**
+  ⇒ 不需要改机器状态；
+- 3 个 R 场景**要**"机器真的缺该控制"，但复位的**契约**就是"把六个控制装齐"（幂等）⇒
+  改机器状态也没用（下一次复位又装回去）⇒ 归入**结构性不可达**而不是"需改机器状态"。
+
