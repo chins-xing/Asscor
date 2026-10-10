@@ -188,9 +188,25 @@ print(f'edge_matrix: 场景名单与采集器 edgescen -list 逐项相等（{len
 for name in declared:
     print('%s\t%s' % (name, factors.get(name, '')))
 PY
-)" || exit 1
+) " || exit 1
 else
-  echo "edge_matrix: 警告：$EDGESCEN 不存在，跳过与采集器场景表的名单核对（也拿不到每场景的注入因子集 ⇒ 条件分类无从进行）" >&2
+  # **硬门禁（Task 8 Step ③）：缺采集器 ⇒ 直接失败，不再降级。**
+  #
+  # 为什么必须在这里失败（而不是只打一行警告）：复审复现过 —— 没有 `build/edgescen` 时本层
+  # 只警告一句就继续，于是**拿不到每场景的注入因子集** ⇒ 条件分类**全部退化成
+  # `recon_playbook + POLICY_ON=1`**（连含 `EF-SELINUX`/`EF-APPARMOR` 的 S2 也是），
+  # 而矩阵照常把 25 个场景规划完，干跑那句
+  # `条件分布 : targeted_ttp=0 个 ｜ recon_playbook=25 个 ｜ 合计 25 个（必须 == 25）`
+  # **仍然通过** —— 它守的是"两列都不是常量"，而退化的结果恰恰是"两列都成了常量"。
+  # 这是"看起来正常、其实全错"那一类，故必须在**分类发生之前**拦下。
+  #
+  # 原先的硬门禁（本文件后面那句 `[ -x "$EDGESCEN" ] || exit 1`）**在干跑里到不了**
+  # （干跑在那之前就 exit 0）—— 所以"缺采集器"在干跑路径上是**没有任何拦截**的。
+  echo "edge_matrix: $EDGESCEN 不存在或不可执行 —— **在条件分类之前就失败**（不降级）：" >&2
+  echo "  没有采集器就拿不到每场景的注入因子集，条件分类会**全部**退化成" >&2
+  echo "  recon_playbook + POLICY_ON=1（连 S2 也是），而干跑的场景数断言仍会通过 —— 静默的全错。" >&2
+  echo "  先交叉编译它（见 edge_collect.sh 的提示），或用 EDGEEXP_EDGESCEN=<路径> 指定。" >&2
+  exit 1
 fi
 declare -A SCEN_FACTORS=()
 if [ -n "$SCEN_FACTORS_RAW" ]; then
