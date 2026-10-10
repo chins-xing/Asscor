@@ -39,11 +39,12 @@
 #                       即退回"在本机评估"的旧形态，但那时 R 组会硬失败。
 #                       注意与 `edge_reset.sh` 的 `EDGEEXP_TARGET_HOST` **不是一回事**：后者是
 #                       复位脚本的攻击目标（默认 `host1`），本变量是基质层的节点名。
-#   EDGEEXP_SUBSTRATE   实验基质：clab（默认，今天的行为）| lxd（A-1，见 edge_lab.sh）。它决定
+#   EDGEEXP_SUBSTRATE   实验基质：clab（默认，今天的行为）| lxd（A-1，见 edge_lab.sh）|
+#                       pve（dl360gen9 上的 PVE CT，经 `pct` —— Task 6）。它决定
 #                       `edgescen -target` 的**语法**（见 edge_lab.sh 的 `lab_target_spec`）；
 #                       `EDGEEXP_TARGET` 本身始终是基质层的节点名（clab: `asc-asscor-host1`；
-#                       lxd: `probe-ot005`）。本脚本把它 export 给三个子脚本 —— 「这一轮跑在哪种
-#                       基质上」必须只有一处解析。
+#                       lxd: `probe-ot005`；pve: CT 的**名字**，如 `asc-tgt-c2`）。本脚本把它
+#                       export 给三个子脚本 —— 「这一轮跑在哪种基质上」必须只有一处解析。
 #
 #   ---- Task 5 / Step 0：按场景驱动的**实验条件**（本步新增）----
 #   背景（控制侧 2026-09-17 实测 + 复审 7.4 独立复核）：本脚本此前对
@@ -305,7 +306,7 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   echo "  环境/重复号 : $ENV_NAME / run=${EDGEEXP_RUN_INDEX:-1}"
   # 基质必须在干跑里就看得见（Task 4D Step 1）：它决定"环境怎么建/毁、目标怎么被 exec、
   # `-target` 长什么样"，而默认值 clab = 今天的行为。换基质是**显式**动作，不是隐式继承。
-  echo "  基质        : $lab_substrate（clab = 今天的行为；lxd = A-1 上的既有实例，见 edge_lab.sh）"
+  echo "  基质        : $lab_substrate（clab = 今天的行为；lxd = A-1 上的既有实例；pve = PVE CT（pct），见 edge_lab.sh）"
   # 两层 CLI 分别打印（Fix round 1 / M-2）：上一版只打一个 `$lab_bin`，读者看不出"拓扑级用哪个、
   # 容器级用哪个"——而那条区分正是 I-1 的根因（一个变量两义）。现在两个名字各打一个。
   # shellcheck disable=SC2154  # lab_topology_bin / lab_target_bin 由 source edge_lab.sh 赋值

@@ -408,6 +408,211 @@ if printf '%s' "$RUN_OUT" | grep -q 'new_wait=ready'; then
   ok "G3 对照组 RUNNING + exec 可用 ⇒ lab_wait_node_exec 判就绪"
 else fail "G3 对照组没有判就绪：$RUN_OUT"; fi
 
+# ===========================================================================
+# H) pve 分支（Task 6）：假 pct 上的命令形状、名字→vmid、负向与不顶替
+# ===========================================================================
+#
+# 这一段的判据与 B 段（lxd）**逐项对应**，但多了两件 pve 专属的事：
+#   · 节点是**名字**（`asc-tgt-c2`）而 `pct` 要 **VMID**（`904`）⇒ 每条命令都必须是
+#     `pct … 904 …`，**名字一个字节都不许进 pct 的参数位**（否则 pct 会以一个不存在的
+#     vmid 失败，而错误指向"CT 不存在"，真正的原因只是少了一层解析）；
+#   · **绝不猜 vmid**：名字解析不到、或解析到多个，都必须响亮失败，且**一次 pct 都没起过**。
+#
+# 假 pct 的 `list` 刻意给出**两种列宽**：`Lock` 为空时整行塌成三格、非空时四格 ——
+# 解析若写死列号（$2/$3），塌陷的那一行会解析错（实测 `pct list` 就是这两种形态混排）。
+echo "############ H) pve 分支（假 pct）"
+mkdir -p "$D/bin-pve"
+cat > "$D/bin-pve/pct" <<'SH'
+#!/bin/sh
+printf 'pct %s\n' "$*" >> "$REPLAY_LOG"
+case "$1" in
+  list)
+    printf 'VMID       Status     Lock         Name\n'
+    printf '904        running                 asc-tgt-c2\n'
+    printf '905        stopped    snapshot    asc-locked\n'
+    ;;
+  status) printf 'status: %s\n' "${REPLAY_PCT_STATUS:-running}" ;;
+  config) printf 'arch: amd64\nhostname: asc-tgt-c2\n' ;;
+  exec)   printf 'hostname-from-ct\n' ;;
+  push)   : ;;
+esac
+exit "${REPLAY_EXIT:-0}"
+SH
+chmod +x "$D/bin-pve/pct"
+
+cat > "$D/pve.sh" <<'SH'
+#!/bin/bash
+set -uo pipefail
+. "$LIB"
+echo "== exec";     lab_target_exec asc-tgt-c2 bash -c "rm -f /tmp/x" || echo "  rc=$?"
+echo "== push";     lab_push /opt/payload asc-tgt-c2 /tmp/sandcat || echo "  rc=$?"
+echo "== ip";       lab_node_ip asc-tgt-c2 eth0 || echo "  rc=$?"
+echo "== pids";     lab_node_pids asc-tgt-c2 sandcat || echo "  rc=$?"
+echo "== running";  lab_node_running asc-tgt-c2 || echo "  rc=$?"
+echo "== exists";   lab_instance_exists asc-tgt-c2; echo "  rc=$?"
+echo "== inspect";  lab_inspect asc-tgt-c2 >/dev/null 2>&1; echo "  rc=$?"
+echo "== list";     lab_list || echo "  rc=$?"
+echo "== spec";     lab_target_spec asc-tgt-c2 || echo "  rc=$?"
+echo "== spec-lock"; lab_target_spec asc-locked || echo "  rc=$?"
+echo "== require";  lab_require_bins; echo "  require-rc=$?"
+echo "== up";       lab_up; echo "  rc=$?"
+echo "== down";     lab_down; echo "  rc=$?"
+echo "== counts";   lab_node_counts; echo "  rc=$?"
+SH
+PVE_LOG="$D/pve.log"; : > "$PVE_LOG"
+# PATH 上**同时**有假 docker/lxc/clab（$D/bin）与假 pct（$D/bin-pve）⇒ 日志里出现哪一种，
+# 就是"命令实际发给了谁"。「绝不静默回落」在基质维度上的形态就是"只该出现 pct"。
+PATH="$D/bin-pve:$D/bin:$PATH" REPLAY_LOG="$PVE_LOG" EDGEEXP_SUBSTRATE=pve EDGEEXP_PCT_BIN=pct \
+  LAB_TMP="$D/work" EDGEEXP_LAB_TMP="$D/work" LIB="$LIB" \
+  bash "$D/pve.sh" > "$D/pve.out" 2>&1
+
+if grep -q '^pct exec 904 -- bash -c rm -f /tmp/x' "$PVE_LOG"; then
+  ok "pve exec 带 \`--\` 分隔符、且送出去的是**解析后的 vmid**（904）"; else fail "pve exec 形态不对"; cat "$PVE_LOG"; fi
+if grep -q '^pct exec 904 -- ps -eo pid,comm --no-headers' "$PVE_LOG"; then
+  ok "pve lab_node_pids 在 CT 内取进程表"; else fail "pve lab_node_pids 形态不对"; fi
+if grep -q '^pct exec 904 -- ip -4 -o addr show eth0' "$PVE_LOG"; then
+  ok "pve lab_node_ip 在 CT 内取地址"; else fail "pve lab_node_ip 形态不对"; fi
+if grep -q '^pct push 904 /opt/payload /tmp/sandcat --perms 755' "$PVE_LOG"; then
+  ok "pve push 语法正确（\`pct push <vmid> <本地> <目标> --perms 755\`，注意与 lxc 的参数顺序相反）"
+else fail "pve push 形态不对"; fi
+if grep -q '^pct status 904' "$PVE_LOG"; then
+  ok "lab_node_running 用 \`pct status <vmid>\` 判状态"; else fail "lab_node_running 没走 pct status"; fi
+if grep -q '^pct config 904' "$PVE_LOG"; then
+  ok "lab_inspect 用 \`pct config <vmid>\` 取基质视图"; else fail "lab_inspect 没走 pct config"; fi
+# **名字绝不许进 pct 的参数位**：`pct exec asc-tgt-c2` / `pct push asc-tgt-c2` 一次都不许有。
+if grep -qE '^pct (exec|push|status|config) asc-' "$PVE_LOG"; then
+  fail "名字被直接交给了 pct（应当是解析后的 vmid）：$(grep -E '^pct (exec|push|status|config) asc-' "$PVE_LOG" | head -3)"
+else ok "所有 pct 命令用的都是**解析后的 vmid**，名字一个字节都没进参数位"; fi
+if grep -qE '^(docker|lxc|clab) ' "$PVE_LOG"; then
+  fail "pve 路径起了别的基质的 CLI（基质选错/静默回落的形态）：$(grep -E '^(docker|lxc|clab) ' "$PVE_LOG" | head -3)"
+else ok "pve 路径**只**起 pct：docker / lxc / clab 一次都没被调用（绝不静默回落）"; fi
+
+PVE_OUT="$(cat "$D/pve.out")"
+# `lab_target_spec` 的取值打在**它自己那一行**上（调用点在 `== spec` 与 `== spec-lock` 之间），
+# 故用 sed 范围取那一段再比对 —— 直接 grep 整份输出会把别的段落的 `pve:` 也算进来。
+if printf '%s' "$PVE_OUT" | sed -n '/^== spec$/,/^== spec-lock$/p' | grep -qx 'pve:904'; then
+  ok "lab_target_spec 产出 pve:<vmid>（asc-tgt-c2 ⇒ pve:904）"
+else fail "lab_target_spec 不对：$(printf '%s' "$PVE_OUT" | sed -n '/^== spec$/,/^== spec-lock$/p')"; fi
+if printf '%s' "$PVE_OUT" | sed -n '/^== spec-lock$/,/^== require$/p' | grep -qx 'pve:905'; then
+  ok "lab_target_spec 对 **Lock 非空**（四列）的那一行同样解析正确（asc-locked ⇒ pve:905）"
+else fail "四列形态解析错（列位置被写死？）：$(printf '%s' "$PVE_OUT" | sed -n '/^== spec-lock$/,/^== require$/p')"; fi
+if printf '%s' "$PVE_OUT" | sed -n '/^== list/,/^== spec/p' | grep -q 'asc-locked' \
+   && ! printf '%s' "$PVE_OUT" | sed -n '/^== list/,/^== spec/p' | grep -qE '^(VMID|904|905)' ; then
+  ok "lab_list 产出的是**名字**（每行一个，含 Lock 非空的那一行），不是 pct 的四列原表"
+else fail "lab_list 契约不对（应当是每行一个名字）：$PVE_OUT"; fi
+if printf '%s' "$PVE_OUT" | grep -qE '^== running$' && printf '%s' "$PVE_OUT" | sed -n '/^== running/,/^== exists/p' | grep -q 'true'; then
+  ok "lab_node_running 从 \`status: running\` 取到 true"; else fail "lab_node_running 取值不对：$PVE_OUT"; fi
+if printf '%s' "$PVE_OUT" | sed -n '/^== require/,/^== up/p' | grep -q 'require-rc=0'; then
+  ok "lab_require_bins 在 pve 下检查 pct 并放行（PATH 上有假 pct）"; else fail "lab_require_bins 在 pve 下不对"; fi
+if printf '%s' "$PVE_OUT" | sed -n '/^== up/,/^== down/p' | grep -q 'rc=2' \
+   && printf '%s' "$PVE_OUT" | sed -n '/^== up/,/^== down/p' | grep -q '不适用'; then
+  ok "lab_up 在 pve 下响亮失败（rc=2 + 说明原因，与 lxd 同处置）"
+else fail "lab_up 在 pve 下没有响亮失败：$PVE_OUT"; fi
+if printf '%s' "$PVE_OUT" | sed -n '/^== down/,/^== counts/p' | grep -q 'rc=2' \
+   && printf '%s' "$PVE_OUT" | sed -n '/^== down/,/^== counts/p' | grep -q '不适用'; then
+  ok "lab_down 在 pve 下响亮失败（rc=2 + 说明原因，与 lxd 同处置）"
+else fail "lab_down 在 pve 下没有响亮失败：$PVE_OUT"; fi
+if printf '%s' "$PVE_OUT" | sed -n '/^== counts/,$p' | grep -q -- '-1 -1 -1'; then
+  ok "lab_node_counts 在 pve 下回显 -1 -1 -1（查不出来 ≠ 0 个节点）"; else fail "lab_node_counts 在 pve 下不对"; fi
+# **只读**：本层永不 create/destroy/start/stop 任何 CT。
+if grep -qE '^pct (create|destroy|start|stop|shutdown|reboot|del) ' "$PVE_LOG"; then
+  fail "pve 分支发出了会改变 CT 状态的命令（绝不允许）：$(grep -E '^pct (create|destroy|start|stop|shutdown|reboot|del) ' "$PVE_LOG")"
+else ok "pve 分支只读：无 create/destroy/start/stop/shutdown"; fi
+
+# --- H-负向 1：名字解析不到 ⇒ 响亮失败，且**一次 pct 都没起过**（绝不猜 vmid）--------
+: > "$D/pve-neg.log"
+NEG_OUT="$(PATH="$D/bin-pve:$D/bin:$PATH" REPLAY_LOG="$D/pve-neg.log" EDGEEXP_SUBSTRATE=pve \
+  EDGEEXP_PCT_BIN=pct LIB="$LIB" bash -c \
+  '. "$LIB"; lab_target_exec no-such-node-xyz hostname; echo "rc=$?"' 2>&1)"
+if printf '%s' "$NEG_OUT" | grep -q 'rc=1' && printf '%s' "$NEG_OUT" | grep -q '找不到名字为'; then
+  ok "名字解析不到 ⇒ lab_target_exec 响亮失败（rc=1 + 说明原因）"
+else fail "名字解析不到的处置不对：$NEG_OUT"; fi
+if grep -qE '^pct (exec|push|status|config) ' "$D/pve-neg.log"; then
+  fail "解析失败后**仍然**起了 pct（说明它猜了一个 vmid）：$(cat "$D/pve-neg.log")"
+else ok "解析失败时**一次 pct 命令都没起**（绝不猜一个 vmid —— 猜错会作用到别人的 CT 上）"; fi
+NEG_SPEC="$(PATH="$D/bin-pve:$D/bin:$PATH" REPLAY_LOG="$D/pve-neg.log" EDGEEXP_SUBSTRATE=pve \
+  EDGEEXP_PCT_BIN=pct LIB="$LIB" bash -c \
+  '. "$LIB"; v="$(lab_target_spec no-such-node-xyz)"; rc=$?; printf "spec=[%s]\n" "$v"; echo "rc=$rc"' 2>&1)"
+if printf '%s' "$NEG_SPEC" | grep -q 'spec=\[\]' && printf '%s' "$NEG_SPEC" | grep -q '^rc=1$'; then
+  ok "lab_target_spec 对解析不到的名字回**空串 + rc=1**（不产出 pve:<猜的 vmid>）"
+else fail "lab_target_spec 对解析不到的名字处置不对：$NEG_SPEC"; fi
+
+# --- H-负向 2：**重名**同样必须失败（取第一个 = 一次静默的任意选择）------------------
+mkdir -p "$D/bin-dupname"
+cat > "$D/bin-dupname/pct" <<'SH'
+#!/bin/sh
+[ "$1" = "list" ] && printf 'VMID       Status     Lock         Name\n904        running                 asc-tgt-c2\n905        running                 asc-tgt-c2\n'
+exit 0
+SH
+chmod +x "$D/bin-dupname/pct"
+DUP_OUT="$(PATH="$D/bin-dupname:$PATH" EDGEEXP_SUBSTRATE=pve EDGEEXP_PCT_BIN=pct LIB="$LIB" \
+  bash -c '. "$LIB"; lab_node_vmid asc-tgt-c2; echo "rc=$?"' 2>&1)"
+if printf '%s' "$DUP_OUT" | grep -q 'rc=1' && printf '%s' "$DUP_OUT" | grep -q '匹配到 2 个 VMID'; then
+  ok "名字匹配到**多个** vmid ⇒ 同样响亮失败（不取第一个）"
+else fail "重名的处置不对：$DUP_OUT"; fi
+
+# --- H-负向 3：STOPPED 的 CT 必须回 false（判据打在 stdout 上）------------------------
+STOPPED_OUT="$(PATH="$D/bin-pve:$D/bin:$PATH" REPLAY_LOG="$D/pve-stopped.log" REPLAY_PCT_STATUS=stopped \
+  EDGEEXP_SUBSTRATE=pve EDGEEXP_PCT_BIN=pct LIB="$LIB" bash -c \
+  '. "$LIB"; printf "running=[%s]\n" "$(lab_node_running asc-tgt-c2)"; echo "rc=$?"' 2>&1)"
+if printf '%s' "$STOPPED_OUT" | grep -q 'running=\[false\]'; then
+  ok "STOPPED 的 CT ⇒ lab_node_running 回 false（rc=0；与 lxd 侧同一条纪律）"
+else fail "STOPPED 的取值不对：$STOPPED_OUT"; fi
+
+# --- H-F) detached 的 argv 保真（与 F 段同手法，换到 pve 形状）-------------------------
+mkdir -p "$D/bin-exec-pve"
+cat > "$D/bin-exec-pve/pct" <<'SH'
+#!/bin/bash
+# pve 形状：`pct exec <vmid> -- <cmd…>`（先经过一次 `pct list` 做名字解析）。
+if [ "${1:-}" = "list" ]; then
+  printf 'VMID       Status     Lock         Name\n904        running                 asc-tgt-c2\n'
+  exit 0
+fi
+shift                        # exec
+shift                        # <vmid>
+[ "${1:-}" = "--" ] && shift
+REPLAY_LOG="$REPLAY_LOG" "$@"
+exit $?
+SH
+chmod +x "$D/bin-exec-pve/pct"
+rm -f "$D/marker/pve.txt"
+PATH="$D/bin-exec-pve:/usr/bin:/bin" REPLAY_LOG="$D/detached-pve.log" EDGEEXP_SUBSTRATE=pve \
+  EDGEEXP_PCT_BIN=pct LIB="$LIB" bash -c \
+  '. "$LIB"; lab_target_exec_detached asc-tgt-c2 /bin/sh -c "printf RAN-pve > '"$D"'/marker/pve.txt"' \
+  > "$D/detached-pve.out" 2>&1
+if wait_marker "$D/marker/pve.txt" "RAN-pve"; then
+  ok "detached（pve）：脱离命令按 argv 在节点内跑起来了（marker=RAN-pve）"
+else
+  fail "detached（pve）：命令没有按 argv 跑（marker=$([ -f "$D/marker/pve.txt" ] && cat "$D/marker/pve.txt" || echo 不存在)｜stderr=$(tr '\n' ';' < "$D/detached-pve.out"))"
+fi
+rm -f "$D/marker/sandcat-pve.log"
+PATH="$D/bin-exec-pve:/usr/bin:/bin" REPLAY_LOG="$D/detached2-pve.log" EDGEEXP_SUBSTRATE=pve \
+  EDGEEXP_PCT_BIN=pct LIB="$LIB" bash -c \
+  '. "$LIB"; lab_target_exec_detached asc-tgt-c2 bash -c "echo SANDCAT-STARTED argv=--server http://192.168.30.2:8888 > '"$D"'/marker/sandcat-pve.log 2>&1"' \
+  > "$D/detached2-pve.out" 2>&1
+i=0; ready=1
+while [ "$i" -lt 30 ]; do
+  if grep -q 'argv=--server http://192.168.30.2:8888' "$D/marker/sandcat-pve.log" 2>/dev/null; then ready=0; break; fi
+  sleep 0.1; i=$((i + 1))
+done
+if [ "$ready" -eq 0 ]; then
+  ok "detached（pve）：与 edge_reset.sh 同形的调用把**整条命令串**送达节点内（URL 没丢）"
+else
+  fail "detached（pve）：命令串没送达（sandcat log = $([ -f "$D/marker/sandcat-pve.log" ] && cat "$D/marker/sandcat-pve.log" || echo 不存在)｜stderr=$(tr '\n' ';' < "$D/detached2-pve.out"))"
+fi
+
+# --- H) 非法基质名：pve 也必须是**白名单内**的合法值（对照组）--------------------------
+cat > "$D/goodsub-pve.sh" <<SH
+set -euo pipefail
+. "$LIB"
+echo "reached-lab_substrate=\$lab_substrate"
+SH
+rc=0
+out="$(EDGEEXP_SUBSTRATE=pve bash "$D/goodsub-pve.sh" 2>&1)" || rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'reached-lab_substrate=pve'; then
+  ok "合法基质名 pve ⇒ source 正常通过（对照组；非法值仍被 C 段钉住）"
+else fail "pve 被误拦：rc=$rc out=$out"; fi
+
 echo "############ 汇总"
 echo "  PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

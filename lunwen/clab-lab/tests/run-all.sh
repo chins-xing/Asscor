@@ -17,7 +17,7 @@
 #
 # 期望的通过数（复审 7.6 第 3 条的判据，**任何一条不到就是回归**）：
 #   test-agent-readiness   3
-#   test-edge-lab         26
+#   test-edge-lab         51（Task 6 的 H 段把 pve 基质加了 25 条；此前 26）
 #   lab-diff              31
 #   test-chain-derivation  8
 #   test-edge-probe       20（它按 `ok` 行计数，没有 PASS= 汇总行）
@@ -29,7 +29,7 @@ export REPO
 
 declare -A EXPECT=(
   [test-agent-readiness]=3
-  [test-edge-lab]=26
+  [test-edge-lab]=51
   [test-edge-probe]=20
   [lab-diff]=31
   [test-chain-derivation]=8
@@ -69,7 +69,7 @@ done
 
 echo
 if [ "$TOTAL_FAIL" -eq 0 ]; then
-  echo "run-all: 全部通过（5 组：3/26/20/31/8）"
+  echo "run-all: 全部通过（5 组：3/51/20/31/8）"
   exit 0
 fi
 echo "run-all: $TOTAL_FAIL 组未达标 —— 见上面的尾部输出" >&2

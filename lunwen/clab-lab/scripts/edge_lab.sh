@@ -15,10 +15,10 @@
 # 接口（**单一来源**：所有基质相关命令只能从这里出去，调用点不得再出现 `clab`/`docker`/`lxc`
 # 命令字面 —— 需要新增一条基质命令时改本文件，不要在调用点写）：
 #
-#   lab_substrate                当前基质名（clab|lxd，只读）
-#   lab_topology                 拓扑文件路径（clab 用；lxd 下是"占位"，不参与命令）
-#   lab_topology_bin             拓扑级 CLI（clab: `clab`；lxd: `lxc`）
-#   lab_target_bin               目标级 CLI（clab: `docker`；lxd: `lxc`）
+#   lab_substrate                当前基质名（clab|lxd|pve，只读）
+#   lab_topology                 拓扑文件路径（clab 用；lxd/pve 下是"占位"，不参与命令）
+#   lab_topology_bin             拓扑级 CLI（clab: `clab`；lxd: `lxc`；pve: `pct`）
+#   lab_target_bin               目标级 CLI（clab: `docker`；lxd: `lxc`；pve: `pct`）
 #   lab_require_bins             前置检查：当前基质需要的 CLI 都在 PATH 上吗（缺则返回非零）
 #   lab_up                       建拓扑（clab: deploy）
 #   lab_down                     毁拓扑（clab: destroy --cleanup）
@@ -33,15 +33,17 @@
 #   lab_inspect <node>              取目标的基质视图（存在性/状态的权威判据）
 #   lab_list                        列出目标（每行一个名字）
 #   lab_node_counts                 回显 "total up down"（失败回显 "-1 -1 -1"）
-#   lab_target_spec <node>          节点名 → `edgescen -target` 的语法（clab 裸名 / lxd:<实例>）
+#   lab_target_spec <node>          节点名 → `edgescen -target` 的语法（clab 裸名 / lxd:<实例> / pve:<vmid>）
+#   lab_node_vmid <node>            **pve 专属**：节点名 → VMID（唯一的解析点；解析不到/重名都失败）
 #
 # 覆盖开关（**与抽象前逐条对应**，别把它们合并成一个）：
-#   EDGEEXP_SUBSTRATE          clab（默认）| lxd
+#   EDGEEXP_SUBSTRATE          clab（默认）| lxd | pve
 #   EDGEEXP_TOPOLOGY           拓扑文件路径
 #   EDGEEXP_LAB_TOPOLOGY_BIN   拓扑级 CLI 的可执行文件（离线夹具用）
 #   EDGEEXP_LAB_TARGET_BIN     目标级 CLI 的可执行文件（离线夹具用；clab 下默认 = DOCKER_BIN）
 #   EDGEEXP_DOCKER_BIN         **抽象前就有的**接缝：目标级的 `docker`（`edge_probe.sh` 用它）
 #   EDGEEXP_LXC_BIN            lxd 基质的 `lxc`
+#   EDGEEXP_PCT_BIN            pve 基质的 `pct`
 #   EDGEEXP_LAB_WAIT_STEP       `lab_wait_node_exec` 的轮询间隔（秒，默认 3；**只给离线夹具缩短用**）
 #
 # **clab 分支逐位等价**是最硬的门禁：函数体里每一条命令、参数顺序、重定向目标、日志文件名都
@@ -50,8 +52,8 @@
 # 复现夹具钉住（`build/lab-diff.sh`：从 `git archive <base>` 取**真基线**跑同一批假 CLI 做差分），
 # 不是靠通读保证的。
 #
-# 基质选择的失败处置：`EDGEEXP_SUBSTRATE` 只认 `clab`（默认）与 `lxd`，别的值**在 source 时就
-# 响亮失败** —— 一个拼错的基质名如果被当成默认值静默降级，整轮矩阵会在 WSL 的 clab 上跑，
+# 基质选择的失败处置：`EDGEEXP_SUBSTRATE` 只认 `clab`（默认）、`lxd` 与 `pve`，别的值**在 source
+# 时就响亮失败** —— 一个拼错的基质名如果被当成默认值静默降级，整轮矩阵会在 WSL 的 clab 上跑，
 # 而记录里的 `env` 标签看起来仍然正常。**没有 `set -e` 的调用方也会被中止**（见下方实现）。
 #
 # lxd 分支的边界（**必须显式**，不能默默什么都不做）：
@@ -65,17 +67,28 @@
 #     它们只要求"实例存在"，正是 LXD 上取数与探针路径需要的四件事。
 #   · 本文件的 lxd 分支只**访问既有实例**：不 launch、不 delete、不 stop、不 restart，
 #     也不改任何实例的配置。
+#
+# pve 分支的边界（Task 6；节点是 **PVE CT**，`pct`）：**逐条照搬 lxd 的边界**，理由同源 ——
+# PVE 上"环境"同样是既有 CT 的集合，本层**永不** create/destroy/start/stop 任何 CT：
+#   · `lab_up` / `lab_down` 与 lxd 同样**响亮失败**（rc=2）；
+#   · `lab_node_counts` 同样回显 `-1 -1 -1`；
+#   · 其余原语全部支持，只把 `lxc …` 换成等价的 `pct …`（对照表见各函数体内的注释）。
+#
+# **pve 的节点标识（唯一一处"名字 → vmid"解析）**：既有脚本用**名字**（`asc-tgt-c2`）标识节点，
+# 而 `pct` 的原生标识是 **VMID（数字）**。`pct list` 同时给出两者，故 `lab_node_vmid` 是**唯一**
+# 的解析点，所有 `pct` 命令都从它拿 vmid。解析不到（或名字匹配到**多个** VMID）时**响亮失败**，
+# **绝不猜一个 vmid** —— 猜错会作用到别人的 CT 上，而那看起来与正确执行完全一样。
 # ============================================================================
 
 # lab_substrate —— 当前基质（变量名带 lab_ 前缀：避免与调用方自己的 SUBSTRATE/SUBSTRATE_*
 # 撞名，同 edge_probe.sh 的 probe_target/probe_docker_bin 约定）。
 lab_substrate="${EDGEEXP_SUBSTRATE:-clab}"
 case "$lab_substrate" in
-  clab|lxd) : ;;
+  clab|lxd|pve) : ;;
   *)
-    echo "edge_lab: EDGEEXP_SUBSTRATE 只认 clab（默认）与 lxd，收到 '$lab_substrate' ——" >&2
+    echo "edge_lab: EDGEEXP_SUBSTRATE 只认 clab（默认）、lxd 与 pve，收到 '$lab_substrate' ——" >&2
     echo "  基质名拼错时静默退回默认值会让整轮矩阵在另一种基质上跑（记录里的 env 标签照常），" >&2
-    echo "  故这里直接失败。用法：EDGEEXP_SUBSTRATE=clab|lxd。" >&2
+    echo "  故这里直接失败。用法：EDGEEXP_SUBSTRATE=clab|lxd|pve。" >&2
     # 三种加载方式都要**中止调用方**（Fix round 1 / M-4）：
     #   · 被 source + 调用方有 `set -e` ⇒ `return 2` 就能带走调用方；
     #   · 被 source + 调用方**没有** `set -e` ⇒ `return` 只返回这一层，调用方会**继续跑**，
@@ -113,18 +126,22 @@ if [ -z "$lab_topology_bin" ]; then
   case "$lab_substrate" in
     clab) lab_topology_bin="clab" ;;
     lxd)  lab_topology_bin="${EDGEEXP_LXC_BIN:-lxc}" ;;
+    # pve：拓扑级与目标级是**同一个** CLI（`pct`）—— PVE 上没有"拓扑"这个对象，
+    # 与 lxd 同形（那边两级都是 `lxc`）。覆盖开关 `EDGEEXP_PCT_BIN` 供离线夹具用。
+    pve)  lab_topology_bin="${EDGEEXP_PCT_BIN:-pct}" ;;
   esac
 fi
 
 # 目标级 CLI 在 clab 下就是 `docker` —— **保留抽象前的覆盖开关 `EDGEEXP_DOCKER_BIN`**
 # （它是 `edge_probe.sh` 的既有接缝，也是"用两个可分辨的假 docker 证明覆盖有牙"那条判据的入口）。
-# lxd 下是 `lxc`（`EDGEEXP_LXC_BIN` 可覆盖，供离线夹具用）。
+# lxd 下是 `lxc`（`EDGEEXP_LXC_BIN` 可覆盖，供离线夹具用）；pve 下是 `pct`（`EDGEEXP_PCT_BIN`）。
 lab_docker_bin="${EDGEEXP_DOCKER_BIN:-docker}"
 lab_target_bin="${EDGEEXP_LAB_TARGET_BIN:-}"
 if [ -z "$lab_target_bin" ]; then
   case "$lab_substrate" in
     clab) lab_target_bin="$lab_docker_bin" ;;
     lxd)  lab_target_bin="${EDGEEXP_LXC_BIN:-lxc}" ;;
+    pve)  lab_target_bin="${EDGEEXP_PCT_BIN:-pct}" ;;
   esac
 fi
 
@@ -137,7 +154,9 @@ lab_require_bins() {
   local bins=() bin
   case "$lab_substrate" in
     clab) bins=("$lab_topology_bin" "$lab_target_bin") ;;
+    # lxd / pve：两级是同一个 CLI，故清单里只出现一次（重复一项没有额外语义）。
     lxd)  bins=("$lab_topology_bin") ;;
+    pve)  bins=("$lab_topology_bin") ;;
   esac
   for bin in "${bins[@]}"; do
     command -v "$bin" >/dev/null 2>&1 || {
@@ -165,8 +184,53 @@ lab_tmp="${EDGEEXP_LAB_TMP:-/tmp}"
 lab_inspect_json="$lab_tmp/edgeexp-clab-inspect.json"
 lab_inspect_log="$lab_tmp/edgeexp-clab-inspect.log"
 
+# lab_node_vmid <node> —— **pve 专属**：节点名 → VMID（本层**唯一**的名字解析点）。
+#
+# 为什么需要它（简报 §1「节点标识的坑」）：既有脚本用**名字**（`asc-tgt-c2`）标识节点，而 `pct`
+# 的原生标识是 **VMID（数字）**——`pct exec/list/push/status/config` 全都要数字。`pct list` 同时
+# 给出两者，故解析只在这里做一次；其余每个 pve 分支都调它，**不得**各自再写一份。
+#
+# 三条判据（每一条都对应一种"看起来能跑、其实作用到别处"的形态）：
+#
+#  1. **只认 `pct list` 里真的存在的那个名字**。解析不到 ⇒ 响亮失败并**列出当前可见的节点**，
+#     绝不猜一个 vmid：猜错会把命令下到**别人的 CT** 上，而它对调用方与正确执行完全同形。
+#  2. **重名 ⇒ 也失败**（匹配到多个 VMID 时报错而不是取第一个）。PVE 不强制 hostname 唯一，
+#     两个 CT 同名时"取第一个"就是一次静默的任意选择。
+#  3. **列位置不写死**。实测 `pct list` 的输出是**四列** `VMID Status Lock Name`，而 `Lock` 为空
+#     时整行塌成**三格**（`904  stopped  asc-tgt-c2`）—— 故判据是"第 1 格是纯数字 + **最后**一格
+#     等于名字"（`$NF`），而不是任何固定列号（简报把它写成"VMID + Name 两列"，与实测不符）。
+#     表头行 `VMID Status Lock Name` 被第 1 格的纯数字判据自然滤掉。
+#
+# 输出（成功时）：**只有 vmid**，一行一个（正常恰好一行）—— 供调用方 `$( )` 直接取用。
+lab_node_vmid() {
+  local node="$1" listing matches count
+  listing="$("$lab_target_bin" list 2>/dev/null)" || {
+    echo "edge_lab: 取节点清单失败（$lab_target_bin list，基质 $lab_substrate）——" >&2
+    echo "  名字 '$node' 无法解析成 VMID；本层不会在『问不清』的情况下继续（那会变成一次盲操作）。" >&2
+    return 1
+  }
+  matches="$(printf '%s\n' "$listing" | awk -v n="$node" '$1 ~ /^[0-9]+$/ && $NF == n {print $1}')"
+  count="$(printf '%s\n' "$matches" | awk 'NF {c++} END {print c+0}')"
+  case "$count" in
+  1)
+    printf '%s\n' "$matches"
+    return 0 ;;
+  0)
+    echo "edge_lab: 在 $lab_target_bin list 里找不到名字为 '$node' 的节点（基质 pve）——" >&2
+    echo "  节点由**名字**标识，而 pct 的原生标识是 VMID；名字对不上时本层**绝不猜一个 vmid**" >&2
+    echo "  （猜错会把命令下到别的 CT 上，而那与正确执行看起来完全一样）。" >&2
+    echo "  当前可见的节点（VMID Name）：" >&2
+    printf '%s\n' "$listing" | awk '$1 ~ /^[0-9]+$/ {printf "    %s %s\n", $1, $NF}' >&2
+    return 1 ;;
+  *)
+    echo "edge_lab: 名字 '$node' 在 $lab_target_bin list 里匹配到 $count 个 VMID（$(printf '%s' "$matches" | tr '\n' ' ')）——" >&2
+    echo "  同名时无法判定该操作哪一个，本层**响亮失败**而不是取第一个（那是一次静默的任意选择）。" >&2
+    return 1 ;;
+  esac
+}
+
 # lab_target_spec <node> —— 把基质层的节点名翻成 **`edgescen -target` 的语法**
-# （`docker:<容器>` / `lxd:<实例>`；见 cmd/edgescen 的 `parseNodeTarget`）。
+# （`docker:<容器>` / `lxd:<实例>` / `pve:<vmid>`；见 cmd/edgescen 的 `parseNodeTarget`）。
 #
 # 为什么必须有一个**单一来源**做这件事（而不是在采集脚本里手工拼前缀）：记录里的
 # `meta.observation_target` 来自 `edgescen` 那侧的解析结果，而 `edge_collect.sh` 的观测主体
@@ -174,11 +238,18 @@ lab_inspect_log="$lab_tmp/edgeexp-clab-inspect.log"
 # 断言就会以"记录声称观测主体是 X，而本轮声明的节点是 Y"的名义把每条记录都判死，
 # 而真正的原因只是少了一个前缀。**clab 基质保持裸名字**：`docker exec <容器名>` 是既有语义，
 # 也是抽象前的字节（题面要求 `docker:` 前缀下逐位不变）。
+#
+# pve 这里**必须**做名字→vmid 的解析（`edgescen` 那侧只认数字 vmid），失败即往外传非零 ——
+# 采集侧会因此整轮失败，**不会**退回本机结果（那正是这条路径最危险的静默形态）。
 lab_target_spec() {
-  local node="$1"
+  local node="$1" vmid
   case "$lab_substrate" in
     clab) printf '%s\n' "$node" ;;
     lxd)  printf 'lxd:%s\n' "$node" ;;
+    pve)
+      vmid="$(lab_node_vmid "$node")" || return $?
+      printf 'pve:%s\n' "$vmid"
+      ;;
   esac
 }
 
@@ -227,6 +298,14 @@ PY
     echo "  返回 -1 -1 -1（=『查不出来』，不是『0 个节点』），调用方不得据此断言环境已清空。" >&2
     printf '%s\n' "-1 -1 -1"
     ;;
+  pve)
+    # 与 lxd **逐条同源**：PVE 上也没有"拓扑"这个对象（节点集合由 CT 列表定义），
+    # 故同样回显 -1 而不是 0 —— 0 的含义是"拓扑已清空"，那是一条会被
+    # `edge_reset.sh` 的 I9 补断言采信的结论，而 inspect 类的失败绝不能空洞地满足它。
+    echo "edge_lab: lab_node_counts 对 pve 不适用（PVE 上没有拓扑对象；节点集合由 CT 列表定义）——" >&2
+    echo "  返回 -1 -1 -1（=『查不出来』，不是『0 个节点』），调用方不得据此断言环境已清空。" >&2
+    printf '%s\n' "-1 -1 -1"
+    ;;
   esac
 }
 
@@ -244,6 +323,13 @@ lab_up() {
     echo "  probe-ot005 等实例不得被删改），LXD 侧没有『建拓扑』这个动作，本层不会 launch 任何实例。" >&2
     echo "  这不是可以放过的不一致：静默返回 0 会让一次『复位成功』的假象进入记录。" >&2
     return 2 ;;
+  pve)
+    # 与 lxd 同处置、理由同源：PVE 上的实验环境同样是【既有 CT 集合】，本层不会 create 任何 CT。
+    echo "edge_lab: lab_up 对 pve 不适用 —— PVE 上的实验环境是【既有 CT 集合】，" >&2
+    echo "  PVE 侧没有『建拓扑』这个动作，本层不会 create/start 任何 CT（新建 CT 是操作者的动作，" >&2
+    echo "  不在实验脚本的路径上：脚本建了 CT 就得由脚本销毁，而『谁建的谁来销毁』在这里没有单一来源）。" >&2
+    echo "  这不是可以放过的不一致：静默返回 0 会让一次『复位成功』的假象进入记录。" >&2
+    return 2 ;;
   esac
 }
 
@@ -259,6 +345,13 @@ lab_down() {
   lxd)
     echo "edge_lab: lab_down 对 lxd 不适用 —— 本层**永不**删除 A-1 上的实例（probe-ot005 等是" >&2
     echo "  控制侧的对照容器）。需要清理实例时由操作者显式手工执行，不在实验脚本的路径上。" >&2
+    return 2 ;;
+  pve)
+    # 与 lxd 同处置、理由同源（且更硬）：一次猜测性的 destroy 会**销毁别人的 CT**，
+    # 而 PVE 上没有"这台 CT 是本任务建的吗"这个信息 —— 故本层永不 destroy。
+    echo "edge_lab: lab_down 对 pve 不适用 —— 本层**永不**销毁 PVE 上的 CT（宿主上的 CT 集合是" >&2
+    echo "  操作者与别的任务共用的；一次猜测性的 destroy 会把**别人的** CT 删掉，而脚本没有" >&2
+    echo "  『这台 CT 是不是本次实验建的』这个信息）—— 需要清理时由操作者显式手工执行。" >&2
     return 2 ;;
   esac
 }
@@ -283,6 +376,16 @@ lab_target_exec() {
     # 一条以 `-` 开头的命令串会被 lxc 当成自己的参数（实测 rc=1）。
     "$lab_target_bin" exec "$node" -- "$@"
     ;;
+  pve)
+    # 形状与 lxd **逐项对应**：`pct exec <vmid> -- <cmd…>`。
+    # `--` 在这里同样**不是可选的**（实测）：`pct exec` 把 `--` 之后的整串当 `<extra-args>`
+    # 原样交给容器，故以 `-` 开头的参数（`-emit-checks`、`ip -4 -o addr …` 里的 `-4`）
+    # 不会被 `pct` 自己吃掉。少了它，那些参数会被 pct 的选项解析器截走。
+    # 节点是**名字**、vmid 是**数字** ⇒ 必经 lab_node_vmid（唯一解析点）；解析失败即往外传非零。
+    local vmid
+    vmid="$(lab_node_vmid "$node")" || return $?
+    "$lab_target_bin" exec "$vmid" -- "$@"
+    ;;
   esac
 }
 
@@ -298,6 +401,16 @@ lab_push() {
     ;;
   lxd)
     "$lab_target_bin" file push "$local_path" "$node$dest"
+    ;;
+  pve)
+    # `pct push <vmid> <本地> <目标> --perms 755` —— 注意**参数顺序与 lxd 相反**
+    # （`lxc file push <本地> <实例><目标>` 是"本地在前"，`pct push` 是"vmid 在前"），
+    # 且目标路径是**独立的第三个参数**（没有 lxc 那种"实例名与路径拼在一起"的写法）。
+    # `--perms 755` 与调用点随后的 `chmod 755`（如 edge_reset.sh）语义一致，且把权限在
+    # **送进去的那一刻**就定下来 —— 省掉一个"推成功但没执行权限"的中间态。
+    local vmid
+    vmid="$(lab_node_vmid "$node")" || return $?
+    "$lab_target_bin" push "$vmid" "$local_path" "$dest" --perms 755
     ;;
   esac
 }
@@ -341,6 +454,16 @@ lab_target_exec_detached() {
   lxd)
     "$lab_target_bin" exec "$node" -- sh -c 'nohup "$@" >/dev/null 2>&1 </dev/null &' _ "$@"
     ;;
+  pve)
+    # 与 lxd **逐字同形**（`pct exec` 同样没有 `-d`）：脱离靠 shell 惯用法 ——
+    # `nohup` + 三个重定向 + `&`。没有它们的话，命令的 stdio 仍挂在"掉线即断"的 exec 通道上，
+    # `pct exec` 一返回进程就被带走，而调用方只看到"agent 一直没回连"（与"agent 起不来"同形）。
+    # `"$@"` 放在 `sh -c` 的脚本位置**之后**（`_` 占位 `$0`），故节点内 `sh` 的 `$@` 就是调用方
+    # 给的 argv —— 与 clab/lxd 两侧的 argv 保真纪律一致（Fix round 1 / I-2）。
+    local vmid
+    vmid="$(lab_node_vmid "$node")" || return $?
+    "$lab_target_bin" exec "$vmid" -- sh -c 'nohup "$@" >/dev/null 2>&1 </dev/null &' _ "$@"
+    ;;
   esac
 }
 
@@ -356,6 +479,11 @@ lab_node_ip() {
     ;;
   lxd)
     "$lab_target_bin" exec "$node" -- ip -4 -o addr show "$iface" 2>/dev/null | awk '{print $4; exit}'
+    ;;
+  pve)
+    local vmid
+    vmid="$(lab_node_vmid "$node")" || return $?
+    "$lab_target_bin" exec "$vmid" -- ip -4 -o addr show "$iface" 2>/dev/null | awk '{print $4; exit}'
     ;;
   esac
 }
@@ -381,6 +509,12 @@ lab_node_pids() {
     "$lab_target_bin" exec "$node" -- ps -eo pid,comm --no-headers 2>/dev/null \
       | awk -v p="$pattern" '$2 ~ p {print $1}' | sort -n
     ;;
+  pve)
+    local vmid
+    vmid="$(lab_node_vmid "$node")" || return $?
+    "$lab_target_bin" exec "$vmid" -- ps -eo pid,comm --no-headers 2>/dev/null \
+      | awk -v p="$pattern" '$2 ~ p {print $1}' | sort -n
+    ;;
   esac
 }
 
@@ -390,31 +524,16 @@ lab_node_pids() {
 # 会让"实例存在但没在跑"被读成"不存在"⇒ 一次多余的 launch（那会以 `Instance already exists`
 # 失败，看起来像环境问题）。
 lab_instance_exists() {
-  local node="$1"
+  local node="$1" vmid
   case "$lab_substrate" in
   clab) "$lab_target_bin" inspect "$node" >/dev/null 2>&1 ;;
   lxd)  "$lab_target_bin" info "$node" >/dev/null 2>&1 ;;
-  esac
-}
-#
-# 为什么需要它（Task 4D Step 4 / 已知坑 2）：Caldera **保留已死 agent 的条目**（`trusted=true`
-# 但 `last_seen` 停在容器消失那一刻）。攻击脚本若只按"有心跳的 agent"挑人，就可能把 operation
-# 打到一只**已经死掉的** agent 上 —— 链里出现 `status=-3`（EXECUTE），而 `-3` **看起来像"被拦住"**。
-# 正确的判据是 **`(host, 容器内当前活着的 pid)`**：先问目标"你里面现在有哪些 pid"，再去 agent
-# 表里按 `(host, pid)` 精确匹配。
-#
-# `comm-regex` 过滤进程名（例如 `sandcat`）；`ps` 的 comm 字段被内核截断到 15 字符，故用 `grep -E`
-# 做子串匹配而不是精确相等。取不到（实例不存在/ps 不可用）⇒ **非零退出**，调用方据此响亮失败。
-lab_node_pids() {
-  local node="$1" pattern="${2:-.}"
-  case "$lab_substrate" in
-  clab)
-    "$lab_target_bin" exec "$node" ps -eo pid,comm --no-headers 2>/dev/null \
-      | awk -v p="$pattern" '$2 ~ p {print $1}' | sort -n
-    ;;
-  lxd)
-    "$lab_target_bin" exec "$node" -- ps -eo pid,comm --no-headers 2>/dev/null \
-      | awk -v p="$pattern" '$2 ~ p {print $1}' | sort -n
+  pve)
+    # "存在"的判据 = 名字能解析出 vmid **且** `pct status` 能应答。
+    # 解析失败即"不存在"（同一个 `pct list` 就是存在性的权威来源）—— 这与 lxd 的
+    # `lxc info` 失败即"不存在"同形，且**不猜** vmid。
+    vmid="$(lab_node_vmid "$node" 2>/dev/null)" || return 1
+    "$lab_target_bin" status "$vmid" >/dev/null 2>&1
     ;;
   esac
 }
@@ -463,6 +582,26 @@ lab_node_running() {
       *)       printf 'false\n' ;;
     esac
     ;;
+  pve)
+    # 形状与 lxd 逐项对应，只是取值来源换成 `pct status <vmid>`（实测输出 `status: running`）。
+    # 三条判据（缺一条就会把"问不到"读成"没在跑"或反之）：
+    #   · 名字解析不到 ⇒ **非零**（不是 `false`）：解析不到与"存在但没在跑"是两件事，
+    #     后者会让调用方去 start 一个不存在的 CT；
+    #   · `pct status` 本身失败 ⇒ **非零**（同上，`pct status` 对不存在的 vmid 是 rc=2）；
+    #   · 解析不出 status 行 ⇒ **非零**（拿不到取值 ≠ false）。
+    # `[Ss]tatus`：`pct` 打的是小写 `status:`，而 lxd 的 `lxc info` 打的是 `Status:` ——
+    # 两种都吃（pve 分支是新的，没有"不许变"的历史包袱，说得更宽不会掩盖问题：
+    # 真正要防的是"没有 status 行"这条，它仍然 return 1）。
+    local vmid out status
+    vmid="$(lab_node_vmid "$node" 2>/dev/null)" || return 1
+    out="$("$lab_target_bin" status "$vmid" 2>/dev/null)" || return 1
+    status="$(printf '%s\n' "$out" | awk -F': *' '$1 ~ /^ *[Ss]tatus$/ {print tolower($2); exit}')"
+    [ -n "$status" ] || return 1
+    case "$status" in
+      running) printf 'true\n' ;;
+      *)       printf 'false\n' ;;
+    esac
+    ;;
   esac
 }
 
@@ -471,6 +610,11 @@ lab_node_running() {
 # 调用方只用它的退出码回答"这个节点存在吗"（clab 是 `docker inspect`、lxd 是 `lxc info`）；
 # 打印出来的 JSON 留在日志里供排障。抽象前该处是 `docker inspect "$NODE" >/dev/null 2>&1`，
 # 本函数把输出**收下**再交给调用方重定向 —— 退出码语义不变。
+#
+# pve 侧取 `pct config <vmid>`（PVE 的 `pct` 没有 `inspect`）。它**不是 JSON**（是 `key: value`
+# 的配置视图）—— 与 lxd 侧取回的 `lxc info`（YAML）处境相同：调用方只用退出码，
+# 内容是排障留痕，故这里不为了"看起来像 JSON"去转换（转换会引入一个新的解析层，
+# 而它一旦与 pct 的输出格式漂移，就会以"节点不存在"的形态失败）。
 lab_inspect() {
   local node="$1"
   case "$lab_substrate" in
@@ -480,6 +624,11 @@ lab_inspect() {
   lxd)
     "$lab_target_bin" info "$node"
     ;;
+  pve)
+    local vmid
+    vmid="$(lab_node_vmid "$node")" || return $?
+    "$lab_target_bin" config "$vmid"
+    ;;
   esac
 }
 
@@ -488,6 +637,11 @@ lab_inspect() {
 # clab 的 `docker ps -a` 是"这台机器上所有容器"，不是"本拓扑的节点"；拓扑视图请用
 # `lab_node_counts`（它才是 `clab inspect` 的拓扑视图）。这里刻意给出两种基质的"实例名字面"，
 # 供干跑与排障使用。
+#
+# pve 侧：**契约是"每行一个名字"，而 `pct list` 打的是四列表格**（`VMID Status Lock Name`，
+# `Lock` 为空时那一格会消失）—— 故这里按 `lab_node_vmid` 的同一条判据（第 1 格纯数字、
+# 名字在**最后**一格）把名字抽出来，而不是把整张表原样吐出去（原样吐出去会让每个调用方
+# 各自实现一次同一套解析，那正是本层要收口的东西）。表头行由"第 1 格是纯数字"自然滤掉。
 lab_list() {
   case "$lab_substrate" in
   clab)
@@ -495,6 +649,9 @@ lab_list() {
     ;;
   lxd)
     "$lab_target_bin" list --format csv -c n
+    ;;
+  pve)
+    "$lab_target_bin" list | awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $NF}'
     ;;
   esac
 }
