@@ -526,10 +526,12 @@ if [ -n "$REAL_MISSING" ]; then
 fi
 
 # --- 触发固定剧本并派生客观结果 ---------------------------------------------
-# `topology_hash` 是**拓扑对象**的哈希：clab 基质下就是拓扑文件；lxd 基质下没有拓扑对象，因此
+# `topology_hash` 是**拓扑对象**的哈希：clab 基质下就是拓扑文件；lxd/pve 基质下没有拓扑对象，因此
 # **不留一个编造的值**（拿实例名去 sha256 出一个"拓扑哈希"是给读者一个假的可复核锚点）。
 # 换留**基质身份**：这一轮环境里真正可复核的量是"哪个实例、什么实验条件（策略在不在）"——
-# 与 `edge_reset.sh` 的 lxd 留痕字段同一套口径（两处必须是同一套，否则复位与攻击各说各话）。
+# 与 `edge_reset.sh` 的留痕字段同一套口径（两处必须是同一套，否则复位与攻击各说各话）。
+# `substrate` 取**当前基质**（lxd 下仍是字面 `lxd`，逐字未变；pve 下是 `pve`）：写死 `lxd`
+# 会让 PVE 上的记录声称自己跑在 LXD 上，那是一条无法从数据上区分的假证据。
 # shellcheck disable=SC2154  # lab_substrate 由上面 source edge_lab.sh 赋值
 if [ "$lab_substrate" = "clab" ]; then
   TOPO_HASH="sha256:$(sha256sum "$TOPOLOGY" | awk '{print $1}')"
@@ -542,7 +544,7 @@ else
   # 显式关掉并写明理由（Task 4D Fix round 2 / Minor-5）：否则"抽象前后同为 2 条告警"这条既有
   # 不变量会被这 2 条打破，读者无法判断那是不是新引入的问题。
   # shellcheck disable=SC2089,SC2090
-  SUBSTRATE_IDENTITY="{\"substrate\":\"lxd\",\"instance\":\"${EDGEEXP_TARGET:-${EDGEEXP_TARGET_HOST:-}}\",\"policy_on\":\"${EDGEEXP_POLICY_ON:-0}\"}"
+  SUBSTRATE_IDENTITY="{\"substrate\":\"${lab_substrate}\",\"instance\":\"${EDGEEXP_TARGET:-${EDGEEXP_TARGET_HOST:-}}\",\"policy_on\":\"${EDGEEXP_POLICY_ON:-0}\"}"
 fi
 # 同一件事的**第二半**：SC2090 报在下面那行 `export` 的变量名上（不是上面的赋值行）——
 # 同一个理由（按字面处理正是本行的意图），故在同一处再关一次；两处都关掉之后，

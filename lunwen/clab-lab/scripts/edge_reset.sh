@@ -19,7 +19,9 @@
 # 比一次失败危险得多：它会以完全正常的语气进入报告）。
 #
 # 环境变量（全部可选）：
-#   EDGEEXP_SUBSTRATE    实验基质：clab（默认，今天的行为）| lxd（A-1，见 edge_lab.sh）
+#   EDGEEXP_SUBSTRATE    实验基质：clab（默认，今天的行为）| lxd（A-1）| pve（dl360gen9 的 PVE CT，
+#                        见 edge_lab.sh）。lxd 与 pve 走**同一个**"既有实例集合"复位分支
+#                        （语义相同，差异全在 edge_target_prepare.sh 里按基质分派）
 #   EDGEEXP_TOPOLOGY     拓扑文件，默认 <lab>/asscor.clab.yml
 #   EDGEEXP_TARGET_HOST  攻击目标节点名（不带 clab 前缀），默认 host1
 #   EDGEEXP_CALDERA_URL  Caldera API，默认 http://127.0.0.1:8888
@@ -119,23 +121,28 @@ ensure_caldera() {
 T0=$(now_s); ensure_caldera "$T0" || exit 1
 
 # ============================================================================
-# **lxd 基质：复位 = "把既有实例准备成实验条件"**（Task 4D Step 4-B）
+# **lxd / pve 基质：复位 = "把既有实例准备成实验条件"**（lxd：Task 4D Step 4-B；pve：Task 6）
 # ============================================================================
 # 与 clab 的语义差别（必须显式写清，否则读者会以为 lxd 侧"跳过了复位"）：
 #   · clab 的复位是"毁掉再建拓扑"（`lab_down` + `lab_up`）—— 每次都是全新的容器集合；
-#   · LXD 上没有拓扑对象，A-1 上的实验环境是**既有实例集合**（且控制侧裁定不得删改
-#     `probe-ot005` 这类对照容器）⇒ 复位只能是"把目标实例准备成实验条件"：六个控制 +
-#     策略在/不在 + 活得着的 sandcat agent，每一步都**先查后做**（幂等）。
+#   · LXD/PVE 上没有拓扑对象，实验环境是**既有实例/CT 集合**（且控制侧裁定不得删改
+#     `probe-ot005` 这类对照容器、也不得动别人的 CT）⇒ 复位只能是"把目标实例准备成实验条件"：
+#     六个控制 + 策略在/不在 + 活得着的 sandcat agent，每一步都**先查后做**（幂等）。
 # 因此这里**直接调用** `edge_target_prepare.sh` 并在它成功后收敛，不再走下面 clab 的
-# destroy/deploy/节点等待/agent 部署那几段（那几段在 lxd 下会依次以"不适用"失败 —— 那是
-# 刻意的，见 edge_lab.sh 对 lab_up/lab_down 的说明）。
+# destroy/deploy/节点等待/agent 部署那几段（那几段在 lxd/pve 下会依次以"不适用"失败 ——
+# 那是刻意的，见 edge_lab.sh 对 lab_up/lab_down 的说明）。
+#
+# **为什么把 pve 并进这一个分支**（而不是再抄一段）：两种基质的复位**语义完全相同**
+# （"把既有实例准备成实验条件"），差别全在 `edge_target_prepare.sh` 内部按基质分派的那几处
+# （建/启实例、取包、策略的设置面）。再抄一段会让"什么算复位成功"出现第二处真源。
+# lxd 的行为**逐位未变**：条件只是多了一个 `= "pve"` 的或项，`$lab_substrate` 的取值集合没有重叠。
 # shellcheck disable=SC2154  # lab_substrate 由 source edge_lab.sh 赋值
-if [ "$lab_substrate" = "lxd" ]; then
+if [ "$lab_substrate" = "lxd" ] || [ "$lab_substrate" = "pve" ]; then
   PREPARE="$SCRIPT_DIR/edge_target_prepare.sh"
-  [ -f "$PREPARE" ] || { echo "edge_reset: 缺少 lxd 侧的复位脚本 $PREPARE" >&2; exit 1; }
+  [ -f "$PREPARE" ] || { echo "edge_reset: 缺少 $lab_substrate 侧的复位脚本 $PREPARE" >&2; exit 1; }
   TARGET_NODE="${EDGEEXP_TARGET:-${EDGEEXP_TARGET_HOST:-}}"
   [ -n "$TARGET_NODE" ] || {
-    echo "edge_reset: lxd 基质下必须给 EDGEEXP_TARGET=<实例名> —— 复位要作用在**某一个实例**上" >&2
+    echo "edge_reset: $lab_substrate 基质下必须给 EDGEEXP_TARGET=<实例名/CT 名> —— 复位要作用在**某一个实例**上" >&2
     exit 1
   }
   # `probe-ot005` 是控制侧的对照容器：复位**不得**把它当目标（判据写在最前面，避免"跑错了才发现"）
@@ -150,16 +157,21 @@ if [ "$lab_substrate" = "lxd" ]; then
     exit 1
   fi
   prepare_s=$(( $(now_s) - T0 ))
-  # 复位留痕：与 clab 分支同形状的 run.d/reset-<scenario>.json（字段按 lxd 的语义给，
-  # 不写"拓扑/节点数"这些在 LXD 上不存在的量 —— 写了就是编造）。
+  # 复位留痕：与 clab 分支同形状的 run.d/reset-<scenario>.json（字段按该基质的语义给，
+  # 不写"拓扑/节点数"这些在 LXD/PVE 上不存在的量 —— 写了就是编造）。
+  # `substrate` 取**当前基质**（lxd 下仍是字面 `lxd`，逐字未变；pve 下是 `pve`）——
+  # 写死 `lxd` 会让 PVE 上的记录声称自己跑在 LXD 上，那是一条无法从数据上区分的假证据。
+  # `env` 的默认标签同理：lxd 下仍是 `a1-lxd`（逐字未变），pve 下给 `dl360-pve`。
+  RESET_ENV_DEFAULT="a1-lxd"
+  [ "$lab_substrate" = "pve" ] && RESET_ENV_DEFAULT="dl360-pve"
   FINISHED_AT=$(now_rfc3339)
   TOTAL_S=$(( $(now_s) - START_S ))
   cat > "$TMP_OUT" <<EOF
 {
   "scenario": "${SCENARIO}",
   "phase": "reset",
-  "env": "${EDGEEXP_ENV:-a1-lxd}",
-  "substrate": "lxd",
+  "env": "${EDGEEXP_ENV:-$RESET_ENV_DEFAULT}",
+  "substrate": "${lab_substrate}",
   "started_at": "$STARTED_AT",
   "finished_at": "$FINISHED_AT",
   "elapsed_s": $TOTAL_S,
@@ -167,11 +179,11 @@ if [ "$lab_substrate" = "lxd" ]; then
   "policy_on": "${EDGEEXP_POLICY_ON:-0}",
   "policy_rule": "${EDGEEXP_POLICY_RULE:-audit deny /etc/shadow r,}",
   "timings_s": {"caldera": $caldera_s, "prepare": $prepare_s},
-  "note": "lxd 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+  "note": "$lab_substrate 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
 }
 EOF
   mv "$TMP_OUT" "$RUN_D/$FILLER"
-  echo "edge_reset: 复位完成（lxd，总 ${TOTAL_S}s，prepare ${prepare_s}s）→ $RUN_D/$FILLER"
+  echo "edge_reset: 复位完成（$lab_substrate，总 ${TOTAL_S}s，prepare ${prepare_s}s）→ $RUN_D/$FILLER"
   exit 0
 fi
 
