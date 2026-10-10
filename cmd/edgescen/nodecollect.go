@@ -67,9 +67,18 @@ const (
 	// substrateLXD = A-1 上的 LXD 实例 —— `lxc file push` + `lxc exec --env … --`。
 	// 用户 2026-09-12 裁定实验基质搬到 A-1（LXD，环境真实），这是那条路径的入口。
 	substrateLXD nodeSubstrate = "lxd"
+	// substratePVE = dl360gen9 上的 **PVE CT** —— `pct push` + `pct exec <vmid> -- env … `。
+	// 用户 2026-09-12 的裁定把方向② 的实验基质交给真实环境，dl360gen9 上是 PVE（没有 LXD、
+	// 也没有给节点用的 Docker），节点是 CT（`pct`），这是那条路径的入口（Task 6）。
+	//
+	// ⚠️ **`pct exec` 没有 `--env`**（实测 `pct help exec` 只有 `--keep-env`）—— 这是与
+	// docker/lxd 唯一的**结构性**差别，nonce 因此只能经节点内的 `env` 下发；三侧的信封校验
+	// 仍然共用同一份实现（见 runNodeProcess 与 parseNodeEnvelope）。
+	substratePVE nodeSubstrate = "pve"
 )
 
-// targetPrefixDocker / targetPrefixLXD 是 `-target` 的**基质前缀**（`docker:<名>` / `lxd:<名>`）。
+// targetPrefixDocker / targetPrefixLXD / targetPrefixPVE 是 `-target` 的**基质前缀**
+// （`docker:<名>` / `lxd:<名>` / `pve:<vmid>`）。
 //
 // 为什么要有前缀（而不是一个 `-substrate` 开关）：观测主体是**每一条记录**的属性，而不是
 // 整个进程的属性 —— 一个进程内混采两种基质时，开关式的写法会让"这条记录采自哪里"取决于
@@ -77,6 +86,7 @@ const (
 const (
 	targetPrefixDocker = string(substrateDocker) + ":"
 	targetPrefixLXD    = string(substrateLXD) + ":"
+	targetPrefixPVE    = string(substratePVE) + ":"
 )
 
 // nodeTarget 是解析后的 `-target`：**基质 + 节点名**。
@@ -91,17 +101,20 @@ func (nt nodeTarget) binary() string {
 	switch nt.Substrate {
 	case substrateLXD:
 		return "lxc"
+	case substratePVE:
+		return "pct"
 	default:
 		return "docker"
 	}
 }
 
-// parseNodeTarget 解析 `-target`，语法三种（`-h` 文案与错误串里必须写明同一套）：
+// parseNodeTarget 解析 `-target`，语法四种（`-h` 文案与错误串里必须写明同一套）：
 //
 //	""                 ⇒ 由调用方处理（collectChecksForTarget 的默认路径 = 本机）
 //	<裸名字>            ⇒ docker（**向后兼容**：Task 4C 以来的语义，逐位不变）
 //	docker:<容器>       ⇒ docker（与裸名字等价，只是把基质显式写出来）
-//	lxd:<实例>          ⇒ lxd（新）
+//	lxd:<实例>          ⇒ lxd（A-1 的 LXD）
+//	pve:<vmid>          ⇒ pve（dl360gen9 的 PVE CT；这里是 **VMID**，由 `lab_target_spec` 解析后给出）
 //
 // 为什么"未知前缀"必须报错而不是当成裸名字：`lxd:probe-ot005` 里的名字若被当成
 // **docker 容器名**，docker 会以 `No such container: lxd:probe-ot005` 失败 —— 那条错误指向
@@ -109,6 +122,12 @@ func (nt nodeTarget) binary() string {
 // （`[A-Za-z0-9_-]+`）且冒号后面还有名字：**看着像基质前缀却不在白名单**一律报错
 // （`foo:bar` 里的 `foo` 完全可能是个拼错的基质名，报出来比让它变成一次"容器不存在"有用得多）。
 // 只有"冒号前面不像标识符"（例如路径或 IPv6 里的冒号）才继续按今天的裸名字语义走 docker。
+//
+// pve 这一格**刻意不做"必须是纯数字"的额外校验**：解析层在三种基质上做的是同一件事
+// （把基质前缀摘掉、留下节点标识），把 pct 的"vmid 必须是数字"这条**基质内部规则**搬到这里，
+// 会让三层解析各有一套关于节点标识的语法。名字→vmid 的解析**只有一处**，在基质层
+// （`edge_lab.sh` 的 `lab_node_vmid`）；给一个非数字的标识时 `pct` 自己会失败（实测 rc≠0），
+// 那条失败照样响亮、照样不写任何记录。
 func parseNodeTarget(target string) (nodeTarget, error) {
 	raw := strings.TrimSpace(target)
 	if raw == "" {
@@ -127,15 +146,22 @@ func parseNodeTarget(target string) (nodeTarget, error) {
 			return nodeTarget{}, fmt.Errorf("节点内采集：target %q 缺少实例名（用法：%s<实例名>）", raw, targetPrefixLXD)
 		}
 		return nodeTarget{Substrate: substrateLXD, Node: node}, nil
+	case strings.HasPrefix(raw, targetPrefixPVE):
+		node := strings.TrimSpace(strings.TrimPrefix(raw, targetPrefixPVE))
+		if node == "" {
+			return nodeTarget{}, fmt.Errorf("节点内采集：target %q 缺少 vmid（用法：%s<vmid>；"+
+				"vmid 由基质层 `lab_target_spec` 从 CT 名字解析出来）", raw, targetPrefixPVE)
+		}
+		return nodeTarget{Substrate: substratePVE, Node: node}, nil
 	}
 	if i := strings.Index(raw, ":"); i >= 0 {
 		prefix := raw[:i]
 		// 只有"像一个基质前缀"时才报错：前缀是纯字母/数字/下划线/连字符（即一个标识符）而后面
 		// 还有名字。`foo:bar` 因此仍然按今天的裸名字走 docker，不会因本次改动改变语义。
 		if isIdentifier(prefix) && strings.TrimSpace(raw[i+1:]) != "" {
-			return nodeTarget{}, fmt.Errorf("节点内采集：target %q 的基质前缀 %q 未知（只认 %q 与 %q；"+
+			return nodeTarget{}, fmt.Errorf("节点内采集：target %q 的基质前缀 %q 未知（只认 %q、%q 与 %q；"+
 				"不带前缀的裸名字按 %s 处理）", raw, prefix, strings.TrimPrefix(targetPrefixDocker, ":"),
-				strings.TrimPrefix(targetPrefixLXD, ":"), substrateDocker)
+				strings.TrimPrefix(targetPrefixLXD, ":"), strings.TrimPrefix(targetPrefixPVE, ":"), substrateDocker)
 		}
 	}
 	return nodeTarget{Substrate: substrateDocker, Node: raw}, nil
@@ -374,6 +400,14 @@ func copyBinaryIntoNode(nt nodeTarget, localPath string) (string, error) {
 		if _, err := runLXC("file", "push", localPath, nt.Node+dest); err != nil {
 			return "", err
 		}
+	case substratePVE:
+		// `pct push <vmid> <本地> <目标路径> --perms 755` —— 与 lxd 那行**逐项对应**，
+		// 但参数顺序**相反**（vmid 在前、目标路径是独立的一个参数，没有 lxc 那种
+		// `<实例><路径>` 拼接）。`--perms 755` 让"送进去就能执行"在**送进去的那一刻**成立，
+		// 与 docker 侧 `docker cp` 之后依赖镜像里的权限不同（docker 侧的历史行为不动）。
+		if _, err := runPCT("push", nt.Node, localPath, dest, "--perms", "755"); err != nil {
+			return "", err
+		}
 	default:
 		return "", fmt.Errorf("节点内采集：未知基质 %q", nt.Substrate)
 	}
@@ -386,9 +420,10 @@ func copyBinaryIntoNode(nt nodeTarget, localPath string) (string, error) {
 // 原始检查结果**交出来（评分与装配仍由父进程做 —— 那是本工具的全部契约与自检所在，
 // 不能在节点里重跑第二遍）。因此也就不需要把配置/harness 产物也送进容器。
 //
-// nonce 经**环境变量**下发（docker: `-e <ENV>=<nonce>`；lxd: `--env <ENV>=<nonce>`）而不是
-// 参数位：`-emit-checks` 只接受空参数集这条性质要保住（见 nodeNonceEnv 的说明）。两种基质的
-// 开关拼写不同（`-e` vs `--env`），但**语义同一件事**：给节点内进程设一个只属于本次运行的值。
+// nonce 经**环境变量**下发（docker: `-e <ENV>=<nonce>`；lxd: `--env <ENV>=<nonce>`；
+// pve: `-- env <ENV>=<nonce> …`）而不是参数位：`-emit-checks` 只接受空参数集这条性质要保住
+// （见 nodeNonceEnv 的说明）。三种基质的开关拼写不同，但**语义同一件事**：给节点内进程设一个
+// 只属于本次运行的值。
 func runNodeProcess(nt nodeTarget, containerPath, emitFlag, nonce string) ([]byte, error) {
 	switch nt.Substrate {
 	case substrateDocker:
@@ -397,6 +432,18 @@ func runNodeProcess(nt nodeTarget, containerPath, emitFlag, nonce string) ([]byt
 		// `--` 把命令与 lxc 自己的开关分开：`lxc exec <实例> -- <cmd…>`。少了它，以 `-` 开头的
 		// 命令串（这里就是 `-emit-checks`）会被 lxc 当成自己的参数而报错（实测 rc=1）。
 		return runLXC("exec", "--env", nodeNonceEnv+"="+nonce, nt.Node, "--", containerPath, emitFlag)
+	case substratePVE:
+		// **`pct exec` 没有 `--env`**（实测 `pct help exec` 只有 `--keep-env`），故 nonce 只能
+		// 靠节点内的 `env` 下发。这条形状把下面三条性质一条不落地保住：
+		//   · nonce **不在** `-emit-checks` 那一侧的参数里 —— 节点内进程收到的 argv 仍然
+		//     **恰好是 `[-emit-checks]`**（`env K=V <bin> -emit-checks` 里 `K=V` 是 `env` 自己的
+		//     位置参数，进程的 argv[0] 之后只有那个开关）。"`-emit-checks` 只接受空参数集"
+		//     这条守卫因此没有被开出一个"合法参数"，nonce 没有进参数位；
+		//   · `--` 把命令与 `pct` 自己的开关分开（**实测必需**：`pct exec` 把 `--` 之后的整串
+		//     当 `<extra-args>` 原样交给容器，`-emit-checks` 不会被 pct 的选项解析器吃掉）；
+		//   · 信封校验（标记 / nonce 非空且等于本次下发 / hostname / 非空检查集 / 取最后一行）
+		//     走的仍是 `parseNodeEnvelope`，**与 docker/lxd 共用同一份实现**。
+		return runPCT("exec", nt.Node, "--", "env", nodeNonceEnv+"="+nonce, containerPath, emitFlag)
 	default:
 		return nil, fmt.Errorf("节点内采集：未知基质 %q", nt.Substrate)
 	}
@@ -420,6 +467,15 @@ var runLXC = func(args ...string) ([]byte, error) {
 	return runNodeCLI("lxc", args...)
 }
 
+// runPCT 执行一次 pct 子命令（stdout/stderr 分开收集）—— 与 `runLXC` 同一个手法。
+//
+// 它同样是**包级变量**（Task 6）：判据要求"把假 pct 换成假 docker 的等价变异必须让用例红"，
+// 有接缝时这条可以在**同一份源码**上被证明（用例把 `runPCT` 指到 `runDocker`，
+// 也就是"`pve:` 前缀认了、但二进制还是 docker"这个最像的错法）。生产代码从不改写它。
+var runPCT = func(args ...string) ([]byte, error) {
+	return runNodeCLI("pct", args...)
+}
+
 // runNodeCLI 是节点侧 CLI 的执行点（Task 4D Step 2 把 docker 专用实现泛化到这里）。
 //
 // 失败时把子进程的 stderr **原样带进错误**：目标不存在、容器没在跑、CLI 不在 PATH
@@ -432,9 +488,10 @@ var runLXC = func(args ...string) ([]byte, error) {
 // 97581d8: 节点内采集：docker exec %s %s 失败: %s   （args[1]="-e"、args[2]="EDGESCEN_NODE_NONCE=<nonce>"）
 // 泛化后 : 节点内采集：docker exec 失败（exec -e EDGESCEN_NODE_NONCE=<nonce> <容器> <二进制> -emit-checks）: …
 // ```
-// 现在两条路径各有自己的措辞：docker 保留字面量（**含那个把 `-e` / `NONCE=…` 当参数打印的形状**，
-// 它是既有日志的形态，不是本次引入的），lxc 用按实例与目标路径报错的说法（`file push <本地> → <实例><目标>`
-// 与完整的 `exec` 命令）—— 后者是**新**基质，没有"不许变"的历史包袱，说得更准才有用。
+// 现在三条路径各有自己的措辞：docker 保留字面量（**含那个把 `-e` / `NONCE=…` 当参数打印的形状**，
+// 它是既有日志的形态，不是本次引入的），lxc 与 pct 用按实例/vmid 与目标路径报错的说法
+// （`file push <本地> → <实例><目标>` / `push <本地> → <目标>`，以及完整的 `exec` 命令）——
+// 后两者是**新**基质，没有"不许变"的历史包袱，说得更准才有用。
 func runNodeCLI(bin string, args ...string) ([]byte, error) {
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(bin, args...)
@@ -459,6 +516,18 @@ func runNodeCLI(bin string, args ...string) ([]byte, error) {
 				return nil, fmt.Errorf("节点内采集：lxc exec 失败（%s）: %s", strings.Join(args, " "), detail)
 			}
 			return nil, fmt.Errorf("节点内采集：lxc %s 失败: %s", strings.Join(args, " "), detail)
+		}
+		if bin == "pct" {
+			switch args[0] {
+			case "push":
+				// `pct push <vmid> <本地> <目标> [--perms …]`：报出**本地文件**与**目标**。
+				if len(args) >= 4 {
+					return nil, fmt.Errorf("节点内采集：pct push %s → %s 失败: %s", args[2], args[3], detail)
+				}
+			case "exec":
+				return nil, fmt.Errorf("节点内采集：pct exec 失败（%s）: %s", strings.Join(args, " "), detail)
+			}
+			return nil, fmt.Errorf("节点内采集：pct %s 失败: %s", strings.Join(args, " "), detail)
 		}
 		switch args[0] {
 		case "cp":
