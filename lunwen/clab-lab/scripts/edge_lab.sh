@@ -167,6 +167,54 @@ lab_require_bins() {
   return 0
 }
 
+# ---------------------------------------------------------------------------
+# 基线活跃集：**按基质如实声明**（用户 2026-10-10 裁定，Task 7）
+# ---------------------------------------------------------------------------
+#
+# 为什么这一条属于**基质层**：一个因子"不看场景也该在链上"，取决于**这个基质能不能观测到它背后
+# 的那条检查** —— 那是**基质**的事实，不是场景的事实，更不是某一台机器的偶然。既然"当前是哪一
+# 种基质"只有本层知道，基线集也就只有本层能如实声明。
+#
+# **pve 基质为什么是这两个因子**：`OT-005`（强制执行的可见性）在 **PVE CT** 里
+# **结构性不可观测** —— LXC 的 apparmor 命名空间不向容器暴露 profile（`aa-status` 报
+# `Failed to get profiles: 2`、可见策略数 0；装包解决不了），而配置里
+# `trigger.EF-SELINUX` 与 `trigger.EF-APPARMOR` **都指向 `OT-005`**
+# ⇒ 这两个因子**恒在链上**，与场景无关。
+# 用户裁定的处置是**如实声明**（而不是去改 `internal/checks` 让 OT-005 在 CT 里"可测" ——
+# 那条路要动底座文件、影响 main/ARC 的一致性审计，用户已明确否决）。
+#
+# 声明的两个变量就是 `edge_attack.sh` 读的那两个（Task 4D Step 4-B3 做好的机制，
+# 故**声明本身零代码改动**）：它们进 harness 产物的 `expected_baseline_factors` /
+# `expected_baseline_factors_source`，采集脚本据此把相等断言的右边从「注入集」扩成
+# 「**声明面 = 基线活跃集 ∪ 注入集**」。
+#
+# 三条纪律（每条都对应一种"看起来正常、其实声明错了"的形态）：
+#
+#  1. **只在 pve 下设置**：clab/lxd 的这两个变量**不设、不导出**（一个字节都不动）——
+#     Task 6 的硬不变式在 Task 7 仍然成立。
+#  2. **操作者显式给的值优先**，判据用 `+set` 而**不是** `:-`：显式给**空串**是有意义的
+#     （回到"没有基线声明"的老路径），不能把它当成"没设"而被默认值盖掉 ——
+#     那会把一个诊断/复现入口变成不可能（Task 7 Step 1 的反证正是靠它）。
+#  3. **非空声明必须带来源**：只给了因子、没给来源 ⇒ 响亮警告。产物里的
+#     `expected_baseline_factors_source` 在那种情况下会退化成"未声明（默认空基线集）"，
+#     而那与**真的**空基线集同形 —— 读数据的人分不出"声明了但没写为什么"与"没声明"。
+#     这正是本层要堵的"安静"：**不会失败，只会让事后无从判断**。
+lab_pve_baseline_factors="EF-SELINUX,EF-APPARMOR"
+lab_pve_baseline_factors_source="PVE CT 基质：LXC 的 apparmor 命名空间不向容器暴露 profile（aa-status 报 Failed to get profiles: 2、可见策略数 0）⇒ OT-005 结构性不可观测；而 trigger.EF-SELINUX 与 trigger.EF-APPARMOR 都指向 OT-005 ⇒ 这两个因子恒在链上。用户 2026-10-10 裁定『按基质如实声明基线活跃集』，不去改 internal/checks"
+case "$lab_substrate" in
+  pve)
+    if [ -z "${EDGEEXP_BASELINE_FACTORS+set}" ]; then
+      EDGEEXP_BASELINE_FACTORS="$lab_pve_baseline_factors"
+      EDGEEXP_BASELINE_FACTORS_SOURCE="$lab_pve_baseline_factors_source"
+      export EDGEEXP_BASELINE_FACTORS EDGEEXP_BASELINE_FACTORS_SOURCE
+    elif [ -n "$EDGEEXP_BASELINE_FACTORS" ] && [ -z "${EDGEEXP_BASELINE_FACTORS_SOURCE+set}" ]; then
+      echo "edge_lab: 警告：EDGEEXP_BASELINE_FACTORS='$EDGEEXP_BASELINE_FACTORS' 是**非空**的基线声明，" >&2
+      echo "  却没有给 EDGEEXP_BASELINE_FACTORS_SOURCE —— 产物里的来源会退化成" >&2
+      echo "  『未声明（默认空基线集）』，与**真的**空基线集在数据上无法区分。" >&2
+      echo "  基线集按基质声明，来源必须与它一起写出来（用户 2026-10-10 裁定）。" >&2
+    fi ;;
+esac
+
 # lab_lab_dir / lab_topology —— lab 目录与拓扑文件。
 #
 # 路径的解析基准是本文件自己的位置（`edge_lab.sh` 与四个调用脚本同在 scripts/ 下），

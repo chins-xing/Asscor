@@ -307,6 +307,12 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   # 基质必须在干跑里就看得见（Task 4D Step 1）：它决定"环境怎么建/毁、目标怎么被 exec、
   # `-target` 长什么样"，而默认值 clab = 今天的行为。换基质是**显式**动作，不是隐式继承。
   echo "  基质        : $lab_substrate（clab = 今天的行为；lxd = A-1 上的既有实例；pve = PVE CT（pct），见 edge_lab.sh）"
+  # 基质基线活跃集必须在干跑里就看得见（Task 7）：它决定「声明面 = 基线活跃集 ∪ 注入集」的
+  # **左边那一半**，而它是**按基质**定的（见 edge_lab.sh 的那段）。看不它，操作者就无法在跑之前
+  # 判断"这批记录的因子向量会带上哪些天然因子"。空基线集也照打（"没声明"与"声明为空"
+  # 在数据上必须能分开读，这里同理）。
+  # shellcheck disable=SC2154  # EDGEEXP_BASELINE_FACTORS/_SOURCE 由 source edge_lab.sh 赋值/导出
+  echo "  基线活跃集  : ${EDGEEXP_BASELINE_FACTORS:-（空）}｜来源：${EDGEEXP_BASELINE_FACTORS_SOURCE:-未声明（默认空基线集）}"
   # 两层 CLI 分别打印（Fix round 1 / M-2）：上一版只打一个 `$lab_bin`，读者看不出"拓扑级用哪个、
   # 容器级用哪个"——而那条区分正是 I-1 的根因（一个变量两义）。现在两个名字各打一个。
   # shellcheck disable=SC2154  # lab_topology_bin / lab_target_bin 由 source edge_lab.sh 赋值
