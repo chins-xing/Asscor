@@ -1338,7 +1338,7 @@ CT 904 上 44 项检查失败，而 `EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007`
 | 16 | `S2-selinux-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
 | 17 | `S2-syn-cookie-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
 | 18 | `S2-syn-cookie-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
-| 19 | `S3-3fa-selinux-apparmor` | check_fail | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | **被打回**（缺 EF-002FA） | **预期失败**（见下） |
+| 19 | `S3-3fa-selinux-apparmor` | check_fail | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达（**实测确认**，见 D.1） |
 | 20 | `S3-selinux-apparmor-2fa` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达 |
 | 21 | `S3-selinux-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
 | 22 | `S3-syn-cookie-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
@@ -1346,7 +1346,10 @@ CT 904 上 44 项检查失败，而 `EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007`
 | 24 | `S5-2fa-only` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
 | 25 | `S5-cascade-3fa` | check_fail | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
 
-**统计**：**可达 21 ｜ 需改机器状态 0 ｜ 结构性不可达 3 ｜ 另有 1 个"预期失败"**（＝ 25）。
+**统计**：**可达 22 ｜ 需改机器状态 0 ｜ 结构性不可达 3**（＝ 25）。
+
+**复算口径（修正过一次，务必按这条算）**：链 = `B ∪ 注入集 ∪ 级联闭包(注入集)` ——
+注入 `EF-3FA` 时，**级联目标 `EF-002FA` 也会上链**（见 D.1）。
 
 ### D.1 与控制侧给的 `4 / 18 / 3` 的复核结论
 
@@ -1359,23 +1362,38 @@ CT 904 上 44 项检查失败，而 `EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007`
 | 结构性不可达（R 组） | **3** | **3**：`R-no-2fa` / `R-no-ids` / `R-no-siem` | ✅ 完全一致 |
 
 ⇒ **`4 / 18 / 3` 复核通过**（同一口径、独立算的，逐场景名字也对得上）。
+可达性轴上的结论是 **22 可达 / 0 需改机器状态 / 3 结构性不可达**。
 
-**但独立复核多出一条控制侧没有的信息**（下表第 19 行）：
+### D.1.1 一处**我自己的推演被实测推翻**（如实登记，不要删）
 
-> **`S3-3fa-selinux-apparmor` 在"可达性"这条轴上**不是"没问题"，而是**预期会被打回**，
-> 且原因与基线集**无关**：它的产物 `expected_chain_factors` 是
-> `{EF-002FA, EF-3FA, EF-APPARMOR, EF-SELINUX}`（`edge_attack.sh` 的级联展开
-> `EF-3FA → EF-002FA` 加上了级联目标），而该场景的**注入相位只注入 `EF-3FA` 与
-> `EF-SELINUX,EF-APPARMOR`**（`scenarios["S3-3fa-selinux-apparmor"].Inject`）——
-> **没有人让 `EF-002FA` 的触发检查 `EF-001` 失败**。而这台 CT 上 `EF-001` **自然通过**
-> （实测），也没有任何相位注入它 ⇒ **`EF-002FA` 不可能上链** ⇒ 相等断言以
-> `missing_injected = [EF-002FA]` 失败。
-> 对照 `S5-cascade-3fa`：它的相位是 `EF-3FA|EF-002FA`，**两个都注入**，故 `EF-002FA` 上链、通过。
->
-> **这条与"按基质声明基线集"是两件事**：声明基线集**修不了**它（那是"多出因子"的问题，
-> 这里是"缺因子"）。**它不是本基质独有的**：任何 `EF-001` 自然通过的宿主都会撞上。
-> 处置需要**改场景定义或期望集推导**（例如给 S3-3fa 的相位补上 `EF-002FA`，
-> 或让期望集对该场景退回 `Factors`），**属设计决策，不在 Task 7 范围内**。
+初版普查表把第 19 行 `S3-3fa-selinux-apparmor` 判成"**预期失败**"，依据是离线推演
+「链 = B ∪ 注入集」：该场景的产物期望集含级联目标 `EF-002FA`（`edge_attack.sh` 的
+`EF-3FA → EF-002FA` 展开），而注入相位只注入 `EF-3FA` 与 `EF-SELINUX,EF-APPARMOR`
+⇒ 推得 `EF-002FA` **不可能上链**。
+
+**真跑把这个推演推翻了**：该场景 `collect-rc=0`、因子集相等断言**通过**
+（`链 4 个 ID = 声明面：注入 4 个 ∪ 基线 2 个`）。记录原文：
+
+```
+链条数 = 6
+  factor=EF-002FA    trigger=EF-001  c_trigger=0  eff=0.7000    ← 注入集里没有它，链上却有
+  factor=EF-APPARMOR trigger=OT-005  c_trigger=1  eff=0.8200
+  factor=EF-SELINUX  trigger=OT-005  c_trigger=1  eff=0.8000
+  factor=EF-3FA      trigger=EF-002  c_trigger=1  eff=0.8200
+  …（OT-005 的两个因子各再出现一次；共 6 条 / 去重 4 个 ID）
+```
+
+**机制**：引擎的**级联**会把级联目标带上链，且以 `c_trigger = 0`（"**仅由级联激活**"）出现 ——
+这与 §10.2 已登记的"级联因子在 V/G/C 下不产生惩罚（`c_trigger = 0`）"是**同一条行为**。
+注意 `EF-001` **根本没有出现在这次记录的 `checks` 里**，说明级联路径**不需要**
+它的触发检查被观测到。
+
+**修正后的口径**：链 = `B ∪ 注入集 ∪ 级联闭包(注入集)`（注入 `EF-3FA` ⇒ 同时带上 `EF-002FA`）。
+本表的复算脚本按此修正并重跑，结论 **22 / 0 / 3**。
+
+**教训（写在这里以防再犯）**：离线推演可以做**预测**，但**不能替代真跑**。
+第 19 行就是"推演看起来无懈可击、实测一句话推翻"的例子；凡是对**链上会出现什么**
+下判断的地方，都要用真跑收口。
 
 ### D.2 "需改机器状态"为什么是 0
 
