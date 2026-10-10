@@ -98,6 +98,15 @@ PIDS_HELPER="$SCRIPT_DIR/edge_lab_pids.sh"
 PVE_DEB_DIR="${EDGEEXP_PVE_DEB_DIR:-/var/tmp/edgeexp-debs}"
 PVE_DEB_PORT="${EDGEEXP_PVE_DEB_PORT:-8899}"
 PVE_CONF_DIR="${EDGEEXP_PVE_CONF_DIR:-/etc/pve/lxc}"
+# dpkg 的"已装"判据串：**只在这里写一次**（两处轮询 + 缺包探测都用它）。
+# 写成常量而不是散在各处的字面量，理由与其它"单一来源"一样：口径分叉时两边都还能跑，
+# 只是一个说"装好了"、一个说"还没"。
+PKG_INSTALLED_STATUS='install ok installed'
+# 闭包基准用的两份 dpkg status（见下面 pve 分支）：
+#   RAW  = 直接从 CT 里取回来的原样；
+#   NORM = 把非 `install ok installed` 的条目降级成"未安装"之后的那份（给 apt 当 `Dir::State::status`）。
+PVE_STATUS_RAW="${EDGEEXP_PVE_STATUS_RAW:-/var/tmp/edgeexp-ct-status.raw}"
+PVE_STATUS_NORM="${EDGEEXP_PVE_STATUS_NORM:-/var/tmp/edgeexp-ct-status.norm}"
 # **agent 分组名只有一个来源：`EDGEEXP_ATTACK_GROUP`**（Task 4D Fix round 2 / Minor-4）。
 #
 # 上一版这里把 `--group t4d-ttp` **硬编码**在拉起命令里，而攻击侧要求用 `EDGEEXP_ATTACK_GROUP`
@@ -123,6 +132,44 @@ pve_vmid() {
   local vmid
   vmid="$(lab_node_vmid "$TARGET")" || return 1
   printf '%s\n' "$vmid"
+}
+
+# ct_reachable_host_addr —— **宿主自己**在 CT 网段上的地址（pve 的默认值来源）。
+#
+# 为什么必须有这个函数（Task 6 收尾轮实测到的第二处"地址给错了机器"）：
+#   `EDGEEXP_C2_HOST` 的既有默认值是"**容器内的默认网关**" —— 在 A-1 的 LXD 拓扑里那个网关
+#   就是宿主，但在 dl360gen9 上它是**路由器 `192.168.30.1`**，而宿主是 `192.168.30.2`。
+#   于是 C2 自证以 `000` 失败（那一轮实测的原始报错就长这样），脚本还得靠操作者手工加
+#   `EDGEEXP_C2_HOST=` 才跑得起来 —— 那就谈不上"`EDGEEXP_SUBSTRATE=pve` 时能直接跑起来"。
+#   正确判据与前一步给本地包镜像用的是**同一条**：从宿主自己的接口里挑一个落在 CT 网段内的
+#   地址。抽成函数是为了这个判据**只有一处**（本地包镜像的 `--bind` 与 C2 地址两处都用它）。
+#
+# **定义必须排在它的调用点之前**（实测踩过）：bash 的函数在**调用时**才解析名字，
+# 而 `pve_install_controls`（第 2 步）先于第 3 步被调用 —— 把本函数写在第 2 步之后就得到
+# `ct_reachable_host_addr: command not found`，看起来像"这个环境没有那条命令"。
+ct_reachable_host_addr() {
+  local cidr
+  cidr="$(lab_node_ip "$TARGET" eth0 2>/dev/null || true)"
+  python3 - "$cidr" <<'PY'
+import ipaddress, subprocess, sys
+cidr = (sys.argv[1] if len(sys.argv) > 1 else '').strip()
+try:
+    net = ipaddress.ip_network(cidr, strict=False)
+except Exception:
+    print(''); raise SystemExit
+out = subprocess.run(['ip', '-4', '-o', 'addr', 'show'], capture_output=True, text=True).stdout
+for line in out.splitlines():
+    parts = line.split()
+    if 'inet' not in parts:
+        continue
+    try:
+        ip = ipaddress.ip_interface(parts[parts.index('inet') + 1]).ip
+    except Exception:
+        continue
+    if ip in net and not ip.is_loopback:
+        print(str(ip)); raise SystemExit
+print('')
+PY
 }
 
 # wait_for_exec <秒> —— 等实例真的**能在里面执行命令**；判据与实现都在**基质层**
@@ -245,19 +292,55 @@ trap 'stop_pve_http' EXIT
 pve_install_controls() {
   local missing="$1" vmid host_ip waited
   vmid="$(pve_vmid)" || return 1
-  # 1) 宿主侧：把依赖闭包下到 PVE_DEB_DIR（已下过就是幂等的：`--download-only` 不会重复下）。
-  if ! ls "$PVE_DEB_DIR"/*.deb >/dev/null 2>&1; then
-    echo "edge_target_prepare: 宿主侧预置控制包 ⇒ apt-get --download-only -o Dir::Cache::archives=$PVE_DEB_DIR $missing"
+  # 1) 宿主侧：把依赖闭包下到 PVE_DEB_DIR。
+  #
+  #    **闭包的基准必须是"目标 CT 现在装了什么"** —— 这是 Task 6 收尾轮修掉的那个 bug
+  #    （原来直接用 `apt-get install --download-only`，它按**宿主**的已装集合算闭包；
+  #    宿主上已经有的依赖 `libglib2.0-0t64`/`libnuma1`/`libfdt1`/`python3-yaml`… 根本不会被下，
+  #    而全新最小 CT 里没有它们 ⇒ 实测 31 个包停在 `install ok unpacked`、`suricata` 装不「完」）。
+  #
+  #    做法两步，都不引入新东西：
+  #      a. 把 CT 的 `/var/lib/dpkg/status` 取到宿主；
+  #      b. 用 `-o Dir::State::status=<这份 status>` 让 apt 以**目标机的已装集合**为基准出计划。
+  #
+  #    **归一化那一步是必须的**（实测）：CT 上可能正停着 `iU`/`iF` 这类中间态（上一趟留下的），
+  #    而 apt 见到不一致的状态会直接 `E: Unmet dependencies. Try 'apt --fix-broken install'`
+  #    拒绝出计划（rc=100、Inst 0 条）。把非 `install ok installed` 的条目降级成"未安装"之后，
+  #    基准是**一致且偏保守**的（宁可多下一个包，绝不少下）。
+  #
+  #    不采用"按空已装集合算"（`-o Dir::State::status=<空文件>`）：实测那会算出 **221 个**包
+  #    （整台基础系统：apt/dpkg/debconf/base-files/exim4…），往一个已经有基础系统的 CT 里装它是错的。
+  if is_pve; then
+    echo "edge_target_prepare: 宿主侧预置控制包 ⇒ 以**CT 自己的已装集合**为基准算闭包（$PVE_DEB_DIR）"
     mkdir -p "$PVE_DEB_DIR"
+    if ! lab_target_exec "$TARGET" cat /var/lib/dpkg/status > "$PVE_STATUS_RAW" 2>/dev/null; then
+      echo "edge_target_prepare: 取 CT 的 dpkg status 失败（$PVE_STATUS_RAW）—— 没有它就算不出正确的闭包" >&2
+      return 1
+    fi
+    python3 - "$PVE_STATUS_RAW" "$PVE_STATUS_NORM" <<'PY' || { echo "edge_target_prepare: 归一化 CT 的 dpkg status 失败" >&2; return 1; }
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+stanzas = open(src, encoding='utf-8', errors='replace').read().split('\n\n')
+out = []
+for st in stanzas:
+    if not st.strip():
+        continue
+    lines = st.split('\n')
+    lines = [('Status: deinstall ok config-files'
+              if l.startswith('Status:') and l.strip() != 'Status: install ok installed'
+              else l) for l in lines]
+    out.append('\n'.join(lines))
+open(dst, 'w', encoding='utf-8').write('\n\n'.join(out) + '\n')
+print('edge_target_prepare: 闭包基准取自 CT 的 dpkg status（%d 个包条目，非 installed 的已降级）' % len(out))
+PY
     if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --download-only \
+         -o Dir::State::status="$PVE_STATUS_NORM" \
          -o Dir::Cache::archives="$PVE_DEB_DIR" $missing > /tmp/edgeexp-pve-debs.log 2>&1; then
       echo "edge_target_prepare: 宿主上下载控制包失败（见 /tmp/edgeexp-pve-debs.log 尾部）——" >&2
       echo "  靶机 CT 出不了公网，没有别的取包途径；不静默跳过（控制包是实验条件的一部分）。" >&2
       tail -20 /tmp/edgeexp-pve-debs.log >&2 || true
       return 1
     fi
-  else
-    echo "edge_target_prepare: 宿主侧预置目录已有 .deb（$(ls "$PVE_DEB_DIR"/*.deb 2>/dev/null | wc -l) 个）—— 幂等路径，不重下"
   fi
   # **宿主侧的文件名可能带 URL 编码的冒号**（epoch 的 `1:` 被 apt 存成 `%3a`）。
   # 实测踩坑（Task 6，这一条让 suricata 永远装不上）：`suricata_1%3a7.0.10-…_amd64.deb`
@@ -280,28 +363,7 @@ pve_install_controls() {
   #    正确判据：**从宿主自己的接口里挑一个落在 CT 网段内的地址**（而不是问 CT 要一个地址）。
   host_ip="${EDGEEXP_C2_HOST:-}"
   if [ -z "$host_ip" ]; then
-    CT_CIDR="$(lab_node_ip "$TARGET" eth0 2>/dev/null || true)"
-    host_ip="$(python3 - "$CT_CIDR" <<'PY'
-import ipaddress, subprocess, sys
-cidr = (sys.argv[1] if len(sys.argv) > 1 else '').strip()
-try:
-    net = ipaddress.ip_network(cidr, strict=False)
-except Exception:
-    print(''); raise SystemExit
-out = subprocess.run(['ip', '-4', '-o', 'addr', 'show'], capture_output=True, text=True).stdout
-for line in out.splitlines():
-    parts = line.split()
-    if 'inet' not in parts:
-        continue
-    try:
-        ip = ipaddress.ip_interface(parts[parts.index('inet') + 1]).ip
-    except Exception:
-        continue
-    if ip in net and not ip.is_loopback:
-        print(str(ip)); raise SystemExit
-print('')
-PY
-)"
+    host_ip="$(ct_reachable_host_addr)"
     host_ip="$(printf '%s' "$host_ip" | tr -d '[:space:]')"
   fi
   [ -n "$host_ip" ] || {
@@ -385,10 +447,23 @@ HARDEN
   # or directory`，而 `&` 让这条错误静默消失，随后只剩一个"永远等不到"的轮询循环）。
   # 后台化用 bash 自己的 `&` 就够（子 shell 里照样能调函数）。
   lab_target_exec "$TARGET" /root/harden.sh "$host_ip" "$PVE_DEB_PORT" > /tmp/edgeexp-pve-harden.out 2>&1 &
+  # **轮询判据里的 `${Status}` 必须转义成 `\${Status}`**（Task 6 收尾轮实测抓到的**既有**缺陷，
+  # 不是本次引入的）：这段字符串由**宿主**用单引号交给容器内的 `sh -c`，而**容器里的 sh 会**展开
+  # `${Status}` —— 那里没有这个变量 ⇒ 展开成**空串** ⇒ `dpkg-query: error in show format:
+  # may not be empty string`（rc=1）⇒ `grep -q "install ok installed"` **永远不匹配** ⇒
+  # 这个轮询循环**永远不会 break**，只会一路跑到 `APT_TIMEOUT_S` 然后报"apt 没装完"。
+  # 基线的 160-162 行（lxd 路径）就是这个写法 —— 它之所以一直没暴露，是因为 A-1 上的控制包
+  # **早就装好了**（`MISSING` 为空 ⇒ 这段根本不进来）。实测证据：
+  #   pct exec 904 -- sh -c 'dpkg-query -W -f="${Status}" suricata …'  ⇒ rc=1
+  #   pct exec 904 -- sh -c 'dpkg-query -W -f="\${Status}" suricata …' ⇒ rc=0
+  # 判据错位的形态与"包装得很慢"同形，故这里连同下一处一起修（两处都改，否则 pve 侧照旧卡死）。
+  # 另外：`lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' <pkg>` —— 把 `-f='${Status}'`
+  # 作为**单个 argv** 交给 `pct exec -- …`，容器里没有第二层 shell，故 `${Status}` **不会被展开**；
+  # 命令用 `lab_target_bin` 而不是外层 `[]`，故 `lab_target_exec` 会把它原样透传（argv 逐条保真）。
   waited=0
   while :; do
-    if lab_target_exec "$TARGET" sh -c 'dpkg-query -W -f="${Status}" suricata 2>/dev/null | grep -q "install ok installed"' 2>/dev/null \
-       && lab_target_exec "$TARGET" sh -c 'dpkg-query -W -f="${Status}" libpam-u2f 2>/dev/null | grep -q "install ok installed"' 2>/dev/null; then
+    if lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' suricata 2>/dev/null | grep -q "$PKG_INSTALLED_STATUS" \
+       && lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' libpam-u2f 2>/dev/null | grep -q "$PKG_INSTALLED_STATUS"; then
       break
     fi
     if [ "$waited" -ge "$APT_TIMEOUT_S" ]; then
@@ -423,9 +498,9 @@ HARDEN
     nohup "$lab_target_bin" exec "$TARGET" -- /root/harden.sh > /tmp/edgeexp-harden.log 2>&1 &
     waited=0
     while :; do
-      if lab_target_exec "$TARGET" sh -c 'dpkg-query -W -f="${Status}" suricata 2>/dev/null | grep -q "install ok installed"' 2>/dev/null \
-         && lab_target_exec "$TARGET" sh -c 'dpkg-query -W -f="${Status}" aide 2>/dev/null | grep -q "install ok installed"' 2>/dev/null \
-         && lab_target_exec "$TARGET" sh -c 'dpkg-query -W -f="${Status}" libpam-u2f 2>/dev/null | grep -q "install ok installed"' 2>/dev/null; then
+      if lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' suricata 2>/dev/null | grep -q "$PKG_INSTALLED_STATUS" \
+         && lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' aide 2>/dev/null | grep -q "$PKG_INSTALLED_STATUS" \
+         && lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' libpam-u2f 2>/dev/null | grep -q "$PKG_INSTALLED_STATUS"; then
         break
       fi
       if [ "$waited" -ge "$APT_TIMEOUT_S" ]; then
@@ -609,7 +684,23 @@ PY
 # 而后者看起来像实例坏了。窗口给 `EDGEEXP_C2_HOST_WAIT_S`（默认 90s），期间每次重问一次。
 C2_HOST_WAIT_S="${EDGEEXP_C2_HOST_WAIT_S:-90}"
 C2_HOST="${EDGEEXP_C2_HOST:-}"
-if [ -z "$C2_HOST" ]; then
+if [ -z "$C2_HOST" ] && is_pve; then
+  # **pve 基质下默认值是"宿主自己在 CT 网段上的地址"**，不是"容器内的默认网关"。
+  # 实测（Task 6 收尾轮）：dl360gen9 的容器默认网关是**路由器 `192.168.30.1`**，宿主是
+  # `192.168.30.2` —— 用网关拼 URL 时 C2 自证回 `000`，整轮在"容器内问不到 C2"处失败，
+  # 而正确的地址明明可达（同一条判据已经用在本地包镜像的 `--bind` 上）。
+  # 这里与那一处**共用同一个函数**（`ct_reachable_host_addr`），不写第二份。
+  c2_waited=0
+  while [ -z "$C2_HOST" ]; do
+    C2_HOST="$(ct_reachable_host_addr)"
+    C2_HOST="$(printf '%s' "$C2_HOST" | tr -d '[:space:]')"
+    [ -n "$C2_HOST" ] && break
+    [ "$c2_waited" -ge "$C2_HOST_WAIT_S" ] && break
+    sleep 3; c2_waited=$((c2_waited + 3))
+  done
+  [ -n "$C2_HOST" ] && echo "edge_target_prepare: C2 主机 = **宿主自己**在 CT 网段上的地址 $C2_HOST（pve 基质；等待 ${c2_waited}s）"
+fi
+if [ -z "$C2_HOST" ] && ! is_pve; then
   c2_waited=0
   while [ -z "$C2_HOST" ]; do
     C2_HOST="$(lab_target_exec "$TARGET" sh -c 'ip route show default 2>/dev/null | awk "/^default/ {print \$3; exit}"' 2>/dev/null || true)"
