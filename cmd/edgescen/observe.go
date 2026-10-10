@@ -272,6 +272,14 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 	// 装配失败时"这台机器的证据面到底长什么样"更该留下，而不是只在成功路径上才有）。
 	// 判据见 `skippedChecks`：它把"评估器变瞎"与"安全变好"分开 —— 没有它，两者在记录里同形。
 	rec.Meta.SkippedChecks = skippedChecks(host)
+	// 声明面（Task 8 Step ④，additive）：把"这条记录的因子集相等断言是拿什么比出来的"写进数据集本体。
+	// 不写的话，**只看 `records-*.jsonl` 的人看不出这批数据做过基线声明** —— 而基线集是**按基质**
+	// 声明的人为选择，同一批记录在"声明过"与"没声明"两种口径下含义不同。
+	// 理由与"它为什么是证据而不是输入"见 `edgeexp.Meta` 那三个字段的说明；与本函数上方两处
+	// （`ObservationTarget` / `SkippedChecks`）同款：写在第一个 `fail` **之前**，装配失败时也要留痕。
+	rec.Meta.ExpectedChainFactors = gt.ExpectedChainFactors
+	rec.Meta.ExpectedBaselineFactors = gt.ExpectedBaselineFactors
+	rec.Meta.ExpectedBaselineFactorsSource = gt.ExpectedBaselineFactorsSource
 	fail := func(format string, args ...any) (edgeexp.Record, error) {
 		reason := fmt.Sprintf(format, args...)
 		rec.Meta.AssemblyError = reason

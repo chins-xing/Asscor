@@ -328,6 +328,31 @@ type Meta struct {
 	//
 	// 它**不参与任何判据**（不是必填、不进评分、不影响 `Validate`）：它是**证据**而不是输入。
 	SkippedChecks []SkippedCheck `json:"skipped_checks,omitempty"`
+
+	// ExpectedChainFactors / ExpectedBaselineFactors / ExpectedBaselineFactorsSource 三个字段
+	// 承载**声明面**（Task 8 Step ④，additive；`omitempty`，读取层不要求；与上面 `SkippedChecks`
+	// 同一路数：**证据而不是输入**，不进评分、不影响阈值、不进 `Validate`）。
+	//
+	// **为什么必须进数据集本体**：采集侧的**因子集相等断言**是"这条记录合法"的前提，而它比的是
+	// 		`observed` 的链上因子集  ==  声明面（= 基线活跃集 ∪ 注入集）
+	// 其中**基线活跃集**是**按基质**声明出来的人为选择（例如 dl360gen9 的 PVE CT 基质恒为
+	// `{EF-SELINUX, EF-APPARMOR}` —— 见 spec §10.4）。这件事此前只写在 harness 产物
+	// （`attack-*.json`）与 `collect-*.json` 里，**不在 `records-*.jsonl` 里** ⇒
+	// **只看数据集的人看不出这批数据做过基线声明**，而"做过哪种声明"恰恰是这批数据可信度的前提：
+	// 同一批记录在"声明过基线"与"没声明"两种口径下**含义不同**（后者会被相等断言整轮打回，
+	// 压根不该存在）。让读者必须同时保存 harness 产物才能判断，等于把这个前提留在**第二份真源**上。
+	//
+	// 三个字段一起记，是为了让记录**自证**：光有基线集还不够 —— 声明面的另一半是**注入集**，
+	// 而它随场景变（含级联展开，例如 `S3-3fa-selinux-apparmor` 的注入集含它没注入的级联目标
+	// `EF-002FA`）。三者在场时，读者用数据集**alone** 就能复核
+	// 		`factors`（链上实际）== `expected_baseline_factors` ∪ `expected_chain_factors`
+	// —— 正是采集侧断言比过的那条等式。
+	//
+	// **不得改既有字段语义**：这三个都是新增键；没有声明时字段缺席（`omitempty`），
+	// 既有夹具与既有记录的 JSON **逐字节不变**（见 `baseline_declaration_test.go` 的第 ③ 条判据）。
+	ExpectedChainFactors          []string `json:"expected_chain_factors,omitempty"`
+	ExpectedBaselineFactors       []string `json:"expected_baseline_factors,omitempty"`
+	ExpectedBaselineFactorsSource string   `json:"expected_baseline_factors_source,omitempty"`
 }
 
 // SkippedCheck 是一条被跳过的检查。

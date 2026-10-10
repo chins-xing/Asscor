@@ -64,6 +64,17 @@ type harnessReport struct {
 	// （裁定 3）：引擎侧链上所有条目的 ts 是同一个评分时刻，而 chain 模型要求相邻观测严格
 	// 递增，全部同值会让所有有向耦合被跳过、C 候选退化成 V。
 	Injections []harnessInjection `json:"injections"`
+
+	// 声明面（Task 8 Step ④）：`expected_chain_factors` 是 harness 声明的**注入集**，
+	// `expected_baseline_factors` / `..._source` 是**按基质**声明的**基线活跃集**与它的来源。
+	// 三者一起决定采集侧相等断言的右边（`声明面 = 基线活跃集 ∪ 注入集`）。
+	//
+	// 这里**不做指针解码**（与上面那组必填字段不同）：声明面是**证据**，不是判据的输入 ——
+	// 缺了它记录照样合法（历史记录与手写夹具都没有这三个键）。采集侧该拒的情形已经由
+	// `edge_collect.sh` 的相等断言负责，采集器不在这里替它做决定。
+	ExpectedChainFactors          []string `json:"expected_chain_factors"`
+	ExpectedBaselineFactors       []string `json:"expected_baseline_factors"`
+	ExpectedBaselineFactorsSource string   `json:"expected_baseline_factors_source"`
 }
 
 // harnessInjection 是一次注入观测：哪个检查、什么时候。
@@ -101,6 +112,12 @@ type groundTruth struct {
 
 	PlaybookHash string               `json:"playbook_hash"`
 	Injections   map[string]time.Time `json:"injections"`
+
+	// 声明面（Task 8 Step ④）：随记录落盘，让**只看数据集**的人也能看出这批数据做过哪种基线声明
+	// （见 `edgeexp.Meta` 那三个字段的说明）。此处**不参与任何判据**。
+	ExpectedChainFactors          []string `json:"expected_chain_factors,omitempty"`
+	ExpectedBaselineFactors       []string `json:"expected_baseline_factors,omitempty"`
+	ExpectedBaselineFactorsSource string   `json:"expected_baseline_factors_source,omitempty"`
 }
 
 // loadGroundTruth 解析攻击 harness 产物。
@@ -180,7 +197,26 @@ func loadGroundTruth(path, scenario string) (groundTruth, error) {
 		TargetAbility:     targetAbility,
 		PlaybookHash:      rep.PlaybookHash,
 		Injections:        injections,
+		// 声明面原样带上（含空基线的显式来源串：空必须是被**声明出来的**空）。
+		ExpectedChainFactors:          trimAll(rep.ExpectedChainFactors),
+		ExpectedBaselineFactors:       trimAll(rep.ExpectedBaselineFactors),
+		ExpectedBaselineFactorsSource: strings.TrimSpace(rep.ExpectedBaselineFactorsSource),
 	}, nil
+}
+
+// trimAll 去掉每一项两侧空白并丢掉空串（与 `edge_collect.sh` 的 `norm` 同一个口径：
+// 多一个空项会让"链上因子集 == 声明面"这条等式在两边都看起来正常的情况下判错）。
+func trimAll(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // recordGroundTruth 把客观结果转成契约类型。
