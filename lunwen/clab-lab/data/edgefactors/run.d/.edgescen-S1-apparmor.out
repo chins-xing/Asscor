@@ -1,0 +1,10 @@
+edgescen: 场景 S1-apparmor-01（表内共 25 组场景）
+  因子 2：EF-APPARMOR, EF-SELINUX
+  权重来源：5 域｜config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）
+  链条目 ts：链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 1 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）
+  观测主体：node:904 (substrate=pve, hostname=asc-tgt-c2)
+  注入：check_fail；注入时刻：OT-005@2026-10-13T05:51:37Z
+  观测链 4 条｜失败检查 45 条｜总分 57.91（阈值 80，判 false）｜配置 m0-baseline.ini（指纹 dd334cd724ba0c4c）
+  round-trip: 复算 57.9100 − 记录 57.9100 = +0（容差 0.005）
+  装配错误：(无)
+  写出：/root/t6/argus/lunwen/clab-lab/data/edgefactors/records-dl360-pve-20261013.jsonl

@@ -1,0 +1,14 @@
+{
+  "scenario": "S1-selinux",
+  "phase": "reset",
+  "env": "dl360-pve",
+  "substrate": "pve",
+  "started_at": "2026-10-13T05:52:54Z",
+  "finished_at": "2026-10-13T05:53:20Z",
+  "elapsed_s": 26,
+  "instance": "asc-tgt-c2",
+  "policy_on": "0",
+  "policy_rule": "audit deny /etc/shadow r,",
+  "timings_s": {"caldera": 0, "prepare": 25},
+  "note": "pve 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+}
