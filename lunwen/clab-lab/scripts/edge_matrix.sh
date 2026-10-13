@@ -301,6 +301,25 @@ if [ "${TARGETED_SELECTED:-0}" -gt 0 ]; then
     echo "edge_matrix: 选中的场景里有 $TARGETED_SELECTED 个目标 TTP 场景，却没给 EDGEEXP_TTP_PLAYBOOK_ID（pair 剧本）—— 缺省剧本是固定的 Discovery（侦察口径），与 basis=targeted_ttp 不一致，整轮失败" >&2
     exit 2
   }
+  # **为什么 `..._PLAYBOOK_NAME` 也要在这里拦**（Task 8 复审实测的缺口）：只给 ID 不给名字时，
+  # 干跑**照样 rc=0**、规划表看起来完全正常 —— 因为名字要到**攻击步**才被用上：`edge_attack.sh`
+  # 有一条**剧本漂移守卫**（`edge_attack.sh:628-629`，名字默认 `Discovery`，见 `:75`）：
+  #
+  #     剧本 ID … 现在的名字是 'T4D Step 3B pair (control + target TTP)'，与固定的 'Discovery' 不符
+  #     —— 剧本漂移，拒绝在这种状态下采集
+  #
+  # 于是一整轮要在**第一个** targeted 场景的攻击步才以 rc=1 失败（矩阵"记录条数 0/2 整轮失败"），
+  # 而前面已经跑过的 reset 全白费。这正是 Step ① 那条"干跑 rc=0"判据**没有覆盖**的一类缺项：
+  # 判据只证明"给了五个变量时能跑通"，不证明"缺哪个会在干跑就被拦"。
+  #
+  # 判据只看**选中的**场景（与上面两条同源）：只跑侦察场景时不要求它（矩阵对 recon 场景会主动
+  # unset 剧本变量）。**一处例外要写明**：如果操作者的 pair 剧本真的就叫 `Discovery`，缺名字本来
+  # 也能跑通，但本门禁不做"猜名字"这件事（那要访问 C2 查 adversary）—— 显式给一个名字是更便宜的代价，
+  # 而猜错的代价是整轮在攻击步失败。
+  [ -n "$TTP_PLAYBOOK_NAME" ] || {
+    echo "edge_matrix: 选中的场景里有 $TARGETED_SELECTED 个目标 TTP 场景，却没给 EDGEEXP_TTP_PLAYBOOK_NAME —— edge_attack.sh 的剧本漂移守卫拿 adversary 的**名字**与它比对（缺省 'Discovery'），只给 ID 不给名字会让每一个 targeted 场景在**攻击步**才被拒（干跑却是绿的）—— 整轮失败" >&2
+    exit 2
+  }
 fi
 
 # run>1 是 A-1 的重复样本：env 仍是默认值时重复样本会被打上 wsl-clab-14 混进主数据集。
