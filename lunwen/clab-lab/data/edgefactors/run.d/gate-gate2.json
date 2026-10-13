@@ -1,0 +1,9 @@
+{
+  "dataset": "all-records",
+  "records": 11,
+  "records_file": "/root/t6/argus/lunwen/clab-lab/data/edgefactors/records-dl360-pve-20261013.jsonl",
+  "candidate": "legacy=m0-baseline.ini（采集模型；门禁② 只在采集模型下执行）",
+  "exit_code": 0,
+  "ran_at": "2026-10-13T06:17:41Z",
+  "note": "逐条 |复算 − 记录| 的权威证据在 edgescen 的进程内自检（run.d/collect-*.json 的 gate2_round_trip，不通过即拒绝写出该条记录）；此处是离线工具在**采集模型**下读全量记录不 fail-fast 的复核，失败只记 warning —— 记录写不出来就没得复核，门禁② 的实质已由进程内自检承担"
+}

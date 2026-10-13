@@ -1,0 +1,15 @@
+{
+  "config_path": "/root/t6/argus/configs/edgeexp/m0-baseline.ini",
+  "config_hash": "sha256:dd334cd724ba0c4c",
+  "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+  "hash_precision": {
+    "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+    "config_hash_full": "sha256[:64]",
+    "topology_hash": "sha256[:64]",
+    "playbook_hash": "sha256[:64]"
+  },
+  "factors_spec": "EF-002FA=0.70,EF-SYNCOOKIE=0.75,EF-SELINUX=0.80,EF-APPARMOR=0.82,EF-NO-SIEM=0.90,EF-NO-IDS=0.88,EF-3FA=0.82",
+  "weights_spec": "attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10",
+  "env": "dl360-pve",
+  "note": "-factors 与 -weights 由采集配置解析而来（内置六因子取 [edge_factors] + [edge_factors.level4_override]，自定义因子取 [edge_factors.custom] 中不与内置同名的条目 ⇒ 含 EF-3FA=0.82），避免脚本里再抄一份而漂移"
+}

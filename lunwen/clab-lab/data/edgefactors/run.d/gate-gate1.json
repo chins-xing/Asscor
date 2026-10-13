@@ -1,0 +1,17 @@
+{
+  "dataset": "all-records",
+  "records": 11,
+  "records_file": "/root/t6/argus/lunwen/clab-lab/data/edgefactors/records-dl360-pve-20261013.jsonl",
+  "exit_code": 0,
+  "factors_spec": "EF-002FA=0.70,EF-SYNCOOKIE=0.75,EF-SELINUX=0.80,EF-APPARMOR=0.82,EF-NO-SIEM=0.90,EF-NO-IDS=0.88,EF-3FA=0.82",
+  "weights_spec": "attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10",
+  "candidates": {
+    "legacy": "m0-baseline.ini（= 采集模型）",
+    "vector": "vector.ini",
+    "graph": "graph.ini",
+    "chain": "chain.ini"
+  },
+  "candidate_dir": "",
+  "ran_at": "2026-10-13T06:17:41Z",
+  "note": "跑在全量记录上（不再切 EF-3FA 子集）；候选名必须是模型名（legacy|vector|graph|chain）；-factors 必填且必须覆盖链上用到的每个因子（含 EF-3FA=0.82）"
+}

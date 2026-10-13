@@ -28,7 +28,10 @@
     "S2-selinux-apparmor",
     "S2-selinux-no-ids",
     "S2-selinux-no-siem",
-    "S3-3fa-selinux-apparmor"
+    "S3-3fa-selinux-apparmor",
+    "S3-selinux-apparmor-2fa",
+    "S3-selinux-no-siem-no-ids",
+    "S4-all"
   ],
   "failed": null,
   "conditions": {
@@ -76,6 +79,16 @@
       "basis": "targeted_ttp",
       "policy_on": 0,
       "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1"
+    },
+    "S3-selinux-no-siem-no-ids": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1"
+    },
+    "S4-all": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1"
     }
   },
   "progress": {
@@ -118,6 +131,21 @@
       "reset": 25,
       "attack": 120,
       "collect": 5
+    },
+    "S3-selinux-apparmor-2fa": {
+      "reset": 24,
+      "attack": 109,
+      "collect": 5
+    },
+    "S3-selinux-no-siem-no-ids": {
+      "reset": 25,
+      "attack": 130,
+      "collect": 5
+    },
+    "S4-all": {
+      "reset": 26,
+      "attack": 156,
+      "collect": 6
     }
   }
 }
