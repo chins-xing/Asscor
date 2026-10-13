@@ -1307,7 +1307,12 @@ Important-1 指出一处**字面违反硬不变式**的改动，复审判**可�
 
 **口径**（见 §10.4）：`声明面 = 基线活跃集 B ∪ 注入集`，其中本基质 **B = {EF-SELINUX, EF-APPARMOR}**；
 本基质上的**链** = `B ∪ 实际注入的因子集 I`（自然失败里只有 `OT-005` 能点亮因子 —— 实测：
-CT 904 上 44 项检查失败，而 `EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007` **全部通过**）。
+CT 904 上 `observed.checks[]` 的 **44 条全部是失败项**（该数组只落失败项 —— 这是
+**采集器**的约定：`cmd/edgescen/observe.go` 的 `checkObservations` 里 `if c.Passed { continue }`；
+`internal/edgeexp` 的读取层**不校验**它，`record.go` 明写"采集器的额外约定，读取层不校验"。
+Task 8 收尾更正了本节原先"是 `internal/edgeexp` 的硬门禁"的说法），
+而其中**属于因子触发检查的只有 `OT-005` 一条**
+（`EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007` 在这台 CT 上**通过** ⇒ 它们的因子不上链）。
 
 **判定三选一**：
 - **可达** = 本基质上链与声明面相等（声明后能写出合法记录）；
@@ -1338,7 +1343,7 @@ CT 904 上 44 项检查失败，而 `EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007`
 | 16 | `S2-selinux-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
 | 17 | `S2-syn-cookie-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
 | 18 | `S2-syn-cookie-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
-| 19 | `S3-3fa-selinux-apparmor` | check_fail | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达（**实测确认**，见 D.1） |
+| 19 | `S3-3fa-selinux-apparmor` | check_fail | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达（**实测确认**，见 D.1） |
 | 20 | `S3-selinux-apparmor-2fa` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达 |
 | 21 | `S3-selinux-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
 | 22 | `S3-syn-cookie-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
@@ -1385,8 +1390,19 @@ CT 904 上 44 项检查失败，而 `EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007`
 
 **机制**：引擎的**级联**会把级联目标带上链，且以 `c_trigger = 0`（"**仅由级联激活**"）出现 ——
 这与 §10.2 已登记的"级联因子在 V/G/C 下不产生惩罚（`c_trigger = 0`）"是**同一条行为**。
-注意 `EF-001` **根本没有出现在这次记录的 `checks` 里**，说明级联路径**不需要**
-它的触发检查被观测到。
+
+**为什么 `EF-002FA` 的 `trigger_check = EF-001` 不在 `checks[]` 里却仍然合法**（Task 8 勘误：
+初版把依据写成"`EF-001` 不在 checks 里 ⇒ 级联不需要它被观测"，**结论对、理由不严谨**）：
+真正的依据是 `internal/edgeexp/record.go` 里 **`CheckTriggerCrossReference` 的注释块**与
+**`MarshalRecord` 的注释**（本仓 `c0fe19a` 上分别是 **598–612** 与 **675–677** 行；
+"legacy 的 identity/级联路径**请勿调用本检查**"这句在 **628** 行的错误串里 ——
+行号随提交漂移，按**符号名**引用更稳）—— legacy 的
+**identity 分支 / 级联路径**产出的链条目，其 `trigger_check` 是"该因子**登记的**触发检查"，
+**未必**是真正失败的那个检查；那条"`trigger_check` 必须以 `passed=false` 出现在 `checks[]` 里"
+的交叉核对**仅插件路径（V/G/C）适用**，源码里就写着"legacy 的 identity/级联路径**请勿调用本检查**"。
+⇒ `EF-002FA` 以 `c_trigger=0` 上链、其登记触发检查未失败，是**制度允许的既有行为**，不是异常。
+（另注：`EF-001` "不在 `checks[]` 里"这件事本身只是**该数组只落失败项**的后果 —— 它恰恰也是
+Minor-1 那条勘误的同一个点。）
 
 **修正后的口径**：链 = `B ∪ 注入集 ∪ 级联闭包(注入集)`（注入 `EF-3FA` ⇒ 同时带上 `EF-002FA`）。
 本表的复算脚本按此修正并重跑，结论 **22 / 0 / 3**。
@@ -1399,9 +1415,83 @@ CT 904 上 44 项检查失败，而 `EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007`
 
 逐个排除：
 - 22 个 S 场景的触发检查（`EF-001`/`EF-002`/`RS-005`/`RS-006`/`RS-007`/`OT-005`）**都在** CT 的
-  检查登记表里（实测：44 项检查含全部 6 个触发检查），且 `check_fail` 注入是**强制翻转**
-  `Passed`（`edgescen` 的 `resolveInjections` + `collectChecks`），**不依赖机器本来是什么状态**
-  ⇒ 不需要改机器状态；
+  检查登记表里（登记表 = **`checks.GetAll()`**，即平台闸门按 `runtime.GOOS` 过滤后的注册表 =
+  `internal/checks/linux/checks.go` 的 `All()` **68 项** + `kernel_security.go` 的 `ksAll()` **12 项**
+  = **80 项**；实测 `-emit-checks` 信封里就是 80 条，按域 attack_surface 19 / operation_trust 22 /
+  resilience 24 / business_continuity 3 / kernel_security 12，六个触发检查**逐条都在**。
+  Task 8 勘误前这里写的"实测：44 项检查含全部 6 个触发检查"**不实**：44 是
+  `observed.checks[]` 里的**失败项数**（该数组只落失败项 —— 那是**采集器**的约定，
+  见 `cmd/edgescen/observe.go` 的 `checkObservations`，读取层不校验），
+  而其中属于因子触发检查的**只有 `OT-005`** —— 本批两条记录实测：`checks[]` 各 45 条、
+  `passed=true` 的 0 条，命中的触发检查只有 `OT-005`（`S1-apparmor`）与
+  `OT-005,RS-006`（`S1-no-ids`，后者是本场景自己注入的）），
+  而 `check_fail` 注入是**强制翻转** `Passed`（`edgescen` 的 `resolveInjections` + `collectChecks`），
+  **不依赖机器本来是什么状态** ⇒ 不需要改机器状态；
 - 3 个 R 场景**要**"机器真的缺该控制"，但复位的**契约**就是"把六个控制装齐"（幂等）⇒
   改机器状态也没用（下一次复位又装回去）⇒ 归入**结构性不可达**而不是"需改机器状态"。
+
+## 附录 E：`targeted_ttp` 口径的三件 Caldera 实体（建法 + ID 记档）
+
+**为什么需要这一节**（Task 8 Step ①）：`edge_matrix.sh` 把"注入因子含 `EF-SELINUX`/`EF-APPARMOR`"的
+**11 个** S 场景判成 `basis=targeted_ttp`，并要求给出目标/对照 ability 与 pair 剧本。
+这套实体在 A-1 上**有**，但**是手工建的、仓里没有创建脚本** ⇒ 换一台 C2（dl360gen9 上的
+这个 Caldera）就**没有它们**，于是 **25 个场景一齐跑会在门禁处整批被拒（rc=2）**。
+把"怎么建"变成可跟踪、可重跑的东西，本身就是记档。
+
+### E.1 建法（唯一入口，幂等）
+
+```
+EDGEEXP_CALDERA_URL=http://192.168.30.2:8888 EDGEEXP_CALDERA_KEY=ADMIN123 \
+  bash lunwen/clab-lab/scripts/edge_ttp_provision.sh
+```
+
+脚本做三件事：**已存在则不重建，而是核对关键字段**（ability 的 `command`、adversary 的
+`atomic_ordering`）—— 不一致就**响亮失败**，因为那意味着"C2 上的实体与夹具/文档引用的不是
+同一个东西"，比"缺实体"更难发现。
+
+**不得拿别的 ability 冒充**：Caldera 自带的 `Access /etc/shadow (Local)`
+（`af30d8506a8aba7a022b687261d22541`）执行的是 `sudo cat /etc/shadow > /tmp/T1003.008.txt; cat …`，
+与 A-1 上被判据引用的那一条**命令不同**；换掉它，链上看到的 `command` 就与已落盘的历史数据不可比。
+本脚本只借用现成 Linux ability 的 **executor 字段形状**（`sh` / `platform: linux` / `timeout: 60`）。
+
+### E.2 三件实体（ID 与 A-1 **逐字相同**）
+
+| 角色 | ID | 名字 | 命令 / ordering |
+|---|---|---|---|
+| **目标 TTP** ability | `a5c0ffee-0000-4000-8000-0000000003b1` | `T4D Step 3B: read /etc/shadow (AppArmor target TTP)` | `head -1 /etc/shadow`（**撞 AppArmor 策略**） |
+| **对照** ability | `a5c0ffee-0000-4000-8000-0000000003c1` | `T4D Step 3B control: write marker (no policy collision)` | `echo t4d-control-ok > /tmp/t4d-control-marker && cat /tmp/t4d-control-marker` |
+| **pair 剧本** adversary | `a5c0ffee-0000-4000-8000-0000000003c2` | `T4D Step 3B pair (control + target TTP)` | `atomic_ordering = [ …3c1, …3b1 ]`（**先对照、后目标**）；`objective = 495a9828-cab1-44dd-a0ca-66e58177d8cc`（Caldera 自带 `default`） |
+
+语义（照 A-1 的原始 chain 与 `experiments-final/pilot-step5-2026-09-13/README.md`）：
+**目标**撞策略 —— 策略在 ⇒ 被拒（`compromised=false`）；策略不在 ⇒ 成功（`true`）。
+**对照**不撞策略 —— 它回答"通道与执行器健不健康"：对照失败 ⇒ 目标失败**不能**归因于策略。
+
+### E.3 跑批要给的**五个**变量（不是三个）
+
+```bash
+export EDGEEXP_TTP_TARGET_ABILITY=a5c0ffee-0000-4000-8000-0000000003b1
+export EDGEEXP_TTP_TARGET_ABILITY_NAME='T4D Step 3B: read /etc/shadow (AppArmor target TTP)'
+export EDGEEXP_TTP_CONTROL_ABILITY=a5c0ffee-0000-4000-8000-0000000003c1
+export EDGEEXP_TTP_PLAYBOOK_ID=a5c0ffee-0000-4000-8000-0000000003c2
+export EDGEEXP_TTP_PLAYBOOK_NAME='T4D Step 3B pair (control + target TTP)'
+```
+
+（这是**矩阵层**的变量名：`edge_matrix.sh` 的 `apply_scenario_conditions` 会按场景把它们
+**导出成子脚本那一套** —— `EDGEEXP_TARGET_ABILITY` / `EDGEEXP_TARGET_ABILITY_NAME` /
+`EDGEEXP_CONTROL_ABILITY` / `EDGEEXP_PLAYBOOK_ID` / `EDGEEXP_PLAYBOOK_NAME`；
+直接手跑 `edge_attack.sh` 时要用后者，而它的名字缺省值就是 `Discovery`（`edge_attack.sh:75`）。）
+
+**`..._PLAYBOOK_NAME` 是必须的**（Task 8 实测踩到）：`edge_attack.sh` 的剧本名默认值是
+`Discovery`，而它有一条**剧本漂移守卫**；只给 `PLAYBOOK_ID` 不给名字 ⇒ **每一个
+`targeted_ttp` 场景都会在攻击步被拒**：
+
+```
+edge_attack: 剧本 ID a5c0ffee-0000-4000-8000-0000000003c2 现在的名字是
+  'T4D Step 3B pair (control + target TTP)'，与固定的 'Discovery' 不符 —— 剧本漂移，拒绝在这种状态下采集
+```
+
+`..._TARGET_ABILITY_NAME` 只用于"ID 没被换掉"的**可选**核对（`edge_attack.sh` 里同一条守卫），
+建议一起给。`EDGEEXP_TTP_GROUP` 默认 `t4d-ttp`，与 `edge_target_prepare.sh` 拉起 agent 时用的
+`--group` 同源 —— 投送范围因此可证明只到目标机。
+
 
