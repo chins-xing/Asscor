@@ -1330,24 +1330,24 @@ Task 8 收尾更正了本节原先"是 `internal/edgeexp` 的硬门禁"的说法
 | 3 | `R-no-siem` | real_missing | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX | 先被 `real_missing` 探针拦下 | **结构性不可达** |
 | 4 | `S0-baseline` | none | EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
 | 5 | `S1-2fa` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
-| 6 | `S1-apparmor` | check_fail | EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-SELINUX） | 可达 |
+| 6 | `S1-apparmor` | check_fail | EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-SELINUX） | 可达（**已真跑确认**，2026-10-13） |
 | 7 | `S1-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
 | 8 | `S1-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
-| 9 | `S1-selinux` | check_fail | EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
+| 9 | `S1-selinux` | check_fail | EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达（**已真跑确认**，2026-10-13） |
 | 10 | `S1-syn-cookie` | check_fail | EF-APPARMOR,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
-| 11 | `S2-2fa-selinux` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
-| 12 | `S2-apparmor-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | **被打回**（多出 EF-SELINUX） | 可达 |
+| 11 | `S2-2fa-selinux` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达（**已真跑确认**，2026-10-13） |
+| 12 | `S2-apparmor-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | **被打回**（多出 EF-SELINUX） | 可达（**已真跑确认**，2026-10-13） |
 | 13 | `S2-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
-| 14 | `S2-selinux-apparmor` | check_fail | EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达 |
-| 15 | `S2-selinux-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
-| 16 | `S2-selinux-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
+| 14 | `S2-selinux-apparmor` | check_fail | EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达（**已真跑确认**，2026-10-13） |
+| 15 | `S2-selinux-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达（**已真跑确认**，2026-10-13） |
+| 16 | `S2-selinux-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达（**已真跑确认**，2026-10-13） |
 | 17 | `S2-syn-cookie-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
 | 18 | `S2-syn-cookie-no-siem` | check_fail | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
-| 19 | `S3-3fa-selinux-apparmor` | check_fail | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达（**实测确认**，见 D.1） |
-| 20 | `S3-selinux-apparmor-2fa` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达 |
-| 21 | `S3-selinux-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达 |
+| 19 | `S3-3fa-selinux-apparmor` | check_fail | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达（**已真跑确认**：2026-10-13 targeted 小批再跑一致；Task 7 首次实测见 D.1） |
+| 20 | `S3-selinux-apparmor-2fa` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | 仍通过（本来就声明了那两个因子） | 可达（**已真跑确认**，2026-10-13） |
+| 21 | `S3-selinux-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX | **被打回**（多出 EF-APPARMOR） | 可达（**已真跑确认**，2026-10-13） |
 | 22 | `S3-syn-cookie-no-siem-no-ids` | check_fail | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
-| 23 | `S4-all` | check_fail | EF-002FA,EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | 仍通过（本来就声明了那两个因子） | 可达 |
+| 23 | `S4-all` | check_fail | EF-002FA,EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | 仍通过（本来就声明了那两个因子） | 可达（**已真跑确认**，2026-10-13） |
 | 24 | `S5-2fa-only` | check_fail | EF-002FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
 | 25 | `S5-cascade-3fa` | check_fail | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | **被打回**（多出 EF-APPARMOR,EF-SELINUX） | 可达 |
 
@@ -1429,6 +1429,50 @@ Minor-1 那条勘误的同一个点。）
   **不依赖机器本来是什么状态** ⇒ 不需要改机器状态；
 - 3 个 R 场景**要**"机器真的缺该控制"，但复位的**契约**就是"把六个控制装齐"（幂等）⇒
   改机器状态也没用（下一次复位又装回去）⇒ 归入**结构性不可达**而不是"需改机器状态"。
+
+### D.3 这 11 行已由 **targeted 小批（Task 9）真跑确认**（2026-10-13）
+
+附录 D 的 25 行里 **11 行是 `targeted_ttp` 场景**（注入因子含 `EF-SELINUX`/`EF-APPARMOR`）。
+Task 9 把这 11 个各跑了 **1 次**（走矩阵层 `edge_matrix.sh`、默认 **1800s** 攻击观察窗、
+`2026-10-13T05:51:06Z → 06:17:41Z`、`run_id=20261013-2286810`），并把这 11 行**逐行对账**。
+
+**方法（机械、不是通读）**：本表这一列的「声明面 B∪E」是一个**可检验断言** —— 真跑记录的
+`observed.edge_factor_chain` **去重后必须逐元素相等**（这正是采集侧那条"链上因子集 == 声明面"
+的相等断言：不通过就整轮失败并回滚，压根写不出记录）。对账脚本读
+`lunwen/clab-lab/data/edgefactors/records-dl360-pve-20261013.jsonl` 的 11 条记录与本文档的 11 行，
+逐行比集合（脚本与原始输出见 Task 9 报告 §6）。
+
+**结果：11 / 11 行一致，0 行被推翻**（每行都 `reset`/`attack`/`collect` 全 rc=0、
+`ground_truth.basis=targeted_ttp`、记录 11/11、门禁① `exit_code=0`、门禁② 最大偏差 0）：
+
+| 行 | 场景 | 文档「声明面 B∪E」 | 真跑：链去重因子 | 一致 |
+|---|---|---|---|---|
+| 6 | `S1-apparmor` | EF-APPARMOR,EF-SELINUX | 同 | ✅ |
+| 9 | `S1-selinux` | EF-APPARMOR,EF-SELINUX | 同 | ✅ |
+| 11 | `S2-2fa-selinux` | EF-002FA,EF-APPARMOR,EF-SELINUX | 同 | ✅ |
+| 12 | `S2-apparmor-no-ids` | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | 同 | ✅ |
+| 14 | `S2-selinux-apparmor` | EF-APPARMOR,EF-SELINUX | 同 | ✅ |
+| 15 | `S2-selinux-no-ids` | EF-APPARMOR,EF-NO-IDS,EF-SELINUX | 同 | ✅ |
+| 16 | `S2-selinux-no-siem` | EF-APPARMOR,EF-NO-SIEM,EF-SELINUX | 同 | ✅ |
+| 19 | `S3-3fa-selinux-apparmor` | EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX | 同（链 6 条 / 去重 4 个 ID） | ✅ |
+| 20 | `S3-selinux-apparmor-2fa` | EF-002FA,EF-APPARMOR,EF-SELINUX | 同 | ✅ |
+| 21 | `S3-selinux-no-siem-no-ids` | EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX | 同 | ✅ |
+| 23 | `S4-all` | EF-002FA,EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE | 同 | ✅ |
+
+**这次没有被推翻的行** —— 与 D.1.1 那次（第 19 行）刚好互补：那次是"离线推演**错**、
+真跑纠正"，这次是"离线推演**对**、真跑确认"。两者都留档，因为第 2 种情况同样重要：
+**推演对的时候也要真跑收口**，否则"对"与"恰好没被测到"在文档里同形。
+
+**边界（本轮没有测到的）**：
+
+1. 「**不设基线声明时（反证）**」那一列**不在本次确认范围**：本轮 11 个场景**始终声明了**
+   基线活跃集（`pve` 基质下 `edge_lab.sh` 自动声明 `EDGEEXP_BASELINE_FACTORS=EF-SELINUX,EF-APPARMOR`）；
+   要测反证必须**显式置空**再跑（Task 7 用 `EDGEEXP_BASELINE_FACTORS=` 对
+   `S0-baseline`/`S1-no-ids` 做过一次：多出基线因子 ⇒ 相等断言不通过 ⇒ 记录回滚）。
+   ⇒ 这 11 行的反证列仍是**离线推演 + Task 7 两条真跑旁证**。
+2. **另外 14 行**（`recon_playbook` 的 11 行 + R 组 3 行）**本轮没跑**（Task 9 只跑 targeted）——
+   它们的可达性仍来自离线复算，**待全量扫描收口**。
+
 
 ## 附录 E：`targeted_ttp` 口径的三件 Caldera 实体（建法 + ID 记档）
 
