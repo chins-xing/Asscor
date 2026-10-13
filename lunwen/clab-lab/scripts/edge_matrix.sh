@@ -58,14 +58,21 @@
 #       `EDGEEXP_POLICY_ON=1`（控制齐备的基线条件）。
 #   三个开关（`TARGET_ABILITY` / `basis` / `POLICY_ON`）**逐场景成对设置**，不全局设一个 ——
 #   这正是复审"开工必带"第 3 条要求的配对。配置项（在本脚本里是**输入**，不是每场景变量）：
-#     EDGEEXP_TTP_TARGET_ABILITY       目标 TTP 的 ability id（读 /etc/shadow）
-#     EDGEEXP_TTP_TARGET_ABILITY_NAME  它的名字（仅用于核对 ID 没被换掉）
-#     EDGEEXP_TTP_CONTROL_ABILITY      对照 ability id（写 marker，不撞策略）
-#     EDGEEXP_TTP_PLAYBOOK_ID          pair 剧本（adversary）id
-#     EDGEEXP_TTP_PLAYBOOK_NAME        它的名字
-#     EDGEEXP_TTP_GROUP                agent 分组名（默认 t4d-ttp；与 edge_target_prepare.sh 同源）
-#     EDGEEXP_TTP_FACTORS              触发"目标 TTP 口径"的因子集（默认 EF-SELINUX,EF-APPARMOR）
-#   选了目标 TTP 场景却没给 ability/剧本 ⇒ **干跑前就响亮失败**（不许跑到一半才发现条件缺项）。
+#     **必需 3 个**（选中 targeted 场景时缺任一 ⇒ **干跑就 rc=2**，见下面那三条门禁）：
+#       EDGEEXP_TTP_TARGET_ABILITY    目标 TTP 的 ability id（读 /etc/shadow）
+#       EDGEEXP_TTP_PLAYBOOK_ID       pair 剧本（adversary）id
+#       EDGEEXP_TTP_PLAYBOOK_NAME     它的名字（缺它 ⇒ `edge_attack.sh` 的漂移守卫在**攻击步**拒绝，
+#                                     故 2026-10-13 起在矩阵层也拦一道，见下方第三条门禁）
+#     **可选 2 个**（给了更好，缺了不会被拒；Task 8 复审核过源码）：
+#       EDGEEXP_TTP_CONTROL_ABILITY   对照 ability id（写 marker，不撞策略）——
+#                                     `edge_attack.sh:49` 自述"可选，只用于归类与报告"，`:816` 有
+#                                     `not CONTROL_ABILITY or …` 分支
+#       EDGEEXP_TTP_TARGET_ABILITY_NAME  目标 ability 的名字 —— 仅用于**核对 ID 没被换掉**，
+#                                     `edge_attack.sh:852` 是 `if TARGET_ABILITY_NAME:`
+#     其余开关：
+#       EDGEEXP_TTP_GROUP             agent 分组名（默认 t4d-ttp；与 edge_target_prepare.sh 同源）
+#       EDGEEXP_TTP_FACTORS           触发"目标 TTP 口径"的因子集（默认 EF-SELINUX,EF-APPARMOR）
+#   选了目标 TTP 场景却没给**必需项** ⇒ **干跑前就响亮失败**（不许跑到一半才发现条件缺项）。
 # ============================================================================
 set -euo pipefail
 

@@ -1466,15 +1466,26 @@ EDGEEXP_CALDERA_URL=http://192.168.30.2:8888 EDGEEXP_CALDERA_KEY=ADMIN123 \
 **目标**撞策略 —— 策略在 ⇒ 被拒（`compromised=false`）；策略不在 ⇒ 成功（`true`）。
 **对照**不撞策略 —— 它回答"通道与执行器健不健康"：对照失败 ⇒ 目标失败**不能**归因于策略。
 
-### E.3 跑批要给的**五个**变量（不是三个）
+### E.3 跑批要给的**五个**变量（不是三个；其中**必需 3 个、可选 2 个**）
 
 ```bash
+# —— 必需 3 个（选中 targeted 场景时缺任一，矩阵层**干跑就 rc=2**）——
 export EDGEEXP_TTP_TARGET_ABILITY=a5c0ffee-0000-4000-8000-0000000003b1
-export EDGEEXP_TTP_TARGET_ABILITY_NAME='T4D Step 3B: read /etc/shadow (AppArmor target TTP)'
-export EDGEEXP_TTP_CONTROL_ABILITY=a5c0ffee-0000-4000-8000-0000000003c1
 export EDGEEXP_TTP_PLAYBOOK_ID=a5c0ffee-0000-4000-8000-0000000003c2
 export EDGEEXP_TTP_PLAYBOOK_NAME='T4D Step 3B pair (control + target TTP)'
+
+# —— 可选 2 个（给了更好，缺了不会被拒）——
+export EDGEEXP_TTP_CONTROL_ABILITY=a5c0ffee-0000-4000-8000-0000000003c1
+export EDGEEXP_TTP_TARGET_ABILITY_NAME='T4D Step 3B: read /etc/shadow (AppArmor target TTP)'
 ```
+
+| 变量 | 必需性 | 判据（源码） |
+|---|---|---|
+| `…_TTP_TARGET_ABILITY` | **必需** | `edge_matrix.sh` 门禁（缺 ⇒ `exit 2`）；`edge_attack.sh:845` "链里**没有**目标 ability … 的 link"即 `fail` |
+| `…_TTP_PLAYBOOK_ID` | **必需** | `edge_matrix.sh` 门禁（缺 ⇒ `exit 2`） |
+| `…_TTP_PLAYBOOK_NAME` | **必需** | `edge_attack.sh` 的**剧本漂移守卫**（`:628-629`，缺省 `Discovery` 见 `:75`）—— 缺了会在**攻击步**被拒；**2026-10-13 起矩阵层也拦它**（缺了在干跑就 `exit 2`，见下） |
+| `…_TTP_CONTROL_ABILITY` | *可选* | `edge_attack.sh:49` 自述"（可选，只用于归类与报告）"；`:816` 是 `not CONTROL_ABILITY or …` |
+| `…_TTP_TARGET_ABILITY_NAME` | *可选* | `edge_attack.sh:48` 自述"（可选，仅用于核对 ID 没被换掉）"；`:852` 是 `if TARGET_ABILITY_NAME:` |
 
 （这是**矩阵层**的变量名：`edge_matrix.sh` 的 `apply_scenario_conditions` 会按场景把它们
 **导出成子脚本那一套** —— `EDGEEXP_TARGET_ABILITY` / `EDGEEXP_TARGET_ABILITY_NAME` /
@@ -1489,6 +1500,12 @@ export EDGEEXP_TTP_PLAYBOOK_NAME='T4D Step 3B pair (control + target TTP)'
 edge_attack: 剧本 ID a5c0ffee-0000-4000-8000-0000000003c2 现在的名字是
   'T4D Step 3B pair (control + target TTP)'，与固定的 'Discovery' 不符 —— 剧本漂移，拒绝在这种状态下采集
 ```
+
+**它同时意味着"干跑绿 ≠ 能跑"**（Task 8 复审实测的缺口）：缺名字时 25 场景干跑**照样 rc=0**、
+规划表完全正常，直到第一个 targeted 场景的攻击步才 rc=1 —— 而前面的 reset 已经白跑。
+故 2026-10-13（Task 8 复审修复轮）在矩阵层与 `TARGET_ABILITY`/`PLAYBOOK_ID` **同一处**加了
+第三条门禁：缺 `…_TTP_PLAYBOOK_NAME` 且选中了 targeted 场景 ⇒ **干跑前就 `exit 2`**。
+判据只看**选中的**场景 ⇒ 只跑侦察场景时不受影响。
 
 `..._TARGET_ABILITY_NAME` 只用于"ID 没被换掉"的**可选**核对（`edge_attack.sh` 里同一条守卫），
 建议一起给。`EDGEEXP_TTP_GROUP` 默认 `t4d-ttp`，与 `edge_target_prepare.sh` 拉起 agent 时用的
