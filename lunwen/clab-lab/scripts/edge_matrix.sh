@@ -188,7 +188,7 @@ print(f'edge_matrix: 场景名单与采集器 edgescen -list 逐项相等（{len
 for name in declared:
     print('%s\t%s' % (name, factors.get(name, '')))
 PY
-) " || exit 1
+)" || exit 1
 else
   # **硬门禁（Task 8 Step ③）：缺采集器 ⇒ 直接失败，不再降级。**
   #
