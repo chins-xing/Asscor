@@ -4,15 +4,16 @@
 # ============================================================================
 #
 # 用法（仓库根或任意位置都行；脚本按**自身位置**解析仓库根）：
-#   bash lunwen/clab-lab/tests/run-all.sh            # 跑全部 5 组夹具
+#   bash lunwen/clab-lab/tests/run-all.sh            # 跑全部 6 组夹具
 #   bash lunwen/clab-lab/tests/run-all.sh edge-lab   # 只跑其中一组
 #
 # 为什么要有这个入口（复审 N-1：判据此前全在 `build/`，而 `build/` 被 `.gitignore` 整个忽略 ⇒
 # **克隆者拿不到这些判据**，回归能力只存在于开发机上）：
-#   · 5 组夹具现在都在 `lunwen/clab-lab/tests/`（仓内可跟踪）——
+#   · 6 组夹具现在都在 `lunwen/clab-lab/tests/`（仓内可跟踪）——
 #     设计夹具（`lab-diff.sh` 的真基线差分）、基质层（`test-edge-lab.sh`）、
 #     条件探针（`test-edge-probe.sh`）、chain 派生（`test-chain-derivation.sh`）、
-#     agent 就绪判据（`test-agent-readiness.sh`）；
+#     agent 就绪判据（`test-agent-readiness.sh`）、矩阵层条件分类
+#     （`test-matrix-classification.sh`：Task 8 复审那颗"尾随空格翻转 basis"的雷的钉子）；
 #   · 每组都**只读、离线**：不碰 clab / LXD / 容器 / Caldera，不写仓库（临时目录在 $HOME 或 /tmp）。
 #
 # 期望的通过数（复审 7.6 第 3 条的判据，**任何一条不到就是回归**）：
@@ -21,6 +22,8 @@
 #   lab-diff              31
 #   test-chain-derivation  8
 #   test-edge-probe       20（它按 `ok` 行计数，没有 PASS= 汇总行）
+#   test-matrix-classification 7（它在**缺陷版**（`SCEN_FACTORS_RAW="$( … ) "`）上必须红 ——
+#                                 实测 PASS=2 FAIL=5；修好后 PASS=7 FAIL=0）
 set -uo pipefail
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,8 +36,9 @@ declare -A EXPECT=(
   [test-edge-probe]=20
   [lab-diff]=31
   [test-chain-derivation]=8
+  [test-matrix-classification]=7
 )
-ORDER=(test-agent-readiness test-edge-lab test-edge-probe lab-diff test-chain-derivation)
+ORDER=(test-agent-readiness test-edge-lab test-edge-probe lab-diff test-chain-derivation test-matrix-classification)
 
 WANT=("$@")
 TOTAL_FAIL=0
@@ -69,7 +73,7 @@ done
 
 echo
 if [ "$TOTAL_FAIL" -eq 0 ]; then
-  echo "run-all: 全部通过（5 组：3/51/20/31/8）"
+  echo "run-all: 全部通过（6 组：3/51/20/31/8/7）"
   exit 0
 fi
 echo "run-all: $TOTAL_FAIL 组未达标 —— 见上面的尾部输出" >&2
