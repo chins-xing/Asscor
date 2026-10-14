@@ -56,7 +56,10 @@ NODE_WAIT_S="${EDGEEXP_NODE_WAIT_S:-300}"
 AGENT_WAIT_S="${EDGEEXP_AGENT_WAIT_S:-180}"
 
 mkdir -p "$RUN_D"
-FILLER="reset-${SCENARIO:-noarg}.json"
+# **实例后缀**（Task 10，与 `edge_collect.sh` 同一纪律）：矩阵给同一个 targeted 场景跑两条臂，
+# 碎片文件名必须分开，否则第二条臂会覆盖第一条臂的 `reset-*.json`（run.json 的台账按碎片组装）。
+# 旧臂传空串 ⇒ 文件名逐字节不变。
+FILLER="reset-${SCENARIO:-noarg}${EDGEEXP_INSTANCE_SUFFIX:-}.json"
 TMP_OUT="$RUN_D/.$FILLER.tmp"
 
 for bin in curl python3 sha256sum; do

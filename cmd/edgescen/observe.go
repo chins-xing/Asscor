@@ -280,6 +280,11 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 	rec.Meta.ExpectedChainFactors = gt.ExpectedChainFactors
 	rec.Meta.ExpectedBaselineFactors = gt.ExpectedBaselineFactors
 	rec.Meta.ExpectedBaselineFactorsSource = gt.ExpectedBaselineFactorsSource
+	// 策略状态（Task 10 / 用户裁定「甲」，additive）：矩阵给同一个 targeted 场景加了一条
+	// **"策略在"** 的臂（`POLICY_ON=1`）；两臂的记录必须**只靠记录本身**就能分开 —— 这个字段
+	// 就是那个痕迹（取自 harness 产物的 `substrate_identity.policy_on`，即**攻击那一刻**的真实策略
+	// 状态）。与上面三键同款：证据而非输入、`omitempty`、不进评分、不进 `Validate`。
+	rec.Meta.PolicyOn = gt.PolicyOn
 	fail := func(format string, args ...any) (edgeexp.Record, error) {
 		reason := fmt.Sprintf(format, args...)
 		rec.Meta.AssemblyError = reason

@@ -353,6 +353,23 @@ type Meta struct {
 	ExpectedChainFactors          []string `json:"expected_chain_factors,omitempty"`
 	ExpectedBaselineFactors       []string `json:"expected_baseline_factors,omitempty"`
 	ExpectedBaselineFactorsSource string   `json:"expected_baseline_factors_source,omitempty"`
+
+	// PolicyOn 是**实验条件**（策略在/不在）在记录里的显式痕迹（Task 10，用户裁定「甲」）。
+	//
+	// **为什么必须进数据集本体**：矩阵对含 `EF-SELINUX`/`EF-APPARMOR` 的场景（`basis=targeted_ttp`）
+	// 现在跑**两条臂** —— 同一个场景、同一个目标 TTP、同一个剧本，只在 `POLICY_ON` 上不同：
+	// 策略**卸掉**（`"0"`）时目标 TTP 必然成功（`compromised=true`）、策略**装上**（`"1"`）时被挡住
+	// （`compromised=false`）。两类标签是决策层指标的前提，而**"两个臂只差策略"这句话必须能在
+	// 记录里被检验** —— 否则读者只能靠"文件名 / 运行顺序 / 场景 id 的尾号"去猜哪条是哪个臂，
+	// 而那正是本仓反复在堵的"第二个真源"。
+	//
+	// 取值只有 `"0"` / `"1"`（采集器从 harness 产物的 `substrate_identity.policy_on` 归一，
+	// 见 `cmd/edgescen/groundtruth.go` 的 `substratePolicyOn`）；**缺席 = 产物没写**
+	// （历史记录、手写夹具、非矩阵来源的采集）—— 与"显式声明过 `"0"`"是两件事，
+	// 故用 `omitempty` 而不是默认 `"0"`（默认值会让"没写"伪装成一个观测）。
+	//
+	// 与上面三键同路数：**证据而不是输入**（不进评分、不影响阈值、不进 `Validate`）。
+	PolicyOn string `json:"policy_on,omitempty"`
 }
 
 // SkippedCheck 是一条被跳过的检查。

@@ -17,13 +17,15 @@
 #   · 每组都**只读、离线**：不碰 clab / LXD / 容器 / Caldera，不写仓库（临时目录在 $HOME 或 /tmp）。
 #
 # 期望的通过数（复审 7.6 第 3 条的判据，**任何一条不到就是回归**）：
-#   test-agent-readiness   3
+#   test-agent-readiness   6（Task 10 加了 pid 复用 / paw 归属三格：D / D2 / E —— 前 3 格是 Task 4D 的原判据）
 #   test-edge-lab         51（Task 6 的 H 段把 pve 基质加了 25 条；此前 26）
 #   lab-diff              31
 #   test-chain-derivation  8
 #   test-edge-probe       20（它按 `ok` 行计数，没有 PASS= 汇总行）
-#   test-matrix-classification 7（它在**缺陷版**（`SCEN_FACTORS_RAW="$( … ) "`）上必须红 ——
+#   test-matrix-classification 10（Task 8 的 7 格 + Task 10 的臂 3 格：F 两格 + G 一格；
+#                                 它在**缺陷版**（`SCEN_FACTORS_RAW="$( … ) "`）上必须红 ——
 #                                 实测 PASS=2 FAIL=5；修好后 PASS=7 FAIL=0）
+#   test-agent-readiness    见上（Task 10 的 pid 复用/paw 归属三格）
 set -uo pipefail
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,12 +33,12 @@ REPO="${REPO:-$(cd "$TESTS_DIR/../../.." && pwd)}"
 export REPO
 
 declare -A EXPECT=(
-  [test-agent-readiness]=3
+  [test-agent-readiness]=6
   [test-edge-lab]=51
   [test-edge-probe]=20
   [lab-diff]=31
   [test-chain-derivation]=8
-  [test-matrix-classification]=7
+  [test-matrix-classification]=10
 )
 ORDER=(test-agent-readiness test-edge-lab test-edge-probe lab-diff test-chain-derivation test-matrix-classification)
 
@@ -73,7 +75,7 @@ done
 
 echo
 if [ "$TOTAL_FAIL" -eq 0 ]; then
-  echo "run-all: 全部通过（6 组：3/51/20/31/8/7）"
+  echo "run-all: 全部通过（6 组：6/51/20/31/8/10）"
   exit 0
 fi
 echo "run-all: $TOTAL_FAIL 组未达标 —— 见上面的尾部输出" >&2

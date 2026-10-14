@@ -76,9 +76,20 @@ MAX_AGE_S="${EDGEEXP_ATTACK_MAX_AGE_S:-3600}"
 TARGET="${EDGEEXP_TARGET:-}"
 
 mkdir -p "$RUN_D"
-FILLER="collect-$SCENARIO.json"
+# **实例后缀**（Task 10）：矩阵给同一个 targeted 场景跑两条臂（`POLICY_ON=0/1`），
+# 而臂不能出现在场景名里（`edgescen --scenario` 要拿真名去查它自己的场景表）⇒ 由矩阵通过
+# `EDGEEXP_INSTANCE_SUFFIX` 传一个后缀（旧臂是空串）把**碎片文件名**分开。不带它的话，
+# 第二条臂会覆盖第一条臂的 `collect-*.json`，而 run.json 的台账正是按碎片组装的
+# ⇒ 会把"策略在"的臂的数据挂到"策略不在"的臂上（看起来完全正常）。
+# 旧臂后缀为空 ⇒ 文件名逐字节不变（`EDGEEXP_POLICY_ON_ARM=0` 时与 Task 9 相同）。
+INST_SUFFIX="${EDGEEXP_INSTANCE_SUFFIX:-}"
+# `scenario_id` 的形状（`cmd/edgescen/observe.go` 的 `scenarioID`）：`<场景>-<run 两位>`
+# ⇒ 实例 id 就是 `-01` / `-02`（臂的 run 号 1 / 2 由矩阵给）。幂等守卫必须比它**完整**，
+# 否则前缀匹配会把第二条臂当成"同一场景已有记录"而拒掉。
+SID="$(printf '%s-%02d' "$SCENARIO" "$RUN")"
+FILLER="collect-$SCENARIO$INST_SUFFIX.json"
 TMP_OUT="$RUN_D/.$FILLER.tmp"
-REJECTED_OUT="$RUN_D/rejected-$SCENARIO.jsonl"
+REJECTED_OUT="$RUN_D/rejected-$SCENARIO$INST_SUFFIX.jsonl"
 
 [ -x "$EDGESCEN" ] || {
   echo "edge_collect: $EDGESCEN 不存在或不可执行 —— 先交叉编译：" >&2
@@ -151,7 +162,9 @@ if [ -f "$RECORDS" ]; then BEFORE=$(wc -l < "$RECORDS"); fi
 if [ -f "$RECORDS" ]; then
   # 场景标识形如 "<scenario>-r<run>"（JSONL 是 json.Marshal 的紧凑形式，无空格）；
   # 同场景（不论 run 号）已有记录即拒绝。
-  DUP=$(grep -cE "\"scenario_id\":\"$SCENARIO" "$RECORDS" || true)
+  # 判据是**完整实例 id**（`<场景>-<run>`），不是场景前缀 —— 加臂之后同一场景有两条记录
+# （`-01` = 策略不在、`-02` = 策略在），前缀匹配会把第二条臂判成重复而拒掉。
+DUP=$(grep -cE "\"scenario_id\":\"$SID\"" "$RECORDS" || true)
   if [ "${DUP:-0}" -gt 0 ]; then
     echo "edge_collect: $RECORDS 里已经有 $DUP 条 $SCENARIO 的记录 —— 拒绝再写。" >&2
     echo "  同一场景每轮只采一条；重跑请归档旧文件（mv $RECORDS $RECORDS.done）或另给 EDGEEXP_RECORDS；" >&2

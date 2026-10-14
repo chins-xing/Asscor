@@ -57,6 +57,8 @@
 #                             默认路由，一次取不到就判死会把"网络还没起来"报成"环境不可用"
 #   EDGEEXP_SANDCAT_PAYLOAD   sandcat 载荷路径（默认 /opt/caldera/plugins/sandcat/payloads/sandcat.go-linux）
 #   EDGEEXP_AGENT_WAIT_S      等 agent 回连的上限（秒，默认 180）
+#   EDGEEXP_AGENTS_FIXTURE    离线测试缝：用这个 JSON 文件里的 agent 列表替掉真实 API
+#                             （只在离线夹具里用；判据与线上完全同源）
 #   EDGEEXP_ATTACK_GROUP      agent 的**分组名**（默认 t4d-ttp）。它与攻击侧的投送范围
 #                             （`edge_attack.sh` 的 `EDGEEXP_ATTACK_GROUP`）是**同一个变量** ——
 #                             组名只有一处来源，两侧不一致时不会出现"你其实已经拉过了"这种误诊
@@ -640,18 +642,38 @@ fi
 # 后果不是"多拉一次 sandcat"这么轻：它让"目标上有没有活着的 agent"这条判据**恒为否**，于是每次复位
 # 都覆盖并重拉 agent；而这条判据存在的理由正是**避免把 operation 打到死 agent 上**（`status=-3`
 # 看起来像被拦住）。修法是把 pid 列表改成**第 5 个 argv**（stdin 只留给程序本体）。
+# **多候选怎么办（Task 10 Step 4.1，修的就是这里）**：Caldera **保留已死 agent 的条目**，而容器
+# **pid 会被复用** —— 旧记录与新记录可能都记着 `pid=312`，于是"`(host, 活 pid)` 命中"这条判据
+# 会**同时命中两只**。原实现 `for a in agents: … print(paw); raise SystemExit` 取的是**列表里第一只**
+# （= 数据库序 = 通常是最老那只）⇒ 复位的日志里报出**上一只**的名字，而真正在跳的是新的那只
+# （实例：产物记 `bvecgb`、实际活的是 `thgfyz`；Task 6/Task 8 两次登记过，Task 9 的 attempt-1 之后
+# 现场又出现了 `thgfyz`（死）/ `vfljce`（活）这对同 pid 的记录）。
+#
+# **修法**：命中多个时取 **`last_seen` 最新**的那只（"谁心跳最新谁就是现在在跳的那只"），
+# 并把**全部候选**打进 stderr 的警告里（有名有姓，操作者据此清理残留）。
+# 仍然保留三条判据不变：`host` 相同 + `trusted=true` + `(pid ∈ 容器内活 pid)` + `last_seen ≤ 新鲜度`。
+# **不改成硬失败**：一条已死记录不该让每次复位都失败（那会让"清理残留"变成跑批的硬前置）；
+# 但这也不再是静默的 —— 警告里直接列出"还有哪些 paw 记着同一个 pid"。
 live_agent_paws() {
-  python3 - "$CALDERA_URL" "$CALDERA_KEY" "$TARGET" "${EDGEEXP_AGENT_FRESH_S:-180}" "${1:-}" <<'PY'
+  python3 - "$CALDERA_URL" "$CALDERA_KEY" "$TARGET" "${EDGEEXP_AGENT_FRESH_S:-180}" "${1:-}" \
+          "${EDGEEXP_AGENTS_FIXTURE:-}" <<'PY'
 import json, sys, time, urllib.request
 from datetime import datetime, timezone
 api, key, host, fresh = sys.argv[1].rstrip('/'), sys.argv[2], sys.argv[3], int(sys.argv[4])
-try:
-    req = urllib.request.Request(api + '/api/v2/agents', headers={'KEY': key})
-    agents = json.load(urllib.request.urlopen(req, timeout=15))
-except Exception:
-    print(''); raise SystemExit
+fixture = (sys.argv[6] or '').strip()
+if fixture:
+    # **离线测试缝**（与 `EDGEEXP_EDGESCEN` / `EDGEEXP_PCT_BIN` 同款）：用文件里的 agent 列表替掉
+    # 真实 API，好让"多候选时取哪一只"这件事可以**离线**判真假（正反两向证据见报告 Step 4.1）。
+    agents = json.load(open(fixture, encoding='utf-8'))
+else:
+    try:
+        req = urllib.request.Request(api + '/api/v2/agents', headers={'KEY': key})
+        agents = json.load(urllib.request.urlopen(req, timeout=15))
+    except Exception:
+        print(''); raise SystemExit
 pids = [int(x) for x in sys.argv[5].split() if x.strip().isdigit()]
 now = time.time()
+cands = []
 for a in agents:
     if a.get('host') != host or not a.get('trusted'):
         continue
@@ -662,8 +684,21 @@ for a in agents:
     except Exception:
         continue
     if seen >= now - fresh:
-        print(a.get('paw')); raise SystemExit
-print('')
+        cands.append((seen, a.get('paw') or '', a.get('created') or '', int(a['pid'])))
+if not cands:
+    print(''); raise SystemExit
+# 最新的心跳在前。`created` 只作为同一 last_seen 时的稳定次序（不让结果取决于数据库序）。
+cands.sort(key=lambda c: (c[0], c[2]), reverse=True)
+if len(cands) > 1:
+    others = ', '.join('%s(last_seen=%s, created=%s)' % (
+        p, datetime.fromtimestamp(s, timezone.utc).strftime('%FT%TZ'), c or '?')
+        for s, p, c, _ in cands[1:])
+    print('edge_target_prepare: 警告：容器内活 pid=[%s] 在 Caldera 里命中 **%d 只** agent（pid 复用 ⇒ '
+          '有已死记录残留）；取心跳最新的 %s 为当前活 agent，其余候选：%s'
+          % (' '.join(str(p) for p in pids), len(cands), cands[0][1], others), file=sys.stderr)
+    print('edge_target_prepare: 提示：跑批前用 `lunwen/clab-lab/scripts/edge_agent_preflight.sh --clean` '
+          '清理残留（判据与这里同源）', file=sys.stderr)
+print(cands[0][1])
 PY
 }
 

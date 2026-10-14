@@ -75,6 +75,20 @@ type harnessReport struct {
 	ExpectedChainFactors          []string `json:"expected_chain_factors"`
 	ExpectedBaselineFactors       []string `json:"expected_baseline_factors"`
 	ExpectedBaselineFactorsSource string   `json:"expected_baseline_factors_source"`
+
+	// SubstrateIdentity 是 harness 产物里"这批数据在什么基质/什么实例/什么策略状态"下采的那一段
+	// （`edge_attack.sh` 写出：`{substrate, instance, policy_on}`）。
+	//
+	// 采集器**只取 `policy_on` 一个字段**（Task 10 / 用户裁定「甲」：矩阵新增一条"策略在"的臂，
+	// 同一场景两个臂必须只靠记录本身就能分开）。`substrate`/`instance` 不进记录：前者由
+	// `meta.observation_target` 的 `substrate=` 承载，后者已经写在 `observation_target` 里 ——
+	// 再抄一份就是第二个真源。同样**不做指针解码**：老产物没有这一段，记录照样合法。
+	SubstrateIdentity *harnessSubstrateIdentity `json:"substrate_identity"`
+}
+
+// harnessSubstrateIdentity 是 harness 产物的 `substrate_identity` 段（只声明本工具消费的字段）。
+type harnessSubstrateIdentity struct {
+	PolicyOn string `json:"policy_on"`
 }
 
 // harnessInjection 是一次注入观测：哪个检查、什么时候。
@@ -118,6 +132,12 @@ type groundTruth struct {
 	ExpectedChainFactors          []string `json:"expected_chain_factors,omitempty"`
 	ExpectedBaselineFactors       []string `json:"expected_baseline_factors,omitempty"`
 	ExpectedBaselineFactorsSource string   `json:"expected_baseline_factors_source,omitempty"`
+
+	// PolicyOn 是**实验条件**（策略在/不在）在记录里的显式痕迹（Task 10 / 用户裁定「甲」）。
+	// 取自 harness 产物的 `substrate_identity.policy_on`（`edge_attack.sh:547` 写出、`:933` 落盘）
+	// ⇒ 它是**攻击那一刻**真实的策略状态，不是采集期的猜测。空 = 产物没写（老产物）⇒ 记录里缺席。
+	// 与声明面三键同路数：**证据，不是判据输入**（不进评分、不影响阈值、不进 `Validate`）。
+	PolicyOn string `json:"policy_on,omitempty"`
 }
 
 // loadGroundTruth 解析攻击 harness 产物。
@@ -201,7 +221,29 @@ func loadGroundTruth(path, scenario string) (groundTruth, error) {
 		ExpectedChainFactors:          trimAll(rep.ExpectedChainFactors),
 		ExpectedBaselineFactors:       trimAll(rep.ExpectedBaselineFactors),
 		ExpectedBaselineFactorsSource: strings.TrimSpace(rep.ExpectedBaselineFactorsSource),
+		// 策略状态原样带上（"0"/"1"；产物没这一段就是空 ⇒ 记录里 `meta.policy_on` 缺席）。
+		PolicyOn: substratePolicyOn(rep.SubstrateIdentity),
 	}, nil
+}
+
+// substratePolicyOn 从 harness 产物的 `substrate_identity` 段取策略状态，并**归一成 "0"/"1"**。
+//
+// 为什么归一而不是原样透传：这一列要能被**只靠记录**判读"哪个臂"，而产物里的取值来自环境变量
+// （`EDGEEXP_POLICY_ON`，可能是 `0`/`1`/`true`/`false`/带空白的串）。原样透传会让同一件事在数据集里
+// 有多个写法（`"0"` 与 `""` 与 `"false"` 各占一种），而"读的人要自己猜哪种写法算关"正是本字段
+// 要消灭的东西。非法/缺失取值一律归空 ⇒ 字段缺席（不猜）。
+func substratePolicyOn(id *harnessSubstrateIdentity) string {
+	if id == nil {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(id.PolicyOn)) {
+	case "1", "true", "on", "yes":
+		return "1"
+	case "0", "false", "off", "no":
+		return "0"
+	default:
+		return ""
+	}
 }
 
 // trimAll 去掉每一项两侧空白并丢掉空串（与 `edge_collect.sh` 的 `norm` 同一个口径：

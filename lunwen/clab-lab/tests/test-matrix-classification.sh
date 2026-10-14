@@ -21,6 +21,14 @@
 # 然后断言四件事 —— 最后一行必须是 `targeted_ttp`、条件分布必须是 1/24、
 # 计划表里**不得**出现"因子串带尾随空白"的痕迹、以及非最后一行也要照样分类正确。
 #
+# **Task 10 追加两格**（同一处分类逻辑的新维度）：矩阵给 targeted 场景加了「策略在」的臂
+# （`POLICY_ON=1`）⇒ 一个 targeted 场景会产生**两条实例**。两格：
+#   F) `EDGEEXP_POLICY_ON_ARM=1`：分布变成
+#      `targeted_ttp(policy=0)=A ｜ targeted_ttp(policy=1)=A ｜ recon_playbook=B ｜ 合计 2A+B`
+#      （每个 targeted 场景各一条臂），且 `-pon` 那行必须是 `policy=1`；
+#   G) **`EDGEEXP_POLICY_ON_ARM=0` 与 arm=1 的 off 臂逐字相同**（条件行文本一致）——
+#      这就是"既有臂一字不动"在夹具里的钉子（A–E 五格全部跑在 arm=0 上，与 Task 8 时逐字一致）。
+#
 # 判据（6 条，逐条可判真假）：
 #   1. 桩表被脚本接受（名单逐项相等）⇒ 干跑 rc=0
 #   2. **最后一行**（挂着 TTP 因子的那行）判 `basis=targeted_ttp`
@@ -95,6 +103,7 @@ run_dry() { # $1=TTP 因子集；其余 = 选中的场景（无则全量 25）
       -u EDGEEXP_BASELINE_FACTORS -u EDGEEXP_BASELINE_FACTORS_SOURCE \
       -u EDGEEXP_TTP_CONTROL_ABILITY -u EDGEEXP_TTP_TARGET_ABILITY_NAME \
       EDGEEXP_SUBSTRATE=clab EDGEEXP_DRY_RUN=1 EDGEEXP_EDGESCEN="$STUB" \
+      EDGEEXP_POLICY_ON_ARM="${ARM:-0}" \
       EDGEEXP_DATA_DIR="$WORK/data" EDGEEXP_TTP_FACTORS="$factors" \
       EDGEEXP_TTP_TARGET_ABILITY="$TID" EDGEEXP_TTP_PLAYBOOK_ID="$PID" \
       EDGEEXP_TTP_PLAYBOOK_NAME="$PNAME" \
@@ -200,6 +209,46 @@ PY
 [ $? -eq 0 ] && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
 
 echo
+echo
+echo "############ F) 臂开（EDGEEXP_POLICY_ON_ARM=1）：每个 targeted 场景两条实例"
+ARM=1 run_dry "$LAST_FACTOR" > "$WORK/out-arm.txt" 2>&1; RC_ARM=$?
+grep -E "场景实例|条件分布" "$WORK/out-arm.txt" | sed 's/^/  /'
+python3 - "$WORK/out-arm.txt" "$RC_ARM" "$LAST" <<'PY'
+import re, sys
+out = open(sys.argv[1], encoding='utf-8').read()
+rc, last = int(sys.argv[2]), sys.argv[3]
+dist = next((l for l in out.splitlines() if '条件分布' in l), '')
+m = re.search(r'targeted_ttp\(policy=0\)=(\d+)\s+个\s+｜\s+targeted_ttp\(policy=1\)=(\d+)\s+个\s+｜\s+recon_playbook=(\d+)\s+个\s+｜\s+合计 (\d+) 个', dist)
+off, on, rec, tot = (int(m.group(i)) for i in (1, 2, 3, 4)) if m else (-1, -1, -1, -1)
+ok1 = (rc == 0 and off == 1 and on == 1 and rec == 24 and tot == 26)
+print(('  ok   ' if ok1 else '  FAIL ') + 'arm=1：targeted(policy=0)=%d ｜ targeted(policy=1)=%d ｜ recon=%d ｜ 合计 %d（期望 1/1/24/26）' % (off, on, rec, tot))
+pon = next((l for l in out.splitlines() if re.search(r'\]\s+%s-pon\b' % re.escape(last), l)), '')
+ok2 = ('basis=targeted_ttp' in pon and 'policy=1' in pon)
+print(('  ok   ' if ok2 else '  FAIL ') + '-pon 实例行存在且 policy=1')
+print('      %s' % pon.strip()[:150])
+sys.exit(0 if (ok1 and ok2) else 1)
+PY
+[ $? -eq 0 ] && PASS=$((PASS+2)) || FAIL=$((FAIL+2))
+
+echo
+echo "############ G) arm=0 的 off 臂条件行与 arm=1 里的同一行**逐字相同**（既有臂一字不动）"
+python3 - "$WORK/out-full.txt" "$WORK/out-arm.txt" "$LAST" <<'PY'
+import re, sys
+def line_of(path, name):
+    for l in open(path, encoding='utf-8'):
+        if re.search(r'\]\s+%s\b' % re.escape(name), l):
+            return re.sub(r'^\s*\[\s*\d+/\s*\d+\]\s+\S+\s+', '', l.rstrip('\n'))
+    return ''
+a = line_of(sys.argv[1], sys.argv[3])   # arm=0 的那次
+b = line_of(sys.argv[2], sys.argv[3])   # arm=1 的那次（同一场景的 off 臂）
+ok = bool(a) and a == b
+print(('  ok   ' if ok else '  FAIL ') + 'off 臂条件行逐字相同（%s）' % ('去掉实例计数前缀后' if ok else '不同！'))
+if not ok:
+    print('      arm=0: %r' % a[:150]); print('      arm=1: %r' % b[:150])
+sys.exit(0 if ok else 1)
+PY
+[ $? -eq 0 ] && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
+
 echo "############ 汇总"
 echo "  PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

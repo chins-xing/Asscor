@@ -233,7 +233,6 @@ TTP_CONTROL_ABILITY="${EDGEEXP_TTP_CONTROL_ABILITY:-}"
 TTP_PLAYBOOK_ID="${EDGEEXP_TTP_PLAYBOOK_ID:-}"
 TTP_PLAYBOOK_NAME="${EDGEEXP_TTP_PLAYBOOK_NAME:-}"
 TTP_GROUP="${EDGEEXP_TTP_GROUP:-t4d-ttp}"
-
 # scenario_is_targeted <场景名> —— 注入因子集里是否出现任一"目标 TTP 触发因子"。
 scenario_is_targeted() {
   local csv=",${SCEN_FACTORS[$1]:-},"
@@ -247,12 +246,54 @@ scenario_is_targeted() {
   return 1
 }
 
+# --- Task 10：「策略在」的臂（用户 2026-10-13 裁定「甲」）------------------------
+# **为什么需要它**：`targeted_ttp` 场景在 `POLICY_ON=0` 下，策略是卸掉的 ⇒ 目标 TTP
+# （`head -1 /etc/shadow`）**必然成功** ⇒ Task 9 那 11 条记录的 `compromised` **全是 true**
+# （标签零方差，决策层指标算不出东西）。故给**每个 targeted 场景**再加一条 **"策略在"
+# （`POLICY_ON=1`）**的臂：同一个场景、同一个目标 TTP、同一个 pair 剧本、同一个攻击组、
+# 同一份采集配置、同一个观察窗 —— **只差策略**（Step 1 已实测：策略在 ⇒ `compromised=false`
+# 且目标 link `status=1`，对照 link 仍成功 ⇒ 是被策略挡住的）。
+#
+# **本块必须放在 `scenario_is_targeted` 定义之后**（它按分类展开实例）：放前面会变成前向引用，
+# 结果是**每个场景都被判成非 targeted**（干跑实测 0 targeted / 25 recon，还顺手触发了方差门禁）。
+#
+# 四条纪律（每条都对应一种"看起来正常、其实错了"的形态）：
+#  1. **既有臂一字不动**：`EDGEEXP_POLICY_ON_ARM=0` 时本段是**恒等变换**（实例 == 场景，
+#     条件/产物/日志与 Task 9 逐字节相同）；默认 1 = 开臂（用户裁定后的口径）。
+#  2. **实例要有独立身份**：两条臂**共用场景名**（`edgescen -s` 的表内查找必须用真名），
+#     故臂的身份由**实例键**（`<场景>` / `<场景>-pon`）+ **run 号**（1 / 2）承载，
+#     并在**记录本体**里留 `meta.policy_on`（Task 10 的 additive 字段）——
+#     "哪条是哪一个臂"必须只看记录就能答，不许靠文件名或运行顺序。
+#  3. **记账按实例**：记录条数门禁、`condition_summary`、干跑分布与"合计 N 个"都按实例数算。
+#  4. **声明面不变**：两个臂的 `B` 都是 {EF-SELINUX, EF-APPARMOR}（`OT-005` 在 PVE CT 里恒假，
+#     不随策略变）⇒ 两条臂的因子集相等断言**都必须过**（Step 1 已实测两臂都过）。
+POLICY_ON_ARM="${EDGEEXP_POLICY_ON_ARM:-1}"
+case "$POLICY_ON_ARM" in
+  0|1) : ;;
+  *) echo "edge_matrix: EDGEEXP_POLICY_ON_ARM 只认 0（= 与 Task 9 逐字相同的旧行为）或 1（默认：每个 targeted 场景加一条\"策略在\"的臂），收到 '$POLICY_ON_ARM'" >&2; exit 2 ;;
+esac
+INST_KEY=(); INST_SCEN=(); INST_BASIS=(); INST_POLICY=(); INST_RUN=(); INST_SUFFIX=()
+for s in "${SELECTED[@]}"; do
+  if scenario_is_targeted "$s"; then
+    INST_KEY+=("$s");     INST_SCEN+=("$s"); INST_BASIS+=("targeted_ttp");   INST_POLICY+=("0"); INST_RUN+=("1"); INST_SUFFIX+=("")
+    if [ "$POLICY_ON_ARM" = "1" ]; then
+      INST_KEY+=("$s-pon"); INST_SCEN+=("$s"); INST_BASIS+=("targeted_ttp"); INST_POLICY+=("1"); INST_RUN+=("2"); INST_SUFFIX+=("-pon")
+    fi
+  else
+    INST_KEY+=("$s");     INST_SCEN+=("$s"); INST_BASIS+=("recon_playbook"); INST_POLICY+=("1"); INST_RUN+=("1"); INST_SUFFIX+=("")
+  fi
+done
+TARGETED_SELECTED=0
+for k in "${!INST_KEY[@]}"; do
+  if [ "${INST_BASIS[$k]}" = "targeted_ttp" ]; then TARGETED_SELECTED=$((TARGETED_SELECTED + 1)); fi
+done
+
 # scenario_condition_line <场景名> —— 人类可读的一行（干跑与逐场景循环共用，措辞只此一份）。
-scenario_condition_line() {
-  local s="$1" factors="${SCEN_FACTORS[$1]:-}"
+scenario_condition_line() { # $1=场景 $2=策略状态（0/1；缺省 0 = 旧行为，输出逐字节不变）
+  local s="$1" pol="${2:-0}" factors="${SCEN_FACTORS[$1]:-}"
   if scenario_is_targeted "$s"; then
     printf 'basis=%-14s policy=%-3s 目标=%s 对照=%s 剧本=%s 组=%s 因子=%s' \
-      "targeted_ttp" "0" "${TTP_TARGET_ABILITY:-(未给)}" "${TTP_CONTROL_ABILITY:-(未给)}" \
+      "targeted_ttp" "$pol" "${TTP_TARGET_ABILITY:-(未给)}" "${TTP_CONTROL_ABILITY:-(未给)}" \
       "${TTP_PLAYBOOK_ID:-(未给)}" "$TTP_GROUP" "${factors:-（无）}"
   else
     printf 'basis=%-14s policy=%-3s 目标=%s 对照=%s 剧本=%s 组=%s 因子=%s' \
@@ -269,8 +310,8 @@ scenario_condition_line() {
 #   · `EDGEEXP_ATTACK_GROUP` **两类都设**：投送范围钉在目标 agent 那一组，别的机器上的 agent
 #     （A-1 上控制侧 `probe-ot005` 也有活 agent）不会执行本轮的剧本 ⇒ `nodes_affected` 不被污染。
 #     闸门只在 basis=targeted_ttp 时**要求**它，但"条件里没有别的机器"对两类都是更好的实验。
-apply_scenario_conditions() {
-  local s="$1"
+apply_scenario_conditions() { # $1=场景 $2=策略状态（0/1；缺省 0 = 旧行为）
+  local s="$1" pol="${2:-0}"
   if scenario_is_targeted "$s"; then
     export EDGEEXP_BASIS="targeted_ttp"
     export EDGEEXP_TARGET_ABILITY="$TTP_TARGET_ABILITY"
@@ -278,8 +319,8 @@ apply_scenario_conditions() {
     export EDGEEXP_CONTROL_ABILITY="$TTP_CONTROL_ABILITY"
     export EDGEEXP_PLAYBOOK_ID="$TTP_PLAYBOOK_ID"
     export EDGEEXP_PLAYBOOK_NAME="$TTP_PLAYBOOK_NAME"
-    export EDGEEXP_POLICY_ON=0
-    SCEN_BASIS_NOW="targeted_ttp"; SCEN_POLICY_NOW=0; SCEN_ABILITY_NOW="$TTP_TARGET_ABILITY"
+    export EDGEEXP_POLICY_ON="$pol"
+    SCEN_BASIS_NOW="targeted_ttp"; SCEN_POLICY_NOW="$pol"; SCEN_ABILITY_NOW="$TTP_TARGET_ABILITY"
   else
     export EDGEEXP_BASIS="recon_playbook"
     unset EDGEEXP_TARGET_ABILITY EDGEEXP_TARGET_ABILITY_NAME EDGEEXP_CONTROL_ABILITY
@@ -295,10 +336,6 @@ apply_scenario_conditions() {
 
 # 目标 TTP 场景缺配置 ⇒ **干跑就失败**（不许跑到一半才发现条件缺项）。判据只看**选中的**场景：
 # 只跑侦察场景时不该因为"没给 ability"而拒绝。
-TARGETED_SELECTED=0
-for s in "${SELECTED[@]}"; do
-  scenario_is_targeted "$s" && TARGETED_SELECTED=$((TARGETED_SELECTED + 1))
-done
 if [ "${TARGETED_SELECTED:-0}" -gt 0 ]; then
   [ -n "$TTP_TARGET_ABILITY" ] || {
     echo "edge_matrix: 选中的场景里有 $TARGETED_SELECTED 个目标 TTP 场景（注入因子含 $TTP_FACTORS_CSV），却没给 EDGEEXP_TTP_TARGET_ABILITY —— 目标 TTP 口径没有目标 ability 是自相矛盾的（edge_attack.sh 也会拒绝），整轮失败" >&2
@@ -370,9 +407,16 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   fi
   echo "  数据目录    : $DATA_DIR（干跑不创建、不清理）"
   echo "  场景        : ${#SELECTED[@]} 个（声明的 ${#SCENARIOS[@]}）/ 名单核对已通过"
+  if [ "$POLICY_ON_ARM" = "1" ]; then
+    echo "  场景实例    : ${#SELECTED[@]} 个场景 → ${#INST_KEY[@]} 个实例（targeted 场景各 2 条臂：POLICY_ON=0 / POLICY_ON=1；其余场景 1 个实例）"
+  fi
   # **按场景驱动的实验条件**必须在干跑里逐场景看得见（Task 5 / Step 0 的判据）：复审 7.6 第 1 条
   # 要求"每个场景那一行能看出 basis/policy 两列，且两列都不是常量"。
-  echo "  条件分类    : 注入因子含 $TTP_FACTORS_CSV ⇒ targeted_ttp + POLICY_ON=0；其余 ⇒ recon_playbook + POLICY_ON=1"
+  if [ "$POLICY_ON_ARM" = "1" ]; then
+    echo "  条件分类    : 注入因子含 $TTP_FACTORS_CSV ⇒ targeted_ttp，**两条臂**（POLICY_ON=0 = 旧臂 / POLICY_ON=1 = 策略在的臂）；其余 ⇒ recon_playbook + POLICY_ON=1"
+  else
+    echo "  条件分类    : 注入因子含 $TTP_FACTORS_CSV ⇒ targeted_ttp + POLICY_ON=0；其余 ⇒ recon_playbook + POLICY_ON=1"
+  fi
   echo "  目标 TTP    : ability=${TTP_TARGET_ABILITY:-(未给)}（${TTP_TARGET_ABILITY_NAME:-未给名字}）｜对照=${TTP_CONTROL_ABILITY:-(未给)}｜剧本=${TTP_PLAYBOOK_ID:-(未给)}（${TTP_PLAYBOOK_NAME:-未给名字}）｜组=$TTP_GROUP"
   echo "  -factors    : $(derive_factors_spec "$CONFIG")（来源：$CONFIG）"
   echo "  -weights    : $(derive_weights_spec "$CONFIG")"
@@ -387,23 +431,35 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   echo "  子脚本继承  : EDGEEXP_RECORDS=$(bash -c 'printf "%s" "${EDGEEXP_RECORDS:-<未导出>}"')"
   echo "  计划（逐场景条件由本脚本按注入因子集决定；两列都必须不是常量）："
   i=0
-  TGT=0; REC=0
-  for s in "${SELECTED[@]}"; do
+  TGT=0; TGT_ON=0; REC=0
+  COMBOS=""
+  for k in "${!INST_KEY[@]}"; do
     i=$((i + 1))
-    if scenario_is_targeted "$s"; then TGT=$((TGT + 1)); else REC=$((REC + 1)); fi
-    if [ -f "$RECORDS" ] && grep -qE "\"scenario_id\":\"$s" "$RECORDS"; then
+    _s="${INST_SCEN[$k]}"; _pol="${INST_POLICY[$k]}"; _key="${INST_KEY[$k]}"; _run="${INST_RUN[$k]}"
+    case "${INST_BASIS[$k]}" in
+      targeted_ttp) if [ "$_pol" = "1" ]; then TGT_ON=$((TGT_ON + 1)); else TGT=$((TGT + 1)); fi ;;
+      *) REC=$((REC + 1)) ;;
+    esac
+    COMBOS="$COMBOS
+${INST_BASIS[$k]}/$_pol"
+    if [ -f "$RECORDS" ] && grep -qE "\"scenario_id\":\"$_s-0$_run\"" "$RECORDS"; then
       printf '    [%2d/%2d] %-28s %s ｜skip（文件里已有记录；仅当 EDGEEXP_RESUME=1 时才会真的跳过）\n' \
-        "$i" "${#SELECTED[@]}" "$s" "$(scenario_condition_line "$s")"
+        "$i" "${#INST_KEY[@]}" "$_key" "$(scenario_condition_line "$_s" "$_pol")"
     else
       printf '    [%2d/%2d] %-28s %s ｜collect（reset → attack → collect 三步都会跑）\n' \
-        "$i" "${#SELECTED[@]}" "$s" "$(scenario_condition_line "$s")"
+        "$i" "${#INST_KEY[@]}" "$_key" "$(scenario_condition_line "$_s" "$_pol")"
     fi
   done
-  echo "  条件分布    : targeted_ttp=$TGT 个 ｜ recon_playbook=$REC 个 ｜ 合计 $((TGT + REC)) 个（必须 == ${#SELECTED[@]}）"
-  [ "$((TGT + REC))" -eq "${#SELECTED[@]}" ] || { echo "edge_matrix: 条件分类没有覆盖全部选中场景（这是干跑门禁）" >&2; exit 3; }
-  if [ "${#SELECTED[@]}" -gt 1 ]; then
-    [ "$TGT" -gt 0 ] && [ "$REC" -gt 0 ] || {
-      echo "edge_matrix: 选中的 ${#SELECTED[@]} 个场景里 basis/policy 是**常量**（targeted=$TGT recon=$REC）—— 实验条件没有方差，多场景扫描会产出条件无方差的数据（这是干跑门禁，见复审 7.6 第 1 条）" >&2
+  if [ "$POLICY_ON_ARM" = "1" ]; then
+    echo "  条件分布    : targeted_ttp(policy=0)=$TGT 个 ｜ targeted_ttp(policy=1)=$TGT_ON 个 ｜ recon_playbook=$REC 个 ｜ 合计 $((TGT + TGT_ON + REC)) 个（必须 == ${#INST_KEY[@]}）"
+  else
+    echo "  条件分布    : targeted_ttp=$TGT 个 ｜ recon_playbook=$REC 个 ｜ 合计 $((TGT + REC)) 个（必须 == ${#SELECTED[@]}）"
+  fi
+  [ "$((TGT + TGT_ON + REC))" -eq "${#INST_KEY[@]}" ] || { echo "edge_matrix: 条件分类没有覆盖全部选中场景实例（这是干跑门禁）" >&2; exit 3; }
+  if [ "${#INST_KEY[@]}" -gt 1 ]; then
+    _combos="$(printf '%s\n' "$COMBOS" | sed '/^$/d' | sort -u | wc -l)"
+    [ "$_combos" -ge 2 ] || {
+      echo "edge_matrix: 选中的 ${#INST_KEY[@]} 个场景实例里 (basis, policy) 只有**一种**组合（targeted(policy=0)=$TGT targeted(policy=1)=$TGT_ON recon=$REC）—— 实验条件没有方差，多场景扫描会产出条件无方差的数据（这是干跑门禁，见复审 7.6 第 1 条）" >&2
       exit 3
     }
   fi
@@ -435,6 +491,14 @@ state = {
 }
 json.dump(state, open(sys.argv[1], 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 PY
+# 场景**实例**表（Task 10）：台账与 run.json 按实例组装（targeted 场景两条臂）。
+python3 - "$STATE" "${INST_KEY[@]}" <<'PY'
+import json, sys
+p, keys = sys.argv[1], sys.argv[2:]
+s = json.load(open(p, encoding='utf-8'))
+s['instances'] = list(keys)
+json.dump(s, open(p, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+PY
 
 # 逐场景进度落盘（中断也能看出跑到哪、哪一步花了多久）
 state_add() { # state_add <scenario> <step> <elapsed_s>
@@ -456,13 +520,16 @@ if scen not in s['completed']:
 json.dump(s, open(p, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 PY
 }
-state_condition() { # state_condition <scenario> <basis> <policy_on> <ability>
-  python3 - "$STATE" "$1" "$2" "$3" "$4" <<'PY'
+state_condition() { # state_condition <实例键> <basis> <policy_on> <ability> [场景名]
+  python3 - "$STATE" "$1" "$2" "$3" "$4" "${5:-}" <<'PY'
 import json, sys
-p, scen, basis, policy, ability = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+p, key, basis, policy, ability, scenario = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
 s = json.load(open(p, encoding='utf-8'))
-s.setdefault('conditions', {})[scen] = {
+s.setdefault('conditions', {})[key] = {
     'basis': basis, 'policy_on': int(policy), 'target_ability': ability or None,
+    # 实例键与场景名分开记：targeted 场景有两条臂，键是 `<场景>` / `<场景>-pon`，
+    # 而"这是哪个场景"必须另有字段（否则按场景去重统计时会把它算成两个场景）。
+    'scenario': scenario or key,
 }
 json.dump(s, open(p, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 PY
@@ -497,6 +564,9 @@ def frag(kind, scenario):
         return {'_unparsable': str(exc), 'path': p}
 
 scen = state['scenarios_selected']
+# Task 10：台账按**实例**组装（`instances` 由矩阵在开跑时写入；老 state 没有这个键 ⇒
+# 退回场景表，与加臂之前逐字相同）。碎片文件名也是按实例键来的（`<场景>` / `<场景>-pon`）。
+insts = state.get('instances') or list(scen)
 per_scenario = []
 gate0 = {'per_scenario': {}, 'duplicate_observed': [], 'chain_entries_total': 0}
 clock = {'all_ok': True, 'per_scenario': {}}
@@ -506,9 +576,12 @@ records_expected = 0
 ts_sources = {}
 ts_from_dataset = {}   # 从记录本体读到的 ts 口径（续跑时没有 collect 碎片的兜底）
 
-for s in scen:
+for s in insts:
     reset, attack, collect = frag('reset', s), frag('attack', s), frag('collect', s)
-    entry = {'scenario': s, 'reset': reset, 'attack': attack, 'collect': collect,
+    cond = (state.get('conditions') or {}).get(s) or {}
+    entry = {'instance': s, 'scenario': cond.get('scenario') or s,
+             'basis': cond.get('basis'), 'policy_on': cond.get('policy_on'),
+             'reset': reset, 'attack': attack, 'collect': collect,
              'timings_s': state.get('progress', {}).get(s, {})}
     entry['timings_s']['total'] = sum(v for v in entry['timings_s'].values() if isinstance(v, int))
     per_scenario.append(entry)
@@ -665,18 +738,19 @@ run = {
     'failed': state.get('failed'),
     'progress_s': state.get('progress', {}),
     'records_file': records_file,
-    'records_expected': len(scen),
+    # **按实例算**（Task 10）：一个 targeted 场景有两条臂 ⇒ 期望记录数 = 实例数（不是场景数）。
+    'records_expected': len(insts),
     'records_written_this_run': records_expected,
     'records_file_total_lines': file_lines,
-    # 缺/多分开报（Fix round 2 的 Minor 项）：此前一个 `len(scen) - file_lines` 同时承担
+    # 缺/多分开报（Fix round 2 的 Minor 项；Task 10 起分母是**实例数**）：此前一个 `len(scen) - file_lines` 同时承担
     # 两种含义，文件里**多**了别的场景行时会变成负数（看起来像"缺了 −2 条"）。
-    'records_missing_for_selected': max(0, len(scen) - file_lines),
-    'records_extra_in_file': max(0, file_lines - len(scen)),
+    'records_missing_for_selected': max(0, len(insts) - file_lines),
+    'records_extra_in_file': max(0, file_lines - len(insts)),
     # 记录条数（I6）：判据要同时看两件事 —— ① 这份文件里**至少**有本次选中场景数那么多条记录
     # （只统计"本次写了几次"会漏掉文件里原有的别的场景行）；② 本次写入 + 续跑跳过 == 选中场景数
     # （续跑模式下本次写入可以是 0，那不是缺口）。只看 ① 会在"文件里有别的场景行"时误报通过，
     # 只看 ② 会在续跑时误报失败。
-    'record_counts_ok': (file_lines == len(scen)) and (records_expected + len(skipped_resume) == len(scen)),
+    'record_counts_ok': (file_lines == len(insts)) and (records_expected + len(skipped_resume) == len(insts)),
     'run_inputs': run_inputs,
     'chain_factor_set_equality': equality,
     'gate0_duplicate_factors': gate0,
@@ -709,17 +783,34 @@ run = {
 # 而不是靠读日志。`condition_summary` 给出两类的场景数与策略在/不在的场景数（都必须非零）。
 run['conditions'] = state.get('conditions', {})
 _conds = run['conditions']
+# **Task 10 的口径变化要写明**：`conditions` 现在按**场景实例**登记（targeted 场景有两条臂
+# ⇒ 同一场景两行）。故 `policy_on_scenarios`/`policy_off_scenarios` 这两个键从此是**实例**口径
+# （加臂之前实例 == 场景，所以数值不变；`EDGEEXP_POLICY_ON_ARM=0` 时逐字回到旧值）。
+_inst_keys = list(_conds.keys())
+_scen_names = {v.get('scenario') or k for k, v in _conds.items()}
+_def = lambda **kw: sum(1 for v in _conds.values() if all(v.get(f) == x for f, x in kw.items()))
 run['condition_summary'] = {
-    'targeted_ttp_scenarios': sum(1 for v in _conds.values() if v.get('basis') == 'targeted_ttp'),
-    'recon_playbook_scenarios': sum(1 for v in _conds.values() if v.get('basis') == 'recon_playbook'),
-    'policy_on_scenarios': sum(1 for v in _conds.values() if v.get('policy_on') == 1),
-    'policy_off_scenarios': sum(1 for v in _conds.values() if v.get('policy_on') == 0),
+    # 场景口径（**场景去重**；与 Task 9 的 run.json 同名同义）
+    'targeted_ttp_scenarios': len({v.get('scenario') for v in _conds.values() if v.get('basis') == 'targeted_ttp'}),
+    'recon_playbook_scenarios': len({v.get('scenario') for v in _conds.values() if v.get('basis') == 'recon_playbook'}),
+    # 实例口径（Task 10 新增：`targeted_ttp` 场景各有两条臂）
+    'instances_total': len(_inst_keys),
+    'targeted_ttp_policy_off_instances': _def(basis='targeted_ttp', policy_on=0),
+    'targeted_ttp_policy_on_instances': _def(basis='targeted_ttp', policy_on=1),
+    'recon_playbook_instances': _def(basis='recon_playbook'),
+    'policy_on_scenarios': _def(policy_on=1),
+    'policy_off_scenarios': _def(policy_on=0),
+    'policy_on_arm': os.environ.get('EDGEEXP_POLICY_ON_ARM', '1'),
 }
 run['notes']['scenario_conditions'] = (
-    'Task 5 / Step 0：逐场景条件由 edge_matrix.sh 按 edgescen -list 的注入因子集决定 —— '
-    '含 TTP 触发因子（默认 EF-SELINUX/EF-APPARMOR）⇒ basis=targeted_ttp + POLICY_ON=0 + 目标/对照 ability；'
+    'Task 5 / Step 0 + Task 10：逐**场景实例**条件由 edge_matrix.sh 按 edgescen -list 的注入因子集决定 —— '
+    '含 TTP 触发因子（默认 EF-SELINUX/EF-APPARMOR）⇒ basis=targeted_ttp + 目标/对照 ability，'
+    '并且**每个场景两条臂**（POLICY_ON=0 与 POLICY_ON=1，后者是 Task 10 按用户裁定「甲」加的）；'
     '其余 ⇒ basis=recon_playbook + POLICY_ON=1（不得带 target ability）。'
-    'condition_summary 的两类之和必须 == scenarios_selected 数（干跑门禁也查这一点）。')
+    '`condition_summary` 的场景口径两列之和 == scenarios_selected 数，'
+    '实例口径 `instances_total` == 选中实例数（干跑门禁同时查这两条）。'
+    '两条臂只差策略、其余逐项相同；臂的身份写在记录的 **`meta.policy_on`** 里（additive），'
+    '不许靠文件名或运行顺序区分。')
 for path in (out_stable, out_copy):
     with open(path, 'w', encoding='utf-8') as fh:
         json.dump(run, fh, ensure_ascii=False, indent=2)
@@ -766,55 +857,62 @@ on_exit() {
 trap on_exit EXIT
 
 # --- 逐场景 -----------------------------------------------------------------
-echo "edge_matrix: 运行 $RUN_ID（$MODE，${#SELECTED[@]} 个场景 / 声明的 ${#SCENARIOS[@]}）"
+echo "edge_matrix: 运行 $RUN_ID（$MODE，${#SELECTED[@]} 个场景 / ${#INST_KEY[@]} 个场景实例 / 声明的 ${#SCENARIOS[@]}）"
 echo "edge_matrix: 记录文件 $RECORDS"
 # 子脚本据此判断 harness 产物是不是**本轮**的（I7）：陈旧产物会静默提供旧的注入时刻与客观结果。
 export EDGEEXP_RUN_STARTED_AT="$RUN_STARTED"
 RESUME="${EDGEEXP_RESUME:-0}"
 i=0
-for s in "${SELECTED[@]}"; do
+for k in "${!INST_KEY[@]}"; do
   i=$((i + 1))
-  # 续跑（M9）：幂等守卫会拒绝"同一场景已有记录"，于是中断后的整轮只能从头再来。
-  # EDGEEXP_RESUME=1 时跳过目标文件里已有记录的场景，并把跳过的事实写进 run.json。
-  if [ "$RESUME" = "1" ] && [ -f "$RECORDS" ] && grep -qE "\"scenario_id\":\"$s" "$RECORDS"; then
-    echo "edge_matrix: [$i/${#SELECTED[@]}] 场景 $s 已有记录 —— 续跑模式跳过（写入 run.json 的 scenarios_skipped_resume）"
-    python3 - "$STATE" "$s" <<'PY'
+  s="${INST_SCEN[$k]}"; KEY="${INST_KEY[$k]}"; POL="${INST_POLICY[$k]}"; RUN="${INST_RUN[$k]}"; SUF="${INST_SUFFIX[$k]}"
+  INST_ID="$(printf '%s-%02d' "$s" "$RUN")"
+  # 续跑（M9）：幂等守卫会拒绝"同一**实例**已有记录"，于是中断后的整轮只能从头再来。
+  # EDGEEXP_RESUME=1 时跳过已有记录的实例，并把跳过的事实写进 run.json。
+  # 判据用**完整 scenario_id**（不是场景前缀）：加臂之后同一场景有两条记录（`-01`/`-02`），
+  # 前缀匹配会把第二条臂当成"已有记录"而拒掉（那正是"看起来正常、其实少了一条臂"）。
+  if [ "$RESUME" = "1" ] && [ -f "$RECORDS" ] && grep -qE "\"scenario_id\":\"$INST_ID\"" "$RECORDS"; then
+    echo "edge_matrix: [$i/${#INST_KEY[@]}] 实例 $KEY 已有记录（$INST_ID）—— 续跑模式跳过（写入 run.json 的 scenarios_skipped_resume）"
+    python3 - "$STATE" "$KEY" <<'PY'
 import json, sys
-p, scen = sys.argv[1], sys.argv[2]
+p, inst = sys.argv[1], sys.argv[2]
 s = json.load(open(p, encoding='utf-8'))
 s.setdefault('skipped_resume', [])
-if scen not in s['skipped_resume']:
-    s['skipped_resume'].append(scen)
+if inst not in s['skipped_resume']:
+    s['skipped_resume'].append(inst)
 json.dump(s, open(p, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 PY
     continue
   fi
   echo "============================================================"
-  echo "edge_matrix: [$i/${#SELECTED[@]}] 场景 $s"
-  # **按场景设条件**（Task 5 / Step 0）：三个开关逐场景成对设置，并在同一行打印出来 ——
-  # 日志里能看到"这个场景用的是什么条件"，而不是只能事后去翻记录。
-  apply_scenario_conditions "$s"
-  echo "edge_matrix: [$i/${#SELECTED[@]}] $s 条件 $(scenario_condition_line "$s")"
-  state_condition "$s" "$SCEN_BASIS_NOW" "$SCEN_POLICY_NOW" "$SCEN_ABILITY_NOW" || true
+  echo "edge_matrix: [$i/${#INST_KEY[@]}] 实例 $KEY（场景 $s，策略=$POL，run=$RUN）"
+  # **按实例设条件**（Task 5 / Step 0 + Task 10 的臂）：三个开关逐实例成对设置，并在同一行打印
+  # 出来 —— 日志里能看到"这个实例用的是什么条件"，而不是只能事后去翻记录。
+  apply_scenario_conditions "$s" "$POL"
+  echo "edge_matrix: [$i/${#INST_KEY[@]}] $KEY 条件 $(scenario_condition_line "$s" "$POL")"
+  state_condition "$KEY" "$SCEN_BASIS_NOW" "$SCEN_POLICY_NOW" "$SCEN_ABILITY_NOW" "$s" || true
   t0=$(date -u +%s)
   # 一律用 `bash <script>` 调用（不依赖可执行位）：lab 目录在 /mnt/f（drvfs）上，
   # 可执行位由挂载选项决定，靠它会让"脚本本身没跑"伪装成"实验失败"。
-  # 每一步先写好兜底失败原因（含场景名与步骤名）：`set -e` 下子脚本失败会直接跳到 trap，
+  # 每一步先写好兜底失败原因（含实例与场景名）：`set -e` 下子脚本失败会直接跳到 trap，
   # 那时只有这里写下的原因是可归因的（Fix round 2 的 M4 项）。
-  FAIL_REASON="场景 $s 的 reset 步失败（见上面的 stderr）"
-  bash "$SCRIPT_DIR/edge_reset.sh" "$s"
+  # `EDGEEXP_INSTANCE_SUFFIX`（Task 10）只用于**碎片文件名**：两条臂共用场景名，
+  # 不带后缀的话第二条臂会覆盖第一条臂的 `reset-*.json`/`collect-*.json`（run.json 的台账
+  # 按碎片组装 ⇒ 会把策略在的臂的数据挂到策略不在的臂上）。旧臂后缀为空 ⇒ 文件名逐字节不变。
+  FAIL_REASON="实例 $KEY（场景 $s）的 reset 步失败（见上面的 stderr）"
+  EDGEEXP_INSTANCE_SUFFIX="$SUF" bash "$SCRIPT_DIR/edge_reset.sh" "$s"
   FAIL_REASON=""
-  t1=$(date -u +%s); state_add "$s" reset $((t1 - t0))
-  FAIL_REASON="场景 $s 的 attack 步失败（见上面的 stderr）"
-  bash "$SCRIPT_DIR/edge_attack.sh" "$s" "$DATA_DIR/attack-$s.json"
+  t1=$(date -u +%s); state_add "$KEY" reset $((t1 - t0))
+  FAIL_REASON="实例 $KEY（场景 $s）的 attack 步失败（见上面的 stderr）"
+  bash "$SCRIPT_DIR/edge_attack.sh" "$s" "$DATA_DIR/attack-$KEY.json"
   FAIL_REASON=""
-  t2=$(date -u +%s); state_add "$s" attack $((t2 - t1))
-  FAIL_REASON="场景 $s 的 collect 步失败（记录已回滚；见上面的 stderr 与 run.d/rejected-$s.jsonl）"
-  bash "$SCRIPT_DIR/edge_collect.sh" "$s" "$CONFIG" "$DATA_DIR/attack-$s.json" "${EDGEEXP_RUN_INDEX:-1}"
+  t2=$(date -u +%s); state_add "$KEY" attack $((t2 - t1))
+  FAIL_REASON="实例 $KEY（场景 $s）的 collect 步失败（记录已回滚；见上面的 stderr 与 run.d/rejected-$KEY.jsonl）"
+  EDGEEXP_INSTANCE_SUFFIX="$SUF" bash "$SCRIPT_DIR/edge_collect.sh" "$s" "$CONFIG" "$DATA_DIR/attack-$KEY.json" "$RUN"
   FAIL_REASON=""
-  t3=$(date -u +%s); state_add "$s" collect $((t3 - t2))
-  state_complete "$s"
-  echo "edge_matrix: [$i/${#SELECTED[@]}] $s 完成（reset $((t1-t0))s / attack $((t2-t1))s / collect $((t3-t2))s）"
+  t3=$(date -u +%s); state_add "$KEY" collect $((t3 - t2))
+  state_complete "$KEY"
+  echo "edge_matrix: [$i/${#INST_KEY[@]}] $KEY 完成（reset $((t1-t0))s / attack $((t2-t1))s / collect $((t3-t2))s）"
 done
 
 # --- 记录条数门禁（**判死整轮**，不只是一个上报字段）----------------------------
@@ -824,14 +922,14 @@ done
 # （续跑/换 run_id/共用文件），两种都会让"每场景一条"这句结论失效。
 FILE_LINES=0
 if [ -f "$RECORDS" ]; then FILE_LINES=$(grep -c . "$RECORDS" || true); fi
-if [ "$FILE_LINES" -ne "${#SELECTED[@]}" ]; then
-  echo "edge_matrix: 记录条数门禁未通过：$RECORDS 有 $FILE_LINES 条，本次选中 ${#SELECTED[@]} 个场景 —— 整轮失败" >&2
-  echo "  （少一条 = 有场景没采成；多一条 = 文件里混进了别的场景的记录。两者都会让\"每场景一条\"失效）" >&2
-  FAIL_REASON="记录条数门禁未通过：文件 $FILE_LINES 条 ≠ 选中 ${#SELECTED[@]} 个场景"
+if [ "$FILE_LINES" -ne "${#INST_KEY[@]}" ]; then
+  echo "edge_matrix: 记录条数门禁未通过：$RECORDS 有 $FILE_LINES 条，本次选中 ${#INST_KEY[@]} 个场景实例（${#SELECTED[@]} 个场景）—— 整轮失败" >&2
+  echo "  （少一条 = 有实例没采成；多一条 = 文件里混进了别的实例的记录。两者都会让\"每实例一条\"失效）" >&2
+  FAIL_REASON="记录条数门禁未通过：文件 $FILE_LINES 条 ≠ 选中 ${#INST_KEY[@]} 个场景实例"
   state_fail 1 "$FAIL_REASON" || true
   exit 1
 fi
-echo "edge_matrix: 记录条数门禁通过（$FILE_LINES 条 == 选中 ${#SELECTED[@]} 个场景）"
+echo "edge_matrix: 记录条数门禁通过（$FILE_LINES 条 == 选中 ${#INST_KEY[@]} 个场景实例）"
 
 # --- 因子权重与权重表（实现在共用的 edge_spec_lib.sh；干跑也要用它，见 EDGEEXP_DRY_RUN）---
 FACTORS_SPEC="$(derive_factors_spec "$CONFIG")"
