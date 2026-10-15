@@ -272,17 +272,54 @@ case "$POLICY_ON_ARM" in
   0|1) : ;;
   *) echo "edge_matrix: EDGEEXP_POLICY_ON_ARM 只认 0（= 与 Task 9 逐字相同的旧行为）或 1（默认：每个 targeted 场景加一条\"策略在\"的臂），收到 '$POLICY_ON_ARM'" >&2; exit 2 ;;
 esac
-INST_KEY=(); INST_SCEN=(); INST_BASIS=(); INST_POLICY=(); INST_RUN=(); INST_SUFFIX=()
+# --- **重复轴**（Task 11）：`EDGEEXP_RUN_INDEX` 与「臂」是**两个独立的维度** --------
+# 全量扫描是 `--run 1|2|3` × 2 个臂 ⇒ 每个 targeted 场景 **6 条**记录。而 Task 10 引入臂时，
+# 实例的 run 号被**硬编码**成 1（策略不在）/ 2（策略在）⇒ `EDGEEXP_RUN_INDEX` **完全失效**：
+# 重复第 2 遍仍拿 `-01`/`-02`，于是 ① 对已有记录的文件被幂等守卫拒掉（整轮失败，**跑到几小时后**才发现）；
+# ② 碎片与 harness 产物的文件名里没有重复号 ⇒ 第 2 遍**覆盖**第 1 遍（run.json 台账串号，**静默**）。
+# 现在把两个维度拆开：
+#   · `run` 维度 = `EDGEEXP_RUN_INDEX`（默认 1）—— 语义不变（"同条件的第几次重复采样"）；
+#   · `arm` 维度 = 该场景的第几条臂（0 = 策略不在 / 1 = 策略在）；
+#   · 记录的 `scenario_id` 尾号 = **实例号** `NN = (REPEAT-1)*NARMS + arm + 1`（NARMS = 该场景的实例数）
+#     ⇒ 三元组 (场景, 臂, 重复) **唯一**地映射到一个 id，且**单臂单 run 时 NN 退化成 1**
+#     （`POLICY_ON_ARM=0` + `RUN_INDEX=1` ⇒ `-01`，与 Task 9 逐字节相同）；
+#   · 实例键（碎片/产物文件名）= `<场景>` [+ `-pon`] [+ `-r<REPEAT>`]（REPEAT>1 才加）
+#     ⇒ 重复之间也互不覆盖；
+#   · 记录里三个维度分别可查：`scenario_id`（场景 + 实例号）、`meta.policy_on`（臂）、`meta.repeat`（重复号，
+#     只在 >1 时写 ⇒ 单 run 的记录与 Task 9 逐字节不变）。
+REPEAT="${EDGEEXP_RUN_INDEX:-1}"
+case "$REPEAT" in
+  ''|*[!0-9]*) echo "edge_matrix: EDGEEXP_RUN_INDEX 必须是非负整数（重复号），收到 '$REPEAT'" >&2; exit 2 ;;
+esac
+[ "$REPEAT" -ge 1 ] || { echo "edge_matrix: EDGEEXP_RUN_INDEX 必须 ≥ 1（收到 $REPEAT）—— 重复号 0 没有意义，且会让 scenario_id 尾号塌成 0" >&2; exit 2; }
+INST_KEY=(); INST_SCEN=(); INST_BASIS=(); INST_POLICY=(); INST_RUN=(); INST_SUFFIX=(); INST_ARM=()
 for s in "${SELECTED[@]}"; do
-  if scenario_is_targeted "$s"; then
-    INST_KEY+=("$s");     INST_SCEN+=("$s"); INST_BASIS+=("targeted_ttp");   INST_POLICY+=("0"); INST_RUN+=("1"); INST_SUFFIX+=("")
-    if [ "$POLICY_ON_ARM" = "1" ]; then
-      INST_KEY+=("$s-pon"); INST_SCEN+=("$s"); INST_BASIS+=("targeted_ttp"); INST_POLICY+=("1"); INST_RUN+=("2"); INST_SUFFIX+=("-pon")
-    fi
+  NARMS=1
+  if scenario_is_targeted "$s" && [ "$POLICY_ON_ARM" = "1" ]; then NARMS=2; fi
+  RSFX=""
+  [ "$REPEAT" -gt 1 ] && RSFX="-r$REPEAT"
+  if [ "$NARMS" = "2" ]; then
+    # targeted + 开臂：两条实例，arm 0 = 策略不在 / arm 1 = 策略在
+    INST_KEY+=("$s$RSFX");     INST_SCEN+=("$s"); INST_BASIS+=("targeted_ttp"); INST_POLICY+=("0"); INST_ARM+=("0")
+    INST_RUN+=("$(( (REPEAT - 1) * NARMS + 0 + 1 ))"); INST_SUFFIX+=("$RSFX")
+    INST_KEY+=("$s-pon$RSFX"); INST_SCEN+=("$s"); INST_BASIS+=("targeted_ttp"); INST_POLICY+=("1"); INST_ARM+=("1")
+    INST_RUN+=("$(( (REPEAT - 1) * NARMS + 1 + 1 ))"); INST_SUFFIX+=("-pon$RSFX")
   else
-    INST_KEY+=("$s");     INST_SCEN+=("$s"); INST_BASIS+=("recon_playbook"); INST_POLICY+=("1"); INST_RUN+=("1"); INST_SUFFIX+=("")
+    # 单实例场景（NARMS=1）：targeted 但**关了臂** ⇒ 策略不在；其余（recon / R 组）本来就是
+    # 策略在的既有口径（`policy_on=1`）—— 两者都不是"第二条臂"，故 arm 恒为 0
+    # （arm 是"该场景的第几条臂"，不是策略状态；策略状态在 `INST_POLICY` 里）。
+    if scenario_is_targeted "$s"; then
+      INST_BASIS+=("targeted_ttp"); INST_POLICY+=("0")
+    else
+      INST_BASIS+=("recon_playbook"); INST_POLICY+=("1")
+    fi
+    INST_KEY+=("$s$RSFX"); INST_SCEN+=("$s"); INST_ARM+=("0")
+    INST_RUN+=("$(( (REPEAT - 1) * NARMS + 0 + 1 ))"); INST_SUFFIX+=("$RSFX")
   fi
 done
+# 重复号 >1 时导出给子脚本（`edge_attack.sh` 会把它写进 harness 产物 ⇒ 采集器写进记录的 `meta.repeat`）。
+# **只在 >1 时导出**：这样单 run 的产物与记录与 Task 9/10 逐字节不变（`repeat` 缺席 = 第 1 遍）。
+if [ "$REPEAT" -gt 1 ]; then export EDGEEXP_REPEAT_INDEX="$REPEAT"; fi
 TARGETED_SELECTED=0
 for k in "${!INST_KEY[@]}"; do
   if [ "${INST_BASIS[$k]}" = "targeted_ttp" ]; then TARGETED_SELECTED=$((TARGETED_SELECTED + 1)); fi
@@ -407,6 +444,9 @@ if [ "${EDGEEXP_DRY_RUN:-0}" = "1" ]; then
   fi
   echo "  数据目录    : $DATA_DIR（干跑不创建、不清理）"
   echo "  场景        : ${#SELECTED[@]} 个（声明的 ${#SCENARIOS[@]}）/ 名单核对已通过"
+  if [ "$REPEAT" -gt 1 ]; then
+    echo "  重复轴      : REPEAT=$REPEAT（EDGEEXP_RUN_INDEX）—— 实例号 NN=(REPEAT-1)*NARMS+臂+1 ⇒ 本轮的 scenario_id 尾号与第 1 遍**不重叠**；实例键带 -r$REPEAT（碎片/产物不覆盖）"
+  fi
   if [ "$POLICY_ON_ARM" = "1" ]; then
     echo "  场景实例    : ${#SELECTED[@]} 个场景 → ${#INST_KEY[@]} 个实例（targeted 场景各 2 条臂：POLICY_ON=0 / POLICY_ON=1；其余场景 1 个实例）"
   fi
@@ -493,10 +533,12 @@ json.dump(state, open(sys.argv[1], 'w', encoding='utf-8'), ensure_ascii=False, i
 PY
 # 场景**实例**表（Task 10）：台账与 run.json 按实例组装（targeted 场景两条臂）。
 python3 - "$STATE" "${INST_KEY[@]}" <<'PY'
-import json, sys
+import json, os, sys
 p, keys = sys.argv[1], sys.argv[2:]
 s = json.load(open(p, encoding='utf-8'))
 s['instances'] = list(keys)
+# **重复轴**（Task 11）：台账要按"实例数 × 重复号"算期望行数（同一份记录文件会被 1..REPEAT 各跑一遍）。
+s['repeat'] = int(os.environ.get('EDGEEXP_RUN_INDEX') or 1)
 json.dump(s, open(p, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 PY
 
@@ -724,6 +766,8 @@ if run_inputs.get('config_path'):
     run_inputs.setdefault('collection_config', run_inputs['config_path'])
 run = {
     'run_id': state['run_id'],
+    # **重复轴**（Task 11）：这一轮是第几次重复采样（1..N）。全量扫描 = 同一份记录文件跑 1/2/3 各一遍。
+    'repeat_index': int(state.get('repeat') or 1),
     'env': state['env'],
     # 观测主体（Task 4C / I-9）：空串 = 本机（旧形态、R 组会硬失败）。照 env 的先例放顶层。
     'observation_target': state.get('observation_target', ''),
@@ -738,19 +782,22 @@ run = {
     'failed': state.get('failed'),
     'progress_s': state.get('progress', {}),
     'records_file': records_file,
-    # **按实例算**（Task 10）：一个 targeted 场景有两条臂 ⇒ 期望记录数 = 实例数（不是场景数）。
+    # **按实例 × 重复号算**（Task 10/11）：一个 targeted 场景两条臂，且同一份文件会被 1..REPEAT 各跑一遍。
     'records_expected': len(insts),
     'records_written_this_run': records_expected,
     'records_file_total_lines': file_lines,
     # 缺/多分开报（Fix round 2 的 Minor 项；Task 10 起分母是**实例数**）：此前一个 `len(scen) - file_lines` 同时承担
     # 两种含义，文件里**多**了别的场景行时会变成负数（看起来像"缺了 −2 条"）。
-    'records_missing_for_selected': max(0, len(insts) - file_lines),
-    'records_extra_in_file': max(0, file_lines - len(insts)),
+    'records_missing_for_selected': max(0, len(insts) * int(state.get('repeat') or 1) - file_lines),
+    'records_extra_in_file': max(0, file_lines - len(insts) * int(state.get('repeat') or 1)),
     # 记录条数（I6）：判据要同时看两件事 —— ① 这份文件里**至少**有本次选中场景数那么多条记录
     # （只统计"本次写了几次"会漏掉文件里原有的别的场景行）；② 本次写入 + 续跑跳过 == 选中场景数
     # （续跑模式下本次写入可以是 0，那不是缺口）。只看 ① 会在"文件里有别的场景行"时误报通过，
     # 只看 ② 会在续跑时误报失败。
-    'record_counts_ok': (file_lines == len(insts)) and (records_expected + len(skipped_resume) == len(insts)),
+    # 期望**文件行数** = 实例数 × 重复号（同一份记录文件承载 1..REPEAT 各一遍）；
+    # `records_expected` 仍是"**本轮**该写几条"（= 实例数，不含被续跑跳过的）。
+    'record_counts_ok': (file_lines == len(insts) * int(state.get('repeat') or 1))
+                        and (records_expected + len(skipped_resume) == len(insts)),
     'run_inputs': run_inputs,
     'chain_factor_set_equality': equality,
     'gate0_duplicate_factors': gate0,
@@ -769,6 +816,12 @@ run = {
                  '分数被抬高），而不是什么"fallback 向量惩罚"；禁止的只是"为让门禁变绿而静默塞值"。',
         'weights': '离线复算以记录自带的 observed.effective_weights 为准；-weights 只是回退表',
         'gate1_dataset': '门禁① 跑在**全量**记录上（不再按 EF-3FA 切子集）',
+        'repeat_axis': 'Task 11：**重复轴与臂是两个独立维度**。`run` 维度 = EDGEEXP_RUN_INDEX（第几次重复采样），'
+                       '`arm` 维度 = 0（POLICY_ON=0）/ 1（POLICY_ON=1）；记录的 `scenario_id` 尾号是'
+                       '**实例号** NN=(REPEAT-1)*NARMS+arm+1（NARMS = 该场景的实例数，targeted 开臂时=2）；'
+                       '实例键（碎片/`attack-*.json` 文件名）在 REPEAT>1 时带 `-r<N>` ⇒ 重复之间不覆盖。'
+                       '记录里三个维度分别可查：`scenario_id` / `meta.policy_on` / `meta.repeat`'
+                       '（`repeat` 只在 >1 时写 ⇒ 单 run 的记录与 Task 9 逐字节不变）。',
         'records_file_pinned': '本脚本把解析出的记录路径 export 给子脚本（Fix round 3 / 第 2 项）：'
                                '父子各自算 date +%Y%m%d 时，跨 00:00 UTC 的 sweep 会把数据集劈成两份',
         'threshold_sensitivity': '阈值敏感性行（spec §5.4.6）**只在显式 opt-in 时**存在'
@@ -858,15 +911,18 @@ trap on_exit EXIT
 
 # --- 逐场景 -----------------------------------------------------------------
 echo "edge_matrix: 运行 $RUN_ID（$MODE，${#SELECTED[@]} 个场景 / ${#INST_KEY[@]} 个场景实例 / 声明的 ${#SCENARIOS[@]}）"
+[ "$REPEAT" -gt 1 ] && echo "edge_matrix: 重复轴 REPEAT=$REPEAT（EDGEEXP_RUN_INDEX）—— scenario_id 尾号从 $(( (REPEAT - 1) * 2 + 1 )) 起，与第 1 遍不重叠"
 echo "edge_matrix: 记录文件 $RECORDS"
 # 子脚本据此判断 harness 产物是不是**本轮**的（I7）：陈旧产物会静默提供旧的注入时刻与客观结果。
 export EDGEEXP_RUN_STARTED_AT="$RUN_STARTED"
 RESUME="${EDGEEXP_RESUME:-0}"
+EXPECT_IDS=()
 i=0
 for k in "${!INST_KEY[@]}"; do
   i=$((i + 1))
   s="${INST_SCEN[$k]}"; KEY="${INST_KEY[$k]}"; POL="${INST_POLICY[$k]}"; RUN="${INST_RUN[$k]}"; SUF="${INST_SUFFIX[$k]}"
   INST_ID="$(printf '%s-%02d' "$s" "$RUN")"
+  EXPECT_IDS+=("$INST_ID")
   # 续跑（M9）：幂等守卫会拒绝"同一**实例**已有记录"，于是中断后的整轮只能从头再来。
   # EDGEEXP_RESUME=1 时跳过已有记录的实例，并把跳过的事实写进 run.json。
   # 判据用**完整 scenario_id**（不是场景前缀）：加臂之后同一场景有两条记录（`-01`/`-02`），
@@ -922,14 +978,35 @@ done
 # （续跑/换 run_id/共用文件），两种都会让"每场景一条"这句结论失效。
 FILE_LINES=0
 if [ -f "$RECORDS" ]; then FILE_LINES=$(grep -c . "$RECORDS" || true); fi
-if [ "$FILE_LINES" -ne "${#INST_KEY[@]}" ]; then
-  echo "edge_matrix: 记录条数门禁未通过：$RECORDS 有 $FILE_LINES 条，本次选中 ${#INST_KEY[@]} 个场景实例（${#SELECTED[@]} 个场景）—— 整轮失败" >&2
-  echo "  （少一条 = 有实例没采成；多一条 = 文件里混进了别的实例的记录。两者都会让\"每实例一条\"失效）" >&2
-  FAIL_REASON="记录条数门禁未通过：文件 $FILE_LINES 条 ≠ 选中 ${#INST_KEY[@]} 个场景实例"
-  state_fail 1 "$FAIL_REASON" || true
-  exit 1
+# **多重复的口径（Task 11）**：同一份记录文件会被 `EDGEEXP_RUN_INDEX=1..N` 各跑一遍 ⇒
+# 第 2 遍之后"文件总行数 == 实例数"**本来就不成立**（那是第 1 遍的判据）。故：
+#   · `REPEAT=1`：**逐字保持旧判据**（总行数 == 选中实例数）—— 它同时是"文件里混进了别的场景"的哨兵；
+#   · `REPEAT>1`：改判"**本轮每个实例 id 在文件里恰好出现一次**"（少一条 = 有实例没采成；
+#     多于一条 = 串号/重复写）。文件里**允许**出现其它重复号的行（那是前几遍的，正常）。
+if [ "$REPEAT" -eq 1 ]; then
+  if [ "$FILE_LINES" -ne "${#INST_KEY[@]}" ]; then
+    echo "edge_matrix: 记录条数门禁未通过：$RECORDS 有 $FILE_LINES 条，本次选中 ${#INST_KEY[@]} 个场景实例（${#SELECTED[@]} 个场景）—— 整轮失败" >&2
+    echo "  （少一条 = 有实例没采成；多一条 = 文件里混进了别的实例的记录。两者都会让\"每实例一条\"失效）" >&2
+    FAIL_REASON="记录条数门禁未通过：文件 $FILE_LINES 条 ≠ 选中 ${#INST_KEY[@]} 个场景实例"
+    state_fail 1 "$FAIL_REASON" || true
+    exit 1
+  fi
+  echo "edge_matrix: 记录条数门禁通过（$FILE_LINES 条 == 选中 ${#INST_KEY[@]} 个场景实例）"
+else
+  BAD=""
+  for id in "${EXPECT_IDS[@]}"; do
+    n=$(grep -cE "\"scenario_id\":\"$id\"" "$RECORDS" || true)
+    [ "$n" -eq 1 ] || BAD="$BAD $id(×$n)"
+  done
+  if [ -n "$BAD" ]; then
+    echo "edge_matrix: 记录条数门禁未通过（REPEAT=$REPEAT）：这些**本轮实例**在文件里不是恰好一条：$BAD" >&2
+    echo "  （×0 = 没采成；×2+ = 串号/重复写。文件里其它重复号的行是正常的历史遍）" >&2
+    FAIL_REASON="记录条数门禁未通过（REPEAT=$REPEAT）：本轮实例不满足"恰好一条"：$BAD"
+    state_fail 1 "$FAIL_REASON" || true
+    exit 1
+  fi
+  echo "edge_matrix: 记录条数门禁通过（REPEAT=$REPEAT：本轮 ${#EXPECT_IDS[@]} 个实例各恰好 1 条；文件总行数 $FILE_LINES）"
 fi
-echo "edge_matrix: 记录条数门禁通过（$FILE_LINES 条 == 选中 ${#INST_KEY[@]} 个场景实例）"
 
 # --- 因子权重与权重表（实现在共用的 edge_spec_lib.sh；干跑也要用它，见 EDGEEXP_DRY_RUN）---
 FACTORS_SPEC="$(derive_factors_spec "$CONFIG")"

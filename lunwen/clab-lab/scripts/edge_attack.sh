@@ -931,6 +931,9 @@ report = {
     # lxd 基质下 `topology_hash` 为 null（没有拓扑对象，见上面的分支）；基质身份另给一栏。
     'topology_hash': os.environ['TOPO_HASH'] or None,
     'substrate_identity': json.loads(os.environ.get('SUBSTRATE_IDENTITY') or '{}'),
+    # **重复轴**（Task 11）：只在 `EDGEEXP_REPEAT_INDEX` 被显式给了（即重复号 >1）时写进产物 ——
+    # 采集器把它落到记录的 `meta.repeat`。缺席 = 第 1 遍（单 run 的产物与 Task 9/10 逐字节不变）。
+    **({'repeat_index': os.environ['EDGEEXP_REPEAT_INDEX']} if os.environ.get('EDGEEXP_REPEAT_INDEX') else {}),
     'injections': [
         {'check': c, 'at': p['at']}
         for p in json.loads(os.environ['PHASES_JSON'])
