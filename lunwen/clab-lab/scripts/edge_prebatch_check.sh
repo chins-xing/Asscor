@@ -34,8 +34,9 @@
 #   bash edge_prebatch_check.sh --strict-agents # 有残留 agent 也算 NO-GO
 #
 # 环境变量：
-#   EDGEEXP_HEAD_CHECKOUT   干净 HEAD 检出（默认 /root/t6/t8/head）
-#   EDGEEXP_REPO            跑批工作区（默认：本脚本所在仓库根的 ../../ = lunwen/clab-lab 的上级）
+#   EDGEEXP_HEAD_CHECKOUT   干净 HEAD 检出（默认 /root/t6/t8/head）；必须**真的等于 HEAD**
+#                           （有未提交改动 ⇒ 直接判红："HEAD 构建"名不副实）
+#   EDGEEXP_REPO            跑批工作区（默认：本脚本所在**仓库根** `<repo>` = `$SCRIPT_DIR/../../..`）
 #   EDGEEXP_CALDERA_URL/KEY C2（默认 http://192.168.30.2:8888 / ADMIN123）
 #   EDGEEXP_TARGET          目标节点名（默认 asc-tgt-c2）
 #   EDGEEXP_AGENT_FRESH_S   agent 心跳新鲜度（默认 180）
@@ -45,7 +46,11 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="${EDGEEXP_REPO:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+# 仓库根 = 本脚本（<repo>/lunwen/clab-lab/scripts/）往上**三层** —— 与 tests/ 里那六组夹具
+# （`$TESTS_DIR/../../..`）同一口径。曾经写成两层（落成 `<repo>/lunwen`）⇒ 四项前置**全部**
+# 指向 `…/argus/lunwen/build`、`…/argus/lunwen/lunwen/clab-lab/scripts` 这种不存在的路径，
+# 于是一运行就"五项全红"。这类"入口自己算错位置"的错**只有真跑一遍才会现形**。
+REPO="${EDGEEXP_REPO:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 HEADCO="${EDGEEXP_HEAD_CHECKOUT:-/root/t6/t8/head}"
 CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://192.168.30.2:8888}"
 export EDGEEXP_CALDERA_URL="$CALDERA_URL"
@@ -72,6 +77,9 @@ bad()  { echo "  ❌ $*"; FAILED+=("$1"); }
 echo "############ 跑批前置检查（Task 11 Step 3）"
 echo "  跑批工作区   : $REPO"
 echo "  干净 HEAD 检出: $HEADCO"
+if [ -d "$HEADCO/.git" ]; then
+  echo "  检出 HEAD    : $(git -C "$HEADCO" log -1 --format='%h %s' 2>/dev/null | head -c 120)"
+fi
 echo "  C2           : $CALDERA_URL ｜ 目标节点: $EDGEEXP_TARGET"
 echo
 
@@ -80,6 +88,12 @@ echo "== [1/4] 生效的二进制 == 干净 HEAD 检出构建（-trimpath + tags
 command -v go >/dev/null 2>&1 || bad "找不到 go（构建需要它；GOPROXY=$GOPROXY）"
 [ -d "$HEADCO/.git" ] || bad "干净 HEAD 检出不存在或不是 git 仓库：$HEADCO"
 [ -f "$HEADCO/cmd/edgescen/nodecollect.go" ] || bad "$HEADCO 里没有 cmd/edgescen（检出不完整？）"
+# "HEAD 构建"只有在检出**真的等于 HEAD** 时才有意义：现场那份 build/edgescen 就是
+# 042c3fe + 未提交改动（`go version -m` 报 `…042c3fe…+dirty`）构出来的 —— 此时"比 sha256"
+# 比的是一个**没人能复现**的东西。故脏检出直接判红，不静默放行。
+if [ -d "$HEADCO/.git" ] && [ -n "$(git -C "$HEADCO" status --porcelain 2>/dev/null)" ]; then
+  bad "干净 HEAD 检出 $HEADCO **有未提交改动**（"HEAD 构建"名不副实，比 sha256 失去意义）—— 修法：git -C $HEADCO checkout -f && git -C $HEADCO clean -fd，或指向另一个真干净的检出"
+fi
 if [ "${#FAILED[@]}" -eq 0 ]; then
   TMPB="$(mktemp -d)"
   declare -A TAG=( [edgescen]="expr,engine,checks" [edgecompare]="edgeexp" )
@@ -90,7 +104,17 @@ if [ "${#FAILED[@]}" -eq 0 ]; then
       continue
     fi
     WANT="$(sha256sum "$TMPB/$bin" | cut -d' ' -f1)"
-    HAVE="$(sha256sum "$REPO/build/$bin" 2>/dev/null | cut -d' ' -f1 || echo '<缺失>')"
+    # 三种情形要分清（否则"响亮"的那句话会指错方向）：不在位 / 没有执行位 / 逐字节不同。
+    if [ ! -e "$REPO/build/$bin" ]; then
+      HAVE='<缺失>'
+      WHY="$REPO/build/$bin **不在位**（现场根本没有这个二进制）"
+    elif [ ! -x "$REPO/build/$bin" ]; then
+      HAVE="$(sha256sum "$REPO/build/$bin" | cut -d' ' -f1)"
+      WHY="$REPO/build/$bin **没有执行位**（门禁/采集会以"命令找不到"或静默 skipped 收场）"
+    else
+      HAVE="$(sha256sum "$REPO/build/$bin" | cut -d' ' -f1)"
+      WHY="$bin 与 HEAD 构建**逐字节不同** —— 这正是 Task 9 栽的那条（陈旧源码构出的采集器不认识 pve: 前缀）"
+    fi
     echo "     $bin: HEAD 构建=$WANT"
     echo "             生效的  =$HAVE"
     if [ "$HAVE" = "$WANT" ]; then
@@ -101,13 +125,13 @@ if [ "${#FAILED[@]}" -eq 0 ]; then
       mkdir -p "$REPO/build"
       cp -f "$TMPB/$bin" "$REPO/build/$bin" && chmod 755 "$REPO/build/$bin"
       NEW="$(sha256sum "$REPO/build/$bin" | cut -d' ' -f1)"
-      if [ "$NEW" = "$WANT" ]; then
-        ok "$bin 已用规范配方重建并安装（--install），现在与 HEAD 相同"
+      if [ "$NEW" = "$WANT" ] && [ -x "$REPO/build/$bin" ]; then
+        ok "$bin 已用规范配方重建并安装（--install），现在与 HEAD 相同（且可执行）"
       else
-        bad "$bin 安装后仍与 HEAD 构建不同（$NEW）"
+        bad "$bin 安装后仍与 HEAD 构建不同或没有执行位（$NEW）"
       fi
     else
-      bad "$bin 与 HEAD 构建**不同** —— 这正是 Task 9 栽的那条（陈旧源码构出的采集器不认识 pve: 前缀）。修法：bash $0 --install"
+      bad "$bin: $WHY。修法：bash $0 --install"
     fi
   done
   rm -rf "$TMPB"
