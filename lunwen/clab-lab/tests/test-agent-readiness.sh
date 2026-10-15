@@ -118,9 +118,14 @@ PORT="$(cat "$D/port.txt" 2>/dev/null || true)"
 echo "假 Caldera API: http://127.0.0.1:$PORT"
 
 # --- 3. 三格判据 ---------------------------------------------------------------
+# ⚠️ `CALDERA_KEY` 是**夹具自带的假值**（Task 14 脱敏 D2）：本夹具的假 API **不校验** KEY 头，
+# 而被抽出来执行的 `live_agent_paws` 只是把 KEY 塞进请求头 ⇒ 这里给什么值都一样。
+# 纪律：**夹具不许依赖真凭据**（原值是真口令的明文，已随 D2 一起移除）。给空串则会让
+# "KEY 变量丢了"这种低级错也被静默吞掉，故显式给一个一眼看出是假的常量。
+FIXTURE_KEY='fixture-key-not-a-real-credential'
 probe() { # probe <argv|stdin> <pid 列表>
   local layout="$1" pids="$2"
-  TARGET=asc-tgt-1 CALDERA_URL="http://127.0.0.1:$PORT" CALDERA_KEY=ADMIN123 \
+  TARGET=asc-tgt-1 CALDERA_URL="http://127.0.0.1:$PORT" CALDERA_KEY="$FIXTURE_KEY" \
   EDGEEXP_AGENT_FRESH_S=180 LAYOUT="$layout" PIDS="$pids" \
   bash -c '. "$0"; if [ "$LAYOUT" = stdin ]; then printf "%s" "$PIDS" | live_agent_paws; else live_agent_paws "$PIDS"; fi' \
     "$D/live_agent_paws.sh" 2>"$D/probe.err"

@@ -51,7 +51,8 @@
 #   EDGEEXP_CALDERA_URL       Caldera API（默认 http://127.0.0.1:8888；**这是宿主上**调 API 的地址。
 #                             dl360gen9 上 Caldera 只绑 192.168.30.2 ⇒ 必须显式给
 #                             `EDGEEXP_CALDERA_URL=http://192.168.30.2:8888`，默认值在那里不通）
-#   EDGEEXP_CALDERA_KEY       API key（默认 ADMIN123）
+#   EDGEEXP_CALDERA_KEY       API key，**无默认值**（Task 14 脱敏 D2）：取法见
+#                             scripts/edge_c2_key.sh —— 环境变量 → 未跟踪的本地配置 → 响亮失败
 #   EDGEEXP_C2_HOST           容器侧可达的宿主地址（默认取容器内默认网关；覆盖见"地址给错了机器"那段）
 #   EDGEEXP_C2_HOST_WAIT_S    取默认路由的重试窗口（秒，默认 90）：重启后 DHCP 未完成时容器内没有
 #                             默认路由，一次取不到就判死会把"网络还没起来"报成"环境不可用"
@@ -91,7 +92,14 @@ TARGET="${EDGEEXP_TARGET:-}"
 POLICY_ON="${EDGEEXP_POLICY_ON:-0}"
 POLICY_RULE="${EDGEEXP_POLICY_RULE:-audit deny /etc/shadow r,}"
 CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
-CALDERA_KEY="${EDGEEXP_CALDERA_KEY:-ADMIN123}"
+# C2 API key：**不再有明文默认值**（Task 14 脱敏 D2）。取值顺序与三条红线见 edge_c2_key.sh；
+# 缺 key 时它**当场 exit 2** —— 本脚本要用 C2 判"目标上有没有活着的 agent"，判据不能降级。
+# ⚠️ 注意放置位置：`live_agent_paws` 是**被离线夹具整段抽出**执行的函数（tests/test-agent-readiness.sh），
+# 因此这道门禁必须在**函数之外**（在那里它不会被执行，夹具照旧自带一个假 key）。
+# shellcheck source=scripts/edge_c2_key.sh
+. "$SCRIPT_DIR/edge_c2_key.sh"
+edge_require_c2_key edge_target_prepare.sh
+CALDERA_KEY="$EDGEEXP_CALDERA_KEY"
 PAYLOAD="${EDGEEXP_SANDCAT_PAYLOAD:-/opt/caldera/plugins/sandcat/payloads/sandcat.go-linux}"
 AGENT_WAIT_S="${EDGEEXP_AGENT_WAIT_S:-180}"
 APT_TIMEOUT_S="${EDGEEXP_APT_TIMEOUT_S:-900}"

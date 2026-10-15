@@ -43,15 +43,22 @@
 # 因为那意味着"夹具/文档里的 ID 与 C2 上的实体不是同一个东西"，比"缺实体"更难发现。
 #
 # 用法：
-#   EDGEEXP_CALDERA_URL=http://192.168.30.2:8888 EDGEEXP_CALDERA_KEY=ADMIN123 \
+#   EDGEEXP_CALDERA_URL=http://192.168.30.2:8888 EDGEEXP_CALDERA_KEY='<C2 API 口令>' \
 #     bash scripts/edge_ttp_provision.sh
+#   （KEY **不再有明文默认值** —— 也可以写进未跟踪的本地配置，见 scripts/edge_c2_key.sh）
 #
 # 退出码：0 = 三件实体都在且字段核对通过；非零 = 任一步失败（不降级）。
 # ============================================================================
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
-CALDERA_KEY="${EDGEEXP_CALDERA_KEY:-ADMIN123}"
+# C2 API key：**不再有明文默认值**（Task 14 脱敏 D2）。取值顺序与三条红线见 edge_c2_key.sh；
+# 缺 key 时它**当场 exit 2** —— "三件实体都在且字段核对通过"这个判据必须真的问过 C2。
+# shellcheck source=scripts/edge_c2_key.sh
+. "$SCRIPT_DIR/edge_c2_key.sh"
+edge_require_c2_key edge_ttp_provision.sh
+CALDERA_KEY="$EDGEEXP_CALDERA_KEY"
 command -v python3 >/dev/null 2>&1 || { echo "edge_ttp_provision: 缺少 python3" >&2; exit 2; }
 
 TARGET_ID="a5c0ffee-0000-4000-8000-0000000003b1"

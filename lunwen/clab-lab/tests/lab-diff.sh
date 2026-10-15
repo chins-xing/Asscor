@@ -17,6 +17,16 @@ set -uo pipefail
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-$(cd "$TESTS_DIR/../../.." && pwd)}"
 BASE="${1:-97581d8}"
+# --- C2 key：夹具自己的**契约值**（Task 14 脱敏 D2 带出的一处夹具改动）-----------------
+# 本夹具用 `env -i` 起一个**空环境**跑真脚本 `edge_reset.sh`。而 D2 之后 `edge_reset.sh`
+# **没有**明文默认 key 了（缺了当场 exit 2）⇒ 不给这个变量，AFTER 侧会在第一行就退出，
+# 而 BEFORE 侧照旧往下跑 —— 两侧不再可比（这是"夹具缺一个输入"，不是"行为变了"）。
+# 因此这里显式给一个**假值**，并把它加进 `env -i` 的那串 `KEY=VALUE` 里：
+#   · 两侧拿到**逐字相同**的环境 ⇒ 等价性判据的语义没变（那个假 curl 根本不看 key）；
+#   · 主检出那一侧（BASE 提交）的旧脚本会读同一个变量 ⇒ 假 curl 日志里的 `-H "KEY: …"`
+#     两侧也是同一个值 ⇒ "调用序列逐行相同"不因这次脱敏而变化；
+#   · 给的是假值而不是真口令 —— 夹具**不许依赖真凭据**（这也正是 D2 的纪律）。
+CONTRACT_KEY='contract-fixture-key'
 # **夹具的根不能在 /tmp 下**：下面用 `unshare -rm` 把 /tmp 换成私有的空目录（见 run_isolated），
 # 那时 `/tmp/...` 里的一切都会"消失"（第一次跑就是这么拿到 rc=127 的假绿：脚本路径在私有 /tmp
 # 里不存在，两侧都"失败得一模一样"）。故夹具根放到 $HOME 下。
@@ -156,6 +166,7 @@ run_case() { # $1=名称 $2=产物期望（yes=必须写出 / no=必须不写）
       REPLAY_INSPECT_FILE='$WORK/scen/$name/inspect.json' \
       EDGEEXP_DATA_DIR='$tmp/data' EDGEEXP_TOPOLOGY='$lab/asscor.clab.yml' \
       EDGEEXP_CALDERA_BOOT_S=1 EDGEEXP_NODE_WAIT_S=1 EDGEEXP_AGENT_WAIT_S=4 \
+      EDGEEXP_CALDERA_KEY='$CONTRACT_KEY' \
       $extra \
       bash '$lab/scripts/edge_reset.sh' S0-baseline" \
       > "$WORK/$side-$name.out" 2> "$WORK/$side-$name.err"

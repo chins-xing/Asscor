@@ -102,7 +102,10 @@ cd /opt/caldera
 python3 -m venv venv && venv/bin/pip install -r requirements.txt
 git clone --depth 1 https://github.com/mitre/sandcat.git plugins/sandcat   # etc.
 venv/bin/python server.py --fresh --insecure -P sandcat,stockpile,atomic
-# API key: ADMIN123 (default argon2 in conf/default.yml)
+# API key: <c2-key>  -- set EDGEEXP_CALDERA_KEY; the key itself is NOT stored in this
+#                            repository (only its argon2id hash lives in conf/default.yml,
+#                            as shipped by Caldera's --insecure deploy). Do not paste the
+#                            real key into any tracked file.
 ```
 
 ## 4. Running the experiments

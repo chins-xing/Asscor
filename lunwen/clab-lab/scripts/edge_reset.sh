@@ -25,7 +25,8 @@
 #   EDGEEXP_TOPOLOGY     拓扑文件，默认 <lab>/asscor.clab.yml
 #   EDGEEXP_TARGET_HOST  攻击目标节点名（不带 clab 前缀），默认 host1
 #   EDGEEXP_CALDERA_URL  Caldera API，默认 http://127.0.0.1:8888
-#   EDGEEXP_CALDERA_KEY  API key，默认 ADMIN123（本机 Caldera 的 --insecure 部署值）
+#   EDGEEXP_CALDERA_KEY  API key，**无默认值**（Task 14 脱敏 D2）：取法见
+#                        scripts/edge_c2_key.sh —— 环境变量 → 未跟踪的本地配置 → 响亮失败
 #   EDGEEXP_CALDERA_HOME Caldera 安装目录，默认 /opt/caldera
 #   EDGEEXP_CALDERA_BOOT_S / EDGEEXP_NODE_WAIT_S / EDGEEXP_AGENT_WAIT_S  各阶段超时（秒）
 #
@@ -49,7 +50,12 @@ RUN_D="$DATA_DIR/run.d"
 TOPOLOGY="$lab_topology"
 TARGET="${EDGEEXP_TARGET_HOST:-host1}"
 CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
-CALDERA_KEY="${EDGEEXP_CALDERA_KEY:-ADMIN123}"
+# C2 API key：**不再有明文默认值**（Task 14 脱敏 D2）。取值顺序与三条红线见 edge_c2_key.sh；
+# 缺 key 时它**当场 exit 2** —— 复位拿不到 C2 就没法回答"agent 回连了没有"，不能降级继续。
+# shellcheck source=scripts/edge_c2_key.sh
+. "$SCRIPT_DIR/edge_c2_key.sh"
+edge_require_c2_key edge_reset.sh
+CALDERA_KEY="$EDGEEXP_CALDERA_KEY"
 CALDERA_HOME="${EDGEEXP_CALDERA_HOME:-/opt/caldera}"
 CALDERA_BOOT_S="${EDGEEXP_CALDERA_BOOT_S:-240}"
 NODE_WAIT_S="${EDGEEXP_NODE_WAIT_S:-300}"
