@@ -39,6 +39,9 @@
 #   EDGEEXP_REPO            跑批工作区（默认：本脚本所在**仓库根** `<repo>` = `$SCRIPT_DIR/../../..`）
 #   EDGEEXP_CALDERA_URL/KEY C2（默认 http://192.168.30.2:8888 / ADMIN123）
 #   EDGEEXP_TARGET          目标节点名（默认 asc-tgt-c2）
+#   EDGEEXP_SUBSTRATE       基质（默认 pve —— 本入口是给 dl360gen9 的 PVE CT 跑批用的；
+#                           **必须转发**：不转发时子脚本退回 clab/docker，会去问一个不存在的
+#                           容器，把"看错地方"报成"没有活 agent"）
 #   EDGEEXP_AGENT_FRESH_S   agent 心跳新鲜度（默认 180）
 #
 # 退出码：0 = GO（可以开跑）；非零 = NO-GO（上面哪一项没满足就修哪一项，别绕过）。
@@ -56,6 +59,11 @@ CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://192.168.30.2:8888}"
 export EDGEEXP_CALDERA_URL="$CALDERA_URL"
 export EDGEEXP_CALDERA_KEY="${EDGEEXP_CALDERA_KEY:-ADMIN123}"
 export EDGEEXP_TARGET="${EDGEEXP_TARGET:-asc-tgt-c2}"
+# **基质必须跟着跑批走**：本入口是给 dl360gen9 的 **pve**（PVE CT）跑批用的（C2 的默认地址、
+# 目标默认值都已经是 pve 那一套）。不转发它时 `edge_agent_preflight.sh` 会退回默认的
+# `clab`（docker）⇒ 去问一个**不存在的容器**，于是"取不到活 pid"被当成
+# **"目标上没有活着的 agent"**（rc=1 ⇒ 误报 NO-GO）—— 是**看错了地方**，不是现场真没 agent。
+export EDGEEXP_SUBSTRATE="${EDGEEXP_SUBSTRATE:-pve}"
 GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 export GOPROXY
 
@@ -80,7 +88,7 @@ echo "  干净 HEAD 检出: $HEADCO"
 if [ -d "$HEADCO/.git" ]; then
   echo "  检出 HEAD    : $(git -C "$HEADCO" log -1 --format='%h %s' 2>/dev/null | head -c 120)"
 fi
-echo "  C2           : $CALDERA_URL ｜ 目标节点: $EDGEEXP_TARGET"
+echo "  C2           : $CALDERA_URL ｜ 目标节点: $EDGEEXP_TARGET ｜ 基质: $EDGEEXP_SUBSTRATE"
 echo
 
 # --- 前置 1：生效二进制 == HEAD 构建（-trimpath，从干净检出构建）---------------
