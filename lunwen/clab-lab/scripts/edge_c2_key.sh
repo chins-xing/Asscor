@@ -21,8 +21,8 @@
 #   R2 **不许把"缺 key"降级成空串继续跑**：用空 key 打 C2 只会得到 401/403，错误现场与
 #      "C2 挂了 / 网络不通"**同形**，排障方向完全错。必须在这一层就停下。
 #   R3 **门禁不许自己把 key 补上**（`edge_prebatch_check.sh` 此前正是这么干的：它先
-#      `export EDGEEXP_CALDERA_KEY="${…:-ADMIN123}"` ⇒ 前置门禁**永远不会**因缺 key 而
-#      NO-GO）。缺 key 就是要 NO-GO —— 否则会变成"跑完 13 小时才发现 C2 没通"。
+#      `export EDGEEXP_CALDERA_KEY="${EDGEEXP_CALDERA_KEY:-<明文默认值>}"` ⇒ 前置门禁**永远不会**
+#      因缺 key 而 NO-GO）。缺 key 就是要 NO-GO —— 否则会变成"跑完 13 小时才发现 C2 没通"。
 #
 # ## 用法（在调用脚本里 source 之后二选一）
 #   . "$SCRIPT_DIR/edge_c2_key.sh"
