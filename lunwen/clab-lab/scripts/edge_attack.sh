@@ -366,6 +366,46 @@ while IFS='=' read -r k v; do
 done < <(grep -iE '^[[:space:]]*trigger\.[A-Za-z0-9_-]+[[:space:]]*=' "$CONFIG")
 [ "${#TRIGGER[@]}" -gt 0 ] || { echo "edge_attack: 配置 $CONFIG 里没有 trigger.<ID> 映射 —— 无法解析注入检查" >&2; exit 1; }
 
+# --- 注入集的**耦合闭包**（★ Task 17 真机实测补上的一格）------------------------------------
+# `EXPECTED_CHAIN_FACTORS` 是"这次注入**应该**在链上激活的因子集"，而它的来源是
+# `edgescen -list` 的**场景声明面**（`因子=…`）。但**一次注入的后果比场景声明更宽**：
+# 注入是"把某条**检查**判为失败"，而**多条因子可以共用同一条触发检查** ——
+# 出厂表里 `trigger.EF-SELINUX = trigger.EF-APPARMOR = OT-005`（spec §5.4.7 第 7 条把它记为
+# **唯一有直接证据**的那条耦合）⇒ 场景 `S1-apparmor` 只声明 `EF-APPARMOR`，而注入 `OT-005`
+# 会**同时**把 `EF-SELINUX` 激活上链。
+#
+# **在 CT 基质上这一格看不见**：CT 的基线活跃集恰好含 `EF-SELINUX`（`OT-005` 在 LXC 里恒失败），
+# "基线 ∪ 注入"的并集把它覆盖了 —— 于是缺陷在那里**从来没有症状**。
+# 在 VM 基质上 `OT-005` 自然**通过**（AppArmor 真的在 enforcing）⇒ `EF-SELINUX` **不在**基线，
+# 它以 `多出 ['EF-SELINUX']（无人声明的自然失败）` 的形态把整轮判死（实测原文见报告 §5.2）。
+#
+# **正确处置是"把声明面补全"，不是另外两条错路**：
+#   · **不是**把 `EF-SELINUX` 塞进基线 —— 那会声称"这台宿主天然有它"，而 S0 探针证明
+#     基线里**没有**它（它只因为这次注入才出现）；
+#   · **不是**放松断言 —— `链 == 声明面` 这条判据（含"多出来的因子"那条牙齿）一字未动。
+# 判据取自**配置自己的触发表**（`edgefactor`/`edgescen` 消费的同一份），不在这里抄第二份。
+# `EF-3FA` 被显式排除：它是 `CascadeOnly`（永远不 Active、永远不上链），把它纳进来会让
+# 断言凭空要求一个不可能出现的条目。
+CLOSURE_ADD=""
+for f in $(printf '%s' "$EXPECTED_CHAIN_FACTORS" | tr ',' ' '); do
+  chk="${TRIGGER[$f]:-}"
+  [ -n "$chk" ] || continue
+  for g in "${!TRIGGER[@]}"; do
+    [ "$g" = "EF-3FA" ] && continue
+    [ "${TRIGGER[$g]}" = "$chk" ] || continue
+    case ",${EXPECTED_CHAIN_FACTORS}," in *",$g,"*) continue ;; esac
+    CLOSURE_ADD="$CLOSURE_ADD $g"
+  done
+done
+if [ -n "$CLOSURE_ADD" ]; then
+  EXPECTED_CHAIN_FACTORS="$(printf '%s\n%s\n' \
+    "$(printf '%s' "$EXPECTED_CHAIN_FACTORS" | tr ',' '\n')" \
+    "$(printf '%s' "$CLOSURE_ADD" | tr ' ' '\n')" | grep -v '^$' | sort -u | paste -sd, -)"
+  echo "edge_attack: 注入集按**触发检查的耦合闭包**补全：+$(printf '%s' "$CLOSURE_ADD" | tr ' ' ',' | sed 's/^,//') ⇒ [${EXPECTED_CHAIN_FACTORS}]"
+  echo "  （注入的是**检查**：多条因子共用同一条触发检查时，一次注入会同时激活它们；见本段注释）"
+fi
+EXPECTED_CHAIN_FACTORS_SOURCE="${EXPECTED_CHAIN_FACTORS_SOURCE}；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）"
+
 # --- 真实条件探针（**在节点上**执行，Task 4C Step 3） -------------------------
 # 探针实现搬到了 `edge_probe.sh`：它用 `docker exec -i` 把判据送进**目标节点**执行，而不是在
 # 跑脚本的这台机器上跑。原因是勘测实测的洞：脚本在 WSL 宿主上跑、被攻节点是 host1 容器，
