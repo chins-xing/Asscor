@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -406,6 +407,11 @@ func fetchNodeChecks(nt nodeTarget) (nodeCheckEnvelope, error) {
 	if err != nil {
 		return nodeCheckEnvelope{}, err
 	}
+	// 送进去之后**无论是成是败都要把它删掉**（Task 16 / concern 7）。位置在图里的理由：
+	// `runNodeProcess` 一返回就说明那次执行已经结束（`-emit-checks` 是一次性进程），
+	// 此时删掉不会打断任何东西；而放在 `defer` 里能让"节点内进程失败"的路径也清干净。
+	defer cleanupNodeBinary(nt, containerPath)
+
 	stdout, err := runNodeProcess(nt, containerPath, emitChecksFlag, nonce)
 	if err != nil {
 		return nodeCheckEnvelope{}, err
@@ -433,8 +439,17 @@ var newNodeNonce = func() (string, error) {
 // 覆盖容器的 `/tmp/edgescen-<pid>`：**每次采集都重新送**，绝不复用节点里可能残留的旧二进制
 // —— 旧二进制会让"同一份二进制"这条前提静默失效（节点里跑的是上一次修复前的版本，
 // 而数据看起来只是一点点不同）。
+//
+// ⚠️ **qemu 基质的路径是固定的 `/tmp/asscor-edgescen`（不带 pid）**（Task 16 / concern 7）：
+// 容器基质每次采集都是同一台实例、`docker cp`/`pct push` 会覆盖，而 VM 基质会**跨进程累积**
+// （25 场景 ≈ 210 MB 常驻客人 /tmp）。固定路径让"残留"在客人里**看得见**、也让清理是
+// **一条确定的命令**（`cleanupNodeBinary`），而不是"找到哪个 pid 的那个文件"。
+// 容器那三条路径**逐字不动**（既有行为）。
 func copyBinaryIntoNode(nt nodeTarget, localPath string) (string, error) {
 	dest := fmt.Sprintf("/tmp/edgescen-%d", os.Getpid())
+	if nt.Substrate == substrateQEMU {
+		dest = qemuGuestBinaryPath
+	}
 	switch nt.Substrate {
 	case substrateDocker:
 		if _, err := runDocker("cp", localPath, nt.Node+":"+dest); err != nil {
@@ -476,14 +491,18 @@ func copyBinaryIntoNode(nt nodeTarget, localPath string) (string, error) {
 			return "", err
 		}
 		if _, err := runSCP(scpArgs...); err != nil {
-			return "", err
+			return "", formatSSHFailure(nt.Node, "scp "+localPath+" → "+dest, err)
 		}
 		chmodArgs, err := qemuSSHArgs(nt.Node, "chmod", "0755", dest)
 		if err != nil {
 			return "", err
 		}
 		if _, err := runSSH(chmodArgs...); err != nil {
-			return "", err
+			// ⚠️ 这里也要过 formatSSHFailure（Task 16）：**第一次连接**就是 chmod 那条，
+			// 所以"同名重建 ⇒ host key 变更"与"客人里没有 sudo"这两种失败**首先**在这一步出现
+			// （host key 是连接层的，sudo 是命令层的）。不过这一层的话，两条自解释的话
+			// 都永远打不出来，而操作者看到的只有 ssh 的原文。
+			return "", formatSSHFailure(nt.Node, "chmod 0755 "+dest, err)
 		}
 	default:
 		return "", fmt.Errorf("节点内采集：未知基质 %q", nt.Substrate)
@@ -522,13 +541,20 @@ func runNodeProcess(nt nodeTarget, containerPath, emitFlag, nonce string) ([]byt
 		//     走的仍是 `parseNodeEnvelope`，**与 docker/lxd 共用同一份实现**。
 		return runPCT("exec", nt.Node, "--", "env", nodeNonceEnv+"="+nonce, containerPath, emitFlag)
 	case substrateQEMU:
-		// `ssh <选项> -- <主机> env <ENV>=<nonce> <二进制> -emit-checks`（Task 13）。
-		// 这条形状与 pve 侧**逐项对应**，只有"谁来把命令交给客人"不同（`ssh` 而不是 `pct`），
-		// 于是下面三条性质一条不落地保住：
+		// `ssh <选项> -- <主机> sudo -n env <ENV>=<nonce> <二进制> -emit-checks`（Task 16 起）。
+		//
+		// **Task 16 的唯一改动是把取数提到 root 等价**（`sudo -n` 那两格），理由写在
+		// qemuSSHSudoDefault 的注释里：`pct exec` 天生 root，而 VM 基质登录的是 `asc`，
+		// 实测同一份二进制在同一台 VM 上会因取数用户不同而让 **10/80** 条检查翻转
+		// （含决定基线活跃集 `B` 的 `OT-005`/`KS-012`）⇒ 不对齐权限就等于**换了一套测量语义**。
+		//
+		// 这条形状与 pve 侧**逐项对应**（只有"谁来把命令交给客人"与"谁把自己提到 root"不同），
+		// 于是下面四条性质一条不落地保住：
 		//   · nonce **不在** `-emit-checks` 那一侧的参数里 —— 客人侧二进制的 argv 仍然
-		//     **恰好是 `[-emit-checks]`**（`env K=V <bin> -emit-checks` 里 `K=V` 是 `env` 自己的
-		//     位置参数）。"`-emit-checks` 只接受空参数集"那条守卫因此没有被开出一个
-		//     "合法参数"，nonce 没有进参数位；
+		//     **恰好是 `[-emit-checks]`**（`sudo -n env K=V <bin> -emit-checks` 里 `K=V` 是
+		//     `env` 自己的位置参数，sudo 与 env 都不改后面那几格）。"`-emit-checks` 只接受空
+		//     参数集"那条守卫因此没有被开出一个"合法参数"，nonce 没有进参数位；
+		//   · `-n` 让"拿不到 root 等价权限"**当场失败**而不是挂在口令提示上；
 		//   · `--` 把命令与 ssh 自己的开关分开（**实测必需**：`ssh <host> -emit-checks` 会把
 		//     以 `-` 开头的那一格当作 ssh 的选项；`--` 之后的一格才是"远程命令"）。
 		//     **注意 `--` 必须在主机名之前**：ssh 的 `[user@]hostname` 位置参数之后的东西
@@ -537,11 +563,20 @@ func runNodeProcess(nt nodeTarget, containerPath, emitFlag, nonce string) ([]byt
 		//     走的仍是 `parseNodeEnvelope`，**与其它三种基质共用同一份实现**。
 		//
 		// `env` 是客人侧的 `/usr/bin/env`（cloud image 必有），不需要客人里装任何本项目的东西。
-		args, err := qemuSSHArgs(nt.Node, "env", nodeNonceEnv+"="+nonce, containerPath, emitFlag)
+		sudo, err := qemuSSHSudoArgs()
 		if err != nil {
 			return nil, err
 		}
-		return runSSH(args...)
+		remote := append(append([]string{}, sudo...), "env", nodeNonceEnv+"="+nonce, containerPath, emitFlag)
+		args, err := qemuSSHArgs(nt.Node, remote...)
+		if err != nil {
+			return nil, err
+		}
+		stdout, runErr := runSSH(args...)
+		if runErr != nil {
+			return nil, formatSSHFailure(nt.Node, "env "+nodeNonceEnv+"=<nonce> "+containerPath+" "+emitFlag, runErr)
+		}
+		return stdout, nil
 	default:
 		return nil, fmt.Errorf("节点内采集：未知基质 %q", nt.Substrate)
 	}
@@ -593,8 +628,11 @@ var runPCT = func(args ...string) ([]byte, error) {
 //     **不接受**从环境变量来的"SSH 选项串" —— 那种变量会被当成 `-o` 的值，于是
 //     `-o ProxyCommand=…` 这类取值能在操作者看不见的地方把**取数目标**改到别处
 //     （记录里的 `observation_target` 照常印着节点名）。要换目标就换 `EDGEEXP_VM_SSH_HOST`。
-//  3. **nonce 只经环境变量下发**（`ssh <选项> -- <主机> env K=V <二进制> -emit-checks`）——
+//  3. **nonce 只经环境变量下发**（`ssh <选项> -- <主机> sudo -n env K=V <二进制> -emit-checks`）——
 //     与 pve 侧同一条硬不变量：客人侧二进制的 argv **恰好是 `[-emit-checks]`**。
+//  4. **取数用户是 root 等价**（Task 16）：`pct exec` 天生 root，VM 基质必须与之等价，
+//     否则 `B` 与 −30 都会被取数权限带偏（见 qemuSSHSudoDefault）。拿不到就**响亮失败**，
+//     **绝不**降级成 `asc` 去取数。
 const (
 	// qemuSSHHostEnv 是 SSH 目标主机（值里出现的 `%s` 会被替换成节点标识；
 	// 不含 `%s` 则所有节点都指向同一台，供单机场景使用）。默认：`asc-vm<vmid>`
@@ -610,8 +648,50 @@ const (
 	qemuSSHUserEnv = "EDGEEXP_VM_SSH_USER"
 	// qemuSSHPortEnv 是 SSH 端口。默认 `22`。端口是**数字**语义，故这里单独校验。
 	qemuSSHPortEnv = "EDGEEXP_VM_SSH_PORT"
+	// qemuSSHKnownHostsEnv 是 **known_hosts 文件路径**（`UserKnownHostsFile`）。
+	//
+	// 为什么要有它（Task 16，concern 3）：这台基质的**正常循环**就是"建机 → 清机 → 用同一个
+	// vmid/名字重建"，而重建之后**客人 host key 必然变**。此时 `StrictHostKeyChecking=accept-new`
+	// **只接受新主机、不接受变更后的主机** ⇒ 直接报
+	// `REMOTE HOST IDENTIFICATION HAS CHANGED!` + `Host key verification failed.`
+	// —— 那条错误与"私钥不对 / 机器不可达"**同形**，而真正的原因是"同名重建"。
+	//
+	// 处置（不削弱检查，见 formatSSHFailure 的两句话）：`edge_vm_provision.sh` 在**建机时**把
+	// 该主机在**这一份** known_hosts 里的旧条目删掉（`ssh-keygen -R`），取数侧则始终读写
+	// **同一份**文件 ⇒ 同一个 vmid/名字在整轮实验里只有一把有效的 host key，
+	// 而 `accept-new` 对**真的**中间人仍然会拒绝（它只免掉"首次见面"这一次询问）。
+	//
+	// **不设**这个变量时行为与本任务之前**逐字相同**（用 ssh 自己的 `~/.ssh/known_hosts`）。
+	qemuSSHKnownHostsEnv = "EDGEEXP_VM_KNOWN_HOSTS"
 	// qemuSSHUserDefault 是登录用户的默认值。
 	qemuSSHUserDefault = "asc"
+	// qemuSSHSudoDefault 是客人侧"root 等价"的默认取值（Task 16 的**测量语义对齐**）。
+	//
+	// 为什么 qemu 基质的取数**必须**是 root 等价：`pct exec` 在容器里**天生以 root 执行**，
+	// 而 VM 基质登录的是 cloud-init 建的 `asc`。实测（Task 15 §3.4 + Task 16 端到端复跑）
+	// **同一份二进制、同一台 VM，只换取数用户** ⇒ 80 条检查里 **10 条翻转，且双向**：
+	//   · 6 条在 `asc` 下 `detail = "skipped — requires root privileges"` **却被算作通过**；
+	//   · 4 条（含 `OT-005`/`KS-012`/`KS-010`）在 `asc` 下**假失败**、root 下通过。
+	// 而 `OT-005`/`KS-012` 恰好是决定**基线活跃集 `B`** 的那两条 ⇒ 权限不对齐时，
+	// `B = {EF-SELINUX, EF-APPARMOR}`（与 CT 逐项相同、−30 原样复现）；
+	// 对齐之后 `B = {}`（−30 消失）。
+	//
+	// ⇒ 这不是"提升权限"，而是**把 CT 基质既有的测量语义原样搬过来**：现在这个 `asc` 用户
+	//   才是偏差来源。客人侧的 NOPASSWD sudo 由 `edge_vm_provision.sh` 的 cloud-init 建立。
+	qemuSSHSudoDefault = "sudo -n"
+	// qemuSSHSudoEnv 允许把那一格换掉（例如客人里装的是 `doas`）。
+	//
+	// ⚠️ 取值会被拼进**客人侧的 shell 命令行**，故只接受"不含空白、且只由
+	// `A-Za-z0-9_./:+-` 组成的格"。含别的东西（`;`、`$`、反引号、空白……）一律**响亮失败**，
+	// 绝不"去掉危险字符"继续 —— 那会拼出一条操作者没写过的命令。
+	qemuSSHSudoEnv = "EDGEEXP_VM_SSH_SUDO"
+	// qemuGuestBinaryPath 是 qemu 基质在**客人侧**的临时二进制路径（Task 16 / concern 7）。
+	//
+	// **固定**（不带 pid）而不是 `docker`/`pct` 那种 `/tmp/edgescen-<pid>`：VM 基质是长线基质
+	// （全量批次 25 场景 × 重复），带 pid 的路径会让每次采集都在客人 /tmp 里留下一个 8.5 MB
+	// 的孤儿（实测 ≈ 210 MB 常驻），而固定路径让清理是一条确定的命令、残留也看得见。
+	// 每次采集仍然**重新送**（覆盖写）⇒ "同一份二进制"这条前提不因此变弱。
+	qemuGuestBinaryPath = "/tmp/asscor-edgescen"
 	// substrateBinSSH / substrateBinSCP 是 qemu 基质实际起的两个**宿主侧**二进制名。
 	// 它们是 `runNodeCLI` 错误分派与诊断串的键（"到底是哪个 CLI 说的"必须能从报错里读出来）。
 	substrateBinSSH = "ssh"
@@ -694,7 +774,63 @@ func qemuSSHConnArgs() ([]string, error) {
 		}
 		args = append(args, "-o", "IdentitiesOnly=yes", "-i", keyPath)
 	}
+
+	// known_hosts：给了就**显式**指同一份文件（建机侧清旧键、取数侧读同一份 ⇒ 见 qemuSSHKnownHostsEnv
+	// 的说明）。没给时一个字节都不加（用 ssh 自己的 `~/.ssh/known_hosts`，与既有行为逐字相同）。
+	if kh := strings.TrimSpace(os.Getenv(qemuSSHKnownHostsEnv)); kh != "" {
+		if strings.ContainsAny(kh, " \t\n") {
+			return nil, fmt.Errorf("节点内采集：%s 不能含空白（收到 %q）—— 它会被原样交给 "+
+				"ssh/scp 的 UserKnownHostsFile 选项", qemuSSHKnownHostsEnv, kh)
+		}
+		if _, err := os.Stat(filepath.Dir(kh)); err != nil {
+			return nil, fmt.Errorf("节点内采集：%s=%s 的**目录**不可用: %w —— "+
+				"这一格必须与建机侧 edge_vm_provision.sh 用**同一份**文件"+
+				"（建机时在那里删旧 host key，取数时读它），否则同名重建之后会撞上 "+
+				"`REMOTE HOST IDENTIFICATION HAS CHANGED`", qemuSSHKnownHostsEnv, kh, err)
+		}
+		args = append(args, "-o", "UserKnownHostsFile="+kh)
+	}
 	return args, nil
+}
+
+// qemuSSHSudoArgs 给出客人侧"root 等价"那几格（默认 `sudo -n`）。
+//
+// **为什么要在**客人侧的 `env` **之前**（而不是像 pve 那样用 `pct exec` 天生 root）：
+// 客人里唯一的登录身份是 cloud-init 建的 `asc`；把取数提到 root 等价唯一可行的方式是
+// 客人侧自己的 sudo，而 `sudo -n` 的三条性质正好是我们要的：
+//
+// 第一条，`-n`（non-interactive）⇒ **拿不到权限就立刻失败**，绝不挂在口令提示上
+// （挂在提示上的形态最糟：ssh 的 BatchMode 会把它变成一句语焉不详的 rc=1）。
+//
+// 第二条，它**不改** `-emit-checks` 那一侧的 argv（`sudo -n env K=V <二进制> -emit-checks` 里
+// `env` 的位置参数才是 nonce，客人侧二进制的 argv 仍然**恰好是 `[-emit-checks]`**）。
+//
+// 第三条，失败时 stderr 是 `sudo: a password is required` / `sudo: command not found`
+// —— 这两句都能被 formatSSHFailure 认出来并给出修法（见那里的分派）。
+//
+// 取值不做"清洗后继续"：含危险字符一律**响亮失败**（拼进客人侧 shell 的那一格必须是我们
+// 能逐字解释的东西）。
+func qemuSSHSudoArgs() ([]string, error) {
+	raw := strings.TrimSpace(os.Getenv(qemuSSHSudoEnv))
+	if raw == "" {
+		raw = qemuSSHSudoDefault
+	}
+	toks := strings.Fields(raw)
+	if len(toks) == 0 {
+		return nil, fmt.Errorf("节点内采集：%s=%q 解析为空 —— "+
+			"它是**客人侧** root 等价那一格（默认 %q）；空值会让取数以 %s 的权限跑，"+
+			"而记录里的 detail 会写成『SELinux和AppArmor均未检测到』这种**看起来像机器真的没装**的话",
+			qemuSSHSudoEnv, raw, qemuSSHSudoDefault, qemuSSHUserDefault)
+	}
+	const allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./:+-"
+	for _, tk := range toks {
+		if strings.Trim(tk, allowed) != "" {
+			return nil, fmt.Errorf("节点内采集：%s=%q 的第 %q 格含不允许的字符（只收 %q）—— "+
+				"这一格会被拼进**客人侧的 shell 命令行**，含别的东西就是一条操作者没写过的命令",
+				qemuSSHSudoEnv, raw, tk, allowed)
+		}
+	}
+	return toks, nil
 }
 
 // qemuSSHArgs = 连接参数 + `-- <主机> <远程命令…>`。
@@ -740,6 +876,80 @@ func vmidFromNode(node string) (int, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// formatSSHFailure 把一条 ssh 失败的原文包成**能自解释**的错误（Task 16 / concern 3 + concern 1）。
+//
+// 为什么需要它：qemu 基质有两类失败，**原文都指向错的地方**——
+//
+//  1. **同名重建 ⇒ host key 变更**。原文是
+//     `@@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@@ … Host key verification failed.`
+//     而"建机 → 清机 → 用同一个 vmid/名字重建"是这台基质的**正常循环**（重建后 host key 必然变）。
+//     不点明的话，操作者最可能去查"私钥是不是不对 / 机器是不是不可达"，而两件事都是好的。
+//  2. **root 等价拿不到**。原文是 `sudo: a password is required` 或 `sudo: command not found`，
+//     看起来只是"这条命令失败了"；真正的后果是**测量语义已经变了**：
+//     非 root 取数下 6 条被跳过的检查**算通过**、4 条**假失败**，而记录里的 detail
+//     会写成「SELinux和AppArmor均未检测到」（**看起来像机器真的没装**）。
+//     ⇒ 那一句必须点明"不许降级"，否则下一位执行者最自然的动作是"那就用 asc 跑吧"。
+func formatSSHFailure(node, remoteDisplay string, err error) error {
+	detail := err.Error()
+	if strings.Contains(detail, "REMOTE HOST IDENTIFICATION HAS CHANGED") ||
+		strings.Contains(detail, "Host key verification failed") {
+		return fmt.Errorf("%w\n  ⇒ 这次的直接原因是**客人 host key 变了**。"+
+			"「建机 → 清机 → 用同一个 vmid/名字重建」是这台基质的正常循环，而重建之后 host key 必然变，"+
+			"`StrictHostKeyChecking=accept-new` **只接受新主机、不接受变更后的主机**。"+
+			"处置：让建机侧清掉旧条目（`edge_vm_provision.sh` 建机时会做，见 %s），"+
+			"或手工 `ssh-keygen -R <主机>` 之后重跑。"+
+			"**不要**改成 `StrictHostKeyChecking=no` —— 那会把真的中间人也一起放过。",
+			err, qemuSSHKnownHostsEnv)
+	}
+	if strings.Contains(detail, "sudo: a password is required") ||
+		strings.Contains(detail, "sudo: no password was provided") {
+		return fmt.Errorf("%w\n  ⇒ 客人侧 %q **拿不到 root 等价权限**（sudoers 要口令）。"+
+			"本工具的 qemu 基质**必须**与 CT 基质的 `pct exec`（天生 root）等价取数 —— "+
+			"非 root 取数会让 6 条检查被跳过却**算通过**、4 条**假失败**，基线活跃集 B 也会跟着变。"+
+			"**绝不降级**成非 root 去取数。修法：让 edge_vm_provision.sh 的 cloud-init "+
+			"`sudo: \"ALL=(ALL) NOPASSWD:ALL\"` 生效（重建该 VM 或修 /etc/sudoers.d/），"+
+			"或用 %s 指向客人侧真正的 root 等价程序。",
+			err, qemuSSHSudoDefault, qemuSSHSudoEnv)
+	}
+	if strings.Contains(detail, "sudo: command not found") || strings.Contains(detail, "env: 'sudo'") {
+		return fmt.Errorf("%w\n  ⇒ 客人里**没有 sudo**（或不叫这个名字）。"+
+			"本工具的 qemu 基质**必须**与 CT 基质的 `pct exec`（天生 root）等价取数。"+
+			"修法：在客人里装 sudo，或用 %s 指向客人侧真正的 root 等价程序（默认 %q）。",
+			err, qemuSSHSudoEnv, qemuSSHSudoDefault)
+	}
+	return fmt.Errorf("%w", err)
+}
+
+// cleanupNodeBinary 删掉客人侧的临时二进制（Task 16 / concern 7）。
+//
+// 为什么必须删：每次取数都会 `scp` 一份二进制到客人 `/tmp/asscor-edgescen-<pid>`（约 8.5 MB），
+// 跑完不删。单次跑批 25 个场景 ≈ **210 MB** 常驻客人 `/tmp` —— 8 G 盘够用，但那不是"设计"，
+// 是**漏掉**：跨整轮实验累积下来，最后会把客人 `/tmp` 撑满，而症状是下一次取数在 scp 步
+// 报 `No space left on device`（看起来像"磁盘满了"这种与代码无关的事）。
+//
+// 位置**固定**（不再带 pid）：固定路径 + 每次覆盖写，让"残留"这件事在客人里**看得见**
+// （`ls -la /tmp/asscor-edgescen`），也让清理是一条确定的命令而不是"找到哪个 pid 的那个文件"。
+//
+// ⚠️ 清理**失败不改变结论**：取数已经成功（信封已校验），此时再报错会让一次成功的测量变成
+// 一次失败。故这条命令的 rc 被**有意忽略**，但那条路径是**确定**的（不是"尽力而为地找找看"）。
+func cleanupNodeBinary(nt nodeTarget, containerPath string) {
+	if nt.Substrate != substrateQEMU {
+		return
+	}
+	sudo, err := qemuSSHSudoArgs()
+	if err != nil {
+		return
+	}
+	// `sudo -n rm -f` 而不是 `rm -f`：二进制在客人里由 `scp` 以登录用户的身份落地，
+	// 但"路径会不会被 root 先碰过"不该是清理能否成功的条件。`-f` 让"文件已经不在了"也是 0。
+	remote := append(append([]string{}, sudo...), "rm", "-f", containerPath)
+	args, err := qemuSSHArgs(nt.Node, remote...)
+	if err != nil {
+		return
+	}
+	_, _ = runSSH(args...)
 }
 
 // runSSH 执行一次 ssh 子命令（`runLXC`/`runPCT` 同一个手法：包级变量 = 用例接缝，

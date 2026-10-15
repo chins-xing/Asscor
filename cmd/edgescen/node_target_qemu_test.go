@@ -10,13 +10,17 @@
 //
 // 判据分四层，与 `node_target_pve_test.go` **逐条对应**（那一轮定下的形态照搬，不另立一套）：
 //
-//  1. **`qemu:<vmid>` 真的走 `scp` + `ssh`**：三条命令的形状
+//  1. **`qemu:<vmid>` 真的走 `scp` + `ssh`**：四条命令的形状
 //     （`scp <连接参数> -O <本地> <主机>:<路径>`、`ssh <连接参数> -- <主机> chmod 0755 <路径>`、
-//     `ssh <连接参数> -- <主机> env <ENV>=<nonce> <二进制> -emit-checks`）逐项正确；
+//     `ssh <连接参数> -- <主机> sudo -n env <ENV>=<nonce> <二进制> -emit-checks`、
+//     `ssh <连接参数> -- <主机> sudo -n rm -f <路径>`）逐项正确；
 //  2. **四种基质互不顶替**：跑 `qemu:` 时 docker / lxc / pct **一次都不能被调用**，反之亦然；
 //  3. **nonce 绝不进参数位**（本项目最硬的一条）：客人侧二进制的 argv 必须**恰好是
 //     `[-emit-checks]`**，nonce 只出现在 `env` 的位置参数那一格；
-//  4. **SSH 目标只从四个具名环境变量来**：取值、默认值、"私钥路径不存在 ⇒ 响亮失败"、
+//  4. **取数必须是 root 等价**（Task 16）：客人侧那条命令必须以 `sudo -n` 起头 ——
+//     `pct exec` 天生 root，而 VM 基质登录的是 `asc`，实测同一份二进制在同一台 VM 上
+//     会因取数用户不同而让 **10/80** 条检查翻转（含决定基线活跃集 `B` 的 `OT-005`/`KS-012`）；
+//  5. **SSH 目标只从具名环境变量来**：取值、默认值、"私钥路径不存在 ⇒ 响亮失败"、
 //     以及"任何别的环境变量都不得把 `-o` 注入 argv"这条守卫。
 //
 // **为什么这里另写一个夹具（而不是复用 `writeCLIShim`）**：判据分两半，两半各有各的手段 ——
@@ -281,7 +285,7 @@ func TestQEMUNodeTargetUsesSSHAndSCPAndRecordsSubstrate(t *testing.T) {
 		}
 	}
 
-	// 第一条：`scp <连接参数> -O <本地> asc-vm910:/tmp/edgescen-<pid>`
+	// 第一条：`scp <连接参数> -O <本地> asc-vm910:/tmp/asscor-edgescen`
 	scpCalls := readCLICallLog(t, scpLog)
 	if len(scpCalls) != 1 {
 		t.Fatalf("qemu 取数应当只起一个 scp 子进程（送二进制），实际 %d 条: %v", len(scpCalls), scpCalls)
@@ -289,11 +293,21 @@ func TestQEMUNodeTargetUsesSSHAndSCPAndRecordsSubstrate(t *testing.T) {
 	if !strings.Contains(scpCalls[0], "-O") {
 		t.Errorf("scp 必须带 `-O`（强制 legacy SCP 协议，免得依赖客人侧的 sftp-server 子系统），实际 %q", scpCalls[0])
 	}
+	if !strings.Contains(scpCalls[0], qemuGuestBinaryPath) {
+		t.Errorf("scp 的目标路径必须是**固定**的 %q（Task 16：带 pid 的路径会让每次采集在客人 /tmp "+
+			"里留下一个 8.5 MB 的孤儿），实际 %q", qemuGuestBinaryPath, scpCalls[0])
+	}
 
-	// 第二、三条：两条 ssh（chmod + emit-checks）
+	// 第二、三、四条：三条 ssh（chmod + emit-checks + 清理）
 	sshCalls := readCLICallLog(t, sshLog)
-	if len(sshCalls) != 2 {
-		t.Fatalf("qemu 取数应当起两个 ssh 子进程（chmod + emit-checks），实际 %d 条: %v", len(sshCalls), sshCalls)
+	if len(sshCalls) != 3 {
+		t.Fatalf("qemu 取数应当起三个 ssh 子进程（chmod + emit-checks + 清理客人侧二进制），实际 %d 条: %v",
+			len(sshCalls), sshCalls)
+	}
+	// 清理那一条必须真的删**那个**路径（Task 16 / concern 7：25 场景 ≈ 210 MB 常驻客人 /tmp）。
+	if !strings.Contains(sshCalls[len(sshCalls)-1], "rm -f "+qemuGuestBinaryPath) {
+		t.Errorf("最后一条 ssh 必须是 `rm -f %s`（取完就回收，不让客人 /tmp 累积），实际 %q",
+			qemuGuestBinaryPath, sshCalls[len(sshCalls)-1])
 	}
 
 	// argv 的**逐格**判据打在构造函数上（见文件头"为什么 argv 不走夹具"）：
@@ -317,7 +331,9 @@ func TestQEMUNodeTargetUsesSSHAndSCPAndRecordsSubstrate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("构造 chmod argv: %v", err)
 	}
-	execArgs, err := qemuSSHArgs("910", "env", nodeNonceEnv+"="+fixtureNonce, "/tmp/edgescen-4242", emitChecksFlag)
+	wantExec := append(append([]string{}, "sudo", "-n"), "env", nodeNonceEnv+"="+fixtureNonce,
+		qemuGuestBinaryPath, emitChecksFlag)
+	execArgs, err := qemuSSHArgs("910", wantExec...)
 	if err != nil {
 		t.Fatalf("构造 emit-checks argv: %v", err)
 	}
@@ -334,21 +350,30 @@ func TestQEMUNodeTargetUsesSSHAndSCPAndRecordsSubstrate(t *testing.T) {
 	if chmodCmd := chmodArgs[len(wantConn)+2:]; len(chmodCmd) != 3 || chmodCmd[0] != "chmod" || chmodCmd[1] != "0755" {
 		t.Errorf("第一次 ssh 必须显式 `chmod 0755 <路径>`（scp 只保留权限位、**不**保证可执行），实际 %q", chmodCmd)
 	}
-	// 第三条：远程命令 = `env <ENV>=<nonce> <二进制> -emit-checks`
+	// 第三条：远程命令 = `sudo -n env <ENV>=<nonce> <二进制> -emit-checks`
 	execCmd := execArgs[len(wantConn)+2:]
-	if len(execCmd) != 4 {
-		t.Fatalf("客人侧的远程命令必须**恰好四格**（env K=V <二进制> -emit-checks），实际 %d 格: %q",
+	if len(execCmd) != 6 {
+		t.Fatalf("客人侧的远程命令必须**恰好六格**（sudo -n env K=V <二进制> -emit-checks），实际 %d 格: %q",
 			len(execCmd), execCmd)
 	}
-	if execCmd[0] != "env" {
-		t.Errorf("客人侧的命令名必须是 `env`（ssh 没有 `-e`，nonce 只能靠它下发），实际 %q", execCmd[0])
+	// 第 0~1 格：**root 等价**（Task 16 的测量语义对齐；少了它 B 与 −30 都会被权限带偏）。
+	if execCmd[0] != "sudo" || execCmd[1] != "-n" {
+		t.Errorf("客人侧的命令必须以 `sudo -n` 起头（与 CT 基质的 `pct exec` 天生 root 等价）；"+
+			"非 root 取数会让 6 条检查被跳过却**算通过**、4 条**假失败**，实际前两格是 %q",
+			execCmd[:2])
 	}
-	if execCmd[1] != nodeNonceEnv+"="+fixtureNonce {
-		t.Errorf("第 2 格必须是 `%s=%s`（nonce 经**环境变量**下发），实际 %q",
-			nodeNonceEnv, fixtureNonce, execCmd[1])
+	if execCmd[2] != "env" {
+		t.Errorf("客人侧 nonce 那一格必须由 `env` 承载（ssh 没有 `-e`，nonce 只能靠它下发），实际 %q", execCmd[2])
 	}
-	if execCmd[3] != emitChecksFlag {
-		t.Errorf("客人侧二进制的 argv 必须**恰好是** [%s]，实际 %q", emitChecksFlag, execCmd[3])
+	if execCmd[3] != nodeNonceEnv+"="+fixtureNonce {
+		t.Errorf("第 4 格必须是 `%s=%s`（nonce 经**环境变量**下发），实际 %q",
+			nodeNonceEnv, fixtureNonce, execCmd[3])
+	}
+	if execCmd[4] != qemuGuestBinaryPath {
+		t.Errorf("第 5 格必须是客人侧二进制的**固定路径** %q，实际 %q", qemuGuestBinaryPath, execCmd[4])
+	}
+	if execCmd[5] != emitChecksFlag {
+		t.Errorf("客人侧二进制的 argv 必须**恰好是** [%s]，实际 %q", emitChecksFlag, execCmd[5])
 	}
 
 	if len(host) != len(nodeChecks) {
@@ -389,26 +414,27 @@ func TestQEMUNonceNeverEntersNodeArgv(t *testing.T) {
 	if _, _, err := collectChecksForTarget("qemu:910"); err != nil {
 		t.Fatalf("qemu 基质取数: %v", err)
 	}
-	// 先证明"真的起了两条 ssh"（夹具那一层），再把 argv 逐格拆开（构造函数那一层）。
-	if calls := readCLICallLog(t, sshLog); len(calls) != 2 {
-		t.Fatalf("应当有两条 ssh 调用，实际 %d 条: %v", len(calls), calls)
+	// 先证明"真的起了三条 ssh"（夹具那一层），再把 argv 逐格拆开（构造函数那一层）。
+	if calls := readCLICallLog(t, sshLog); len(calls) != 3 {
+		t.Fatalf("应当有三条 ssh 调用（chmod + emit-checks + 清理），实际 %d 条: %v", len(calls), calls)
 	}
 	wantConn := append(sshConnPrefix("asc"), "-p", "22", "-o", "IdentitiesOnly=yes", "-i", key)
 
-	execArgs, err := qemuSSHArgs("910", "env", nodeNonceEnv+"="+fixtureNonce, "/tmp/edgescen-4242", emitChecksFlag)
+	execArgs, err := qemuSSHArgs("910", append(append([]string{}, "sudo", "-n"), "env",
+		nodeNonceEnv+"="+fixtureNonce, qemuGuestBinaryPath, emitChecksFlag)...)
 	if err != nil {
 		t.Fatalf("构造 emit-checks argv: %v", err)
 	}
 	remote := execArgs[len(wantConn)+2:] // 去掉连接参数与 `-- <主机>`
-	if len(remote) != 4 {
-		t.Fatalf("客人侧的远程命令必须**恰好四格**，实际 %d 格: %q", len(remote), remote)
+	if len(remote) != 6 {
+		t.Fatalf("客人侧的远程命令必须**恰好六格**，实际 %d 格: %q", len(remote), remote)
 	}
-	if remote[1] != nodeNonceEnv+"="+fixtureNonce {
+	if remote[3] != nodeNonceEnv+"="+fixtureNonce {
 		t.Errorf("nonce 必须落在 `env` 的位置参数那一格（%s=%s），实际 %q",
-			nodeNonceEnv, fixtureNonce, remote[1])
+			nodeNonceEnv, fixtureNonce, remote[3])
 	}
 	// 客人侧二进制自己那一格之后**只有** -emit-checks：nonce 一格都不许出现。
-	for _, a := range remote[3:] {
+	for _, a := range remote[5:] {
 		if strings.Contains(a, fixtureNonce) {
 			t.Errorf("nonce **绝不**能进客人侧二进制的参数位，实际参数位有 %q（整条 %q）", a, remote)
 		}
@@ -653,9 +679,203 @@ func TestQEMUErrorTextNamesHostAndRemoteCommand(t *testing.T) {
 }
 
 // ============================================================================
-// 变异：把 qemu 的 ssh 换成 docker ⇒ 用例**必须**红
+// Task 16：取数权限对齐（root 等价）—— 拿不到就**响亮失败**，绝不降级
 // ============================================================================
 
+// TestQEMUSudoArgsDefaultAndOverride：root 等价那一格的默认值与覆盖语义。
+//
+// 判据三条：
+//
+//  1. 不给环境变量 ⇒ **恰好** `[sudo, -n]`（`-n` 是关键：它让"拿不到权限"当场失败，
+//     而不是挂在口令提示上被 ssh 的 BatchMode 变成一句语焉不详的 rc=1）；
+//  2. 给了合法取值 ⇒ 逐格用它（例如客人里装的是 `doas`）；
+//  3. 给了含危险字符的取值 ⇒ **响亮失败**（那一格会被拼进客人侧的 shell 命令行，
+//     "清洗后继续"会拼出一条操作者没写过的命令）。
+func TestQEMUSudoArgsDefaultAndOverride(t *testing.T) {
+	t.Run("默认", func(t *testing.T) {
+		t.Setenv(qemuSSHSudoEnv, "")
+		got, err := qemuSSHSudoArgs()
+		if err != nil {
+			t.Fatalf("默认取值不该报错: %v", err)
+		}
+		if strings.Join(got, " ") != "sudo -n" {
+			t.Errorf("默认必须是 `sudo -n`（拿不到 root 等价就当场失败），实际 %q", got)
+		}
+	})
+	t.Run("覆盖", func(t *testing.T) {
+		t.Setenv(qemuSSHSudoEnv, "doas")
+		got, err := qemuSSHSudoArgs()
+		if err != nil {
+			t.Fatalf("合法覆盖不该报错: %v", err)
+		}
+		if strings.Join(got, " ") != "doas" {
+			t.Errorf("覆盖取值应当逐格生效，实际 %q", got)
+		}
+	})
+	for _, bad := range []string{"sudo; rm -rf /", "sudo`id`", "sudo $HOME"} {
+		t.Run("拒绝:"+bad, func(t *testing.T) {
+			t.Setenv(qemuSSHSudoEnv, bad)
+			if _, err := qemuSSHSudoArgs(); err == nil {
+				t.Fatalf("取值 %q 必须报错 —— 它会被拼进客人侧的 shell 命令行"+
+					"（含空白/分号/反引号/`$` 的一律不许），而『清洗后继续』会拼出一条"+
+					"操作者没写过的命令", bad)
+			} else if !strings.Contains(err.Error(), qemuSSHSudoEnv) {
+				t.Errorf("错误串里必须点名 %s，实际：%v", qemuSSHSudoEnv, err)
+			}
+		})
+	}
+	t.Run("空值回默认", func(t *testing.T) {
+		// 空串（含只写空白）等同于"没给"——与其它几格同一条口径（不猜：给了空串就等于没给）。
+		t.Setenv(qemuSSHSudoEnv, "   ")
+		got, err := qemuSSHSudoArgs()
+		if err != nil {
+			t.Fatalf("空白取值应当按【没给】处理: %v", err)
+		}
+		if strings.Join(got, " ") != "sudo -n" {
+			t.Errorf("空白取值应当回落到默认 `sudo -n`，实际 %q", got)
+		}
+	})
+}
+
+// TestQEMUSudoDeniedIsLoudAndSaysDoNotDowngrade：客人侧拿不到 root 等价 ⇒ 错误串必须
+// **点明"不许降级"**并给出修法。
+//
+// 为什么这条比看起来重要：`sudo: a password is required` 的原文只说明"这条命令失败了"，
+// 而真正的后果是**测量语义已经变了** —— 非 root 取数下 6 条检查被跳过却**算通过**、
+// 4 条**假失败**，记录里的 detail 还会写成「SELinux和AppArmor均未检测到」
+// （**看起来像机器真的没装**）。操作者最自然的动作会是"那就用 asc 跑吧"，而那正是要堵的路。
+func TestQEMUSudoDeniedIsLoudAndSaysDoNotDowngrade(t *testing.T) {
+	registerFixtureChecks()
+	useFixtureNonce(t)
+	key := qemuTestKey(t)
+	qemuTestEnv(t, "asc-vm910", key, "asc", "22")
+
+	writeSCPShim(t, 0, "")
+	// 三条 ssh 全部返回同一句 sudo 报错（chmod 那条与 emit-checks 那条都会撞上）。
+	writeSSHShim(t, "", 1, "sudo: a password is required")
+
+	_, _, err := collectChecksForTarget("qemu:910")
+	if err == nil {
+		t.Fatal("拿不到 root 等价权限时**必须**报错（绝不降级成 asc 去取数）")
+	}
+	for _, want := range []string{"a password is required", "绝不降级", qemuSSHSudoEnv} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("错误串里必须有 %q —— 否则下一位执行者最自然的动作是『那就用 asc 跑吧』。"+
+				"实际：%v", want, err)
+		}
+	}
+}
+
+// TestQEMUSudoMissingIsLoud：客人里没有 sudo ⇒ 同样响亮失败并点名修法。
+func TestQEMUSudoMissingIsLoud(t *testing.T) {
+	registerFixtureChecks()
+	useFixtureNonce(t)
+	key := qemuTestKey(t)
+	qemuTestEnv(t, "asc-vm910", key, "asc", "22")
+	writeSCPShim(t, 0, "")
+	writeSSHShim(t, "", 127, "bash: line 1: sudo: command not found")
+
+	_, _, err := collectChecksForTarget("qemu:910")
+	if err == nil {
+		t.Fatal("客人里没有 sudo 时**必须**报错")
+	}
+	for _, want := range []string{"command not found", qemuSSHSudoEnv} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("错误串里必须有 %q，实际：%v", want, err)
+		}
+	}
+}
+
+// TestQEMUHostKeyChangedIsSelfExplaining：**同名重建**导致的 host key 变更必须被解释清楚。
+//
+// 为什么单列一条：`REMOTE HOST IDENTIFICATION HAS CHANGED!` 与
+// 「私钥不对 / 机器不可达」在操作者眼里**同形**，而「建机 → 清机 → 用同一个 vmid/名字重建」
+// 恰恰是这台基质的**正常循环**（重建后 host key 必然变）。错误串不说清，下一步就是去查错的东西。
+func TestQEMUHostKeyChangedIsSelfExplaining(t *testing.T) {
+	registerFixtureChecks()
+	useFixtureNonce(t)
+	key := qemuTestKey(t)
+	qemuTestEnv(t, "asc-vm910", key, "asc", "22")
+	writeSCPShim(t, 0, "")
+	// ⚠️ stderr 只用**单行**且不含 `%`：夹具的 `.bat` 分支（Windows）是 `echo` 逐行写的，
+	// 多行/百分号会被 cmd.exe 自己解释掉，于是"错误串里必须有 X"会在 Windows 上**假红**
+	// （与判据无关的平台差异 —— 本文件的其它失败用例都走同一个约定）。
+	writeSSHShim(t, "", 255, "Host key verification failed.")
+
+	_, _, err := collectChecksForTarget("qemu:910")
+	if err == nil {
+		t.Fatal("host key 变更时必须报错（不许静默接受新键）")
+	}
+	for _, want := range []string{"host key 变了", "重建", "ssh-keygen -R", qemuSSHKnownHostsEnv} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("错误串里必须有 %q（否则这条错误与『私钥不对』同形），实际：%v", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), "StrictHostKeyChecking=no") &&
+		!strings.Contains(err.Error(), "不要") {
+		t.Errorf("错误串若提到 StrictHostKeyChecking=no，必须同时说明**不要**那么做，"+
+			"实际：%v", err)
+	}
+}
+
+// TestQEMUKnownHostsOptionIsHonoured：给了 known_hosts 路径 ⇒ ssh/scp 都显式用它
+// （建机侧删旧键、取数侧读同一份 ⇒ 同名重建不再炸）；没给 ⇒ 一个字节都不加。
+func TestQEMUKnownHostsOptionIsHonoured(t *testing.T) {
+	key := qemuTestKey(t)
+
+	t.Run("给了就用同一个文件", func(t *testing.T) {
+		kh := filepath.Join(t.TempDir(), "asscor-edge-vm_known_hosts")
+		if err := os.WriteFile(kh, nil, 0o600); err != nil {
+			t.Fatalf("写临时 known_hosts: %v", err)
+		}
+		qemuTestEnv(t, "asc-vm910", key, "asc", "22")
+		t.Setenv(qemuSSHKnownHostsEnv, kh)
+		args, err := qemuSSHArgs("910", emitChecksFlag)
+		if err != nil {
+			t.Fatalf("解析 SSH 目标: %v", err)
+		}
+		if !containsOption(args, "UserKnownHostsFile="+kh) {
+			t.Errorf("ssh 必须显式用 %s 指定的那一份 known_hosts（`UserKnownHostsFile=`），实际 %q",
+				qemuSSHKnownHostsEnv, args)
+		}
+	})
+	t.Run("没给就不加", func(t *testing.T) {
+		qemuTestEnv(t, "asc-vm910", key, "asc", "22")
+		t.Setenv(qemuSSHKnownHostsEnv, "")
+		args, err := qemuSSHArgs("910", emitChecksFlag)
+		if err != nil {
+			t.Fatalf("解析 SSH 目标: %v", err)
+		}
+		for _, a := range args {
+			if strings.Contains(a, "UserKnownHostsFile") {
+				t.Errorf("没给 %s 时**不得**加这一格（用 ssh 自己的 ~/.ssh/known_hosts，"+
+					"与既有行为逐字相同），实际 %q", qemuSSHKnownHostsEnv, args)
+			}
+		}
+	})
+	t.Run("目录不可用就响亮失败", func(t *testing.T) {
+		qemuTestEnv(t, "asc-vm910", key, "asc", "22")
+		t.Setenv(qemuSSHKnownHostsEnv, filepath.Join(t.TempDir(), "no-such-dir", "known_hosts"))
+		if _, err := qemuSSHArgs("910", emitChecksFlag); err == nil {
+			t.Fatal("known_hosts 的目录不存在时必须报错（不许退回 ssh 自己的文件：" +
+				"那会让建机侧删的键与取数侧读的键**不是同一份**，同名重建照样炸）")
+		}
+	})
+}
+
+// containsOption 判断 argv 里有没有那一格（`-o` 的取值是一整格）。
+func containsOption(args []string, want string) bool {
+	for _, a := range args {
+		if a == want {
+			return true
+		}
+	}
+	return false
+}
+
+// ============================================================================
+// 变异：把 qemu 的 ssh 换成 docker ⇒ 用例**必须**红
+// ============================================================================
 // TestQEMUMutationToDockerMustTurnTheCasesRed 是"qemu 路径必须**真的**用 ssh"这条判据的变异证明。
 //
 // 变异手法与 Task 6 的 pve 版本相同：把 `runSSH` 指到 `runDocker`，也就是那个最像的错法

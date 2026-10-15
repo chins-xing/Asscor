@@ -38,8 +38,23 @@
 #   · 脚本会把 `<ip> <hostname>` 写进宿主 `/etc/hosts`（**带标记的区块**，可重复执行、
 #     可干净移除）⇒ 取数**不需要 DNS**（管理 VLAN 30 上没有 DNS，实测 CT 内 DNS FAIL）。
 #   · 客人的登录用户 = `asc`（与 `EDGEEXP_VM_SSH_USER` 的默认值一致）。
+#   · **取数用户是 root 等价（Task 16）**：cloud-init 给 `asc` 的是 `NOPASSWD` sudo，
+#     取数侧（`cmd/edgescen`）因此在客人里以 `sudo -n env … -emit-checks` 执行 ——
+#     与 CT 基质的 `pct exec`（天生 root）**等价**。理由：`OT-005`/`KS-012` 的判定随取数用户
+#     翻转（实测 10/80 条翻转，含决定基线活跃集 `B` 的那两条）⇒ 权限不对齐就是在换测量语义。
+#     本脚本每次建机都会**实测** `id -u` 与 `sudo -n id -u` 并把结果打印出来。
 #   · 私钥路径写进**未跟踪**的本地 env 文件（默认 `~/.config/asscor/edgeexp.local.env`），
 #     供跑批前 `source` —— 私钥内容**从不**进仓库、不进 argv、不进记录。
+#
+# ---------------------------------------------------------------------------
+# 宿主侧的**持久**改动（只要一处，Task 16 起）
+# ---------------------------------------------------------------------------
+#   · 自建一条**专用 ISO 存储** `asscor-vmseed`（`dir` + `path /RAID-Mirror/asscor-vmseed`，
+#     `content iso`，`is_mountpoint 1`；写法参照 `ZFS-ISO`）。seed ISO 必须落在带 `iso`
+#     内容的存储里（PVE 9 起 `qm set --ide2` 不收裸路径），而 `ZFS-ISO`/`Backup-320G`/
+#     `ZFS-LXD` 一律不碰 ⇒ 自建一条是**additive、幂等**的，也是唯一不翻转全局状态的做法。
+#     **不再**有任何"临时改 `local` 的 content、--destroy 时写回"的动作（Task 15 的做法已删）。
+#     要撤：`pvesm remove asscor-vmseed && rm -rf /RAID-Mirror/asscor-vmseed`。
 #
 # ---------------------------------------------------------------------------
 # 用法
@@ -88,18 +103,33 @@ CORES="${EDGEEXP_VM_CORES:-2}"
 DISK_STORAGE="${EDGEEXP_VM_DISK_STORAGE:-local-lvm}"
 DISK_SIZE="${EDGEEXP_VM_DISK_SIZE:-8G}"
 IMG_STORAGE_DIR="${EDGEEXP_VM_IMG_DIR:-/var/lib/vz/import}"
-# seed ISO 的落点与**存储引用**（Task 15 修正；PVE 9.2.2 实测）：
+# seed ISO 的落点与**存储引用**（Task 15 修正 + Task 16 收口；PVE 9.2.2 实测）：
 #   · PVE 9 起 `qm set --ide2` **不再接受裸绝对路径** —— 报
 #     `ide2: unable to associate path '/var/lib/vz/import/x.iso' to any storage`；
 #     ISO 必须落在一条**带 `iso` 内容**的存储里，并写成 `<存储>:iso/<文件名>`。
 #   · 宿主上唯一带 `iso` 内容的存储是 `ZFS-ISO`，而**项目规则不许动它**
-#     （`ZFS-ISO` / `Backup-320G` / `ZFS-LXD` 一律不碰）⇒ 本脚本改为**临时**给 `local`
-#     补上 `iso` 这一项内容（记下原值，`--destroy` 时**原样恢复**）。
-#     这是本脚本**唯一**一处会碰宿主存储配置的地方，且只碰 `local`。
-#   · 原注释里"ISO 是每台 VM 一个自包含文件、不用改存储配置"这条推理在 PVE 9 上**不成立**
-#     （ISO 依然要挂在一条 iso 存储下）—— 这里是那处修正，不是新增特性。
-SEED_STORAGE="${EDGEEXP_VM_SEED_STORAGE:-local}"
-SEED_DIR="${EDGEEXP_VM_SEED_DIR:-/var/lib/vz/template/iso}"
+#     （`ZFS-ISO` / `Backup-320G` / `ZFS-LXD` 一律不碰）。
+#
+#   ⇒ **Task 16 的收口改动（concern 5）**：不再"临时给 `local` 补 `iso`、`--destroy` 时逐字写回"，
+#     而是**一次性、持久**地自建一条**专用 ISO 存储** `asscor-vmseed`，路径
+#     `/RAID-Mirror/asscor-vmseed`（`content iso`），写法**参照 `ZFS-ISO`**
+#     （`dir:` + `path /RAID-Mirror/<名>`，用户 2026-09 定的存储规则）。
+#
+#   为什么不是"继续临时改 `local`"（代价对比，Task 16 的报告里也抄了一份）：
+#     · 临时改是**对全局状态的一次翻转**，且必须在**另一个进程**（`--destroy`）里翻回来 ——
+#       只要有人没走 `--destroy` 而手工 `qm destroy`，`local` 就会**永久**停在 `iso` 状态
+#       （Task 15 专门留了一个状态文件来兜这件事，那个文件的存在本身就是这条风险的形状）；
+#     · 专用存储是 **additive 且幂等** 的：加的是**新名字**，`local`/`ZFS-ISO`/`Backup-320G`/
+#       `ZFS-LXD` 的 content 一个字节都不动；建机与清机都不再需要"记住并还原"这类跨进程状态
+#       ⇒ 上面那个状态文件与它的恢复路径**整个删掉**（少一条只在故障时才暴露的代码路径）；
+#     · 代价：`/etc/pve/storage.cfg` 里多一条存储定义（**持久**）。要撤：先
+#       `rm -f /etc/pve/storage.cfg` 里那一段（或 `pvesm remove asscor-vmseed`），再删目录。
+#   · `is_mountpoint 1`（与 `Backup-320G` 同一手法）：底下的 ZFS 池没挂上时 PVE 直接拒绝写，
+#     而不是把 ISO 写到**根文件系统**的挂载点目录里（那种形态看起来一切正常、直到重启）。
+SEED_STORAGE="${EDGEEXP_VM_SEED_STORAGE:-asscor-vmseed}"
+SEED_STORAGE_PATH="${EDGEEXP_VM_SEED_STORAGE_PATH:-/RAID-Mirror/asscor-vmseed}"
+# ISO 的落点由存储的 path 决定（PVE 直接按 `<path>/iso/<文件>` 找）。
+SEED_DIR="${EDGEEXP_VM_SEED_DIR:-$SEED_STORAGE_PATH/iso}"
 # 客人侧网卡名（Task 15 修正）：**不是 `eth0`**。PVE 的 virtio 网卡在客人里按 PCI 槽位取
 # **可预测名**，实测（PVE 9.2.2 + Ubuntu noble cloud image）是 **`ens18`** ——
 # `qm guest cmd 910 network-get-interfaces` 逐字报 `name='ens18'`。
@@ -117,6 +147,12 @@ SSH_USER="${EDGEEXP_VM_SSH_USER:-asc}"
 SSH_KEY="${EDGEEXP_VM_SSH_KEY:-/root/.ssh/asc-vm_ed25519}"
 LOCAL_ENV="${EDGEEXP_VM_LOCAL_ENV:-/root/.config/asscor/edgeexp.local.env}"
 SSH_WAIT_S="${EDGEEXP_VM_SSH_WAIT_S:-300}"
+# known_hosts 那一份文件（Task 16 / concern 3）：建机时在这里删掉该主机的旧条目，
+# 取数侧（cmd/edgescen 的 EDGEEXP_VM_KNOWN_HOSTS）读**同一份** ⇒ 同名重建不再炸。
+# 为什么必须清：这台基质的正常循环是"建机 → 清机 → 用同一个 vmid/名字重建"，而重建之后
+# **客人 host key 必然变**，`StrictHostKeyChecking=accept-new` **只接受新主机、不接受变更后
+# 的主机** ⇒ 直接 `Host key verification failed.`，而那条错误与"私钥不对 / 机器不可达"同形。
+KNOWN_HOSTS="${EDGEEXP_VM_KNOWN_HOSTS:-/root/.ssh/asscor-edge-vm_known_hosts}"
 INSTALL_PACKAGES=1
 GUEST_TOOL_PKGS="${EDGEEXP_VM_TOOL_PKGS:-apparmor-utils auditd qemu-guest-agent}"
 DRY_RUN=0
@@ -319,53 +355,41 @@ clear_hosts_block() {
 }
 
 # ============================================================================
-# seed ISO 所在存储的 `iso` 内容（Task 15）：只加 `iso`、只碰 $SEED_STORAGE、用完恢复
+# seed ISO 专用存储（Task 16 收口）：**自建、幂等、additive**，不碰任何既有存储
 # ============================================================================
-# 为什么"记住原值再恢复"而不是"直接加上就不管"：
-#   `pvesm set local --content …` 改的是**全局**存储配置（进 `/etc/pve/storage.cfg`），
-#   而 `local` 上除了我们补的 `iso` 之外还挂着 `backup,import,vztmpl` —— 如果恢复时
-#   不是"写回**原值**"而是"写回我们以为的默认值"，就会把这条存储的其它内容项改掉。
-# 为什么原值要**落盘**而不是只放变量：`--destroy` 是一次**独立的进程调用**
-#   （建机一个进程、清机另一个），内存里的 `ISO_CONTENT_ADDED` 到那时恒为 0 ——
-#   只靠变量的话，"建机时补过 iso"这件事在清机时**看不见**，`--destroy` 就永远
-#   恢复不了。故把原值写进 $ISO_STATE_FILE，清机时按它逐字写回。
-ISO_STATE_FILE="${EDGEEXP_VM_ISO_STATE:-/var/lib/vz/.asscor-seed-storage.state}"
-
-ensure_iso_content() {
-  local orig
-  orig="$(awk -v s="$SEED_STORAGE" '
-    $0 == "dir: " s      { f = 1; next }
-    f && /^[[:space:]]*content / { sub(/^[[:space:]]*content[[:space:]]*/, ""); print; exit }
+# 这条路换掉了 Task 15 的"临时给 local 补 iso、--destroy 逐字写回"（理由见文件顶部那一段）。
+# 三条纪律：
+#   · **只加新名字**：`asscor-vmseed` 不存在才创建；已存在则只核对它的 path/content，
+#     **绝不**去改它（更不会去改 `local`/`ZFS-ISO`/`Backup-320G`/`ZFS-LXD`）；
+#   · **幂等**：重跑、多台、`--destroy` 之后再建，都只在"不存在"那一次动手；
+#   · **写不进去就响亮失败**：底下的 ZFS 池没挂上（`is_mountpoint 1`）或目录建不出来时，
+#     宁可当场失败，也不把 seed ISO 落到根文件系统的挂载点目录里（那种形态看起来一切正常，
+#     直到宿主重启 —— 而那时症状是"所有 VM 的 seed 都不见了"）。
+ensure_seed_storage() {
+  local existing
+  existing="$(awk -v s="$SEED_STORAGE" '
+    $0 == "dir: " s      { f = 1; print "dir"; next }
+    f && /^[[:space:]]*path / { sub(/^[[:space:]]*path[[:space:]]*/, ""); print; exit }
     f && /^[^[:space:]]/  { exit }
   ' /etc/pve/storage.cfg)"
-  case "$orig" in
-    "") die "读不到存储 $SEED_STORAGE 的 content 原值（/etc/pve/storage.cfg 里没有 'dir: $SEED_STORAGE'？）——
-  本脚本**不猜**：猜错会在恢复时改掉别的存储配置。换 --seed-storage 或先确认存储名。" ;;
-  esac
-  case ",$orig," in
-    *,iso,*) log "== seed ISO 存储 $SEED_STORAGE 本来就有 iso 内容 —— 不动它，也不留状态文件" ;;
-    *)
-      log "== seed ISO 需要 iso 存储：临时给 $SEED_STORAGE 的 content 补上 iso（原值 '$orig'；原值已记入 $ISO_STATE_FILE，--destroy 时逐字写回）"
-      if [ "$DRY_RUN" -eq 1 ]; then
-        printf '  [dry-run] 写 %s（记下原值 "\t" 供 --destroy 恢复）\n' "$ISO_STATE_FILE"
-      else
-        printf '%s\t%s\n' "$SEED_STORAGE" "$orig" > "$ISO_STATE_FILE"
-      fi
-      run pvesm set "$SEED_STORAGE" --content "$orig,iso" ;;
-  esac
+  if [ -n "$existing" ]; then
+    local cur_path
+    cur_path="$(printf '%s\n' "$existing" | sed -n '2p')"
+    if [ "$cur_path" != "$SEED_STORAGE_PATH" ]; then
+      die "存储 $SEED_STORAGE 已存在，但它的 path='$cur_path' 与本脚本期望的 '$SEED_STORAGE_PATH' 不同 ——
+  本脚本**不猜**：换一个 --seed-storage，或先把这个名字让出来。它**不会**去改一条既有存储的定义。"
+    fi
+    log "== seed ISO 存储 $SEED_STORAGE 已存在（path=$cur_path）—— 不动它"
+  else
+    log "== 创建 seed ISO 专用存储 $SEED_STORAGE（dir:$SEED_STORAGE_PATH，content iso；参照 ZFS-ISO 的写法）"
+    log "   ⚠️ 这是本脚本唯一的**持久**宿主改动（additive；既有存储一个字节都不动）。要撤："
+    log "      pvesm remove $SEED_STORAGE && rm -rf $SEED_STORAGE_PATH"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      mkdir -p "$SEED_STORAGE_PATH/iso"
+      pvesm add dir "$SEED_STORAGE" --path "$SEED_STORAGE_PATH" --content iso --is_mountpoint 1
+    fi
+  fi
   run mkdir -p "$SEED_DIR"
-}
-
-restore_iso_content() {
-  [ -f "$ISO_STATE_FILE" ] || return 0
-  local st orig
-  st="$(cut -f1 "$ISO_STATE_FILE")"
-  orig="$(cut -f2 "$ISO_STATE_FILE")"
-  [ -n "$st" ] && [ -n "$orig" ] || die "$ISO_STATE_FILE 内容不合法（应为 '<存储>\\t<原 content>'）——
-  本脚本**不猜**原值：猜错会改掉宿主别的存储配置。请手工核对后删除该文件。"
-  log "== 恢复 $st 的 content 原值：'$orig'"
-  run pvesm set "$st" --content "$orig"
-  [ "$DRY_RUN" -eq 0 ] && rm -f "$ISO_STATE_FILE"
 }
 
 # ============================================================================
@@ -396,6 +420,11 @@ write_local_env() {
     printf '# 它只放"路径"与"用户名"，**从不**放私钥内容或任何口令。\n'
     printf 'export EDGEEXP_VM_SSH_KEY=%q\n' "$SSH_KEY"
     printf 'export EDGEEXP_VM_SSH_USER=%q\n' "$SSH_USER"
+    # known_hosts（Task 16 / concern 3）：建机侧在这里删旧键，取数侧读**同一份** ⇒ 同名重建不炸。
+    printf 'export EDGEEXP_VM_KNOWN_HOSTS=%q\n' "$KNOWN_HOSTS"
+    # 取数权限（Task 16）：客人侧 root 等价那一格。写出来是为了"用的是默认值"这件事
+    # 在环境里**看得见**（取数侧读不到就响亮失败，绝不降级）。
+    printf 'export EDGEEXP_VM_SSH_SUDO=%q\n' "sudo -n"
     printf 'export EDGEEXP_SUBSTRATE=qemu\n'
     printf 'export EDGEEXP_VM_IMAGE_URL=%q\n' "$CLOUD_IMG_URL"
     printf '# 取数地址：默认由 vmid 推 `%s<vmid>`（与宿主 /etc/hosts 的托管区块一致）。\n' "$NAME_PREFIX"
@@ -651,17 +680,93 @@ wait_ssh() {
   # 不是"22 端口开着"：sshd 在 cloud-init 收敛过程中会出现"端口开着但 key 还没落盘"的窗口。
   local host="$1" limit="${SSH_WAIT_S}" waited=0
   while ! ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-              -o "IdentitiesOnly=yes" -i "$SSH_KEY" -l "$SSH_USER" -- "$host" true >/dev/null 2>&1; do
+              -o "UserKnownHostsFile=$KNOWN_HOSTS" -o "IdentitiesOnly=yes" -i "$SSH_KEY" \
+              -l "$SSH_USER" -- "$host" true >/dev/null 2>&1; do
     [ "$waited" -ge "$limit" ] && return 1
     sleep 5; waited=$((waited + 5))
   done
   return 0
 }
 
+# forget_host_key —— 在**我们那一份** known_hosts 里删掉这个主机的旧条目（Task 16 / concern 3）。
+#
+# 为什么必须在**建机时**做（而不是等取数时撞上再处理）："建机 → 清机 → 用同一个 vmid/名字
+# 重建"是正常循环，重建之后 host key 必然变；`accept-new` 只接受**新主机**、不接受**变更后的
+# 主机** ⇒ 不清的话整条基质哑火，而错误（`REMOTE HOST IDENTIFICATION HAS CHANGED`）与
+# "私钥不对 / 机器不可达"**同形**。
+#
+# 为什么只清**自己那一条**、且只清**我们那一份**文件：`ssh-keygen -R` 只删这个主机的条目
+# （不动别人的 host key，也不动 `/etc/ssh/ssh_known_hosts`）；用专用文件则意味着
+# **不去碰操作者 `~/.ssh/known_hosts` 里记着的其它机器**。
+# ⚠️ 代价（写清）：这一份文件里该主机的**历史** host key 会被丢掉 —— 而它本来就是"一次性靶机"
+# 的键（每次重建必变），所以没有可保护的历史。别有用心的人冒充该主机时，`accept-new`
+# 仍然会拒（它只免掉"首次见面"一次询问），本条**不削弱**这一层。
+forget_host_key() {
+  local host="$1"
+  if [ ! -f "$KNOWN_HOSTS" ]; then
+    : # 还没有这份文件（第一次建机）⇒ 没有什么可清的
+    return 0
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '  [dry-run] ssh-keygen -R %s -f %s\n' "$host" "$KNOWN_HOSTS"
+    return 0
+  fi
+  # `-R` 在没有该条目时也返回 0；`-f` 指定文件，故**不会**去动 ~/.ssh/known_hosts。
+  if ssh-keygen -R "$host" -f "$KNOWN_HOSTS" >/dev/null 2>&1; then
+    log "   已清掉 $KNOWN_HOSTS 里 $host 的旧 host key（同名重建的必踩项）"
+  else
+    warn "清 $KNOWN_HOSTS 里 $host 的旧条目失败（继续；取数侧若撞上 `Host key verification failed` 就是这里没做成）"
+  fi
+}
+
+# guest_root_equivalence —— **实测**客人侧的 root 等价，并把证据打出来（Task 16 Step 2）。
+#
+# 为什么要实测而不是"看 cloud-init 脚本写了 NOPASSWD 就认为成立"：这一格决定的是
+# **测量语义**（谁能读 `/etc/shadow`、谁能跑 `dmesg`/`aa-status`），而它的失败形态是
+# **安静的**：取数照常成功、记录照常落盘，只是 `OT-005`/`KS-012` 变成假失败、
+# 另有 6 条被跳过的检查被算作通过 ⇒ 基线活跃集 B 与那个 −30 跟着一起变。
+# 故这里**每次都真跑一遍**，并把 `id -u` 与 `sudo -n id -u` 两行原文留在日志里（就是证据）。
+# 拿不到就**响亮失败**：绝不把一台"取数只能是 asc"的 VM 交给跑批
+# （那会让这一批数据与 CT 的数据按两套语义混在一起）。
+guest_root_equivalence() {
+  local host="$1" out rc=0
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '  [dry-run] ssh … %s `id -u` + `sudo -n id -u`（root 等价实测）\n' "$host"
+    return 0
+  fi
+  out="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+            -o "UserKnownHostsFile=$KNOWN_HOSTS" -o "IdentitiesOnly=yes" -i "$SSH_KEY" \
+            -l "$SSH_USER" -- "$host" \
+            'id -un; echo "login-uid=$(id -u)"; if command -v sudo >/dev/null 2>&1; then echo "sudo-uid=$(sudo -n id -u 2>&1)"; else echo "sudo-uid=(没有 sudo)"; fi' 2>&1)" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    die "取数权限自检连不上 $host（rc=$rc）：$out"
+  fi
+  printf '%s\n' "$out" | sed 's/^/      /'
+  case "$out" in
+    *"sudo-uid=0"*)
+      log "   ✅ **root 等价成立**（登录用户是 $SSH_USER，取数走 sudo -n ⇒ uid 0）——"
+      log "      与 CT 基质的 \`pct exec\`（天生 root）**等价**，两套基质的 B 可比。"
+      ;;
+    *)
+      die "客人 $host 上**拿不到 root 等价权限** —— 实测输出：
+$(printf '%s\n' "$out" | sed 's/^/        /')
+  为什么这是**响亮失败而不是警告**：本项目的 qemu 基质必须与 CT 基质的 \`pct exec\`（天生 root）
+  **等价**取数。实测同一份二进制、同一台 VM，只换取数用户（asc vs root）会让 80 条检查里
+  **10 条翻转且双向**：6 条在 asc 下被跳过却**算通过**、4 条（含决定基线活跃集 B 的
+  OT-005/KS-012）**假失败** ⇒ 记录里的 detail 会写成「SELinux和AppArmor均未检测到」
+  （看起来像机器真的没装），而 B 与那个 −30 会跟着一起变。
+  **绝不**降级成 $SSH_USER 去取数。修法：确认 cloud-init 的 \`sudo: \"ALL=(ALL) NOPASSWD:ALL\"\`
+  生效（重建该 VM），或手工在客人里放 \`/etc/sudoers.d/90-asscor-edgeexp\`：
+      printf '%%s ALL=(ALL) NOPASSWD:ALL\\n' $SSH_USER > /etc/sudoers.d/90-asscor-edgeexp
+      chmod 0440 /etc/sudoers.d/90-asscor-edgeexp" ;;
+  esac
+}
+
 guest_side_metrics() {
   local host="$1"
   ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-      -o "IdentitiesOnly=yes" -i "$SSH_KEY" -l "$SSH_USER" -- "$host" \
+      -o "UserKnownHostsFile=$KNOWN_HOSTS" -o "IdentitiesOnly=yes" -i "$SSH_KEY" \
+      -l "$SSH_USER" -- "$host" \
       'set -e
        echo "  hostname      : $(hostname)"
        echo "  os            : $(. /etc/os-release; echo "$PRETTY_NAME")"
@@ -683,9 +788,10 @@ if [ "$DESTROY" -eq 1 ]; then
     teardown_vm "${VMIDS[$i]}" "$i"
   done
   run clear_hosts_block
-  # seed ISO 用完 ⇒ 把 $SEED_STORAGE 的 content **原样**写回（Task 15；建机时可能补过 `iso`）。
-  # 幂等重跑（VM 已存在、没建过 seed）时 $ISO_CONTENT_ADDED=0，这里什么都不做。
-  restore_iso_content
+  # ⚠️ **这里不再有任何"存储 content 的恢复"**（Task 16 收口）：seed ISO 落在**专用存储**
+  # `asscor-vmseed` 上，建机时也没有改过任何既有存储的 content ⇒ "恢复"这件事**不存在**，
+  # 于是也不会再有"没走 --destroy 就把 local 永久留在 iso 状态"的那条风险。
+  # 专用存储与它的目录**有意保留**（下一批 VM 直接复用；要撤见 --help 的说明）。
   log "== 销毁完成。当前 qm list："
   [ "$DRY_RUN" -eq 0 ] && qm list
   exit 0
@@ -694,7 +800,7 @@ fi
 memory_plan
 ensure_ssh_key
 ensure_cloud_image
-ensure_iso_content
+ensure_seed_storage
 
 VM_IPS=()
 for i in "${!VMIDS[@]}"; do
@@ -713,6 +819,12 @@ for i in "${!VMIDS[@]}"; do
     seed="$SEED_DIR/$host-seed.iso"
     build_seed_iso "$vmid" "$host" "$seed"
     create_vm "$vmid" "$host" "$seed"
+    # **新建的机器 ⇒ host key 必然与同名旧机不同**（Task 16 / concern 3）：必须在本机开始
+    # 连它**之前**把旧条目删掉。第一台的时候 ssh 还没见过它，但**第二台起**、
+    # 以及"清机后再建"的循环里，旧条目已经在 $KNOWN_HOSTS 里了 —— 而 `accept-new`
+    # 只接受新主机、**不接受变更后的主机** ⇒ 不清就会以 `Host key verification failed.` 收场
+    # （那条错误与"私钥不对 / 机器不可达"同形）。幂等重跑（VM 已存在）不清。
+    forget_host_key "$host"
     log "== 启动 VM $vmid"
     run qm start "$vmid"
   fi
@@ -751,6 +863,11 @@ for i in "${!VMIDS[@]}"; do
     else
       die "等 SSH 超时（${SSH_WAIT_S}s）：$SSH_USER@$ip —— 诊断：qm terminal $vmid 看客人控制台"
     fi
+    # 取数权限自检（Task 16 Step 2 的判据之一）：**在跑批之前**证明这台 VM 的取数
+    # 与 CT 基质的 `pct exec`（天生 root）等价。拿不到就**响亮失败**（这里 exit 1），
+    # 绝不把一台"只能以 asc 取数"的 VM 交给跑批 —— 那会让 B 与 −30 一起被带偏。
+    log "   取数权限自检（root 等价）："
+    guest_root_equivalence "$ip"
   fi
 done
 
