@@ -4,7 +4,24 @@
 - **分支**：ASSCOR-Research-Core（实现需同步 main）
 - **状态**：设计定稿（所有取舍经作者逐项确认），等待实现计划
 - **关联**：债务清单 §四 ②（边缘因子耦合放大缺理论边界）+ RC-M4（ACL 硬编码权重参数化，本轮只参数化、标定后置）；方向① 设计 `docs/CONFIDENCE_MODEL_DESIGN_2026-09-08.md`（本方向不改其语义）
-- **实验环境**：WSL2 Containerlab（14 节点真实拓扑，主战场）+ 远程 A-1（≤14 agent 多进程模拟，重复性验证）
+- **实验环境**（**2026-10-15 更新**）：当前基质是 **dl360gen9 / PVE CT**（`EDGEEXP_SUBSTRATE=pve`；
+  环境画像见 `docs/experiments/EDGE_FACTOR_EXPERIMENT_ENVIRONMENT_WHITEPAPER.md`）；
+  WSL2 Containerlab（14 节点拓扑）退为**开发与离线**；远程 A-1/LXD 保留为可选基质。
+  历次迁移与每次的理由见 `docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part C。
+
+> ### 阅读须知：本文档中的内部标识与凭据口径
+>
+> 1. **本文档出现的网段（管理 VLAN）、主机名与实验代号是内部实验环境的标识**。
+>    它们都是 RFC1918 私有网段内的固定标识或团队自有实验机型号，**不构成外部可寻址信息**
+>    （该管理 VLAN 实测与外网不互通）。之所以保留具体值而不是整体替换，
+>    是因为它们散布在**必须带具体地址才能读懂**的踩坑注释里
+>    （例如"容器的默认网关是路由器、不是宿主"）。
+>    **新写的文档**一律使用 `<pve-host-ip>` / `<mgmt-vlan-cidr>` / `<lab-tag>` 之类的占位符。
+> 2. **凭据（C2 的 API 口令）不写入本仓库**：由**未跟踪的本地配置**经环境变量提供。
+>    本文中凡需要口令处一律写占位符 `<c2-key>`。
+> 3. **带外管理控制器绝对不许访问**（不登录、不探测、不扫描、不改配置、不重启），
+>    其地址**从未**写入本仓库。
+> 4. 完整口径与处置台账见 `docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part E。
 
 ---
 
@@ -417,7 +434,12 @@ A-1 上**不要**跑的：攻击（Caldera 已在跑，`/opt/caldera`，API `:88
    `./venv/bin/python server.py --fresh -P sandcat,stockpile,atomic`。
    `-P sandcat,stockpile,atomic` 必须显式给出 —— 缺插件列表时 `sandcat.go-linux` payload 不会被生成，
    而"没有 payload"会在第 4 步以一个看起来像网络问题的错误出现。
-   **A-1 上它已经在跑**（API `http://127.0.0.1:8888`，key `ADMIN123`）：**不要重启、不要重装**。
+   **实验基质上它已经在跑**（API `http://127.0.0.1:8888`，key 见下方口径）：**不要重启、不要重装**。
+
+   > **凭据口径（脱敏）**：C2 的 API 口令**不写入本仓库**。它由**未跟踪的本地配置**提供，
+   > 环境变量名是 `EDGEEXP_CALDERA_KEY`（URL 是 `EDGEEXP_CALDERA_URL`）。
+   > **缺 key 时跑批前置会响亮失败** —— **不允许**回落成"没 key 也继续"。
+   > 原因与处置见 `docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` 的脱敏处置台账。
 4. **两个 Linux 工具**（交叉编译，脚本默认读 `build/`）：
    ```bash
    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags 'expr,engine,checks' -o build/edgescen  ./cmd/edgescen
@@ -856,6 +878,12 @@ Fix round 1 / I-6 把这个数字从"7 纯身份 + 1 交互"改正 —— 后者
 
 #### 5.4.10 A-1/LXD 上的跑通状态（逐项如实标注；"未跑"不得按"已验证"引用）
 
+> 📌 **本节是 A-1/LXD 基质在 2026-09-13 前后的**历史状态快照**，其内容对**该基质**仍然成立。
+> 但从 **2026-10-13 起实验基质已迁到 dl360gen9 / PVE CT**，本节里的"未跑"**不再代表当前基质的状态** ——
+> 当前基质的进度见本文件 §5.4.11 之后的各节与附录 D；历次迁移与理由见
+> `docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part C。
+> **引用"未跑"时请写清基质**，否则会把"A-1 上没跑"误读成"整个方向没跑"。
+
 Task 4D 这一批只交付 Step 1（基质抽象）+ Step 2（`-target` 的 lxd 驱动）。下面这些**全部未跑**
 （Step 3/3B/4/5 另批派发），任何报告与论文引用都必须按"未跑"写：
 
@@ -1258,7 +1286,8 @@ edge_attack: R 组的真实缺失**不成立**：ids 的防护在节点 asc-tgt-
 ### 10.5 Task 6 复审 Important-1 登记：`${Status}` 的修复**落在 lxd 分支内**
 **背景**：Task 6（`pve` 基质驱动）独立复审判 Approved（Critical 0 / **Important 1** / Minor 1）。
 Important-1 指出一处**字面违反硬不变式**的改动，复审判**可接受**但**必须登记到可跟踪处**
-（此前只写在 gitignored 的 `.superpowers/sdd/` 报告第 11.3 节里 ⇒ 等于没有披露）。此处即为登记。
+（此前只写在**未跟踪**的过程报告里 ⇒ 等于没有披露）。此处即为登记（另见
+`docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` 的有意差异登记）。
 
 | 项 | 内容 |
 |---|---|
@@ -1398,10 +1427,13 @@ Task 8 收尾更正了本节原先"是 `internal/edgeexp` 的硬门禁"的说法
 
 **为什么 `EF-002FA` 的 `trigger_check = EF-001` 不在 `checks[]` 里却仍然合法**（Task 8 勘误：
 初版把依据写成"`EF-001` 不在 checks 里 ⇒ 级联不需要它被观测"，**结论对、理由不严谨**）：
-真正的依据是 `internal/edgeexp/record.go` 里 **`CheckTriggerCrossReference` 的注释块**与
-**`MarshalRecord` 的注释**（本仓 `c0fe19a` 上分别是 **598–612** 与 **675–677** 行；
-"legacy 的 identity/级联路径**请勿调用本检查**"这句在 **628** 行的错误串里 ——
-行号随提交漂移，按**符号名**引用更稳）—— legacy 的
+真正的依据是 `internal/edgeexp/record.go` 里 **`func (r Record) CheckTriggerCrossReference()` 的注释块**与
+**`func MarshalRecord` 的注释**（**请按符号名定位** —— 这个方法名就是权威锚点；
+"legacy 的 identity/级联路径**请勿调用本检查**"这句在它的**错误串**里）。
+⚠️ **行号会随提交漂移，不要用来定位**：本节初版引的是 `c0fe19a` 上的 598–612 / 675–677 / 628，
+而在 `5eaedec` 上这三个方法分别在 **644 / 709** 行、该错误串也在方法体内 —— 典型的一次漂移。
+`grep -n 'func (r Record) CheckTriggerCrossReference\|func MarshalRecord' internal/edgeexp/record.go` 一跑就能拿到当前行号。
+—— legacy 的
 **identity 分支 / 级联路径**产出的链条目，其 `trigger_check` 是"该因子**登记的**触发检查"，
 **未必**是真正失败的那个检查；那条"`trigger_check` 必须以 `passed=false` 出现在 `checks[]` 里"
 的交叉核对**仅插件路径（V/G/C）适用**，源码里就写着"legacy 的 identity/级联路径**请勿调用本检查**"。
@@ -1505,6 +1537,26 @@ recon_playbook=14 ｜ 合计 36`）；`EDGEEXP_POLICY_ON_ARM=0` 可关掉新臂�
 `compromised` 一真一假）；其余 10 个 targeted 场景的"策略在"臂**尚未真跑** ——
 本表那 11 行的"已真跑确认"标记说的是**旧臂**（`POLICY_ON=0`）已经跑过，**不等于**两条臂都跑过。
 
+**更新（2026-10-15，重复轴落地后）**：`S1-apparmor` 已以 **2 条臂 × 3 个重复 = 6 条记录**真跑，
+并且**由两个人各自独立跑出一份数据集**（两套数据目录、各自的记录文件），结论一致：
+
+| 重复 `meta.repeat` | 臂 `meta.policy_on` | 实例号 | `compromised` | `block_effective` |
+|---|---|---|---|---|
+| 1（字段**缺席** = 第 1 遍） | `0`（策略卸掉） | 01 | `true` | `false` |
+| 1 | `1`（策略在） | 02 | `false` | `true` |
+| 2 | `0` | 03 | `true` | `false` |
+| 2 | `1` | 04 | `false` | `true` |
+| 3 | `0` | 05 | `true` | `false` |
+| 3 | `1` | 06 | `false` | `true` |
+
+- **因子集相等断言**：6 条记录的链去重集 **全部** == 声明面 `{EF-APPARMOR, EF-SELINUX}`（链均 4 条）✅
+- **门禁①/② 当轮退出码**：每个重复的 `run-*.json` 都是 `exit_code=0`（**不是 `null`/`skipped`**）✅
+- **记录条数门禁**：`record_counts_ok=True`（`2/2`、`4/4`、`6/6`）✅
+- **两份独立数据集的前 10 行逐字相同** ⇒ 这两条臂的**标签与因子集是可重复的**（ttc 仍有抖动，
+  但**标签口径**没有抖）。
+- ⚠️ **仍然只覆盖 1 个场景**：另外 10 个 targeted 场景的"策略在"臂**仍未真跑**，
+  须由**全量批次**收口。
+
 ## 附录 E：`targeted_ttp` 口径的三件 Caldera 实体（建法 + ID 记档）
 
 **为什么需要这一节**（Task 8 Step ①）：`edge_matrix.sh` 把"注入因子含 `EF-SELINUX`/`EF-APPARMOR`"的
@@ -1516,9 +1568,13 @@ recon_playbook=14 ｜ 合计 36`）；`EDGEEXP_POLICY_ON_ARM=0` 可关掉新臂�
 ### E.1 建法（唯一入口，幂等）
 
 ```
-EDGEEXP_CALDERA_URL=http://192.168.30.2:8888 EDGEEXP_CALDERA_KEY=ADMIN123 \
+EDGEEXP_CALDERA_URL=http://<pve-host-ip>:8888 EDGEEXP_CALDERA_KEY=<c2-key> \
   bash lunwen/clab-lab/scripts/edge_ttp_provision.sh
 ```
+
+> 上例中的两个值必须来自**未跟踪的本地配置**：`<pve-host-ip>` 是本机在管理 VLAN 上的地址，
+> `<c2-key>` 是 C2 的 API 口令（**不得**写进仓库）。占位符口径见
+> `docs/experiments/EDGE_FACTOR_EXPERIMENT_ENVIRONMENT_WHITEPAPER.md` §0。
 
 脚本做三件事：**已存在则不重建，而是核对关键字段**（ability 的 `command`、adversary 的
 `atomic_ordering`）—— 不一致就**响亮失败**，因为那意味着"C2 上的实体与夹具/文档引用的不是
@@ -1556,16 +1612,20 @@ export EDGEEXP_TTP_TARGET_ABILITY_NAME='T4D Step 3B: read /etc/shadow (AppArmor 
 
 | 变量 | 必需性 | 判据（源码） |
 |---|---|---|
-| `…_TTP_TARGET_ABILITY` | **必需** | `edge_matrix.sh` 门禁（缺 ⇒ `exit 2`）；`edge_attack.sh:845` "链里**没有**目标 ability … 的 link"即 `fail` |
+| `…_TTP_TARGET_ABILITY` | **必需** | `edge_matrix.sh` 门禁（缺 ⇒ `exit 2`）；`edge_attack.sh` 里 "链里**没有**目标 ability … 的 link" 即 `fail`（函数 `target/control 分开计` 那段） |
 | `…_TTP_PLAYBOOK_ID` | **必需** | `edge_matrix.sh` 门禁（缺 ⇒ `exit 2`） |
-| `…_TTP_PLAYBOOK_NAME` | **必需** | `edge_attack.sh` 的**剧本漂移守卫**（`:628-629`，缺省 `Discovery` 见 `:75`）—— 缺了会在**攻击步**被拒；**2026-10-13 起矩阵层也拦它**（缺了在干跑就 `exit 2`，见下） |
-| `…_TTP_CONTROL_ABILITY` | *可选* | `edge_attack.sh:49` 自述"（可选，只用于归类与报告）"；`:816` 是 `not CONTROL_ABILITY or …` |
-| `…_TTP_TARGET_ABILITY_NAME` | *可选* | `edge_attack.sh:48` 自述"（可选，仅用于核对 ID 没被换掉）"；`:852` 是 `if TARGET_ABILITY_NAME:` |
+| `…_TTP_PLAYBOOK_NAME` | **必需** | `edge_attack.sh` 的**剧本漂移守卫**（`if playbook.get('name') != PLAYBOOK_NAME:` 那段；缺省 `Discovery` 在文件头的 `PLAYBOOK_NAME=` 赋值处）—— 缺了会在**攻击步**被拒；**2026-10-13 起矩阵层也拦它**（缺了在干跑就 `exit 2`，见下） |
+| `…_TTP_CONTROL_ABILITY` | *可选* | `edge_attack.sh` 文件头的环境变量说明自述"（可选，只用于归类与报告）"；判据在 `control_links = […]` 的 `not CONTROL_ABILITY or …` 处 |
+| `…_TTP_TARGET_ABILITY_NAME` | *可选* | 同上，自述"（可选，仅用于核对 ID 没被换掉）"；判据是 `if TARGET_ABILITY_NAME:` 那段 |
+
+> ⚠️ **本表按符号/代码片段引用，不写行号** —— 本节的三个行号引用里已有一处漂移，
+> 行号引用在本项目**被证明不可靠**。需要当前行号时用
+> `grep -n '<片段>' lunwen/clab-lab/scripts/edge_attack.sh` 现取。
 
 （这是**矩阵层**的变量名：`edge_matrix.sh` 的 `apply_scenario_conditions` 会按场景把它们
 **导出成子脚本那一套** —— `EDGEEXP_TARGET_ABILITY` / `EDGEEXP_TARGET_ABILITY_NAME` /
 `EDGEEXP_CONTROL_ABILITY` / `EDGEEXP_PLAYBOOK_ID` / `EDGEEXP_PLAYBOOK_NAME`；
-直接手跑 `edge_attack.sh` 时要用后者，而它的名字缺省值就是 `Discovery`（`edge_attack.sh:75`）。）
+直接手跑 `edge_attack.sh` 时要用后者，而它的名字缺省值就是 `Discovery`（见文件头的 `PLAYBOOK_NAME=` 赋值处）。）
 
 **`..._PLAYBOOK_NAME` 是必须的**（Task 8 实测踩到）：`edge_attack.sh` 的剧本名默认值是
 `Discovery`，而它有一条**剧本漂移守卫**；只给 `PLAYBOOK_ID` 不给名字 ⇒ **每一个
