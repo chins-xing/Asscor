@@ -704,10 +704,11 @@ func as015() model.CheckItem {
 // 原实现先建 map 再 `for path, expected := range correctFiles` 往 `issues` 里追加，最后
 // `strings.Join(issues, "; ")` 作为 `Detail` —— 而 **Go 里 map 的迭代顺序是随机的**
 // ⇒ 同一台机器、同一份文件状态下，同一个检查项会产出**不同的明细串**。两个后果：
-//   ① `cmd/edgescen` 的 `TestCollectChecksForTargetDefaultsToLocalHostChecks`（判据是
-//      "默认路径与 runHostChecks 逐要素一致"）约 2/3 概率变红 —— 一条**假**红（不是代码坏了）；
-//   ② 更要紧的是它**直接撞上本项目的"数据可复现"要求**：检查明细会随迭代顺序漂移，
-//      两次采集写出的记录因此不可逐字节比对。⇒ 顺序必须是代码里写死的一条**声明次序**。
+//
+//	① `cmd/edgescen` 的 `TestCollectChecksForTargetDefaultsToLocalHostChecks`（判据是
+//	   "默认路径与 runHostChecks 逐要素一致"）约 2/3 概率变红 —— 一条**假**红（不是代码坏了）；
+//	② 更要紧的是它**直接撞上本项目的"数据可复现"要求**：检查明细会随迭代顺序漂移，
+//	   两次采集写出的记录因此不可逐字节比对。⇒ 顺序必须是代码里写死的一条**声明次序**。
 //
 // 次序（也是 `Detail` 里问题串的次序）：/etc/shadow → /etc/gshadow → /etc/sudoers → /etc/passwd。
 // ⚠️ 改这个次序会改变 `Detail` 的字节 ⇒ 必须同时改 `determinism_test.go` 里那条断言。
