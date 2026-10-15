@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,6 +85,10 @@ type harnessReport struct {
 	// `meta.observation_target` 的 `substrate=` 承载，后者已经写在 `observation_target` 里 ——
 	// 再抄一份就是第二个真源。同样**不做指针解码**：老产物没有这一段，记录照样合法。
 	SubstrateIdentity *harnessSubstrateIdentity `json:"substrate_identity"`
+
+	// RepeatIndex 是**重复轴**（Task 11）：`edge_attack.sh` 在 `EDGEEXP_REPEAT_INDEX` 被显式给出
+	// （重复号 >1）时才写这个键。采集器把它落进 `meta.repeat`；缺席 = 第 1 遍（不写该键）。
+	RepeatIndex *string `json:"repeat_index"`
 }
 
 // harnessSubstrateIdentity 是 harness 产物的 `substrate_identity` 段（只声明本工具消费的字段）。
@@ -138,6 +143,9 @@ type groundTruth struct {
 	// ⇒ 它是**攻击那一刻**真实的策略状态，不是采集期的猜测。空 = 产物没写（老产物）⇒ 记录里缺席。
 	// 与声明面三键同路数：**证据，不是判据输入**（不进评分、不影响阈值、不进 `Validate`）。
 	PolicyOn string `json:"policy_on,omitempty"`
+
+	// RepeatIndex 同 `Meta.Repeat`（重复轴）；空 = 产物没写 ⇒ 记录里缺席。
+	RepeatIndex string `json:"repeat_index,omitempty"`
 }
 
 // loadGroundTruth 解析攻击 harness 产物。
@@ -223,7 +231,28 @@ func loadGroundTruth(path, scenario string) (groundTruth, error) {
 		ExpectedBaselineFactorsSource: strings.TrimSpace(rep.ExpectedBaselineFactorsSource),
 		// 策略状态原样带上（"0"/"1"；产物没这一段就是空 ⇒ 记录里 `meta.policy_on` 缺席）。
 		PolicyOn: substratePolicyOn(rep.SubstrateIdentity),
+		// 重复轴（Task 11）：产物写了才带（空 ⇒ 记录里 `meta.repeat` 缺席 = 第 1 遍）。
+		RepeatIndex: repeatIndexOf(rep.RepeatIndex),
 	}, nil
+}
+
+// repeatIndexOf 归一 harness 产物里的重复号：非空且是正整数才带（否则空 ⇒ 记录里缺席）。
+//
+// 为什么归一而不是原样透传：这一列要在数据集里能被**比较**（第几遍重复），
+// 而产物里的取值来自环境变量（可能带空白、可能是 `01`）。非法/缺失一律归空 ⇒ 字段缺席（不猜）。
+func repeatIndexOf(p *string) string {
+	if p == nil {
+		return ""
+	}
+	s := strings.TrimSpace(*p)
+	if s == "" {
+		return ""
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 {
+		return ""
+	}
+	return strconv.Itoa(n)
 }
 
 // substratePolicyOn 从 harness 产物的 `substrate_identity` 段取策略状态，并**归一成 "0"/"1"**。

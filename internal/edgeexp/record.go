@@ -370,6 +370,20 @@ type Meta struct {
 	//
 	// 与上面三键同路数：**证据而不是输入**（不进评分、不影响阈值、不进 `Validate`）。
 	PolicyOn string `json:"policy_on,omitempty"`
+
+	// Repeat 是**重复轴**（Task 11）：同一条实验条件的第几次重复采样（`EDGEEXP_RUN_INDEX`）。
+	//
+	// **为什么必须进数据集本体**：全量扫描是 `--run 1|2|3` × 2 个臂 ⇒ 每个 targeted 场景 6 条记录。
+	// 三个维度必须**只靠记录本身**能查出来：
+	//   · 场景 —— `scenario_id` 的名字部分；
+	//   · 臂 —— `meta.policy_on`（`"0"` / `"1"`）；
+	//   · 重复 —— **本字段**（`"2"` / `"3"`…）。
+	// `scenario_id` 的尾号是**实例号** `NN = (REPEAT-1)*NARMS + 臂 + 1`（NARMS = 该场景的实例数），
+	// 它保证三元组唯一，但**不能**直接当重复号读（尾号 3/4 = 第 2 遍的两个臂）。
+	//
+	// **缺席 = 第 1 遍**（`omitempty`；只有 `REPEAT > 1` 时采集器才写）—— 这样单 run 的记录与
+	// Task 9/10 逐字节不变，而多重复的每一遍都带着显式的重复号。
+	Repeat string `json:"repeat,omitempty"`
 }
 
 // SkippedCheck 是一条被跳过的检查。

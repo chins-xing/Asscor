@@ -285,6 +285,9 @@ func assembleRecord(ctx context.Context, cfg *config.Config, scenarioName string
 	// 就是那个痕迹（取自 harness 产物的 `substrate_identity.policy_on`，即**攻击那一刻**的真实策略
 	// 状态）。与上面三键同款：证据而非输入、`omitempty`、不进评分、不进 `Validate`。
 	rec.Meta.PolicyOn = gt.PolicyOn
+	// 重复轴（Task 11，additive）：同条件第几次重复采样；只在 harness 产物写了 `repeat_index` 时落盘
+	// （缺席 = 第 1 遍）⇒ 单 run 的记录与 Task 9/10 逐字节不变。
+	rec.Meta.Repeat = gt.RepeatIndex
 	fail := func(format string, args ...any) (edgeexp.Record, error) {
 		reason := fmt.Sprintf(format, args...)
 		rec.Meta.AssemblyError = reason

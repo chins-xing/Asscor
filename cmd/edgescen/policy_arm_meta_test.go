@@ -101,6 +101,108 @@ func TestPolicyArmIsRecordedAdditively(t *testing.T) {
 	}
 }
 
+// TestRepeatAxisIsRecordedAdditively 是 Task 11 的用例：**重复轴必须在记录里可查**
+// （`meta.repeat`，additive）。
+//
+// 为什么必须有它：全量扫描 = `--run 1|2|3` × 2 个臂 ⇒ 每个 targeted 场景 6 条记录。
+// 三个维度必须**只靠记录本身**查得出来 —— 场景（`scenario_id` 的名字部分）、臂（`meta.policy_on`）、
+// **重复（`meta.repeat`）**。`scenario_id` 的尾号是**实例号** `NN=(REPEAT-1)*NARMS+臂+1`
+// （它保证三元组唯一，但**不能**直接当重复号读）。
+//
+// 判据四条：
+//  1. 产物写了重复号 ⇒ `meta.repeat` 在场且归一（`"2"`）；
+//  2. **不动评分**：总分 / 阈值 / 链与不写时逐位相同（它是证据不是输入）；
+//  3. 产物没写 ⇒ 键**缺席**（`omitempty`）⇒ 单 run 的记录与 Task 9/10 逐字节不变；
+//  4. **同一条记录里三个维度互不混同**：`meta.policy_on` 与 `meta.repeat` 是**两个字段**
+//     （第 2 遍 + 策略在的臂 ⇒ `policy_on="1"` 且 `repeat="2"`），不是同一个数字。
+func TestRepeatAxisIsRecordedAdditively(t *testing.T) {
+	registerFixtureChecks()
+	cfg := fixtureConfig(t)
+	host := fixtureHostChecks()
+
+	// 第 1 遍（不写重复号）作为对照
+	gt1 := policyArmGroundTruth("0", true)
+	rec1, err := assembleRecord(context.Background(), cfg, "S1-apparmor", gt1, 1, host, "")
+	if err != nil {
+		t.Fatalf("assembleRecord(第 1 遍): %v", err)
+	}
+	// 第 2 遍 + 策略在的臂：实例号 NN=4（(2-1)*2+1+1），run=4；重复号写 2
+	gt2 := policyArmGroundTruth("1", false)
+	gt2.RepeatIndex = "2"
+	rec2, err := assembleRecord(context.Background(), cfg, "S1-apparmor", gt2, 4, host, "")
+	if err != nil {
+		t.Fatalf("assembleRecord(第 2 遍·策略在): %v", err)
+	}
+
+	// ① 在场且取值正确。
+	if rec2.Meta.Repeat != "2" {
+		t.Errorf("meta.repeat = %q, want \"2\"（重复轴）", rec2.Meta.Repeat)
+	}
+	if rec2.Meta.PolicyOn != "1" {
+		t.Errorf("meta.policy_on = %q, want \"1\"（臂）—— 两个维度**必须是两个字段**", rec2.Meta.PolicyOn)
+	}
+	if rec2.ScenarioID != "S1-apparmor-04" {
+		t.Errorf("scenario_id = %q, want S1-apparmor-04（实例号 NN=(REPEAT-1)*NARMS+臂+1）", rec2.ScenarioID)
+	}
+
+	// ② 不动评分。
+	if rec2.Observed.FinalScore != rec1.Observed.FinalScore {
+		t.Errorf("重复号不得影响总分：%v vs %v", rec2.Observed.FinalScore, rec1.Observed.FinalScore)
+	}
+	if rec2.Observed.Threshold != rec1.Observed.Threshold {
+		t.Errorf("重复号不得影响阈值：%v vs %v", rec2.Observed.Threshold, rec1.Observed.Threshold)
+	}
+
+	// ③ 第 1 遍的记录里**不得**出现 repeat / policy_on 之外的重复轴痕迹：repeat 缺席。
+	raw1, err := json.Marshal(rec1)
+	if err != nil {
+		t.Fatalf("json.Marshal(第 1 遍): %v", err)
+	}
+	if strings.Contains(string(raw1), `"repeat"`) {
+		t.Errorf("第 1 遍的记录里不得出现 meta.repeat（omitempty ⇒ 与 Task 9/10 逐字节不变）：%s", trunc(raw1, 400))
+	}
+
+	// ④ 第 2 遍：两个维度都在场且**各自独立**（policy_on="1" + repeat="2"）。
+	raw2, err := json.Marshal(rec2)
+	if err != nil {
+		t.Fatalf("json.Marshal(第 2 遍): %v", err)
+	}
+	for _, want := range []string{`"policy_on":"1"`, `"repeat":"2"`} {
+		if !strings.Contains(string(raw2), want) {
+			t.Fatalf("第 2 遍的记录里看不到 %s：%s", want, trunc(raw2, 600))
+		}
+	}
+}
+
+// TestRepeatIndexOfNormalizes 归一与"不猜"（与 `substratePolicyOn` 同款纪律）。
+func TestRepeatIndexOfNormalizes(t *testing.T) {
+	sp := func(s string) *string { return &s }
+	cases := []struct {
+		in   *string
+		want string
+		why  string
+	}{
+		{sp("1"), "1", "第 1 遍（矩阵只在 >1 时才写，这里仍接受）"},
+		{sp("2"), "2", "第 2 遍"},
+		{sp(" 3 "), "3", "环境变量带空白"},
+		{sp("02"), "2", "前导零归一（避免 `02` 与 `2` 在数据集里被当成两个值）"},
+		{sp(""), "", "空 ⇒ 缺席（产物没写）"},
+		{sp("0"), "", "0 不合法 ⇒ 缺席（重复号从 1 起），**不猜**"},
+		{sp("-1"), "", "负数 ⇒ 缺席"},
+		{sp("abc"), "", "非法 ⇒ 缺席"},
+		{nil, "", "键不在产物里 ⇒ 缺席"},
+	}
+	for _, c := range cases {
+		if got := repeatIndexOf(c.in); got != c.want {
+			label := "<nil>"
+			if c.in != nil {
+				label = *c.in
+			}
+			t.Errorf("repeatIndexOf(%s) = %q, want %q（%s）", label, got, c.want, c.why)
+		}
+	}
+}
+
 // TestSubstratePolicyOnNormalizes 判据 4/5：归一与"不猜"。
 func TestSubstratePolicyOnNormalizes(t *testing.T) {
 	cases := []struct {
