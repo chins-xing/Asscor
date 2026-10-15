@@ -331,8 +331,8 @@ HARDEN
   lab_push /tmp/edgeexp-vm-harden.sh "$TARGET" /tmp/edgeexp-vm-harden.sh \
     || { echo "edge_target_prepare: 把 VM 侧装包脚本送进客人失败" >&2; return 1; }
   # **不能写 `nohup qemu_guest_detached …`**：那是 shell 函数，`nohup` 只能执行外部命令
-  # （pve 侧那条注释记的正是这个坑，症状是错误被 `&` 静默吞掉）。
-  qemu_guest_detached bash /tmp/edgeexp-vm-harden.sh > /tmp/edgeexp-vm-harden.out 2>&1 &
+  # （pve 侧那条注释记的正是这个坑，症状是错误被 `&` 静默吞掉）。这里直接调基质层。
+  lab_target_exec_detached "$TARGET" sudo -n bash /tmp/edgeexp-vm-harden.sh > /tmp/edgeexp-vm-harden.out 2>&1 &
   while :; do
     if lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' suricata 2>/dev/null | grep -q "$PKG_INSTALLED_STATUS" \
        && lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' aide 2>/dev/null | grep -q "$PKG_INSTALLED_STATUS" \
@@ -728,7 +728,7 @@ if is_qemu; then
   controls_config_script > /tmp/edgeexp-vm-config.sh
   lab_push /tmp/edgeexp-vm-config.sh "$TARGET" /tmp/edgeexp-vm-config.sh \
     || { echo "edge_target_prepare: 把控制配置脚本送进 VM 失败" >&2; exit 1; }
-  qemu_guest bash /tmp/edgeexp-vm-config.sh \
+  lab_target_exec "$TARGET" sudo -n bash /tmp/edgeexp-vm-config.sh \
     || { echo "edge_target_prepare: 写控制配置失败" >&2; exit 1; }
 else
   lab_target_exec "$TARGET" sh -c "$(controls_config_script)" \

@@ -908,7 +908,15 @@ for i in "${!VMIDS[@]}"; do
   fi
 
   # 等 SSH（**按 IP 连**：此刻 /etc/hosts 还没写）
+  #
+  # ⚠️ **必须先把这一份 known_hosts 里"这个 IP"的旧条目也清掉**（Task 17 实测踩到）：
+  # 前面那次 `forget_host_key` 清的是**名字**（`asc-vm910`），而这里连的是**IP**；而
+  # "销毁 → 用同一个 vmid 重建"时 PVE 通常把**同一个 IP** 再分给新 VM ⇒ 旧 IP 条目仍在，
+  # `accept-new` 对**变更后的主机**一律拒绝 ⇒ `wait_ssh` 会以 `Host key verification failed`
+  # 死等满 `SSH_WAIT_S`（默认 300s），日志只剩一句"等 SSH 超时"，而真实原因是
+  # 我们**自己那一份**文件里有一条**过期的 IP 键**（名字那一份已经清干净了）。
   if [ "$DRY_RUN" -eq 0 ]; then
+    forget_host_key "$ip"
     if wait_ssh "$ip"; then
       log "   SSH 就绪：$SSH_USER@$ip"
     else

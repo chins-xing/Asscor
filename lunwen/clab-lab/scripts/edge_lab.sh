@@ -440,6 +440,61 @@ lab_node_vmid() {
   esac
 }
 
+# lab_qemu_vmid <node> —— **qemu 专属**：节点标识 → VMID（本层 qemu 那一半的**唯一**解析点）。
+#
+# 为什么必须有它（Task 17 在真机上实测到的**第一条 qemu 缺陷**）：
+#   Task 13 的注释写着"`qm` 原生同时接受 VMID 与 Name"，并据此让 `lab_instance_exists` /
+#   `lab_node_running` / `lab_inspect` 把节点名**原样**交给 `qm`。**实测不成立**：
+#
+#       $ qm status asc-vm910
+#       400 Parameter verification failed.
+#       vmid: type check ('integer') failed - got 'asc-vm910'      （rc=255）
+#       $ qm status 910
+#       status: running                                            （rc=0）
+#
+#   ⇒ 以**名字**为节点标识时（而名字是必须的：`edge_attack.sh` 的 `(host, 活 pid)` 判据、
+#     `edge_collect.sh` 的观测主体断言、Caldera 的 `host` 字段**全都**用 VM 的 hostname），
+#     `lab_instance_exists` 恒返回 false、`lab_node_running` 恒失败 —— 复位会在**第一格**
+#     以"实例不存在"收场，而真实原因是这一层把名字当 vmid 发给了 `qm`。
+#
+# 三条判据与 pve 侧的 `lab_node_vmid` **逐条同源**（只是清单来源与列位置不同）：
+#   1. 只认 `qm list` 里真的存在的那个名字；解析不到 ⇒ 响亮失败并列出当前可见的 VM；
+#   2. 重名 ⇒ 也失败（PVE 不强制 Name 唯一，"取第一个"是一次静默的任意选择）；
+#   3. 列位置**不写死**：`qm list` 的形状是 `VMID NAME STATUS MEM(MB) BOOTDISK(GB) PID`
+#      —— 名字在**第 2 格**（与 `pct list` 的"名字在最后一格"**相反**，共用一条 awk 会静默取错）。
+#   纯数字标识直接回它自己（`qm` 本来就收 vmid ⇒ 不需要查表，也避免"VMID 恰好等于别人的名字"）。
+lab_qemu_vmid() {
+  local node="$1" listing matches count
+  case "$node" in
+    ''|*[!0-9]*) : ;;
+    *) printf '%s\n' "$node"; return 0 ;;
+  esac
+  listing="$("$lab_topology_bin" list 2>/dev/null)" || {
+    echo "edge_lab: 取 VM 清单失败（$lab_topology_bin list，基质 qemu）——" >&2
+    echo "  名字 '$node' 无法解析成 VMID；本层不会在『问不清』的情况下继续（那会变成一次盲操作）。" >&2
+    return 1
+  }
+  matches="$(printf '%s\n' "$listing" | awk -v n="$node" '$1 ~ /^[0-9]+$/ && $2 == n {print $1}')"
+  count="$(printf '%s\n' "$matches" | awk 'NF {c++} END {print c+0}')"
+  case "$count" in
+  1)
+    printf '%s\n' "$matches"
+    return 0 ;;
+  0)
+    echo "edge_lab: 在 $lab_topology_bin list 里找不到名字为 '$node' 的 VM（基质 qemu）——" >&2
+    echo "  节点由**名字**标识（= VM 的 hostname，Caldera 的 host 字段与观测主体断言都用它），" >&2
+    echo "  而 qm 的原生标识是 VMID；名字对不上时本层**绝不猜一个 vmid**" >&2
+    echo "  （猜错会把命令下到**别人的** VM 上，而那与正确执行看起来完全一样）。" >&2
+    echo "  当前可见的 VM（VMID Name）：" >&2
+    printf '%s\n' "$listing" | awk '$1 ~ /^[0-9]+$/ {printf "    %s %s\n", $1, $2}' >&2
+    return 1 ;;
+  *)
+    echo "edge_lab: 名字 '$node' 在 $lab_topology_bin list 里匹配到 $count 个 VMID（$(printf '%s' "$matches" | tr '\n' ' ')）——" >&2
+    echo "  同名时无法判定该操作哪一台，本层**响亮失败**而不是取第一个（那是一次静默的任意选择）。" >&2
+    return 1 ;;
+  esac
+}
+
 # lab_target_spec <node> —— 把基质层的节点名翻成 **`edgescen -target` 的语法**
 # （`docker:<容器>` / `lxd:<实例>` / `pve:<vmid>`；见 cmd/edgescen 的 `parseNodeTarget`）。
 #
@@ -683,10 +738,32 @@ lab_target_exec() {
     # 免得下一位执行者按同样的直觉再改一遍。
     #
     # `--` 必须在主机名之前：`ssh <主机> -c …` 里以 `-` 开头的那一格会被 ssh 当成自己的选项。
-    local host args=()
+    # ⚠️ **Task 17 在真机上实测到的第二条 qemu 缺陷（这条最隐蔽）**：
+    # Task 13 的写法是 `"$lab_target_bin" "${args[@]}" -- "$host" bash -c "$*"`，注释里说
+    # "客人侧收到的命令串逐字是 `bash -c bash -c rm -f /tmp/x`、语义正确"。**实测不成立** ——
+    # `ssh` 把 `-- <主机>` 之后的**所有格用空格拼起来**（不做任何引用转义），于是那对引号
+    # **不存在**，客人侧登录 shell 拿到的是
+    #     bash -c bash -c rm -f /tmp/x
+    # 并把它重新分词：`bash` 的 `-c` 脚本只有 **`bash`** 这一个词，`-c`/`rm`/`-f`/`/tmp/x`
+    # 全变成位置参数 ⇒ **真实执行的是 `bash`（无参，读 stdin）**，`rm -f /tmp/x` 一次也没跑。
+    # 实测（宿主 → asc-vm910，同一台 VM、同一条命令）：
+    #     $ ssh … -- asc-vm910 sudo -n bash /tmp/g.sh net-report ens18         → rc=0，输出正常
+    #     $ ssh … -- asc-vm910 bash -c "sudo -n bash /tmp/g.sh net-report ens18"
+    #       usage: sudo -h | -K | -k | -V                                     → rc=1
+    # （第二行的形态就是原实现发出的形态；`sudo` 收到的 argv 是空的。）
+    # 这条路径**从来没跑到过**：`edge_reset.sh` 在 Task 17 之前根本没有 qemu 分支，
+    # 于是 `lab_target_exec` 的 qemu 分支是**写的当天就没被调用过**的一段代码。
+    #
+    # **修法**：把 argv 用 `printf '%q '` **逐格引用**之后拼成**一格**交给 ssh。
+    # `%q` 产生的转义对**客人侧的登录 shell**有效（它就是 bash），于是
+    #     bash -c "rm -f /tmp/x"  →  bash -c rm\ -f\ /tmp/x  →  客人执行 `bash -c 'rm -f /tmp/x'` ✓
+    # 这同时**保住**了那条结构性限制的诚实描述（argv 里含空格的**单格**取值仍然无法表达）——
+    # 只是把"能表达的形态"从"恰好一格"扩到"任何可被 shell 引用的 argv"。
+    local host args=() cmd
     host="$(lab_node_ssh_host "$node")" || return $?
     mapfile -t args < <(lab_ssh_conn_args) || return $?
-    "$lab_target_bin" "${args[@]}" -- "$host" bash -c "$*"
+    cmd="$(printf '%q ' "$@")"
+    "$lab_target_bin" "${args[@]}" -- "$host" "$cmd"
     ;;
   esac
 }
@@ -799,11 +876,17 @@ lab_target_exec_detached() {
     # 若少了外层 `bash -c`，远端 shell 会把 `'nohup "$@" …'` 里的引号**自己**吃掉，
     # 于是 `"$@"` 在远端 shell 里变成"当前 shell 的位置参数"（通常为空）——
     # 命令被丢掉、返回 0，而症状与"agent 起不来"完全同形。
-    local host args=()
+    # ⚠️ **同一处引号缺陷的第二次出现**（Task 17 实测）：原写法把
+    # `bash -c 'nohup "$@" >/dev/null 2>&1 </dev/null &' _ "$@"` 整段交给 ssh，而 ssh 拼格时
+    # 那层引号**不存在** ⇒ 客人侧登录 shell 重新分词，"$@" 在**客人侧顶层**展开（那里没有位置
+    # 参数 ⇒ 空）⇒ 起的是一个**没有命令**的后台 shell，而 rc=0。症状与"agent 起不来"完全同形。
+    # **修法**：用 `printf '%q '` 把调用方的 argv 逐格引用，拼进一条**逐字**的脱离命令，
+    # 再作为**一格**交给 ssh（ssh 拼格时就没有多余的空格可分词）。
+    local host args=() cmd
     host="$(lab_node_ssh_host "$node")" || return $?
     mapfile -t args < <(lab_ssh_conn_args) || return $?
-    "$lab_target_bin" "${args[@]}" -- "$host" bash -c \
-      'nohup "$@" >/dev/null 2>&1 </dev/null &' _ "$@"
+    cmd="$(printf '%q ' "$@")"
+    "$lab_target_bin" "${args[@]}" -- "$host" "nohup $cmd >/dev/null 2>&1 </dev/null &"
     ;;
   esac
 }
@@ -900,13 +983,14 @@ lab_instance_exists() {
     "$lab_target_bin" status "$vmid" >/dev/null 2>&1
     ;;
   qemu)
-    # "存在"的判据 = `qm status <vmid|名字>` 能应答（**权威来源就是 PVE 自己**）。
-    # 与 pve 侧**刻意不同**：这里**不做**"这个名字必须唯一"的解析 —— `qm` 原生同时接受
-    # VMID 与 Name，`qm status <不存在的名字>` 自己会返回非零。多加一层解析只会多一处
-    # 可能与 `qm` 自己的判据分叉的地方（分叉时症状是"节点明明在、脚本说不在"）。
-    # ⚠️ **只管存在性**，不管在不在跑 —— 那是 `lab_node_running` 的事（两者混成一个
-    # 会让"存在但没在跑"被读成"不存在"⇒ 一次多余的 start，而它看起来像环境问题）。
-    "$lab_topology_bin" status "$node" >/dev/null 2>&1
+    # "存在"的判据 = `qm status <vmid>` 能应答（**权威来源就是 PVE 自己**）。
+    # ⚠️ **必须经 `lab_qemu_vmid` 解析**（Task 17 实测）：`qm status <名字>` 报
+    # `vmid: type check ('integer') failed` 并 rc=255 —— 名字**不能**原样交给 `qm`。
+    # 解析不出来（名字不存在/重名）⇒ 响亮失败（**不是**静默的 false）：
+    # 把"名字打错了"读成"实例不存在"会让复位走建机分支去建一台**新的** VM。
+    local vmid
+    vmid="$(lab_qemu_vmid "$node")" || return 1
+    "$lab_topology_bin" status "$vmid" >/dev/null 2>&1
     ;;
   esac
 }
@@ -983,8 +1067,10 @@ lab_node_running() {
     #   · 只把 `running` 判成 true，其余（`stopped`/`paused`/`prelaunch`…）一律 false。
     # ⚠️ 最后一条在 VM 上比在 CT 上更要紧：`paused`（QEMU 的挂起）**不是**"能进去执行"，
     # 而把它读成 true 会让调用方跳过 start，随后的 ssh 超时会被记成"agent 起不来"。
-    local out status
-    out="$("$lab_topology_bin" status "$node" 2>/dev/null)" || return 1
+    #   纯数字标识直接回它自己（`qm` 本来就收 vmid ⇒ 不需要查表，也避免"VMID 恰好等于别人的名字"）。
+    local out status vmid
+    vmid="$(lab_qemu_vmid "$node" 2>/dev/null)" || return 1
+    out="$("$lab_topology_bin" status "$vmid" 2>/dev/null)" || return 1
     status="$(printf '%s\n' "$out" | awk -F': *' '$1 ~ /^ *[Ss]tatus$/ {print tolower($2); exit}')"
     [ -n "$status" ] || return 1
     case "$status" in
@@ -1025,7 +1111,10 @@ lab_inspect() {
     # **额外价值**（VM 基质独有）：这一份输出就是"这台 VM 挂在哪条桥、几核几内存、
     # balloon 下限多少"的**唯一**权威来源 —— 跑批后追查"这批数据采自什么环境"时，
     # 它是比记录里的 env 标签**硬**得多的证据（标签是手填的，这份是 PVE 自己写的）。
-    "$lab_topology_bin" config "$node"
+    # ⚠️ 同样必须经 `lab_qemu_vmid`（`qm config <名字>` 与 `qm status <名字>` 是同一条限制）。
+    local vmid
+    vmid="$(lab_qemu_vmid "$node")" || return $?
+    "$lab_topology_bin" config "$vmid"
     ;;
   esac
 }

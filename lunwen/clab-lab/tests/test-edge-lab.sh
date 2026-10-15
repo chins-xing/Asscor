@@ -675,6 +675,8 @@ echo "== list";     lab_list || echo "  rc=$?"
 echo "== spec";     lab_target_spec 910 || echo "  rc=$?"
 echo "== specname"; lab_target_spec asc-vm911 || echo "  rc=$?"
 echo "== sshhost";  lab_node_ssh_host 911 || echo "  rc=$?"
+echo "== existsname"; lab_instance_exists asc-vm911; echo "  rc=$?"
+echo "== runname";    lab_node_running asc-vm910 || echo "  rc=$?"
 echo "== require";  lab_require_bins; echo "  require-rc=$?"
 echo "== up";       lab_up; echo "  rc=$?"
 echo "== down";     lab_down; echo "  rc=$?"
@@ -698,32 +700,48 @@ PATH="$D/bin-qemu:$D/bin-pve:$D/bin:$PATH" REPLAY_LOG="$QMU_LOG" \
 QI_PVE_A="$(log_bytes "$D/pve.log")"; QI_LXD_A="$(log_bytes "$D/lxd.log")"
 QI_DOCKER_A="$(log_bytes "$D/docker.log")"
 
-# 判据的写法：连接参数段之后必须是 `-- asc-vm910 bash -c <命令串>`。三条讲究都要留住：
+# 判据的写法：连接参数段之后必须是 `-- asc-vm910 <已引用的命令串>`。四条讲究都要留住：
 #
-#  1. 用 `grep -qx` 做**整行**相等（不是子串匹配）：子串匹配对"参数段里多了一格"是瞎的。
+#  1. 用 `grep -qF` 做**固定串**相等（不是正则）：命令串里带反斜杠转义，正则会把它们吃掉。
 #
 #  2. **不用 `-E` 的 `+`/`?` 量词**（Task 16 实测踩到的一处**夹具自身的雷**）：本机 Git Bash
 #     的 grep 在 **`POSIXLY_CORRECT` 被设上时 `-E` 会退回 BRE 语义** —— 于是 `+` 与 `?`
 #     变成**字面量**（实测 `grep -E 'ssh (-o [^ ]+ )+-- …'` 对完全匹配的行报 NOMATCH）。
 #     ⇒ 这里不用量词，故在 BRE/ERE 两种解释下**同义**。
 #
-#  3. `bash -c bash -c rm -f /tmp/x` 是**正确**形态，不是双重包装的缺陷（Task 16 实测澄清）：
-#     调用点写的是 `lab_target_exec 910 bash -c "rm -f /tmp/x"`（**两格**：`bash`、`-c`、
-#     `rm -f /tmp/x`），而 `lab_target_exec` 的 qemu 分支把它重建成 `bash -c "$*"`
-#     ⇒ 客人侧收到的命令串逐字就是 `bash -c bash -c rm -f /tmp/x`。
-#     Task 16 一度按"这是多包了一层"去改（把外层 `bash -c` 去掉），**实测与理解不符、已还原**；
-#     这条断言就是那次澄清的钉子（改成去掉外层的样子必须让它红）。
+#  3. ★ **`bash -c rm\ -f\ /tmp/x` 才是正确形态 —— Task 17 推翻了 Task 16 的澄清**（后者是错的）：
+#     Task 16 断言"客人侧收到的命令串逐字就是 `bash -c bash -c rm -f /tmp/x`、语义正确"，
+#     理由是"外层 `bash -c` 的脚本是 `bash -c rm -f /tmp/x`"。**那句话隐含了引号存活**，
+#     而 **`ssh` 把 `-- <主机>` 之后的格用空格拼起来、不做任何引用转义** ⇒ 那对引号不存在，
+#     客人侧登录 shell 拿到的是裸的 `bash -c bash -c rm -f /tmp/x` 并重新分词：`bash` 的
+#     `-c` 脚本只有**一个词** `bash`，`-c`/`rm`/`-f`/`/tmp/x` 全成了位置参数
+#     ⇒ **真实执行的是无参 `bash`（读 stdin）**，`rm -f /tmp/x` 一次也没跑。
+#     真机上实测（宿主 → asc-vm910，同一台 VM、同一条命令；Task 17 §1.4）：
+#       ssh … -- asc-vm910 sudo -n bash /tmp/g.sh net-report ens18                     → rc=0 ✓
+#       ssh … -- asc-vm910 bash -c "sudo -n bash /tmp/g.sh net-report ens18"           → rc=1，
+#         `usage: sudo -h | -K | -k | -V`（sudo 收到的 argv 是空的）
+#     **为什么这条断言没能拦住它**：本段的假 `ssh` 只**记账**、不解释命令串；而 I-F 段的假
+#     `ssh` 把 argv **逐格**转交（那是 docker/lxc/pct 的语义，不是 ssh 的）⇒ 两处都把 ssh 当成了
+#     "argv 保真"的通道，于是**夹具与代码共享同一个错模型**，缺陷因此从 Task 13 活到 Task 17。
+#     ⇒ 现在断言的形态是 `printf '%q '` 逐格引用后的结果（`rm -f /tmp/x` → `rm\ -f\ /tmp/x`），
+#       并且 I-E 段另加一条**行为**判据（真 ssh 形态的假 ssh + 副作用检查），让它有牙。
 #
 #  4. 用户那一格必须是 **`-o User=asc`** 而不是 `-l asc`（Task 16 两层对齐）：这一格是
 #     `ssh` 与 `scp` **共用**的，而 `scp -l <值>` 是**带宽上限** ⇒ 原来是"bash 层用 -l、
 #     Go 层用 -o User="的分歧（Go 侧 Task 15 改过、bash 侧没跟上）。断言里把这一格写死，
 #     两层从此必须同源（改回 `-l` 必须让本用例红）。
-if grep -qx 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o User=asc -- asc-vm910 bash -c bash -c rm -f /tmp/x' "$SSH_LOG"; then
+if grep -qF -- '-- asc-vm910 bash -c rm\ -f\ /tmp/x' "$SSH_LOG"; then
   ok "qemu exec 走 ssh 且目标名由 vmid 推出来（asc-vm910）"
-  ok "qemu exec 的命令串与调用点写的**逐字一致**（\`bash -c\` 那两格是调用方给的，不是多包一层）"
+  ok "qemu exec 的命令串**逐格引用**后交给 ssh（真 ssh 会用空格拼格 ⇒ 不引用就会丢引号）"
   ok "登录用户那一格是 \`-o User=<用户>\`（**不是** \`-l\`：scp 会把 -l 当带宽上限）—— 与 Go 侧同源"
 else
-  fail "qemu exec 形态不对（期望整行：ssh <连接参数含 -o User=asc> -- asc-vm910 bash -c bash -c rm -f /tmp/x）"; cat "$SSH_LOG"
+  fail "qemu exec 形态不对（期望含：-- asc-vm910 bash -c rm\\ -f\\ /tmp/x）"; cat "$SSH_LOG"
+fi
+# **回归钉**：Task 16 的那个形态（未引用、靠外层 `bash -c` 兜底）必须**不再出现**。
+if grep -qF -- 'bash -c bash -c rm -f /tmp/x' "$SSH_LOG"; then
+  fail "qemu exec 又回到了未引用的形态（ssh 会把引号吃掉，客人侧只会执行无参 \`bash\`）"
+else
+  ok "qemu exec 不再是 \`bash -c bash -c …\` 那种靠引号存活才成立的形态（Task 17 的回归钉）"
 fi
 if grep -q '^scp .* -O /opt/payload asc-vm910:/tmp/sandcat' "$SCP_LOG"; then
   ok "qemu push 走 scp（含 \`-O\` 强制 legacy SCP 协议）"
@@ -738,6 +756,19 @@ if grep -qE '^ssh .*-- asc-vm910 ps -eo pid,comm --no-headers' "$SSH_LOG"; then
 if grep -q '^\[invoke\] qm status 910' "$QMU_LOG"; then
   ok "qemu lab_node_running 用 \`qm status <vmid>\` 判状态（实例视图走 qm，不走 ssh）"
 else fail "qemu lab_node_running 没走 qm status"; fi
+# ★ Task 17 实测：`qm status <名字>` **不成立**（`vmid: type check ('integer') failed`，rc=255）
+#   ⇒ 名字标识必须经 `lab_qemu_vmid` 解析成 vmid 之后再交给 `qm`。两条判据把这条钉住：
+#   ① 名字标识**必须**先问 `qm list`；② 交给 `qm` 的那一格**必须是数字 vmid**（911，不是名字）。
+if grep -q '^\[invoke\] qm list' "$QMU_LOG" && grep -q '^\[invoke\] qm status 911' "$QMU_LOG"; then
+  ok "qemu 名字标识（asc-vm911）先经 \`qm list\` 解析成 vmid 911 再发给 \`qm status\`（\`qm\` 只认数字）"
+else fail "qemu 名字→vmid 解析不对（期望日志里有 \`qm list\` 与 \`qm status 911\`）：$(cat "$QMU_LOG")"; fi
+if grep -q '^\[invoke\] qm status asc-vm' "$QMU_LOG"; then
+  fail "qemu 把**名字**直接交给了 \`qm\`（实测 rc=255：vmid 必须是整数）"
+else ok "qemu 从不把名字直接交给 \`qm\`（\`qm status <名字>\` 实测 400/rc=255）"; fi
+if printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== existsname/,/^== runname/p' | grep -q 'rc=0' \
+   && ! printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== existsname/,/^== runname/p' | grep -q 'rc=1'; then
+  ok "lab_instance_exists 对**名字**标识回 true（解析成 vmid 后 \`qm status\` 应答）"
+else fail "lab_instance_exists 对名字标识不正确：$(sed -n '/^== existsname/,/^== runname/p' "$D/qemu.out")"; fi
 if grep -q '^\[invoke\] qm config 910' "$QMU_LOG"; then
   ok "qemu lab_inspect 用 \`qm config <vmid>\` 取基质视图"; else fail "qemu lab_inspect 没走 qm config"; fi
 if printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== list/,/^== spec/p' | grep -q 'asc-vm910' \
@@ -825,23 +856,39 @@ if printf '%s' "$KEYERR_OUT" | grep -q 'rc=1' && printf '%s' "$KEYERR_OUT" | gre
   ok "私钥路径不可读 ⇒ lab_ssh_conn_args 响亮失败（不退回 ssh 的默认钥匙）"
 else fail "私钥不可读的处置不对（不许悄悄换钥匙）：$KEYERR_OUT"; fi
 
-# --- I-F) detached 的 argv 保真（与 F/H-F 段同手法，换到 qemu 形状）--------------------
+# --- I-E) exec 的**引号保真**（Task 17 新增：让"ssh 会拼格"这件事有牙）-------------------
+# 这是本段最重要的一条：它把 Task 13→17 那个**活了三轮**的缺陷钉住。
+#
+# 模型必须照实：**真 `ssh` 把 `-- <主机>` 之后的格用空格拼成一串**，交给客人侧登录 shell
+# 重新分词（不做任何引用转义）。旧夹具把 ssh 当"argv 保真"的通道（照搬 docker/lxc/pct 的
+# 语义）⇒ 夹具与代码共享同一个错模型，缺陷因此一路绿灯。
 mkdir -p "$D/bin-exec-qemu"
 cat > "$D/bin-exec-qemu/ssh" <<'SH'
 #!/bin/bash
-# qemu 形状：`ssh <连接参数> -- <主机> <远程命令…>`；把 `-- <主机>` 之后的整串交给本地 sh
-# （等价于远端 shell 解释那一串 —— 夹具在**本机**模拟客人）。
-shift_args=(); seen=0
+# 真 ssh 的行为：argv 里 `--` 之后的第一格是主机名，**其余格用空格拼成一格**，把那一格交给
+# 远端登录 shell 执行。本夹具在本机用 `bash -c` 模拟"远端登录 shell"。
+seen=0; rest=()
 for a in "$@"; do
-  if [ "$seen" = "1" ]; then shift_args+=("$a"); continue; fi
-  if [ "$a" = "--" ]; then seen=1; fi
+  if [ "$seen" = "1" ]; then rest+=("$a"); continue; fi
+  [ "$a" = "--" ] && seen=1
 done
-# shift_args[0] 是主机名，后面才是远程命令
-unset 'shift_args[0]'
-"${shift_args[@]}"
-exit $?
+# rest[0] = 主机名；命令串 = rest[1..] 用空格拼起来（**这正是 `"${rest[*]:1}"` 的语义**）
+cmd="${rest[*]:1}"
+exec bash -c "$cmd"
 SH
 chmod +x "$D/bin-exec-qemu/ssh"
+# 前置：文件先造出来，再由客人侧命令删掉 —— 判据是"**副作用真的发生了**"。
+rm -f "$D/marker/exec-qemu.txt"; : > "$D/marker/exec-qemu.txt"
+PATH="$D/bin-exec-qemu:/usr/bin:/bin" EDGEEXP_SUBSTRATE=qemu EDGEEXP_SSH_BIN=ssh LIB="$LIB" \
+  bash -c '. "$LIB"; lab_target_exec 910 bash -c "rm -f '"$D"'/marker/exec-qemu.txt"' \
+  > "$D/exec-qemu2.out" 2>&1
+if [ ! -f "$D/marker/exec-qemu.txt" ]; then
+  ok "exec（qemu）的引号保真：真 ssh 形态下客人侧**真的执行了**那条命令（marker 被删掉）"
+else
+  fail "exec（qemu）的引号没保住 —— 客人侧只执行了无参 bash，命令被丢掉（marker 还在）；stderr=$(tr '\n' ';' < "$D/exec-qemu2.out")"
+fi
+
+# --- I-F) detached 的 argv 保真（与 F/H-F 段同手法，换到 qemu 形状）--------------------
 rm -f "$D/marker/qemu.txt"
 PATH="$D/bin-exec-qemu:/usr/bin:/bin" EDGEEXP_SUBSTRATE=qemu EDGEEXP_SSH_BIN=ssh LIB="$LIB" \
   bash -c '. "$LIB"; lab_target_exec_detached 910 /bin/sh -c "printf RAN-qemu > '"$D"'/marker/qemu.txt"' \
