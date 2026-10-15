@@ -20,7 +20,7 @@
 #   test-agent-readiness   6（Task 10 加了 pid 复用 / paw 归属三格：D / D2 / E —— 前 3 格是 Task 4D 的原判据）
 #   test-edge-lab         77（Task 6 的 H 段把 pve 基质写成 25 条 ⇒ 51；Task 13 的 I 段给 qemu
 #                              加了 22 条 ⇒ 73；**Task 16 把 I 段那 3 条既有 FAIL 修到全绿、
-#                              并给"命令串逐字一致"那条判据加了一格 ⇒ 77**。
+#                              并给『命令串逐字一致』与『用户那格是 -o User= 而不是 -l』各加一格 ⇒ 78**。
 #                              ⚠️ Task 15 在 Linux 上实跑是 PASS=73 FAIL=3，那 3 条在起点
 #                              `541c504` 上逐字相同（失败集 diff 为空）⇒ 是 Task 13 带进来的既有
 #                              失败。Task 16 查清了三条的**根因各不相同**（见 Task 16 报告 §3.1）：
@@ -52,7 +52,7 @@ export REPO
 
 declare -A EXPECT=(
   [test-agent-readiness]=6
-  [test-edge-lab]=77
+  [test-edge-lab]=78
   [test-edge-probe]=20
   [lab-diff]=31
   [test-chain-derivation]=8
@@ -93,7 +93,7 @@ done
 
 echo
 if [ "$TOTAL_FAIL" -eq 0 ]; then
-  echo "run-all: 全部通过（6 组：6/77/20/31/8/12）"
+  echo "run-all: 全部通过（6 组：6/78/20/31/8/12）"
   exit 0
 fi
 echo "run-all: $TOTAL_FAIL 组未达标 —— 见上面的尾部输出" >&2

@@ -198,7 +198,18 @@ lab_scp_bin="${EDGEEXP_SCP_BIN:-scp}"
 # `-o ProxyCommand=…` 能在操作者看不见的地方把取数目标改到别处。
 lab_ssh_conn_args() {
   printf '%s\n' -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10
-  printf '%s\n' -l "${EDGEEXP_VM_SSH_USER:-asc}"
+  # ⚠️ 登录用户用 **`-o User=<用户>`** 而不是 `-l <用户>`（Task 16 与 Go 侧对齐）。
+  #
+  # 这一格是 `ssh` 与 `scp` **共用**的（`lab_push` 的 qemu 分支两条都用它），而两个二进制
+  # 对 `-l` 的解释**完全不同**：
+  #   · `ssh  -l <用户>` = 登录名（也就是这里的本意）；
+  #   · `scp  -l <值>`   = **带宽上限**（要数字）⇒ `scp … -l asc …` 直接报
+  #     `usage: scp [-346ABCOpqRrsTv] …`，而那条 usage **看不出**是 `-l` 的问题。
+  # `-o User=<用户>` 对两者语义唯一（都是"把 User 交给底层 ssh"），故共用这一格是安全的。
+  # Task 15 在 Go 侧（`cmd/edgescen` 的 `qemuSSHConnArgs`）就是**因为这条**改的
+  # —— 那是 qemu 基质端到端此前从没跑通的直接原因；Task 16 把 bash 这一侧补齐，
+  # 两层从此**同源**（判据：`test-edge-lab.sh` 的 qemu 段断言这两层的连接参数逐格相同）。
+  printf '%s\n' -o "User=${EDGEEXP_VM_SSH_USER:-asc}"
   if [ -n "${EDGEEXP_VM_SSH_PORT:-}" ]; then
     printf '%s\n' -p "$EDGEEXP_VM_SSH_PORT"
   fi

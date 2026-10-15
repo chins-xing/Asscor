@@ -50,7 +50,7 @@
 # 宿主侧的**持久**改动（只要一处，Task 16 起）
 # ---------------------------------------------------------------------------
 #   · 自建一条**专用 ISO 存储** `asscor-vmseed`（`dir` + `path /RAID-Mirror/asscor-vmseed`，
-#     `content iso`，`is_mountpoint 1`；写法参照 `ZFS-ISO`）。seed ISO 必须落在带 `iso`
+#     `content iso`；写法参照 `ZFS-ISO` 的 `dir:` + `path /RAID-Mirror/<名>`）。seed ISO 必须落在带 `iso`
 #     内容的存储里（PVE 9 起 `qm set --ide2` 不收裸路径），而 `ZFS-ISO`/`Backup-320G`/
 #     `ZFS-LXD` 一律不碰 ⇒ 自建一条是**additive、幂等**的，也是唯一不翻转全局状态的做法。
 #     **不再**有任何"临时改 `local` 的 content、--destroy 时写回"的动作（Task 15 的做法已删）。
@@ -124,12 +124,25 @@ IMG_STORAGE_DIR="${EDGEEXP_VM_IMG_DIR:-/var/lib/vz/import}"
 #       ⇒ 上面那个状态文件与它的恢复路径**整个删掉**（少一条只在故障时才暴露的代码路径）；
 #     · 代价：`/etc/pve/storage.cfg` 里多一条存储定义（**持久**）。要撤：先
 #       `rm -f /etc/pve/storage.cfg` 里那一段（或 `pvesm remove asscor-vmseed`），再删目录。
-#   · `is_mountpoint 1`（与 `Backup-320G` 同一手法）：底下的 ZFS 池没挂上时 PVE 直接拒绝写，
-#     而不是把 ISO 写到**根文件系统**的挂载点目录里（那种形态看起来一切正常、直到重启）。
+#   · **不带 `--is_mountpoint 1`**（Task 16 实测：带上它这条存储**根本建不出来**）：
+#     那个开关是给 `Backup-320G` 那种"存储 path **就是**挂载点"的形态用的 —— PVE 会拒绝激活：
+#     `create storage failed: unable to activate storage '…' - directory is expected to be a
+#      mount point but is not mounted`。我们这条存储的 path 是 ZFS 池 `RAID-Mirror` **里面**的
+#     目录（与 `ZFS-ISO` / `ZFS-LXD` 同形），池没挂上时"落到根文件系统的挂载点目录"这件事
+#     由**建机前的 mkdir + PVE 激活失败**双重兜住（激活失败即响亮失败，不会静默写进根 FS）。
 SEED_STORAGE="${EDGEEXP_VM_SEED_STORAGE:-asscor-vmseed}"
 SEED_STORAGE_PATH="${EDGEEXP_VM_SEED_STORAGE_PATH:-/RAID-Mirror/asscor-vmseed}"
-# ISO 的落点由存储的 path 决定（PVE 直接按 `<path>/iso/<文件>` 找）。
-SEED_DIR="${EDGEEXP_VM_SEED_DIR:-$SEED_STORAGE_PATH/iso}"
+# ISO 的落点：**不猜**，建机时从 PVE 自己的 API 问出来（见 ensure_seed_storage 的末尾）。
+# ⚠️ Task 16 实测踩到的一条**假设错误**：`dir` 存储里的 ISO **不是**放在 `<path>/iso/`，
+# 而是 `<path>/template/iso/`。我按 `<path>/iso` 写了一次 ⇒ `genisoimage` 把 ISO 写进了那条
+# "看起来对"的目录，而 PVE 随后报
+#     volume 'asscor-vmseed:iso/asc-vm910-seed.iso' does not exist
+# （`pvesm list asscor-vmseed` 回**空表**）⇒ 建机当场停住，留下一台 `stopped` 的半成品 VM
+# （BOOTDISK=0.00）。对照本机唯一既有的 iso 存储 `ZFS-ISO` 确认：它的 ISO 全在
+# `/RAID-Mirror/iso/template/iso/`。
+# ⇒ 这个变量只是**默认值**，真值由 `pvesm path <存储>:iso/` 在运行时替换 —— 存储布局随
+#   PVE 版本与存储类型变，把它写死就等于把一次观察当前提。
+SEED_DIR="${EDGEEXP_VM_SEED_DIR:-$SEED_STORAGE_PATH/template/iso}"
 # 客人侧网卡名（Task 15 修正）：**不是 `eth0`**。PVE 的 virtio 网卡在客人里按 PCI 槽位取
 # **可预测名**，实测（PVE 9.2.2 + Ubuntu noble cloud image）是 **`ens18`** ——
 # `qm guest cmd 910 network-get-interfaces` 逐字报 `name='ens18'`。
@@ -362,7 +375,7 @@ clear_hosts_block() {
 #   · **只加新名字**：`asscor-vmseed` 不存在才创建；已存在则只核对它的 path/content，
 #     **绝不**去改它（更不会去改 `local`/`ZFS-ISO`/`Backup-320G`/`ZFS-LXD`）；
 #   · **幂等**：重跑、多台、`--destroy` 之后再建，都只在"不存在"那一次动手；
-#   · **写不进去就响亮失败**：底下的 ZFS 池没挂上（`is_mountpoint 1`）或目录建不出来时，
+#   · **写不进去就响亮失败**：底下的 ZFS 池没挂上（`/RAID-Mirror` 不存在）或目录建不出来时，
 #     宁可当场失败，也不把 seed ISO 落到根文件系统的挂载点目录里（那种形态看起来一切正常，
 #     直到宿主重启 —— 而那时症状是"所有 VM 的 seed 都不见了"）。
 ensure_seed_storage() {
@@ -381,12 +394,43 @@ ensure_seed_storage() {
     fi
     log "== seed ISO 存储 $SEED_STORAGE 已存在（path=$cur_path）—— 不动它"
   else
+    # ⚠️ **池没挂上时不要建目录**（Task 16 加固）：`mkdir -p` 会成功地把挂载点目录造在
+    # **根文件系统**上（看起来一切正常，直到宿主重启 —— 而那时症状是"所有 VM 的 seed 都不见了"）。
+    # 判据：`$SEED_STORAGE_PATH` 的**父目录**必须已经存在（ZFS 池挂上了才有它）；
+    # 不存在就**响亮失败**，让操作者先去看池。
+    if [ "$DRY_RUN" -eq 0 ] && [ ! -d "$(dirname "$SEED_STORAGE_PATH")" ]; then
+      die "存储落点的父目录 $(dirname "$SEED_STORAGE_PATH") 不存在 ——
+  底下的池很可能**没挂上**。本脚本**不猜**：宁可当场失败，也不把 seed ISO 落到根文件系统上
+  （那种形态看起来一切正常，直到宿主重启）。诊断：\`zfs list\` / \`ls $(dirname "$SEED_STORAGE_PATH")\`。"
+    fi
     log "== 创建 seed ISO 专用存储 $SEED_STORAGE（dir:$SEED_STORAGE_PATH，content iso；参照 ZFS-ISO 的写法）"
     log "   ⚠️ 这是本脚本唯一的**持久**宿主改动（additive；既有存储一个字节都不动）。要撤："
     log "      pvesm remove $SEED_STORAGE && rm -rf $SEED_STORAGE_PATH"
     if [ "$DRY_RUN" -eq 0 ]; then
-      mkdir -p "$SEED_STORAGE_PATH/iso"
-      pvesm add dir "$SEED_STORAGE" --path "$SEED_STORAGE_PATH" --content iso --is_mountpoint 1
+      pvesm add dir "$SEED_STORAGE" --path "$SEED_STORAGE_PATH" --content iso
+    fi
+  fi
+  # ISO 的落点**不写死**：`dir` 存储把 ISO 放在 `<path>/template/iso`，但这条布局是 PVE 的
+  # 实现细节（Task 16 实测：按 `<path>/iso` 写会让 `pvesm list <存储>` 回空表、随后
+  # `qm set --ide2` 报 `volume '<存储>:iso/<文件>' does not exist`，而 ISO 已经生成好了
+  # —— 症状像"文件没了"，真正的原因是目录不对）。
+  # 判据用 PVE 自己的**目录列表**：`find <每个候选>/ -maxdepth 1 -name '*.iso' | head -1`
+  # 会给出一个**真实存在**的 iso 文件，把它所在目录当 $SEED_DIR。
+  # ⚠️ 这条判据是**只读**的：不去创建目录（否则会在错的候选上造出一个空目录，而
+  # `find` 又会把它当成"存在"）。一个 iso 都没有时回落到默认值（`<path>/template/iso`）。
+  if [ "$DRY_RUN" -eq 0 ] && [ -z "${EDGEEXP_VM_SEED_DIR:-}" ]; then
+    local cand probe
+    for cand in "$SEED_STORAGE_PATH/template/iso" "$SEED_STORAGE_PATH/iso"; do
+      [ -d "$cand" ] || continue
+      probe="$(find "$cand" -maxdepth 1 -name '*.iso' 2>/dev/null | head -n1)"
+      if [ -n "$probe" ]; then
+        SEED_DIR="$cand"
+        log "== seed ISO 落点（按 PVE 自己的目录列表判定）：$SEED_DIR（样例：$(basename "$probe")）"
+        break
+      fi
+    done
+    if [ -z "$probe" ]; then
+      log "== seed ISO 落点（没有任何 iso 文件可参照 ⇒ 按 PVE 的 dir 布局用默认）：$SEED_DIR"
     fi
   fi
   run mkdir -p "$SEED_DIR"
@@ -424,7 +468,13 @@ write_local_env() {
     printf 'export EDGEEXP_VM_KNOWN_HOSTS=%q\n' "$KNOWN_HOSTS"
     # 取数权限（Task 16）：客人侧 root 等价那一格。写出来是为了"用的是默认值"这件事
     # 在环境里**看得见**（取数侧读不到就响亮失败，绝不降级）。
-    printf 'export EDGEEXP_VM_SSH_SUDO=%q\n' "sudo -n"
+    # ⚠️ **不用 `%q`**（Task 16 实测）：`%q` 会把 `sudo -n` 写成 `sudo\ -n`，而
+    # `grep -c '\\ '` 实测 **count=1** —— 也就是说那份 `source` 之后**真的**会得到
+    # `sudo\ -n`。本脚本自己的 shell 在展开 `$'\t'` 时把反斜杠吃掉了，所以打印出来看是
+    # `sudo -n`（同一个坑的两种面孔）：本脚本能跑到、别的读者拿到的是 `sudo\ -n`。
+    # 这一格是"拼进客人侧 shell 的命令"（见 cmd/edgescen 的 qemuSSHSudoArgs），
+    # 值必须**逐字**是 `sudo -n` ⇒ 用单引号把它整段括起来。
+    printf "export EDGEEXP_VM_SSH_SUDO='%s'\n" "sudo -n"
     printf 'export EDGEEXP_SUBSTRATE=qemu\n'
     printf 'export EDGEEXP_VM_IMAGE_URL=%q\n' "$CLOUD_IMG_URL"
     printf '# 取数地址：默认由 vmid 推 `%s<vmid>`（与宿主 /etc/hosts 的托管区块一致）。\n' "$NAME_PREFIX"
@@ -771,8 +821,9 @@ guest_side_metrics() {
        echo "  hostname      : $(hostname)"
        echo "  os            : $(. /etc/os-release; echo "$PRETTY_NAME")"
        echo "  kernel        : $(uname -r)"
-       echo "  systemd       : $(systemctl is-system-running 2>/dev/null || echo unknown)（CT 里 systemd 是残缺的）"
-       echo "  aa-status rc  : $(aa-status >/dev/null 2>&1; echo $?)（0 = 正常；CT 里报 Failed to get profiles: 2）"
+        echo "  systemd       : $(systemctl is-system-running 2>/dev/null || echo unknown)（CT 里 systemd 是残缺的）"
+       echo "  aa-status rc  : $(aa-status >/dev/null 2>&1; echo $?)（**以登录用户**跑；非 root 常见 rc=4 —— 见下一行）"
+       echo "  aa-status(root): $(sudo -n aa-status 2>/dev/null | grep -m1 -E 'profiles are loaded|profiles are in enforce' || echo '取不到')（**以 root 等价**跑；这一行才是『VM 上真能 enforce』的证据）"
        echo "  apparmor      : $(cat /sys/module/apparmor/parameters/enabled 2>/dev/null || echo n/a)"
        echo "  lsm           : $(cat /sys/kernel/security/lsm 2>/dev/null || echo n/a)"
        echo "  nproc/mem     : $(nproc) vCPU / $(awk "/^MemTotal:/{printf \"%d MiB\", \$2/1024}" /proc/meminfo)"

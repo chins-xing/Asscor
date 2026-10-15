@@ -713,11 +713,17 @@ QI_DOCKER_A="$(log_bytes "$D/docker.log")"
 #     ⇒ 客人侧收到的命令串逐字就是 `bash -c bash -c rm -f /tmp/x`。
 #     Task 16 一度按"这是多包了一层"去改（把外层 `bash -c` 去掉），**实测与理解不符、已还原**；
 #     这条断言就是那次澄清的钉子（改成去掉外层的样子必须让它红）。
-if grep -qx 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -l asc -- asc-vm910 bash -c bash -c rm -f /tmp/x' "$SSH_LOG"; then
+#
+#  4. 用户那一格必须是 **`-o User=asc`** 而不是 `-l asc`（Task 16 两层对齐）：这一格是
+#     `ssh` 与 `scp` **共用**的，而 `scp -l <值>` 是**带宽上限** ⇒ 原来是"bash 层用 -l、
+#     Go 层用 -o User="的分歧（Go 侧 Task 15 改过、bash 侧没跟上）。断言里把这一格写死，
+#     两层从此必须同源（改回 `-l` 必须让本用例红）。
+if grep -qx 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o User=asc -- asc-vm910 bash -c bash -c rm -f /tmp/x' "$SSH_LOG"; then
   ok "qemu exec 走 ssh 且目标名由 vmid 推出来（asc-vm910）"
   ok "qemu exec 的命令串与调用点写的**逐字一致**（\`bash -c\` 那两格是调用方给的，不是多包一层）"
+  ok "登录用户那一格是 \`-o User=<用户>\`（**不是** \`-l\`：scp 会把 -l 当带宽上限）—— 与 Go 侧同源"
 else
-  fail "qemu exec 形态不对（期望整行：ssh <连接参数> -- asc-vm910 bash -c bash -c rm -f /tmp/x）"; cat "$SSH_LOG"
+  fail "qemu exec 形态不对（期望整行：ssh <连接参数含 -o User=asc> -- asc-vm910 bash -c bash -c rm -f /tmp/x）"; cat "$SSH_LOG"
 fi
 if grep -q '^scp .* -O /opt/payload asc-vm910:/tmp/sandcat' "$SCP_LOG"; then
   ok "qemu push 走 scp（含 \`-O\` 强制 legacy SCP 协议）"
