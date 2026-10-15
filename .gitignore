@@ -123,3 +123,24 @@ certs/
 ssam-lib/.git/
 prism-lib/.git/
 
+# Session artifacts (task briefs / reports / verdicts / surveys produced while
+# working with the AI agent). These are process artifacts, not deliverables,
+# and must never enter the repository.
+#
+# Why this rule exists even though the directory already ignores itself:
+# the exclusion used to live ONLY in .superpowers/sdd/.gitignore (a single `*`),
+# and that file is itself untracked -> deleting or re-cloning the directory
+# removes the rule, at which point everything under it shows up as untracked
+# and ONE `git add -A` swallows it all. Task 12 made the rule explicit here.
+#
+# NOTE: this is `.superpowers/` (leading dot, project root). It is a DIFFERENT
+# path from `docs/superpowers/`, which holds *tracked* design/plan documents
+# and must stay tracked. Do not widen this rule.
+.superpowers/
+
+# Untracked local experiment config. Holds the C2 API key and the substrate
+# address used by the edge-factor pipeline. It lives OUTSIDE the repository
+# (e.g. ~/.config/asscor/edgeexp.local.env) -- this rule only guards against
+# someone copying it in by accident.
+edgeexp.local.env
+
