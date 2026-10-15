@@ -659,9 +659,18 @@ func qemuSSHConnArgs() ([]string, error) {
 	}
 	if strings.ContainsAny(user, " \t\n") {
 		return nil, fmt.Errorf("节点内采集：%s 不能含空白（收到 %q）—— "+
-			"它会被拼进 `user@host`，含空白时拼出来的目标与操作者写的**不是一个**", qemuSSHUserEnv, user)
+			"它会被原样交给 ssh/scp 的 User 选项，含空白时连到的那台与操作者写的**不是一个**",
+			qemuSSHUserEnv, user)
 	}
-	args = append(args, "-l", user)
+	// ⚠️ **用 `-o User=<用户>`，不许用 `-l <用户>`**（Task 15 真机实测，这一条是 qemu 基质
+	// 端到端此前**从没跑通过**的直接原因）：这一组参数是 `ssh` 与 `scp` **共用**的，而两个
+	// 二进制对 `-l` 的解释**完全不同** ——
+	//   · `ssh  -l <用户>` = 登录名（也就是这里的本意）；
+	//   · `scp  -l <值>`   = **带宽上限**（`limit`，要的是数字）⇒ `scp … -l asc …` 直接
+	//     报 `usage: scp [-346ABCOpqRrsTv] …`，而这条 usage **看不出**是 `-l` 的问题
+	//     （实测：把 `-l asc` 去掉、其余逐格不变，同一条 scp 立刻成功）。
+	// `-o User=<用户>` 对两者语义唯一（都是"把 User 交给底层 ssh"），故共用这一格是安全的。
+	args = append(args, "-o", "User="+user)
 
 	// 端口：**数字**语义，非数字一律响亮失败（`ssh -p abc` 自己会报，但那条错误看起来像
 	// "端口不对"，而真正的原因是环境变量写错）。
@@ -830,10 +839,14 @@ func runNodeCLI(bin string, args ...string) ([]byte, error) {
 			return nil, fmt.Errorf("节点内采集：ssh 失败: %s", detail)
 		}
 		if bin == substrateBinSCP {
-			// `scp -O <本地> <主机>:<目标>`（Task 13）：报出**本地文件**与**目标**，
+			// `scp <连接参数…> -O <本地> <主机>:<目标>`（Task 13）：报出**本地文件**与**目标**，
 			// 与 `pct push` 那一格同款（同一个失败在两种基质上的排障动作一样）。
-			if len(args) >= 3 {
-				return nil, fmt.Errorf("节点内采集：scp %s → %s 失败: %s", args[1], args[2], detail)
+			// ⚠️ 位置**不是** `args[1]`/`args[2]`（Task 15 实测）：连接参数排在 `-O 本地 目标`
+			// **之前**，故 `args[1]`/`args[2]` 是 `-o` 与它的取值 —— 实测报出来的是
+			// `节点内采集：scp BatchMode=yes → -o 失败: usage: scp …`，把"哪台机器、哪个文件"
+			// 这条唯一有用的信息换成了两段无意义的字符串。本地与目标恒定是**最后两格**。
+			if n := len(args); n >= 2 {
+				return nil, fmt.Errorf("节点内采集：scp %s → %s 失败: %s", args[n-2], args[n-1], detail)
 			}
 			return nil, fmt.Errorf("节点内采集：scp 失败（%s）: %s", strings.Join(args, " "), detail)
 		}

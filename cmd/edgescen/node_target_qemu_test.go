@@ -152,12 +152,17 @@ func qemuTestKey(t *testing.T) string {
 //
 // 断言写成"整段逐格相等"而不是"包含这几项"：连接参数一旦被追加/改序，包含式断言照样绿，
 // 而 ssh 的行为可能已经变了（例如 `-o` 被顶到 `--` 之后 ⇒ 那一格变成**远程命令**）。
+//
+// ⚠️ 用户那一格是 `-o User=<用户>` 而**不是** `-l <用户>`（Task 15 真机实测改）：
+// 这一段是 `ssh` 与 `scp` **共用**的，而 `scp -l <值>` 是**带宽上限**（要数字）⇒
+// `scp … -l asc …` 会直接报 `usage: scp [-346ABCOpqRrsTv] …`，qemu 基质因此**从来没有**
+// 跑通过端到端。这个用例正是那条不变量的守卫：把 `-l` 改回来必须让它红。
 func sshConnPrefix(user string) []string {
 	return []string{
 		"-o", "BatchMode=yes",
 		"-o", "StrictHostKeyChecking=accept-new",
 		"-o", "ConnectTimeout=10",
-		"-l", user,
+		"-o", "User=" + user,
 	}
 }
 
@@ -557,8 +562,14 @@ func TestQEMUDefaultsAreAppliedWhenEnvIsEmpty(t *testing.T) {
 		t.Fatalf("全空环境变量下必须能解析（默认值生效）: %v", err)
 	}
 	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, " -l "+qemuSSHUserDefault+" ") {
-		t.Errorf("用户默认值必须是 %q，实际 %v", qemuSSHUserDefault, args)
+	// 用户那一格是 `-o User=<用户>`（Task 15 起；见 sshConnPrefix 的说明 —— `-l <用户>`
+	// 在 scp 上是带宽上限，是 qemu 基质端到端此前跑不通的直接原因）。
+	if !strings.Contains(joined, " -o User="+qemuSSHUserDefault+" ") {
+		t.Errorf("用户默认值必须是 %q（以 `-o User=` 下发），实际 %v", qemuSSHUserDefault, args)
+	}
+	// 反向判据：连接参数里**不得**再出现 `-l`（它只对 ssh 有效、对 scp 是另一种含义）。
+	if strings.Contains(joined, " -l ") {
+		t.Errorf("连接参数里**不得**出现 `-l`（scp 会把它当带宽上限并直接报 usage），实际 %v", args)
 	}
 	if strings.Contains(joined, " -p ") {
 		t.Errorf("端口没给时**不得**出现 `-p`，实际 %v", args)
