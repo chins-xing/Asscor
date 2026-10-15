@@ -44,6 +44,15 @@ bc39ebcf4568f1c223c3922a148d756672a992d3  6b499f759e53a0a5c63bca724770be20b1f5b5
 99a290f8a5f1c08165b31e90d350fc2c75253c54  296bf021f624141d6206fd61ae85b3b321c0abee  .github/workflows/ci.yml  # ARC 的 MODULE_TAGS 含 edgeexp，且含两个研究线工具的构建与测试步骤
 
 # ---- 忽略规则与对外文档（**永不一致** 或 按分支表述）----
-51633f7acf011d774b87a9f6b0e393c1445fefd7  e5f12282dbf31166fe8d963f0eb3682d1c404380  .gitignore  # ARC 用 lunwen/* 白名单（可跟踪 lunwen/paper、lunwen/clab-lab 等）；main 必须整目录忽略 ⇒ 永不一致
+bfa7717647cc93129e42df0a02a96c4b1fbf457d  e5f12282dbf31166fe8d963f0eb3682d1c404380  .gitignore  # ARC 用 lunwen/* 白名单（可跟踪 lunwen/paper、lunwen/clab-lab 等）；main 必须整目录忽略 ⇒ 永不一致
+
+# ---- 只在 ARC 侧存在的研究线判据脚本（main 上不存在，记 ABSENT）----
+# 为什么放在 `scripts/` 而不是 `docs/`：它们是**可执行判据**、不是文档，而 `scripts/`
+# 是底座路径集里唯一"放脚本"的位置。放这里的代价是它们会出现在一致性检查的漂移面里
+# ⇒ **必须在此登记**，否则检查会报"清单外未解释漂移"（红）。
+8f5b5ff696bdbd0307b79de92f90382565a18a5b  ABSENT  scripts/check-main-base-consistency.sh  # 底座一致性检查（裁定「乙」的判据）；研究线的分支治理工具，main 侧不需要
+e053fac96015c4f18756c7070f744af4e3ce89b9  ABSENT  scripts/main-base-drift-manifest.txt  # 上一条的输入：**双侧登记**的有意差异清单（ARC 侧登记的 sha 指向上一个提交的版本；本清单改一次内容，那个 sha 就要跟着更新一次 —— 见「维护须知」第 1 条）
+
+# ---- 对外文档（按分支表述；除横幅与结构树外逐字相同）----
 8412e354c6070766c02af3516f4af3c84e4e95d1  35aa596ddff072e51720da40f041fe53c3af3550  README.md  # 仅横幅与结构树按分支表述（ARC 列研究线资产，main 列产品线）；其余逐字相同
 f3786c8012c512a41d5565d7ea913f7c497cb336  f841e1c1c7a48c2be05ea6a5b7f3e9c7cc77639f  README_EN.md  # 同上（英文版）
