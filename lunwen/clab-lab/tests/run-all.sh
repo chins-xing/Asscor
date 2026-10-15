@@ -34,6 +34,15 @@
 #                                   已改成"本段没让它增长"的逐字节比较）；
 #                                另有一条 `bash -c bash -c` 曾被当成双重包装 ⇒ Task 16 实测澄清
 #                                **它是正确形态**（两格是调用方给的），并把这条钉进了判据。）
+#                              ⚠️⚠️ **Task 17 在真机上推翻了 Task 16 上面那句澄清**：
+#                                `ssh` 把 `-- <主机>` 之后的格**用空格拼起来、不做引用转义**
+#                                ⇒ `bash -c "$*"` 里那对引号到不了客人侧；客人侧登录 shell 重新
+#                                分词后 `bash -c` 的脚本只有**一个词** `bash` ⇒ 真实执行的是
+#                                无参 `bash`（读 stdin），**命令一次也没跑**（rc 还是 0）。
+#                                修法：`printf '%q '` 逐格引用后作为**一格**交给 ssh。
+#                                ⇒ 本组 78 → **83**：按错模型写的那 1 格换掉、新增 5 格
+#                                  （exec 的引用形态 / 回归钉 / I-E 行为判据 /
+#                                   名字→vmid 解析 2 格 / `lab_instance_exists` 的名字分支 1 格）。
 #   lab-diff              31
 #   test-chain-derivation  8
 #   test-edge-probe       20（它按 `ok` 行计数，没有 PASS= 汇总行）
@@ -52,7 +61,7 @@ export REPO
 
 declare -A EXPECT=(
   [test-agent-readiness]=6
-  [test-edge-lab]=78
+  [test-edge-lab]=83
   [test-edge-probe]=20
   [lab-diff]=31
   [test-chain-derivation]=8
@@ -93,7 +102,7 @@ done
 
 echo
 if [ "$TOTAL_FAIL" -eq 0 ]; then
-  echo "run-all: 全部通过（6 组：6/78/20/31/8/12）"
+  echo "run-all: 全部通过（6 组：6/83/20/31/8/12）"
   exit 0
 fi
 echo "run-all: $TOTAL_FAIL 组未达标 —— 见上面的尾部输出" >&2
