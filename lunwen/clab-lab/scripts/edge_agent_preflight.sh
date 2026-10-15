@@ -36,7 +36,8 @@
 # ## 环境变量
 #   EDGEEXP_TARGET           目标节点名（基质层的名字，默认 asc-tgt-c2）
 #   EDGEEXP_SUBSTRATE        clab（默认）| lxd | pve（决定 pid 怎么取）
-#   EDGEEXP_CALDERA_URL/KEY  C2（默认 http://192.168.30.2:8888 / ADMIN123）
+#   EDGEEXP_CALDERA_URL/KEY  C2（URL 默认 http://192.168.30.2:8888；**KEY 无默认值** ——
+#                            取法见 scripts/edge_c2_key.sh：环境变量 → 未跟踪的本地配置 → 响亮失败）
 #   EDGEEXP_AGENT_FRESH_S    心跳新鲜度上限（秒，默认 180）
 #   EDGEEXP_AGENTS_FIXTURE   **离线测试缝**：用 JSON 文件里的 agent 列表替掉真实 API
 #                            （判据同源；离线夹具用它做正反两向证据）
@@ -44,13 +45,21 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# 这里原先有一行死变量 `REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"`（Task 14 Step 4 清掉）：
+# ① 全文件只出现这一次赋值、**没有任何读取点**；② 而且它少算一层（`$SCRIPT_DIR/../..` = `<repo>/lunwen`
+# 而不是仓库根 —— 仓库根是往上**三层**，见 tests/ 与 edge_prebatch_check.sh 的同一口径）。
+# 因为无人使用，这个错一直没现形；留着它只会让下一个人以为"这里有个能用的仓库根"。
 # shellcheck source=scripts/edge_lab.sh
 . "$SCRIPT_DIR/edge_lab.sh"
 
 TARGET="${EDGEEXP_TARGET:-asc-tgt-c2}"
 CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://192.168.30.2:8888}"
-CALDERA_KEY="${EDGEEXP_CALDERA_KEY:-ADMIN123}"
+# C2 API key：**不再有明文默认值**（Task 14 脱敏 D2）。取值顺序与三条红线见 edge_c2_key.sh；
+# 缺 key 时它**当场 exit 2** —— 本脚本的全部判据都建立在"从 C2 取到 agent 列表"之上。
+# shellcheck source=scripts/edge_c2_key.sh
+. "$SCRIPT_DIR/edge_c2_key.sh"
+edge_require_c2_key edge_agent_preflight.sh
+CALDERA_KEY="$EDGEEXP_CALDERA_KEY"
 FRESH="${EDGEEXP_AGENT_FRESH_S:-180}"
 CLEAN=0
 [ "${1:-}" = "--clean" ] && CLEAN=1
