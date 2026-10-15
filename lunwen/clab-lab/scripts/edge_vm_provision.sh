@@ -470,7 +470,15 @@ create_vm() {
   # 这里不去"防"操作者显式传它（那是操作者的决定），但默认值与本脚本的所有示例都不用它。
   run qm importdisk "$vmid" "$CLOUD_RAW_LOCAL" "$DISK_STORAGE" >/dev/null
   local diskref
-  diskref="$(qm config "$vmid" 2>/dev/null | awk -F': *' '$1=="unused0"{print $2; exit}')"
+  # ⚠️ **不许用 `awk -F': *' '$1=="unused0"{print $2}'`**（Task 15 实测踩坑，PVE 9.2.2）：
+  # 卷引用**自身就带冒号**（`local-lvm:vm-910-disk-0`），按 `:` 切分时 `$2` 会在**第一个**
+  # 冒号处被截断成 `local-lvm`。于是下一行变成
+  #   qm set 910 --scsi0 "local-lvm,discard=on,ssd=1,iothread=1"
+  # 而 `qm` 回 `400 Parameter verification failed. / scsi0: invalid format … unable to parse
+  # volume ID 'local-lvm'` —— `set -e` 让整轮建机**当场中止**，留下一台"有 `unused0`、
+  # 没有 `scsi0`、`qm list` 里 BOOTDISK=0.00"的半成品 VM（看起来只是"卡住了"）。
+  # `sed` 取"键之后**整段**值"，没有"值里含分隔符"这个形状。
+  diskref="$(qm config "$vmid" 2>/dev/null | sed -n 's/^unused0: //p' | head -n1)"
   [ -n "$diskref" ] || diskref="$DISK_STORAGE:vm-$vmid-disk-0"
   run qm set "$vmid" --scsihw virtio-scsi-single --scsi0 "$diskref,discard=on,ssd=1,iothread=1"
   run qm resize "$vmid" scsi0 "$DISK_SIZE"
