@@ -1,0 +1,49 @@
+# ============================================================================
+# ASSCOR 底座一致性：有意差异清单（双侧登记，v3 格式）
+# ----------------------------------------------------------------------------
+# 用途：`scripts/check-main-base-consistency.sh` 的**输入**。
+#       裁定来源：用户 2026-09-13 裁定「乙」——
+#         底座路径集合 减去 本清单 之后，main 与 ARC 必须逐字节相同；
+#         清单内的差异视为**有意**，逐条核对，且**两侧都比对**。
+#
+# 格式： <登记 blob sha(ARC 侧 HEAD)>  <登记 blob sha(main 侧 BASE_REF) | ABSENT>  <路径>  # 理由
+#   · 两侧都有的文件记 main 侧 blob sha；
+#   · 只在 ARC 有的文件记字面量 ABSENT（表示「main 上不存在」）；
+#   · 任一侧与登记不符都报红（ABSENT 变成"确实存在"也算不符）。
+#
+# ⚠️ 维护须知：
+#   1. 本文件里的 ARC 侧 sha 是**提交相关**的。任何**改动底座文件**的提交之后，
+#      都必须重跑 `scripts/check-main-base-consistency.sh` 并按输出更新 ARC 侧登记，
+#      否则会报「[登记失效] … ARC侧(登记… 实际…)」。
+#   2. **不要**把研究线专属路径写进来（它们在检查的 `EXCL` 负路径里，本来就排除在外）。
+#      本清单只登记「**底座路径内**有意不同」的条目。
+#   3. 新增一条时**必须**写理由（行尾 `# …`）——没有理由的登记等于没登记。
+#
+# 生成方式（下次更新时照此重跑）：
+#   git diff --name-only main HEAD -- <底座路径…> <负路径…> | sort
+#   然后对每条取 `git rev-parse HEAD:<路径>` 与 `git rev-parse main:<路径>`。
+# ============================================================================
+
+# ---- 研究接线（底座文件被研究线改动过，按规则④留在 ARC）----
+eff549db9d44fb4cc4ada8f97109e890a5ce808a  17e2bf6a0b04603e5963b2e49d3b6dd58240b835  internal/model/model.go  # EdgeFactors / EdgeFactorObservation 的线上契约（研究线新增）
+35a2077e06a6c9f09980d529260166d48dbaa47f  d5fc5b4b45bfe2525a8945654e6918cb31d2cdaa  internal/engine/assessor.go  # legacy 评分路径回填观测链（evaluateEdgeFactorChain）
+42240d69ba0b2f8482e5e85ef62161f464a7183a  8baf132115796ccb46d4ce67e801ab9c980a3d66  internal/engine/ssam/adapter_engine.go  # 插件路径的合成策略钩子回填观测链
+5f1375889f899a3dd1bbd5ffadd56f2409c980e4  fd0a385660b1e5c5140d7160ffa7d0f2b50b567b  internal/kernel/persistence_types.go  # 落盘结构增 additive 字段 EdgeFactorChain
+77cc2f961e3a46f2bff6276268a8bddde676fede  b842a11b9cd76672b24b0bbcd0a7dfcf57e6ed50  internal/persistence/persistence.go  # 落盘时透出观测链
+
+# ---- 研究线的测试（在底座路径内，但属研究接线的测试）----
+0f8a93ce7e6d79f3fc7032e7a9282845d9015263  ABSENT  internal/engine/assessor_chain_test.go  # 观测链在 legacy 路径的研究线新测试（main 上不存在）
+7adb8f52d67360a1ec93c1b77ad064163d04f290  ABSENT  internal/engine/ssam/edgefactor_chain_test.go  # 观测链在插件路径的研究线新测试（main 上不存在）
+e1f36206ad5873723040b343630c974bdc6355e1  ABSENT  internal/kernel/persistence_types_test.go  # 观测链在落盘层的研究线新测试（main 上不存在）
+b7bd641ed381329328137dd4f2422546f42ef22b  ABSENT  internal/model/edgefactor_chain_test.go  # 观测链在契约层的研究线新测试（main 上不存在）
+05630b7943f29c3aefeed7f54ca2403d1e1ce39d  56829bd2f8f3f00d3384574a1c4e275ebc028834  internal/persistence/persistence_test.go  # 观测链落盘的往返测试（ARC 版多研究线断言）
+01a6de69ed85f540dd9810a8874f7b13f6ab8d26  6cd6894cfdfbc8b539005a90572b9c471020581b  internal/config/configs_templates_test.go  # ARC 版多 4 条读研究线契约（configs/edgeexp/、lunwen/）的用例
+
+# ---- 构建面（研究线目标只在 ARC 上构建/测试）----
+bc39ebcf4568f1c223c3922a148d756672a992d3  6b499f759e53a0a5c63bca724770be20b1f5b5ae  scripts/build.sh  # ARC 的 BINARIES 多 cmd/edgescen / cmd/edgecompare 交叉编译目标
+99a290f8a5f1c08165b31e90d350fc2c75253c54  296bf021f624141d6206fd61ae85b3b321c0abee  .github/workflows/ci.yml  # ARC 的 MODULE_TAGS 含 edgeexp，且含两个研究线工具的构建与测试步骤
+
+# ---- 忽略规则与对外文档（**永不一致** 或 按分支表述）----
+51633f7acf011d774b87a9f6b0e393c1445fefd7  e5f12282dbf31166fe8d963f0eb3682d1c404380  .gitignore  # ARC 用 lunwen/* 白名单（可跟踪 lunwen/paper、lunwen/clab-lab 等）；main 必须整目录忽略 ⇒ 永不一致
+8412e354c6070766c02af3516f4af3c84e4e95d1  35aa596ddff072e51720da40f041fe53c3af3550  README.md  # 仅横幅与结构树按分支表述（ARC 列研究线资产，main 列产品线）；其余逐字相同
+f3786c8012c512a41d5565d7ea913f7c497cb336  f841e1c1c7a48c2be05ea6a5b7f3e9c7cc77639f  README_EN.md  # 同上（英文版）

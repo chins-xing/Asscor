@@ -1,9 +1,16 @@
 # ASSCOR 资产归属表（`main` vs `ASSCOR-Research-Core`）
 
-> **快照**：`main` = `fdb116e`（2026-09-13 分叉后）、`ASSCOR-Research-Core`(ARC) = `028cfd5`
-> **规模实测**：main **661** 文件 / ARC **1014** 文件；**ARC 独有 353 个**、**main 独有 0 个**
+> **快照（2026-10-15 重取）**：`main` = `aef84de`、`ASSCOR-Research-Core`(ARC) = `5eaedec`
+> **规模实测**：main **662** 文件 / ARC **1098** 文件；**ARC 独有 436 个**、**main 独有 0 个**
 > ⇒ 两分支的文件集是**包含关系**（main ⊂ ARC），差异只有"ARC 独有"与"共有但内容不同"两种。
+> **分叉点**（merge-base）= `df8342e`；此后 main **605** 提交、ARC **706** 提交。
 > **本表的依据**：用户 2026-09-13 的四条分支规则（下 §0）+ 可复跑判据（§4）。
+>
+> ⚠️ **本节数字是快照，会随提交漂移**。要拿当前值请照 §4 的**重取命令**现算，
+> **不要**把这里的数字当成现状引用。
+> 📌 **上一条快照**（2026-09-13 分叉后）：`main` = `fdb116e` / ARC = `028cfd5`；
+> main 661 / ARC 1014 文件、ARC 独有 353 个。两版之间 ARC 增加 **84** 个文件
+> （里程碑 B 的采集器、离线工具、离线夹具与实验数据）。
 
 ---
 
@@ -18,16 +25,18 @@
 
 ---
 
-## 1. ARC 特有资产（main **不**持有，353 个文件）
+## 1. ARC 特有资产（main **不**持有，**436** 个文件）
+
+> 文件数为 **2026-10-15 快照**（`git ls-tree -r --name-only` 双侧比对的结果，见 §4 重取命令）。
 
 | 路径 | 文件数 | 内容 | 为什么只留 ARC |
 |---|---|---|---|
-| `lunwen/clab-lab/` | 213 | 实验基质：拓扑 `asscor.clab.yml`、`scripts/edge_*.sh`（矩阵/复位/攻击/采集/探针/基质层/目标准备）、`data/edgefactors/` 数据集与 `run.json`、`kernel-config.ini`、`experiments-final/` | 研究线实验资产（含真实攻防数据） |
+| `lunwen/clab-lab/` | **293** | 实验基质：拓扑 `asscor.clab.yml`、`scripts/edge_*.sh`（矩阵/复位/攻击/采集/探针/基质层/目标准备/跑批前置）、`data/edgefactors/` 数据集与 `run.json`、`kernel-config.ini`、`experiments-final/`、`tests/`（六组离线夹具） | 研究线实验资产（含真实攻防数据） |
 | `lunwen/attachment/` | 68 | 评审/送审附件包（含 `bin/` 已忽略） | 论文送审材料 |
 | `lunwen/paper/` | 18 | MDPI preprint 版 + article 版 tex/PDF、论文 md、模板 | 论文（未发表） |
 | `lunwen/research-core/` | 11 | 研究核心素材（设计白皮书、攻击者模型等） | 研究过程材料 |
 | `cmd/edgecompare/` | 14 | 离线重算/对比/拟合工具（**全部**带 `//go:build edgeexp`） | 研究线工具（消费实验记录） |
-| `cmd/edgescen/` | 10 | 实验采集器（tag `expr,engine,checks`） | 研究线工具（产出实验记录） |
+| `cmd/edgescen/` | **13** | 实验采集器（tag `expr,engine,checks`） | 研究线工具（产出实验记录） |
 | `configs/edgeexp/` | 4 | 四候选实验模板（`m0-baseline`/`vector`/`graph`/`chain`） | 研究线配置 |
 | `docs/clab-lab/` | 3 | 实验室文档 | 研究 |
 | `docs/superpowers/plans/2026-09-08-edge-factor-coupling.md`<br>`…/2026-09-08-entropy-pack.md`<br>`…/2026-09-12-edge-factor-coupling-milestone-b.md` | 3 | 方向② 里程碑 A/B 计划、方向③ 熵包计划 | 研究线过程文档（同目录的 `2026-08-21-secure-mode.md` 属**产品线**，两侧都有） |
@@ -36,6 +45,7 @@
 | `docs/TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md` | 1 | 拓扑蓝图 | 用户裁定撤出。**撤出时暴露的悬空引用已修**：`internal/kernel/topo_types.go` 与 `internal/topology/topology.go` 的注释原本指向该文档 ⇒ 已在**两分支同步**改为不引用（`f9d96d1`），因此这两处**不产生新的有意差异**（两侧仍逐字节相同） |
 | `internal/edgeexp/` | 2 | 共享 JSONL 契约（`Record`/`Validate`/`MarshalRecord`） | 研究线契约（`cmd/edgescen`+`cmd/edgecompare` 共用） |
 | `internal/engine/assessor_chain_test.go`<br>`internal/engine/ssam/edgefactor_chain_test.go`<br>`internal/kernel/persistence_types_test.go`<br>`internal/model/edgefactor_chain_test.go` | 4 | 观测链在 legacy/插件/落盘/契约四处的**研究线新测试** | 研究接线的测试（被测代码差异见 §3） |
+| `docs/experiments/` | 3 | 本方向的**三份标准文档**：环境画像白皮书、实验技术文档与操作手册、审计归档与裁定台账 | 研究线的可交付文档（此前只散落在记忆与会话产物里 ⇒ 外人看不到） |
 
 ---
 
@@ -90,12 +100,42 @@
 
 ## 4. 复跑判据（每次要动 main 之前跑一次）
 
+> ✅ **判据的产物已在仓内**（2026-10-15 起）：
+> `scripts/check-main-base-consistency.sh`（检查脚本）+ `scripts/main-base-drift-manifest.txt`（有意差异清单）。
+> 此前这两个文件只存在于**会话产物目录**（未跟踪）⇒ **clone 者照做必然失败**，判据等于没有披露。
+
 ```bash
 # 在工作区（ARC 检出）里执行：
-MANIFEST=.superpowers/sdd/2026-09-12-edge-factor-coupling-milestone-b/main-base-drift-manifest.txt \
-BASE_REF=main \
-  bash .superpowers/sdd/2026-09-12-edge-factor-coupling-milestone-b/main-base-consistency-check.sh
+MANIFEST=scripts/main-base-drift-manifest.txt BASE_REF=main \
+  bash scripts/check-main-base-consistency.sh
 ```
+
+### 4.1 快照数字的重取命令（**不要引用本文的快照值**）
+
+```bash
+# 两分支的头与分叉点
+git merge-base main ASSCOR-Research-Core
+git rev-parse main ASSCOR-Research-Core
+git rev-list --count main ; git rev-list --count ASSCOR-Research-Core
+
+# 文件集规模与包含关系（ARC 独有 / main 独有）
+git ls-tree -r --name-only main | wc -l
+git ls-tree -r --name-only ASSCOR-Research-Core | wc -l
+comm -13 <(git ls-tree -r --name-only main | sort) \
+         <(git ls-tree -r --name-only ASSCOR-Research-Core | sort) | wc -l    # ARC 独有
+comm -23 <(git ls-tree -r --name-only main | sort) \
+         <(git ls-tree -r --name-only ASSCOR-Research-Core | sort) | wc -l    # main 独有
+
+# 逐目录的 ARC 独有文件数（本文 §1 那张表就是这么来的）
+comm -13 <(git ls-tree -r --name-only main | sort) \
+         <(git ls-tree -r --name-only ASSCOR-Research-Core | sort) \
+  | cut -d/ -f1-2 | sort | uniq -c | sort -rn
+
+# 底座漂移面（不提供清单时的原始输出）
+bash scripts/check-main-base-consistency.sh        # 不加 MANIFEST ⇒ 只报漂移面
+```
+
+### 4.2 清单的格式与语义
 
 清单是**双侧登记**（v3 起）：
 
@@ -112,7 +152,8 @@ BASE_REF=main \
 | **黄 exit=3** | 清单外逐字节一致；清单内 16 条有意差异，**两侧均与登记一致** | **裁定「乙」的合格终态** |
 | **红 exit=1** | ①出现**清单之外**的漂移 ②ARC 侧与登记不符 ③**main 侧与登记不符**（被改写 / 凭空出现）④清单行缺 main 侧登记 | 要么**消除**漂移（按规则② 上 main），要么**登记**（按规则④ 写理由与引入提交） |
 
-**当前实测状态（2026-09-13）**：`清单条目=16 active=16 stale=0`、`登记失效 ARC 侧=0 / main 侧=0`、**清单外未解释 = 0** ⇒ **黄 exit=3**。
+**当前实测状态（2026-10-15）**：`清单条目=16 active=16 stale=0`、`登记失效 ARC 侧=0 / main 侧=0`、**清单外未解释 = 0** ⇒ **黄 exit=3**。
+（2026-09-13 分叉后首次测得的是同一形态，当时对照分支是 `fdb116e`；本次对照 `aef84de`，结论未变。）
 （对照分叉前的 `df8342e` 会报 22 个漂移、其中 8 个未解释 ⇒ 红；那 8 个正是已按规则② 上 main 的 A 类产品侧修复。）
 
 ---
