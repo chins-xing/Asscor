@@ -91,7 +91,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="${EDGEEXP_TARGET:-}"
 POLICY_ON="${EDGEEXP_POLICY_ON:-0}"
 POLICY_RULE="${EDGEEXP_POLICY_RULE:-audit deny /etc/shadow r,}"
-CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
 # C2 API key：**不再有明文默认值**（Task 14 脱敏 D2）。取值顺序与三条红线见 edge_c2_key.sh；
 # 缺 key 时它**当场 exit 2** —— 本脚本要用 C2 判"目标上有没有活着的 agent"，判据不能降级。
 # ⚠️ 注意放置位置：`live_agent_paws` 是**被离线夹具整段抽出**执行的函数（tests/test-agent-readiness.sh），
@@ -99,6 +98,8 @@ CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
 # shellcheck source=scripts/edge_c2_key.sh
 . "$SCRIPT_DIR/edge_c2_key.sh"
 edge_require_c2_key edge_target_prepare.sh
+# C2 地址也在**取值之后**解析（理由同 edge_reset.sh：本地配置里通常同时给 KEY 与 URL）。
+CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
 CALDERA_KEY="$EDGEEXP_CALDERA_KEY"
 PAYLOAD="${EDGEEXP_SANDCAT_PAYLOAD:-/opt/caldera/plugins/sandcat/payloads/sandcat.go-linux}"
 AGENT_WAIT_S="${EDGEEXP_AGENT_WAIT_S:-180}"

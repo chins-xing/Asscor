@@ -52,12 +52,13 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
 # C2 API key：**不再有明文默认值**（Task 14 脱敏 D2）。取值顺序与三条红线见 edge_c2_key.sh；
 # 缺 key 时它**当场 exit 2** —— "三件实体都在且字段核对通过"这个判据必须真的问过 C2。
 # shellcheck source=scripts/edge_c2_key.sh
 . "$SCRIPT_DIR/edge_c2_key.sh"
 edge_require_c2_key edge_ttp_provision.sh
+# C2 地址也在**取值之后**解析（理由同 edge_reset.sh：本地配置里通常同时给 KEY 与 URL）。
+CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
 CALDERA_KEY="$EDGEEXP_CALDERA_KEY"
 command -v python3 >/dev/null 2>&1 || { echo "edge_ttp_provision: 缺少 python3" >&2; exit 2; }
 

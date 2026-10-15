@@ -49,12 +49,14 @@ RUN_D="$DATA_DIR/run.d"
 # shellcheck disable=SC2154  # lab_topology 由上面那行 source 赋值（shellcheck 不跨文件跟踪变量）
 TOPOLOGY="$lab_topology"
 TARGET="${EDGEEXP_TARGET_HOST:-host1}"
-CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
 # C2 API key：**不再有明文默认值**（Task 14 脱敏 D2）。取值顺序与三条红线见 edge_c2_key.sh；
 # 缺 key 时它**当场 exit 2** —— 复位拿不到 C2 就没法回答"agent 回连了没有"，不能降级继续。
 # shellcheck source=scripts/edge_c2_key.sh
 . "$SCRIPT_DIR/edge_c2_key.sh"
 edge_require_c2_key edge_reset.sh
+# C2 地址也在**取值之后**解析：未跟踪的本地配置里通常同时给 KEY 与 URL（见 edge_c2_key.sh），
+# 排在前面的话那行 URL 会被静默忽略 —— 于是"配置文件里改地址不生效"这种坑没人看得出来。
+CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
 CALDERA_KEY="$EDGEEXP_CALDERA_KEY"
 CALDERA_HOME="${EDGEEXP_CALDERA_HOME:-/opt/caldera}"
 CALDERA_BOOT_S="${EDGEEXP_CALDERA_BOOT_S:-240}"

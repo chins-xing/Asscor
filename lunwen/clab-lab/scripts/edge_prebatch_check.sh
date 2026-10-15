@@ -68,8 +68,7 @@ REPO="${EDGEEXP_REPO:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 # 换机器之后它会静默指向一个不存在或陈旧的目录，而错误现场看起来像"检出不完整"。真正只有
 # 跑批的人知道"这一次该用哪份检出"，所以这题**必须显式回答**（缺省 ⇒ 下面 [1/4] 判红给示例）。
 HEADCO="${EDGEEXP_HEAD_CHECKOUT:-}"
-CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://192.168.30.2:8888}"
-export EDGEEXP_CALDERA_URL="$CALDERA_URL"
+# ⚠️ 这一段必须在下面那两行 C2 地址**之前**（理由见那两行上面的注释）。
 # ---------------------------------------------------------------------------
 # C2 API key：**门禁红线**（Task 14 脱敏 D2）
 # ---------------------------------------------------------------------------
@@ -86,6 +85,12 @@ if edge_c2_key_source; then
   export EDGEEXP_CALDERA_KEY
   C2_KEY_OK=1
 fi
+# C2 地址在**取值之后**才解析：本地配置文件里通常**同时**写着 `EDGEEXP_CALDERA_KEY` 与
+# `EDGEEXP_CALDERA_URL`，而 source 是直接改环境变量 —— 若这两行排在前面，头部那行 `C2 : …`
+# 打的会是**还没被覆盖**的默认地址，而子脚本用的是配置文件里的地址（"看错了地方"那一类错，
+# 正是本入口存在的理由）。
+CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://192.168.30.2:8888}"
+export EDGEEXP_CALDERA_URL="$CALDERA_URL"
 export EDGEEXP_TARGET="${EDGEEXP_TARGET:-asc-tgt-c2}"
 # **基质必须跟着跑批走**：本入口是给 dl360gen9 的 **pve**（PVE CT）跑批用的（C2 的默认地址、
 # 目标默认值都已经是 pve 那一套）。不转发它时 `edge_agent_preflight.sh` 会退回默认的

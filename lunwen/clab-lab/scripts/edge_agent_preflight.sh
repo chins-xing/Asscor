@@ -53,12 +53,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/edge_lab.sh"
 
 TARGET="${EDGEEXP_TARGET:-asc-tgt-c2}"
-CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://192.168.30.2:8888}"
 # C2 API key：**不再有明文默认值**（Task 14 脱敏 D2）。取值顺序与三条红线见 edge_c2_key.sh；
 # 缺 key 时它**当场 exit 2** —— 本脚本的全部判据都建立在"从 C2 取到 agent 列表"之上。
 # shellcheck source=scripts/edge_c2_key.sh
 . "$SCRIPT_DIR/edge_c2_key.sh"
 edge_require_c2_key edge_agent_preflight.sh
+# C2 地址也在**取值之后**解析（理由同 edge_reset.sh：本地配置里通常同时给 KEY 与 URL）。
+CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://192.168.30.2:8888}"
 CALDERA_KEY="$EDGEEXP_CALDERA_KEY"
 FRESH="${EDGEEXP_AGENT_FRESH_S:-180}"
 CLEAN=0

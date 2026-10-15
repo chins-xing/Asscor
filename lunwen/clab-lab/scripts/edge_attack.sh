@@ -73,12 +73,13 @@ TOPOLOGY="${EDGEEXP_TOPOLOGY:-$LAB_DIR/asscor.clab.yml}"
 CONFIG="${EDGEEXP_CONFIG:-$REPO_ROOT/configs/edgeexp/m0-baseline.ini}"
 PLAYBOOK_ID="${EDGEEXP_PLAYBOOK_ID:-0f4c3c67-845e-49a0-927e-90ed33c044e0}"
 PLAYBOOK_NAME="${EDGEEXP_PLAYBOOK_NAME:-Discovery}"
-CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
 # C2 API key：**不再有明文默认值**（Task 14 脱敏 D2）。取值顺序与三条红线见 edge_c2_key.sh；
 # 缺 key 时它**当场 exit 2** —— 攻击侧拿不到 C2 就无法触发剧本，也派不出客观结果。
 # shellcheck source=scripts/edge_c2_key.sh
 . "$SCRIPT_DIR/edge_c2_key.sh"
 edge_require_c2_key edge_attack.sh
+# C2 地址也在**取值之后**解析（理由同 edge_reset.sh：本地配置里通常同时给 KEY 与 URL）。
+CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://127.0.0.1:8888}"
 CALDERA_KEY="$EDGEEXP_CALDERA_KEY"
 ATTACK_TIMEOUT_S="${EDGEEXP_ATTACK_TIMEOUT_S:-1800}"
 POLL_S="${EDGEEXP_POLL_S:-10}"
