@@ -52,6 +52,14 @@ EXCL=(
   ':!cmd/edgescen' ':!cmd/edgecompare' ':!cmd/exprunner'
   ':!cmd/decoyd' ':!cmd/tracecheck'
   ':!configs/edgeexp'
+  # 本套判据**自己**（检查脚本 + 它的输入清单）不是"底座"，而是研究线的分支治理工具
+  # —— 两分支共有但内容不同的清单不适用于它们，它们是**只在 ARC 侧存在**的新文件。
+  # 若把它们留在漂移面里，清单就必须登记自己，而登记内容里含自己的 sha ⇒
+  # **改一次清单、sha 就变一次、永远追不上**（实测：连追 8 轮仍不收敛）。
+  # 故在这里显式排除；理由是"它们不是底座"，不是为了把红项藏起来。
+  # （`scripts/build.sh` 是**真底座**，仍留在面里并另行登记。）
+  ':!scripts/check-main-base-consistency.sh'
+  ':!scripts/main-base-drift-manifest.txt'
 )
 # A 类：纯产品侧底座变更（裁定②「第一时间进 main」）—— 用于给红项打标签
 A_CLASS=(
