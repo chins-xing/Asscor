@@ -736,10 +736,35 @@ if BASIS == 'targeted_ttp':
                  f'并注意**组名只有一处来源**：prepare 拉起 agent 时用的也是 EDGEEXP_ATTACK_GROUP '
                  f'（默认 t4d-ttp），本脚本收到的则是 {ATTACK_GROUP!r} —— 两侧必须是同一个值，'
                  f'否则 agent 在别的组里活着、而 operation 指向本组')
-        off_host = [(a.get('paw'), a.get('host')) for a in group_alive if a.get('host') != ATTACK_HOST]
+        # ★ 闸门② **Task 17 修掉了一处恒不发生**（真机实测）：
+        # 原文是 `off_host = [a for a in group_alive if a['host'] != ATTACK_HOST]`，而
+        # `group_alive` 的判据是 `agent_alive(a, …)`，`agent_alive` 的第一行就是
+        # `if ATTACK_HOST and a['host'] != ATTACK_HOST: return False` ⇒ **这个列表里根本不可能
+        # 出现非目标主机** ⇒ 判据恒为空集、**永远不会红**（闸门②是死代码）。
+        # 后果在 Task 17 的现场**真实发生了**：VM 靶机（asc-vm910）与上一轮遗留的 CT 904 agent
+        # （asc-tgt-c2，同组 t4d-ttp、心跳新鲜）同时在册，operation 会**同时**打在两台机器上 ——
+        # 而 `compromised` 只看"目标 ability 的 link 里有没有 status==0"，**不看 paw 属于哪台机器**
+        # ⇒ 一条"CT 上成功"的 link 会把 VM 臂的标签写成 `compromised=true`（策略在的臂也会），
+        # 两臂因此**读数相同**、而记录看起来完全正常。
+        # 修法：闸门② 的判据换成"**该组里有没有别的机器上 trusted+心跳新鲜 的 agent**"
+        # （与闸门③ 的 `other_host_live_agents` 同一条判据 —— 那里早就是这么写的，
+        #  两条闸门的宽严必须一致，否则"声明了组"反而比"没声明组"更松）。
+        off_host = []
+        for a in agents:
+            if a.get('group') != ATTACK_GROUP:
+                continue
+            if a.get('host') == ATTACK_HOST:
+                continue
+            if not a.get('trusted'):
+                continue
+            if (parse_ts(a.get('last_seen')) or 0) >= time.time() - AGENT_FRESH_S:
+                off_host.append((a.get('paw'), a.get('host')))
         if off_host:
             fail(f'basis=targeted_ttp：投送组 {ATTACK_GROUP} 里还有**非目标主机** {ATTACK_HOST} 的活 agent {off_host} —— '
-                 f'目标 TTP 的成功可能来自别的机器，标签会失效')
+                 f'目标 TTP 的成功可能来自别的机器，标签会失效。'
+                 f'处置：给**本轮的靶机**单独分组（在跑批环境里同时改 '
+                 f'`EDGEEXP_ATTACK_GROUP`（攻击侧）与 `edge_target_prepare.sh` 拉起 agent 用的同一个变量），'
+                 f'使 operation 的投送范围**可证明**只到目标机。')
     else:
         others = other_host_live_agents(agents)
         if others:

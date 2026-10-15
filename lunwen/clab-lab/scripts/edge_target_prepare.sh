@@ -321,8 +321,13 @@ CFG
 qemu_install_controls() {
   local missing="$1" waited=0
   echo "edge_target_prepare: 缺控制包 [$missing] ⇒ 在 VM 内 apt-get 安装（后台 + 轮询，最长 ${APT_TIMEOUT_S}s）"
+  # ⚠️ **日志必须在客人侧重定向**（Task 17 实测踩到）：调用点那条 `> /tmp/edgeexp-vm-harden.out`
+  # 重定向的是**宿主上的 ssh 客户端**，而 `lab_target_exec_detached` 的脱离命令自带
+  # `>/dev/null 2>&1` ⇒ apt 的输出**一个字都没有留下来**。超时的诊断信息因此只剩
+  # "900s 内没有装完" —— 而真正的原因（取不到包/依赖冲突/锁被占）无从判断。
   cat > /tmp/edgeexp-vm-harden.sh <<'HARDEN'
 #!/bin/bash
+exec >/tmp/edgeexp-vm-harden.log 2>&1
 set -x
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -340,9 +345,8 @@ HARDEN
       break
     fi
     if [ "$waited" -ge "$APT_TIMEOUT_S" ]; then
-      echo "edge_target_prepare: VM 内 apt 在 ${APT_TIMEOUT_S}s 内没有装完，见 /tmp/edgeexp-vm-harden.out 尾部：" >&2
-      tail -20 /tmp/edgeexp-vm-harden.out >&2 || true
-      lab_target_exec "$TARGET" sh -c 'tail -20 /tmp/edgeexp-vm-harden.log 2>/dev/null' >&2 2>/dev/null || true
+      echo "edge_target_prepare: VM 内 apt 在 ${APT_TIMEOUT_S}s 内没有装完，见 **VM 内** /tmp/edgeexp-vm-harden.log 尾部：" >&2
+      lab_target_exec "$TARGET" sh -c 'tail -30 /tmp/edgeexp-vm-harden.log' >&2 2>/dev/null || true
       return 1
     fi
     sleep 10
