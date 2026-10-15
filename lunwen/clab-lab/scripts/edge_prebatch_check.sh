@@ -34,10 +34,20 @@
 #   bash edge_prebatch_check.sh --strict-agents # 有残留 agent 也算 NO-GO
 #
 # 环境变量：
-#   EDGEEXP_HEAD_CHECKOUT   干净 HEAD 检出（默认 /root/t6/t8/head）；必须**真的等于 HEAD**
-#                           （有未提交改动 ⇒ 直接判红："HEAD 构建"名不副实）
+#   EDGEEXP_HEAD_CHECKOUT   干净 HEAD 检出。**没有默认值**（Task 14 修 D3）：它是"这一次
+#                           跑批要用哪份检出"的信息，只有跑批的人知道 —— 给默认值等于把
+#                           一个**陈旧路径**伪装成"约定"；缺省时本入口**响亮失败**并给示例。
+#                           判据见下面 [1/4]：`git -C … rev-parse --git-dir`（**能认 worktree**；
+#                           旧的 `[ -d "$HEADCO/.git" ]` 把 git worktree 的 `.git` **文件**
+#                           当成"不是仓库"⇒ 对一份完全正常的检出误报 NO-GO）+ 有未提交改动
+#                           直接判红（这条加固保留）。
 #   EDGEEXP_REPO            跑批工作区（默认：本脚本所在**仓库根** `<repo>` = `$SCRIPT_DIR/../../..`）
-#   EDGEEXP_CALDERA_URL/KEY C2（默认 http://192.168.30.2:8888 / ADMIN123）
+#   EDGEEXP_CALDERA_URL     C2 API（默认 http://192.168.30.2:8888）
+#   EDGEEXP_CALDERA_KEY     C2 API key。**没有默认值**（Task 14 修 D2/门禁红线）：取法见
+#                           scripts/edge_c2_key.sh —— 环境变量 → 未跟踪的本地配置 → 缺则 NO-GO。
+#                           ⚠️ 本入口此前 `export EDGEEXP_CALDERA_KEY="${…:-<明文默认值>}"`
+#                           **自己把 key 补上**，于是"缺 key"
+#                           永远不可能让它 NO-GO —— 那是门禁被自己绕过，已删除。
 #   EDGEEXP_TARGET          目标节点名（默认 asc-tgt-c2）
 #   EDGEEXP_SUBSTRATE       基质（默认 pve —— 本入口是给 dl360gen9 的 PVE CT 跑批用的；
 #                           **必须转发**：不转发时子脚本退回 clab/docker，会去问一个不存在的
@@ -54,10 +64,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 指向 `…/argus/lunwen/build`、`…/argus/lunwen/lunwen/clab-lab/scripts` 这种不存在的路径，
 # 于是一运行就"五项全红"。这类"入口自己算错位置"的错**只有真跑一遍才会现形**。
 REPO="${EDGEEXP_REPO:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
-HEADCO="${EDGEEXP_HEAD_CHECKOUT:-/root/t6/t8/head}"
+# **没有默认值**（Task 14 修 D3）。旧默认 `/root/t6/t8/head` 是 Task 8 那一次的工作区：换任务/
+# 换机器之后它会静默指向一个不存在或陈旧的目录，而错误现场看起来像"检出不完整"。真正只有
+# 跑批的人知道"这一次该用哪份检出"，所以这题**必须显式回答**（缺省 ⇒ 下面 [1/4] 判红给示例）。
+HEADCO="${EDGEEXP_HEAD_CHECKOUT:-}"
 CALDERA_URL="${EDGEEXP_CALDERA_URL:-http://192.168.30.2:8888}"
 export EDGEEXP_CALDERA_URL="$CALDERA_URL"
-export EDGEEXP_CALDERA_KEY="${EDGEEXP_CALDERA_KEY:-ADMIN123}"
+# ---------------------------------------------------------------------------
+# C2 API key：**门禁红线**（Task 14 脱敏 D2）
+# ---------------------------------------------------------------------------
+# 这里此前是 `export EDGEEXP_CALDERA_KEY="${EDGEEXP_CALDERA_KEY:-<那个明文默认值>}"` —— 两件事一起坏：
+#   ① 明文默认值 = 真凭据（脱敏铁律）；② **门禁自己把 key 补上** ⇒ "缺 key"永远不可能让这一轮
+#      NO-GO，前置检查的结论因此是假的（跑完 13 小时才发现 C2 没通）。
+# 现在取值只有两档（环境变量 → 未跟踪的本地配置），取不到就**不导出**，并把这一项记成 NO-GO：
+# 下面的 [2/4]/[3/4] 需要问 C2，缺 key 时**整段跳过**（而不是退回空串去发请求 —— 空 key 打 C2
+# 得到的 401/403 与"C2 挂了"同形，会把排障方向带歪）。
+# shellcheck source=scripts/edge_c2_key.sh
+. "$SCRIPT_DIR/edge_c2_key.sh"
+C2_KEY_OK=0
+if edge_c2_key_source; then
+  export EDGEEXP_CALDERA_KEY
+  C2_KEY_OK=1
+fi
 export EDGEEXP_TARGET="${EDGEEXP_TARGET:-asc-tgt-c2}"
 # **基质必须跟着跑批走**：本入口是给 dl360gen9 的 **pve**（PVE CT）跑批用的（C2 的默认地址、
 # 目标默认值都已经是 pve 那一套）。不转发它时 `edge_agent_preflight.sh` 会退回默认的
@@ -84,24 +112,43 @@ bad()  { echo "  ❌ $*"; FAILED+=("$*"); }   # `$*` 而不是 `$1`：万一消�
 
 echo "############ 跑批前置检查（Task 11 Step 3）"
 echo "  跑批工作区   : $REPO"
-echo "  干净 HEAD 检出: $HEADCO"
-if [ -d "$HEADCO/.git" ]; then
+echo "  干净 HEAD 检出: ${HEADCO:-（未给 EDGEEXP_HEAD_CHECKOUT —— 见下面 [1/4] 的 ❌）}"
+# `-d "$HEADCO/.git"` 换掉（Task 14 修 D3）：**git worktree 的 `.git` 是一个文件**（46 字节，
+# 内容是 `gitdir: /…/.git/worktrees/<名>`），`[ -d … ]` 判否 ⇒ 对一份**完全正常**的检出误报
+# NO-GO（控制侧 2026-10-15 实测 rc=1，rc 还是从管道里读的 ⇒ 更不可信）。现在的判据是
+# `git -C … rev-parse --git-dir`：它认 worktree、认子目录、认裸仓库，且不依赖 `.git` 的形态。
+if git -C "$HEADCO" rev-parse --git-dir >/dev/null 2>&1; then
   echo "  检出 HEAD    : $(git -C "$HEADCO" log -1 --format='%h %s' 2>/dev/null | head -c 120)"
+  # 把检出**形态**打出来：worktree 与主检出的差异正是 D3 的根因，操作者一眼就该看到。
+  if [ -f "$HEADCO/.git" ]; then
+    echo "  检出形态     : **git worktree**（.git 是文件：$(cat "$HEADCO/.git" 2>/dev/null | head -c 80)）"
+  else
+    echo "  检出形态     : 主检出/普通克隆（.git 是目录）"
+  fi
 fi
 echo "  C2           : $CALDERA_URL ｜ 目标节点: $EDGEEXP_TARGET ｜ 基质: $EDGEEXP_SUBSTRATE"
 echo
+if [ "$C2_KEY_OK" != "1" ]; then
+  bad "未提供 EDGEEXP_CALDERA_KEY（仓库**不再**有明文默认值）⇒ 无法核实 C2 连通性（[2/4]、[3/4] 会跳过）。修法：① export EDGEEXP_CALDERA_KEY='<C2 API 口令>'；或 ② 写进未跟踪的本地配置 $(edge_c2_key_local_env)（一行 EDGEEXP_CALDERA_KEY=…，chmod 600；文件名已在根 .gitignore 里）"
+fi
 
 # --- 前置 1：生效二进制 == HEAD 构建（-trimpath，从干净检出构建）---------------
 echo "== [1/4] 生效的二进制 == 干净 HEAD 检出构建（-trimpath + tags）=="
 command -v go >/dev/null 2>&1 || bad "找不到 go（构建需要它；GOPROXY=$GOPROXY）"
-[ -d "$HEADCO/.git" ] || bad "干净 HEAD 检出不存在或不是 git 仓库：$HEADCO"
-[ -f "$HEADCO/cmd/edgescen/nodecollect.go" ] || bad "$HEADCO 里没有 cmd/edgescen（检出不完整？）"
-# "HEAD 构建"只有在检出**真的等于 HEAD** 时才有意义：现场那份 build/edgescen 就是
-# 042c3fe + 未提交改动（`go version -m` 报 `…042c3fe…+dirty`）构出来的 —— 此时"比 sha256"
-# 比的是一个**没人能复现**的东西。故脏检出直接判红，不静默放行。
-if [ -d "$HEADCO/.git" ] && [ -n "$(git -C "$HEADCO" status --porcelain 2>/dev/null)" ]; then
+# 检出判据（Task 14 修 D3，逐条见文件头）：
+#   · 缺 EDGEEXP_HEAD_CHECKOUT ⇒ 判红并给示例路径（**不再回落到某个任务的工作区**）；
+#   · 不是 git 仓库 ⇒ 判红（`rev-parse --git-dir` 认 worktree）；
+#   · **有未提交改动 ⇒ 直接判红**（原判据，保留：此时"HEAD 构建"名不副实，比 sha256 没意义）。
+#     现场那份 build/edgescen 就是 042c3fe + 未提交改动（`go version -m` 报 `…042c3fe…+dirty`）
+#     构出来的 —— 那时"比 sha256"比的是一个**没人能复现**的东西。
+if [ -z "$HEADCO" ]; then
+  bad "未给 EDGEEXP_HEAD_CHECKOUT —— 本检查必须知道**哪一份检出**算「干净 HEAD 检出」（此变量没有默认值）。修法：EDGEEXP_HEAD_CHECKOUT=/root/t6/t14/head bash $0"
+elif ! git -C "$HEADCO" rev-parse --git-dir >/dev/null 2>&1; then
+  bad "干净 HEAD 检出不是 git 仓库（或路径不存在）：$HEADCO —— 修法：把一份干净检出放在该路径（示例：/root/t6/t14/head），或把 EDGEEXP_HEAD_CHECKOUT 指过去"
+elif [ -n "$(git -C "$HEADCO" status --porcelain 2>/dev/null)" ]; then
   bad "干净 HEAD 检出 $HEADCO **有未提交改动**（「HEAD 构建」名不副实，比 sha256 失去意义）—— 修法：git -C $HEADCO checkout -f && git -C $HEADCO clean -fd，或指向另一个真干净的检出"
 fi
+[ -z "$HEADCO" ] || [ -f "$HEADCO/cmd/edgescen/nodecollect.go" ] || bad "$HEADCO 里没有 cmd/edgescen（检出不完整？）"
 if [ "${#FAILED[@]}" -eq 0 ]; then
   TMPB="$(mktemp -d)"
   declare -A TAG=( [edgescen]="expr,engine,checks" [edgecompare]="edgeexp" )
@@ -158,7 +205,11 @@ fi
 echo
 echo "== [2/4] 残留 agent 复核（edge_agent_preflight.sh，判据见其文件头）=="
 AP="$REPO/lunwen/clab-lab/scripts/edge_agent_preflight.sh"
-if [ ! -x "$AP" ] && [ ! -f "$AP" ]; then
+if [ "$C2_KEY_OK" != "1" ]; then
+  # **不许退回空 key 去问 C2**（Task 14 门禁红线）：那只会得到 401/403，与"C2 挂了"同形。
+  # 跳过并不等于放行 —— 上面已经记了一条 ❌（缺 key），退出码照样是非零。
+  bad "跳过 [2/4] 残留 agent 复核：缺 EDGEEXP_CALDERA_KEY（用空 key 问 C2 会得到与「C2 挂了」同形的错误）—— 修法见上面的 ❌（先 export 或写本地配置，再重跑本入口）"
+elif [ ! -x "$AP" ] && [ ! -f "$AP" ]; then
   bad "找不到 edge_agent_preflight.sh：$AP"
 else
   bash "$AP" 2>&1 | sed 's/^/     /'
@@ -179,7 +230,9 @@ fi
 echo
 echo "== [3/4] TTP 三件实体（edge_ttp_provision.sh，幂等：已存在则核对关键字段）=="
 TP="$REPO/lunwen/clab-lab/scripts/edge_ttp_provision.sh"
-if [ ! -f "$TP" ]; then
+if [ "$C2_KEY_OK" != "1" ]; then
+  bad "跳过 [3/4] TTP 三件实体：缺 EDGEEXP_CALDERA_KEY（同上——不许用空 key 去问 C2）"
+elif [ ! -f "$TP" ]; then
   bad "找不到 edge_ttp_provision.sh：$TP"
 else
   TP_OUT="$(bash "$TP" 2>&1)"; TP_RC=$?
