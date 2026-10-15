@@ -88,6 +88,18 @@ CORES="${EDGEEXP_VM_CORES:-2}"
 DISK_STORAGE="${EDGEEXP_VM_DISK_STORAGE:-local-lvm}"
 DISK_SIZE="${EDGEEXP_VM_DISK_SIZE:-8G}"
 IMG_STORAGE_DIR="${EDGEEXP_VM_IMG_DIR:-/var/lib/vz/import}"
+# seed ISO 的落点与**存储引用**（Task 15 修正；PVE 9.2.2 实测）：
+#   · PVE 9 起 `qm set --ide2` **不再接受裸绝对路径** —— 报
+#     `ide2: unable to associate path '/var/lib/vz/import/x.iso' to any storage`；
+#     ISO 必须落在一条**带 `iso` 内容**的存储里，并写成 `<存储>:iso/<文件名>`。
+#   · 宿主上唯一带 `iso` 内容的存储是 `ZFS-ISO`，而**项目规则不许动它**
+#     （`ZFS-ISO` / `Backup-320G` / `ZFS-LXD` 一律不碰）⇒ 本脚本改为**临时**给 `local`
+#     补上 `iso` 这一项内容（记下原值，`--destroy` 时**原样恢复**）。
+#     这是本脚本**唯一**一处会碰宿主存储配置的地方，且只碰 `local`。
+#   · 原注释里"ISO 是每台 VM 一个自包含文件、不用改存储配置"这条推理在 PVE 9 上**不成立**
+#     （ISO 依然要挂在一条 iso 存储下）—— 这里是那处修正，不是新增特性。
+SEED_STORAGE="${EDGEEXP_VM_SEED_STORAGE:-local}"
+SEED_DIR="${EDGEEXP_VM_SEED_DIR:-/var/lib/vz/template/iso}"
 CLOUD_IMG_URL="${EDGEEXP_VM_CLOUD_IMG_URL:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 CLOUD_IMG_SHA_URL="${EDGEEXP_VM_CLOUD_IMG_SHA_URL:-https://cloud-images.ubuntu.com/noble/current/SHA256SUMS}"
 SSH_USER="${EDGEEXP_VM_SSH_USER:-asc}"
@@ -243,7 +255,7 @@ teardown_vm() {
   fi
   # `--purge 1` 连同 VM 的磁盘（在 local-lvm 上）一起删；**不动**任何存储配置。
   run qm destroy "$vmid" --purge 1 --skiplock
-  [ "$DRY_RUN" -eq 0 ] && run rm -f "$IMG_STORAGE_DIR/$NAME_PREFIX$vmid-seed.iso" \
+  [ "$DRY_RUN" -eq 0 ] && run rm -f "$SEED_DIR/$NAME_PREFIX$vmid-seed.iso" \
                                  "$IMG_STORAGE_DIR/$NAME_PREFIX$vmid.raw"
   : "$idx"
 }
@@ -257,13 +269,18 @@ teardown_vm() {
 write_hosts_block() {
   local tmp
   tmp="$(mktemp)"
-  awk -v mark="$HOSTS_MARK" '
-    $0 == "# >>> " mark " >>>" { skip = 1; next }
-    $0 == "# <<< " mark " <<<" { skip = 0; next }
-    !skip { print }
-  ' /etc/hosts > "$tmp"
+  # ⚠️ **不许写成"先 awk > $tmp、再 `{ cat $tmp; printf 新区块; } >> $tmp`"**（Task 15 实测）：
+  # 那是把 `$tmp` **同时**当输入与输出，GNU `cat` 会直接拒绝并报
+  # `cat: /tmp/tmp.xxx: input file is output file`。本机（GNU coreutils）上这个错误**恰好**
+  # 让结果正确（过滤后的内容已经由 awk 写进 $tmp，`cat` 失败后只追加了新区块）；
+  # 但在允许"自己读自己"的 `cat`（如 BusyBox）上，过滤后的内容会被**再追加一遍**，
+  # 于是 `/etc/hosts` 整份**重复**。故这里改成**一次重定向**写全（语义完全相同、不依赖 cat 的行为）。
   {
-    cat "$tmp"
+    awk -v mark="$HOSTS_MARK" '
+      $0 == "# >>> " mark " >>>" { skip = 1; next }
+      $0 == "# <<< " mark " <<<" { skip = 0; next }
+      !skip { print }
+    ' /etc/hosts
     printf '# >>> %s >>>\n' "$HOSTS_MARK"
     printf '# 由 edge_vm_provision.sh 管理（Task 13）：本脚本建的 VM 的 <ip> <hostname>。\n'
     printf '# 手改这里的内容会在下一次建机/清机时被覆盖；要留别的条目请写在块外。\n'
@@ -273,7 +290,7 @@ write_hosts_block() {
       [ -n "$ip" ] && printf '%s\t%s%s\n' "$ip" "$NAME_PREFIX" "$vmid"
     done
     printf '# <<< %s <<<\n' "$HOSTS_MARK"
-  } >> "$tmp"
+  } > "$tmp"
   run cp "$tmp" /etc/hosts
   rm -f "$tmp"
 }
@@ -291,6 +308,56 @@ clear_hosts_block() {
 }
 
 # ============================================================================
+# seed ISO 所在存储的 `iso` 内容（Task 15）：只加 `iso`、只碰 $SEED_STORAGE、用完恢复
+# ============================================================================
+# 为什么"记住原值再恢复"而不是"直接加上就不管"：
+#   `pvesm set local --content …` 改的是**全局**存储配置（进 `/etc/pve/storage.cfg`），
+#   而 `local` 上除了我们补的 `iso` 之外还挂着 `backup,import,vztmpl` —— 如果恢复时
+#   不是"写回**原值**"而是"写回我们以为的默认值"，就会把这条存储的其它内容项改掉。
+# 为什么原值要**落盘**而不是只放变量：`--destroy` 是一次**独立的进程调用**
+#   （建机一个进程、清机另一个），内存里的 `ISO_CONTENT_ADDED` 到那时恒为 0 ——
+#   只靠变量的话，"建机时补过 iso"这件事在清机时**看不见**，`--destroy` 就永远
+#   恢复不了。故把原值写进 $ISO_STATE_FILE，清机时按它逐字写回。
+ISO_STATE_FILE="${EDGEEXP_VM_ISO_STATE:-/var/lib/vz/.asscor-seed-storage.state}"
+
+ensure_iso_content() {
+  local orig
+  orig="$(awk -v s="$SEED_STORAGE" '
+    $0 == "dir: " s      { f = 1; next }
+    f && /^[[:space:]]*content / { sub(/^[[:space:]]*content[[:space:]]*/, ""); print; exit }
+    f && /^[^[:space:]]/  { exit }
+  ' /etc/pve/storage.cfg)"
+  case "$orig" in
+    "") die "读不到存储 $SEED_STORAGE 的 content 原值（/etc/pve/storage.cfg 里没有 'dir: $SEED_STORAGE'？）——
+  本脚本**不猜**：猜错会在恢复时改掉别的存储配置。换 --seed-storage 或先确认存储名。" ;;
+  esac
+  case ",$orig," in
+    *,iso,*) log "== seed ISO 存储 $SEED_STORAGE 本来就有 iso 内容 —— 不动它，也不留状态文件" ;;
+    *)
+      log "== seed ISO 需要 iso 存储：临时给 $SEED_STORAGE 的 content 补上 iso（原值 '$orig'；原值已记入 $ISO_STATE_FILE，--destroy 时逐字写回）"
+      if [ "$DRY_RUN" -eq 1 ]; then
+        printf '  [dry-run] 写 %s（记下原值 "\t" 供 --destroy 恢复）\n' "$ISO_STATE_FILE"
+      else
+        printf '%s\t%s\n' "$SEED_STORAGE" "$orig" > "$ISO_STATE_FILE"
+      fi
+      run pvesm set "$SEED_STORAGE" --content "$orig,iso" ;;
+  esac
+  run mkdir -p "$SEED_DIR"
+}
+
+restore_iso_content() {
+  [ -f "$ISO_STATE_FILE" ] || return 0
+  local st orig
+  st="$(cut -f1 "$ISO_STATE_FILE")"
+  orig="$(cut -f2 "$ISO_STATE_FILE")"
+  [ -n "$st" ] && [ -n "$orig" ] || die "$ISO_STATE_FILE 内容不合法（应为 '<存储>\\t<原 content>'）——
+  本脚本**不猜**原值：猜错会改掉宿主别的存储配置。请手工核对后删除该文件。"
+  log "== 恢复 $st 的 content 原值：'$orig'"
+  run pvesm set "$st" --content "$orig"
+  [ "$DRY_RUN" -eq 0 ] && rm -f "$ISO_STATE_FILE"
+}
+
+# ============================================================================
 # 本地 env 文件（**未跟踪**）：把私钥路径 / SSH 用户传播给跑批脚本
 # ============================================================================
 write_local_env() {
@@ -303,16 +370,16 @@ write_local_env() {
   # **不用 `>>` 追加**：同一批机重复建时会把旧块留着，于是"文件里的私钥路径"有两个取值，
   # 而 `source` 只生效最后一个 —— 那种"看起来配好了、实际用的是上一批"的形态最难查。
   # 故先删本脚本的块，再写新的。
+  # 同 write_hosts_block 那条：**一次重定向**写全，不要"`cat $tmp` 再 `>> $tmp`"。
   local tmp; tmp="$(mktemp)"
-  if [ -f "$LOCAL_ENV" ]; then
-    awk -v mark="$HOSTS_MARK" '
-      $0 == "# >>> " mark " >>>" { skip = 1; next }
-      $0 == "# <<< " mark " <<<" { skip = 0; next }
-      !skip { print }
-    ' "$LOCAL_ENV" > "$tmp"
-  fi
   {
-    cat "$tmp"
+    if [ -f "$LOCAL_ENV" ]; then
+      awk -v mark="$HOSTS_MARK" '
+        $0 == "# >>> " mark " >>>" { skip = 1; next }
+        $0 == "# <<< " mark " <<<" { skip = 0; next }
+        !skip { print }
+      ' "$LOCAL_ENV"
+    fi
     printf '# >>> %s >>>\n' "$HOSTS_MARK"
     printf '# 由 edge_vm_provision.sh 写出（Task 13）。**本文件未跟踪、不在仓库里** ——\n'
     printf '# 它只放"路径"与"用户名"，**从不**放私钥内容或任何口令。\n'
@@ -324,7 +391,7 @@ write_local_env() {
     printf '# 要用别的写法（例如写死 IP）就取消下面这行的注释并填上 —— 含 %%s 时按 vmid 展开：\n'
     printf '# export EDGEEXP_VM_SSH_HOST=%%s\n'
     printf '# <<< %s <<<\n' "$HOSTS_MARK"
-  } >> "$tmp"
+  } > "$tmp"
   cp "$tmp" "$LOCAL_ENV"
   rm -f "$tmp"
   chmod 600 "$LOCAL_ENV"
@@ -482,7 +549,14 @@ create_vm() {
   [ -n "$diskref" ] || diskref="$DISK_STORAGE:vm-$vmid-disk-0"
   run qm set "$vmid" --scsihw virtio-scsi-single --scsi0 "$diskref,discard=on,ssd=1,iothread=1"
   run qm resize "$vmid" scsi0 "$DISK_SIZE"
-  run qm set "$vmid" --ide2 "$seed,media=cdrom,readonly=1"
+  # ⚠️ `--ide2` 的**正确形状**（Task 15 实测，PVE 9.2.2）：
+  #   · **不能**给裸绝对路径 —— `--ide2 /var/lib/vz/import/x.iso,media=cdrom` 报
+  #     `unable to associate path '…' to any storage`；必须写成 `<存储>:iso/<文件名>`
+  #     （故 seed 落在 $SEED_DIR 并挂 $SEED_STORAGE，见文件顶部那两格的说明）。
+  #   · **不能**加 `readonly=1` / `ro=1` —— 两者**都不是** ide2 的合法属性，报
+  #     `ide2.readonly: property is not defined in schema`（CD-ROM 介质本身只读，
+  #     本来也不需要这个开关）。
+  run qm set "$vmid" --ide2 "$SEED_STORAGE:iso/$(basename "$seed"),media=cdrom"
   run qm set "$vmid" --boot order=scsi0 --bootdisk scsi0
   # 网络：默认只挂 $NET_BRIDGE（默认 vmbr1 —— 宿主在这条桥上**有外网**，装包靠它）。
   run qm set "$vmid" --net0 "virtio,bridge=$NET_BRIDGE"
@@ -583,6 +657,9 @@ if [ "$DESTROY" -eq 1 ]; then
     teardown_vm "${VMIDS[$i]}" "$i"
   done
   run clear_hosts_block
+  # seed ISO 用完 ⇒ 把 $SEED_STORAGE 的 content **原样**写回（Task 15；建机时可能补过 `iso`）。
+  # 幂等重跑（VM 已存在、没建过 seed）时 $ISO_CONTENT_ADDED=0，这里什么都不做。
+  restore_iso_content
   log "== 销毁完成。当前 qm list："
   [ "$DRY_RUN" -eq 0 ] && qm list
   exit 0
@@ -591,6 +668,7 @@ fi
 memory_plan
 ensure_ssh_key
 ensure_cloud_image
+ensure_iso_content
 
 VM_IPS=()
 for i in "${!VMIDS[@]}"; do
@@ -606,7 +684,7 @@ for i in "${!VMIDS[@]}"; do
     fi
   else
     run qm create "$vmid" --name "$host" --ostype l26
-    seed="$IMG_STORAGE_DIR/$host-seed.iso"
+    seed="$SEED_DIR/$host-seed.iso"
     build_seed_iso "$vmid" "$host" "$seed"
     create_vm "$vmid" "$host" "$seed"
     log "== 启动 VM $vmid"
