@@ -80,7 +80,7 @@ done
 FAILED=()
 ok()   { echo "  ✅ $*"; }
 warn() { echo "  ⚠️  $*"; }
-bad()  { echo "  ❌ $*"; FAILED+=("$1"); }
+bad()  { echo "  ❌ $*"; FAILED+=("$*"); }   # `$*` 而不是 `$1`：万一消息里混进未转义的引号，摘要也不会被截断
 
 echo "############ 跑批前置检查（Task 11 Step 3）"
 echo "  跑批工作区   : $REPO"
@@ -100,7 +100,7 @@ command -v go >/dev/null 2>&1 || bad "找不到 go（构建需要它；GOPROXY=$
 # 042c3fe + 未提交改动（`go version -m` 报 `…042c3fe…+dirty`）构出来的 —— 此时"比 sha256"
 # 比的是一个**没人能复现**的东西。故脏检出直接判红，不静默放行。
 if [ -d "$HEADCO/.git" ] && [ -n "$(git -C "$HEADCO" status --porcelain 2>/dev/null)" ]; then
-  bad "干净 HEAD 检出 $HEADCO **有未提交改动**（"HEAD 构建"名不副实，比 sha256 失去意义）—— 修法：git -C $HEADCO checkout -f && git -C $HEADCO clean -fd，或指向另一个真干净的检出"
+  bad "干净 HEAD 检出 $HEADCO **有未提交改动**（「HEAD 构建」名不副实，比 sha256 失去意义）—— 修法：git -C $HEADCO checkout -f && git -C $HEADCO clean -fd，或指向另一个真干净的检出"
 fi
 if [ "${#FAILED[@]}" -eq 0 ]; then
   TMPB="$(mktemp -d)"
