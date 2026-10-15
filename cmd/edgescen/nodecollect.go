@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/chins-xing/asscor/internal/checks"
@@ -75,10 +76,30 @@ const (
 	// docker/lxd 唯一的**结构性**差别，nonce 因此只能经节点内的 `env` 下发；三侧的信封校验
 	// 仍然共用同一份实现（见 runNodeProcess 与 parseNodeEnvelope）。
 	substratePVE nodeSubstrate = "pve"
+	// substrateQEMU = dl360gen9 上的 **QEMU/KVM 虚拟机** —— `scp` + `ssh`（Task 13）。
+	//
+	// 为什么 VM 是**另一种基质**而不是"pve 的一个变体"（用户 2026-10-15 两条裁定）：
+	// ① CT（LXC）是**快速验证 / 轻量模拟 / 临时**的基质，VM 是**长线 + 中重型拓扑 + 重要任务**
+	// 的基质 —— 两者的**定位**不同，不是同一件事的两种实现；
+	// ② 在 CT 里 `OT-005`/`KS-012` 是**结构性不可观测**的（LXC 的 apparmor 命名空间不向容器
+	// 暴露 profile，`aa-status` 报 `Failed to get profiles: 2`），于是基线活跃集被迫声明成
+	// `{EF-SELINUX, EF-APPARMOR}`、每条链上挂着一个常量 **−30** 惩罚；VM 里 LSM 真的能
+	// enforcing ⇒ **基线活跃集随基质变**。两套基质的数据**禁止混算/互相解释**。
+	// 把 VM 塞进 `pve:` 前缀就等于让"这条记录采自哪种基质"在数据上消失 —— 而那正是
+	// 后面所有结论的前提。
+	//
+	// ⚠️ **取数手段与前三者都不同（这是唯一一个"不经节点侧 CLI"的基质）**：VM 里没有
+	// `docker`/`lxc`/`pct` 这类宿主侧的 CLI，而"在客人里 exec 一条本地命令"本来就不是 VM 的
+	// 语义（`qm` 的客人侧执行要 `qemu-guest-agent`，实测宿主上**没装**它，见 Task 13 报告）。
+	// ⇒ 走**通用的** `scp`（送文件）与 `ssh`（执行），两者都不新增运行期二进制依赖之外的
+	// 东西（openssh-client 是宿主既有）。nonce 依旧**只经环境变量**下发（`ssh <host>
+	// env EDGESCEN_NODE_NONCE=<nonce> <二进制> -emit-checks`），**绝不进 argv** ——
+	// 这条硬不变量在 docker/lxd/pve 三侧逐条成立，VM 侧不破例（见 TestQEMUNonceNeverEntersNodeArgv）。
+	substrateQEMU nodeSubstrate = "qemu"
 )
 
-// targetPrefixDocker / targetPrefixLXD / targetPrefixPVE 是 `-target` 的**基质前缀**
-// （`docker:<名>` / `lxd:<名>` / `pve:<vmid>`）。
+// targetPrefixDocker / targetPrefixLXD / targetPrefixPVE / targetPrefixQEMU 是 `-target` 的
+// **基质前缀**（`docker:<名>` / `lxd:<名>` / `pve:<vmid>` / `qemu:<vmid|名字>`）。
 //
 // 为什么要有前缀（而不是一个 `-substrate` 开关）：观测主体是**每一条记录**的属性，而不是
 // 整个进程的属性 —— 一个进程内混采两种基质时，开关式的写法会让"这条记录采自哪里"取决于
@@ -87,6 +108,7 @@ const (
 	targetPrefixDocker = string(substrateDocker) + ":"
 	targetPrefixLXD    = string(substrateLXD) + ":"
 	targetPrefixPVE    = string(substratePVE) + ":"
+	targetPrefixQEMU   = string(substrateQEMU) + ":"
 )
 
 // nodeTarget 是解析后的 `-target`：**基质 + 节点名**。
@@ -103,18 +125,24 @@ func (nt nodeTarget) binary() string {
 		return "lxc"
 	case substratePVE:
 		return "pct"
+	case substrateQEMU:
+		return "ssh"
 	default:
 		return "docker"
 	}
 }
 
-// parseNodeTarget 解析 `-target`，语法四种（`-h` 文案与错误串里必须写明同一套）：
+// parseNodeTarget 解析 `-target`，语法五种（`-h` 文案与错误串里必须写明同一套）：
 //
 //	""                 ⇒ 由调用方处理（collectChecksForTarget 的默认路径 = 本机）
 //	<裸名字>            ⇒ docker（**向后兼容**：Task 4C 以来的语义，逐位不变）
 //	docker:<容器>       ⇒ docker（与裸名字等价，只是把基质显式写出来）
 //	lxd:<实例>          ⇒ lxd（A-1 的 LXD）
 //	pve:<vmid>          ⇒ pve（dl360gen9 的 PVE CT；这里是 **VMID**，由 `lab_target_spec` 解析后给出）
+//	qemu:<vmid|名字>    ⇒ qemu（dl360gen9 的 **QEMU/KVM VM**；Task 13。这里**既收 vmid 也收名字**，
+//	                     与 pve **刻意不同**：pve 的节点标识由 `pct list` 唯一决定（只能是 vmid），
+//	                     而 VM 的标识同时出现在 `qm list` 的 VMID 列与 Name 列 —— 两种写法都指向
+//	                     同一个对象，收窄反而会让 `qemu:asc-vm910` 这种**正确**写法变成错误）
 //
 // 为什么"未知前缀"必须报错而不是当成裸名字：`lxd:probe-ot005` 里的名字若被当成
 // **docker 容器名**，docker 会以 `No such container: lxd:probe-ot005` 失败 —— 那条错误指向
@@ -128,6 +156,10 @@ func (nt nodeTarget) binary() string {
 // 会让三层解析各有一套关于节点标识的语法。名字→vmid 的解析**只有一处**，在基质层
 // （`edge_lab.sh` 的 `lab_node_vmid`）；给一个非数字的标识时 `pct` 自己会失败（实测 rc≠0），
 // 那条失败照样响亮、照样不写任何记录。
+//
+// qemu 这一格同款：这里**不**去校验节点标识"是不是 vmid 也不是名字"—— 解析层做的是
+// "摘前缀、留标识"，`ssh` 解析不到那个主机名时自己会响亮失败（`Could not resolve hostname`），
+// 而"名字→SSH 主机"的解析只有一处（基质层 `edge_lab.sh` 的 `lab_node_ssh_host`）。
 func parseNodeTarget(target string) (nodeTarget, error) {
 	raw := strings.TrimSpace(target)
 	if raw == "" {
@@ -153,15 +185,24 @@ func parseNodeTarget(target string) (nodeTarget, error) {
 				"vmid 由基质层 `lab_target_spec` 从 CT 名字解析出来）", raw, targetPrefixPVE)
 		}
 		return nodeTarget{Substrate: substratePVE, Node: node}, nil
+	case strings.HasPrefix(raw, targetPrefixQEMU):
+		node := strings.TrimSpace(strings.TrimPrefix(raw, targetPrefixQEMU))
+		if node == "" {
+			return nodeTarget{}, fmt.Errorf("节点内采集：target %q 缺少 vmid 或名字（用法：%s<vmid|名字>；"+
+				"SSH 主机与私钥走环境变量 %s / %s，**不进 argv、不进仓库**）",
+				raw, targetPrefixQEMU, qemuSSHHostEnv, qemuSSHKeyEnv)
+		}
+		return nodeTarget{Substrate: substrateQEMU, Node: node}, nil
 	}
 	if i := strings.Index(raw, ":"); i >= 0 {
 		prefix := raw[:i]
 		// 只有"像一个基质前缀"时才报错：前缀是纯字母/数字/下划线/连字符（即一个标识符）而后面
 		// 还有名字。`foo:bar` 因此仍然按今天的裸名字走 docker，不会因本次改动改变语义。
 		if isIdentifier(prefix) && strings.TrimSpace(raw[i+1:]) != "" {
-			return nodeTarget{}, fmt.Errorf("节点内采集：target %q 的基质前缀 %q 未知（只认 %q、%q 与 %q；"+
+			return nodeTarget{}, fmt.Errorf("节点内采集：target %q 的基质前缀 %q 未知（只认 %q、%q、%q 与 %q；"+
 				"不带前缀的裸名字按 %s 处理）", raw, prefix, strings.TrimPrefix(targetPrefixDocker, ":"),
-				strings.TrimPrefix(targetPrefixLXD, ":"), strings.TrimPrefix(targetPrefixPVE, ":"), substrateDocker)
+				strings.TrimPrefix(targetPrefixLXD, ":"), strings.TrimPrefix(targetPrefixPVE, ":"),
+				strings.TrimPrefix(targetPrefixQEMU, ":"), substrateDocker)
 		}
 	}
 	return nodeTarget{Substrate: substrateDocker, Node: raw}, nil
@@ -316,6 +357,10 @@ func collectChecksForTarget(target string) ([]model.CheckResult, string, error) 
 // `node:<容器> (hostname=…)` —— 上一个任务已经落盘的记录、以及所有既有断言都按这个形状写。
 // 只有 lxd 基质额外印出 `substrate=lxd`：非默认基质必须能从记录里看出来，否则
 // `docker exec host1` 与 `lxc exec host1 --` 两种观测在数据上完全同形。
+// pve（Task 6）与 qemu（Task 13）按同一形状印出 `substrate=pve` / `substrate=qemu` ——
+// 这一格对 VM 基质**比其它任何一条都关键**：CT 与 VM 是两种**不同定位**的基质
+// （CT = 快速验证/轻量/临时；VM = 长线/中重型/重要任务），且**基线活跃集随基质变**，
+// 拿一份看不出基质的记录去比较两套数据，会把"基质差异"读成"因子效果"。
 //
 // hostname 为空的情形已经在 `parseNodeEnvelope` 被拒（那里有独立诊断），故这里不再有
 // "回退成 node:<target>" 的分支 —— 那种回退一旦可达就会产出一条**更弱**的取值
@@ -408,6 +453,38 @@ func copyBinaryIntoNode(nt nodeTarget, localPath string) (string, error) {
 		if _, err := runPCT("push", nt.Node, localPath, dest, "--perms", "755"); err != nil {
 			return "", err
 		}
+	case substrateQEMU:
+		// `scp -O <本地> <ssh 目标>:<目标路径>`（Task 13）——**VM 侧唯一能用的送文件手段**：
+		// 客人里没有 `docker`/`lxc`/`pct` 这类宿主侧 CLI，而"在客人里 exec 一条本地命令"
+		// 本来就不是 VM 的语义（`qm` 的客人侧执行要 guest agent，宿主实测**没装**）。
+		//
+		// `-O`（强制走 legacy SCP 协议）**不是可选的**：OpenSSH 9.0+ 默认用 SFTP 子系统，
+		// 而 cloud image 里 `sftp-server` 与 `/usr/lib/openssh/sftp-server` 的位置随发行版变、
+		// 缺了就报 `subsystem request failed` —— 那条错误指向"子系统没配"，与真正的原因
+		// （本机 scp 版本 vs 客人 sshd 的默认）差得很远。`-O` 把这条依赖整个去掉。
+		//
+		// 送进去之后**必须显式 `chmod 0755`**：`scp` 保留源文件的权限位而**不**保证可执行
+		// —— 而"送进去但不可执行"的失败形态是客人侧的 `Permission denied`（看起来像
+		// "这个用户权限不足"，与"忘了 chmod"完全不像）。pve 侧靠 `pct push --perms 755`
+		// 一次到位，VM 侧靠这一条显式的 `ssh chmod`。
+		//
+		// 两条命令**都用 `qemuSSHArgs` 造的完整 argv**（连接参数逐格相同）—— 只传主机名
+		// 会让这次 ssh 用到操作者的 `~/.ssh/config` 与默认钥匙（`-l`/`-i`/`-p` 全丢），
+		// 于是"scp 送进去的那台"与"chmod 改的那台"可能**不是同一台**，而两边都成功。
+		scpArgs, err := qemuSCPArgs(nt.Node, localPath, dest)
+		if err != nil {
+			return "", err
+		}
+		if _, err := runSCP(scpArgs...); err != nil {
+			return "", err
+		}
+		chmodArgs, err := qemuSSHArgs(nt.Node, "chmod", "0755", dest)
+		if err != nil {
+			return "", err
+		}
+		if _, err := runSSH(chmodArgs...); err != nil {
+			return "", err
+		}
 	default:
 		return "", fmt.Errorf("节点内采集：未知基质 %q", nt.Substrate)
 	}
@@ -444,6 +521,27 @@ func runNodeProcess(nt nodeTarget, containerPath, emitFlag, nonce string) ([]byt
 		//   · 信封校验（标记 / nonce 非空且等于本次下发 / hostname / 非空检查集 / 取最后一行）
 		//     走的仍是 `parseNodeEnvelope`，**与 docker/lxd 共用同一份实现**。
 		return runPCT("exec", nt.Node, "--", "env", nodeNonceEnv+"="+nonce, containerPath, emitFlag)
+	case substrateQEMU:
+		// `ssh <选项> -- <主机> env <ENV>=<nonce> <二进制> -emit-checks`（Task 13）。
+		// 这条形状与 pve 侧**逐项对应**，只有"谁来把命令交给客人"不同（`ssh` 而不是 `pct`），
+		// 于是下面三条性质一条不落地保住：
+		//   · nonce **不在** `-emit-checks` 那一侧的参数里 —— 客人侧二进制的 argv 仍然
+		//     **恰好是 `[-emit-checks]`**（`env K=V <bin> -emit-checks` 里 `K=V` 是 `env` 自己的
+		//     位置参数）。"`-emit-checks` 只接受空参数集"那条守卫因此没有被开出一个
+		//     "合法参数"，nonce 没有进参数位；
+		//   · `--` 把命令与 ssh 自己的开关分开（**实测必需**：`ssh <host> -emit-checks` 会把
+		//     以 `-` 开头的那一格当作 ssh 的选项；`--` 之后的一格才是"远程命令"）。
+		//     **注意 `--` 必须在主机名之前**：ssh 的 `[user@]hostname` 位置参数之后的东西
+		//     本来就是"远程命令"，而 `--` 放在前面同时管住了"主机名以 `-` 开头"这种形态；
+		//   · 信封校验（标记 / nonce 非空且等于本次下发 / hostname / 非空检查集 / 取最后一行）
+		//     走的仍是 `parseNodeEnvelope`，**与其它三种基质共用同一份实现**。
+		//
+		// `env` 是客人侧的 `/usr/bin/env`（cloud image 必有），不需要客人里装任何本项目的东西。
+		args, err := qemuSSHArgs(nt.Node, "env", nodeNonceEnv+"="+nonce, containerPath, emitFlag)
+		if err != nil {
+			return nil, err
+		}
+		return runSSH(args...)
 	default:
 		return nil, fmt.Errorf("节点内采集：未知基质 %q", nt.Substrate)
 	}
@@ -474,6 +572,188 @@ var runLXC = func(args ...string) ([]byte, error) {
 // 也就是"`pve:` 前缀认了、但二进制还是 docker"这个最像的错法）。生产代码从不改写它。
 var runPCT = func(args ...string) ([]byte, error) {
 	return runNodeCLI("pct", args...)
+}
+
+// ---------------------------------------------------------------------------
+// qemu 基质（Task 13）：SSH/SCP 取数
+// ---------------------------------------------------------------------------
+//
+// 前三套基质（docker/lxd/pve）都是"宿主上有一个 CLI，它替我们在客人里执行"。
+// **VM 上没有这样一个 CLI** —— 客人里跑的是真的虚拟硬件 + 真的 systemd，宿主侧只有
+// QEMU 进程；`qm` 里唯一能"进客人执行"的入口是 `qm guest exec`，而它要
+// `qemu-guest-agent`（实测宿主上**没有** `/usr/share/pve-qemu-guest-agent`）。
+// ⇒ VM 侧的取数走**通用**手段：`scp` 送文件、`ssh` 执行。
+//
+// 三条纪律（都在下面有对应的用例）：
+//
+//  1. **SSH 目标与私钥一律走环境变量**，两者**都不进 argv、不进记录、不进仓库**。
+//     `EDGEEXP_VM_SSH_KEY` 指向的是**私钥文件路径**（不是密钥内容）；
+//     口令/私钥内容本身不许出现在任何一处。
+//  2. **默认连接参数是硬编码的常量**（BatchMode / accept-new / ConnectTimeout / IdentitiesOnly），
+//     **不接受**从环境变量来的"SSH 选项串" —— 那种变量会被当成 `-o` 的值，于是
+//     `-o ProxyCommand=…` 这类取值能在操作者看不见的地方把**取数目标**改到别处
+//     （记录里的 `observation_target` 照常印着节点名）。要换目标就换 `EDGEEXP_VM_SSH_HOST`。
+//  3. **nonce 只经环境变量下发**（`ssh <选项> -- <主机> env K=V <二进制> -emit-checks`）——
+//     与 pve 侧同一条硬不变量：客人侧二进制的 argv **恰好是 `[-emit-checks]`**。
+const (
+	// qemuSSHHostEnv 是 SSH 目标主机（值里出现的 `%s` 会被替换成节点标识；
+	// 不含 `%s` 则所有节点都指向同一台，供单机场景使用）。默认：`asc-vm<vmid>`
+	// —— 与 provisioning 脚本写进宿主 `/etc/hosts` 的客户机主机名一致
+	// （cloud-init 把 hostname 设成 `asc-vm<vmid>`），故**不需要 DNS**：
+	// 管理 VLAN 30 上没有 DNS（实测 CT 内 DNS FAIL），而 `/etc/hosts` 是宿主本地的。
+	qemuSSHHostEnv = "EDGEEXP_VM_SSH_HOST"
+	// qemuSSHKeyEnv 是 SSH **私钥文件路径**（`IdentityFile`）。默认：不传 `-i`
+	// （由操作者的 ssh 配置决定）——provisioning 脚本会把生成的私钥路径写进未跟踪的本地
+	// env 文件，**从不**写进仓库。
+	qemuSSHKeyEnv = "EDGEEXP_VM_SSH_KEY"
+	// qemuSSHUserEnv 是 SSH 登录用户（cloud-init 里建的那个）。默认 `asc`。
+	qemuSSHUserEnv = "EDGEEXP_VM_SSH_USER"
+	// qemuSSHPortEnv 是 SSH 端口。默认 `22`。端口是**数字**语义，故这里单独校验。
+	qemuSSHPortEnv = "EDGEEXP_VM_SSH_PORT"
+	// qemuSSHUserDefault 是登录用户的默认值。
+	qemuSSHUserDefault = "asc"
+	// substrateBinSSH / substrateBinSCP 是 qemu 基质实际起的两个**宿主侧**二进制名。
+	// 它们是 `runNodeCLI` 错误分派与诊断串的键（"到底是哪个 CLI 说的"必须能从报错里读出来）。
+	substrateBinSSH = "ssh"
+	substrateBinSCP = "scp"
+	// newNodeHostnamePattern 是"没给 EDGEEXP_VM_SSH_HOST 时，vmid → SSH 主机名"的**唯一**规则
+	// （`%d` 是数字 vmid）。它必须与 provisioning 脚本写进 `/etc/hosts` 的那一行一致 ——
+	// 两处一旦分叉，症状是"SSH 解析不到主机名"，而真正的原因是两台机器对同一个 vmid
+	// 起了不同的名字。非数字节点标识（`qemu:asc-vm910` 这种写法）不走这条规则，
+	// 而是原样当作主机名（它**就是**一个主机名）。
+	newNodeHostnamePattern = "asc-vm%d"
+)
+
+// qemuSSHHost 解析"这次连哪台客人"（**唯一**的节点标识 → SSH 主机的解析点）。
+//
+// 参数从**环境变量**实时取（`os.Getenv` 而不是包级变量）：这两个值属于**运行环境**，
+// 每一条记录都可能连不同的机器，把它们缓存在包级变量里会让"改了环境变量但仍旧连旧机器"
+// 这种形态成为可能（症状是采到了**另一台**机器的数据，而记录里的节点名照常）。
+func qemuSSHHost(node string) (string, error) {
+	host := strings.TrimSpace(os.Getenv(qemuSSHHostEnv))
+	if host != "" {
+		// 显式给了模板：`%s` 被替换成节点标识，没给 `%s` 就所有节点都用这一台。
+		host = strings.ReplaceAll(host, "%s", node)
+	} else if vmid, ok := vmidFromNode(node); ok {
+		host = fmt.Sprintf(newNodeHostnamePattern, vmid)
+	} else {
+		// 非数字标识（`qemu:asc-vm910`）**原样**当主机名 —— 它本身就是一个主机名，
+		// 这里不去猜它对应哪个 vmid（猜错就是采到另一台机器的数据，而看起来完全正常）。
+		host = node
+	}
+	if host == "" {
+		return "", fmt.Errorf("节点内采集：qemu 基质的 SSH 主机解析为空（节点 %q；%s 与默认规则都没给出取值）",
+			node, qemuSSHHostEnv)
+	}
+	return host, nil
+}
+
+// qemuSSHConnArgs 是 ssh 与 scp **共用**的那几格连接参数（硬编码、不做配置面）。
+func qemuSSHConnArgs() ([]string, error) {
+	args := []string{"-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10"}
+
+	// 登录用户：空 ⇒ 默认（**不猜**：给了空串就等于没给）。
+	user := strings.TrimSpace(os.Getenv(qemuSSHUserEnv))
+	if user == "" {
+		user = qemuSSHUserDefault
+	}
+	if strings.ContainsAny(user, " \t\n") {
+		return nil, fmt.Errorf("节点内采集：%s 不能含空白（收到 %q）—— "+
+			"它会被拼进 `user@host`，含空白时拼出来的目标与操作者写的**不是一个**", qemuSSHUserEnv, user)
+	}
+	args = append(args, "-l", user)
+
+	// 端口：**数字**语义，非数字一律响亮失败（`ssh -p abc` 自己会报，但那条错误看起来像
+	// "端口不对"，而真正的原因是环境变量写错）。
+	if raw := strings.TrimSpace(os.Getenv(qemuSSHPortEnv)); raw != "" {
+		port, err := strconv.Atoi(raw)
+		if err != nil || port < 1 || port > 65535 {
+			return nil, fmt.Errorf("节点内采集：%s=%q 不是合法端口（1..65535）", qemuSSHPortEnv, raw)
+		}
+		args = append(args, "-p", raw)
+	}
+
+	// 私钥：**路径**。`IdentitiesOnly=yes` 让这次连接**只用**这一把钥匙 —— 没有它，
+	// ssh 还会去试 agent 与 `~/.ssh/id_*` 里的其它钥匙，于是"连上了"这件事可能靠的是
+	// 操作者没想到的那把钥匙（换人做实验时行为就变了，而两次的实验记录看不出差别）。
+	if keyPath := strings.TrimSpace(os.Getenv(qemuSSHKeyEnv)); keyPath != "" {
+		if _, err := os.Stat(keyPath); err != nil {
+			return nil, fmt.Errorf("节点内采集：%s=%s 不可读: %w —— "+
+				"私钥路径由环境变量给出（**从不**写进仓库）；provisioning 脚本 "+
+				"`lunwen/clab-lab/scripts/edge_vm_provision.sh` 在没有这把钥匙时会自己生成一把",
+				qemuSSHKeyEnv, keyPath, err)
+		}
+		args = append(args, "-o", "IdentitiesOnly=yes", "-i", keyPath)
+	}
+	return args, nil
+}
+
+// qemuSSHArgs = 连接参数 + `-- <主机> <远程命令…>`。
+//
+// `--` **必须在主机名之前**：`ssh <主机> -emit-checks` 会把以 `-` 开头的那一格当作 ssh 自己的
+// 选项（实测形态：`ssh: unknown option -- e`），而 `--` 之后的第一格才是主机名。
+func qemuSSHArgs(node string, cmd ...string) ([]string, error) {
+	args, err := qemuSSHConnArgs()
+	if err != nil {
+		return nil, err
+	}
+	host, err := qemuSSHHost(node)
+	if err != nil {
+		return nil, err
+	}
+	return append(append(args, "--", host), cmd...), nil
+}
+
+// qemuSCPArgs = 连接参数 + `-O <本地> <主机>:<目标>`。
+//
+// `-O`（强制走 legacy SCP 协议）**不是可选的**：OpenSSH 9.0+ 默认用 SFTP 子系统，
+// 而 cloud image 里 `sftp-server` 的位置随发行版变、缺了就报 `subsystem request failed`
+// —— 那条错误指向"子系统没配"，与真正的原因（本机 scp 版本 vs 客人 sshd 的默认）差得很远。
+// `-O` 把这条依赖整个去掉。
+//
+// scp **没有** `--` 那种分隔：主机与路径拼在**同一格**（`<主机>:<路径>`）。
+func qemuSCPArgs(node, localPath, remotePath string) ([]string, error) {
+	args, err := qemuSSHConnArgs()
+	if err != nil {
+		return nil, err
+	}
+	host, err := qemuSSHHost(node)
+	if err != nil {
+		return nil, err
+	}
+	return append(args, "-O", localPath, host+":"+remotePath), nil
+}
+
+// vmidFromNode 判断节点标识是不是一个**纯数字 vmid**，是则给出数值。
+func vmidFromNode(node string) (int, bool) {
+	n, err := strconv.Atoi(node)
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
+}
+
+// runSSH 执行一次 ssh 子命令（`runLXC`/`runPCT` 同一个手法：包级变量 = 用例接缝，
+// 让"把 qemu 的 ssh 换成 docker 的等价变异必须让用例红"能在**同一份源码**上被证明）。
+// 生产代码从不改写它。
+var runSSH = func(args ...string) ([]byte, error) {
+	return runNodeCLI(substrateBinSSH, args...)
+}
+
+// runSCP 执行一次 scp 子命令（同上）。
+var runSCP = func(args ...string) ([]byte, error) {
+	return runNodeCLI(substrateBinSCP, args...)
+}
+
+// indexOf 是 `[]string` 上的 `strings.Index`（Go 标准库没有这一条，而错误分派里要用它
+// 把 ssh 的"连接参数"与"远程命令"分开）。
+func indexOf(args []string, want string) int {
+	for i, a := range args {
+		if a == want {
+			return i
+		}
+	}
+	return -1
 }
 
 // runNodeCLI 是节点侧 CLI 的执行点（Task 4D Step 2 把 docker 专用实现泛化到这里）。
@@ -528,6 +808,34 @@ func runNodeCLI(bin string, args ...string) ([]byte, error) {
 				return nil, fmt.Errorf("节点内采集：pct exec 失败（%s）: %s", strings.Join(args, " "), detail)
 			}
 			return nil, fmt.Errorf("节点内采集：pct %s 失败: %s", strings.Join(args, " "), detail)
+		}
+		if bin == substrateBinSSH {
+			// `ssh <选项…> -- <主机> <远程命令…>`：报出**主机**与**远程命令**，而**不**打印整条
+			// argv 的原样长串（那段里没有口令，但把连接参数逐格打出来对排障没有增益，
+			// 而"哪台机器、哪条远程命令"才是要看的）。主机名与远程命令都从 `--` 之后取。
+			//
+			// ⚠️ 这里**不得**改成人读的更详细形态时带上 `nodeNonceEnv` 的值：nonce 是
+			// 一次性绑定，进日志就等于把它写进了一个长期留存的文本里（本函数只拼 argv，
+			// 而 nonce 在 argv 里是**环境赋值**那一格 —— 故这里只报主机与那条远程命令的
+			// 前几格，见下面 join 的范围）。
+			if i := indexOf(args, "--"); i >= 0 && len(args) > i+1 {
+				host := args[i+1]
+				remote := args[i+2:]
+				if len(remote) > 2 {
+					remote = append(append([]string{}, remote[:2]...), "…")
+				}
+				return nil, fmt.Errorf("节点内采集：ssh 失败（主机 %s；远程命令 %s）: %s",
+					host, strings.Join(remote, " "), detail)
+			}
+			return nil, fmt.Errorf("节点内采集：ssh 失败: %s", detail)
+		}
+		if bin == substrateBinSCP {
+			// `scp -O <本地> <主机>:<目标>`（Task 13）：报出**本地文件**与**目标**，
+			// 与 `pct push` 那一格同款（同一个失败在两种基质上的排障动作一样）。
+			if len(args) >= 3 {
+				return nil, fmt.Errorf("节点内采集：scp %s → %s 失败: %s", args[1], args[2], detail)
+			}
+			return nil, fmt.Errorf("节点内采集：scp 失败（%s）: %s", strings.Join(args, " "), detail)
 		}
 		switch args[0] {
 		case "cp":
