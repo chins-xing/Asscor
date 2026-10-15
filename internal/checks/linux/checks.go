@@ -619,6 +619,10 @@ func as012() model.CheckItem {
 			for acct := range processAccountsWithoutPasswd {
 				trueGhosts = append(trueGhosts, acct)
 			}
+			// **排序后再拼串**（Task 14 W2 同类点）：上面是 map 迭代，顺序随机 ⇒ 不排序的话
+			// `Detail`（"发现 N 个可疑幽灵账户: …"）会随迭代顺序漂移，与"数据可复现"冲突。
+			// 只加一条排序，措辞与分隔符逐字不变。
+			sort.Strings(trueGhosts)
 
 			if len(trueGhosts) > 0 {
 				return false, fmt.Sprintf("发现 %d 个可疑幽灵账户: %s; (系统默认账户 %d 个已正确锁定)",
@@ -694,6 +698,26 @@ func as015() model.CheckItem {
 	}
 }
 
+// ot001CriticalFiles 是 OT-001 要核对的关键文件及其**期望权限**。
+//
+// 为什么是**有序切片**而不是 `map[string]string`（Task 14 修 W2 —— 一个真实的"不可复现"缺陷）：
+// 原实现先建 map 再 `for path, expected := range correctFiles` 往 `issues` 里追加，最后
+// `strings.Join(issues, "; ")` 作为 `Detail` —— 而 **Go 里 map 的迭代顺序是随机的**
+// ⇒ 同一台机器、同一份文件状态下，同一个检查项会产出**不同的明细串**。两个后果：
+//   ① `cmd/edgescen` 的 `TestCollectChecksForTargetDefaultsToLocalHostChecks`（判据是
+//      "默认路径与 runHostChecks 逐要素一致"）约 2/3 概率变红 —— 一条**假**红（不是代码坏了）；
+//   ② 更要紧的是它**直接撞上本项目的"数据可复现"要求**：检查明细会随迭代顺序漂移，
+//      两次采集写出的记录因此不可逐字节比对。⇒ 顺序必须是代码里写死的一条**声明次序**。
+//
+// 次序（也是 `Detail` 里问题串的次序）：/etc/shadow → /etc/gshadow → /etc/sudoers → /etc/passwd。
+// ⚠️ 改这个次序会改变 `Detail` 的字节 ⇒ 必须同时改 `determinism_test.go` 里那条断言。
+var ot001CriticalFiles = []struct{ Path, Expected string }{
+	{"/etc/shadow", "000"},
+	{"/etc/gshadow", "000"},
+	{"/etc/sudoers", "0440"},
+	{"/etc/passwd", "0644"},
+}
+
 func ot001() model.CheckItem {
 	return model.CheckItem{
 		ID:            "OT-001",
@@ -704,22 +728,18 @@ func ot001() model.CheckItem {
 		ComplianceRef: "L3-CE-07",
 		Platform:      "linux",
 		Check: func() (bool, string) {
-			correctFiles := map[string]string{
-				"/etc/shadow":  "000",
-				"/etc/gshadow": "000",
-				"/etc/sudoers": "0440",
-				"/etc/passwd":  "0644",
-			}
 			var issues []string
-			for path, expected := range correctFiles {
-				info, err := os.Stat(path)
+			// 按**声明次序**遍历（不是 map 迭代）：输出格式逐字不变 ——
+			// `<路径> 权限=<实际> (期望=<期望>)`、以 "; " 连接。
+			for _, f := range ot001CriticalFiles {
+				info, err := os.Stat(f.Path)
 				if err != nil {
-					issues = append(issues, fmt.Sprintf("%s 不存在", path))
+					issues = append(issues, fmt.Sprintf("%s 不存在", f.Path))
 					continue
 				}
 				mode := fmt.Sprintf("%04o", info.Mode().Perm())
-				if mode != expected && mode != "0"+expected {
-					issues = append(issues, fmt.Sprintf("%s 权限=%s (期望=%s)", path, mode, expected))
+				if mode != f.Expected && mode != "0"+f.Expected {
+					issues = append(issues, fmt.Sprintf("%s 权限=%s (期望=%s)", f.Path, mode, f.Expected))
 				}
 			}
 			if len(issues) == 0 {
@@ -1130,6 +1150,9 @@ func as010() model.CheckItem {
 						dupes = append(dupes, fmt.Sprintf("UID %s: %s", uid, strings.Join(users, ",")))
 					}
 				}
+				// **排序后再拼串**（Task 14 W2 同类点）：`uidMap` 是 map ⇒ 迭代顺序随机，
+				// 不排序时 `Detail`（"发现UID共享: …"）会随迭代顺序漂移。只加一条排序。
+				sort.Strings(dupes)
 				if len(dupes) > 0 {
 					return false, fmt.Sprintf("发现UID共享: %s", strings.Join(dupes, "; "))
 				}
