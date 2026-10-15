@@ -29,6 +29,12 @@
 #   G) **`EDGEEXP_POLICY_ON_ARM=0` 与 arm=1 的 off 臂逐字相同**（条件行文本一致）——
 #      这就是"既有臂一字不动"在夹具里的钉子（A–E 五格全部跑在 arm=0 上，与 Task 8 时逐字一致）。
 #
+# **Task 11 追加两格**（重复轴 × 臂）：全量扫描是 `--run 1|2|3` × 2 个臂 ⇒ 每个 targeted 场景
+# **6 条**记录。而 Task 10 引入臂时把 run 号**硬编码**成 1/2 ⇒ `EDGEEXP_RUN_INDEX` **失效**：
+# 重复第 2 遍仍拿 `-01`/`-02`（被幂等守卫拒 / 碎片覆盖）。两格：
+#   H) `EDGEEXP_RUN_INDEX=2` 的干跑：实例键带 `-r2`、与第 1 遍的键集合**无交集**、并集 = 4 个落点；
+#   I) 三元组表：`(场景实例, 臂, 重复)` 的落点 4 个**互不相同**（这就是"没有两个三元组撞在一起"）。
+#
 # 判据（6 条，逐条可判真假）：
 #   1. 桩表被脚本接受（名单逐项相等）⇒ 干跑 rc=0
 #   2. **最后一行**（挂着 TTP 因子的那行）判 `basis=targeted_ttp`
@@ -103,7 +109,8 @@ run_dry() { # $1=TTP 因子集；其余 = 选中的场景（无则全量 25）
       -u EDGEEXP_BASELINE_FACTORS -u EDGEEXP_BASELINE_FACTORS_SOURCE \
       -u EDGEEXP_TTP_CONTROL_ABILITY -u EDGEEXP_TTP_TARGET_ABILITY_NAME \
       EDGEEXP_SUBSTRATE=clab EDGEEXP_DRY_RUN=1 EDGEEXP_EDGESCEN="$STUB" \
-      EDGEEXP_POLICY_ON_ARM="${ARM:-0}" \
+      EDGEEXP_POLICY_ON_ARM="${ARM:-0}" EDGEEXP_RUN_INDEX="${REPEAT_IDX:-1}" \
+      EDGEEXP_ENV=dl360-pve \
       EDGEEXP_DATA_DIR="$WORK/data" EDGEEXP_TTP_FACTORS="$factors" \
       EDGEEXP_TTP_TARGET_ABILITY="$TID" EDGEEXP_TTP_PLAYBOOK_ID="$PID" \
       EDGEEXP_TTP_PLAYBOOK_NAME="$PNAME" \
@@ -248,6 +255,39 @@ if not ok:
 sys.exit(0 if ok else 1)
 PY
 [ $? -eq 0 ] && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
+
+echo
+echo "############ H)+I) 重复轴（Task 11）：REPEAT=2 的实例键带 -r2，且与第 1 遍不重叠"
+REPEAT_IDX=1 ARM=1 run_dry "$LAST_FACTOR" "$LAST" > "$WORK/out-r1-one.txt" 2>&1; RC_R1=$?
+REPEAT_IDX=2 ARM=1 run_dry "$LAST_FACTOR" "$LAST" > "$WORK/out-r2-one.txt" 2>&1; RC_R2=$?
+grep -E "重复轴|条件分布" "$WORK/out-r2-one.txt" | sed 's/^/  /'
+python3 - "$WORK/out-r1-one.txt" "$WORK/out-r2-one.txt" "$RC_R1" "$RC_R2" "$LAST" <<'PY'
+import re, sys
+
+def keys(path):
+    out = []
+    for l in open(path, encoding='utf-8'):
+        m = re.match(r'\s+\[\s*\d+/\s*\d+\]\s+(\S+)\s+basis=', l)
+        if m:
+            out.append(m.group(1))
+    return out
+
+k1, k2 = keys(sys.argv[1]), keys(sys.argv[2])
+rc1, rc2, last = int(sys.argv[3]), int(sys.argv[4]), sys.argv[5]
+want1 = {last, last + '-pon'}
+want2 = {last + '-r2', last + '-pon-r2'}
+ok = (rc1 == 0 and rc2 == 0 and set(k1) == want1 and set(k2) == want2 and not (set(k1) & set(k2)))
+print(('  ok   ' if ok else '  FAIL ') +
+      'REPEAT=1 的键 %s ｜ REPEAT=2 的键 %s（各自 2 个、**无交集**）' % (sorted(k1), sorted(k2)))
+tri = sorted(set(k1) | set(k2))
+ok2 = (len(tri) == 4)
+print(('  ok   ' if ok2 else '  FAIL ') +
+      '(场景实例, 臂, 重复) 的 4 个落点互不相同：%s' % tri)
+if not ok:
+    print('      rc1=%d rc2=%d' % (rc1, rc2))
+sys.exit(0 if (ok and ok2) else 1)
+PY
+[ $? -eq 0 ] && PASS=$((PASS+2)) || FAIL=$((FAIL+2))
 
 echo "############ 汇总"
 echo "  PASS=$PASS FAIL=$FAIL"

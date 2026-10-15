@@ -22,7 +22,7 @@
 #   lab-diff              31
 #   test-chain-derivation  8
 #   test-edge-probe       20（它按 `ok` 行计数，没有 PASS= 汇总行）
-#   test-matrix-classification 10（Task 8 的 7 格 + Task 10 的臂 3 格：F 两格 + G 一格；
+#   test-matrix-classification 12（Task 8 的 7 格 + Task 10 的臂 3 格 + Task 11 的重复轴 2 格：H/I；
 #                                 它在**缺陷版**（`SCEN_FACTORS_RAW="$( … ) "`）上必须红 ——
 #                                 实测 PASS=2 FAIL=5；修好后 PASS=7 FAIL=0）
 #   test-agent-readiness    见上（Task 10 的 pid 复用/paw 归属三格）
@@ -38,7 +38,7 @@ declare -A EXPECT=(
   [test-edge-probe]=20
   [lab-diff]=31
   [test-chain-derivation]=8
-  [test-matrix-classification]=10
+  [test-matrix-classification]=12
 )
 ORDER=(test-agent-readiness test-edge-lab test-edge-probe lab-diff test-chain-derivation test-matrix-classification)
 
@@ -75,7 +75,7 @@ done
 
 echo
 if [ "$TOTAL_FAIL" -eq 0 ]; then
-  echo "run-all: 全部通过（6 组：6/51/20/31/8/10）"
+  echo "run-all: 全部通过（6 组：6/51/20/31/8/12）"
   exit 0
 fi
 echo "run-all: $TOTAL_FAIL 组未达标 —— 见上面的尾部输出" >&2
