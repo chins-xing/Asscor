@@ -157,6 +157,15 @@ PVE_STATUS_NORM="${EDGEEXP_PVE_STATUS_NORM:-/var/tmp/edgeexp-ct-status.norm}"
 # （不是静默出错，这点是好的），但它的错误信息让操作者"用 --group 拉起 agent" —— 而他其实已经拉了，
 # **诊断方向指错**。现在两处读同一个变量：目标 agent 拉起时的 `--group` 与攻击侧的投送范围同源。
 AGENT_GROUP="${EDGEEXP_ATTACK_GROUP:-t4d-ttp}"
+# AGENT_GROUP_FOR_JUDGE 是**只给 qemu 基质**用的那一格：它是"活 agent"判据里的投送组名
+# （见 `live_agent_paws` 上方的第五条判据）。为什么**只有 qemu 传**（Task 17 实测后的取舍）：
+# 加入这条判据之后，"换组名"会让本脚本**重拉** agent —— 而只有 qemu 那一支的重拉路径里
+# 带了"先 `agent-stop` 停掉旧的那只"；CT/lxd/pve 的重拉路径**没有**停旧动作，
+# 传组名会让换组时**两只 sandcat 并存**（旧组一只、新组一只）。那种形态比"换组不被发现"
+# 更危险（多一个跳动的进程、`live_sandcat_pids` 多一个 pid）。⇒ 其余基质**逐字保持旧行为**；
+# "换组不被发现"这个坑在那些基质上仍然存在，登记在 Task 17 报告的 concern 里（未跨基质统一）。
+AGENT_GROUP_FOR_JUDGE=""
+[ "${lab_substrate:-}" = "qemu" ] && AGENT_GROUP_FOR_JUDGE="$AGENT_GROUP"
 
 [ -n "$TARGET" ] || { echo "edge_target_prepare: 必须给 EDGEEXP_TARGET=<实例名>" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "edge_target_prepare: 缺少 python3" >&2; exit 2; }
@@ -910,13 +919,30 @@ fi
 # 仍然保留三条判据不变：`host` 相同 + `trusted=true` + `(pid ∈ 容器内活 pid)` + `last_seen ≤ 新鲜度`。
 # **不改成硬失败**：一条已死记录不该让每次复位都失败（那会让"清理残留"变成跑批的硬前置）；
 # 但这也不再是静默的 —— 警告里直接列出"还有哪些 paw 记着同一个 pid"。
+#
+# ★★ **Task 17 真机实测新增第五条判据：投送组**（`${AGENT_GROUP:-}` 经**第 7 个 argv** 传入）。
+# 实测的坑：`EDGEEXP_ATTACK_GROUP` 是"prepare 拉起 agent 用的 `--group`"与"攻击侧 operation 的
+# 投送范围"**同一个变量**，但它**不参与**本函数的存活判据 ⇒ **改组名之后，旧组里那只 agent 仍被
+# 判成"已在跳"**，prepare 走幂等路径**不重拉**；随后攻击侧以
+# `basis=targeted_ttp 且声明了投送组 <新组>，但该组里没有一只活 agent` 失败 ——
+# 而那句提示让操作者"先跑 edge_reset.sh"，**重跑复位什么也不会做**（agent 被判成活着）。
+# 现场逐字（Task 17）：
+#     $ ps -eo pid,args --no-headers | grep sandcat
+#       32691 /root/sandcat --server http://192.168.30.2:8888 --group t4d-ttp      ← 仍停在**旧组**
+#     edge_target_prepare: agent 已在跳（paw=veflzw，容器内活 pid=[32691]）—— 幂等路径
+#     （而它的日志头一行写着「组=t4d-ttp-vm」—— 那是**声明值**，不是事实）
+# ⇒ 组名与 `host`/`pid`/心跳一样，都是"这一只 agent 是不是**本轮的那一只**"的组成部分。
+# 空串（缺 `AGENT_GROUP`，例如离线夹具把本函数单独抽出来跑）= **不过滤**，逐字同旧行为。
 live_agent_paws() {
   python3 - "$CALDERA_URL" "$CALDERA_KEY" "$TARGET" "${EDGEEXP_AGENT_FRESH_S:-180}" "${1:-}" \
-          "${EDGEEXP_AGENTS_FIXTURE:-}" <<'PY'
+          "${EDGEEXP_AGENTS_FIXTURE:-}" "${AGENT_GROUP_FOR_JUDGE:-}" <<'PY'
 import json, sys, time, urllib.request
 from datetime import datetime, timezone
 api, key, host, fresh = sys.argv[1].rstrip('/'), sys.argv[2], sys.argv[3], int(sys.argv[4])
 fixture = (sys.argv[6] or '').strip()
+# want_group 是**第 7 个 argv**：投送组名。它参与"活 agent"的判据（Task 17 实测新增，见函数上方的长注释）。
+# 空串 = **不过滤**（老调用点与离线夹具都走这条，逐字同旧行为）。
+want_group = (sys.argv[7] if len(sys.argv) > 7 else '').strip()
 if fixture:
     # **离线测试缝**（与 `EDGEEXP_EDGESCEN` / `EDGEEXP_PCT_BIN` 同款）：用文件里的 agent 列表替掉
     # 真实 API，好让"多候选时取哪一只"这件事可以**离线**判真假（正反两向证据见报告 Step 4.1）。
@@ -932,6 +958,18 @@ now = time.time()
 cands = []
 for a in agents:
     if a.get('host') != host or not a.get('trusted'):
+        continue
+    # **投送组也要对得上**（Task 17 真机实测新增的第五条判据）。
+    # 为什么必须加：`EDGEEXP_ATTACK_GROUP` 既是"prepare 拉起 agent 时用的 `--group`"，
+    # 也是"攻击侧 operation 的投送范围"——**同一个变量两处消费**。而它在 agent 的存活判据里
+    # **原本不参与** ⇒ 换了组名之后，旧组里那只 agent 仍被判成"已在跳"，prepare 走**幂等路径不重拉**
+    # ⇒ 攻击侧随后以「投送组 X 里没有一只活 agent」失败，而那句提示让操作者"先跑 edge_reset.sh"
+    # —— **重跑复位什么也不会做**（agent 被判成活着）。实测现场（Task 17）：
+    #   `ps … | grep sandcat` → `/root/sandcat --server … --group t4d-ttp`   ← 仍停在旧组
+    #   而 prepare 的日志写着「agent 已在跳（paw=veflzw…，组=t4d-ttp-vm）」← 那是**声明值**，不是事实
+    # 判据加在这里（而不是另写一段"组对不对"）：组名与 `host`/`pid`/心跳一样，都是
+    # "这一只 agent 是不是**本轮的那一只**"的组成部分。
+    if want_group and (a.get('group') or '') != want_group:
         continue
     if a.get('pid') is None or int(a['pid']) not in pids:
         continue
@@ -1149,6 +1187,12 @@ elif is_qemu; then
   #      故"策略在 ⇒ TTP 被拒 / 策略不在 ⇒ TTP 成功"这条因果链是真的，而不是配置层的一句声明。
   echo "edge_target_prepare: 目标上没有活着的 agent（VM 内 sandcat pid=[$PIDS]）⇒ 送载荷并以 root 等价拉起"
   qemu_push_helper || exit 1
+  # **先把可能还活着的旧 sandcat 停掉**（Task 17 实测新增）：本分支可能是**换组**触发的
+  # （见 `AGENT_GROUP_FOR_JUDGE`），而旧那只仍在**旧组**里跳 —— 不停它就会两只并存：
+  # 多一个跳动的进程、`live_sandcat_pids` 多一个 pid，而"本轮打的是哪一只"这件事在数据上
+  # 又变得无法回答（Task 10 Step 4.2 的整段理由）。`pkill -x sandcat` 只按进程名杀，
+  # 幂等（没有匹配时 rc≠0，故 `|| true`）。
+  qemu_guest agent-stop >/dev/null 2>&1 || true
   lab_push "$PAYLOAD" "$TARGET" /tmp/sandcat.new \
     || { echo "edge_target_prepare: 把 sandcat 载荷送到 $TARGET:/tmp/sandcat.new 失败" >&2; exit 1; }
   [ "$(qemu_guest agent-install /tmp/sandcat.new)" = "installed" ] \
