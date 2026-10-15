@@ -125,6 +125,15 @@ if [ "${#FAILED[@]}" -eq 0 ]; then
     fi
     echo "     $bin: HEAD 构建=$WANT"
     echo "             生效的  =$HAVE"
+    # 不一致时补一行**现场那份的构建戳**：只说"不同"等于说了一半 ——
+    #   · 二进制里盖着构建时的 `vcs.revision`（默认 `-buildvcs`）⇒ **每次提交后哈希都会变**，
+    #     哪怕源码一个字没动。没有这一行，操作者会把"提交之后没重装"误读成"源码陈旧"，
+    #     而这两件事的修法完全不同（前者 `--install` 即好，后者说明检出的东西根本不是这套代码）。
+    if [ "$HAVE" != "$WANT" ] && [ -e "$REPO/build/$bin" ]; then
+      STAMP="$(go version -m "$REPO/build/$bin" 2>/dev/null | grep -E 'vcs\.revision|vcs\.modified' | tr -s ' \t' ' ' | tr '\n' ' ')"
+      echo "             现场那份: ${STAMP:-（读不出构建信息）}"
+      echo "             ★ 二进制盖着构建时的 vcs 戳 ⇒ **换提交后要重新 --install**（源码没动也会哈希不同）"
+    fi
     if [ "$HAVE" = "$WANT" ]; then
       ok "$bin 与 HEAD 构建**逐字节相同**（跑批用的是 HEAD 的代码）"
       continue
