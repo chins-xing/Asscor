@@ -722,7 +722,7 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
 
 ### Task 4C: 观察对象搬到节点内 + R 组条件探测真相源（不依赖 C1 的正确性修复）
 
-**为什么加这个任务**（C1 只读勘测实测，报告 `.superpowers/sdd/2026-09-12-edge-factor-coupling-milestone-b/c1-feasibility-survey.md`）：
+**为什么加这个任务**（C1 只读勘测实测 —— 该勘测的结论逐条写在下面，**勘测报告本身是过程产物、不入库**；可交付版本见 `docs/experiments/EDGE_FACTOR_EXPERIMENT_ENVIRONMENT_WHITEPAPER.md` 与 `docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part B.2）：
 
 - **观察对象错位**：`cmd/edgescen` **没有** target/host 参数，`runHostChecks()` 跑的是**它自己所在宿主**的检查登记表，冒烟记录描述的因此是 **WSL 开发机**而不是**被攻击的节点**（输出路径 `/mnt/f/...` 是铁证）。C1 的两个候选分支（硬化基线 / 缩小矩阵）**都需要**这个修复 —— 否则"记录描述部署行为"这一前提不成立。
 - **R 组诚实性有洞**：`condition_holds()` / R 组"真实缺失"闸门探测的是**脚本宿主**，而 `attack-R-no-ids.json` 的 `condition_probes` 是**空数组** ⇒ "确实把 IDS 去掉了"这句话目前**没有节点侧证据**。
