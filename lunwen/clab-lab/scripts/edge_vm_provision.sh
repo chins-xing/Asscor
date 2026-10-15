@@ -100,6 +100,17 @@ IMG_STORAGE_DIR="${EDGEEXP_VM_IMG_DIR:-/var/lib/vz/import}"
 #     （ISO 依然要挂在一条 iso 存储下）—— 这里是那处修正，不是新增特性。
 SEED_STORAGE="${EDGEEXP_VM_SEED_STORAGE:-local}"
 SEED_DIR="${EDGEEXP_VM_SEED_DIR:-/var/lib/vz/template/iso}"
+# 客人侧网卡名（Task 15 修正）：**不是 `eth0`**。PVE 的 virtio 网卡在客人里按 PCI 槽位取
+# **可预测名**，实测（PVE 9.2.2 + Ubuntu noble cloud image）是 **`ens18`** ——
+# `qm guest cmd 910 network-get-interfaces` 逐字报 `name='ens18'`。
+# 原来写死 `guest_ip … eth0` ⇒ python 那句 `nic["name"] != want` 恒真 ⇒ **永远**取不到 IP，
+# 而报错文案却写"guest agent 没能报出 **eth0** 的 IPv4"，把根因指到了 agent 身上（实测 agent 是好的）。
+# 列表里保留 `eth0` 兜底（别的镜像/别的总线可能真的叫 eth0）。
+GUEST_IFACE="${EDGEEXP_VM_GUEST_IFACE:-ens18}"
+GUEST_IFACE_ACCEPT="$GUEST_IFACE,eth0"
+# cloud-init 首启要装包（qemu-guest-agent / apparmor-utils / auditd …），实测**超过 240 s**
+# 才把 guest agent 起来；原值 240 会在冷启动时**必定**超时并让整轮建机 die（Task 15 实测）。
+GUEST_AGENT_WAIT_S="${EDGEEXP_VM_GUEST_AGENT_WAIT_S:-600}"
 CLOUD_IMG_URL="${EDGEEXP_VM_CLOUD_IMG_URL:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 CLOUD_IMG_SHA_URL="${EDGEEXP_VM_CLOUD_IMG_SHA_URL:-https://cloud-images.ubuntu.com/noble/current/SHA256SUMS}"
 SSH_USER="${EDGEEXP_VM_SSH_USER:-asc}"
@@ -582,16 +593,22 @@ create_vm() {
 guest_ip() {
   # 客人 IP 的权威判据是 **guest agent**（cloud-init 装并起的就是它）。
   # 失败时**不猜**：猜错会让 /etc/hosts 与后续取数锁到**另一台**机器上。
-  local vmid="$1" iface="$2" ip
-  ip="$(qm guest cmd "$vmid" network-get-interfaces 2>/dev/null | python3 -c '
+  #
+  # ⚠️ 接口名由 $2 给（调用方传 $GUEST_IFACE_ACCEPT，默认 `ens18,eth0`）——**别改回写死 `eth0`**：
+  # PVE virtio 上客人网卡的可预测名是 `ens18`，写死 eth0 会让过滤条件恒真、永远取不到 IP。
+  # 输出是 `<网卡名>\t<IP>` 两格（调用方要拿网卡名打日志，故不能只回 IP）。
+  local vmid="$1" iface="$2" out
+  out="$(qm guest cmd "$vmid" network-get-interfaces 2>/dev/null | python3 -c '
 import json,sys
-want = sys.argv[1]
+want = [w for w in sys.argv[1].split(",") if w]
 try:
     data = json.load(sys.stdin)
 except Exception:
     raise SystemExit(1)
+fallback = None
 for nic in data:
-    if nic.get("name") in ("lo", "lo0"):
+    name = nic.get("name")
+    if name in ("lo", "lo0"):
         continue
     for a in nic.get("ip-addresses", []):
         if a.get("ip-address-type") != "ipv4":
@@ -601,14 +618,23 @@ for nic in data:
             continue
         # 只取"要挂的那条桥"上的地址：客人可能有第二块网卡（管理 VLAN），
         # 取错了就会把 /etc/hosts 与取数地址锁到一条不通的路上。
-        if want and nic.get("name") != want:
+        # 故**先**按名字精确匹配；名字都不匹配时**不静默**回退 ——
+        # 记下第一个候选，只有在整个列表里没有任何一个名字命中时才用它，
+        # 并把"回退到了哪个网卡"打到 stderr（回退必须看得见）。
+        if want and name not in want:
+            if fallback is None:
+                fallback = (name, addr)
             continue
-        print(addr)
+        sys.stdout.write("%s\t%s\n" % (name, addr))
         raise SystemExit(0)
+if fallback is not None:
+    sys.stderr.write("guest_ip: 没有一个网卡叫 %s —— 回退用 %s\n" % (",".join(want), fallback[0]))
+    sys.stdout.write("%s\t%s\n" % fallback)
+    raise SystemExit(0)
 raise SystemExit(1)
-' "$iface" 2>/dev/null)" || return 1
-  [ -n "$ip" ] || return 1
-  printf '%s\n' "$ip"
+' "$iface")" || return 1
+  [ -n "$out" ] || return 1
+  printf '%s\n' "$out"
 }
 
 wait_guest_agent() {
@@ -692,22 +718,30 @@ for i in "${!VMIDS[@]}"; do
   fi
 
   # 取客人 IP（判据：guest agent 说了才算；说不出来就**响亮失败**，绝不猜）
+  # ⚠️ guest_ip 回的是 `<网卡名>\t<IP>` 两格，**不能**直接把它的整段输出当 IP 用。
+  # 注意 `ip="$(guest_ip …)"` 那种写法会把函数跑在**子 shell**里 —— 网卡名就传不出来，
+  # 故这里一次取回两格、在当前 shell 里切开。
   ip=""
+  iface_used=""
   if [ "$DRY_RUN" -eq 0 ]; then
-    if wait_guest_agent "$vmid" 240; then
-      ip="$(guest_ip "$vmid" eth0 || true)"
+    if wait_guest_agent "$vmid" "$GUEST_AGENT_WAIT_S"; then
+      ipinfo="$(guest_ip "$vmid" "$GUEST_IFACE_ACCEPT" || true)"
+      iface_used="${ipinfo%%$'\t'*}"
+      ip="${ipinfo#*$'\t'}"
+      # 没有制表符 ⇒ 前后两格相等 ⇒ guest_ip 其实没给出结果
+      if [ "$iface_used" = "$ip" ]; then iface_used=""; ip=""; fi
     fi
     if [ -z "$ip" ]; then
-      warn "VM $vmid 的 guest agent 没能报出 eth0 的 IPv4 ——"
+      warn "VM $vmid 的 guest agent 没能报出网卡（$GUEST_IFACE_ACCEPT）的 IPv4 ——"
       warn "  可能的因：cloud-init 还没收敛、镜像里没有 qemu-guest-agent、或网络没起来。"
       warn "  诊断：qm guest cmd $vmid network-get-interfaces；qm terminal $vmid（Ctrl-O 退出）"
       warn "  处置：确认 IP 后手工导出 EDGEEXP_VM_SSH_HOST=<ip> 再跑跑批前检查。"
       die "取不到 VM $vmid 的客人 IP（本脚本**不猜**取数地址：猜错会让 /etc/hosts 与后续取数锁到别的机器上）"
     fi
-    log "   客人 IP：$ip（eth0@$NET_BRIDGE）"
+    log "   客人 IP：$ip（$iface_used@$NET_BRIDGE；期望网卡名 $GUEST_IFACE_ACCEPT）"
     VM_IPS[$i]="$ip"
   else
-    printf '  [dry-run] qm guest cmd %s network-get-interfaces（取 eth0 的 IPv4）\n' "$vmid"
+    printf '  [dry-run] qm guest cmd %s network-get-interfaces（取 %s 的 IPv4）\n' "$vmid" "$GUEST_IFACE_ACCEPT"
   fi
 
   # 等 SSH（**按 IP 连**：此刻 /etc/hosts 还没写）
