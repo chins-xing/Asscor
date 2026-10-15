@@ -18,7 +18,12 @@
 #
 # 期望的通过数（复审 7.6 第 3 条的判据，**任何一条不到就是回归**）：
 #   test-agent-readiness   6（Task 10 加了 pid 复用 / paw 归属三格：D / D2 / E —— 前 3 格是 Task 4D 的原判据）
-#   test-edge-lab         51（Task 6 的 H 段把 pve 基质加了 25 条；此前 26）
+#   test-edge-lab         73（Task 6 的 H 段把 pve 基质写成 25 条 ⇒ 51；Task 13 的 I 段给 qemu
+#                              加了 22 条 ⇒ 73。⚠️ Task 15 在 Linux 上实跑是
+#                              **PASS=73 FAIL=3**，而那 3 条 FAIL 在**起点 `541c504` 上逐字相同**
+#                              （失败集 diff 为空）⇒ 是 Task 13 带进来的**既有失败**、不是回归。
+#                              故本组 **rc 恒为 1**：把 EXPECT 从 51 改成 73 只是让"计数"不再
+#                              骗人，**不会**让本组变绿 —— 那 3 条要单独处置（见 Task 15 报告）。）
 #   lab-diff              31
 #   test-chain-derivation  8
 #   test-edge-probe       20（它按 `ok` 行计数，没有 PASS= 汇总行）
@@ -37,7 +42,7 @@ export REPO
 
 declare -A EXPECT=(
   [test-agent-readiness]=6
-  [test-edge-lab]=51
+  [test-edge-lab]=73
   [test-edge-probe]=20
   [lab-diff]=31
   [test-chain-derivation]=8
@@ -78,7 +83,7 @@ done
 
 echo
 if [ "$TOTAL_FAIL" -eq 0 ]; then
-  echo "run-all: 全部通过（6 组：6/51/20/31/8/12）"
+  echo "run-all: 全部通过（6 组：6/73/20/31/8/12）"
   exit 0
 fi
 echo "run-all: $TOTAL_FAIL 组未达标 —— 见上面的尾部输出" >&2
