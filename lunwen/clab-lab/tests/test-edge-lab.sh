@@ -630,7 +630,14 @@ echo "############ I) qemu 分支（假 qm + 假 ssh/scp）"
 mkdir -p "$D/bin-qemu"
 cat > "$D/bin-qemu/qm" <<'SH'
 #!/bin/sh
-printf 'qm %s\n' "$*" >> "$REPLAY_LOG"
+# ⚠️ 日志里带 **`[invoke] ` 前缀**（Task 16 修的一处夹具缺陷）：不加前缀时，这个日志同时装了
+# "真被调用的命令"与**脚本自己 echo 出来的帮助文本** —— 而后者恰恰包含字面量
+# `qm destroy --purge`（`edge_lab.sh` 的 `lab_down` 在说明"本层永不销毁 VM"时会把它写出来）。
+# 于是 I 段那条"qemu 分支发出了会改变 VM 状态的命令"会把**帮助文本**当成**命令**，
+# 报出一条**假红**（`FAIL … 绝不允许）：qm destroy --purge`）。而那条判据本该在
+# "代码真的去 destroy 了"时才红 —— 假红与真红的区别，在这里就是"命令"与"说明"的区别。
+# 加了前缀之后，所有针对本日志的判据点名的都是**真被调用过的** `qm …`。
+printf '[invoke] qm %s\n' "$*" >> "$REPLAY_LOG"
 case "$1" in
   list)
     printf 'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n'
@@ -679,15 +686,39 @@ QMU_LOG="$D/qemu.log"; SSH_LOG="$D/qemu-ssh.log"; SCP_LOG="$D/qemu-scp.log"
 # 否则"没给端口时不出现 `-p`"这条判据会被外层环境静默改变（假绿/假红）。
 unset EDGEEXP_VM_SSH_HOST EDGEEXP_VM_SSH_KEY EDGEEXP_VM_SSH_USER EDGEEXP_VM_SSH_PORT
 # PATH 上**同时**有假 docker/lxc/clab/pct 与假 qm/ssh/scp ⇒ 日志里出现哪一种就是"实际发给了谁"。
+# 「基质串味」的判据是"跑之前 / 跑之后"两份字节数比，而中间**只有**这一次 `bash "$D/qemu.sh"`。
+log_bytes() { if [ -f "$1" ]; then wc -c < "$1"; else echo 0; fi; }
+QI_PVE_B="$(log_bytes "$D/pve.log")"; QI_LXD_B="$(log_bytes "$D/lxd.log")"
+QI_DOCKER_B="$(log_bytes "$D/docker.log")"
 PATH="$D/bin-qemu:$D/bin-pve:$D/bin:$PATH" REPLAY_LOG="$QMU_LOG" \
   REPLAY_SSH_LOG="$SSH_LOG" REPLAY_SCP_LOG="$SCP_LOG" \
   EDGEEXP_SUBSTRATE=qemu EDGEEXP_QM_BIN=qm EDGEEXP_SSH_BIN=ssh EDGEEXP_SCP_BIN=scp \
   LAB_TMP="$D/work" EDGEEXP_LAB_TMP="$D/work" LIB="$LIB" \
   bash "$D/qemu.sh" > "$D/qemu.out" 2>&1
+QI_PVE_A="$(log_bytes "$D/pve.log")"; QI_LXD_A="$(log_bytes "$D/lxd.log")"
+QI_DOCKER_A="$(log_bytes "$D/docker.log")"
 
-if grep -qE '^ssh (-o [^ ]+ )+-- asc-vm910 bash -c rm -f /tmp/x' "$SSH_LOG"; then
+# 判据的写法：连接参数段之后必须是 `-- asc-vm910 bash -c <命令串>`。三条讲究都要留住：
+#
+#  1. 用 `grep -qx` 做**整行**相等（不是子串匹配）：子串匹配对"参数段里多了一格"是瞎的。
+#
+#  2. **不用 `-E` 的 `+`/`?` 量词**（Task 16 实测踩到的一处**夹具自身的雷**）：本机 Git Bash
+#     的 grep 在 **`POSIXLY_CORRECT` 被设上时 `-E` 会退回 BRE 语义** —— 于是 `+` 与 `?`
+#     变成**字面量**（实测 `grep -E 'ssh (-o [^ ]+ )+-- …'` 对完全匹配的行报 NOMATCH）。
+#     ⇒ 这里不用量词，故在 BRE/ERE 两种解释下**同义**。
+#
+#  3. `bash -c bash -c rm -f /tmp/x` 是**正确**形态，不是双重包装的缺陷（Task 16 实测澄清）：
+#     调用点写的是 `lab_target_exec 910 bash -c "rm -f /tmp/x"`（**两格**：`bash`、`-c`、
+#     `rm -f /tmp/x`），而 `lab_target_exec` 的 qemu 分支把它重建成 `bash -c "$*"`
+#     ⇒ 客人侧收到的命令串逐字就是 `bash -c bash -c rm -f /tmp/x`。
+#     Task 16 一度按"这是多包了一层"去改（把外层 `bash -c` 去掉），**实测与理解不符、已还原**；
+#     这条断言就是那次澄清的钉子（改成去掉外层的样子必须让它红）。
+if grep -qx 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -l asc -- asc-vm910 bash -c bash -c rm -f /tmp/x' "$SSH_LOG"; then
   ok "qemu exec 走 ssh 且目标名由 vmid 推出来（asc-vm910）"
-else fail "qemu exec 形态不对"; cat "$SSH_LOG"; fi
+  ok "qemu exec 的命令串与调用点写的**逐字一致**（\`bash -c\` 那两格是调用方给的，不是多包一层）"
+else
+  fail "qemu exec 形态不对（期望整行：ssh <连接参数> -- asc-vm910 bash -c bash -c rm -f /tmp/x）"; cat "$SSH_LOG"
+fi
 if grep -q '^scp .* -O /opt/payload asc-vm910:/tmp/sandcat' "$SCP_LOG"; then
   ok "qemu push 走 scp（含 \`-O\` 强制 legacy SCP 协议）"
 else fail "qemu push 形态不对"; cat "$SCP_LOG"; fi
@@ -698,10 +729,10 @@ if grep -qE '^ssh .*-- asc-vm910 ip -4 -o addr show eth0' "$SSH_LOG"; then
   ok "qemu lab_node_ip 在客人内取地址"; else fail "qemu lab_node_ip 形态不对"; fi
 if grep -qE '^ssh .*-- asc-vm910 ps -eo pid,comm --no-headers' "$SSH_LOG"; then
   ok "qemu lab_node_pids 在客人内取进程表"; else fail "qemu lab_node_pids 形态不对"; fi
-if grep -q '^qm status 910' "$QMU_LOG"; then
+if grep -q '^\[invoke\] qm status 910' "$QMU_LOG"; then
   ok "qemu lab_node_running 用 \`qm status <vmid>\` 判状态（实例视图走 qm，不走 ssh）"
 else fail "qemu lab_node_running 没走 qm status"; fi
-if grep -q '^qm config 910' "$QMU_LOG"; then
+if grep -q '^\[invoke\] qm config 910' "$QMU_LOG"; then
   ok "qemu lab_inspect 用 \`qm config <vmid>\` 取基质视图"; else fail "qemu lab_inspect 没走 qm config"; fi
 if printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== list/,/^== spec/p' | grep -q 'asc-vm910' \
    && ! printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== list/,/^== spec/p' | grep -qE '^(VMID|12345)'; then
@@ -731,12 +762,22 @@ if sed -n '/^== counts/,$p' "$D/qemu.out" | grep -q -- '-1 -1 -1'; then
   ok "lab_node_counts 在 qemu 下回显 -1 -1 -1（宿主上还有别人的 VM，不是同一个集合）"
 else fail "lab_node_counts 在 qemu 下不对"; fi
 # **不越界**：本层永不 create/destroy/start/stop 任何 VM；也**不得**把 pct/docker/lxc 当 qemu 用。
-if grep -qE '^qm (create|destroy|start|stop|shutdown|reboot|del|importdisk|set) ' "$QMU_LOG"; then
-  fail "qemu 分支发出了会改变 VM 状态的命令（绝不允许）：$(grep -E '^qm (create|destroy|start|stop|shutdown|reboot|del|importdisk|set) ' "$QMU_LOG")"
-else ok "qemu 分支只读：无 create/destroy/start/stop/importdisk/set"; fi
-if [ -s "$D/pve.log" ] || [ -s "$D/lxd.log" ] || [ -s "$D/docker.log" ]; then
-  fail "qemu 路径把命令发给了别的基质（pct/lxc/docker）—— 基质选错且不报错：$(cat "$D/pve.log" "$D/lxd.log" "$D/docker.log" 2>/dev/null | head -5)"
-else ok "qemu 路径**只**起 qm/ssh/scp：docker / lxc / pct 一次都没被调用（绝不静默回落）"; fi
+# ⚠️ 判据只打在**日志里带 `[invoke] qm ` 前缀**的那些行上（即**真被调用过的**命令）：
+# 脚本自己 echo 的帮助文本里就有字面量 `qm destroy --purge`（`lab_down` 说明"本层永不销毁 VM"
+# 时写出来的），把它当命令会让这条判据**恒红**——而它本该在"代码真去 destroy 了"时才红。
+if grep -E '^\[invoke\] qm (create|destroy|start|stop|shutdown|reboot|del|importdisk|set) ' "$QMU_LOG" >/dev/null; then
+  fail "qemu 分支发出了会改变 VM 状态的命令（绝不允许）：$(grep -E '^\[invoke\] qm (create|destroy|start|stop|shutdown|reboot|del|importdisk|set) ' "$QMU_LOG")"
+else ok "qemu 分支只读：无 create/destroy/start/stop/importdisk/set（判据打在真被调用过的命令上）"; fi
+# 「基质串味」：H 段（pve）与 B 段（lxd）的日志是**累积**的（`bash $D/pve.sh` 追加在
+# `$D/pve.log` 上），故不能只看"文件非空"——那会把**上一段留下的** pct 行读成本段发的。
+# 判据改成"**本段跑的那一次没有让它们增长**"（`QI_*_B` 与 `QI_*_A` 分别取自那一次
+# `bash "$D/qemu.sh"` 的**紧邻前后**），既保住"绝不静默回落"这条纪律，也不再冤枉代码。
+# 判据**有牙**：把 qemu 的目标级二进制换成 pct/docker 的等价变异会让右侧的字节数变大。
+if [ "$QI_PVE_A" = "$QI_PVE_B" ] && [ "$QI_LXD_A" = "$QI_LXD_B" ] && [ "$QI_DOCKER_A" = "$QI_DOCKER_B" ]; then
+  ok "qemu 路径**只**起 qm/ssh/scp：docker / lxc / pct 一次都没被调用（绝不静默回落）；判据是本段没让它们的日志增长（pct $QI_PVE_B→$QI_PVE_A、lxd $QI_LXD_B→$QI_LXD_A 字节）"
+else
+  fail "qemu 路径把命令发给了别的基质（pct/lxc/docker）—— 基质选错且不报错：pct $QI_PVE_B→$QI_PVE_A、lxd $QI_LXD_B→$QI_LXD_A、docker $QI_DOCKER_B→$QI_DOCKER_A；尾部：$(cat "$D/pve.log" "$D/lxd.log" "$D/docker.log" 2>/dev/null | tail -5)"
+fi
 
 # --- I-1) STOPPED 的 VM 必须回 false（判据打在 stdout 上，与 pve 段同款）-------------
 STOPPED_Q="$(PATH="$D/bin-qemu:$PATH" REPLAY_LOG="$D/qemu-stopped.log" REPLAY_QM_STATUS=stopped \

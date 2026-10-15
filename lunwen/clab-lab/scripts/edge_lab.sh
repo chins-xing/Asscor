@@ -214,6 +214,25 @@ lab_ssh_conn_args() {
     }
     printf '%s\n' -o IdentitiesOnly=yes -i "$EDGEEXP_VM_SSH_KEY"
   fi
+  # known_hosts：给了就**显式**指同一份文件（Task 16，concern 3）。
+  #
+  # 为什么：这台基质的正常循环是"建机 → 清机 → 用同一个 vmid/名字重建"，而重建之后
+  # **客人 host key 必然变**，`StrictHostKeyChecking=accept-new` **只接受新主机、不接受
+  # 变更后的主机** ⇒ 直接报 `Host key verification failed.`，而那条错误与"私钥不对 /
+  # 机器不可达"**同形**（Task 15 里它让 guest_side_metrics 静默失败）。
+  # 处置与 cmd/edgescen 的 qemuSSHKnownHostsEnv **同源**：建机侧（edge_vm_provision.sh）
+  # 在这**同一份**文件里删掉旧条目，本层与取数层都读它 ⇒ 同一个 vmid/名字在整轮实验里
+  # 只有一把有效的 host key，而 `accept-new` 对**真的**中间人仍然会拒绝。
+  if [ -n "${EDGEEXP_VM_KNOWN_HOSTS:-}" ]; then
+    case "$EDGEEXP_VM_KNOWN_HOSTS" in
+      *[[:space:]]*)
+        echo "edge_lab: EDGEEXP_VM_KNOWN_HOSTS='$EDGEEXP_VM_KNOWN_HOSTS' 含空白 ——" >&2
+        echo "  它会被原样交给 ssh/scp 的 UserKnownHostsFile 选项。请给一个不含空白的路径。" >&2
+        return 1
+        ;;
+    esac
+    printf '%s\n' -o "UserKnownHostsFile=$EDGEEXP_VM_KNOWN_HOSTS"
+  fi
   return 0
 }
 
@@ -570,7 +589,18 @@ lab_down() {
     # 与 pve 同处置（一次猜测性的 destroy 会删掉**别人的** VM），但**额外**说明清机该走哪里：
     # `edge_vm_provision.sh --destroy` 有"前缀 + VMID 下限"两道护栏，能在拆之前确认
     # "这台 VM 是本任务建的吗"。基质层没有那个信息，故永不 destroy。
-    echo "edge_lab: lab_down 对 qemu 不适用 —— 本层**永不**销毁 VM（`qm destroy --purge` 会连磁盘" >&2
+    #
+    # ⚠️⚠️ **这行里的反引号必须转义**（Task 16 实测踩到的一处**真缺陷**，不是笔误）：
+    # 双引号字符串里的 `` `…` `` 是**命令替换** —— 原来的写法
+    #     echo "…（`qm destroy --purge` 会连磁盘…"
+    # 会让 bash 在打印这条**帮助文本之前**真的去**执行** `qm destroy --purge`。
+    # 实测（Task 16 的最小复现）：那台 VM 上的 `qm` 确实被调用了，argv 逐字是 `destroy --purge`，
+    # 命令替换的结果是空串（因为假 qm 不实现 destroy）⇒ 日志里只多两个空格，
+    # **肉眼完全看不出来**，而"我们主动去销毁一台 VM"这件事已经发生了。
+    # 在真宿主上这条帮助文本只在 qemu 分支被打印，而那个分支的 `qm` 是真的 PVE 命令
+    # ⇒ 一次 `lab_down` 就会**真的拆掉**一台 VM（VMID 来自 `$lab_topology`，可能是别人的）。
+    # 这正是"帮助文本看起来只是帮助文本"的形态，故这里改成**单引号**（零语义、零执行）。
+    echo "edge_lab: lab_down 对 qemu 不适用 —— 本层**永不**销毁 VM（'qm destroy --purge' 会连磁盘" >&2
     echo "  一起删，而宿主上还有别人的 VM/CT）。清机请跑有护栏的那一个：" >&2
     echo "  lunwen/clab-lab/scripts/edge_vm_provision.sh --destroy（只拆带本任务前缀、VMID ≥ 910 的）。" >&2
     return 2 ;;
@@ -618,9 +648,8 @@ lab_target_exec() {
     #     `lab_target_exec <节点> bash -c "echo 'a b'"`
     # 在 ssh 侧得到的不是 `bash` 收到 `-c` 与那一段脚本，而是一行被远端 shell 重新解析过的文本。
     #
-    # ⇒ 本分支把 argv **显式**重建成一条**引号正确**的命令串（`"$*"`：argv 是调用方给的，
-    #   `$*` 是"用空格拼起来"的那个语义），再交给客人侧的 `bash -c` 当**一整段脚本**执行。
-    #   逐条对应关系：
+    # ⇒ 本分支把 argv **显式**重建成一条命令串（`"$*"`：argv 是调用方给的，`$*` 是"用空格
+    #   拼起来"的那个语义），再交给客人侧的 `bash -c` 当**一整段脚本**执行。逐条对应关系：
     #     · clab/lxd/pve：argv 逐格透传（客人侧进程直接收到调用方写的那些格）；
     #     · qemu：argv 先**拼成一条命令串**，再由客人侧 `bash -c` 解释 —— 引号/空格/
     #       重定向的语义因此落在**调用方写的那条命令串**上，而不是落在 argv 的格边界上。
@@ -628,6 +657,19 @@ lab_target_exec() {
     #   需要"格边界精确保真"的调用点（现在的调用点都不是）在 qemu 基质上要自己保证引号。
     #   三种基质的**共同契约**（"命令在目标里被执行了、stdout/stderr 原样透传、失败非零"）
     #   在 qemu 侧逐条成立；`set -o pipefail` 由调用方与客人侧各自负责。
+    #
+    # ⚠️ **Task 16 记下的一条"看着像缺陷、实测不是"**（值得留着，因为下一位执行者会再想一遍）：
+    # 这一段是 `bash -c "$*"`，而调用点写的是 `lab_target_exec <节点> bash -c "<命令串>"` ——
+    # 于是客人侧收到的字符串**看起来**是 `bash -c bash -c rm -f /tmp/x` 这种"双重包装"。
+    # 实测（Task 16 在夹具里插探针把 `$*` 逐字打出来）它**语义正确**：
+    #   · shell 在把参数交给函数**之前**就去掉了调用点写的那对引号 ⇒ `$*` = `bash -c rm -f /tmp/x`；
+    #   · 外层 `bash -c` 收到的脚本是 `bash -c rm -f /tmp/x` ⇒ 它**执行** `bash`、`-c`、
+    #     `rm -f /tmp/x` 三格（`rm -f /tmp/x` 是**一格**，因为它是 `bash -c` 的脚本位置参数）
+    #     ⇒ 内层 bash 拿到的脚本正是 `rm -f /tmp/x`。
+    # 也就是说：指令与参数都落到了该落的地方，**没有**"内层 bash 只拿到 `rm`、`/tmp/x` 变成 `$0`"
+    # 那种事（Task 16 一度按那种理解改掉了这一行，实测形态与理解不符 ⇒ **已还原**）。
+    # 这条差别（"看起来像双重包装、实为调用方本来就写了 `bash -c`"）留在这里，
+    # 免得下一位执行者按同样的直觉再改一遍。
     #
     # `--` 必须在主机名之前：`ssh <主机> -c …` 里以 `-` 开头的那一格会被 ssh 当成自己的选项。
     local host args=()
