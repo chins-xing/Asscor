@@ -19,9 +19,10 @@
 # 比一次失败危险得多：它会以完全正常的语气进入报告）。
 #
 # 环境变量（全部可选）：
-#   EDGEEXP_SUBSTRATE    实验基质：clab（默认，今天的行为）| lxd（A-1）| pve（dl360gen9 的 PVE CT，
-#                        见 edge_lab.sh）。lxd 与 pve 走**同一个**"既有实例集合"复位分支
-#                        （语义相同，差异全在 edge_target_prepare.sh 里按基质分派）
+#   EDGEEXP_SUBSTRATE    实验基质：clab（默认，今天的行为）| lxd（A-1）| pve（dl360gen9 的 PVE CT）|
+#                        qemu（dl360gen9 上的 **QEMU/KVM VM**，Task 17 起的**生产靶机**，见 edge_lab.sh）。
+#                        **三者**（lxd/pve/qemu）走**同一个**"既有实例集合"复位分支
+#                        （语义相同：把实例准备成实验条件；差异全在 edge_target_prepare.sh 里按基质分派）
 #   EDGEEXP_TOPOLOGY     拓扑文件，默认 <lab>/asscor.clab.yml
 #   EDGEEXP_TARGET_HOST  攻击目标节点名（不带 clab 前缀），默认 host1
 #   EDGEEXP_CALDERA_URL  Caldera API，默认 http://127.0.0.1:8888
@@ -148,7 +149,7 @@ T0=$(now_s); ensure_caldera "$T0" || exit 1
 # （建/启实例、取包、策略的设置面）。再抄一段会让"什么算复位成功"出现第二处真源。
 # lxd 的行为**逐位未变**：条件只是多了一个 `= "pve"` 的或项，`$lab_substrate` 的取值集合没有重叠。
 # shellcheck disable=SC2154  # lab_substrate 由 source edge_lab.sh 赋值
-if [ "$lab_substrate" = "lxd" ] || [ "$lab_substrate" = "pve" ]; then
+if [ "$lab_substrate" = "lxd" ] || [ "$lab_substrate" = "pve" ] || [ "$lab_substrate" = "qemu" ]; then
   PREPARE="$SCRIPT_DIR/edge_target_prepare.sh"
   [ -f "$PREPARE" ] || { echo "edge_reset: 缺少 $lab_substrate 侧的复位脚本 $PREPARE" >&2; exit 1; }
   TARGET_NODE="${EDGEEXP_TARGET:-${EDGEEXP_TARGET_HOST:-}}"
@@ -175,6 +176,7 @@ if [ "$lab_substrate" = "lxd" ] || [ "$lab_substrate" = "pve" ]; then
   # `env` 的默认标签同理：lxd 下仍是 `a1-lxd`（逐字未变），pve 下给 `dl360-pve`。
   RESET_ENV_DEFAULT="a1-lxd"
   [ "$lab_substrate" = "pve" ] && RESET_ENV_DEFAULT="dl360-pve"
+  [ "$lab_substrate" = "qemu" ] && RESET_ENV_DEFAULT="dl360-qemu"
   FINISHED_AT=$(now_rfc3339)
   TOTAL_S=$(( $(now_s) - START_S ))
   cat > "$TMP_OUT" <<EOF

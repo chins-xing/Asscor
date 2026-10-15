@@ -1,8 +1,13 @@
 #!/bin/bash
 # shellcheck disable=SC2154  # lab_substrate/lab_target_bin 由 source edge_lab.sh 赋值（shellcheck 不跨文件跟踪变量）
 # ============================================================================
-# edge_target_prepare.sh —— **幂等**地准备实验目标（Task 4D Step 4-B；Task 6 加 pve 分支）
+# edge_target_prepare.sh —— **幂等**地准备实验目标（Task 4D Step 4-B；Task 6 加 pve；Task 17 加 qemu）
 # ============================================================================
+#
+# 三种基质、**同一套复位语义**（"把既有实例准备成实验条件"），差别全在"命令发到哪、策略设在哪个面"：
+#   · lxd  ：`lxc exec` / `raw.apparmor`（既有路径，一字未动）；
+#   · pve  ：`pct exec` / `lxc.apparmor.raw`（Task 6）；
+#   · qemu ：`ssh` + 客人侧助手 `edge_vm_guest.sh` / **客人里的真 AppArmor profile**（Task 17）。
 #
 # 用法（在 A-1 上跑，lxd 基质）：
 #   EDGEEXP_TARGET=asc-tgt-1 \
@@ -14,6 +19,15 @@
 #   EDGEEXP_TARGET=asc-tgt-c2 \
 #   EDGEEXP_POLICY_ON=1 \
 #   EDGEEXP_PVE_DEB_DIR=/var/tmp/edgeexp-debs \
+#   bash scripts/edge_target_prepare.sh
+#
+# 用法（在 dl360gen9 上跑，qemu 基质 = 本任务的**生产靶机**，Task 17）：
+#   source /root/.config/asscor/edgeexp.local.env      # 给出私钥路径/登录用户/known_hosts/sudo
+#   EDGEEXP_SUBSTRATE=qemu \
+#   EDGEEXP_TARGET=asc-vm910 \
+#   EDGEEXP_POLICY_ON=1 \
+#   EDGEEXP_CALDERA_URL=http://192.168.30.2:8888 \
+#   EDGEEXP_CALDERA_KEY=<C2 口令> \
 #   bash scripts/edge_target_prepare.sh
 #
 # 它做什么（每一步都**先查后做**，重复执行不产生副作用）：
@@ -70,6 +84,14 @@
 #   EDGEEXP_PVE_DEB_PORT      宿主上那个一次性 HTTP 服务的端口（默认 8899；**只绑管理网地址**）
 #   EDGEEXP_PVE_CONF_DIR      CT 配置文件目录（默认 /etc/pve/lxc；离线夹具可覆盖）
 #
+#   ---- Task 17：qemu（VM）基质专属 ----
+#   EDGEEXP_VM_GUEST_IFACE    客人侧取数网卡名（默认 ens18）—— 只用于"宿主的哪个地址落在
+#                             客人网段内"这一条判据（给客人加一条到 C2 的主机路由）。
+#   EDGEEXP_C2_HOST           显式指定 C2 主机（qemu 侧默认取 `EDGEEXP_CALDERA_URL` 的主机名，
+#                             理由见 C2 地址那一段；**不是**客人内的默认网关）。
+#   （VM 基质另外需要 `EDGEEXP_VM_SSH_KEY` / `EDGEEXP_VM_SSH_USER` / `EDGEEXP_VM_KNOWN_HOSTS` /
+#     `EDGEEXP_VM_SSH_SUDO` 四格 —— 取数侧同源，由 `edge_vm_provision.sh` 写进未跟踪的本地 env。）
+#
 # ⚠️ **已知限制（concern，Task 6 实测；本任务内未解决）**：第 2 步 pve 分支用的
 # `apt-get install --download-only`，它算出的依赖闭包是**相对"宿主当前已装集合"**的 ——
 # 宿主上已经有的依赖（实测：`python3-yaml`、`libglib2.0-0t64`、`libnuma1`、`libfdt1`、
@@ -109,6 +131,16 @@ PIDS_HELPER="$SCRIPT_DIR/edge_lab_pids.sh"
 PVE_DEB_DIR="${EDGEEXP_PVE_DEB_DIR:-/var/tmp/edgeexp-debs}"
 PVE_DEB_PORT="${EDGEEXP_PVE_DEB_PORT:-8899}"
 PVE_CONF_DIR="${EDGEEXP_PVE_CONF_DIR:-/etc/pve/lxc}"
+# qemu 专属（Task 17）：客人侧助手 + 客人的取数网卡名。
+#   · `VM_GUEST_HELPER_*`：多 token 的脚本**不能**靠 argv 送进 VM（ssh 不保格边界，见
+#     `edge_vm_guest.sh` 的文件头）⇒ 一律"推送文件 + 按路径执行"；助手**每次复位都重推**，
+#     故不会出现"客人里是旧版本"的静默分叉。
+#   · `VM_IFACE`：cloud image 的网卡在客人里是 **`ens18`**（Task 15 实测；不是 `eth0`）。
+#     只用于"宿主的哪个地址落在客人网段内"这一条判据，不用于取数（取数网卡由 provisioning 决定）。
+VM_GUEST_HELPER_LOCAL="$SCRIPT_DIR/edge_vm_guest.sh"
+VM_GUEST_HELPER_REMOTE="/tmp/asscor-edge-vm-guest.sh"
+VM_RULE_REMOTE="/tmp/asscor-edge-policy.rule"
+VM_IFACE="${EDGEEXP_VM_GUEST_IFACE:-ens18}"
 # dpkg 的"已装"判据串：**只在这里写一次**（两处轮询 + 缺包探测都用它）。
 # 写成常量而不是散在各处的字面量，理由与其它"单一来源"一样：口径分叉时两边都还能跑，
 # 只是一个说"装好了"、一个说"还没"。
@@ -132,10 +164,15 @@ command -v python3 >/dev/null 2>&1 || { echo "edge_target_prepare: 缺少 python
 
 echo "edge_target_prepare: 目标=$TARGET 基质=$lab_substrate 策略=$([ "$POLICY_ON" = "1" ] && echo 在 || echo 不在) agent 组=$AGENT_GROUP（来源 EDGEEXP_ATTACK_GROUP，攻击侧同一变量）"
 
-# is_pve / is_lxd —— 基质的**分支判据**收在这里，别在正文里散着写 `[ "$lab_substrate" = pve ]`：
-# 散着写迟早会漏一处，而漏掉的那一处会走另一条基质的路径（"看起来照常跑完"是它最坏的形态）。
+# is_pve / is_lxd / is_qemu —— 基质的**分支判据**收在这里，别在正文里散着写
+# `[ "$lab_substrate" = pve ]`：散着写迟早会漏一处，而漏掉的那一处会走另一条基质的路径
+# （"看起来照常跑完"是它最坏的形态）。
 is_pve() { [ "$lab_substrate" = "pve" ]; }
 is_lxd() { [ "$lab_substrate" = "lxd" ]; }
+# qemu（VM）基质：Task 13 接的线、Task 15/16 打通取数，Task 17 在本文件里补齐**复位**那一半
+# （此前 qemu 会落到下面 `lxd` 的 `lxc launch` 分支 —— 那是一条"名字打错/环境起不来"形态的
+# 死路，而真正的原因是这一层根本没有 qemu 分支）。
+is_qemu() { [ "$lab_substrate" = "qemu" ]; }
 
 # pve_vmid —— pve 下的 CT 标识。**只经基质层的 `lab_node_vmid` 解析**（唯一解析点），
 # 解析不到即响亮失败（绝不猜 vmid）。非 pve 下不会被调用。
@@ -183,6 +220,138 @@ print('')
 PY
 }
 
+# ============================================================================
+# qemu（VM）基质专属：客人侧助手 + root 等价（Task 17）
+# ============================================================================
+# 这一块必须排在**它的调用点之前**（bash 的函数在调用时才解析名字；写晚了会得到
+# `qemu_guest: command not found`，看起来像"这个环境没有那条命令" —— 与 `ct_reachable_host_addr`
+# 那一段记的是同一类坑）。
+
+# guest_host_addr <客人网卡名> —— **宿主自己**落在客人（该网卡）网段内的那个地址。
+#
+# 为什么需要它：VM 的默认路由指向 `192.168.1.1`（家用路由器，由 DHCP 给的），而 Caldera 只绑在
+# 宿主的 `vmbr0` 地址上 ⇒ 客人要经**宿主自己在 vmbr1 上的地址**把报文交给宿主（本机投递）。
+# 判据与 pve 侧的 `ct_reachable_host_addr` **同一条**（"从宿主自己的接口里挑一个落在客人网段内的
+# 地址"），只是网卡名不同 —— 故两处各写一份 20 行的 python，而不是把 `eth0` 写死进共用的那个。
+guest_host_addr() {
+  local iface="$1" cidr
+  cidr="$(lab_node_ip "$TARGET" "$iface" 2>/dev/null || true)"
+  python3 - "$cidr" <<'PY'
+import ipaddress, subprocess, sys
+cidr = (sys.argv[1] if len(sys.argv) > 1 else '').strip()
+try:
+    net = ipaddress.ip_network(cidr, strict=False)
+except Exception:
+    print(''); raise SystemExit
+out = subprocess.run(['ip', '-4', '-o', 'addr', 'show'], capture_output=True, text=True).stdout
+for line in out.splitlines():
+    parts = line.split()
+    if 'inet' not in parts:
+        continue
+    try:
+        ip = ipaddress.ip_interface(parts[parts.index('inet') + 1]).ip
+    except Exception:
+        continue
+    if ip in net and not ip.is_loopback:
+        print(str(ip)); raise SystemExit
+print('')
+PY
+}
+
+# qemu_push_helper —— 把客人侧助手（本仓库里的那一份）推送到客人并置可执行位。
+# `lab_push` 的 qemu 分支已经带 `chmod 0755`（见 edge_lab.sh），故这里不再补一次。
+qemu_push_helper() {
+  [ -f "$VM_GUEST_HELPER_LOCAL" ] || {
+    echo "edge_target_prepare: 缺少 qemu 客人侧助手 $VM_GUEST_HELPER_LOCAL" >&2
+    return 1
+  }
+  lab_push "$VM_GUEST_HELPER_LOCAL" "$TARGET" "$VM_GUEST_HELPER_REMOTE" >/dev/null 2>&1 || {
+    echo "edge_target_prepare: 把客人侧助手送到 $TARGET:$VM_GUEST_HELPER_REMOTE 失败" >&2
+    return 1
+  }
+  # 自证：客人侧**真的**能看到它（推送命令 rc=0 与"文件在那儿"是两件事）
+  lab_target_exec "$TARGET" test -x "$VM_GUEST_HELPER_REMOTE" >/dev/null 2>&1 || {
+    echo "edge_target_prepare: 客人侧助手 $VM_GUEST_HELPER_REMOTE 送进去了但不可执行" >&2
+    return 1
+  }
+  return 0
+}
+
+# qemu_guest <子命令> [参数…] —— 以 **root 等价**同步执行客人侧助手。
+# `sudo -n`：拿不到权限就**当场失败**，而不是挂在口令提示上（与取数侧同一条口径）。
+qemu_guest() {
+  lab_target_exec "$TARGET" sudo -n bash "$VM_GUEST_HELPER_REMOTE" "$@"
+}
+
+# qemu_guest_detached <子命令> [参数…] —— 起一个**不随本次 ssh 连接结束而退出**的进程
+# （用于拉起 sandcat；`edge_lab.sh` 的 qemu 分支用 `nohup … &` 做脱离，理由见那一处）。
+qemu_guest_detached() {
+  lab_target_exec_detached "$TARGET" sudo -n bash "$VM_GUEST_HELPER_REMOTE" "$@"
+}
+
+# controls_config_script —— 六个控制的**配置文件**那一段（aide 告警面 + PAM 三类行）。
+#
+# 为什么抽成函数（而不是给 qemu 再抄一份）：它跑在**两台机器上的两种传输形态**里 ——
+# lxd/pve 走 `exec`（argv 逐格透传 ⇒ 可以内联一段 `sh -c '<正文>'`），qemu 走 `ssh`
+# （argv 会被拼成一条命令串再分词 ⇒ 多 token 的正文**必须**走文件）。**正文只有一处**，
+# 传输形态各按基质来；抄两份的代价是"哪天改了 PAM 行，只改了一边"，
+# 而它的症状是"有一个场景的 2FA 因子莫名其妙没激活"。
+controls_config_script() {
+  cat <<'CFG'
+set -e
+# SIEM 代理判据：RS-007 要求三份配置文件之一能匹配 email|alert|notification。
+# **实测坑**：只写 report_level/report_url 两行**不命中**该正则（控制侧容器里恰好有一行含
+# `alert` 的注释才过）⇒ 这里写的是**真实的告警通知配置**，不是为了过门禁塞词。
+if ! grep -qiE "email|alert|notification" /etc/aide/aide.conf 2>/dev/null; then
+  printf "\n# 告警通知配置（RS-007 的代理判据需要一份真实的告警配置面）\nreport_level=changed\nreport_url=stdout\nmail_command=/usr/bin/mail\nreport_email=secops@example.invalid\nalert_notification=email\n" >> /etc/aide/aide.conf
+fi
+# 2FA/3FA：EF-001 任一子串即通过；EF-002 要求三类各≥1（按文件累加）
+if ! grep -q pam_google_authenticator /etc/pam.d/sshd 2>/dev/null; then
+  printf "auth required pam_google_authenticator.so\nauth required pam_u2f.so\nauth required pam_fprintd.so\n" >> /etc/pam.d/sshd
+fi
+systemctl enable --now suricata >/dev/null 2>&1 || true
+CFG
+}
+
+# qemu_install_controls <缺包清单> —— VM 上装六个控制。
+#
+# 与 pve 侧的**结构性差别**：VM 有真外网（Task 13 实测 `apt-get install` 直接 rc=0），
+# 故**不需要** pve 那套"宿主下载闭包 + 一次性 HTTP 镜像 + 进客人 dpkg"的绕法。
+# 与 lxd 侧的差别只在传输形态：`lxc exec` 可以把 argv 逐格交给客人，`ssh` 不行 ⇒ 脚本走文件。
+qemu_install_controls() {
+  local missing="$1" waited=0
+  echo "edge_target_prepare: 缺控制包 [$missing] ⇒ 在 VM 内 apt-get 安装（后台 + 轮询，最长 ${APT_TIMEOUT_S}s）"
+  cat > /tmp/edgeexp-vm-harden.sh <<'HARDEN'
+#!/bin/bash
+set -x
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y suricata aide libpam-google-authenticator libpam-u2f libpam-fprintd
+HARDEN
+  lab_push /tmp/edgeexp-vm-harden.sh "$TARGET" /tmp/edgeexp-vm-harden.sh \
+    || { echo "edge_target_prepare: 把 VM 侧装包脚本送进客人失败" >&2; return 1; }
+  # **不能写 `nohup qemu_guest_detached …`**：那是 shell 函数，`nohup` 只能执行外部命令
+  # （pve 侧那条注释记的正是这个坑，症状是错误被 `&` 静默吞掉）。
+  qemu_guest_detached bash /tmp/edgeexp-vm-harden.sh > /tmp/edgeexp-vm-harden.out 2>&1 &
+  while :; do
+    if lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' suricata 2>/dev/null | grep -q "$PKG_INSTALLED_STATUS" \
+       && lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' aide 2>/dev/null | grep -q "$PKG_INSTALLED_STATUS" \
+       && lab_target_exec "$TARGET" dpkg-query -W -f='${Status}' libpam-u2f 2>/dev/null | grep -q "$PKG_INSTALLED_STATUS"; then
+      break
+    fi
+    if [ "$waited" -ge "$APT_TIMEOUT_S" ]; then
+      echo "edge_target_prepare: VM 内 apt 在 ${APT_TIMEOUT_S}s 内没有装完，见 /tmp/edgeexp-vm-harden.out 尾部：" >&2
+      tail -20 /tmp/edgeexp-vm-harden.out >&2 || true
+      lab_target_exec "$TARGET" sh -c 'tail -20 /tmp/edgeexp-vm-harden.log 2>/dev/null' >&2 2>/dev/null || true
+      return 1
+    fi
+    sleep 10
+    waited=$((waited + 10))
+  done
+  echo "edge_target_prepare: VM 内控制包安装完成（等待 ${waited}s）"
+  return 0
+}
+
 # wait_for_exec <秒> —— 等实例真的**能在里面执行命令**；判据与实现都在**基质层**
 # （`edge_lab.sh:lab_wait_node_exec`，Task 4D Fix round 2 / Minor-6 把那条判据收进基质层的原因见那里）。
 #
@@ -228,6 +397,16 @@ elif is_pve; then
   echo "  并确认 pct list 里的 Name 就是 '$TARGET'（节点由**名字**标识，pct 只认 vmid）。" >&2
   echo "  若名字写错，上面的 pct list 差异说明已经打出来了。" >&2
   exit 1
+elif is_qemu; then
+  # **qemu：不存在 ⇒ 响亮失败**（本脚本永不 create VM —— 与 pve 侧同一条边界，理由更硬：
+  # VM 的建/清有**单一来源** `edge_vm_provision.sh`，它带"名字前缀 + VMID ≥ 910"两道护栏）。
+  # 若这里落到下面 lxd 的 `lxc launch` 分支，症状会是"实例在 600s 内没有创建出来" ——
+  # 而那台 VM 根本没在建，真正的原因是**qemu 分支不存在**（Task 17 之前就是这条死路）。
+  echo "edge_target_prepare: VM '$TARGET' 不存在（qm status 应答不了）—— 本脚本**不建 VM**（见头部边界）。" >&2
+  echo "  请先用**唯一来源**建机（幂等；VMID 从 910 起）：" >&2
+  echo "    bash $(dirname "$0")/edge_vm_provision.sh            # 或 --first-vmid <≥910>" >&2
+  echo "  并确认 qm list 里的 Name 就是 '$TARGET'（节点由**名字**标识，qm 两种标识都收）。" >&2
+  exit 1
 else
   echo "edge_target_prepare: 实例不存在 ⇒ lxc launch ubuntu:24.04 $TARGET（后台 + 轮询）"
   # `ssh_exec` 约 600 s 会打断前台长命令；`lxc launch` 实测要几十秒 ⇒ 一律后台 + 轮询日志。
@@ -260,6 +439,16 @@ if [ "$(lab_node_running "$TARGET" 2>/dev/null || true)" != "true" ]; then
     echo "  请由操作者显式启动（vmid=$(pve_vmid 2>/dev/null || echo '<解析不到>')）：" >&2
     echo "    pct start $(pve_vmid 2>/dev/null || echo '<vmid>')" >&2
     echo "  启动后重跑本脚本（它是幂等的）。" >&2
+    exit 1
+  fi
+  if is_qemu; then
+    # **qemu：存在但没在跑 ⇒ 响亮失败**（与 pve 同处置、理由同源）：VM 的启停归
+    # `edge_vm_provision.sh`（幂等；重跑它会"确保在跑"），本脚本不 start ——
+    # 一次猜测性的 start 会作用到"这台 VM 是不是本任务的"这个问题上，而本层没有那个信息。
+    echo "edge_target_prepare: VM '$TARGET' 存在但**没在跑** —— 本脚本**不启动 VM**（见头部边界）。" >&2
+    echo "  请由操作者显式启动（幂等，且它会顺带确认 name 前缀与 VMID 区间）：" >&2
+    echo "    bash $(dirname "$0")/edge_vm_provision.sh" >&2
+    echo "  或 qm start <vmid>；启动后重跑本脚本。" >&2
     exit 1
   fi
   echo "edge_target_prepare: 实例存在但没在跑 ⇒ $lab_target_bin start $TARGET"
@@ -494,6 +683,8 @@ HARDEN
 if [ -n "$MISSING" ]; then
   if is_pve; then
     pve_install_controls "$MISSING" || { echo "edge_target_prepare: pve 侧控制包安装失败 —— 环境可用性未证实，整轮失败" >&2; exit 1; }
+  elif is_qemu; then
+    qemu_install_controls "$MISSING" || { echo "edge_target_prepare: qemu(VM) 侧控制包安装失败 —— 环境可用性未证实，整轮失败" >&2; exit 1; }
   else
     echo "edge_target_prepare: 缺控制包 [$MISSING] ⇒ apt-get 安装（后台 + 轮询，最长 ${APT_TIMEOUT_S}s）"
     cat > /tmp/edgeexp-harden.sh <<'HARDEN'
@@ -529,20 +720,20 @@ else
 fi
 
 # 配置（幂等：用 grep 判存在，不重复追加）
-lab_target_exec "$TARGET" sh -c '
-set -e
-# SIEM 代理判据：RS-007 要求三份配置文件之一能匹配 email|alert|notification。
-# **实测坑**：只写 report_level/report_url 两行**不命中**该正则（控制侧容器里恰好有一行含
-# `alert` 的注释才过）⇒ 这里写的是**真实的告警通知配置**，不是为了过门禁塞词。
-if ! grep -qiE "email|alert|notification" /etc/aide/aide.conf 2>/dev/null; then
-  printf "\n# 告警通知配置（RS-007 的代理判据需要一份真实的告警配置面）\nreport_level=changed\nreport_url=stdout\nmail_command=/usr/bin/mail\nreport_email=secops@example.invalid\nalert_notification=email\n" >> /etc/aide/aide.conf
+# 正文的唯一来源是 `controls_config_script()`（见它上面那段：两台机器、两种传输形态，正文一处）。
+#   · lxd/pve：`exec` 把 argv 逐格透传 ⇒ 内联一段 `sh -c '<正文>'`（既有形态，一字未动）；
+#   · qemu：ssh 会把这串重新分词 ⇒ **必须**走文件（落本地 → lab_push → `sudo -n bash <路径>`）。
+if is_qemu; then
+  qemu_push_helper || exit 1
+  controls_config_script > /tmp/edgeexp-vm-config.sh
+  lab_push /tmp/edgeexp-vm-config.sh "$TARGET" /tmp/edgeexp-vm-config.sh \
+    || { echo "edge_target_prepare: 把控制配置脚本送进 VM 失败" >&2; exit 1; }
+  qemu_guest bash /tmp/edgeexp-vm-config.sh \
+    || { echo "edge_target_prepare: 写控制配置失败" >&2; exit 1; }
+else
+  lab_target_exec "$TARGET" sh -c "$(controls_config_script)" \
+    || { echo "edge_target_prepare: 写控制配置失败" >&2; exit 1; }
 fi
-# 2FA/3FA：EF-001 任一子串即通过；EF-002 要求三类各≥1（按文件累加）
-if ! grep -q pam_google_authenticator /etc/pam.d/sshd 2>/dev/null; then
-  printf "auth required pam_google_authenticator.so\nauth required pam_u2f.so\nauth required pam_fprintd.so\n" >> /etc/pam.d/sshd
-fi
-systemctl enable --now suricata >/dev/null 2>&1 || true
-' || { echo "edge_target_prepare: 写控制配置失败" >&2; exit 1; }
 
 # --- 3. 实验条件：AppArmor 策略（变了才重启）---------------------------------
 #
@@ -591,11 +782,22 @@ pve_policy_apply() {
 CUR_POLICY=""
 if is_pve; then
   CUR_POLICY="$(pve_policy_get || true)"
+elif is_qemu; then
+  # qemu：策略的**状态面**是"内核策略表里有没有这个名字"（`loaded` / `absent`）——
+  # 与 lxd/pve 的"配置里那一行的值"不是同一种量，故不能共用一条 `config get`。
+  # 助手不可用/客人不可达时它**非零退出**（不把"问不到"读成"策略不在"）。
+  qemu_push_helper || exit 1
+  CUR_POLICY="$(qemu_guest policy-status)" || {
+    echo "edge_target_prepare: 取 VM 侧的 AppArmor 策略状态失败（不把『问不到』读成『策略不在』）" >&2; exit 1; }
 else
   CUR_POLICY="$("$lab_target_bin" config get "$TARGET" raw.apparmor 2>/dev/null || true)"
 fi
 WANT_POLICY=""
-[ "$POLICY_ON" = "1" ] && WANT_POLICY="$POLICY_RULE"
+if is_qemu; then
+  [ "$POLICY_ON" = "1" ] && WANT_POLICY="loaded" || WANT_POLICY="absent"
+else
+  [ "$POLICY_ON" = "1" ] && WANT_POLICY="$POLICY_RULE"
+fi
 RESTARTED=0
 if [ "$(printf '%s' "$CUR_POLICY" | tr -d '[:space:]')" != "$(printf '%s' "$WANT_POLICY" | tr -d '[:space:]')" ]; then
   if is_pve; then
@@ -607,6 +809,31 @@ if [ "$(printf '%s' "$CUR_POLICY" | tr -d '[:space:]')" != "$(printf '%s' "$WANT
     wait_for_up "$RESTART_PID" 180 || exit 1
     RESTARTED=1
     echo "edge_target_prepare: 重启完成（容器内已可执行命令）"
+  elif is_qemu; then
+    # qemu 侧的**设置面**是客人里的一个真 AppArmor profile（见 `edge_vm_guest.sh` 的
+    # `cmd_policy_apply`：`file,` + `/** ix,` 让它在 deny 之外等同不受限，正是 CT 那边
+    # `lxc.apparmor.raw` "往容器 profile 追加一条 deny"的等价物）。
+    #
+    # **不重启 VM**：VM 的重启会换 host key（Task 16 concern 3 那颗雷）、清空 /tmp、
+    # 并让 cloud-init 再跑一遍 —— 代价与收益完全不成比例。等价的动作是**重启 agent**：
+    # 策略是"挂在攻击进程上"的（`aa-exec -p` 拉起 sandcat），换策略就必须换进程。
+    # 故这里下一道 `agent-stop`，第 4 步会因为"没有活着的 sandcat"而重新拉起 ——
+    # `RESTARTED=1` 如实记下"这一轮换过策略状态"。
+    echo "edge_target_prepare: 设置 VM 侧 AppArmor 策略（原状态 '$CUR_POLICY' ⇒ '$WANT_POLICY'）"
+    if [ "$WANT_POLICY" = "loaded" ]; then
+      printf '%s\n' "$POLICY_RULE" > "$VM_RULE_REMOTE.local"
+      lab_push "$VM_RULE_REMOTE.local" "$TARGET" "$VM_RULE_REMOTE" \
+        || { echo "edge_target_prepare: 把策略规则送进 VM 失败（$VM_RULE_REMOTE）" >&2; exit 1; }
+      rm -f "$VM_RULE_REMOTE.local"
+      [ "$(qemu_guest policy-apply "$VM_RULE_REMOTE")" = "applied" ] || {
+        echo "edge_target_prepare: VM 侧加载策略失败" >&2; exit 1; }
+    else
+      [ "$(qemu_guest policy-remove)" = "removed" ] || {
+        echo "edge_target_prepare: VM 侧卸载策略失败" >&2; exit 1; }
+    fi
+    echo "edge_target_prepare: 策略变更 ⇒ 停掉当前 agent（策略挂在攻击进程上，换策略必须换进程）"
+    qemu_guest agent-stop >/dev/null 2>&1 || true
+    RESTARTED=1
   else
     echo "edge_target_prepare: 设置策略 raw.apparmor='$WANT_POLICY'（原值 '$CUR_POLICY'）"
     if [ -n "$WANT_POLICY" ]; then
@@ -626,7 +853,23 @@ else
 fi
 
 # 策略生效的**节点内自证**（不是"我设了 config"）：读一次被拒路径，两条分支都必须可解释。
-if [ "$POLICY_ON" = "1" ]; then
+#
+# qemu 侧的判据必须用**受限进程**（`aa-exec -p <profile> -- head -1 /etc/shadow`），而不是
+# 裸的 `head -1 /etc/shadow` —— 策略挂在攻击进程上，而**登录用户/root 本身不受限**：
+# 裸 head 在两条臂上都会成功，"策略生效自证"会**恒红**，而真正的原因是判据问错了进程。
+# 这一格由 `edge_vm_guest.sh` 的 `policy-probe` 回答（它在策略没加载时**响亮失败**，
+# 不把 `aa-exec` 自己失败读成 DENIED）。
+if is_qemu; then
+  if [ "$POLICY_ON" = "1" ]; then
+    [ "$(qemu_guest policy-probe)" = "DENIED" ] \
+      || { echo "edge_target_prepare: 策略**没有生效**（策略在，但受限进程读 /etc/shadow 成功）—— 拒绝目标状态不成立" >&2; exit 1; }
+    echo "edge_target_prepare: 策略生效自证：受限进程（aa-exec -p asscor-edge-policy）读 /etc/shadow 被拒"
+  else
+    [ "$(qemu_guest policy-probe)" = "UNRESTRICTED" ] \
+      || { echo "edge_target_prepare: 策略**没有卸载干净**（策略不在，但受限进程读 /etc/shadow 仍被拒）" >&2; exit 1; }
+    echo "edge_target_prepare: 策略卸载自证：策略不在内核表里，受限进程读 /etc/shadow 成功"
+  fi
+elif [ "$POLICY_ON" = "1" ]; then
   lab_target_exec "$TARGET" sh -c 'head -1 /etc/shadow >/dev/null 2>&1' \
     && { echo "edge_target_prepare: 策略**没有生效**（策略在，但读 /etc/shadow 成功了）—— 拒绝目标状态不成立" >&2; exit 1; }
   echo "edge_target_prepare: 策略生效自证：节点内读 /etc/shadow 被拒（rc≠0）"
@@ -744,7 +987,30 @@ if [ -z "$C2_HOST" ] && is_pve; then
   done
   [ -n "$C2_HOST" ] && echo "edge_target_prepare: C2 主机 = **宿主自己**在 CT 网段上的地址 $C2_HOST（pve 基质；等待 ${c2_waited}s）"
 fi
-if [ -z "$C2_HOST" ] && ! is_pve; then
+if [ -z "$C2_HOST" ] && is_qemu; then
+  # **qemu 基质下默认值 = `EDGEEXP_CALDERA_URL` 里的主机名**，而不是"客人内的默认网关"。
+  #
+  # 为什么不能用默认网关（Task 15 §3.5 实测）：VM 挂在 `vmbr1`（192.168.1.0/24），默认网关是
+  # **家用路由器 192.168.1.1**，而 Caldera **只绑在宿主的 vmbr0 地址（192.168.30.2）上** ⇒
+  # 用网关拼 URL 会让 sandcat 往一个没人听 8888 的地址上打（症状与"agent 起不来"同形）。
+  # 而 URL 里的那个地址是操作者**明确**写下的"宿主上 Caldera 在哪"，它天然就是正确的那一个 ——
+  # 若它在客人侧不可达，正确反应是**响亮失败并给出修法**（加一条静态路由），不是换一个地址。
+  c2_waited=0
+  while [ -z "$C2_HOST" ]; do
+    C2_HOST="$(python3 - "$CALDERA_URL" <<'PY' 2>/dev/null || true
+import sys
+from urllib.parse import urlparse
+print(urlparse(sys.argv[1]).hostname or '')
+PY
+)"
+    C2_HOST="$(printf '%s' "$C2_HOST" | tr -d '[:space:]')"
+    [ -n "$C2_HOST" ] && break
+    [ "$c2_waited" -ge "$C2_HOST_WAIT_S" ] && break
+    sleep 3; c2_waited=$((c2_waited + 3))
+  done
+  [ -n "$C2_HOST" ] && echo "edge_target_prepare: C2 主机 = EDGEEXP_CALDERA_URL 里的主机名 $C2_HOST（qemu 基质）"
+fi
+if [ -z "$C2_HOST" ] && ! is_pve && ! is_qemu; then
   c2_waited=0
   while [ -z "$C2_HOST" ]; do
     C2_HOST="$(lab_target_exec "$TARGET" sh -c 'ip route show default 2>/dev/null | awk "/^default/ {print \$3; exit}"' 2>/dev/null || true)"
@@ -783,7 +1049,54 @@ PY
 #
 # 判据仍是"容器内真的问到了 Caldera 的 API"（HTTP 200），不是"TCP 通了"：
 # 8888 上可能是别的东西在听，而 `/api/v2/abilities` 需要正确的 KEY 才会给 200。
-C2_PROOF="$(lab_target_exec "$TARGET" sh -c "
+C2_PROOF=""
+if is_qemu; then
+  # ---------------------------------------------------------------------------
+  # qemu：客人侧的网络前提（**到 C2 的那一条主机路由**）
+  # ---------------------------------------------------------------------------
+  # 事实（Task 15 §3.5 实测、Task 16 §3.5 记进设计文档）：
+  #   · VM 挂在 `vmbr1`（192.168.1.0/24），默认网关是**家用路由器 192.168.1.1**；
+  #   · Caldera 只绑在宿主的 `vmbr0` 地址（192.168.30.2）上；
+  #   · 宿主 `net.ipv4.ip_forward = 0` —— 这条修法**仍然成立**，因为报文的目的地是
+  #     **宿主自己的地址**（本机投递，不需要转发）。
+  # ⇒ 客人在**客户机侧**加一条到 C2 的主机路由，下一跳 = **宿主自己在客人网段内的地址**。
+  # 为什么加的是 `/32` 主机路由而不是整段 `192.168.30.0/24`：`/32` 恰好覆盖"我们要去的那台
+  # 机器"，不替操作者做"那个网段整体该怎么走"的决定（那是网络侧的事，且本任务的纪律是不碰
+  # 任何网络设备）。C2_HOST 不是 IPv4 字面量（例如是域名）时**不猜**，直接响亮失败并说明。
+  #
+  # 幂等：`ip route replace` 重复执行不会堆积（与 `ip route add` 不同 —— 后者第二次会报
+  # `File exists`，而那条错会以"复位失败"的形态出现）。这条**沿用** provisioning 已经决定好的
+  # 网卡名，不改任何接口配置。
+  if [ -n "$C2_HOST" ] && printf '%s' "$C2_HOST" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+    VM_HOST_ADDR="$(guest_host_addr "$VM_IFACE")"
+    VM_HOST_ADDR="$(printf '%s' "$VM_HOST_ADDR" | tr -d '[:space:]')"
+    if [ -z "$VM_HOST_ADDR" ]; then
+      echo "edge_target_prepare: 取不到**宿主自己**在客人网段（$VM_IFACE）内的地址 ——" >&2
+      echo "  到 C2（$C2_HOST）的路由算不出来；请给 EDGEEXP_VM_GUEST_IFACE=<客人网卡名>。" >&2
+      exit 1
+    fi
+    qemu_guest net-report "$VM_IFACE" 2>&1 | sed 's/^/  ├ /' || true
+    qemu_guest route-add "$C2_HOST/32" "$VM_HOST_ADDR" "$VM_IFACE" >/dev/null \
+      || { echo "edge_target_prepare: 在客人里加主机路由失败（$C2_HOST/32 via $VM_HOST_ADDR dev $VM_IFACE）" >&2; exit 1; }
+    echo "edge_target_prepare: 客人侧到 C2 的主机路由已就位（$C2_HOST/32 via $VM_HOST_ADDR dev $VM_IFACE；下一跳 = 宿主自己在客人网段的地址）"
+    qemu_guest net-report "$VM_IFACE" 2>&1 | sed 's/^/  └ /' || true
+  else
+    echo "edge_target_prepare: C2_HOST='$C2_HOST' 不是 IPv4 字面量 ⇒ **不加主机路由**（不猜）；" >&2
+    echo "  qemu 基质上客人要经宿主自己的地址才能到 C2 网段，域名形式请显式给 EDGEEXP_C2_HOST=<IPv4>。" >&2
+    exit 1
+  fi
+  # C2 可达性自证（判据与 CT 侧**同一条**：客人里真的问到 200 + 正确的 KEY）。
+  # 口令走 `env` 的赋值格（`AVE_C2_KEY`），**不进助手脚本的 argv**（见 edge_vm_guest.sh 的纪律 3）。
+  C2_PROOF="$(lab_target_exec "$TARGET" sudo -n env "AVE_C2_KEY=$CALDERA_KEY" \
+    bash "$VM_GUEST_HELPER_REMOTE" c2-probe "$C2_URL" 2>/dev/null || true)"
+  case "$C2_PROOF" in
+    200) echo "edge_target_prepare: C2 可达性自证：**客人内**问到 $C2_URL/api/v2/abilities → 200（qemu 基质）" ;;
+    *)   echo "edge_target_prepare: 客人内问不到 C2（$C2_URL → '${C2_PROOF:-空}'）—— 这个地址拉起 agent 必然不回连，先修路由/地址" >&2
+         qemu_guest net-report "$VM_IFACE" >&2 2>&1 || true
+         exit 1 ;;
+  esac
+else
+  C2_PROOF="$(lab_target_exec "$TARGET" sh -c "
 if command -v curl >/dev/null 2>&1; then
   curl -s -m 5 -o /dev/null -w '%{http_code}' -H 'KEY: $CALDERA_KEY' '$C2_URL/api/v2/abilities'
 elif command -v wget >/dev/null 2>&1; then
@@ -810,12 +1123,56 @@ case "$C2_PROOF" in
        echo "  可用 EDGEEXP_C2_HOST=<宿主在容器网段的地址> 覆盖。" >&2
        exit 1 ;;
 esac
+fi
 
 PIDS="$(bash "$PIDS_HELPER" "$TARGET" sandcat 2>/dev/null || true)"
 PAW="$(live_agent_paws "$PIDS" 2>/dev/null || true)"
 
 if [ -n "$PAW" ]; then
   echo "edge_target_prepare: agent 已在跳（paw=$PAW，容器内活 pid=[$PIDS]）—— 幂等路径"
+elif is_qemu; then
+  # ---------------------------------------------------------------------------
+  # qemu：送载荷 + 拉起 agent（**以 root 等价**，且按策略状态决定挂不挂 profile）
+  # ---------------------------------------------------------------------------
+  # 三条与 CT/lxd 侧的**结构性差别**，逐条都有理由：
+  #   ① 载荷落地走 `sudo -n`：`scp` 以登录用户 `asc` 送，`/root/` 它写不进去。故先送 `/tmp/`，
+  #      再由助手（root）`mv` 到 `/root/sandcat`（助手内部仍保留"先临时名再 mv"的抗 ETXTBSY 写法）。
+  #   ② sandcat **必须以 root 跑**：目标 TTP 是 `head -1 /etc/shadow`，以 `asc` 跑的话
+  #      DAC 就会挡住它 ⇒ **两臂的读数会相同**（策略在/不在都失败），整个实验测不出任何东西
+  #      而记录看起来完全正常。这一条与取数侧的 root 等价是**同一条口径**（Task 16 定稿）。
+  #   ③ 策略在的臂要 `aa-exec -p asscor-edge-policy -- /root/sandcat`：策略挂在**攻击进程**上，
+  #      由 sandcat 派生的子进程继承（子进程没有自己的 profile ⇒ 继承父进程的）。
+  #      故"策略在 ⇒ TTP 被拒 / 策略不在 ⇒ TTP 成功"这条因果链是真的，而不是配置层的一句声明。
+  echo "edge_target_prepare: 目标上没有活着的 agent（VM 内 sandcat pid=[$PIDS]）⇒ 送载荷并以 root 等价拉起"
+  qemu_push_helper || exit 1
+  lab_push "$PAYLOAD" "$TARGET" /tmp/sandcat.new \
+    || { echo "edge_target_prepare: 把 sandcat 载荷送到 $TARGET:/tmp/sandcat.new 失败" >&2; exit 1; }
+  [ "$(qemu_guest agent-install /tmp/sandcat.new)" = "installed" ] \
+    || { echo "edge_target_prepare: 在 $TARGET 内落地 /root/sandcat 失败" >&2; exit 1; }
+  AGENT_PROFILE="-"
+  [ "$POLICY_ON" = "1" ] && AGENT_PROFILE="asscor-edge-policy"
+  qemu_guest_detached agent-start "$C2_URL" "$AGENT_GROUP" "$AGENT_PROFILE" > /tmp/edgeexp-vm-agent.out 2>&1 &
+  waited=0
+  while :; do
+    PIDS="$(bash "$PIDS_HELPER" "$TARGET" sandcat 2>/dev/null || true)"
+    PAW="$(live_agent_paws "$PIDS" 2>/dev/null || true)"
+    [ -n "$PAW" ] && break
+    if [ "$waited" -ge "$AGENT_WAIT_S" ]; then
+      echo "edge_target_prepare: agent 在 ${AGENT_WAIT_S}s 内没有回连（判据：host=$TARGET 且 VM 内活 pid 一致且心跳新鲜）" >&2
+      echo "  · VM 内 sandcat 进程（ps，可能为空）:" >&2
+      lab_target_exec "$TARGET" ps -eo pid,comm --no-headers >&2 2>/dev/null || true
+      echo "  · VM 内 /root/sandcat:" >&2
+      lab_target_exec "$TARGET" ls -la /root/sandcat >&2 2>/dev/null || true
+      echo "  · VM 内 sandcat 日志尾部（C2 地址=$C2_URL，profile=$AGENT_PROFILE）:" >&2
+      lab_target_exec "$TARGET" tail -20 /tmp/sandcat.log >&2 2>/dev/null || true
+      echo "  · 拉起那一句话的输出（/tmp/edgeexp-vm-agent.out）:" >&2
+      tail -5 /tmp/edgeexp-vm-agent.out >&2 2>/dev/null || true
+      exit 1
+    fi
+    sleep 5
+    waited=$((waited + 5))
+  done
+  echo "edge_target_prepare: agent 就绪（paw=$PAW，VM 内活 pid=[$PIDS]，profile=$AGENT_PROFILE，等待 ${waited}s）"
 else
   echo "edge_target_prepare: 目标上没有活着的 agent（容器内 sandcat pid=[$PIDS]）⇒ 送载荷并拉起"
   # **先送到临时名再 `mv`**（实测踩坑）：直接 `lxc file push` 覆盖 `/root/sandcat` 在**有进程正在跑
