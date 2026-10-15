@@ -343,17 +343,11 @@ if [ "${EXPECTED_CHAIN_FACTORS_SET:-0}" -eq 0 ]; then
 fi
 echo "edge_attack: 期望上链因子集 = [${EXPECTED_CHAIN_FACTORS:-（空集）}]（采集脚本用它做相等断言；配置里自定义 EF-3FA：$HAS_CUSTOM_EF3FA）"
 
-# 只推导、不碰 Caldera/拓扑的入口（离线验证与操作者自查用）：
-#   EDGEEXP_PRINT_EXPECTED=1 bash edge_attack.sh <scenario> /tmp/whatever.json
-# 修 Fix round 2 的级联期望集问题时，正是靠这条在**没有 lab** 的情况下拿到真实推导结果
-# （旧做法是手工造一个期望集喂给采集脚本，那恰好掩盖了 S5 的错误）。
-if [ "${EDGEEXP_PRINT_EXPECTED:-0}" = "1" ]; then
-  echo "expected_chain_factors: ${EXPECTED_CHAIN_FACTORS}"
-  echo "expected_chain_factors_source: ${EXPECTED_CHAIN_FACTORS_SOURCE}"
-  echo "has_custom_ef3fa: ${HAS_CUSTOM_EF3FA}"
-  echo "cascade_target: ${CASCADE_TARGET:-（无）}"
-  exit 0
-fi
+# ⚠️ **`EDGEEXP_PRINT_EXPECTED` 的早退必须排在下面「耦合闭包」之后**（Task 17）：
+# 它存在的理由是"操作者在**没有 lab** 时也能拿到**真实**的推导结果"，而闭包是推导的一部分 ——
+# 排在闭包之前，它会打印出一个**补全之前**的值（实测：`S1-apparmor` 打印 `EF-APPARMOR`，
+# 而真实路径上是 `EF-APPARMOR,EF-SELINUX`）⇒ 这个自查入口会给出**与真实运行不同**的答案，
+# 而那正是它存在的意义（自查）的反面。
 
 # --- 因子 -> 触发检查：从配置里解析，绝不在这里抄一份表 ----------------------
 # [edge_factors.model] 的 trigger.<ID> 是两份实验模板里显式写出的完整映射
@@ -405,6 +399,19 @@ if [ -n "$CLOSURE_ADD" ]; then
   echo "  （注入的是**检查**：多条因子共用同一条触发检查时，一次注入会同时激活它们；见本段注释）"
 fi
 EXPECTED_CHAIN_FACTORS_SOURCE="${EXPECTED_CHAIN_FACTORS_SOURCE}；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）"
+
+# 只推导、不碰 Caldera/拓扑的入口（离线验证与操作者自查用）：
+#   EDGEEXP_PRINT_EXPECTED=1 bash edge_attack.sh <scenario> /tmp/whatever.json
+# 修 Fix round 2 的级联期望集问题时，正是靠这条在**没有 lab** 的情况下拿到真实推导结果
+# （旧做法是手工造一个期望集喂给采集脚本，那恰好掩盖了 S5 的错误）。
+# **位置**：排在「耦合闭包」之后（理由见那一处与上面的注释）。
+if [ "${EDGEEXP_PRINT_EXPECTED:-0}" = "1" ]; then
+  echo "expected_chain_factors: ${EXPECTED_CHAIN_FACTORS}"
+  echo "expected_chain_factors_source: ${EXPECTED_CHAIN_FACTORS_SOURCE}"
+  echo "has_custom_ef3fa: ${HAS_CUSTOM_EF3FA}"
+  echo "cascade_target: ${CASCADE_TARGET:-（无）}"
+  exit 0
+fi
 
 # --- 真实条件探针（**在节点上**执行，Task 4C Step 3） -------------------------
 # 探针实现搬到了 `edge_probe.sh`：它用 `docker exec -i` 把判据送进**目标节点**执行，而不是在
