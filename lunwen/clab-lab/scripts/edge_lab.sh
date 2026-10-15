@@ -15,10 +15,10 @@
 # 接口（**单一来源**：所有基质相关命令只能从这里出去，调用点不得再出现 `clab`/`docker`/`lxc`
 # 命令字面 —— 需要新增一条基质命令时改本文件，不要在调用点写）：
 #
-#   lab_substrate                当前基质名（clab|lxd|pve，只读）
-#   lab_topology                 拓扑文件路径（clab 用；lxd/pve 下是"占位"，不参与命令）
-#   lab_topology_bin             拓扑级 CLI（clab: `clab`；lxd: `lxc`；pve: `pct`）
-#   lab_target_bin               目标级 CLI（clab: `docker`；lxd: `lxc`；pve: `pct`）
+#   lab_substrate                当前基质名（clab|lxd|pve|qemu，只读）
+#   lab_topology                 拓扑文件路径（clab 用；lxd/pve/qemu 下是"占位"，不参与命令）
+#   lab_topology_bin             拓扑级 CLI（clab: `clab`；lxd: `lxc`；pve: `pct`；qemu: `qm`）
+#   lab_target_bin               目标级 CLI（clab: `docker`；lxd: `lxc`；pve: `pct`；qemu: `ssh`）
 #   lab_require_bins             前置检查：当前基质需要的 CLI 都在 PATH 上吗（缺则返回非零）
 #   lab_up                       建拓扑（clab: deploy）
 #   lab_down                     毁拓扑（clab: destroy --cleanup）
@@ -33,17 +33,27 @@
 #   lab_inspect <node>              取目标的基质视图（存在性/状态的权威判据）
 #   lab_list                        列出目标（每行一个名字）
 #   lab_node_counts                 回显 "total up down"（失败回显 "-1 -1 -1"）
-#   lab_target_spec <node>          节点名 → `edgescen -target` 的语法（clab 裸名 / lxd:<实例> / pve:<vmid>）
+#   lab_target_spec <node>          节点名 → `edgescen -target` 的语法
+#                                   （clab 裸名 / lxd:<实例> / pve:<vmid> / qemu:<vmid>）
 #   lab_node_vmid <node>            **pve 专属**：节点名 → VMID（唯一的解析点；解析不到/重名都失败）
+#   lab_node_ssh_host <node>        **qemu 专属**：节点标识 → SSH 主机（唯一的解析点）
 #
 # 覆盖开关（**与抽象前逐条对应**，别把它们合并成一个）：
-#   EDGEEXP_SUBSTRATE          clab（默认）| lxd | pve
+#   EDGEEXP_SUBSTRATE          clab（默认）| lxd | pve | qemu
 #   EDGEEXP_TOPOLOGY           拓扑文件路径
 #   EDGEEXP_LAB_TOPOLOGY_BIN   拓扑级 CLI 的可执行文件（离线夹具用）
 #   EDGEEXP_LAB_TARGET_BIN     目标级 CLI 的可执行文件（离线夹具用；clab 下默认 = DOCKER_BIN）
 #   EDGEEXP_DOCKER_BIN         **抽象前就有的**接缝：目标级的 `docker`（`edge_probe.sh` 用它）
 #   EDGEEXP_LXC_BIN            lxd 基质的 `lxc`
 #   EDGEEXP_PCT_BIN            pve 基质的 `pct`
+#   EDGEEXP_QM_BIN             qemu 基质的 `qm`（拓扑/实例视图）
+#   EDGEEXP_SSH_BIN            qemu 基质的 `ssh`（目标内执行）
+#   EDGEEXP_SCP_BIN            qemu 基质的 `scp`（把文件送进目标）
+#   EDGEEXP_VM_SSH_HOST        qemu 基质的 SSH 目标（含 `%s` 时按节点标识展开；缺省用
+#                              `asc-vm<vmid>` —— 与 provisioning 写进宿主 /etc/hosts 的名字一致）
+#   EDGEEXP_VM_SSH_KEY         qemu 基质的 SSH 私钥**路径**（**从不**进仓库）
+#   EDGEEXP_VM_SSH_USER        qemu 基质的登录用户（默认 asc）
+#   EDGEEXP_VM_SSH_PORT        qemu 基质的 SSH 端口（默认 22）
 #   EDGEEXP_LAB_WAIT_STEP       `lab_wait_node_exec` 的轮询间隔（秒，默认 3；**只给离线夹具缩短用**）
 #
 # **clab 分支逐位等价**是最硬的门禁：函数体里每一条命令、参数顺序、重定向目标、日志文件名都
@@ -78,17 +88,33 @@
 # 而 `pct` 的原生标识是 **VMID（数字）**。`pct list` 同时给出两者，故 `lab_node_vmid` 是**唯一**
 # 的解析点，所有 `pct` 命令都从它拿 vmid。解析不到（或名字匹配到**多个** VMID）时**响亮失败**，
 # **绝不猜一个 vmid** —— 猜错会作用到别人的 CT 上，而那看起来与正确执行完全一样。
+#
+# qemu 分支的边界（Task 13；节点是 **QEMU/KVM VM**，`qm` + `ssh`/`scp`）：这是方向② 的
+# **生产基质**（用户 2026-10-15 裁定：CT = 快速验证/轻量模拟/临时；VM = 长线/中重型拓扑/重要任务），
+# 在**脚本层**的边界与 lxd/pve **刻意不同**，逐条写明理由：
+#   · `lab_up` / `lab_down` **仍然不支持**（rc=2）—— 但理由与 lxd/pve 不同：这里**不是**
+#     "怕碰别人的东西"，而是**建机/清机有它自己的单一来源**：
+#     `lunwen/clab-lab/scripts/edge_vm_provision.sh`（幂等、带 VMID 下限、带 `--destroy`）。
+#     把"建拓扑"塞进基质层会让同一件事有两个入口，而两者对"哪些 VMID 属于本任务"的
+#     判据一旦分叉，一次 `lab_down` 就能拆掉别人的 VM。故本层**永不** create/start/destroy。
+#   · `lab_node_counts` 回显 `-1 -1 -1`（同 lxd/pve：PVE 上没有"拓扑"对象，节点集合由 VM 列表定义）。
+#   · 其余原语全部支持，取值手段换成 `qm`（实例视图）与 **`ssh`/`scp`**（目标内执行/送文件）。
+#   · ⚠️ **取数地址是 qemu 专属的一处解析**（`lab_node_ssh_host`）：节点标识（vmid）与
+#     "SSH 连哪台机器"是**两件事**。默认规则是 `asc-vm<vmid>` —— **与 provisioning 脚本写进
+#     宿主 `/etc/hosts` 的 hostname 同源**（故不需要 DNS：管理 VLAN 30 上实测 DNS FAIL）。
+#     解析不出来时**响亮失败**，绝不回落成"裸 vmid 当主机名"（`ssh 910` 会去解析一个叫
+#     "910" 的主机名，而那条错误看起来像网络问题）。
 # ============================================================================
 
 # lab_substrate —— 当前基质（变量名带 lab_ 前缀：避免与调用方自己的 SUBSTRATE/SUBSTRATE_*
 # 撞名，同 edge_probe.sh 的 probe_target/probe_docker_bin 约定）。
 lab_substrate="${EDGEEXP_SUBSTRATE:-clab}"
 case "$lab_substrate" in
-  clab|lxd|pve) : ;;
+  clab|lxd|pve|qemu) : ;;
   *)
-    echo "edge_lab: EDGEEXP_SUBSTRATE 只认 clab（默认）、lxd 与 pve，收到 '$lab_substrate' ——" >&2
+    echo "edge_lab: EDGEEXP_SUBSTRATE 只认 clab（默认）、lxd、pve 与 qemu，收到 '$lab_substrate' ——" >&2
     echo "  基质名拼错时静默退回默认值会让整轮矩阵在另一种基质上跑（记录里的 env 标签照常），" >&2
-    echo "  故这里直接失败。用法：EDGEEXP_SUBSTRATE=clab|lxd|pve。" >&2
+    echo "  故这里直接失败。用法：EDGEEXP_SUBSTRATE=clab|lxd|pve|qemu。" >&2
     # 三种加载方式都要**中止调用方**（Fix round 1 / M-4）：
     #   · 被 source + 调用方有 `set -e` ⇒ `return 2` 就能带走调用方；
     #   · 被 source + 调用方**没有** `set -e` ⇒ `return` 只返回这一层，调用方会**继续跑**，
@@ -129,12 +155,18 @@ if [ -z "$lab_topology_bin" ]; then
     # pve：拓扑级与目标级是**同一个** CLI（`pct`）—— PVE 上没有"拓扑"这个对象，
     # 与 lxd 同形（那边两级都是 `lxc`）。覆盖开关 `EDGEEXP_PCT_BIN` 供离线夹具用。
     pve)  lab_topology_bin="${EDGEEXP_PCT_BIN:-pct}" ;;
+    # qemu：拓扑级是 **`qm`**（VM 列表与实例状态），目标级是 **`ssh`**（在客人里执行）——
+    # 这两级**不是同一个** CLI（与 lxd/pve 的形态不同，与 clab 的 clab/docker 同形）。
+    # PVE 上同样没有"拓扑"对象（节点集合由 VM 列表定义），故 `lab_up`/`lab_down` 不支持，
+    # 但 `lab_list`/`lab_inspect`/`lab_node_running`/`lab_instance_exists` 要从 `qm` 取值。
+    qemu) lab_topology_bin="${EDGEEXP_QM_BIN:-qm}" ;;
   esac
 fi
 
 # 目标级 CLI 在 clab 下就是 `docker` —— **保留抽象前的覆盖开关 `EDGEEXP_DOCKER_BIN`**
 # （它是 `edge_probe.sh` 的既有接缝，也是"用两个可分辨的假 docker 证明覆盖有牙"那条判据的入口）。
-# lxd 下是 `lxc`（`EDGEEXP_LXC_BIN` 可覆盖，供离线夹具用）；pve 下是 `pct`（`EDGEEXP_PCT_BIN`）。
+# lxd 下是 `lxc`（`EDGEEXP_LXC_BIN` 可覆盖，供离线夹具用）；pve 下是 `pct`（`EDGEEXP_PCT_BIN`）；
+# qemu 下是 `ssh`（`EDGEEXP_SSH_BIN`；送文件那个 `scp` 单独用 `EDGEEXP_SCP_BIN`，见 lab_push）。
 lab_docker_bin="${EDGEEXP_DOCKER_BIN:-docker}"
 lab_target_bin="${EDGEEXP_LAB_TARGET_BIN:-}"
 if [ -z "$lab_target_bin" ]; then
@@ -142,8 +174,73 @@ if [ -z "$lab_target_bin" ]; then
     clab) lab_target_bin="$lab_docker_bin" ;;
     lxd)  lab_target_bin="${EDGEEXP_LXC_BIN:-lxc}" ;;
     pve)  lab_target_bin="${EDGEEXP_PCT_BIN:-pct}" ;;
+    qemu) lab_target_bin="${EDGEEXP_SSH_BIN:-ssh}" ;;
   esac
 fi
+
+# ---------------------------------------------------------------------------
+# qemu 专属：SSH 连接参数与目标解析（**唯一**的"节点标识 → SSH 主机"解析点）
+# ---------------------------------------------------------------------------
+#
+# 为什么不复用 `lab_target_bin` 那两格：qemu 需要**两个**二进制（`ssh` 执行、`scp` 送文件），
+# 而 `lab_target_bin` 只表达"目标级 CLI 是哪一个"。把 `scp` 也塞进去会让
+# "lab_push 用哪个二进制"取决于一个为别的语义准备的变量。
+lab_scp_bin="${EDGEEXP_SCP_BIN:-scp}"
+
+# lab_ssh_conn_args —— ssh/scp **共用**的几格连接参数（与 cmd/edgescen 的
+# `qemuSSHConnArgs` **逐项同源**：同一套环境变量、同一套默认值、同一套硬编码选项）。
+#
+# 为什么两边各写一份（而不是互相调用）：一侧是 bash（基质层）、一侧是 Go（取数层），
+# 没有共享代码的手段。故**判据**是"两边对同一组环境变量给同一个解释"，
+# 由两边的用例各自钉住（Go 侧 `TestQEMU*`；bash 侧 `test-edge-lab.sh` 的 qemu 段）。
+#
+# **不接受**任何"SSH 选项串"环境变量：那种变量会被当成 `-o` 的值，于是
+# `-o ProxyCommand=…` 能在操作者看不见的地方把取数目标改到别处。
+lab_ssh_conn_args() {
+  printf '%s\n' -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10
+  printf '%s\n' -l "${EDGEEXP_VM_SSH_USER:-asc}"
+  if [ -n "${EDGEEXP_VM_SSH_PORT:-}" ]; then
+    printf '%s\n' -p "$EDGEEXP_VM_SSH_PORT"
+  fi
+  if [ -n "${EDGEEXP_VM_SSH_KEY:-}" ]; then
+    # 私钥**路径**（不是内容）。路径不可读时**响亮失败**，绝不退回 ssh 自己的默认钥匙 ——
+    # 退回之后大概率也能连上（同一个操作者的同一把钥匙），于是"这条记录是哪把钥匙采的"
+    # 就没人知道了。
+    [ -r "$EDGEEXP_VM_SSH_KEY" ] || {
+      echo "edge_lab: EDGEEXP_VM_SSH_KEY=$EDGEEXP_VM_SSH_KEY 不可读 ——" >&2
+      echo "  私钥路径由环境变量给出（**从不**写进仓库）；建机脚本 edge_vm_provision.sh" >&2
+      echo "  会把生成的私钥路径写进未跟踪的本地 env 文件，跑批前 source 它。" >&2
+      return 1
+    }
+    printf '%s\n' -o IdentitiesOnly=yes -i "$EDGEEXP_VM_SSH_KEY"
+  fi
+  return 0
+}
+
+# lab_node_ssh_host <node> —— **qemu 专属**：节点标识 → SSH 主机（本层唯一的解析点）。
+#
+# 规则与 cmd/edgescen 的 `qemuSSHHost` 逐条一致（两边必须同源，否则"脚本取数"与"记录里的
+# observation_target"会指向两台不同的机器，而两边都看起来正常）：
+#   1. `EDGEEXP_VM_SSH_HOST` 给了 ⇒ 用它（含 `%s` 时按节点标识展开）；
+#   2. 没给 + 节点标识是**纯数字** ⇒ `asc-vm<vmid>`（与 provisioning 写进 /etc/hosts 的名字同源）；
+#   3. 没给 + 非数字 ⇒ **原样**当主机名（`qemu:asc-vm910` 里的标识本身就是一个主机名）。
+lab_node_ssh_host() {
+  local node="$1" host
+  if [ -n "${EDGEEXP_VM_SSH_HOST:-}" ]; then
+    host="${EDGEEXP_VM_SSH_HOST//%s/$node}"
+  else
+    case "$node" in
+      ''|*[!0-9]*)
+        host="$node"
+        echo "edge_lab: 节点标识 '$node' 不是纯数字 vmid ⇒ 按**主机名**使用（基质 qemu）；" >&2
+        echo "  要用默认规则（asc-vm<vmid>）请给 vmid，或显式设 EDGEEXP_VM_SSH_HOST。" >&2
+        ;;
+      *) host="asc-vm$node" ;;
+    esac
+  fi
+  [ -n "$host" ] || return 1
+  printf '%s\n' "$host"
+}
 
 # lab_require_bins —— 前置检查（**单一来源**：调用脚本不再自己写一份命令清单）。
 #
@@ -157,6 +254,12 @@ lab_require_bins() {
     # lxd / pve：两级是同一个 CLI，故清单里只出现一次（重复一项没有额外语义）。
     lxd)  bins=("$lab_topology_bin") ;;
     pve)  bins=("$lab_topology_bin") ;;
+    # qemu：**两级是两个不同的二进制**（`qm` 取实例视图、`ssh`/`scp` 进目标），
+    # 故清单里必须三项都在 —— 缺 `qm` 会让 lab_list/lab_inspect 全盘失败，
+    # 缺 `scp` 会让 lab_push 失败，而缺 `ssh` 会让"目标内执行"失败；
+    # 三种失败的症状（"节点列表是空的"/"文件推不进去"/"命令跑不了"）看起来互不相干，
+    # 一条前置检查比三次排障便宜。
+    qemu) bins=("$lab_topology_bin" "$lab_target_bin" "$lab_scp_bin") ;;
   esac
   for bin in "${bins[@]}"; do
     command -v "$bin" >/dev/null 2>&1 || {
@@ -212,6 +315,36 @@ case "$lab_substrate" in
       echo "  却没有给 EDGEEXP_BASELINE_FACTORS_SOURCE —— 产物里的来源会退化成" >&2
       echo "  『未声明（默认空基线集）』，与**真的**空基线集在数据上无法区分。" >&2
       echo "  基线集按基质声明，来源必须与它一起写出来（用户 2026-10-10 裁定）。" >&2
+    fi ;;
+  qemu)
+    # **qemu 基质刻意不设默认基线集**（Task 13），理由是原则性的而不是"还没填"：
+    #
+    # 在 pve（LXC）上，`B = {EF-SELINUX, EF-APPARMOR}` 是**推导**出来的（LXC 的 apparmor
+    # 命名空间不向容器暴露 profile ⇒ OT-005 结构性不可观测 ⇒ 那两个因子恒在链上），
+    # 而那个推导只依赖"这是 LXC"这一件事 —— 所以在基质层写死是对的。
+    #
+    # 在 VM 上**没有**可推导的默认值：LSM 是否真的 enforcing、`OT-005` 过不过、
+    # 有几个 profile 可见，全都取决于**这一批 VM 的实际配置**（镜像、cloud-init 装的包、
+    # 有没有加载自定义 profile）。把它写死成 `∅` 或 `{EF-APPARMOR}` 等于**把一次实测结果
+    # 当成前提**，而实测结果会随镜像与配置变 —— 那时脚本仍然"有个基线集"，
+    # 只是它已经与事实不符，且**不会**有任何症状（链只是安静地多算/少算一个因子）。
+    #
+    # ⇒ 这里的处置与用户 2026-10-10「按基质如实声明」的裁定同源，只是把"如实"落到**跑批时**
+    #   而不是**写代码时**：VM 基质上 `EDGEEXP_BASELINE_FACTORS` 必须**显式给**
+    #   （通常由一个"先测 VM 基线"的步骤产出），并**必须**带 `_SOURCE`。
+    #   ⇒ **不设**默认值（保持未设置），故 `edge_matrix.sh` 的既有行为不变：
+    #      未声明 = 空基线集，而产物里的来源会如实写成"未声明（默认空基线集）"。
+    if [ -n "${EDGEEXP_BASELINE_FACTORS:-}" ] && [ -z "${EDGEEXP_BASELINE_FACTORS_SOURCE+set}" ]; then
+      echo "edge_lab: 警告：EDGEEXP_BASELINE_FACTORS='$EDGEEXP_BASELINE_FACTORS' 是**非空**的基线声明，" >&2
+      echo "  却没有给 EDGEEXP_BASELINE_FACTORS_SOURCE —— 产物里的来源会退化成" >&2
+      echo "  『未声明（默认空基线集）』，与**真的**空基线集在数据上无法区分。" >&2
+      echo "  基线集**随基质变化**：VM 基质上的取值必须由实测得出（不许照抄 CT 基质的两个因子）。" >&2
+    elif [ -z "${EDGEEXP_BASELINE_FACTORS+set}" ]; then
+      echo "edge_lab: 提示：qemu（VM）基质上 EDGEEXP_BASELINE_FACTORS **没有默认值** ——" >&2
+      echo "  VM 上 LSM 是**真的**能 enforcing 的，基线活跃集取决于这一批 VM 的实际配置，" >&2
+      echo "  写死等于把一次实测结果当前提。跑批前请显式给：EDGEEXP_BASELINE_FACTORS=<实测集>" >&2
+      echo "  （空集就写空串）**并**给 EDGEEXP_BASELINE_FACTORS_SOURCE=<为什么是这个集>。" >&2
+      echo "  当前按『未声明（空基线集）』继续 —— 与 CT 基质的两个因子**不可混算**。" >&2
     fi ;;
 esac
 
@@ -298,6 +431,16 @@ lab_target_spec() {
       vmid="$(lab_node_vmid "$node")" || return $?
       printf 'pve:%s\n' "$vmid"
       ;;
+    qemu)
+      # `qemu:<vmid>`（见 cmd/edgescen 的 parseNodeTarget）。**不在这里做名字→vmid 的解析**：
+      # qemu 那一格**既收 vmid 也收名字**（VM 的标识同时存在于 `qm list` 的 VMID 列与 Name 列），
+      # 故节点标识可以原样传下去 —— pve 需要解析是因为 `pct` **只认数字**。
+      # 但"SSH 连哪台机器"要在这一层先算出来（唯一解析点 `lab_node_ssh_host`）：
+      # 算不出来就**响亮失败并往外传非零**，采集侧据此整轮失败，
+      # **不会**退回本机结果（那正是这条路径最危险的静默形态）。
+      lab_node_ssh_host "$node" >/dev/null || return $?
+      printf 'qemu:%s\n' "$node"
+      ;;
   esac
 }
 
@@ -354,6 +497,16 @@ PY
     echo "  返回 -1 -1 -1（=『查不出来』，不是『0 个节点』），调用方不得据此断言环境已清空。" >&2
     printf '%s\n' "-1 -1 -1"
     ;;
+  qemu)
+    # 同 lxd/pve 的处置（PVE 上没有"拓扑"对象，节点集合由 VM 列表定义）。这里**不**去用
+    # `qm list` 的行数冒充"拓扑节点数"：那两件事只在"这一批 VM 就是全部节点"时才碰巧相等，
+    # 而一旦相等，调用方就会拿它做"拓扑已建好/已清空"的断言 —— 那条断言的真实含义
+    # （"**本任务**的节点都在/都不在"）与 `qm list` 的（"这台宿主上有几台 VM"）不是一回事。
+    echo "edge_lab: lab_node_counts 对 qemu 不适用（PVE 上没有拓扑对象；节点集合由 VM 列表定义，" >&2
+    echo "  而那与『本任务的节点』不是同一个集合 —— 宿主上还有别人的 VM）——" >&2
+    echo "  返回 -1 -1 -1（=『查不出来』，不是『0 个节点』），调用方不得据此断言环境已清空。" >&2
+    printf '%s\n' "-1 -1 -1"
+    ;;
   esac
 }
 
@@ -378,6 +531,18 @@ lab_up() {
     echo "  不在实验脚本的路径上：脚本建了 CT 就得由脚本销毁，而『谁建的谁来销毁』在这里没有单一来源）。" >&2
     echo "  这不是可以放过的不一致：静默返回 0 会让一次『复位成功』的假象进入记录。" >&2
     return 2 ;;
+  qemu)
+    # **理由与 lxd/pve 不同（Task 13 写明）**：这里不是"怕碰别人的东西"，而是"建机有它自己的
+    # 单一来源"。VM 是**要建**的（与 CT 不同），而建机/清机在
+    # `lunwen/clab-lab/scripts/edge_vm_provision.sh` 里已经有一套**幂等 + 带 VMID 下限 +
+    # 带 --destroy** 的实现。基质层再做一遍"建 VM"就有了两个入口，而两者对
+    # "哪些 VMID 属于本任务"的判据一旦分叉，一次 lab_down 就能拆掉别人的 VM ——
+    # 故本层只**访问**，永不 create/start/destroy。
+    echo "edge_lab: lab_up 对 qemu 不适用 —— VM 的建/清有**单一来源**：" >&2
+    echo "  lunwen/clab-lab/scripts/edge_vm_provision.sh（幂等、VMID 从 910 起、带 --destroy）。" >&2
+    echo "  本层不会 create/start 任何 VM：两个入口对『哪些 VMID 属于本任务』的判据一旦分叉，" >&2
+    echo "  一次误操作就会作用到别人的 VM 上。建机请跑那个脚本。" >&2
+    return 2 ;;
   esac
 }
 
@@ -400,6 +565,14 @@ lab_down() {
     echo "edge_lab: lab_down 对 pve 不适用 —— 本层**永不**销毁 PVE 上的 CT（宿主上的 CT 集合是" >&2
     echo "  操作者与别的任务共用的；一次猜测性的 destroy 会把**别人的** CT 删掉，而脚本没有" >&2
     echo "  『这台 CT 是不是本次实验建的』这个信息）—— 需要清理时由操作者显式手工执行。" >&2
+    return 2 ;;
+  qemu)
+    # 与 pve 同处置（一次猜测性的 destroy 会删掉**别人的** VM），但**额外**说明清机该走哪里：
+    # `edge_vm_provision.sh --destroy` 有"前缀 + VMID 下限"两道护栏，能在拆之前确认
+    # "这台 VM 是本任务建的吗"。基质层没有那个信息，故永不 destroy。
+    echo "edge_lab: lab_down 对 qemu 不适用 —— 本层**永不**销毁 VM（`qm destroy --purge` 会连磁盘" >&2
+    echo "  一起删，而宿主上还有别人的 VM/CT）。清机请跑有护栏的那一个：" >&2
+    echo "  lunwen/clab-lab/scripts/edge_vm_provision.sh --destroy（只拆带本任务前缀、VMID ≥ 910 的）。" >&2
     return 2 ;;
   esac
 }
@@ -434,6 +607,34 @@ lab_target_exec() {
     vmid="$(lab_node_vmid "$node")" || return $?
     "$lab_target_bin" exec "$vmid" -- "$@"
     ;;
+  qemu)
+    # `ssh <连接参数> -- <主机> bash -c '<命令串>'`。
+    #
+    # ⚠️ **这里是 qemu 分支唯一一处"不能与 docker/lxd/pve 逐项对应"的地方**，理由必须写清：
+    # 前三者都有一个"把 argv 原样交给客人"的 CLI（`docker exec <容器> <argv…>` /
+    # `lxc exec <实例> -- <argv…>` / `pct exec <vmid> -- <argv…>`），而 **`ssh` 没有** ——
+    # ssh 把 `-- <主机>` 之后的**所有格**拼成一个字符串，交给**客人侧的登录 shell** 去再分词。
+    # 于是同一个调用点
+    #     `lab_target_exec <节点> bash -c "echo 'a b'"`
+    # 在 ssh 侧得到的不是 `bash` 收到 `-c` 与那一段脚本，而是一行被远端 shell 重新解析过的文本。
+    #
+    # ⇒ 本分支把 argv **显式**重建成一条**引号正确**的命令串（`"$*"`：argv 是调用方给的，
+    #   `$*` 是"用空格拼起来"的那个语义），再交给客人侧的 `bash -c` 当**一整段脚本**执行。
+    #   逐条对应关系：
+    #     · clab/lxd/pve：argv 逐格透传（客人侧进程直接收到调用方写的那些格）；
+    #     · qemu：argv 先**拼成一条命令串**，再由客人侧 `bash -c` 解释 —— 引号/空格/
+    #       重定向的语义因此落在**调用方写的那条命令串**上，而不是落在 argv 的格边界上。
+    #   这条差别是**结构性**的（ssh 协议本身如此，不是实现选择），故写在这里而不是藏在注释里：
+    #   需要"格边界精确保真"的调用点（现在的调用点都不是）在 qemu 基质上要自己保证引号。
+    #   三种基质的**共同契约**（"命令在目标里被执行了、stdout/stderr 原样透传、失败非零"）
+    #   在 qemu 侧逐条成立；`set -o pipefail` 由调用方与客人侧各自负责。
+    #
+    # `--` 必须在主机名之前：`ssh <主机> -c …` 里以 `-` 开头的那一格会被 ssh 当成自己的选项。
+    local host args=()
+    host="$(lab_node_ssh_host "$node")" || return $?
+    mapfile -t args < <(lab_ssh_conn_args) || return $?
+    "$lab_target_bin" "${args[@]}" -- "$host" bash -c "$*"
+    ;;
   esac
 }
 
@@ -459,6 +660,23 @@ lab_push() {
     local vmid
     vmid="$(lab_node_vmid "$node")" || return $?
     "$lab_target_bin" push "$vmid" "$local_path" "$dest" --perms 755
+    ;;
+  qemu)
+    # `scp <连接参数> -O <本地> <主机>:<dest>` + 紧随其后的 `ssh <连接参数> -- <主机> chmod 0755 <dest>`。
+    #
+    # 两条都是**必需**的，各自对应一种"看起来成功、其实没到位"的形态：
+    #   · **`-O`**（强制 legacy SCP 协议）：OpenSSH 9.0+ 默认走 SFTP 子系统，而 cloud image 里
+    #     `sftp-server` 的位置随发行版变；缺了就报 `subsystem request failed` ——
+    #     那条错误指向"子系统没配"，与真正的原因（本机 scp 的默认协议）差得很远。
+    #   · **`chmod 0755`**：`scp` 保留源文件的权限位而**不**保证可执行。少了这一条，
+    #     症状是客人侧的 `Permission denied`（看起来像"权限不足"），而不是"没传进来"。
+    #     pve 侧靠 `pct push --perms 755` 一次到位，VM 侧没有等价开关（`scp -p` 保留的是
+    #     **宿主上那个文件**的权限，而宿主上它是 0644 的构建产物）。
+    local host args=()
+    host="$(lab_node_ssh_host "$node")" || return $?
+    mapfile -t args < <(lab_ssh_conn_args) || return $?
+    "$lab_scp_bin" "${args[@]}" -O "$local_path" "$host:$dest"
+    "$lab_target_bin" "${args[@]}" -- "$host" chmod 0755 "$dest"
     ;;
   esac
 }
@@ -512,6 +730,28 @@ lab_target_exec_detached() {
     vmid="$(lab_node_vmid "$node")" || return $?
     "$lab_target_bin" exec "$vmid" -- sh -c 'nohup "$@" >/dev/null 2>&1 </dev/null &' _ "$@"
     ;;
+  qemu)
+    # 与 lxd/pve **同源地照搬这个 shell 惯用法**（`nohup` + 三个重定向 + `&`）：没有它们的话，
+    # 命令的 stdio 仍挂在"掉线即断"的 ssh 通道上，ssh 一返回进程就被带走 ——
+    # 而调用方只看到"agent 一直没回连"（与"agent 起不来"同形）。
+    #
+    # ⚠️ 前缀是 **`nohup sh -c '…' _ "$@"`**（引号在**客人侧的 sh** 那一段里），
+    # 与上面 `lab_target_exec` 的 `bash -c "$*"` **刻意不同**：这里的命令是"起一个后台进程"，
+    # 而"起"这个动作的 argv 保真纪律来自 lxd/pve 那一轮（Fix round 1 / I-2：
+    # `"$@"` 放在 `sh -c` 的脚本位置**之后**，`_` 占位 `$0`，于是客人侧 `sh` 的 `$@`
+    # 就是调用方给的 argv）。但 ssh 会把整串交给远端 shell，故这里必须**再包一层**
+    # `bash -c`，让"引号"落在正确的解释层：
+    #     ssh <主机> bash -c 'nohup "$@" >/dev/null 2>&1 </dev/null &' _ cmd arg…
+    # 于是远端 bash 把整串当脚本执行，脚本里的 `"$@"` 展开成 `cmd arg1 arg2…`。
+    # 若少了外层 `bash -c`，远端 shell 会把 `'nohup "$@" …'` 里的引号**自己**吃掉，
+    # 于是 `"$@"` 在远端 shell 里变成"当前 shell 的位置参数"（通常为空）——
+    # 命令被丢掉、返回 0，而症状与"agent 起不来"完全同形。
+    local host args=()
+    host="$(lab_node_ssh_host "$node")" || return $?
+    mapfile -t args < <(lab_ssh_conn_args) || return $?
+    "$lab_target_bin" "${args[@]}" -- "$host" bash -c \
+      'nohup "$@" >/dev/null 2>&1 </dev/null &' _ "$@"
+    ;;
   esac
 }
 
@@ -532,6 +772,17 @@ lab_node_ip() {
     local vmid
     vmid="$(lab_node_vmid "$node")" || return $?
     "$lab_target_bin" exec "$vmid" -- ip -4 -o addr show "$iface" 2>/dev/null | awk '{print $4; exit}'
+    ;;
+  qemu)
+    # 与 pve 那行的**取值形状完全一致**（`ip -4 -o addr show <iface>` + `awk '{print $4}'`），
+    # 只是"在客人里执行"由 ssh 承担。**接口名不改**：cloud image 的网卡在客人里叫 `eth0`
+    # （cloud-init 的 netplan 用 `eth0`），而 `lab_node_ip <node> <iface>` 的 `iface` 由调用方给 ——
+    # 故这里不替调用方做"vmbr1 的网卡该叫 eth0 还是 ens18"的猜测（猜错会拿到空地址，
+    # 而空地址的既有语义是"这个接口没有 IPv4"，与"接口名写错了"完全同形）。
+    local host args=()
+    host="$(lab_node_ssh_host "$node")" || return $?
+    mapfile -t args < <(lab_ssh_conn_args) || return $?
+    "$lab_target_bin" "${args[@]}" -- "$host" ip -4 -o addr show "$iface" 2>/dev/null | awk '{print $4; exit}'
     ;;
   esac
 }
@@ -563,6 +814,18 @@ lab_node_pids() {
     "$lab_target_bin" exec "$vmid" -- ps -eo pid,comm --no-headers 2>/dev/null \
       | awk -v p="$pattern" '$2 ~ p {print $1}' | sort -n
     ;;
+  qemu)
+    # 形状与 pve 逐项对应（同一条 `ps -eo pid,comm --no-headers` + 同一个 awk 过滤 + `sort -n`）。
+    # ⚠️ **这一格在 VM 上比在 CT 上更重要**：VM 里跑的进程是**真的**（launchd/systemd/内核线程
+    # 都会出现在 `ps` 里），而 CT 里只有容器命名空间内的进程 —— 于是"按 PID 匹配 agent"这条
+    # 判据在 VM 上更容易撞上**别人的**进程（例如宿主侧别的任务在客人里起的工具）。
+    # 故调用点用的 `(host, pid)` 精确匹配纪律在 VM 基质上**不是**可选的。
+    local host args=()
+    host="$(lab_node_ssh_host "$node")" || return $?
+    mapfile -t args < <(lab_ssh_conn_args) || return $?
+    "$lab_target_bin" "${args[@]}" -- "$host" ps -eo pid,comm --no-headers 2>/dev/null \
+      | awk -v p="$pattern" '$2 ~ p {print $1}' | sort -n
+    ;;
   esac
 }
 
@@ -582,6 +845,15 @@ lab_instance_exists() {
     # `lxc info` 失败即"不存在"同形，且**不猜** vmid。
     vmid="$(lab_node_vmid "$node" 2>/dev/null)" || return 1
     "$lab_target_bin" status "$vmid" >/dev/null 2>&1
+    ;;
+  qemu)
+    # "存在"的判据 = `qm status <vmid|名字>` 能应答（**权威来源就是 PVE 自己**）。
+    # 与 pve 侧**刻意不同**：这里**不做**"这个名字必须唯一"的解析 —— `qm` 原生同时接受
+    # VMID 与 Name，`qm status <不存在的名字>` 自己会返回非零。多加一层解析只会多一处
+    # 可能与 `qm` 自己的判据分叉的地方（分叉时症状是"节点明明在、脚本说不在"）。
+    # ⚠️ **只管存在性**，不管在不在跑 —— 那是 `lab_node_running` 的事（两者混成一个
+    # 会让"存在但没在跑"被读成"不存在"⇒ 一次多余的 start，而它看起来像环境问题）。
+    "$lab_topology_bin" status "$node" >/dev/null 2>&1
     ;;
   esac
 }
@@ -650,6 +922,23 @@ lab_node_running() {
       *)       printf 'false\n' ;;
     esac
     ;;
+  qemu)
+    # 形状与 pve 逐项对应，只是取值来源是 `qm status <vmid|名字>`（实测输出 `status: running`）。
+    # 三条判据（与 pve 侧同源，缺一条就会把"问不到"读成"没在跑"或反之）：
+    #   · `qm status` 本身失败（VMID 不存在）⇒ **非零**（不是 `false`）；
+    #   · 解析不出 status 行 ⇒ **非零**（拿不到取值 ≠ false）；
+    #   · 只把 `running` 判成 true，其余（`stopped`/`paused`/`prelaunch`…）一律 false。
+    # ⚠️ 最后一条在 VM 上比在 CT 上更要紧：`paused`（QEMU 的挂起）**不是**"能进去执行"，
+    # 而把它读成 true 会让调用方跳过 start，随后的 ssh 超时会被记成"agent 起不来"。
+    local out status
+    out="$("$lab_topology_bin" status "$node" 2>/dev/null)" || return 1
+    status="$(printf '%s\n' "$out" | awk -F': *' '$1 ~ /^ *[Ss]tatus$/ {print tolower($2); exit}')"
+    [ -n "$status" ] || return 1
+    case "$status" in
+      running) printf 'true\n' ;;
+      *)       printf 'false\n' ;;
+    esac
+    ;;
   esac
 }
 
@@ -677,6 +966,14 @@ lab_inspect() {
     vmid="$(lab_node_vmid "$node")" || return $?
     "$lab_target_bin" config "$vmid"
     ;;
+  qemu)
+    # `qm config <vmid|名字>`：PVE 的 VM 配置视图（同样是 `key: value`，不是 JSON —— 与 pve 侧
+    # 的处境相同，调用方只用退出码，内容是排障留痕）。
+    # **额外价值**（VM 基质独有）：这一份输出就是"这台 VM 挂在哪条桥、几核几内存、
+    # balloon 下限多少"的**唯一**权威来源 —— 跑批后追查"这批数据采自什么环境"时，
+    # 它是比记录里的 env 标签**硬**得多的证据（标签是手填的，这份是 PVE 自己写的）。
+    "$lab_topology_bin" config "$node"
+    ;;
   esac
 }
 
@@ -700,6 +997,13 @@ lab_list() {
     ;;
   pve)
     "$lab_target_bin" list | awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $NF}'
+    ;;
+  qemu)
+    # `qm list` 的实测形状：一行表头 `VMID NAME STATUS MEM(MB) BOOTDISK(GB) PID` +
+    # 每台一行（名字在第 2 格、**不是**最后一格 —— 与 `pct list` 的"名字在最后一格"相反）。
+    # 故判据是"第 1 格纯数字 ⇒ 取第 2 格"，与 pve 那条**不能共用**（共用会让名字变成 PID，
+    # 而那个"名字"看起来只是个奇怪的字符串，不会有任何报错）。
+    "$lab_topology_bin" list | awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $2}'
     ;;
   esac
 }

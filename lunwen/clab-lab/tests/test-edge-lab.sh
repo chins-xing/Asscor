@@ -613,6 +613,210 @@ if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'reached-lab_substrate=pve'; 
   ok "合法基质名 pve ⇒ source 正常通过（对照组；非法值仍被 C 段钉住）"
 else fail "pve 被误拦：rc=$rc out=$out"; fi
 
+# ============================================================================
+# I) qemu 分支（Task 13：QEMU/KVM VM = 方向② 的**生产**基质）
+# ============================================================================
+#
+# 与 H) pve 段**同手法**：假 `qm` 记调用、假 `ssh`/`scp` 记账，判据全部打在"命令发给了谁、
+# 发出去的 argv 长什么样"上。三条本段独有的纪律（VM 基质与 CT 基质的**结构性差别**）：
+#   1. **取数走 ssh/scp**（前三套基质是 docker/lxc/pct）—— 而 qemu 的**实例视图**仍走 `qm`：
+#      两级是**两个不同的二进制**，故 `lab_require_bins` 必须三项都查。
+#   2. **`lab_up`/`lab_down` 照旧 rc=2**，但理由不同（不是"怕碰别人的"，而是建机/清机有
+#      **单一来源** `edge_vm_provision.sh`）—— 判据是错误串里必须**点名**那个脚本。
+#   3. **`lab_node_ssh_host` 是唯一的"节点标识 → SSH 主机"解析点**，默认规则 `asc-vm<vmid>`
+#      必须与 provisioning 写进 `/etc/hosts` 的名字**同源**；`EDGEEXP_VM_SSH_HOST` 含 `%s`
+#      时按节点标识展开（多机就靠这条）。
+echo "############ I) qemu 分支（假 qm + 假 ssh/scp）"
+mkdir -p "$D/bin-qemu"
+cat > "$D/bin-qemu/qm" <<'SH'
+#!/bin/sh
+printf 'qm %s\n' "$*" >> "$REPLAY_LOG"
+case "$1" in
+  list)
+    printf 'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n'
+    printf '910  asc-vm910            running    2048               8.00 12345\n'
+    printf '911  asc-vm911            stopped    2048               8.00 0\n'
+    ;;
+  status) printf 'status: %s\n' "${REPLAY_QM_STATUS:-running}" ;;
+  config) printf 'arch: amd64\nname: asc-vm910\nmemory: 2048\nballoon: 512\nnet0: virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr1\n' ;;
+esac
+exit "${REPLAY_EXIT:-0}"
+SH
+cat > "$D/bin-qemu/ssh" <<'SH'
+#!/bin/sh
+printf 'ssh %s\n' "$*" >> "$REPLAY_SSH_LOG"
+printf 'hostname-from-vm\n'
+SH
+cat > "$D/bin-qemu/scp" <<'SH'
+#!/bin/sh
+printf 'scp %s\n' "$*" >> "$REPLAY_SCP_LOG"
+SH
+chmod +x "$D/bin-qemu/qm" "$D/bin-qemu/ssh" "$D/bin-qemu/scp"
+
+cat > "$D/qemu.sh" <<'SH'
+#!/bin/bash
+set -uo pipefail
+. "$LIB"
+echo "== exec";     lab_target_exec 910 bash -c "rm -f /tmp/x" || echo "  rc=$?"
+echo "== push";     lab_push /opt/payload 910 /tmp/sandcat || echo "  rc=$?"
+echo "== ip";       lab_node_ip 910 eth0 || echo "  rc=$?"
+echo "== pids";     lab_node_pids 910 sandcat || echo "  rc=$?"
+echo "== running";  lab_node_running 910 || echo "  rc=$?"
+echo "== exists";   lab_instance_exists 910; echo "  rc=$?"
+echo "== inspect";  lab_inspect 910 >/dev/null 2>&1; echo "  rc=$?"
+echo "== list";     lab_list || echo "  rc=$?"
+echo "== spec";     lab_target_spec 910 || echo "  rc=$?"
+echo "== specname"; lab_target_spec asc-vm911 || echo "  rc=$?"
+echo "== sshhost";  lab_node_ssh_host 911 || echo "  rc=$?"
+echo "== require";  lab_require_bins; echo "  require-rc=$?"
+echo "== up";       lab_up; echo "  rc=$?"
+echo "== down";     lab_down; echo "  rc=$?"
+echo "== counts";   lab_node_counts; echo "  rc=$?"
+SH
+QMU_LOG="$D/qemu.log"; SSH_LOG="$D/qemu-ssh.log"; SCP_LOG="$D/qemu-scp.log"
+: > "$QMU_LOG"; : > "$SSH_LOG"; : > "$SCP_LOG"
+# 连接参数是**具名四个变量**决定的，故这里显式清掉可能从外层继承来的取值 ——
+# 否则"没给端口时不出现 `-p`"这条判据会被外层环境静默改变（假绿/假红）。
+unset EDGEEXP_VM_SSH_HOST EDGEEXP_VM_SSH_KEY EDGEEXP_VM_SSH_USER EDGEEXP_VM_SSH_PORT
+# PATH 上**同时**有假 docker/lxc/clab/pct 与假 qm/ssh/scp ⇒ 日志里出现哪一种就是"实际发给了谁"。
+PATH="$D/bin-qemu:$D/bin-pve:$D/bin:$PATH" REPLAY_LOG="$QMU_LOG" \
+  REPLAY_SSH_LOG="$SSH_LOG" REPLAY_SCP_LOG="$SCP_LOG" \
+  EDGEEXP_SUBSTRATE=qemu EDGEEXP_QM_BIN=qm EDGEEXP_SSH_BIN=ssh EDGEEXP_SCP_BIN=scp \
+  LAB_TMP="$D/work" EDGEEXP_LAB_TMP="$D/work" LIB="$LIB" \
+  bash "$D/qemu.sh" > "$D/qemu.out" 2>&1
+
+if grep -qE '^ssh (-o [^ ]+ )+-- asc-vm910 bash -c rm -f /tmp/x' "$SSH_LOG"; then
+  ok "qemu exec 走 ssh 且目标名由 vmid 推出来（asc-vm910）"
+else fail "qemu exec 形态不对"; cat "$SSH_LOG"; fi
+if grep -q '^scp .* -O /opt/payload asc-vm910:/tmp/sandcat' "$SCP_LOG"; then
+  ok "qemu push 走 scp（含 \`-O\` 强制 legacy SCP 协议）"
+else fail "qemu push 形态不对"; cat "$SCP_LOG"; fi
+if grep -qE '^ssh .*-- asc-vm910 chmod 0755 /tmp/sandcat' "$SSH_LOG"; then
+  ok "qemu push 之后显式 \`chmod 0755\`（scp 不保证可执行位）"
+else fail "qemu push 没有 chmod"; cat "$SSH_LOG"; fi
+if grep -qE '^ssh .*-- asc-vm910 ip -4 -o addr show eth0' "$SSH_LOG"; then
+  ok "qemu lab_node_ip 在客人内取地址"; else fail "qemu lab_node_ip 形态不对"; fi
+if grep -qE '^ssh .*-- asc-vm910 ps -eo pid,comm --no-headers' "$SSH_LOG"; then
+  ok "qemu lab_node_pids 在客人内取进程表"; else fail "qemu lab_node_pids 形态不对"; fi
+if grep -q '^qm status 910' "$QMU_LOG"; then
+  ok "qemu lab_node_running 用 \`qm status <vmid>\` 判状态（实例视图走 qm，不走 ssh）"
+else fail "qemu lab_node_running 没走 qm status"; fi
+if grep -q '^qm config 910' "$QMU_LOG"; then
+  ok "qemu lab_inspect 用 \`qm config <vmid>\` 取基质视图"; else fail "qemu lab_inspect 没走 qm config"; fi
+if printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== list/,/^== spec/p' | grep -q 'asc-vm910' \
+   && ! printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== list/,/^== spec/p' | grep -qE '^(VMID|12345)'; then
+  ok "qemu lab_list 取的是**名字**（\`qm list\` 的名字在第 2 格，与 pct 的最后一格相反）"
+else fail "qemu lab_list 契约不对：$(sed -n '/^== list/,/^== spec/p' "$D/qemu.out")"; fi
+if printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== spec$/,/^== specname/p' | grep -q 'qemu:910'; then
+  ok "qemu lab_target_spec 产出 qemu:<vmid>（不在这里做名字→vmid 解析：qm 两种标识都收）"
+else fail "qemu lab_target_spec 不对：$(sed -n '/^== spec/,/^== specname/p' "$D/qemu.out")"; fi
+if printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== specname$/,/^== sshhost/p' | grep -q 'qemu:asc-vm911'; then
+  ok "qemu lab_target_spec 对**名字**标识原样透传（qemu:asc-vm911，不猜 vmid）"
+else fail "qemu lab_target_spec 对名字标识处置不对：$(sed -n '/^== specname/,/^== sshhost/p' "$D/qemu.out")"; fi
+if printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== sshhost/,/^== require/p' | grep -q 'asc-vm911'; then
+  ok "lab_node_ssh_host 默认规则 = asc-vm<vmid>（与 provisioning 写进 /etc/hosts 的名字同源）"
+else fail "lab_node_ssh_host 默认规则不对：$(sed -n '/^== sshhost/,/^== require/p' "$D/qemu.out")"; fi
+if printf '%s' "$(cat "$D/qemu.out")" | sed -n '/^== require/,/^== up/p' | grep -q 'require-rc=0'; then
+  ok "lab_require_bins 在 qemu 下三项都查（qm + ssh + scp，两级是两个不同二进制）"
+else fail "lab_require_bins 在 qemu 下不对：$(sed -n '/^== require/,/^== up/p' "$D/qemu.out")"; fi
+if sed -n '/^== up/,/^== down/p' "$D/qemu.out" | grep -q 'rc=2' \
+   && sed -n '/^== up/,/^== down/p' "$D/qemu.out" | grep -q 'edge_vm_provision.sh'; then
+  ok "lab_up 在 qemu 下响亮失败并**点名**唯一来源 edge_vm_provision.sh（理由与 pve 不同）"
+else fail "lab_up 在 qemu 下没有响亮失败：$(sed -n '/^== up/,/^== down/p' "$D/qemu.out")"; fi
+if sed -n '/^== down/,/^== counts/p' "$D/qemu.out" | grep -q 'rc=2' \
+   && sed -n '/^== down/,/^== counts/p' "$D/qemu.out" | grep -q 'edge_vm_provision.sh'; then
+  ok "lab_down 在 qemu 下响亮失败并说明清机该走 \`--destroy\`"
+else fail "lab_down 在 qemu 下没有响亮失败：$(sed -n '/^== down/,/^== counts/p' "$D/qemu.out")"; fi
+if sed -n '/^== counts/,$p' "$D/qemu.out" | grep -q -- '-1 -1 -1'; then
+  ok "lab_node_counts 在 qemu 下回显 -1 -1 -1（宿主上还有别人的 VM，不是同一个集合）"
+else fail "lab_node_counts 在 qemu 下不对"; fi
+# **不越界**：本层永不 create/destroy/start/stop 任何 VM；也**不得**把 pct/docker/lxc 当 qemu 用。
+if grep -qE '^qm (create|destroy|start|stop|shutdown|reboot|del|importdisk|set) ' "$QMU_LOG"; then
+  fail "qemu 分支发出了会改变 VM 状态的命令（绝不允许）：$(grep -E '^qm (create|destroy|start|stop|shutdown|reboot|del|importdisk|set) ' "$QMU_LOG")"
+else ok "qemu 分支只读：无 create/destroy/start/stop/importdisk/set"; fi
+if [ -s "$D/pve.log" ] || [ -s "$D/lxd.log" ] || [ -s "$D/docker.log" ]; then
+  fail "qemu 路径把命令发给了别的基质（pct/lxc/docker）—— 基质选错且不报错：$(cat "$D/pve.log" "$D/lxd.log" "$D/docker.log" 2>/dev/null | head -5)"
+else ok "qemu 路径**只**起 qm/ssh/scp：docker / lxc / pct 一次都没被调用（绝不静默回落）"; fi
+
+# --- I-1) STOPPED 的 VM 必须回 false（判据打在 stdout 上，与 pve 段同款）-------------
+STOPPED_Q="$(PATH="$D/bin-qemu:$PATH" REPLAY_LOG="$D/qemu-stopped.log" REPLAY_QM_STATUS=stopped \
+  EDGEEXP_SUBSTRATE=qemu EDGEEXP_QM_BIN=qm LIB="$LIB" bash -c \
+  '. "$LIB"; printf "running=[%s]\n" "$(lab_node_running 910)"; echo "rc=$?"' 2>&1)"
+if printf '%s' "$STOPPED_Q" | grep -q 'running=\[false\]'; then
+  ok "STOPPED 的 VM ⇒ lab_node_running 回 false（\`paused\` 等一律不是 true）"
+else fail "STOPPED 的 VM 取值不对：$STOPPED_Q"; fi
+
+# --- I-2) EDGEEXP_VM_SSH_HOST 的三种语义（%s 展开 / 常量 / 缺省）---------------------
+HOSTENV_OUT="$(PATH="$D/bin-qemu:$PATH" EDGEEXP_SUBSTRATE=qemu LIB="$LIB" bash -c '
+  . "$LIB"
+  printf "tmpl=[%s]\n" "$(EDGEEXP_VM_SSH_HOST="asc-vm%s.lab" lab_node_ssh_host 911)"
+  printf "const=[%s]\n" "$(EDGEEXP_VM_SSH_HOST=192.0.2.7 lab_node_ssh_host 911)"
+  printf "bare=[%s]\n" "$(EDGEEXP_VM_SSH_HOST= lab_node_ssh_host asc-vm911)"
+' 2>&1)"
+if printf '%s' "$HOSTENV_OUT" | grep -q 'tmpl=\[asc-vm911.lab\]'; then
+  ok "EDGEEXP_VM_SSH_HOST 含 \`%s\` ⇒ 按节点标识展开（**多机就靠这条**）"
+else fail "EDGEEXP_VM_SSH_HOST 的 %s 展开不对：$HOSTENV_OUT"; fi
+if printf '%s' "$HOSTENV_OUT" | grep -q 'const=\[192.0.2.7\]'; then
+  ok "EDGEEXP_VM_SSH_HOST 不含 \`%s\` ⇒ 所有节点都指那一台（单机场景）"
+else fail "EDGEEXP_VM_SSH_HOST 常量语义不对：$HOSTENV_OUT"; fi
+if printf '%s' "$HOSTENV_OUT" | grep -q 'bare=\[asc-vm911\]'; then
+  ok "非数字标识原样当主机名（\`qemu:asc-vm911\` 里的标识本身就是一个主机名）"
+else fail "非数字标识的处置不对：$HOSTENV_OUT"; fi
+
+# --- I-3) SSH 选项**不得**由环境变量注入（否则取数目标能被悄悄改到别处）--------------
+INJ_OUT="$(PATH="$D/bin-qemu:$PATH" EDGEEXP_SUBSTRATE=qemu LIB="$LIB" \
+  EDGEEXP_VM_SSH_OPTS="-o ProxyCommand=/bin/false" EDGEEXP_VM_SSH_ARGS="-o ProxyCommand=/bin/false" \
+  bash -c '. "$LIB"; EDGEEXP_VM_SSH_KEY=; lab_ssh_conn_args' 2>&1)"
+if printf '%s' "$INJ_OUT" | grep -q 'ProxyCommand'; then
+  fail "环境变量把 SSH 选项注入进去了（取数目标可被改到别处）：$INJ_OUT"
+else ok "没有任何环境变量能把 SSH 选项注入 argv（换目标只能换 EDGEEXP_VM_SSH_HOST）"; fi
+
+# --- I-4) 私钥路径不可读 ⇒ **响亮失败**，不退回 ssh 自己的默认钥匙 ---------------------
+KEYERR_OUT="$(PATH="$D/bin-qemu:$PATH" EDGEEXP_SUBSTRATE=qemu LIB="$LIB" \
+  bash -c '. "$LIB"; EDGEEXP_VM_SSH_KEY=/nonexistent/id_ed25519; lab_ssh_conn_args; echo "rc=$?"' 2>&1)"
+if printf '%s' "$KEYERR_OUT" | grep -q 'rc=1' && printf '%s' "$KEYERR_OUT" | grep -q '不可读'; then
+  ok "私钥路径不可读 ⇒ lab_ssh_conn_args 响亮失败（不退回 ssh 的默认钥匙）"
+else fail "私钥不可读的处置不对（不许悄悄换钥匙）：$KEYERR_OUT"; fi
+
+# --- I-F) detached 的 argv 保真（与 F/H-F 段同手法，换到 qemu 形状）--------------------
+mkdir -p "$D/bin-exec-qemu"
+cat > "$D/bin-exec-qemu/ssh" <<'SH'
+#!/bin/bash
+# qemu 形状：`ssh <连接参数> -- <主机> <远程命令…>`；把 `-- <主机>` 之后的整串交给本地 sh
+# （等价于远端 shell 解释那一串 —— 夹具在**本机**模拟客人）。
+shift_args=(); seen=0
+for a in "$@"; do
+  if [ "$seen" = "1" ]; then shift_args+=("$a"); continue; fi
+  if [ "$a" = "--" ]; then seen=1; fi
+done
+# shift_args[0] 是主机名，后面才是远程命令
+unset 'shift_args[0]'
+"${shift_args[@]}"
+exit $?
+SH
+chmod +x "$D/bin-exec-qemu/ssh"
+rm -f "$D/marker/qemu.txt"
+PATH="$D/bin-exec-qemu:/usr/bin:/bin" EDGEEXP_SUBSTRATE=qemu EDGEEXP_SSH_BIN=ssh LIB="$LIB" \
+  bash -c '. "$LIB"; lab_target_exec_detached 910 /bin/sh -c "printf RAN-qemu > '"$D"'/marker/qemu.txt"' \
+  > "$D/detached-qemu.out" 2>&1
+if wait_marker "$D/marker/qemu.txt" "RAN-qemu"; then
+  ok "detached（qemu）：脱离命令按 argv 在客人内跑起来了（marker=RAN-qemu）"
+else
+  fail "detached（qemu）：命令没有按 argv 跑（marker=$([ -f "$D/marker/qemu.txt" ] && cat "$D/marker/qemu.txt" || echo 不存在)｜stderr=$(tr '\n' ';' < "$D/detached-qemu.out"))"
+fi
+
+# --- I) 非法基质名：qemu 也必须是**白名单内**的合法值（对照组）--------------------------
+cat > "$D/goodsub-qemu.sh" <<SH
+set -euo pipefail
+. "$LIB"
+echo "reached-lab_substrate=\$lab_substrate"
+SH
+rc=0
+out="$(EDGEEXP_SUBSTRATE=qemu bash "$D/goodsub-qemu.sh" 2>&1)" || rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'reached-lab_substrate=qemu'; then
+  ok "合法基质名 qemu ⇒ source 正常通过（对照组；非法值仍被 C 段钉住）"
+else fail "qemu 被误拦：rc=$rc out=$out"; fi
+
 echo "############ 汇总"
 echo "  PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
