@@ -425,8 +425,16 @@ C2 的 API 口令**不写入本仓库**。仓库里此前的落点是脚本默�
 2. **跑批前置门禁会在缺 key 时响亮失败** —— 绝不允许回落成"没 key 也继续"；
 3. dl360gen9 上的 C2 口令以 **argon2id 哈希**形式存在 `conf/default.yml`
    （`api_key_red` / `api_key_blue` 两条），**哈希本身不是明文**，但**不要**把它拷进仓库。
+4. ⚠️ **实测补充（Task 14，2026-10-16）**：第 3 条那句"不要拷进仓库"**当时已经被违反了** ——
+   `lunwen/clab-lab/scripts/exp_caldera_key2.sh`（及其在 `lunwen/attachment/scripts/` 的副本）
+   里**内联着 `api_key_red` 的哈希原文**，而同一文件的候选口令表里还有那个默认口令的明文
+   ⇒ 等于"靶子 + 答案"一起提交。Task 14 已把它改成**就地**从 `conf/default.yml` 读，
+   哈希与候选明文均不再进仓库。
+   判据：`git grep -nE '\$argon2id\$v=[0-9]+\$m=[0-9]+,t=[0-9]+,p=[0-9]+\$[A-Za-z0-9+/]{16,}' -- lunwen`
+   **零命中**（要匹配到**完整** PHC 串才算命中，故这条判据自身的文本不会命中它）。
 
-> **判据**：`grep -c 'api_key' /opt/caldera/conf/default.yml`（应得 2 条，值为 `$argon2id$…`）
+> **判据**：`grep -c 'api_key' /opt/caldera/conf/default.yml`（应得 2 条，值为 `$argon2id$…`）；
+> 仓库侧：`git grep -I -n -e '<明文>'` 与上一条哈希片段**均零命中**（Task 14 报告 §Step 1）。
 
 ---
 

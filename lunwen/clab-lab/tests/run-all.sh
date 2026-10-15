@@ -24,7 +24,10 @@
 #   test-edge-probe       20（它按 `ok` 行计数，没有 PASS= 汇总行）
 #   test-matrix-classification 12（Task 8 的 7 格 + Task 10 的臂 3 格 + Task 11 的重复轴 2 格：H/I；
 #                                 它在**缺陷版**（`SCEN_FACTORS_RAW="$( … ) "`）上必须红 ——
-#                                 实测 PASS=2 FAIL=5；修好后 PASS=7 FAIL=0）
+#                                 Task 8 当时（7 格版）实测 PASS=2 FAIL=5，修好后 PASS=7 FAIL=0；
+#                                 Task 14 在**现在的 12 格版**上复测：缺陷版 **PASS=3 FAIL=9**（rc=1）、
+#                                 修好版 **PASS=12 FAIL=0** —— 尾随空白把 `R-no-siem` 整行打翻：
+#                                 它被判成 `recon_playbook`、分布塌成 0/25、臂与重复轴跟着一起塌）
 #   test-agent-readiness    见上（Task 10 的 pid 复用/paw 归属三格）
 set -uo pipefail
 

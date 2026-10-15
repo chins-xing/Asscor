@@ -113,8 +113,10 @@ export EDGEEXP_EDGESCEN=<仓库>/build/edgescen
 export EDGEEXP_TOPOLOGY=<仓库>/lunwen/clab-lab/asscor.clab.yml
 
 # ---- 跑批前置 ----
-export EDGEEXP_HEAD_CHECKOUT=<一个真的等于 HEAD 的干净检出>    # **不要依赖默认值**，见 §2.3
-export EDGEEXP_CALDERA_KEY=<c2-key>              # 前置入口会读它；缺了必须 GO 失败
+export EDGEEXP_HEAD_CHECKOUT=<一个真的等于 HEAD 的干净检出>    # **没有默认值**，必须显式给（见 §2.3.1）
+export EDGEEXP_CALDERA_KEY=<c2-key>              # 前置入口会读它；**没有默认值**，缺了必须 GO 失败
+#   （也可以把 KEY 与 URL 一起写进未跟踪的本地配置 ~/.config/asscor/edgeexp.local.env；
+#     文件名已在根 .gitignore 里。唯一取值点见 lunwen/clab-lab/scripts/edge_c2_key.sh）
 
 # ---- 三个维度：臂 / 重复 ----
 export EDGEEXP_POLICY_ON_ARM=1    # 1 = 每个 targeted 场景两条臂（默认）；0 = 与旧行为逐字节相同
@@ -147,33 +149,31 @@ bash lunwen/clab-lab/scripts/edge_prebatch_check.sh [--install] [--strict-agents
 
 **退出码**：`0` = GO（可以开跑）；非零 = **NO-GO**（哪一项没满足就修哪一项，**别绕过**）。
 
-#### 2.3.1 ⚠️ `EDGEEXP_HEAD_CHECKOUT` 必须显式设置（**本项目最容易中的一枪**）
+#### 2.3.1 `EDGEEXP_HEAD_CHECKOUT` 必须显式设置（**没有默认值了**）
 
-`edge_prebatch_check.sh` 的默认值是 `/root/t6/t8/head`，**这个默认值已经陈旧**。
-实测（2026-10-16 只读复核）：
+> **来源**：Task 12 把这条登记为"本项目最容易中的一枪"（当年只能靠"跑批前显式设该变量"绕过）；
+> **Task 14（`6e11fa0`）已把根因修掉**，本节按**修好之后**的实际行为重写。
 
-```text
-$ ls -la /root/t6/t8/head
-.git  →  **一个 46 字节的文本文件**，内容：gitdir: /root/t6/t8/fresh/.git/worktrees/head
-
-$ git -C /root/t6/t8/head rev-parse --short HEAD
-042c3fe
-$ git -C /root/t6/t8/head status --porcelain | wc -l
-14                                   # 带未提交改动
-```
-
-而前置入口用的是 `[ -d "$HEADCO/.git" ]` —— 它把一个 **worktree 的 `.git` 文件**判成
-**"不是 git 仓库"** ⇒ 直接报红。
-
-**正确做法**（在跑批工作区里，每次跑批前）：
+`edge_prebatch_check.sh` 里这个变量**没有默认值**：缺省 ⇒ 该项直接判红并给出示例路径。
+必须显式设的理由不是"默认值陈旧"，而是"**只有跑批的人知道这一次该用哪份检出**"。
 
 ```bash
-export EDGEEXP_HEAD_CHECKOUT=<一个 .git 是**真目录**、且 HEAD 真的 == 你当前 HEAD、且工作树干净的检出>
-# 复核三件事：
-[ -d "$EDGEEXP_HEAD_CHECKOUT/.git" ]                    || echo "❌ .git 不是目录（可能是 worktree，前置会判否）"
-git -C "$EDGEEXP_HEAD_CHECKOUT" rev-parse HEAD          # 必须 == 你要跑的 HEAD
-git -C "$EDGEEXP_HEAD_CHECKOUT" status --porcelain      # 必须为空
+export EDGEEXP_HEAD_CHECKOUT=/root/t6/t14/head     # 例：本次跑批要用的那份干净检出
 ```
+
+**判据（Task 14 之后）**，三条走的是**同一套** git 命令，与 `.git` 是文件还是目录**无关**：
+
+```bash
+git -C "$EDGEEXP_HEAD_CHECKOUT" rev-parse --git-dir     # 必须是 git 仓库（**worktree 也算**）
+git -C "$EDGEEXP_HEAD_CHECKOUT" rev-parse HEAD          # 必须 == 你要跑的 HEAD
+git -C "$EDGEEXP_HEAD_CHECKOUT" status --porcelain      # 必须为空（脏 ⇒ 直接判红）
+```
+
+**为什么当年会误报**：旧判据是 `[ -d "$HEADCO/.git" ]`，而 **git worktree 的 `.git` 是一个
+46~50 字节的文本文件**（内容 `gitdir: …/.git/worktrees/<名>`）⇒ 对一份**完全正常**的检出判
+"不是 git 仓库"（控制侧 2026-10-15 实测 rc=1；且当时 rc 是从管道里读的 ⇒ 更不可信）。
+复现与对照的**原始输出**见 Task 14 报告 §Step 2。前置入口现在还会多打一行**检出形态**
+（`**git worktree**` / 主检出），让这一类问题一眼可见。
 
 > **口径**：前置入口**同时**要求检出干净且等于 HEAD。**"脏检出"会被直接判红而不是静默放行**，
 > 因为脏检出构出的二进制里盖着 `…+dirty` 的 `vcs.revision`，此时**"比 sha256"比的是一个没人能复现的东西**。
@@ -489,14 +489,16 @@ Windows 下跑出来的红**不能**当成回归，也**不能**当成"绿灯"�
 
 | # | 问题 | 影响 | 现状 |
 |---|---|---|---|
-| 1 | **`cmd/edgescen` 的一处 flaky 测试**：`TestCollectChecksForTargetDefaultsToLocalHostChecks` 断言 `ot001()` 的 `Detail` 串**逐字相同**，而 `internal/checks/linux/checks.go`（约 707 行）**遍历 map** ⇒ 顺序随机 | 约 **2/3 ~ 3/4** 的概率红（`4fc5859` 干净工作树上跑 4 次红 3 次）；该 `Detail` **不进数据集**，不影响任何实验结论 | **未修**。修法方向：断言改为**集合比较**或对 `Detail` 排序。属代码改动，本任务不动 |
-| 2 | `edge_agent_preflight.sh` 里的**死变量 `REPO_ROOT`** | 变量**无人使用** ⇒ 目前无实际影响；但"少算一层"是与 §6.10 同型的隐患 | **未清**。属代码改动，本任务不动 |
-| 3 | `edge_prebatch_check.sh` 的 `EDGEEXP_HEAD_CHECKOUT` **默认值陈旧**（`/root/t6/t8/head`） | 不改它就会**误报 NO-GO**（见 §2.3.1） | **未改**（改默认值 = 碰脚本，本任务不动）。**现行处置：跑批前显式设该变量** |
-| 4 | `lunwen/clab-lab/scripts/` 里若干历史脚本的**默认值仍有内部标识**（网段/主机名/C2 默认口令） | 不影响脚本可运行性；见审计归档的"脱敏处置台账" | **待裁定**（见审计归档 §待裁定项） |
-| 5 | 六组夹具在 Windows 下不可全绿（§6.11） | 只影响开发机；不影响 Linux 上的权威执行 | **已知、不修**（环境差异，非缺陷） |
+| 1 | **`cmd/edgescen` 的一处 flaky 测试**：`TestCollectChecksForTargetDefaultsToLocalHostChecks` 断言 `ot001()` 的 `Detail` 串**逐字相同**，而 `internal/checks/linux/checks.go`（约 707 行）**遍历 map** ⇒ 顺序随机 | 起点树上 20 次跑 **7 红 13 绿**（`4fc5859` 干净工作树上也曾 4 次红 3 次）。**不止是测试问题**：该 `Detail` 会进落盘记录的 `checks[].detail` ⇒ 同一状态两次采集**写出的字节不同**，"数据可复现"失效 | ✅ **已修（Task 14 / `cb14060`）**：map → **有序切片**（输出格式逐字不变），同类点 `as012()`/`as010()` 各补一条 `sort.Strings`；新增 `determinism_test.go`（连调 50 次逐字相同 + 声明次序）。实测：起点树新判据 5/5 红、修好后 20/20 绿 |
+| 2 | `edge_agent_preflight.sh` 里的**死变量 `REPO_ROOT`** | 变量**无人使用** ⇒ 无实际影响；但它"少算一层"（`../..` 只到 `<repo>/lunwen`） | ✅ **已清（Task 14 / `2dac30d`）**：**删除**（不是改对 —— 改对等于凭空造一个"看起来可用"的仓库根），原处留一行注释说明 |
+| 3 | `edge_prebatch_check.sh` 的 `EDGEEXP_HEAD_CHECKOUT` **默认值陈旧**（`/root/t6/t8/head`）与**判据认不出 worktree** | 对一份**完全正常**的 worktree 误报 NO-GO（控制侧实测 rc=1） | ✅ **已修（Task 14 / `6e11fa0`）**：判据改 `git -C … rev-parse --git-dir`（认 worktree）；**删掉默认值**（缺 ⇒ 响亮失败并给示例）；"脏检出判红"保留。见 §2.3.1 |
+| 4 | `lunwen/clab-lab/scripts/` 里若干历史脚本的**默认值仍有内部标识**（网段/主机名/C2 默认口令） | 口令类已清零；网段/主机名按审计归档 §E.2 的口径**保留**（是"必须带地址才读得懂"的踩坑注释） | C2 口令：✅ **已处置完（Task 14 / `e282f19`）** —— 18 个文件，判据 `git grep -I -n -e '<明文>'` = 0；网段/主机名：**保留项**（见审计归档 §E.2 + Part F 的 F1/F2） |
+| 5 | 六组夹具在 Windows 下不可全绿（§6.11） | 只影响开发机；不影响 Linux 上的权威执行 | ✅ **已在 Linux 上验证（Task 14）**：干净检出 `/root/t6/t14/head` 上 **6/51/20/31/8/12 全绿**。Windows 侧的 `6/50/20/0/2/0` 逐条根因都是**环境**（`unshare -rm` 不可用、缺 `python3`、路径文本差异） |
+| 6 | `gofmt -l` 在**起点上**就不是空的：**15 个既有**文件（`prism-lib/*` 9 个、`ssam-lib/*` 5 个、`lunwen/attachment/scripts/exprunner-main.go` 1 个） | 与本次改动无关；属**既有**失败 | ⏳ **未修**：在起点 `d32daa2` 上同样列出这 15 个（判据：`gofmt -l .` 的**差集**），列入未修清单。本任务改动的两个文件已按 gofmt 规范重排（`391403e`） |
 
-> **注意**：第 1、2 条是**代码缺陷**，本任务（文档任务）**按纪律不改代码**，
-> 只登记在此。要修请另开任务。
+> **注意**：第 1、2、3、4 条原本是**代码/脚本缺陷**，Task 12（文档任务）只登记不改；
+> **Task 14 受命修掉了它们**（第 4 条的网段/主机名部分仍是保留项）。第 6 条是 Task 14 新登记
+> 的**既有**失败。
 
 ---
 
@@ -518,7 +520,7 @@ Windows 下跑出来的红**不能**当成回归，也**不能**当成"绿灯"�
 | 变量 | 默认 | 必需性 |
 |---|---|---|
 | `EDGEEXP_CALDERA_URL` | 脚本默认（脱敏） | 建议显式 |
-| `EDGEEXP_CALDERA_KEY` | 脚本默认（**已脱敏，见审计归档**） | **必需**（前置门禁会拦） |
+| `EDGEEXP_CALDERA_KEY` | **无默认值**（Task 14 已把明文默认值移除） | **必需**（缺 ⇒ 脚本 `exit 2`；前置门禁记 NO-GO） |
 | `EDGEEXP_TTP_TARGET_ABILITY` | 空 | **必需**（`targeted_ttp`） |
 | `EDGEEXP_TTP_TARGET_ABILITY_NAME` | 空 | 可选（核对 ID 没被换掉） |
 | `EDGEEXP_TTP_CONTROL_ABILITY` | 空 | 可选（只用于归类与报告） |
@@ -545,7 +547,7 @@ Windows 下跑出来的红**不能**当成回归，也**不能**当成"绿灯"�
 | `EDGEEXP_EDGESCEN` | — | **生效的** `edgescen` 二进制路径 |
 | `EDGEEXP_TOPOLOGY` | — | Containerlab 拓扑文件 |
 | `EDGEEXP_REPO` | 由脚本自身位置推 | 跑批工作区（前置入口用） |
-| `EDGEEXP_HEAD_CHECKOUT` | `/root/t6/t8/head`（**陈旧，必须显式覆盖**） | 干净 HEAD 检出（见 §2.3.1） |
+| `EDGEEXP_HEAD_CHECKOUT` | **无默认值**（Task 14 已删；缺 ⇒ 响亮失败并给示例） | 干净 HEAD 检出（见 §2.3.1） |
 | `GOPROXY` | `https://goproxy.cn,direct`（脚本内置） | 构建时用 |
 
 ### 8.5 前置入口专用
