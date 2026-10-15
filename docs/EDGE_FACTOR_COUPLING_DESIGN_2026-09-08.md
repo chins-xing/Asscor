@@ -1283,6 +1283,120 @@ edge_attack: R 组的真实缺失**不成立**：ids 的防护在节点 asc-tgt-
 
 **场景 × 可达性普查表（25 行，独立复核）见 附录 D。**
 
+### 10.4B `qemu` 基质：VM 成为方向② 的**生产**基质（Task 13，用户 2026-10-15 两条裁定）
+
+#### 结论零（基质选择判据，用户原话的直接落地）
+
+| 基质 | 定位 | 用途 |
+|---|---|---|
+| **PVE CT（LXC）** | **快速验证 / 轻量模拟 / 临时短期任务** | 探路、单点验证、看协议通不通、试脚本能不能跑 |
+| **QEMU/KVM VM（`qemu`）** | **完整环境 ⇒ 数据准确性 + 环境可靠性** | **长线任务（全量批次、重复轴）、中重型拓扑模拟、要进论文的重要任务** |
+
+> 用户原话：「CT 的作用本来就是快速验证和轻量模拟，应该作为临时短期任务的选择。
+> 长线和中重型拓扑模拟和重要任务本来就应该交给拥有完整环境的 VM 来保证数据的准确性
+> 和环境可靠性。」以及「如果 CT 用起来难受或者受限太多直接用 VM，不然我为啥会选择
+> PVE 作为系统」。
+
+⇒ **全量批次在 VM 上跑，不在 CT 上跑**；`CT 904`（`asc-tgt-c2`）**保留不动** ——
+它是"快速验证"那一格的现成靶机。
+
+#### 结论一：`qemu` 的原语（与前三套基质的**结构性**差别）
+
+| 原语 | docker / lxd / pve | **qemu（VM）** |
+|---|---|---|
+| 送文件 | `docker cp` / `lxc file push` / `pct push --perms 755` | **`scp -O <本地> <主机>:<路径>` + `ssh … chmod 0755 <路径>`** |
+| 目标内执行 | `docker exec -e` / `lxc exec --env` / `pct exec -- env` | **`ssh <连接参数> -- <主机> env EDGESCEN_NODE_NONCE=<nonce> <二进制> -emit-checks`** |
+| 实例视图 | `docker inspect` / `lxc info` / `pct status`·`pct config` | **`qm status` / `qm config`**（`qm` 与 `ssh` 是**两个不同的二进制**） |
+| 节点标识 | 容器名 / 实例名 / **vmid（只认数字）** | **vmid 或名字**（`qm` 两种标识都收） |
+| 建/毁 | `lab_up`/`lab_down` 对 lxd/pve 响亮失败 | **同样响亮失败，但理由不同**：建机/清机有**单一来源** `edge_vm_provision.sh` |
+
+**VM 为什么不能塞进 `pve:` 前缀**：VM 是**另一种基质**而不是"pve 的一个变体"——
+两者的**定位**不同（结论零），且**基线活跃集随基质变**（结论二）。
+把 VM 塞进 `pve:` 就等于让"这条记录采自哪种基质"在数据上消失，而那正是后面所有结论的前提。
+⇒ 记录里必须印出 `substrate=qemu`（与 `substrate=pve` / `substrate=lxd` 同一形状）。
+
+**唯一一处"不能逐项对应"的地方（结构性，不是实现选择）**：前三者都有一个"把 argv
+原样交给客人"的 CLI，而 **`ssh` 没有** —— 它把 `-- <主机>` 之后的**所有格**拼成一个
+字符串，交给**客人侧的登录 shell** 再分词。故 `lab_target_exec` 在 qemu 下把 argv
+**显式**重建成一条命令串（`"$*"`）交给客人侧 `bash -c` 当一整段脚本执行；
+需要"格边界精确保真"的调用点在 qemu 基质上要自己保证引号。
+
+**硬不变量逐条不破例**：nonce **只经环境变量**下发、**绝不进 argv**（客人侧二进制的
+argv 恰好是 `[-emit-checks]`）；SSH 目标与私钥走环境变量（私钥给的是**路径**而不是
+内容）；**不接受**任何"SSH 选项串"环境变量（否则 `-o ProxyCommand=…` 能把取数目标
+悄悄改到别处）；私钥路径不可读 ⇒ 响亮失败，**不退回** ssh 自己的默认钥匙。
+
+#### 结论二：**基线活跃集随基质变化**（本任务最硬的一条口径）
+
+- **pve（LXC）**：`B = {EF-SELINUX, EF-APPARMOR}` 是**推导**出来的 ——
+  LXC 的 apparmor 命名空间不向容器暴露 profile ⇒ `OT-005` 结构性不可观测 ⇒
+  那两个因子恒在链上。该推导只依赖"这是 LXC"这一件事，**故在基质层写死是对的**。
+- **qemu（VM）**：**没有**可推导的默认值。LSM 是否真的 enforcing、`OT-005` 过不过、
+  有几个 profile 可见，**全都取决于这一批 VM 的实际配置**（镜像、cloud-init 装的包、
+  有没有加载自定义 profile）。把它写死成 `∅` 或 `{EF-APPARMOR}` 等于**把一次实测结果
+  当成前提**；而实测结果会随镜像与配置变 —— 那时脚本仍然"有个基线集"，只是它已与
+  事实不符，且**不会有任何症状**（链只是安静地多算/少算一个因子）。
+  ⇒ `edge_lab.sh` 的 qemu 分支**不设默认值**，并要求跑批前**显式**给
+  `EDGEEXP_BASELINE_FACTORS` + `EDGEEXP_BASELINE_FACTORS_SOURCE`（空集就写空串）。
+
+#### 结论三：**两套基质的数据不可混用**（硬口径）
+
+- 既有 CT 数据集（Task 9 的 `records-dl360-pve-20261013.jsonl` 等）是**另一种基质上的
+  数据**：**只标"CT 基质"、单独陈述**；**禁止与 VM 数据混算、互相解释、或合并进同一个拟合**。
+- 判据是机器可读的：`meta.observation_target` 里的 `substrate=` 是**唯一**凭据。
+  任何 `substrate=pve` / `substrate=lxd` / 裸名字的记录都**不是** VM 基质的数据。
+
+#### 结论四：−30 是 **LXC 基质上的测量伪影；VM 基质上不存在**（Task 13 实测）
+
+此前所有 targeted 场景的链上都挂着一个**常量 −30** 惩罚（`OT-005` −15 + `KS-012` −15），
+当时的定性是"测量伪影"。**Task 13 在真 VM 上把它证完了**（原始输出见
+`task-13-vm-substrate-report.md` §2）：
+
+| 项 | CT 904（`asc-tgt-c2`，LXC） | **VM `asc-vm910`（QEMU/KVM，Ubuntu 24.04 noble cloud image）** |
+|---|---|---|
+| `aa-status` | **不存在/不可用**（`ls /sys/kernel/security/apparmor/` → `No such file or directory`；根因就是 `Failed to get profiles: 2`） | **`rc=0`，`117 profiles are loaded`，`23 profiles are in enforce mode`** |
+| `/sys/kernel/security/lsm` | 容器内不可见 | **`lockdown,capability,landlock,yama,apparmor`** |
+| 自定义 LSM 策略能 enforce 吗 | 只有宿主层的 `lxc.apparmor.raw` | **能**：`apparmor_parser -r` 加载自写 profile，`aa-exec -p … -- cat /etc/shadow` **被拦住**（`Permission denied`，rc=1），而允许的 `/etc/passwd` rc=0 |
+| `OT-005` 判据（`getenforce` 失败 ⇒ 看 `aa-status` 含 `profiles are loaded`） | **恒失败** | **满足（通过）** |
+| `KS-012` 判据（至少一个 LSM enforcing） | **取不到** | **满足** → `AppArmor(23 profiles)` |
+| 工具链（`suricata`/`aide`/三个 PAM 包） | 要"宿主下载闭包 + 送进去 + `dpkg --configure -a`"的绕法 | **`apt-get install` 直接 rc=0 装成**（VM 有真外网 + 真 dpkg） |
+| `systemd` | 残缺 | **`systemctl is-system-running` = `running`**；`auditd` `active` + `enabled` |
+| SELinux | 不可用 | **同样不可用**（Ubuntu 默认不装；`EF-SELINUX` 的 trigger 指向 `OT-005`，已由 AppArmor 判过） |
+
+⇒ **口径订正**：那个常量 −30 的措辞从"在这台基质上是伪影"改为
+「**在 LXC 基质上是测量伪影；VM 基质上不存在**」，并据此**两套数据不可混用**。
+
+#### 结论五：网络拓扑是 VM 基质的**已知约束**（Task 13 实测，未定案）
+
+实测（三个视角同一时刻，见 Task 13 报告 §2.6）：
+
+- **VM 挂 `vmbr1`**：外网**通**（`cloud-images` rc=200）、宿主 `vmbr1` 侧**通**、
+  **到 C2（`192.168.30.2`）不通**（逐个端口试过 8888/80/443/8000/8080/5000/8443，全部不可连）。
+- **CT 904（本就在 `vmbr0` 同网段 `192.168.30.65/24`）到 C2:8888 也**不通****；
+  而**宿主自己**在两个端口上都能连（`ss` 实测 Caldera 监听 `192.168.30.2` 的 8022/7010/7012/8888）。
+- 宿主在 `vmbr0` 上**没有**任何防火墙规则（`iptables -S` 只有三条 ACCEPT 默认策略、
+  `nft list ruleset` 为空）⇒ 最可能是 **bridge 同段回程 / hairpin** 或**上游 S5720 的转发策略**。
+
+⇒ **跑批前必须定案**：VM 基质若要和 Caldera 通信，要么把 VM 挂到 C2 所在的桥并解决这一格，
+要么把 C2 挪到 `vmbr1`。**两套基质的这一格都要重测**（不能假设"CT 能通 VM 就能通"）。
+
+#### 结论六：依赖 **CT 数据** 的既有结论，逐条标注复核状态
+
+以下结论**建立在 CT 基质上**，**VM 基质上待复核**（Task 13 未跑端到端 targeted 批次）：
+
+1. **"零标签方差 ⇒ 只能加策略臂"**（Task 9：11/11 记录 `basis=targeted_ttp` 且
+   **全部 `compromised=True`**）—— **建立在 CT 基质上，VM 基质上待复核**。
+   VM 基质的链**不含那个常量 −30**（结论四），故同一个场景在 VM 上的链读数**必然不同**；
+   "零方差"这个前提本身就要在 VM 上重新测。
+2. **"两臂链读数相同"**（Task 10 的 `POLICY_ON=0/1` 两臂）—— **建立在 CT 基质上，VM 基质上待复核**。
+3. **附录 D 的"场景 × 可达因子普查表"**—— 表的**基质标注是 PVE CT**；
+   `OT-005`/`KS-012` 两行的可达性在 VM 基质上**按结论四已变**，
+   故该表**不得**直接搬到 VM 基质上使用。
+4. **`R` 组三个场景"结构性不可达"**（结论三，Task 7）—— 同样**建立在 CT 基质上**，
+   其"不可达"的根因（`EF-SELINUX`/`EF-APPARMOR` 恒在链上）在 VM 上已不成立 ⇒ **待复核**。
+
+**场景 × 可达性普查表（25 行，独立复核）见 附录 D。**
+
 ### 10.5 Task 6 复审 Important-1 登记：`${Status}` 的修复**落在 lxd 分支内**
 **背景**：Task 6（`pve` 基质驱动）独立复审判 Approved（Critical 0 / **Important 1** / Minor 1）。
 Important-1 指出一处**字面违反硬不变式**的改动，复审判**可接受**但**必须登记到可跟踪处**
