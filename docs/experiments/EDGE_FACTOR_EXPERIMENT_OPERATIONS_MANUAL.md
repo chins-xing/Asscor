@@ -3,8 +3,13 @@
 > **面向读者**：**下一个人**。读完这一份 + 环境白皮书，你应该能在这台机器上
 > **自己跑一遍**边缘因子实验，并**正确读出**记录里的每一个字段。
 >
-> **版本**：v1.0（2026-10-15） ｜ **基线提交**：`ASSCOR-Research-Core` @ `5eaedec`
+> **版本**：**v1.1（2026-10-16）** ｜ **基线提交**：`ASSCOR-Research-Core` @ `4c1ab06`
+> （本批 VM 数据的**采集提交**是 `8ae3c4b`；消费侧修复是 `4c1ab06`）
 > **配套文档**：环境画像见《PVE 单机实验基质白皮书》；裁定依据见《边缘因子实验审计归档》。
+>
+> **v1.1 新增/改写**：§2.1（`qemu` 基质的语法与陷阱）、§2.2（VM 前置变量）、
+> **§2.5（从零到一条 VM 记录的完整命令序列）**、§4.6（**这份数据集怎么读**）、
+> §5.3（基线活跃集：**基质 × 取数权限**）、§6.12–§6.18（**七个真机实测的坑**）、§8（环境变量全表）。
 >
 > **脱敏口径**：本文不含内部实验环境的可寻址标识；占位符表见白皮书 §0。
 > 本文出现的 `<pve-host-ip>` / `<mgmt-gw>` / `<ilo-host>` / `<c2-key>` 均按同一口径替换。
@@ -21,6 +26,9 @@
 6. [常见坑（**逐条都是实测踩出来的**）](#6-常见坑逐条都是实测踩出来的)
 7. [已知问题与未修清单](#7-已知问题与未修清单)
 8. [附录：环境变量全表](#8-附录环境变量全表)
+
+> **只想跑一遍的人**：直接跳 **§2.5「从零到一条 VM 记录」** —— 那是一段可以在宿主上照抄执行的
+> 完整序列（含建机、前置门禁、**实测 `B`**、跑一条 targeted 实例、清机）。
 
 ---
 
@@ -67,7 +75,7 @@ records-<env>-<date>.jsonl    记录本体
 ### 2.1 第一件必须搞清的事：**你跑在哪种基质上**
 
 ```bash
-export EDGEEXP_SUBSTRATE=pve      # docker | lxd | clab | pve
+export EDGEEXP_SUBSTRATE=pve      # docker | lxd | clab | pve | qemu
 ```
 
 | 取值 | 含义 | 目标节点名（`EDGEEXP_TARGET`）的形式 |
@@ -76,6 +84,7 @@ export EDGEEXP_SUBSTRATE=pve      # docker | lxd | clab | pve
 | `docker` | 单容器 | 容器名 |
 | `lxd` | LXD 实例 | `probe-ot005` |
 | **`pve`** | **PVE CT** | **CT 的名字**，如 `asc-tgt-c2`（脚本会解析成 `pve:904`） |
+| **`qemu`** | **PVE VM（QEMU/KVM）** | **VM 的 hostname**，如 `asc-vm910`（**不是** vmid —— Caldera 的 `host` 字段就是 hostname） |
 
 > **为什么必须显式给**：`edge_prebatch_check.sh` 会在**不转发**基质时退回默认的 `clab`（docker），
 > 于是它去问一个**不存在的容器**，把"看错了地方"报成 **"目标上没有活着的 agent"**。
@@ -84,8 +93,17 @@ export EDGEEXP_SUBSTRATE=pve      # docker | lxd | clab | pve
 **基质决定 `edgescen -target` 的语法**（唯一解析点：`edge_lab.sh` 的 `lab_target_spec`）：
 
 ```text
--target docker:<容器>   -target lxd:<实例>   -target pve:<vmid>
+-target docker:<容器>   -target lxd:<实例>   -target pve:<vmid>   -target qemu:<vmid|名字>
 ```
+
+> ⚠️ **`qemu` 与 `pve` 在"名字"这一格上刻意不同**：`pct` 只认**数字 vmid**（`pct` 的名字要在基质层
+> 解析成 vmid），而 `-target qemu:` **既收 vmid 也收名字** —— 数字按默认规则推 `asc-vm<vmid>`，
+> 非数字则**原样当主机名**，且**不去猜它对应哪个 vmid**（猜错就是"采到另一台机器的数据、
+> 而记录里的节点名照常"）。
+>
+> ⚠️ **但 `qm` 的子命令只认数字**：`qm status asc-vm910` → `vmid: type check ('integer') failed`（rc=255），
+> `qm status 910` → `status: running`。基质层里"名字 → vmid"的解析因此收在**唯一一处**
+> `lab_qemu_vmid`（`qm list` 的名字在**第 2 格**，与 `pct list` 的**最后一格相反**）。
 
 ### 2.2 一份可以照抄的 env 文件（**脱敏版**）
 
@@ -123,13 +141,33 @@ export EDGEEXP_POLICY_ON_ARM=1    # 1 = 每个 targeted 场景两条臂（默认
 export EDGEEXP_RUN_INDEX=1        # 重复号（repetition）；>1 时才进记录的 meta.repeat
 ```
 
+**`qemu` 基质额外要设的几格**（**没有它们跑不起来**；逐格的默认值与守卫见 §8.1）：
+
+```bash
+# ---- VM 基质的取数前置（Task 16 起）----
+export EDGEEXP_VM_SSH_KEY=/root/.ssh/asc-vm_ed25519     # 私钥**路径**（内容进不了 argv/记录/仓库）
+export EDGEEXP_VM_SSH_USER=asc                          # 客人里的登录用户（cloud-init 建的）
+export EDGEEXP_VM_KNOWN_HOSTS=/root/.ssh/asscor-edge-vm_known_hosts   # 专用 known_hosts（见 §6.16）
+export EDGEEXP_VM_SSH_SUDO='sudo -n'                    # **取数必须 root 等价**；拿不到就响亮失败、绝不降级
+#   ⚠️ 这一格是**拼进客人侧 shell 的命令**（会被拆成格）⇒ **不要**用 printf '%q' 那种带反斜杠的写法，
+#      也**不要**给它加引号内容。含空白/分号/反引号/$ 一律**响亮失败**（不做"清洗后继续"）。
+export EDGEEXP_VM_GUEST_IFACE=ens18                     # 客人网卡实名（**不是 eth0**）；见 §6.13
+# export EDGEEXP_VM_SSH_HOST='asc-vm%s'                 # 默认按 vmid 推 asc-vm<vmid>；含 %s 时按节点标识展开（多机靠这条）
+
+# ---- 跑批身份（VM 批次用过的取值，逐条可核）----
+export EDGEEXP_TARGET=asc-vm910                         # = VM 的 hostname（Caldera 的 host 字段）
+export EDGEEXP_ENV=<lab-tag>-qemu
+export EDGEEXP_TTP_GROUP=<本机独占的投送组>              # ★ **必须本机独占**，见 §6.17
+```
+
 ### 2.3 跑批前置（**唯一入口，不许绕过**）
 
 ```bash
 bash lunwen/clab-lab/scripts/edge_prebatch_check.sh [--install] [--strict-agents]
 ```
 
-**为什么要有这个入口**：全量扫描是 **36 个场景实例 × 3 个重复 ≈ 13 小时**。
+**为什么要有这个入口**：全量扫描是 **36 个场景实例 × 3 个重复 ≈ 13 小时**（**本批实际放的是
+22 场景 / 33 实例**，差 R 组那 3 个 —— 理由见 §3.1）。
 历史上"开局就错"的**三次都发生在跑批之前的最后三十秒里**：
 
 | 事故 | 形态 | 代价 |
@@ -194,6 +232,141 @@ export EDGEEXP_DRY_RUN=1     # 只打印将要做什么，不执行
 
 ---
 
+## 2.5 从零到一条 VM 记录（`qemu` 基质，**完整命令序列**）
+
+> **这一段是 Task 17 的真机序列，对着当前代码核过**。以下命令**都在宿主**上执行，
+> 工作区 = 一份**等于 HEAD 的干净检出**（本文用 `/root/t6/t17-head`，本批数据的采集提交 `8ae3c4b`）。
+> **所有 `rc` 一律直接取 `$?`，不许用管道**（§6.6）。
+
+### 步骤 0：把代码送上宿主（三种手法，任选一种）
+
+```bash
+# (a) git bundle：自包含、**逐字节同 SHA**（Task 15 用过；80 MB）
+git bundle create /tmp/arc.bundle ASSCOR-Research-Core     # 本机
+scp -C /tmp/arc.bundle root@<pve-host>:/root/t6/           # 传输
+ssh root@<pve-host> 'cd /root/t6 && rm -rf t19-head && git clone -q --branch ASSCOR-Research-Core arc.bundle t19-head'
+
+# (b) git format-patch + git am：多轮迭代时更省（补丁合计 ~120 KB）
+#   本机： git format-patch <起点>..HEAD -o build/t19 --no-signature
+#   宿主： git clone -q /root/t6/<上一轮检出> /root/t6/t19-head
+#          cd /root/t6/t19-head
+#          git config user.name '<你的名字>'; git config user.email '<你的邮箱>'
+#          git am --committer-date-is-author-date /root/t6/t19-patches/000{1..N}.patch
+#          git rev-parse HEAD     # 必须**逐字等于**本地 HEAD
+```
+
+> ⚠️ **`git am` 的两个前置（实测踩到）**：不带 `--committer-date-is-author-date` 与仓库级
+> `user.name`/`user.email` 时，`git am` 会把 **committer** 写成 `root <root@pve.…>`、时间取当下
+> ⇒ **SHA 与本地不同**（实测 `ad5c8f0` vs 本地 `5f24718`）＝ **"宿主检出 = 本地 HEAD"这句话不成立**。
+> `git bundle` 没有这个问题（对象是搬过去的，不是重建的）。
+
+### 步骤 1：建 VM（**幂等；建机/清机只有一个入口**）
+
+```bash
+cd /root/t6/t19-head
+bash lunwen/clab-lab/scripts/edge_vm_provision.sh
+echo "PROVISION_RC=$?"        # 期望 0
+```
+
+**必须在这段日志里看到的三样东西**（没有就不要往下走）：
+
+```text
+内存账：宿主 MemTotal=7795 MiB；本批 1 台 × 2048 MiB = 2048 MiB（balloon 下限 512 MiB/台）
+   客人 IP：192.168.1.3（ens18@vmbr1；期望网卡名 ens18,eth0）
+   取数权限自检（root 等价）：asc / login-uid=1000 / sudo-uid=0
+   ✅ **root 等价成立**（登录用户是 asc，取数走 sudo -n ⇒ uid 0）—— 与 CT 基质的 `pct exec` 等价
+```
+
+- **冷启动要给足时间**：客人首启要 apt 装 `qemu-guest-agent`/`apparmor-utils`/`auditd`，
+  **实测超过 240 s** ⇒ `EDGEEXP_VM_GUEST_AGENT_WAIT_S` 默认 **600 s**。
+- ⚠️ **同名重建（销毁后又用同一个 vmid/名字建）必须先清 host key**，且**清 IP 不只是清名字**
+  （`wait_ssh` 那一刻是按 **IP** 连的）—— 见 §6.16。
+
+### 步骤 2：构建二进制（**从 HEAD 检出构建**）
+
+```bash
+export GOPROXY=https://goproxy.cn,direct
+go build -tags expr,engine,checks -trimpath -o build/edgescen    ./cmd/edgescen    ; echo "rc=$?"
+go build -tags edgeexp            -trimpath -o build/edgecompare ./cmd/edgecompare ; echo "rc=$?"
+go version -m build/edgescen | head -4      # 应看到 vcs.revision == 当前 HEAD
+```
+
+### 步骤 3：跑批环境（**未跟踪**；可变的两格写进本地 env）
+
+```bash
+source /root/.config/asscor/edgeexp.local.env   # C2 的 KEY/URL + VM 的 SSH 几格（**不进仓库**）
+source /root/t6/t19-env.sh                      # 跑批身份：SUBSTRATE/TARGET/ENV/DATA_DIR/RECORDS/
+                                                # HEAD_CHECKOUT/TTP 五件/投送组/BASELINE_FACTORS…
+```
+
+> ⚠️ **投送组必须本机独占**（宿主上还有 CT 904 的遗留 agent，同组会让标签串味）——见 §6.17。
+
+### 步骤 4：前置门禁（**唯一入口，不许绕过**）
+
+```bash
+bash lunwen/clab-lab/scripts/edge_prebatch_check.sh --install
+bash lunwen/clab-lab/scripts/edge_prebatch_check.sh ; echo "PREBATCH_RC=$?"   # 期望 GO / rc=0
+```
+
+> ⚠️ **HEAD 一变就要重新 `--install`**：二进制里盖着构建时的 `vcs.revision`（`-trimpath` 也会盖）
+> ⇒ **即使 Go 源码没动，哈希也会变**，前置门禁会以「与 HEAD 构建**逐字节不同**」报红。
+
+### 步骤 5：★ **先实测 `B`**（不实测就没法写对声明面）
+
+```bash
+cd /root/t6/t19-head/lunwen/clab-lab && source /root/t6/t19-env.sh
+unset EDGEEXP_TARGET_ABILITY EDGEEXP_TARGET_ABILITY_NAME EDGEEXP_CONTROL_ABILITY \
+      EDGEEXP_PLAYBOOK_ID EDGEEXP_PLAYBOOK_NAME            # 走 recon 口径的探针
+export EDGEEXP_BASIS=recon_playbook EDGEEXP_POLICY_ON=0 EDGEEXP_ATTACK_TIMEOUT_S=120
+EDGEEXP_POLICY_ON=0 bash ./scripts/edge_reset.sh S1-apparmor       # 保证 VM 已备好 + agent 在跳
+bash ./scripts/edge_attack.sh S0-baseline /root/t6/t19-data/probe/attack-S0-baseline.json
+cd /root/t6/t19-head
+./build/edgescen --scenario S0-baseline --config configs/edgeexp/m0-baseline.ini \
+  --attack-out /root/t6/t19-data/probe/attack-S0-baseline.json \
+  --out /root/t6/t19-data/probe/probe-B.jsonl --run 1 --env t19-baseline-probe --target qemu:asc-vm910
+echo "rc=$?"
+python3 -c "import json;print(json.load(open('/root/t6/t19-data/probe/probe-B.jsonl'))['factors'])"
+#   ⇒ 本机实测 = ['EF-NO-IDS']；把它与**来源**写进 EDGEEXP_BASELINE_FACTORS[_SOURCE]
+```
+
+> **为什么必须实测**：`B` 取决于**这台靶机的实际配置**（装没装控制、LSM 在不在 enforcing），
+> 而"声明一个不在链上的因子"会被门禁**如实拒掉**（不是放宽一下就过）。见 §5.3。
+
+### 步骤 6：跑一条 targeted 实例（**两条臂**；reset → attack → collect + 门禁①/②）
+
+```bash
+cd /root/t6/t19-head/lunwen/clab-lab && source /root/t6/t19-env.sh
+bash ./scripts/edge_matrix.sh S1-apparmor ; echo "MATRIX_RC=$?"     # 期望 0
+```
+
+期望看到的判据行（本批的实测形态）：
+
+```text
+edge_matrix: 记录条数 本次写入 2/2｜文件总行数 2｜record_counts_ok=True
+edge_matrix: 因子集相等断言 all_ok=True
+edge_matrix: 门禁⓪ 观察到重复条目：S1-apparmor→{'EF-APPARMOR': 2, 'EF-NO-IDS': 2, 'EF-SELINUX': 2}
+edge_matrix: 注入-采集时钟核对 all_ok=True
+edge_matrix: 门禁① exit=0（all-records，2 条）；门禁② 最大偏差 0（2 条）
+```
+
+### 步骤 7：收工（**清机必须走 `--destroy`**）
+
+```bash
+bash lunwen/clab-lab/scripts/edge_vm_provision.sh --destroy ; echo "DESTROY_RC=$?"
+qm list ; pct list ; grep -c 'asc-vm' /etc/hosts
+```
+
+| 判据 | 期望 |
+|---|---|
+| `qm list` | **空**（0 台） |
+| `pct list` | 只有 `904 running asc-tgt-c2`（**别人的 CT，不许动**） |
+| `/etc/hosts` | 托管区块 **0 行**残留 |
+| `local` 的 `content` | 与起点**逐项**相同（顺序可能被 PVE 规范化） |
+| `lvs` | `vm-910-disk-0` 已释放（只剩 `data`/`root`/`swap`） |
+| `asscor-vmseed` | **刻意保留**（见白皮书 §2.1） |
+
+---
+
 ## 3. 矩阵的实例模型（三个维度）
 
 **一句话**：**场景** × **臂** × **重复** = 实例。三个维度落在**三个不同的地方**，
@@ -222,8 +395,28 @@ NARMS = 2   若该场景是 targeted 且 EDGEEXP_POLICY_ON_ARM=1
 targeted_ttp      ：11 个场景 × 2 条臂 = 22 实例
 recon_playbook    ：14 个场景 × 1 条臂 = 14 实例
                  ────────────────────────────────
-合计              ：36 实例
+矩阵合计          ：36 实例
 ```
+
+> ⚠️ **但本实验实际放的是 33 实例，不是 36** —— 差的就是 R 组那 3 个（`R-no-2fa`/`R-no-ids`/`R-no-siem`）。
+> **理由（三条缺一不可，逐条已实测）**：
+>
+> | R 场景 | 需要的"真实缺失" | 装齐六个控制的靶机上 | 结论 |
+> |---|---|---|---|
+> | `R-no-ids` | `RS-006`（IDS/NIDS 不运行） | suricata `failed`、无 IDS 进程 ⇒ **确实缺** | ✅ **可跑**（已单独跑通，**不占批次**） |
+> | `R-no-siem` | `RS-007`（无告警面） | `prepare` 写了 `alert_notification=email` ⇒ **在位** | ❌ **结构性不满足** |
+> | `R-no-2fa` | `EF-001`（PAM 无第二因素） | `prepare` 装了包并写了 `pam.d/sshd` ⇒ **在位** | ❌ **结构性不满足** |
+>
+> 1. 其中两条**不可能产出记录**（R 组硬闸门在**建 operation 之前**整轮失败："不得用注入失败顶上"）；
+> 2. 它们若入批次，**门禁①/② 都拿不到**（`REPEAT=1` 的条数门禁**必然为红**，见 §6.18）；
+> 3. **不是新引入的**：Task 13 的"结论六"早已记着「R 组三场景**结构性不可达**」，
+>    Task 9 的全量实验也只跑了 **11 个 targeted 场景**。
+>
+> ⇒ 取 **"33 实例 + 当轮门禁①/② 可绿"**，而不是"36 实例 + 门禁必然红"。
+> **这是如实收口，不是跳过**：R 组的三条证据（1 条跑通 + 2 条闸门原文）已留档。
+>
+> ⚠️ **已知规模数不是"通用可跑数"**：本批的实测判据是
+> **22 场景 / 33 实例**（11 targeted × 2 臂 + 11 非 targeted）。
 
 > **判据**：`EDGEEXP_DRY_RUN=1 bash lunwen/clab-lab/scripts/edge_matrix.sh <场景>`，
 > 输出里的 `实例数`/`实例键` 行；
@@ -259,7 +452,8 @@ record_counts_ok             = (文件行数 == 实例数 × 重复号)
 ```jsonc
 {
   "scenario_id": "S1-apparmor-01",     // 场景 + 实例号
-  "factors":     ["EF-SELINUX", "…"],  // 本场景**注入**的因子
+  "factors":     ["EF-SELINUX", "…"],  // **链上实际**出现的因子集（去重）
+                                       //   == meta.expected_baseline_factors ∪ meta.expected_chain_factors
   "injection":   "…",                  // 注入描述
   "observed":    { … },                // 采集到的观测面
   "ground_truth":{ … },                // 客观标签（**决策层指标只吃这里**）
@@ -274,13 +468,13 @@ record_counts_ok             = (文件行数 == 实例数 × 重复号)
 | `meta.env` | string | 环境标识（与 `EDGEEXP_ENV` 同源，形如 `<lab-tag>`） | ❌ 标识 |
 | `meta.run` | string | 运行序号 | ❌ 标识 |
 | `meta.repeat` | int（**可选**） | **重复号**（= `EDGEEXP_RUN_INDEX`）。**仅在 >1 时存在**；缺席 = 第 1 遍 | ❌ 标识（但**是重复轴分析的唯一依据**） |
-| `meta.policy_on` | bool | **臂**：策略是否在（`false` = 卸掉策略的臂） | ❌ 条件标识 |
-| `meta.observation_target` | string | **观测主体**，形如 `node:<vmid> (substrate=pve, hostname=<name>)` | ❌ 但**决定"这台机器的数据"是谁的** |
+| `meta.policy_on` | **string**（`"0"`/`"1"`） | **臂**：`"0"` = 策略**不在**（卸掉策略以对齐"该控制缺失"的声明）；`"1"` = 策略**在**。**缺席 = 采集产物没写**（历史记录/手写夹具），与"显式声明过 `"0"`"是两件事 | ❌ 条件标识 |
+| `meta.observation_target` | string | **观测主体**，形如 `node:<vmid> (substrate=qemu, hostname=<name>)` —— **"这批数据采自哪种基质"的唯一判据**（§5.4） | ❌ 但**决定"这台机器的数据"是谁的** |
 | `meta.timestamp` | RFC3339 | 该记录的时刻 | ❌ |
 | `meta.config_hash` | string | 采集所用配置的指纹（**权重的锚点**） | ❌ 溯源 |
-| `meta.expected_baseline_factors` | []string | **基线活跃集**（按基质如实声明，见 §5.3） | ❌ 声明面 |
+| `meta.expected_baseline_factors` | []string | **基线活跃集**（按「基质 × 取数权限」如实声明，见 §5.3） | ❌ 声明面 |
 | `meta.expected_baseline_factors_source` | string | **为什么**是这个基线集（逐字理由） | ❌ 声明面证据 |
-| `meta.expected_chain_factors` | []string | **声明面** = 基线活跃集 ∪ 注入因子 | ❌ 声明面 |
+| `meta.expected_chain_factors` | []string | ⚠️ **只装「注入集 E」**（含级联展开），**不是**完整声明面。**完整声明面 = `expected_baseline_factors` ∪ 本字段** | ❌ 声明面 |
 | `meta.playbook_hash` | string | 剧本字节的 sha256（漂移守卫） | ❌ 溯源 |
 | `meta.weight_source` | string | **权重口径**：`observed.effective_weights` 从哪来，以 `config_hash` 为锚点 | ❌ 溯源（**离线重算必需**） |
 | `meta.ts_source` | string | **链条目 `ts` 的基准**（独立字段） | ❌ 溯源 |
@@ -327,8 +521,91 @@ record_counts_ok             = (文件行数 == 实例数 × 重复号)
 
 ### 4.5 `OT-005` / `KS-012` 与"基线活跃集"
 
-见 §5.3。**一句话**：在 PVE CT 基质上，`OT-005` 一类**内核面**检查项**不可观测**，
-所以基线活跃集**只能是** `{EF-SELINUX, EF-APPARMOR}`，**必须按基质如实声明**。
+见 §5.3。**一句话（v1.1 更正）**：这两条的 `passed` 值取决于**在哪读（基质）× 谁在读（取数权限）** ——
+在 CT 上因 LXC 内核面不可观测、在 VM 上若用非 root 登录用户取数也会**假失败**，
+于是**那个常量 −30 是「取数权限 × 基质」耦合出来的伪影**。
+**同一场景的"失败检查条数"在两套基质/两种权限之间不可直接比较。**
+
+### 4.6 ★ **这份数据集怎么读**（VM 批次 33 条；v1.1 新增）
+
+**数据集本体（已在仓库内）**：
+
+| 文件 | 内容 |
+|---|---|
+| `lunwen/clab-lab/data/edgefactors/records-dl360-qemu-20261016.jsonl` | **33 条记录**（sha256 `82d37eade414327ba3bdaee8d96d419e84eba64eba80264947f1807531f5b468`） |
+| `lunwen/clab-lab/data/edgefactors/run-20261015-3482605.json` | 本次运行的汇总元数据（拓扑/配置哈希/权重口径/逐实例耗时/门禁⓪/注入-采集时钟核对/记录条数/因子集相等断言） |
+| `lunwen/clab-lab/data/edgefactors/run.d-qemu-20261016/**` | 逐实例碎片：`reset-*.json`、`collect-*.json`、`gate-inputs.json`、`gate-gate1.json`、`gate-gate2.json`、`rejected-S1-apparmor.jsonl`（**被断言拒掉并已回滚**的那条记录）、`.state.json` |
+| （对照）`records-dl360-pve-20261013.jsonl` | **CT（LXC）基质**的 11 条 —— **另一套基质的数据，不可混算** |
+
+> **只入数据与 run 元数据**：宿主 `run.d/` 里另有 44 个 `.edgescen-*.out/.err`、`.gate*.out/.err`
+> （合计 116 KB 过程日志）**刻意不入库**；日志里提炼出来的结论在本文与白皮书里。
+> 宿主的 33 份 harness 产物（`attack-*.json`）也**不入库**：它们与 CT 批次的产物**同名**，
+> 平铺进同一个目录会**静默覆盖 CT 的证据**，而读这批数据所需的声明面记录本体已经全有。
+
+**33 条 = 22 + 11（逐条实测）**：
+
+| 组 | 条数 | 构成 | `meta.policy_on` | 边界 |
+|---|---|---|---|---|
+| `ground_truth.basis = targeted_ttp` | **22** | 11 个 targeted 场景 × **2 条臂** | `"0"` × 11 / `"1"` × 11 | ✅ **只有这一组进决策层指标** |
+| `ground_truth.basis = recon_playbook` | **11** | 11 个非 targeted 场景 × 1 | **全部 `"1"`** | ❌ **不得进决策层指标** |
+
+```
+basis: {'targeted_ttp': 22, 'recon_playbook': 11}
+policy_on: {'0': 11, '1': 22}
+targeted score range: 51.55 55.73
+recon compromised set: Counter({True: 11})        ← **旧口径**
+recon block_effective set: Counter({False: 11})
+```
+
+**六条读法（每条都能让一次误读变成一次结论）**：
+
+1. **`recon` 那 11 条的 `compromised` 是「旧口径（任意 link 成功）」** —— 11/11 都是
+   `compromised=true`，因为它报的是"侦察剧本的 link 跑成功了"，**不是**"目标 TTP 达成了"。
+   拿它当标签用会把恒真的结果喂进决策层 ⇒ 统计恒为空。**判据是 `ground_truth.basis`。**
+2. **`compromised` / `block_effective` 在 `ground_truth` 下，不在 `observed` 下。**
+   （`observed` 的键是 `acceptable / checks / domain_scores / edge_factor_chain /
+   effective_weights / final_score / spc_score / threat_coeff / threshold`。）
+3. **`observed.checks[]` 只装「未通过」的检查**（键 `id / domain / passed / delta / confidence / ts`）
+   ⇒ **"某条检查不在记录里"不能读成"它通过了"**。要完整观测面就得看**客人侧完整信封**
+   （`edgescen -emit-checks` 的 80 条）。
+4. **`meta.expected_chain_factors` 只装「注入集 E」**；**完整声明面 = `meta.expected_baseline_factors`
+   ∪ 前者**。本批的基线是 `['EF-NO-IDS']` —— **只拿注入集与链比对会误判一大批"不等"**。
+5. **`meta.policy_on` 是字符串**（`"0"`/`"1"`），不是布尔。
+6. **`meta.ts_source`** 逐字说明了链条目 `ts` 的取法（本批：全部取评估时刻）。
+
+**两条论文级口径（**必须写对，别写反**）**：
+
+```text
+# 两臂逐项比较（忽略 ts，比 chain / checks / domain_scores / final_score + ground truth 标签）
+S1-apparmor   chain=True score=True checks=True dom=True label_diff=True
+…（11 个 targeted 场景全部同形）
+ALL-IDENTICAL-EXCEPT-LABEL: 11 / 11
+```
+
+- ① **两臂的链读数与分数逐项相同、只有 ground truth 标签不同**（11/11）。
+  ⇒ **这条 limitation 不许撤**：分数侧与链侧**都区分不开两条臂**，能区分的只有标签。
+- ② `n_i`（每个因子在链上出现几次）**不是常数 2**。实测的 `n_i` 多重集分布：
+  `(2,)×2 / (2,2)×6 / (2,2,2)×12 / (2,2,2,2)×8 / (2,2,2,2,2,2)×2 / (1,1,2,2,2)×2 / (1,2,2)×1`
+  ⇒ **「每个因子恰好出现两次」只是这批矩阵的观测、不是不变量**（33 条里 **3 条**含 `n_i = 1`）。
+
+**离线复算（分钟级，不需要 VM/CT/Caldera）**：
+
+```bash
+build/edgecompare -records lunwen/clab-lab/data/edgefactors/records-dl360-qemu-20261016.jsonl \
+  -candidate legacy=configs/edgeexp/m0-baseline.ini -candidate vector=configs/edgeexp/vector.ini \
+  -candidate graph=configs/edgeexp/graph.ini        -candidate chain=configs/edgeexp/chain.ini \
+  -factors EF-002FA=0.70,EF-SYNCOOKIE=0.75,EF-SELINUX=0.80,EF-APPARMOR=0.82,\
+EF-NO-SIEM=0.90,EF-NO-IDS=0.88,EF-3FA=0.82 \
+  -weights attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10
+echo "rc=$?"
+```
+
+> ⚠️ **`-factors` 的取值必须以「链上用到的每个因子」为准**（含 `EF-3FA=0.82`）。
+> ⚠️ **本批上"链上同一因子有两个条目"是配置的真实形态**（`[edge_factors]` 内置 7 条 + `[edge_factors.custom]` 另 7 条，
+> 解析后同名）⇒ **链上会出现重复条目**。这在**合成层**曾经让主效应 ×2、耦合项 ×4
+> （`L_d` 被污染）；**Task 18（`4c1ab06`）已把折叠点放在「条目 → 因子」的换算层**
+> （`internal/edgefactor.CollapseToFactors`，取**最强观测惩罚**）。判据：**`legacy` 列逐位不变**
+> （链上的重复对 legacy 是**载荷**，`ConfigToEdgeFactors` 不许去重），**只有 V/G/C 逐条数值上升**。
 
 ---
 
@@ -351,11 +628,17 @@ record_counts_ok             = (文件行数 == 实例数 × 重复号)
 | 缺采集器/比较器**静默降级** | 缺口被当成"没问题" | 前置入口 + 矩阵层硬门禁 |
 | 记录条数不齐 | 续跑 / 崩溃导致少条 | `record_counts_ok` 硬断言，`records_missing_for_selected` 如实报出 |
 
-### 5.3 基线活跃集：**按基质如实声明**
+### 5.3 基线活跃集：**按「基质 × 取数权限」如实声明**（v1.1 改写）
 
-#### 5.3.1 为什么在本基质上是 `{EF-SELINUX, EF-APPARMOR}`
+#### 5.3.1 两个基质的 `B` 实测值（**两套都留档，都不许写死**）
 
-**实测事实**（真机记录的 `meta.expected_baseline_factors_source` 逐字记录了这条理由）：
+| 基质 / 取数口径 | `B` | 成因 | 证据 |
+|---|---|---|---|
+| **CT（LXC，`pct exec` 天生 root）** | `{EF-SELINUX, EF-APPARMOR}` | `OT-005` 类**内核面**检查项在 LXC 里**结构性不可观测** | `records-dl360-pve-20261013.jsonl` |
+| **VM + 非 root 取数（`asc`）** | `{EF-SELINUX, EF-APPARMOR}` | **数值与 CT 相同、成因完全不同** —— 这是**权限伪影**（`OT-005`/`KS-012` 假失败） | Task 15 端到端 |
+| **VM + root 等价取数（正确口径）** | **`{EF-NO-IDS}`** | 真实状态：AppArmor 真的在 enforcing；`prepare` 装齐六个控制 ⇒ `RS-007` **通过** | `records-dl360-qemu-20261016.jsonl` 的 `meta.expected_baseline_factors` |
+
+**CT 侧的实测事实**（真机记录的 `meta.expected_baseline_factors_source` 逐字记录了这条理由）：
 
 - PVE CT 是 **LXC 容器**：共享宿主内核 + 缩减的 `/proc` 视图；
 - 容器内 `aa-status` 报 **`Failed to get profiles: 2`** ⇒ **AppArmor profile 视图不可用**，
@@ -363,33 +646,75 @@ record_counts_ok             = (文件行数 == 实例数 × 重复号)
 - 靶机 CT 的 `pct config` 里既有 `lxc.apparmor.raw: audit deny /etc/shadow r,`
   （**为实验刻意加的一条 LSM 拒止规则**），而这类 LXC 级规则**不**出现在容器内的 profile 列表里。
 
-⇒ **结论**：`OT-005` 一类**内核面**检查项在 CT 基质上**恒为不可观测**。
+**VM 侧的实测事实**（`RS-006` 失败 ⇒ `EF-NO-IDS`；`RS-007` 通过 ⇒ `EF-NO-SIEM` 不在链上）：
 
-#### 5.3.2 口径三条
+```text
+$ ssh … asc-vm910 'systemctl is-active suricata; systemctl is-active aide;
+                   grep -ciE "email|alert|notification" /etc/aide/aide.conf;
+                   ps -eo comm --no-headers | grep -cE "^(suricata|snort|snort3|zeek|aide)$"'
+suricata: failed
+aide: inactive
+aide.conf 告警面: 2
+ps 里有无 IDS 进程: 0
+```
+
+⇒ **`RS-006` 失败**（真没有 IDS 在跑）而 **`RS-007` 通过**（`edge_target_prepare.sh` 把**真实的告警面**
+写进了 `aide.conf`）⇒ **`B = {EF-NO-IDS}`**。
+
+> ⚠️ **一个中间态也必须留档**：Task 16 在**没跑 `edge_target_prepare.sh`** 的裸 VM 上取到的是
+> `{EF-NO-IDS, EF-NO-SIEM}`（那时 `RS-007` 失败）。**一次真实跑批会先跑 `prepare`** ⇒ 变成 `{EF-NO-IDS}`。
+> ⇒ **`B` 只能由实测给出（§2.5 步骤 5），不许写死、也不许从别的批次抄。**
+
+#### 5.3.2 口径四条
 
 | # | 口径 | 含义 |
 |---|---|---|
-| 1 | **按基质如实声明** | 基线活跃集 = **这套环境上事实活跃的因子**，不是"理论上应该活跃的因子"。"本来就没测到" **≠** "不存在" |
-| 2 | **声明面 = 基线活跃集 ∪ 注入因子** | `meta.expected_chain_factors`；门禁做**集合相等**断言 |
-| 3 | **`−30` 是测量伪影，不是态势变化** | **措辞禁令**（见下） |
+| 1 | **按「基质 × 取数权限」如实声明** | 基线活跃集 = **这套环境上事实活跃的因子**，不是"理论上应该活跃的因子"。"本来就没测到" **≠** "不存在" |
+| 2 | **声明面 = 基线活跃集 ∪ 注入集** | `meta.expected_chain_factors`；门禁做**集合相等**断言。⚠️ **注入集要按「触发检查的耦合闭包」补全**：`trigger.EF-SELINUX = trigger.EF-APPARMOR = OT-005` ⇒ 一次注入 `OT-005` 会**同时**激活两个因子 |
+| 3 | **`−30` 是「取数权限 × 基质」耦合出来的伪影，不是态势变化** | **措辞禁令**（见下） |
+| 4 | **取数必须 root 等价（`sudo -n`）；拿不到就响亮失败、绝不降级** | 这是**测量语义的前提**，不是卫生习惯：不对齐权限时 80 条检查里 **10 条会翻转（双向：6 条假通过 + 4 条假失败）**，而**决定 `B` 的那两条恰在其中**。**不许**用"改判据语义"（例如把"跳过"当成通过）去掩盖它 |
 
-#### 5.3.3 ⚠️ 措辞禁令（**违反即方法论错误**）
+#### 5.3.3 ⚠️ 措辞禁令（**两条，违反即方法论错误**）
 
-**禁止**把"某个控制项本应拒止、而环境未报出该因子"描述成
-**"系统被削弱了 30%"**（或任何等价的减法/百分比表述）。
+1. **禁止**把"某个控制项本应拒止、而环境未报出该因子"描述成
+   **"系统被削弱了 30%"**（或任何等价的减法/百分比表述）。
+   **为什么**：那是**测量伪影**，**不是**安全态势的变化。把它当成态势变化，等于让论文的核心结论退化成
+   **"因为观测不到，所以更安全"** —— 这是**自证式的伪结论**。
+2. **禁止**再写 **"VM 基质上不存在 −30"** —— 那句把**权限**与**基质**混在了一起，
+   而真机实测表明它在**现行 qemu 基质（非 root 取数）上原样复现**。
 
-**为什么**：那是**观测面的缺失**（测量伪影），**不是**安全态势的变化。
-把它当成态势变化，等于让论文的核心结论退化成
-**"因为观测不到，所以更安全"** —— 这是**自证式的伪结论**。
+**正确表述（照抄这一段）**：
 
-**正确表述**：**"该因子在本基质上不可观测 ⇒ 基线活跃集按其实际情况声明为
-`{EF-SELINUX, EF-APPARMOR}` ⇒ 声明面与注入集做集合相等断言。"**
+> **「−30 由取数权限产生，在 CT 上被基质形态掩盖。」**
+> `pct exec`（CT 基质）在容器里**天生以 root 执行**，而 VM 基质 `ssh` 登录的是 cloud-init 建的 `asc`。
+> ⇒ 在 CT 上它因"天生 root"而看不见（真正的成因是 LXC 内核面不可观测），
+> 在 VM 上它因"默认登录用户非 root"而原样复现（成因是权限）。
+> **对齐取数权限（root 等价）之后，`OT-005` 与 `KS-012` 都通过、−30 消失。**
+
+**Task 13 里仍然成立的部分（**与权限无关**）**：VM 上 AppArmor **真能 enforce**、
+装包**直接 `apt-get install` 就行**、`systemctl`/`auditd` **正常**、SELinux 不可用（与基质无关）。
 
 ### 5.4 两套基质的数据**不可混用**
 
 `meta.observation_target` 会写出基质类型。同一场景在**不同基质**上的
 基线活跃集、可观测面、甚至 `compromised` 判定都可能不同 ⇒
 **跨基质合并统计没有意义**。全量批次统一在**一种**基质上跑（按裁定：**VM**）。
+
+**唯一的判据**（照抄）：
+
+```text
+meta.observation_target = "node:<vmid> (substrate=qemu, hostname=<name>)"     ← VM 基质
+meta.observation_target = "node:<vmid> (substrate=pve,  hostname=<name>)"     ← CT 基质
+```
+
+⇒ **任何 `substrate=pve` / `substrate=lxd` / 裸名字的记录都不是 VM 基质的数据。**
+
+⚠️ **同一条边界还有第二个维度**（v1.1 新增）：**"采自哪种基质"只说了半件事，另一半是"谁在读"**
+（取数权限）。同一台 VM、同一份二进制，`asc` 与 `root` 两种取数下的**失败检查条数**与**基线活跃集**
+都可能不同 ⇒ 比较"失败条数"这类量之前，**先确认两边的取数权限相同**。
+
+**落地状态**：全量批次（22 场景 / 33 实例）已在 **VM 基质**上跑完，数据入库见 §4.6；
+CT 基质的 11 条记录**保留在仓库里作为历史证据**（它们同时是"链重复与基质无关"的对照证据）。
 
 ---
 
@@ -478,10 +803,141 @@ bash foo.sh | tail -20 ; echo "${PIPESTATUS[0]}"   # ✅ 也可以
 | `lab-diff` | `rc=2`，通过数 0 | 需要 `unshare -rm`（私有 `/tmp`）；Windows 上不可用，夹具**自己**报"本机不可用" |
 | `test-chain-derivation` | 通过数 2（期望 8） | `python3` 不在 Git Bash 的 PATH 上 |
 | `test-matrix-classification` | 通过数 0（期望 12） | 同上（判据用 `python3` 解析 JSON） |
-| `test-edge-lab` | **50**（期望 51） | 唯一那一格 diff 到的是 `python3: command not found` 的**路径文本差异**，不是断言差异 |
+| `test-edge-lab` | 通过数低于期望 | 唯一那一格 diff 到的是 `python3: command not found` 的**路径文本差异**，不是断言差异（**另**：本机 Git Bash 的 `POSIXLY_CORRECT` 会让 `grep -E` 退回 BRE，`+`/`?` 变成字面量 —— 见 §6.18） |
 
 ⇒ **判据结论**：夹具的**权威执行环境是 Linux**（在跑批工作区或等价 Linux 环境里跑）。
 Windows 下跑出来的红**不能**当成回归，也**不能**当成"绿灯"。
+**权威的期望值是 Linux 上的那一组**（见 §7 第 5 条）。
+
+---
+
+### 6.12 ⚠️ `ssh` 会把命令**拼格**（qemu 基质里最隐蔽的一枪）
+
+`ssh <主机> <argv…>` **不保留 argv 的格边界**：它把 `-- <主机>` 之后的**所有格用空格拼成一个字符串**，
+交给**客人侧的登录 shell** 再分词。而 `docker exec` / `lxc exec --` / `pct exec --` 都是**原样转交**的。
+
+**症状（实测原文，同一台 VM、同一份二进制，只差这一层写法）**：
+
+```text
+$ ssh … -- asc-vm910 sudo -n bash /tmp/asscor-edge-vm-guest.sh net-report ens18
+iface=ens18 cidr=192.168.1.3/24
+default=default via 192.168.1.1 dev ens18 proto dhcp src 192.168.1.3 metric 100
+A rc=0                                     ← 正常形态
+
+$ ssh … -- asc-vm910 bash -c "sudo -n bash /tmp/asscor-edge-vm-guest.sh net-report ens18"
+usage: sudo -h | -K | -k | -V
+usage: sudo -v [-AknS] [-g group] [-h host] [-p prompt] [-u user] …
+B rc=1                                     ← 原实现发出的形态：sudo 收到的 argv 是空的
+```
+
+**真因**：那对引号**在传输中不存在**。客人侧登录 shell 拿到裸的
+`bash -c bash -c rm -f /tmp/x` 并重新分词 ⇒ `bash` 的 `-c` 脚本只有**一个词** `bash`，
+其余全成位置参数 ⇒ **真实执行的是无参 `bash`（读 stdin），命令一次也没跑，而 rc 还是 0**。
+
+**修法**：用 `printf '%q '` 把 argv **逐格引用**后拼成**一格**交给 ssh（在 `lab_target_exec` 的 qemu 分支里）。
+`lab_target_exec_detached` 同因同修（否则起的是一个**没有命令的后台 shell**，症状与"agent 起不来"完全同形）。
+
+**为什么这条活了三个任务才被发现**（**值得记住的元教训**）：
+这条路径**从来没跑到过**（`edge_reset.sh` 当时没有 qemu 分支），而**离线夹具也放过了它** ——
+I 段的假 `ssh` 只记账、I-F 段的假 `ssh` 把 argv **逐格转交**（那是 `docker`/`lxc`/`pct` 的语义，
+**不是 `ssh` 的**）⇒ **夹具与代码共享同一个错模型**。
+⇒ **修夹具与修代码同等重要**：现在有一条 **I-E 行为判据** —— 假 `ssh` **照实模拟真 ssh**（拼格后交给本地 shell），
+判据是"**副作用真的发生了**"，它在旧实现下**必红**。
+
+### 6.13 ⚠️ 客人网卡实名是 `ens18`，**不是 `eth0`**
+
+PVE 的 virtio 网卡在客人里按 PCI 槽位取**可预测名**。写死 `eth0` 的症状**极具误导性**：
+
+```text
+edge_vm_provision: VM 910 的 guest agent 没能报出 eth0 的 IPv4 ——
+edge_vm_provision: 取不到 VM 910 的客人 IP
+（而 agent 是好的、IP 就在那儿：qm guest cmd 910 network-get-interfaces → ens18=['192.168.1.3', …]）
+```
+
+**报错文案把根因指到了 agent 身上**，真因是"网卡名不对 ⇒ 过滤条件恒真 ⇒ 永远取不到 IP"。
+⇒ 走 `EDGEEXP_VM_GUEST_IFACE`（默认 `ens18`）+ `eth0` 兜底，**仍以名字精确匹配优先**
+（多网卡时不锁到管理 VLAN 那条不通的路）；名字全不匹配才回退用唯一非环回 IPv4，
+且把"回退到了哪个网卡"打到 **stderr**（**回退必须看得见**）。
+
+### 6.14 ⚠️ `scp -l <用户>` 是**带宽上限**，不是登录名（**端到端从来没跑通的直接原因**）
+
+`ssh -l <用户>` = 登录名；**`scp -l <值>` = 带宽上限**（要数字）。
+而这两个命令**共用**同一组连接参数（`qemuSSHConnArgs` / `lab_ssh_conn_args`）。
+用 PATH 上的壳逐格抓到过真实 argv：
+
+```text
+scp … -l asc … → usage: scp [-346ABCOpqRrsTv] …     （失败）
+scp … -o User=asc … → rc=0，文件落到客人 /tmp，权限 0755   （成功）
+```
+
+⇒ **统一用 `-o User=<用户>`**（对 `ssh` 与 `scp` 语义唯一，故这一格共用是安全的），
+并在用例里**钉死**这一格（改回 `-l` 必须让用例红）。
+⚠️ **bash 层与 Go 层是两份实现**（一侧 bash、一侧 Go，没有共享代码的手段）⇒ 曾经只改了一侧。
+
+### 6.15 ⚠️ `qm set` 在单个 SSH 会话里被中断时**只有前几条落盘**
+
+实测：把 8 条 `qm set` 串在一个 SSH 会话里，会话超时被中断 ⇒ **只有前几条落盘** ⇒
+VM 用 `-m 512`、**没有网卡**、**没有 agent** 起来了（`ps` 里能看到 `-m 512`、`-smp 1`）。
+**症状是"SSH 一直连不上"，而真正的原因是"配置压根没写进去"。**
+⇒ `edge_vm_provision.sh` 里**每一步都读回配置再继续**；排查时用 `qm config <vmid>` 逐条核对。
+
+同族第二枪：**`--ide2` 必须走受管存储**。PVE 9 起 `qm set --ide2 <裸绝对路径>,media=cdrom` 报
+`unable to associate path … to any storage`；`readonly=1`/`ro=1` 都**不是** ide2 的合法属性
+（`property is not defined in schema`）。而 `dir` 存储的 ISO **不在 `<path>/iso/` 而在 `<path>/template/iso/`** ——
+放错目录的症状是 `volume 'asscor-vmseed:iso/<名>' does not exist`（看着像"文件没了"，其实 ISO 已经生成好了）。
+
+### 6.16 ⚠️ 同名重建：清 host key 要清 **IP**，不只是清名字
+
+`--destroy` 后再用同一 vmid/名字重建，**客人 host key 会变**，而 `StrictHostKeyChecking=accept-new`
+**只接受新主机、不接受变更后的主机** ⇒ 两边都炸：
+
+```text
+@@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@@
+Host key for asc-vm910 has changed and you have requested strict checking.
+Host key verification failed.
+```
+
+- **`wait_ssh` 是按 IP 连的**（那一刻 `/etc/hosts` 还没写），而 PVE 通常把**同一个 IP** 再分给新 VM
+  ⇒ **只清名字不够，必须一并清 IP**（实测：不清就死等满 300 s 超时）；
+- 处置**不削弱检查**：新增 `EDGEEXP_VM_KNOWN_HOSTS`（默认 `/root/.ssh/asscor-edge-vm_known_hosts`），
+  建机侧在**新建 VM 之后、开始连它之前** `ssh-keygen -R <主机/ IP> -f <我们那一份>`
+  （**只清这一个主机、只清我们那一份文件**，不动 `~/.ssh/known_hosts` 里别人的）；
+  **取数侧（Go）与基质层（bash）都显式 `-o UserKnownHostsFile=<同一份>`**。
+- **为什么不改成 `StrictHostKeyChecking=no`**：那会把**真的**中间人也一起放过。
+
+### 6.17 ⚠️ 投送组必须**本机独占**，否则标签串味
+
+宿主上长期有 CT 904 的遗留 agent（`asc-tgt-c2`）。若 VM 靶机与它**同组**（且心跳新鲜），
+operation 会**同时**打在两台机器上，而 `compromised` 只看"目标 ability 的 link 里有没有 `status==0`"、
+**不看 paw 属于哪台机器** ⇒ 一条"CT 上成功"的 link 会把 VM 臂的标签写成 `compromised=true`
+（**策略在的那条臂也会**），**两臂读数相同**、而记录看起来完全正常。
+⇒ 给**本轮的靶机**单独分组（`EDGEEXP_TTP_GROUP`/`EDGEEXP_ATTACK_GROUP` = 一个**只有这台 VM 用**的组名）。
+
+**同族的两个坑**：
+
+- **投送范围闸门②曾经是死代码**：它的判据基于一个**已经按目标主机过滤过**的列表 ⇒ 恒为空集、
+  **永远不会红**。修后的判据是"该组里有没有**别的机器上 trusted + 心跳新鲜**的 agent"。
+- **活 agent 判据不含投送组** ⇒ 换组名后 `prepare` 会静默沿用旧组、走幂等路径不重拉，
+  随后攻击侧以「投送组 X 里没有一只活 agent」失败，而那句提示让操作者"先跑 `edge_reset.sh`"——
+  **重跑复位什么也不会做**。修法：活 agent 判据补上投送组这一条（空串 = 不过滤 ⇒ 旧行为逐字不变）。
+
+### 6.18 ⚠️ 批次必须**一次调用跑完**（`REPEAT=1` 的记录条数门禁）
+
+`edge_matrix.sh` 的记录条数门禁在 `REPEAT=1` 时比的是 **"整个记录文件的行数 == 本次实例数"**，
+而 `EDGEEXP_RESUME=1` 只影响**逐实例循环**、**不影响**这条门禁
+⇒ **拆成多次调用时，第 2 次起文件里已经有前一次的记录 ⇒ 门禁永远红**。
+**要分批就必须分批换记录文件**（或用 `REPEAT>1`）。
+
+**同族的第三条（R 组结构性不满足）**：`R-no-siem` / `R-no-2fa` 的语义是"目标机上**真的没有**这个防护"，
+而 `edge_attack.sh` 对 R 组有一条硬闸门：**真实缺失必须成立**（"不得用注入失败顶上"）。
+`edge_target_prepare.sh` 按设计**装齐六个控制**并写告警面 ⇒ 这两个场景在**装齐控制的靶机上
+结构性不满足**，闸门会在**建 operation 之前**整轮失败。⇒ **不入批次，理由是"不可能产出记录"**，
+而不是"跑起来太难"：把它们塞进批次会让 `REPEAT=1` 的条数门禁**必然为红**，
+连门禁①/② 都拿不到。`R-no-ids` **相反**：真实缺失**成立**（suricata failed、无 IDS 进程）⇒ 可以跑。
+
+**同族的第四条（环境相关）**：本机 Git Bash 设了 `POSIXLY_CORRECT` ⇒ **`grep -E` 退回 BRE 语义**，
+`+` / `?` 变成**字面量**（实测：`grep -E 'ssh (-o [^ ]+ )+-- …'` 对**完全匹配**的行报 NOMATCH）。
+**Linux（宿主/CI）没有这个变量 ⇒ 同一份夹具在两边行为不同。**
 
 ---
 
@@ -493,8 +949,15 @@ Windows 下跑出来的红**不能**当成回归，也**不能**当成"绿灯"�
 | 2 | `edge_agent_preflight.sh` 里的**死变量 `REPO_ROOT`** | 变量**无人使用** ⇒ 无实际影响；但它"少算一层"（`../..` 只到 `<repo>/lunwen`） | ✅ **已清（Task 14 / `2dac30d`）**：**删除**（不是改对 —— 改对等于凭空造一个"看起来可用"的仓库根），原处留一行注释说明 |
 | 3 | `edge_prebatch_check.sh` 的 `EDGEEXP_HEAD_CHECKOUT` **默认值陈旧**（`/root/t6/t8/head`）与**判据认不出 worktree** | 对一份**完全正常**的 worktree 误报 NO-GO（控制侧实测 rc=1） | ✅ **已修（Task 14 / `6e11fa0`）**：判据改 `git -C … rev-parse --git-dir`（认 worktree）；**删掉默认值**（缺 ⇒ 响亮失败并给示例）；"脏检出判红"保留。见 §2.3.1 |
 | 4 | `lunwen/clab-lab/scripts/` 里若干历史脚本的**默认值仍有内部标识**（网段/主机名/C2 默认口令） | 口令类已清零；网段/主机名按审计归档 §E.2 的口径**保留**（是"必须带地址才读得懂"的踩坑注释） | C2 口令：✅ **已处置完（Task 14 / `e282f19`）** —— 18 个文件，判据 `git grep -I -n -e '<明文>'` = 0；网段/主机名：**保留项**（见审计归档 §E.2 + Part F 的 F1/F2） |
-| 5 | 六组夹具在 Windows 下不可全绿（§6.11） | 只影响开发机；不影响 Linux 上的权威执行 | ✅ **已在 Linux 上验证（Task 14）**：干净检出 `/root/t6/t14/head` 上 **6/51/20/31/8/12 全绿**。Windows 侧的 `6/50/20/0/2/0` 逐条根因都是**环境**（`unshare -rm` 不可用、缺 `python3`、路径文本差异） |
-| 6 | `gofmt -l` 在**起点上**就不是空的：**15 个既有**文件（`prism-lib/*` 9 个、`ssam-lib/*` 5 个、`lunwen/attachment/scripts/exprunner-main.go` 1 个） | 与本次改动无关；属**既有**失败 | ⏳ **未修**：在起点 `d32daa2` 上同样列出这 15 个（判据：`gofmt -l .` 的**差集**），列入未修清单。本任务改动的两个文件已按 gofmt 规范重排（`391403e`） |
+| 5 | 六组夹具在 Windows 下不可全绿（§6.11） | 只影响开发机；不影响 Linux 上的权威执行 | ✅ **已在 Linux 上验证**：干净检出上 **`6/83/20/31/8/12` 全绿、`run-all.sh` rc=0**（Task 14/16/17 逐步更新期望值：`test-edge-lab` 51 → 73 → 78 → **83**，每次改动都给了理由与原始输出） |
+| 6 | `gofmt -l` 在**起点上**就不是空的：**15 个既有**文件（`prism-lib/*` 9 个、`ssam-lib/*` 5 个、`lunwen/attachment/scripts/exprunner-main.go` 1 个） | 与各次改动无关；属**既有**失败 | ⏳ **未修**（**另开任务**）：判据是"`gofmt -l` 的**差集**必须为空"—— Task 18 在起点 `8ae3c4b` 与 HEAD `4c1ab06` 上各跑一次，**都是 15 行、差集为空** |
+| 7 | **"跳过的检查算通过"这条口径本身**（非 root 取数时 6 条检查 `detail = "skipped — requires root privileges"` 却算 `passed=true`） | **双向失真**：非 root 取数下既**假失败 4 条**、又**假通过 6 条** | ⏳ **已登记、不改**：改动属**判据语义变更** ⇒ 会让所有既有数据的口径失效（要整体重采）。**现行处置是"取数必须 root 等价"**（§5.3.2 第 4 条），从**测量侧**消除它 |
+| 8 | **门禁⓪ 只报不判死** | 链上的重复条目会被如实报出但不拦；**若收紧就是判据变更** | ⏳ **维持现状**：Task 18 已把"重复为什么会出现、对 `L_d` 有什么后果"查清并修复（折叠点在**消费侧**，链与配置**不动**）；收紧门禁需**先裁定** |
+| 9 | **Task 10 的拟合系数**（离线 `-fit` 的产物） | Task 18 顺带统一了 `fit.go:design()` 的**静默 last-wins 折叠**（真机取到 custom 的 `0.85` → 现在用**文档化的 0.70**）⇒ **旧系数是在"未文档化的 0.85"上算的** | ⏳ **只登记、不重跑**：论文若要引用**拟合出的耦合系数**，**必须重跑 `-fit`**（重跑成本 = 分钟级，但会改结论数值） |
+| 10 | **重复轴第 2/3 遍**（`EDGEEXP_RUN_INDEX=2,3`） | 本批只放了第 1 遍（`run=1`） | ⏳ **未跑**：与全量同一条命令，只是 `EDGEEXP_RUN_INDEX` 不同 —— 但那**是另一次数小时的长批次**，要跑先开任务 |
+| 11 | **`--count N` 多机拓扑** | 接口已留（`EDGEEXP_VM_SSH_HOST` 含 `%s` 按 vmid 展开），**真机上未验** | ⏳ **未实测**：本批只起 1 台 VM（内存账见白皮书 §5.3 乙）；"中重型拓扑"是后续里程碑 |
+| 12 | **`edge_probe.sh` 在 qemu 上不是 root 等价** | 探针经 `lab_target_exec`（登录用户 `asc`）执行，而**取数是 root 等价** ⇒ `condition_probes[].condition_holds` 与 `checks[]` 在 VM 上**可能不一致**（例：`EF-APPARMOR` 的探针走 `aa-status`，`asc` 下 rc=4） | ⏳ **未改**：改它要动 `edge_probe.sh` 与它的 20 条离线判据（**判据语义变更**）。对 S 组不阻断，但它**不是**一致证据 |
+| 13 | **`run.d/` 的清理会毁掉上一轮的碎片证据** | `edge_matrix.sh` **每轮开始时清 `run.d/`** ⇒ 小批验证的 `collect-*.json` 在随后启动的全量批次里被清掉 | ⏳ **未改**：**记录本体不受影响**（那是权威产物）。建议把证据目录与运行目录分开（或按 run_id 归档） |
 
 > **注意**：第 1、2、3、4 条原本是**代码/脚本缺陷**，Task 12（文档任务）只登记不改；
 > **Task 14 受命修掉了它们**（第 4 条的网段/主机名部分仍是保留项）。第 6 条是 Task 14 新登记
@@ -508,9 +971,9 @@ Windows 下跑出来的红**不能**当成回归，也**不能**当成"绿灯"�
 
 | 变量 | 默认 | 必需性 | 含义 |
 |---|---|---|---|
-| `EDGEEXP_SUBSTRATE` | `clab` | **强烈建议显式** | `docker`/`lxd`/`clab`/`pve` |
+| `EDGEEXP_SUBSTRATE` | `clab` | **强烈建议显式** | `docker`/`lxd`/`clab`/`pve`/**`qemu`** |
 | `EDGEEXP_ENV` | 由脚本推 | `REPEAT>1` 时**必需** | 环境标签（进文件名与 `meta.env`） |
-| `EDGEEXP_TARGET` | `asc-asscor-host1` | 建议显式 | **被攻节点名**（基质层的名字） |
+| `EDGEEXP_TARGET` | `asc-asscor-host1` | 建议显式 | **被攻节点名**（基质层的名字）。`qemu` 下 = **VM 的 hostname**（Caldera 的 `host` 字段就是它） |
 | `EDGEEXP_DATA_DIR` | `<仓库>/lunwen/clab-lab/data/edgefactors` | 可选 | 产物落点 |
 | `EDGEEXP_RUN_ID` | `<date>-<pid>` | 可选 | 运行标识 |
 | `EDGEEXP_RESUME` | 未设 | 可选 | `1` = 续跑（跳过已有记录的场景） |
@@ -564,3 +1027,25 @@ Windows 下跑出来的红**不能**当成回归，也**不能**当成"绿灯"�
 |---|---|
 | `EDGEEXP_DRY_RUN=1` | 只打印将要做什么（见 §2.4 的能力边界） |
 | `EDGEEXP_DOCKER_BIN` | 覆盖目标级 `docker` 二进制（两个可分辨的假 docker 可测抽象是否生效） |
+| `EDGEEXP_QM_BIN` / `EDGEEXP_SSH_BIN` / `EDGEEXP_SCP_BIN` | **`qemu` 基质**下覆盖三个 CLI（离线夹具靠它们做假 CLI） |
+| `EDGEEXP_PRINT_EXPECTED=1` | **只打印**每个场景的 `expected_chain_factors`（不碰 Caldera/拓扑）—— 操作者自查入口 |
+
+### 8.7 `qemu` 基质专用（v1.1 新增；**逐格都有守卫**）
+
+| 变量 | 默认 | 必需性 | 含义与守卫 |
+|---|---|---|---|
+| `EDGEEXP_CALDERA_KEY` | **无默认值** | **必需** | 缺 ⇒ 脚本 `exit 2`；前置门禁记 NO-GO（§2.3） |
+| `EDGEEXP_CALDERA_URL` | 脚本默认（脱敏） | 建议显式 | **必须是宿主地址**，不是客人默认网关（§6.5 / 白皮书 §3.7） |
+| `EDGEEXP_C2_HOST` | 由 URL 推 | 仅当 URL 是域名时必需 | 加主机路由要用 **IPv4 字面量**；不是字面量 ⇒ **不猜**、响亮失败 |
+| `EDGEEXP_HEAD_CHECKOUT` | **无默认值** | **必需** | 干净 HEAD 检出（§2.3.1） |
+| `EDGEEXP_VM_SSH_KEY` | 空 | **必需** | 私钥**路径**（内容从不进 argv/记录/仓库） |
+| `EDGEEXP_VM_SSH_USER` | `asc` | 建议显式 | 客人里的登录用户 |
+| `EDGEEXP_VM_SSH_HOST` | 按 vmid 推 `asc-vm<vmid>` | 可选 | 含 `%s` 时按节点标识展开 ⇒ **多机靠这条**；**刻意不做 `-o` 选项串**（那种变量会被当成 `-o` 的值，于是 `ProxyCommand` 能在操作者看不见的地方把**取数目标**改到别处） |
+| `EDGEEXP_VM_SSH_PORT` | `22` | 可选 | SSH 端口 |
+| `EDGEEXP_VM_KNOWN_HOSTS` | `/root/.ssh/asscor-edge-vm_known_hosts` | 建议显式 | 专用 known_hosts（§6.16）。目录不可用 ⇒ **响亮失败** |
+| `EDGEEXP_VM_SSH_SUDO` | `sudo -n` | **必需** | 取数**必须 root 等价**。每一格只收 `A-Za-z0-9_./:+-`；含空白/分号/反引号/`$` ⇒ **响亮失败**（不做"清洗后继续"） |
+| `EDGEEXP_VM_GUEST_IFACE` | `ens18`（`eth0` 兜底） | 建议显式 | 客人网卡名（§6.13） |
+| `EDGEEXP_VM_GUEST_AGENT_WAIT_S` | `600` | 可选 | 等 guest agent 报 IP 的上限（冷启动**实测超过 240 s**，不要改小） |
+| `EDGEEXP_VM_IMAGE_URL` | Ubuntu cloud image | 可选 | 建机用的镜像（已缓存在宿主 `/var/lib/vz/import/`） |
+| `EDGEEXP_ATTACK_GROUP` / `EDGEEXP_TTP_GROUP` | 空 | **强烈建议显式** | **投送组必须本机独占**（§6.17） |
+| `EDGEEXP_AGENT_GROUP_FOR_JUDGE` | 空（= 不过滤） | 由 qemu 路径自动传 | 活 agent 判据的第五条（§6.17） |

@@ -4,10 +4,13 @@
 > 仅凭本文 + 仓库内可跟踪的脚本，就能判断"这套实验是在什么机器上、以什么口径跑出来的"，
 > 以及"这套环境够不够格承载我的实验"。
 >
-> **文档版本**：v1.0（2026-10-15）
+> **文档版本**：**v1.1（2026-10-16）** —— v1.1 把 **VM（QEMU/KVM）基质**从"已裁定、待落地"改成**实测落地**（§4.1 / §5.3 / §5.4.1 / §3.7），并按 Task 16 的实测**更正了「−30」的口径**。
 > **取证方式**：**全部条目均在实机上只读取证**，文末给出**每一条的复核命令**。
 > 凡本文未实测的，一律标注「未实测」而**不填猜测值**。
-> **基线提交**：`ASSCOR-Research-Core` @ `5eaedec`。
+> **基线提交**：`ASSCOR-Research-Core` @ `4c1ab06`。
+> **数据锚点（两个提交，别混）**：本批 VM 数据的**采集提交**是 `8ae3c4b`（Task 17，跑批用的二进制盖着
+> `vcs.revision=8ae3c4bb8961`）；**消费侧**（离线 V/G/C 合成）的修复是 `4c1ab06`（Task 18，
+> 记录本体与 `legacy` 列逐位不变 ⇒ **不需要重采**）。
 
 ---
 
@@ -185,7 +188,23 @@ lvmthin: NVMe-256G
         vgname NVMe-256G
         content rootdir,images
         nodes pve
+
+dir: asscor-vmseed
+        path /RAID-Mirror/asscor-vmseed
+        content iso
 ```
+
+> **最后一条 `asscor-vmseed` 是 Task 16 新增的**（本实验**唯一**一处持久的宿主存储改动，
+> **additive**）：VM 基质的 **NoCloud seed ISO** 必须落在一条**带 `iso` 内容**的存储里
+> （PVE 9 起 `qm set --ide2` 不再接受裸绝对路径），而既有三条带 `iso`/不许动的存储
+> （`ZFS-ISO` / `Backup-320G` / `ZFS-LXD`）一律不许动 ⇒ **自建一条**是唯一不翻转全局状态的做法。
+> 写法**参照 `ZFS-ISO`**。**本实验刻意保留它**（下批直接复用；删了就要再建一次）。
+> **撤销命令**：`pvesm remove asscor-vmseed && rm -rf /RAID-Mirror/asscor-vmseed`。
+>
+> ⚠️ **`local` 的 `content` 顺序会变，语义不变**：起点是 `backup,import,vztmpl`，
+> 现在可能显示成 `backup,vztmpl,import` —— 那是 **PVE 在 `pvesm add` 时重写 `storage.cfg`
+> 的规范化行为**，不是本实验改的（Task 15 那套"临时给 `local` 补 `iso` 再写回"的代码
+> **已被整段删除**）。⇒ **本条的正确判据是「逐项相同」，不是「逐字相同」**。
 
 > **判据**：`cat /etc/pve/storage.cfg`
 
@@ -200,6 +219,7 @@ lvmthin: NVMe-256G
 | `ZFS-ISO` | `dir`，路径 `/RAID-Mirror/iso` | **仅 `iso`** | **只收 ISO 镜像**。**新存储的写法参照它**：`dir:` + `path /RAID-Mirror/<名>`（既有约定） |
 | `ZFS-LXD` | `dir`，路径 `/RAID-Mirror/lxd` | **仅 `vztmpl`** | **只收 LXC 模板**（`prune-backups keep-all=1`） |
 | `Backup-320G` | `dir`，路径 `/mnt/pve/Backup-320G`（`is_mountpoint 1`） | **仅 `backup`** | **只收备份**。**不得**改它的 `content`、**不得**把客机磁盘放进去 |
+| **`asscor-vmseed`** | `dir`，路径 `/RAID-Mirror/asscor-vmseed` | **仅 `iso`** | **本实验自建**（Task 16）：只放 **VM 的 NoCloud seed ISO**。⚠️ `dir` 存储的 ISO **不在 `<path>/iso/`，而在 `<path>/template/iso/`** —— 放错目录的症状是 `volume 'asscor-vmseed:iso/<名>' does not exist`（看着像"文件没了"，其实 ISO 已经生成好了）。见 §5.3 |
 
 > **判据**：`zpool list && zpool status RAID-Mirror`；`df -hT`；`pvesm status`
 
@@ -328,6 +348,69 @@ net0: name=eth0,bridge=vmbr0,hwaddr=<mac>,ip=dhcp,type=veth
 整体替换会**直接摧毁注释的可读性**，而它本身在仓库外不可达（§3.4 已实测隔离）。
 ⇒ 既有处理方式是：**既有文档/脚本保留** + **新文档使用占位符** + **加一句口径说明**。
 
+### 3.7 VM 靶机的网络通路（**v1.1 新增，实测**）
+
+这一节回答"VM 靶机怎么走到 C2"。**它和 CT 不是同一条路**，而这是 VM 基质能不能跑批的前提。
+
+**（甲）网卡实名是 `ens18`，不是 `eth0`** —— PVE 的 virtio 网卡在客人里按 PCI 槽位取**可预测名**。
+`edge_vm_provision.sh` 的客人侧指标因此写死 `eth0` 过一次的错，现在走
+`EDGEEXP_VM_GUEST_IFACE`（默认 `ens18`）+ `eth0` 兜底；**仍以名字精确匹配优先**（多网卡时不锁到不通的那条）。
+
+**（乙）VM 挂 `vmbr1` 时到不了 C2 —— 缺的是一条路由，不是一个端口**：
+
+```text
+VM 侧实测（客人内）：
+default via 192.168.1.1 dev ens18 proto dhcp src 192.168.1.3 metric 100
+192.168.1.0/24 dev ens18 proto kernel scope link src 192.168.1.3
+宿主侧实测（宿主上）：
+default via 192.168.1.2 dev vmbr1
+```
+
+⚠️ **两条默认路由的网关不是同一个（`.1` vs `.2`）** —— 两边都是 **DHCP** 拿的。
+⇒ **"默认网关"这个值在这套环境里不得被任何脚本写死**（它连同一个网段的两台机器上都不一样）。
+C2 只绑在宿主的 `vmbr0` 地址（`<pve-host-ip>`）上 ⇒ VM 发往 C2 的报文被默认网关拿走后就没了
+（实测探针 `probe_rc=124`，8 秒超时）。
+
+**修法（客人侧一条 `/32` 主机路由；实测立即生效）**：
+
+```text
+ip route replace <pve-host-ip>/32 via 192.168.1.242 dev ens18
+```
+
+- 下一跳 = **宿主自己在客人网段内的地址**（由 `guest_host_addr <iface>` **动态取**，不写死 ——
+  它在 §3.1 里是 DHCP 的）；
+- **为什么加 `/32` 而不是整段 `192.168.30.0/24`**：`/32` 恰好覆盖"我们要去的那台机器"，
+  不替操作者做"那个网段整体该怎么走"的决定（网络设备是纪律边界，不碰）；
+- **幂等必须用 `replace`**：`ip route add` 第二次会报 `File exists`，而那条错会以
+  **"复位失败"**的形态出现；
+- 对照实验（Task 15 实测）：把路由删掉，同一条探针**又变回不通** ⇒ 差异确实由这条路由造成。
+
+**（丙）为什么宿主 `ip_forward=0` 也不影响**（实测 `sysctl -n net.ipv4.ip_forward` = **`0`**）：
+
+> 报文的目的地 **`<pve-host-ip>` 就是宿主自己的地址** ⇒ 到宿主是**本机投递（local delivery）**，
+> **不需要**转发。⚠️ 若将来要经宿主去到 `192.168.30.x` 的**别的**主机，`ip_forward=0`
+> 就会**真的**成为阻塞（这条是纠错：任务书曾写"宿主已开 `ip_forward`"，**与实测不符**）。
+
+**（丁）VM 挂 `vmbr0` 时不需要任何路由** —— 直连同网段（Task 15 实测：热插一块 `vmbr0` 网卡 +
+客人侧 `192.168.30.201/24` ⇒ `ping` 3/3 收、`HTTP/1.0 401 Unauthorized`）。本批**没有**用这种方式
+（VM 只挂 `vmbr1` + 一条 `/32` 主机路由）。
+
+**（戊）"通"的判据是「客人内问到 HTTP 响应」，不是 ping、也不是 TCP**：
+
+| 端点 | 结论 |
+|---|---|
+| 客人内 `curl -H "KEY: <c2-key>" <C2>/api/v2/abilities` → **200** | 真通（`edge_target_prepare.sh` 的自证判据） |
+| 客人内不带 KEY → `401 Unauthorized` | 也**算通**（HTTP 层答了）；TCP 通不等于服务对 |
+| **宿主**侧不带 KEY → **200**、`/health` → **200** | ⚠️ **与 CT/客人侧不是一回事** —— 别把宿主上的 200 当成"靶机也通"的证据 |
+
+**（己）一处对 Task 13 的订正**：Task 13 §2.6 曾报「连 CT 904（本就在 `vmbr0` 同网段）也到不了 C2:8888」。
+Task 15 用**TCP + 原始 HTTP** 复测 CT 904 → C2:8888，得到 **`HTTP/1.0 401 Unauthorized`** ⇒ **CT 是通的**。
+那条结论是**探针形态**造成的（`/dev/tcp` 依赖 bash 特性），不是网络事实。
+**VM 到 C2 不通是真的**（缺路由），**CT 到 C2 不通是假的** —— 两件事在 Task 13 里被写成了同一件。
+
+> **判据**：宿主 `ip route`；客人内 `ip -br a; ip route`；客人内
+> `curl -o /dev/null -w '%{http_code}' -H "KEY: <c2-key>" <C2>/api/v2/abilities`。
+
 ---
 
 ## 4. 基质与 C2
@@ -345,6 +428,7 @@ net0: name=eth0,bridge=vmbr0,hwaddr=<mac>,ip=dhcp,type=veth
 | `lxd` | LXD 实例 | `lxc exec` / `lxc file push` | 远程 A-1 服务器 |
 | `clab` | Containerlab 拓扑 | `docker exec`（拓扑级） | 开发机 |
 | **`pve`** | **PVE CT（LXC 容器）** | **`pct exec` / `pct push`** | **本文档描述的这台机** |
+| **`qemu`** | **PVE VM（QEMU/KVM）** | **`ssh`（目标内执行） + `scp`（送文件）** | **本文档描述的这台机（v1.1 起已落地）** |
 
 **`pve` 驱动的四条硬行为**（都是踩坑后的判据，逐条有夹具钉住）：
 
@@ -355,8 +439,38 @@ net0: name=eth0,bridge=vmbr0,hwaddr=<mac>,ip=dhcp,type=veth
 4. **`lab_up`/`lab_down` 在 `pve` 下响亮失败**（`rc=2` + 说明原因）——
    拓扑生命周期属于"谁建的谁管"，管线不得偷偷建/删 CT。
 
-> **判据**：`bash lunwen/clab-lab/tests/test-edge-lab.sh`（H 段 25 格专测 `pve` 分支）；
+> **判据**：`bash lunwen/clab-lab/tests/test-edge-lab.sh`（H 段 25 格专测 `pve` 分支、I 段专测 `qemu` 分支）；
 > 驱动实现在 `lunwen/clab-lab/scripts/edge_lab.sh`。
+
+**`qemu` 驱动的五条硬行为**（`docker`/`lxd`/`pve` 的"一个二进制、两级调用"关系在它这里**不成立**，逐条与代码一致）：
+
+1. **两级 CLI 不是同一个二进制**：`lab_topology_bin = qm`（**实例视图**）、`lab_target_bin = ssh`（**目标内执行**）、
+   另有 `lab_scp_bin = scp`（**送文件**）⇒ qemu 下 `bins=(…)` **三项都查**（缺哪一项的症状互不相干）。
+2. **`qm` 只认数字 vmid**：`qm status asc-vm910` 报 `vmid: type check ('integer') failed`（rc=255），
+   而 `qm status 910` → `status: running`。⇒ 名字 → vmid 的解析收在**唯一一处** `lab_qemu_vmid <node>`
+   （判据与 pve 侧 `lab_node_vmid` 逐条同源；**`qm list` 的名字在第 2 格**，与 `pct list` 的"最后一格"**相反**）。
+   **但与 `cmd/edgescen` 的 `-target qemu:<vmid|名字>` 不同**：那里**两种标识都收** ——
+   数字按默认规则推 `asc-vm<vmid>`，非数字则**原样当主机名**（`nodecollect.go` 的 `qemuSSHHost`）
+   且**刻意不去猜它对应哪个 vmid**（猜错就是"采到另一台机器的数据、而记录里的节点名照常"）。
+3. **`ssh` 不保留 argv 的格边界**（**结构性差别，不是实现缺陷**）：`ssh <主机> <argv…>` 会把
+   `-- <主机>` 之后的**所有格用空格拼成一个字符串**，交给**客人侧的登录 shell** 再分词。
+   前三种基质都有"把 argv 原样交给客人"的 CLI（`docker exec <容器> <argv…>` / `lxc exec -- …` /
+   `pct exec <vmid> -- …`），**`ssh` 没有**。
+   ⇒ `lab_target_exec` 在 qemu 下用 `printf '%q '` **逐格引用**后拼成**一格**再交给客人侧 `bash -c`。
+   ⚠️ **忘了这一步会得到一个 rc=0 的哑炮**（`bash -c bash -c rm -f /tmp/x` 的真实执行体是**无参 `bash`**，
+   读 stdin 然后 EOF 退出 ⇒ 命令一次也没跑、**rc 还是 0**）。实测原文见操作手册 §6.12。
+4. **取数手段是 `scp` + `ssh`**：`scp -O`（强制 legacy SCP 协议，免得依赖客人侧 `sftp-server`）+
+   紧随的 `ssh … chmod 0755`（`scp` 保留权限位而**不**保证可执行）。
+   **`-o User=<用户>`，绝不能用 `-l <用户>`** —— `ssh -l` 是登录名，而 **`scp -l` 是带宽上限**（要数字）。
+5. **`lab_up`/`lab_down` 照旧 `rc=2`**（与 `lxd`/`pve` 同形），理由多一条：VM 是**要建**的（与 CT 不同），
+   而建机/清机有**单一来源** `edge_vm_provision.sh`。两个入口对"哪些 VMID 属于本任务"的判据一旦分叉，
+   一次 `lab_down` 就能拆掉别人的 VM。
+
+> ⚠️ **一条实测教训（关于"注释里的推断"）**：上面第 3 条曾被 Task 13 的注释与 Task 16 的
+> "实测澄清"**都**写成"客人侧收到的命令串逐字是 `bash -c bash -c rm -f /tmp/x`、**语义正确**"。
+> Task 17 在真机上**推翻**了它 —— 而那正是"离线夹具与代码共享同一个错模型"的典型：
+> 夹具的假 `ssh` 把 argv **逐格转交**（那是 `docker`/`lxc`/`pct` 的语义，**不是 ssh 的**）。
+> ⇒ **qemu 分支的判据必须是行为判据**（假 `ssh` 照实模拟真 ssh 的拼格，判"副作用真的发生了"）。
 
 ### 4.2 C2（Caldera）
 
@@ -410,7 +524,9 @@ net0: name=eth0,bridge=vmbr0,hwaddr=<mac>,ip=dhcp,type=veth
 | 脚本 | 职责 |
 |---|---|
 | `lunwen/clab-lab/scripts/edge_ttp_provision.sh` | 在 C2 里**幂等**创建/校验三件 TTP 实体（含 ID 记档） |
-| `lunwen/clab-lab/scripts/edge_target_prepare.sh` | **靶机侧**的幂等准备（装包、装 agent、声明基线、C2 自证） |
+| `lunwen/clab-lab/scripts/edge_target_prepare.sh` | **靶机侧**的幂等准备（装包、装 agent、声明基线、C2 自证）。**v1.1 起含 `qemu` 分支**：客人侧助手 + root 等价 + 真 AppArmor 策略 + agent 以 root 拉起 + 到 C2 的主机路由（§3.7） |
+| **`lunwen/clab-lab/scripts/edge_vm_provision.sh`** | **VM 靶机的建机/清机唯一入口**（v1.1 起）。拉 Ubuntu cloud image → `qemu-img convert` → `qm importdisk` → `genisoimage` 造 **NoCloud seed**（卷标 `cidata`）→ `qm create/start` → 等 guest agent 取 IP → 写 `/etc/hosts` 托管区块 → 等 SSH → 客人侧依赖 → **取数权限自检** → 打印指标。⚠️ **清机必须走 `--destroy`** |
+| **`lunwen/clab-lab/scripts/edge_vm_guest.sh`** | **客人侧助手**（v1.1 起）。qemu 的"目标内执行"由 `ssh` 承担，而 **`ssh` 不保留 argv 的格边界** ⇒ 多 token 的脚本**不能**靠 argv 送进去；处置是**落文件 → `lab_push` → 按路径执行**。子命令：`policy-status/apply/remove/probe`、`agent-install/start/stop`、`route-add/route-del`、`net-report`、`c2-probe` |
 | `lunwen/clab-lab/scripts/edge_prebatch_check.sh` | **跑批前置的唯一入口**：把"能不能开跑"收成一道门（见 §5.4） |
 
 > **判据**：`head -60 lunwen/clab-lab/scripts/edge_prebatch_check.sh`
@@ -459,7 +575,7 @@ C2 的 API 口令**不写入本仓库**。仓库里此前的落点是脚本默�
 |---|---|---|
 | **定位** | **快速验证 / 轻量模拟 / 临时短期任务** | **长线任务 / 中重型拓扑模拟 / 要进论文的重要任务** |
 | 环境完整度 | **共享宿主内核** ⇒ 内核面、内核参数、可加载模块、部分 LSM/审计路径**与真机不同** | **独立内核 + 完整设备模型** ⇒ 与真机同形 |
-| 数据准确性 | 受限于"内核面不可观测"（见 §5.3） | **高** |
+| 数据准确性 | 受限于"内核面不可观测"（见 §5.4.1） | **高**（且取数权限对齐后**可复核**，见 §5.3） |
 | 环境可靠性 | 受宿主与邻居影响；CT 的 cgroup/网络/存储都与宿主耦合 | **隔离边界清晰** |
 | 每实例开销 | **进程级**（本机 8 GB 内存下可行） | **整机级**（本机 8 GB 内存下**很快撞墙**） |
 | 起停速度 | 秒级 | 数秒～数十秒（NVMe x1 链路下更慢，见 §1.4） |
@@ -473,22 +589,111 @@ C2 的 API 口令**不写入本仓库**。仓库里此前的落点是脚本默�
    同一场景在两套基质上的基线活跃集、可观测面、甚至 `compromised` 判定都可能不同。
 3. **"CT 用起来难受"是一个合法且被鼓励的换基质理由**。这不是"妥协"，而是**把任务放到它能被可靠完成的地方**。
 
-### 5.3 VM 基质的现状（**已裁定、待落地**）
+### 5.3 VM 基质（QEMU/KVM）：**v1.1 起已落地，以下是实测形态**
 
-> **本文不填任何 VM 基质的实测值** —— 本文写作时**VM 基质尚未落地**。
+> **v1.0 的这一节写的是"已裁定、待落地"** —— 本节按落地后的实际情况**整节重写**。
+> 所有数值都是真机实测（Task 13 / 15 / 16 / 17），不是推算。
 
-已确定的事实（可复核）：
+**（甲）建机路线（`edge_vm_provision.sh`，唯一入口）**：
 
-| 项 | 现状 | 判据 |
+```text
+Ubuntu cloud image（校验和核对）→ qemu-img convert 成 raw → qm importdisk
+→ genisoimage 造 NoCloud seed ISO（**卷标 `cidata`**）→ 挂 CD-ROM（存到 `asscor-vmseed`）
+→ qm set（逐条读回配置确认落盘）→ qm start
+→ 等 guest agent 报 IP（上限 EDGEEXP_VM_GUEST_AGENT_WAIT_S，默认 **600 s**）
+→ 写 /etc/hosts 托管区块（`asc-vm<vmid>`）→ 等 SSH → 客人侧依赖 → **取数权限自检** → 打印指标
+```
+
+- **VMID 从 910 起连续分配**；`MIN_VMID=910` 是**写死的硬下限**，`--first-vmid` 改小一律**拒绝执行**
+  （避开 CT 904 与 PVE 自用的低位区间）。
+- **为什么走 NoCloud ISO 而不是 PVE 原生 cloud-init**（`ciuser`/`sshkeys`+`cicustom`）：
+  原生路线要把 `snippets` 加进某存储的 `content` —— 那是一次**宿主存储配置变更**（全局状态）；
+  而 `qm set --sshkeys` 是**交互式**的（读 stdin 追加），进脚本必须写成 `cat | qm set` 那种形状，
+  那正是**最容易把"追加失败"读成"设置成功"**的地方。代价是 `qm cloudinit dump` 看不到我们的
+  user-data —— **有意的取舍**，脚本自己写自己销毁，唯一真源在脚本里。
+- **`--destroy` 是清机的唯一正确姿势**（走别的路会留下半清状态）。护栏：只拆"名字带前缀 + VMID ≥ 910"的。
+- ⚠️ **首次冷启动要给足时间**：cloud-init 首启要 apt 装 `qemu-guest-agent`/`apparmor-utils`/`auditd`，
+  **实测超过 240 s** ⇒ 写死的 240 s 在冷启动时**必定**超时（已改成环境变量，默认 600 s）。
+
+**（乙）内存账（**这是"能跑几台"的唯一依据**）**：
+
+| 项 | 值（实测/推算） |
+|---|---|
+| 宿主 `MemTotal` | **7795 MiB**（`free -m`） |
+| CT 904 占用 | **1024 MiB**（`pct config 904` 的 `memory: 1024`） |
+| PVE 自身 + 页缓存 | ~0.6–1.5 GiB |
+| **可分配给 VM 的实际上限** | **≈ 5.5–5.9 GiB** |
+| 本批单台 VM | `memory=2048` + `balloon=512` |
+
+⇒ **稳跑 2 台 4 GiB**（余量安全）；**3 台**（6 GiB）已进入"要靠 balloon 与内核回收挤出来"的区间；
+**4 台**（8 GiB）**必然**触发宿主 OOM 与换页 —— 而宿主一旦换页，**CT 904 与所有 VM 的测量都会被拖慢**，
+"数据准确性"这条前提直接失效。**全量批次只起 1 台 VM**，`available` 全程 ≥ 4.0 GiB。
+
+**为什么用 balloon（动态）而不是固定分配**：`memory=` 是**上限**、`balloon=`（默认 512 MiB）是**下限**，
+两边都显式写死（不存在"PVE 默认值随版本漂移"）。靶机在被攻击/装包时要用内存，而**空转时不需要**，
+空转恰是 VM 在整轮跑批里占比最大的状态（等 SSH、等 Caldera、等下一场景）。
+⚠️ **约束（写死为约束而不是建议）**：balloon 会让**内存相关测量**多一个变量。方向② 现无内存类检查项
+⇒ 不进任何因子的读数；**若将来加了内存类检查，必须改固定分配**。
+
+**（丙）取数权限自检（**建机脚本每次都会实测并打印**）**：
+
+```text
+   取数权限自检（root 等价）：
+      asc
+      login-uid=1000
+      sudo-uid=0
+   ✅ **root 等价成立**（登录用户是 asc，取数走 sudo -n ⇒ uid 0）——
+      与 CT 基质的 `pct exec`（天生 root）**等价**，两套基质的 B 可比。
+```
+
+**拿不到就 `die`（整轮建机失败）**，绝不把一台"只能以 `asc` 取数"的 VM 交给跑批。
+这条不是卫生习惯，而是**测量语义的前提**（见 §5.4.1）：不对齐权限时 80 条检查里 **10 条会翻转**，
+而**决定基线活跃集的那两条恰在其中**。**日志里没有这一行就不要往下走**。
+
+**（丁）VM 基质的基线活跃集 `B` = `{EF-NO-IDS}`（**实测，且与 CT 不同**）**：
+
+| 检查 | VM（root 等价取数） | 推出的因子 |
 |---|---|---|
-| 已运行客机 | **只有 1 台 CT**：VMID **904**、名称 `asc-tgt-c2`、`status=running` | `pct list` |
-| VM 数量 | **0** | `qm list`（空） |
-| VM 存储 | `RAID-Mirror`（`images`）与 `NVMe-256G`（`images`）**都已支持 VM 磁盘** | `cat /etc/pve/storage.cfg` |
-| 驱动实现 | `cmd/edgescen` 的基质前缀目前只认 `docker:` / `lxd:` / `pve:<vmid>`；**`qemu`/`vm` 前缀尚未实现** | `grep -rn 'pve:' cmd/edgescen/*.go` |
-| 落地任务 | 已单独立项（"Task 13：VM 生产基质"），范围：SSH 取数、基线随基质重声明、provisioning 按多机设计 | 仓库内任务目录 |
+| `RS-006`（HIDS/NIDS 部署） | **失败**（`suricata.service=failed`、`aide` 无常驻服务、`ps` 无 IDS 进程） | ⇒ **`EF-NO-IDS` 在链上** |
+| `RS-007`（入侵告警配置） | **通过** —— `edge_target_prepare.sh` 把**真实的告警面**写进 `/etc/aide/aide.conf` | ⇒ `EF-NO-SIEM` **不在**链上 |
+| `OT-005` / `KS-012` | **通过**（root 等价取数下 AppArmor 真的在 enforcing，`aa-status` rc=0） | ⇒ `EF-SELINUX`/`EF-APPARMOR` **不在**链上 |
 
-⇒ **对本文读者的意思**：§5.2 的表是**已经生效的选择判据**，
-但"VM 基质的实测性能与口径"**要等 Task 13 落地后另行发布**，届时本节应被替换为实测版。
+⇒ **`B = {EF-NO-IDS}`**（判据：真机记录的 `meta.expected_baseline_factors`）。
+
+> ⚠️ **两个 B 值都是对的，但不可互换**（**这一节最容易读错的地方**）：
+>
+> | 基质 / 口径 | `B` | 成因 |
+> |---|---|---|
+> | **CT（LXC，`pct exec` 天生 root）** | `{EF-SELINUX, EF-APPARMOR}` | `OT-005` 在 LXC 里**结构性不可观测**（§5.4.1） |
+> | **VM + 非 root 取数（`asc`）** | `{EF-SELINUX, EF-APPARMOR}` | **数值与 CT 相同、成因完全不同** —— 这是**权限伪影** |
+> | **VM + root 等价取数（正确口径）** | **`{EF-NO-IDS}`** | 真实状态：AppArmor 真的在 enforcing，而 `prepare` 装齐六个控制 ⇒ `RS-007` 通过 |
+>
+> **一个中间态（Task 16 的裸 VM 上取的 `{EF-NO-IDS, EF-NO-SIEM}`）也出现过**：那时 `RS-007` 失败，
+> 因为那次**没跑 `edge_target_prepare.sh`**。**一次真实跑批会先跑它** ⇒ `RS-007` 通过。
+> ⇒ **`B` 必须由实测给出**（S0 基线探针），**不许写死**；而"声明一个不在链上的因子"会被门禁
+> **如实拒掉**（不是"放宽一下就过了"）。
+
+**（戊）建机 → 清机的判据（`--destroy` 之后逐条核对）**：
+
+```
+qm list                                  → 空（0 台）
+pct list                                 → 只有 904 running asc-tgt-c2（**不许动**）
+/etc/hosts 的托管区块                     → 0 行残留
+local 的 content                          → 与起点**逐项**相同（顺序可能被 PVE 规范化，见 §2.1）
+local-lvm 上的 vm-910-disk-0              → 已随 --purge 释放（lvs 只剩 data/root/swap）
+asscor-vmseed / 它的目录                  → **刻意保留**（见 §2.1 与审计归档的处置条目）
+```
+
+**（己）"这批数据采自哪种基质"的唯一判据**：记录里的 **`meta.observation_target`**，形如
+`node:<vmid> (substrate=qemu, hostname=<name>)`。**任何 `substrate=pve`/`substrate=lxd`/裸名字的记录
+都 `不是` VM 基质的数据。**
+
+**（庚）落地的提交锚点**：`541c504`（Task 13 接线 + 设计文档 10.4B）→ `5ae2a96`（Task 15：五个真机缺陷）
+→ `de34ee0`（Task 16：权限对齐 + 专用 ISO 存储）→ `8ae3c4b`（Task 17：复位接线 + **本批数据的采集提交**）
+→ `4c1ab06`（Task 18：链重复的消费侧修复）。
+**逐条判据与原始输出**在仓库里体现为：驱动代码（`edge_lab.sh` / `edge_vm_provision.sh` /
+`edge_vm_guest.sh` / `edge_target_prepare.sh`）、离线夹具（`test-edge-lab.sh` 的 I 段）、
+数据集（`lunwen/clab-lab/data/edgefactors/records-dl360-qemu-20261016.jsonl`）。
 
 ### 5.4 已知约束与风险（逐条可复核）
 
@@ -500,37 +705,92 @@ C2 的 API 口令**不写入本仓库**。仓库里此前的落点是脚本默�
 | 4 | **`vmbr1` 的宿主地址是 DHCP 的** | 宿主的"出口地址"会变 ⇒ 任何写死它的脚本都会在某天失效 | `ip -br a show vmbr1` |
 | 5 | **`192.168.30.0/24` 是隔离段** | 不能用它做任何"连到外部服务"的假设 | §3.4 的实测 |
 | 6 | **CT 的路由器 ≠ 宿主** | 拼 C2 URL 时必须用 `<pve-host-ip>`；用容器默认网关会拿到 `000` | 容器内 `ip route` 的 `default via` |
-| 7 | **`OT-005` 在 PVE CT 里不可观测** | 基线活跃集在本基质上**只能是** `{EF-SELINUX, EF-APPARMOR}`（见下） | 见下 |
+| 7 | **测量的读数取决于「在哪读」×「谁在读」** | 不对齐取数权限 ⇒ 80 条检查里 **10 条翻转（双向）**，而**决定基线活跃集的那两条恰在其中**（见下） | 见下 |
 | 8 | **残留 agent** | C2 里的历史 agent 会被误判成"本轮已沦陷" | `edge_agent_preflight.sh` 的就绪/归属判据 |
 | 9 | **`GOPROXY` 需指镜像** | 默认 `https://proxy.golang.org` 在隔离网段内**拉不动** ⇒ 构建失败 | `go env GOPROXY`；见下 |
 | 10 | **"生效二进制 == HEAD 构建"必须显式确认** | 工作区里的 `build/*` 可能是**很久以前**构建的（本机实测：某个跑批工作区的源码 HEAD 恒停在早期提交，历轮只同步了脚本 ⇒ 在那里 `go build` 出来的二进制**不支持 `pve:` 前缀**，会在采集步整轮失败） | `bash lunwen/clab-lab/scripts/edge_prebatch_check.sh`（它会把"HEAD 构建"这件事收成一道门） |
 
-#### 5.4.1 第 7 条详述：`OT-005` 不可观测 ⇒ 基线活跃集与「−30」伪影
+#### 5.4.1 第 7 条详述：**「−30」是「取数权限 × 基质」耦合出来的伪影**
 
-**实测事实**：PVE CT 是 LXC 容器，**共享宿主内核**且使用**缩减的 `/proc` 视图**。
-在本机实测到的具体现象：
+> **这一节的措辞在 v1.1 被整节改写过**。v1.0 写的是「`OT-005` 在 PVE CT 里不可观测
+> ⇒ 那个 −30 是 **LXC 基质的**测量伪影」。**那个说法是错的**（或者说：只对了一半）。
+> 下面每一句都有真机实测支撑，三组证据分属三个任务，**不要把它们混成一条**。
 
-- 容器内 `aa-status` 报 `Failed to get profiles: 2` ⇒ **AppArmor profile 视图不可用**，
-  采集器读到 **0 条**；
-- 靶机 CT 的 `pct config` 里既有
-  `lxc.apparmor.raw: audit deny /etc/shadow r,`（**为实验刻意加的一条 LSM 拒止规则**），
-  而这类 LXC 级规则**不**出现在容器内的 profile 列表里。
+**（甲）三组实测，摆在一起才看得见全貌**：
 
-**后果**：`OT-005`（以及同类"内核面"检查项）在 CT 基质上**恒为不可观测**。
+| 组 | 在哪读 / 谁在读 | 读数 | 来源 |
+|---|---|---|---|
+| ① | **CT 904，`pct exec`（天生 root）** | `aa-status` → `Failed to get profiles: 2`；采集器读到 **0 条** profile ⇒ `OT-005`/`KS-012` **恒失败**（−15 + −15 = **−30**） | Task 9（真机记录） |
+| ② | **VM 910，手工 `sudo`（root）** | `aa-status` **rc=0 / 117 profiles / 23 enforce**；自写 AppArmor profile **真的能 enforce** 并拦住受限进程读 `/etc/shadow`（rc=1 + `Permission denied`，而读 `/etc/passwd` rc=0 ⇒ 排除假阳性）⇒ `OT-005`/`KS-012` **都通过** | Task 13（手工探针） |
+| ③ | **VM 910，真机采集器**（`-target qemu:910`，**登录用户 `asc`**） | `OT-005`/`KS-012` **都失败**、各 −15 ⇒ **−30 原样复现**，而且 `B` 与 CT **逐项相同** | Task 15（端到端） |
 
-**由此产生的口径（既有裁定）**：**基线活跃集必须按基质如实声明**，
-即在本基质上声明 `EDGEEXP_BASELINE_FACTORS={EF-SELINUX, EF-APPARMOR}`。
-**"本来就没测到"不是"不存在"** —— 声明面的语义是"这套环境上事实活跃的因子"，
-不是"理论上应该活跃的因子"。
+**决定性实验（Task 16）：同一份二进制、同一台 VM，只换「取数用户」**：
 
-**由此产生的措辞禁令**：**不得**把"控制项显式拒绝而环境未报出该因子"描述成
-**"系统被削弱了 30%"**（或任何等价的减法表述）。
-那是一个**测量伪影**（观测面缺失），**不是**一个安全态势的变化。
-把它当成态势变化，会让论文的核心结论变成"因为观测不到所以更安全"——
-那是**方法论错误**。
+```text
+$ ssh … asc-vm910 sudo -n env PROBE_NONCE=probe-root /tmp/ascor-probe-edgescen -emit-checks   → 80 条
+$ ssh … asc-vm910        env PROBE_NONCE=probe-asc  /tmp/ascor-probe-edgescen -emit-checks   → 80 条
 
-**机器证据**：`lunwen/clab-lab/data/edgefactors/records-dl360-pve-20261013.jsonl` 里
-`meta.expected_baseline_factors_source` 字段逐字记录了这条理由。
+差异条数 = 10 / 总条数 80
+  OT-005   asc=False root=True | asc: SELinux和AppArmor均未检测到      | root: AppArmor 已加载策略
+  KS-012   asc=False root=True | asc: LSM已加载(…)但无enforcing模块     | root: 活跃LSM: AppArmor(1 profiles)
+  KS-010   asc=False root=True | asc: 无法执行dmesg…                     | root: Secure Boot 已启用
+  AC-002   asc=True  root=False | asc: skipped — requires root privileges | root: 未发现远程备份配置
+  AS-004   asc=True  root=False | asc: iptables 不可用: permission denied  | root: INPUT链默认策略非DROP
+  AS-012   asc=True  root=False | asc: skipped — requires root privileges | root: 发现 3 个可疑幽灵账户
+  BC-006   asc=True  root=False | asc: skipped — requires root privileges | root: 未发现异地备份配置
+  OT-004   asc=True  root=False | asc: npm配置需 root 权限检查             | root: 未检测到pip/npm hash校验配置
+  OT-008   asc=True  root=False | asc: skipped — requires root privileges | root: 审计规则仅覆盖 0 个
+  OT-020   asc=True  root=False | asc: skipped — requires root privileges | root: auditd仅覆盖 0 个
+```
+
+⇒ **两个方向都有**：6 条在 `asc` 下被**跳过并算通过**、4 条（含 `OT-005`/`KS-012`/`KS-010`）
+在 `asc` 下**假失败**。**这不是"少算了"的单调偏差，而是双向失真。**
+
+**（乙）口径（**这才是正确的表述**）**：
+
+> **`pct exec`（CT 基质）在容器里天生以 root 执行，而 VM 基质 `ssh` 登录的是 cloud-init 建的 `asc`。**
+> ⇒ **那个常量 −30 是「取数权限」与「基质」耦合出来的伪影**：
+> 在 CT 上它因"天生 root"而**看不见**（真正的成因是 LXC 的内核面不可观测），
+> 在 VM 上它因"默认登录用户非 root"而**原样复现**（成因是权限）。
+> **对齐取数权限之后（root 等价）**：`OT-005` 与 `KS-012` **都通过**、**−30 消失**（那一对 `−15 + −15` 不再产生）。
+
+**⇒ 由此产生的硬口径（不是建议）**：
+
+1. **取数必须 root 等价**（`ssh … sudo -n env <nonce> /tmp/asscor-edgescen -emit-checks`）；
+2. **拿不到就响亮失败、绝不降级**（`sudo -n` 的 `-n` 让"拿不到权限"**当场失败**，而不是挂在口令提示上
+   —— 挂在提示上最糟：ssh 的 `BatchMode` 会把它变成一句语焉不详的 rc=1）；
+3. **不许用改判据语义的方式"修"它**（例如让 `internal/checks` 把"跳过"当成通过）——
+   那会把测量问题变成判据问题。**已知的口径缺陷（"跳过的检查算通过"）登记在册、不改**（见审计归档）。
+
+**（丙）由此产生的措辞禁令（**两条，都违过**）**：
+
+1. **不得**把"控制项显式拒绝而环境未报出该因子"描述成 **"系统被削弱了 30%"**（或任何等价的减法表述）。
+   那是**测量伪影**，不是安全态势的变化；把它当成态势变化，会让论文的核心结论退化成
+   **"因为观测不到所以更安全"** —— **方法论错误**。
+2. **不得再写"VM 基质上不存在 −30"** —— 那句话把**权限**与**基质**混在了一起，
+   而 Task 15 已经实测它在**现行 qemu 基质上原样复现**。
+   正确表述是：**「−30 由取数权限产生，在 CT 上被基质形态掩盖」**。
+
+**（丁）Task 13 里仍然成立的部分（**与权限无关**，一个字节都没删）**：
+
+- AppArmor **真能 enforce**（自写 profile 加载进内核表、`aa-status` 可见、`aa-exec … cat /etc/shadow` 被拦 rc=1）；
+- 装包**直接 `apt-get install` 就行**（`suricata` / `aide` / 三个 PAM 包全 rc=0），
+  CT 上那套"宿主下载闭包 + 送进去 + `dpkg --configure -a`"的绕法在 VM 上**完全不需要**；
+- `systemctl` / `auditd` **正常**（`systemctl is-system-running` = `running`；`auditctl -s` → `enabled 1`）；
+- SELinux **不可用**（Ubuntu 默认不装）——**与基质无关**，与 CT 处境相同。
+
+**（戊）机器证据（**可复核**）**：
+
+| 证据 | 位置 |
+|---|---|
+| CT 侧的声明理由（逐字） | `lunwen/clab-lab/data/edgefactors/records-dl360-pve-20261013.jsonl` 的 `meta.expected_baseline_factors_source` |
+| VM 侧的实测声明 | `lunwen/clab-lab/data/edgefactors/records-dl360-qemu-20261016.jsonl` 的 `meta.expected_baseline_factors` = `['EF-NO-IDS']` |
+| 取数权限的**建机期自检** | `edge_vm_provision.sh` 的 `guest_root_equivalence()`（每次建机实测 `login-uid` / `sudo-uid`，打不出那一行就是 NO-GO） |
+| 客人侧 argv 恰好 `[-emit-checks]` | `edge_vm_guest.sh` 的传输纪律 + `cmd/edgescen` 的 `rejectEmitChecksArgs`（nonce 若进参数位会被**拒绝**） |
+
+⚠️ **一条必须继承下去的边界**：**`OT-005`/`KS-012` 的 `passed` 值依赖取数权限**
+⇒ **同一个场景在两套基质上、或在不同取数权限下的"失败检查条数"不可直接比较**，
+而**基线活跃集必须按（基质 × 取数权限）这一对如实声明**。
 
 #### 5.4.2 第 9 条详述：`GOPROXY` 与模块镜像
 
@@ -608,7 +868,20 @@ git -C /opt/caldera log -1 --format='%h %ad %s' --date=short
 ps -eo pid,etime,cmd | grep server.py
 pct config 904
 pct exec 904 -- ip -br a
-bash lunwen/clab-lab/tests/test-edge-lab.sh      # H 段专测 pve 分支
+bash lunwen/clab-lab/tests/test-edge-lab.sh      # H 段专测 pve 分支、I 段专测 qemu 分支
+
+# ---- §5.3 VM 基质（v1.1 新增；建机/清机走唯一入口，不要手工 qm create/destroy）----
+bash lunwen/clab-lab/scripts/edge_vm_provision.sh              # 建机（幂等）
+bash lunwen/clab-lab/scripts/edge_vm_provision.sh --dry-run    # 只打印将要做什么
+bash lunwen/clab-lab/scripts/edge_vm_provision.sh --destroy    # ⚠️ 清机**必须**用它
+qm config 910                                    # 逐条读回配置（qm set 可能只落前几条）
+qm guest cmd 910 network-get-interfaces          # 客人 IP（网卡名是 ens18，不是 eth0）
+ssh -i /root/.ssh/asc-vm_ed25519 -l asc asc-vm910 'id -un; sudo -n id -u'   # 取数权限自检（期望 1000 / 0）
+ssh -i /root/.ssh/asc-vm_ed25519 -l asc asc-vm910 'ip -br a; ip route'      # 客人侧网络（默认网关**不得写死**）
+free -m                                          # 内存账（宿主 7795 MiB / CT 904 占 1024 MiB）
+grep -A2 'dir: asscor-vmseed' /etc/pve/storage.cfg
+pvesm list asscor-vmseed
+ssh-keygen -F asc-vm910 -f /root/.ssh/asscor-edge-vm_known_hosts  # 同名重建前查旧 host key
 
 # ---- §5 约束 ----
 go env GOPROXY GOSUMDB GOVERSION
@@ -623,17 +896,18 @@ bash lunwen/clab-lab/scripts/edge_prebatch_check.sh      # 需先按技术文档
 
 | 术语 | 含义 |
 |---|---|
-| **基质**（substrate） | 承载"被攻目标"的虚拟化环境抽象层（`docker` / `lxd` / `clab` / `pve`；规划中 `qemu`） |
-| **CT** | PVE 里的 LXC 容器（`pct` 管理） |
-| **VM** | PVE 里的 QEMU/KVM 虚拟机（`qm` 管理） |
+| **基质**（substrate） | 承载"被攻目标"的虚拟化环境抽象层：`docker` / `lxd` / `clab` / `pve`（CT）/ **`qemu`（VM，v1.1 起已落地）** |
+| **CT** | PVE 里的 LXC 容器（`pct` 管理）。**`pct exec` 天生以 root 执行** |
+| **VM** | PVE 里的 QEMU/KVM 虚拟机（`qm` 管理）。取数经 `ssh` + 客人侧 `sudo -n` ⇒ **root 等价** |
 | **C2** | 命令与控制服务端（本项目用 Caldera） |
 | **TTP** | 战术/技术与过程；在本项目里指"链上的一条具体能力执行" |
 | **link** | 边缘因子链条目（`edge_factor_chain` 的元素） |
-| **基线活跃集** | 在**当前基质**上事实活跃的边缘因子集合（**按基质如实声明**） |
-| **声明面** | 基线活跃集 ∪ 注入因子 |
-| **臂**（arm） | targeted 场景的两种策略状态：`POLICY_ON=0`（策略在）与 `=1`（策略在且生效） |
+| **基线活跃集** | 在**当前基质 × 当前取数权限**下事实活跃的边缘因子集合（**按实况如实声明**，**不许写死**） |
+| **声明面** | 基线活跃集 ∪ 注入集（协作闭包：与已声明因子**共用触发检查**的因子也要纳入） |
+| **取数权限等价**（root 等价） | "读的人"与 `pct exec` 同为 uid 0。**拿不到就响亮失败、绝不降级** |
+| **臂**（arm） | targeted 场景的两种策略状态：`POLICY_ON=0`（策略**不在**）与 `=1`（策略**在**） |
 | **重复轴** | 同一实例号在不同 `EDGEEXP_RUN_INDEX` 下的多次运行（用于检验可重复性） |
-| **三道门禁** | gate1（离线重算对比）、gate2（往返 round-trip）、gate3/记录条数与集合一致性 |
+| **三道门禁** | 门禁⓪（重复因子，只报不拦）、门禁①（离线重算对比）、门禁②（往返 round-trip）；另有记录条数与因子集相等断言 |
 
 ---
 
@@ -645,5 +919,7 @@ bash lunwen/clab-lab/scripts/edge_prebatch_check.sh      # 需先按技术文档
 | C2 的明文 API 口令 | 真凭据（§4.5） |
 | 各磁盘/整机的序列号 | 设备指纹，无技术必要性 |
 | MAC 地址 | 同上（且从容器/客机视角每次重建都可能变） |
-| VM 基质的实测性能值 | **尚未落地**，写了就是编造（§5.3） |
 | 管理 VLAN 内的具体地址（除网关与宿主） | 无技术必要性（§3.6） |
+
+> **v1.1 删掉的一行**：v1.0 的这张表里有「VM 基质的实测性能值 —— **尚未落地**，写了就是编造（§5.3）」。
+> VM 基质已经落地，实测值在 §5.3 里 —— 那一条**不再成立**，故删除。
