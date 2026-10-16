@@ -450,7 +450,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 | # | 项 | 处置 | 判据 |
 |---|---|---|---|
 | 1 | **`.gitignore` 的数据目录规则与"数据集应当入库"正面冲突**（Task 19 concern 1） | 选 **甲：显式白名单**。放行 `records-*.jsonl` 与 `run-<8 位日期>-<pid>.json` 两类**证据本体**；其余（`attack-*.json`、`run.d*/`、无批次号的 `run.json`/`run-smoke1.json`、`records-*-smoke*.jsonl`）**明文保持忽略** | `git ls-files` **1181 → 1181**（不减少）；`git status --ignored` **33 → 33**（同一批，无新增"本该跟踪"的文件）；合成的"新数据集文件"在 `git status --porcelain` 里**以 `??` 出现**（不静默消失）。口径写进操作手册 **§4.7** |
-| 2 | **`cmd/edgescen/nodecollect.go` 一处过期注释**（Task 19 concern 7）：写"对齐之后 `B = {}`" | 改成与 Task 17 实测一致的表述（**`B = {EF-NO-IDS}`**），并写明**为什么不是空集** | 同一错误说法**全仓只有这一处**：`git grep -n -e 'B = {}'` 改后 **0 命中**；本改动**只动注释**，`git diff --numstat` 为 `+N -0` 且**无行为改动** |
+| 2 | **`cmd/edgescen/nodecollect.go` 一处过期注释**（Task 19 concern 7）：写——“对齐之后 `B = {}`” | 改成与 Task 17 实测一致的表述（**`B = {EF-NO-IDS}`**），并写明**为什么不是空集**（`prepare` 装齐六控制 ⇒ `RS-007` 通过 ⇒ `EF-NO-SIEM` 不在链上；`RS-006` 失败 ⇒ `EF-NO-IDS` 在链上） | **同一错误说法全仓只有这一处**：`git grep -n -e 'B = {}' -- '*.go'` 改后 **0 命中**（rc=1）；全仓仅剩 **1 处** = 本表这一行对旧文本的**引用**（故意保留：不留就丢了“为什么会有那次误判”的教训）。本改动**只动注释**：`git diff --numstat` = **15 加 / 1 删**，且删掉的那一行只有一处、是注释行；`gofmt -l cmd/edgescen/nodecollect.go` **零输出**（rc=0） |
 | 3 | **「两臂同读数同分数、只差标签」这条 limitation 没有机器判据**（Task 19 concern 3） | 新增离线夹具 **`lunwen/clab-lab/tests/test-arm-limitation.sh`**（读**已入库**的 33 条数据集，断言标签随臂翻转 / 链因子序列相同 / `final_score` 相同），接进 `run-all.sh` 的 `ORDER`/`EXPECT` | 实测 **红 → 绿**：最小变异（改掉一条臂的 `final_score`）⇒ `FAIL=1` **rc≠0**；恢复 ⇒ `PASS=8 FAIL=0` **rc=0**。**守的是"这条 limitation 依然成立"这个事实** —— 一旦两臂分数真的分开，判据变红是**提示去更新文档**，不是叫你去改断言 |
 
 > **①②③ 都是 Task 19 明确登记、按纪律没做的事**（见 Task 19 报告 §6.3 的 concern 1/7/3）。
