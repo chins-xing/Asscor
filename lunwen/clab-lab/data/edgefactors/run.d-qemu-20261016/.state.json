@@ -1,0 +1,453 @@
+{
+  "run_id": "20261015-3482605",
+  "env": "t17-qemu",
+  "mode": "smoke",
+  "records_file": "/root/t6/t17-data/records-t17-qemu.jsonl",
+  "config": "/root/t6/t17-head/configs/edgeexp/m0-baseline.ini",
+  "started_at": "2026-10-15T23:27:51Z",
+  "start_s": 1792106871,
+  "observation_target": "asc-vm910",
+  "scenarios_selected": [
+    "S1-apparmor",
+    "S1-selinux",
+    "S2-2fa-selinux",
+    "S2-apparmor-no-ids",
+    "S2-selinux-apparmor",
+    "S2-selinux-no-ids",
+    "S2-selinux-no-siem",
+    "S3-3fa-selinux-apparmor",
+    "S3-selinux-apparmor-2fa",
+    "S3-selinux-no-siem-no-ids",
+    "S4-all",
+    "S0-baseline",
+    "S1-2fa",
+    "S1-no-ids",
+    "S1-no-siem",
+    "S1-syn-cookie",
+    "S2-no-siem-no-ids",
+    "S2-syn-cookie-no-ids",
+    "S2-syn-cookie-no-siem",
+    "S3-syn-cookie-no-siem-no-ids",
+    "S5-2fa-only",
+    "S5-cascade-3fa"
+  ],
+  "completed": [
+    "S1-selinux",
+    "S1-selinux-pon",
+    "S2-2fa-selinux",
+    "S2-2fa-selinux-pon",
+    "S2-apparmor-no-ids",
+    "S2-apparmor-no-ids-pon",
+    "S2-selinux-apparmor",
+    "S2-selinux-apparmor-pon",
+    "S2-selinux-no-ids",
+    "S2-selinux-no-ids-pon",
+    "S2-selinux-no-siem",
+    "S2-selinux-no-siem-pon",
+    "S3-3fa-selinux-apparmor",
+    "S3-3fa-selinux-apparmor-pon",
+    "S3-selinux-apparmor-2fa",
+    "S3-selinux-apparmor-2fa-pon",
+    "S3-selinux-no-siem-no-ids",
+    "S3-selinux-no-siem-no-ids-pon",
+    "S4-all",
+    "S4-all-pon",
+    "S0-baseline",
+    "S1-2fa",
+    "S1-no-ids",
+    "S1-no-siem",
+    "S1-syn-cookie",
+    "S2-no-siem-no-ids",
+    "S2-syn-cookie-no-ids",
+    "S2-syn-cookie-no-siem",
+    "S3-syn-cookie-no-siem-no-ids",
+    "S5-2fa-only",
+    "S5-cascade-3fa"
+  ],
+  "failed": null,
+  "instances": [
+    "S1-apparmor",
+    "S1-apparmor-pon",
+    "S1-selinux",
+    "S1-selinux-pon",
+    "S2-2fa-selinux",
+    "S2-2fa-selinux-pon",
+    "S2-apparmor-no-ids",
+    "S2-apparmor-no-ids-pon",
+    "S2-selinux-apparmor",
+    "S2-selinux-apparmor-pon",
+    "S2-selinux-no-ids",
+    "S2-selinux-no-ids-pon",
+    "S2-selinux-no-siem",
+    "S2-selinux-no-siem-pon",
+    "S3-3fa-selinux-apparmor",
+    "S3-3fa-selinux-apparmor-pon",
+    "S3-selinux-apparmor-2fa",
+    "S3-selinux-apparmor-2fa-pon",
+    "S3-selinux-no-siem-no-ids",
+    "S3-selinux-no-siem-no-ids-pon",
+    "S4-all",
+    "S4-all-pon",
+    "S0-baseline",
+    "S1-2fa",
+    "S1-no-ids",
+    "S1-no-siem",
+    "S1-syn-cookie",
+    "S2-no-siem-no-ids",
+    "S2-syn-cookie-no-ids",
+    "S2-syn-cookie-no-siem",
+    "S3-syn-cookie-no-siem-no-ids",
+    "S5-2fa-only",
+    "S5-cascade-3fa"
+  ],
+  "repeat": 1,
+  "skipped_resume": [
+    "S1-apparmor",
+    "S1-apparmor-pon"
+  ],
+  "conditions": {
+    "S1-selinux": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S1-selinux"
+    },
+    "S1-selinux-pon": {
+      "basis": "targeted_ttp",
+      "policy_on": 1,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S1-selinux"
+    },
+    "S2-2fa-selinux": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S2-2fa-selinux"
+    },
+    "S2-2fa-selinux-pon": {
+      "basis": "targeted_ttp",
+      "policy_on": 1,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S2-2fa-selinux"
+    },
+    "S2-apparmor-no-ids": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S2-apparmor-no-ids"
+    },
+    "S2-apparmor-no-ids-pon": {
+      "basis": "targeted_ttp",
+      "policy_on": 1,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S2-apparmor-no-ids"
+    },
+    "S2-selinux-apparmor": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S2-selinux-apparmor"
+    },
+    "S2-selinux-apparmor-pon": {
+      "basis": "targeted_ttp",
+      "policy_on": 1,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S2-selinux-apparmor"
+    },
+    "S2-selinux-no-ids": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S2-selinux-no-ids"
+    },
+    "S2-selinux-no-ids-pon": {
+      "basis": "targeted_ttp",
+      "policy_on": 1,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S2-selinux-no-ids"
+    },
+    "S2-selinux-no-siem": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S2-selinux-no-siem"
+    },
+    "S2-selinux-no-siem-pon": {
+      "basis": "targeted_ttp",
+      "policy_on": 1,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S2-selinux-no-siem"
+    },
+    "S3-3fa-selinux-apparmor": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S3-3fa-selinux-apparmor"
+    },
+    "S3-3fa-selinux-apparmor-pon": {
+      "basis": "targeted_ttp",
+      "policy_on": 1,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S3-3fa-selinux-apparmor"
+    },
+    "S3-selinux-apparmor-2fa": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S3-selinux-apparmor-2fa"
+    },
+    "S3-selinux-apparmor-2fa-pon": {
+      "basis": "targeted_ttp",
+      "policy_on": 1,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S3-selinux-apparmor-2fa"
+    },
+    "S3-selinux-no-siem-no-ids": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S3-selinux-no-siem-no-ids"
+    },
+    "S3-selinux-no-siem-no-ids-pon": {
+      "basis": "targeted_ttp",
+      "policy_on": 1,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S3-selinux-no-siem-no-ids"
+    },
+    "S4-all": {
+      "basis": "targeted_ttp",
+      "policy_on": 0,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S4-all"
+    },
+    "S4-all-pon": {
+      "basis": "targeted_ttp",
+      "policy_on": 1,
+      "target_ability": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "scenario": "S4-all"
+    },
+    "S0-baseline": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S0-baseline"
+    },
+    "S1-2fa": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-2fa"
+    },
+    "S1-no-ids": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-no-ids"
+    },
+    "S1-no-siem": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-no-siem"
+    },
+    "S1-syn-cookie": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-syn-cookie"
+    },
+    "S2-no-siem-no-ids": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S2-no-siem-no-ids"
+    },
+    "S2-syn-cookie-no-ids": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S2-syn-cookie-no-ids"
+    },
+    "S2-syn-cookie-no-siem": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S2-syn-cookie-no-siem"
+    },
+    "S3-syn-cookie-no-siem-no-ids": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S3-syn-cookie-no-siem-no-ids"
+    },
+    "S5-2fa-only": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S5-2fa-only"
+    },
+    "S5-cascade-3fa": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S5-cascade-3fa"
+    }
+  },
+  "progress": {
+    "S1-selinux": {
+      "reset": 32,
+      "attack": 135,
+      "collect": 4
+    },
+    "S1-selinux-pon": {
+      "reset": 34,
+      "attack": 136,
+      "collect": 4
+    },
+    "S2-2fa-selinux": {
+      "reset": 33,
+      "attack": 151,
+      "collect": 4
+    },
+    "S2-2fa-selinux-pon": {
+      "reset": 34,
+      "attack": 162,
+      "collect": 4
+    },
+    "S2-apparmor-no-ids": {
+      "reset": 33,
+      "attack": 163,
+      "collect": 4
+    },
+    "S2-apparmor-no-ids-pon": {
+      "reset": 33,
+      "attack": 132,
+      "collect": 4
+    },
+    "S2-selinux-apparmor": {
+      "reset": 33,
+      "attack": 128,
+      "collect": 4
+    },
+    "S2-selinux-apparmor-pon": {
+      "reset": 34,
+      "attack": 139,
+      "collect": 4
+    },
+    "S2-selinux-no-ids": {
+      "reset": 33,
+      "attack": 124,
+      "collect": 4
+    },
+    "S2-selinux-no-ids-pon": {
+      "reset": 34,
+      "attack": 134,
+      "collect": 4
+    },
+    "S2-selinux-no-siem": {
+      "reset": 33,
+      "attack": 139,
+      "collect": 4
+    },
+    "S2-selinux-no-siem-pon": {
+      "reset": 33,
+      "attack": 171,
+      "collect": 4
+    },
+    "S3-3fa-selinux-apparmor": {
+      "reset": 32,
+      "attack": 150,
+      "collect": 4
+    },
+    "S3-3fa-selinux-apparmor-pon": {
+      "reset": 33,
+      "attack": 140,
+      "collect": 4
+    },
+    "S3-selinux-apparmor-2fa": {
+      "reset": 32,
+      "attack": 151,
+      "collect": 4
+    },
+    "S3-selinux-apparmor-2fa-pon": {
+      "reset": 33,
+      "attack": 131,
+      "collect": 4
+    },
+    "S3-selinux-no-siem-no-ids": {
+      "reset": 33,
+      "attack": 157,
+      "collect": 4
+    },
+    "S3-selinux-no-siem-no-ids-pon": {
+      "reset": 34,
+      "attack": 157,
+      "collect": 4
+    },
+    "S4-all": {
+      "reset": 33,
+      "attack": 144,
+      "collect": 4
+    },
+    "S4-all-pon": {
+      "reset": 33,
+      "attack": 124,
+      "collect": 4
+    },
+    "S0-baseline": {
+      "reset": 19,
+      "attack": 1587,
+      "collect": 4
+    },
+    "S1-2fa": {
+      "reset": 18,
+      "attack": 1665,
+      "collect": 4
+    },
+    "S1-no-ids": {
+      "reset": 19,
+      "attack": 1613,
+      "collect": 4
+    },
+    "S1-no-siem": {
+      "reset": 19,
+      "attack": 1551,
+      "collect": 4
+    },
+    "S1-syn-cookie": {
+      "reset": 19,
+      "attack": 1675,
+      "collect": 4
+    },
+    "S2-no-siem-no-ids": {
+      "reset": 19,
+      "attack": 1694,
+      "collect": 4
+    },
+    "S2-syn-cookie-no-ids": {
+      "reset": 18,
+      "attack": 1652,
+      "collect": 4
+    },
+    "S2-syn-cookie-no-siem": {
+      "reset": 19,
+      "attack": 1565,
+      "collect": 4
+    },
+    "S3-syn-cookie-no-siem-no-ids": {
+      "reset": 18,
+      "attack": 1680,
+      "collect": 4
+    },
+    "S5-2fa-only": {
+      "reset": 18,
+      "attack": 1572,
+      "collect": 4
+    },
+    "S5-cascade-3fa": {
+      "reset": 17,
+      "attack": 1643,
+      "collect": 4
+    }
+  }
+}

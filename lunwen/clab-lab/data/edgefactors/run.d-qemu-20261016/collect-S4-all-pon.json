@@ -1,0 +1,263 @@
+{
+  "scenario": "S4-all",
+  "phase": "collect",
+  "env": "t17-qemu",
+  "run": 2,
+  "config": "m0-baseline.ini",
+  "config_path": "/root/t6/t17-head/configs/edgeexp/m0-baseline.ini",
+  "config_hash": "sha256:dd334cd724ba0c4c",
+  "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+  "hash_precision": {
+    "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+    "config_hash_full": "sha256[:64]",
+    "topology_hash": "sha256[:64]",
+    "playbook_hash": "sha256[:64]"
+  },
+  "records_file": "/root/t6/t17-data/records-t17-qemu.jsonl",
+  "records_before": 21,
+  "records_after": 22,
+  "record_added": 1,
+  "record_kept": true,
+  "rolled_back": false,
+  "elapsed_s": 4,
+  "scenario_id": "S4-all-02",
+  "factors": [
+    "EF-002FA",
+    "EF-APPARMOR",
+    "EF-NO-IDS",
+    "EF-NO-SIEM",
+    "EF-SELINUX",
+    "EF-SYNCOOKIE"
+  ],
+  "injection": "check_fail",
+  "chain_entries": 12,
+  "failed_checks": 47,
+  "final_score": 51.55,
+  "threshold": 80,
+  "acceptable": false,
+  "effective_weights": {
+    "attack_surface": 35,
+    "business_continuity": 25,
+    "kernel_security": 10,
+    "operation_trust": 25,
+    "resilience": 15
+  },
+  "spc_score": 1,
+  "threat_coeff": 1,
+  "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+  "ts_source": "链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 5 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）",
+  "collected_at": "2026-10-16T00:28:07Z",
+  "config_hash_match": {
+    "ok": true,
+    "record": "dd334cd724ba0c4c",
+    "expected": "dd334cd724ba0c4c",
+    "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+  },
+  "observation_subject": {
+    "target_declared": "asc-vm910",
+    "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+    "harness_probe_targets": [
+      "asc-vm910"
+    ],
+    "record_in_node": true,
+    "probes_expected": true,
+    "phases": 1,
+    "ok": true,
+    "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+  },
+  "real_missing_evidence": {
+    "real_missing": "",
+    "real_missing_verified_at": "",
+    "probe_count": 5,
+    "probes": [
+      {
+        "factor": "EF-002FA",
+        "check": "EF-001",
+        "condition_holds": false,
+        "phase": 1,
+        "real_missing": false,
+        "probe_target": "asc-vm910",
+        "probe_host": "asc-vm910"
+      },
+      {
+        "factor": "EF-SYNCOOKIE",
+        "check": "RS-005",
+        "condition_holds": false,
+        "phase": 1,
+        "real_missing": false,
+        "probe_target": "asc-vm910",
+        "probe_host": "asc-vm910"
+      },
+      {
+        "factor": "EF-SELINUX",
+        "check": "OT-005",
+        "condition_holds": true,
+        "phase": 1,
+        "real_missing": false,
+        "probe_target": "asc-vm910",
+        "probe_host": "asc-vm910"
+      },
+      {
+        "factor": "EF-NO-SIEM",
+        "check": "RS-007",
+        "condition_holds": false,
+        "phase": 1,
+        "real_missing": false,
+        "probe_target": "asc-vm910",
+        "probe_host": "asc-vm910"
+      },
+      {
+        "factor": "EF-NO-IDS",
+        "check": "RS-006",
+        "condition_holds": true,
+        "phase": 1,
+        "real_missing": false,
+        "probe_target": "asc-vm910",
+        "probe_host": "asc-vm910"
+      }
+    ],
+    "ok": true,
+    "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+  },
+  "attack_product": {
+    "path": "/root/t6/t17-data/edgefactors/attack-S4-all-pon.json",
+    "mtime": "2026-10-16T00:28:03Z",
+    "age_s": 0,
+    "started_at": "2026-10-16T00:26:39Z",
+    "finished_at": "2026-10-16T00:28:02Z",
+    "injections": 5,
+    "run_started_at": "2026-10-15T23:27:51Z",
+    "freshness": "mtime ≥ 本轮起始时刻"
+  },
+  "chain_factor_set_equality": {
+    "ok": true,
+    "declaration_face": "基线活跃集 ∪ 注入集",
+    "expected_injected": [
+      "EF-002FA",
+      "EF-APPARMOR",
+      "EF-NO-IDS",
+      "EF-NO-SIEM",
+      "EF-SELINUX",
+      "EF-SYNCOOKIE"
+    ],
+    "expected_baseline": [
+      "EF-NO-IDS"
+    ],
+    "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+    "expected": [
+      "EF-002FA",
+      "EF-APPARMOR",
+      "EF-NO-IDS",
+      "EF-NO-SIEM",
+      "EF-SELINUX",
+      "EF-SYNCOOKIE"
+    ],
+    "actual": [
+      "EF-002FA",
+      "EF-APPARMOR",
+      "EF-NO-IDS",
+      "EF-NO-SIEM",
+      "EF-SELINUX",
+      "EF-SYNCOOKIE"
+    ],
+    "missing": [],
+    "missing_injected": [],
+    "missing_baseline": [],
+    "extra": [],
+    "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+    "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+  },
+  "gate0_duplicate_factors": {
+    "chain_entries": 12,
+    "distinct_ids": 6,
+    "duplicate_entries": 6,
+    "duplicate_ids": {
+      "EF-002FA": 2,
+      "EF-APPARMOR": 2,
+      "EF-NO-IDS": 2,
+      "EF-NO-SIEM": 2,
+      "EF-SELINUX": 2,
+      "EF-SYNCOOKIE": 2
+    },
+    "verdict": "观察到重复条目: EF-002FA×2, EF-APPARMOR×2, EF-NO-IDS×2, EF-NO-SIEM×2, EF-SELINUX×2, EF-SYNCOOKIE×2",
+    "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+  },
+  "injection_vs_collection": {
+    "ok": true,
+    "status": "ok",
+    "collection_time": "2026-10-16T00:28:07Z",
+    "injection_count": 5,
+    "entries": [
+      {
+        "check": "EF-001",
+        "injected_at": "2026-10-16T00:26:03Z",
+        "injected_check_present": true,
+        "recorded_checks_ts": "2026-10-16T00:26:03Z",
+        "recorded_chain_ts": "2026-10-16T00:28:07Z",
+        "checks_ts_matches": true,
+        "before_collection": true
+      },
+      {
+        "check": "RS-005",
+        "injected_at": "2026-10-16T00:26:03Z",
+        "injected_check_present": true,
+        "recorded_checks_ts": "2026-10-16T00:26:03Z",
+        "recorded_chain_ts": "2026-10-16T00:28:07Z",
+        "checks_ts_matches": true,
+        "before_collection": true
+      },
+      {
+        "check": "OT-005",
+        "injected_at": "2026-10-16T00:26:03Z",
+        "injected_check_present": true,
+        "recorded_checks_ts": "2026-10-16T00:26:03Z",
+        "recorded_chain_ts": "2026-10-16T00:28:07Z",
+        "checks_ts_matches": true,
+        "before_collection": true
+      },
+      {
+        "check": "RS-007",
+        "injected_at": "2026-10-16T00:26:03Z",
+        "injected_check_present": true,
+        "recorded_checks_ts": "2026-10-16T00:26:03Z",
+        "recorded_chain_ts": "2026-10-16T00:28:07Z",
+        "checks_ts_matches": true,
+        "before_collection": true
+      },
+      {
+        "check": "RS-006",
+        "injected_at": "2026-10-16T00:26:03Z",
+        "injected_check_present": true,
+        "recorded_checks_ts": "2026-10-16T00:26:03Z",
+        "recorded_chain_ts": "2026-10-16T00:28:07Z",
+        "checks_ts_matches": true,
+        "before_collection": true
+      }
+    ],
+    "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+  },
+  "checks_ts_mismatch": [],
+  "injected_check_absent": [],
+  "gate2_round_trip": {
+    "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+    "recomputed": 51.55,
+    "recorded": 51.55,
+    "delta": 0.0,
+    "tolerance": 0.005,
+    "line": "round-trip: 复算 51.5500 − 记录 51.5500 = +0（容差 0.005）"
+  },
+  "ground_truth": {
+    "compromised": false,
+    "time_to_compromise_s": 46,
+    "ttps_achieved": 1,
+    "nodes_affected": 1,
+    "block_effective": true,
+    "basis": "targeted_ttp",
+    "target_ability": {
+      "id": "a5c0ffee-0000-4000-8000-0000000003b1",
+      "name": "T4D Step 3B: read /etc/shadow (AppArmor target TTP)"
+    }
+  },
+  "ef3fa_on_chain": false,
+  "ef3fa_note": "链上没有 EF-3FA"
+}

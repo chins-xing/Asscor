@@ -1,0 +1,14 @@
+{
+  "scenario": "S1-syn-cookie",
+  "phase": "reset",
+  "env": "t17-qemu",
+  "substrate": "qemu",
+  "started_at": "2026-10-16T02:16:35Z",
+  "finished_at": "2026-10-16T02:16:54Z",
+  "elapsed_s": 19,
+  "instance": "asc-vm910",
+  "policy_on": "1",
+  "policy_rule": "audit deny /etc/shadow r,",
+  "timings_s": {"caldera": 0, "prepare": 18},
+  "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+}
