@@ -79,6 +79,13 @@ type Metrics struct {
 // 因子 ID 一并做**消费侧**归一（唯一实现：`internal/edgefactor.NormalizeFactorID`）：
 // 合成层的 Vectors / Factors / Coupling 三处查表都以规范大写键进行，不归一会查表落空并
 // 静默回落到"全强度"默认向量。
+//
+// **返回前折叠到因子粒度**（Task 18，规则见 `edgefactor.CollapseToFactors`）：配置的双条目
+// 形态让同一个逻辑因子在链上出现两条，而合成层的参数空间只按因子 ID 建键。
+// 这里折叠还有一条独立理由 —— **消灭评分侧与拟合侧的口径分叉**：`fit.go:design()` 用
+// `eff[a.FactorID] = a.EffectiveFactor` 建 map，那是一次**未文档化的 last-wins 折叠**
+// （真机上 `EF-002FA` 会取到 custom 的 0.85），而评分侧（`Synthesize`）此前**完全不折叠**。
+// 同一份记录在两条路径上口径不同，是比"多计一次"更难发现的一类缺陷。
 func activationsOf(rec Record) []edgefactor.FactorActivation {
 	out := make([]edgefactor.FactorActivation, 0, len(rec.Observed.EdgeFactorChain))
 	for _, c := range rec.Observed.EdgeFactorChain {
@@ -91,7 +98,7 @@ func activationsOf(rec Record) []edgefactor.FactorActivation {
 			TS:              ts,
 		})
 	}
-	return out
+	return edgefactor.CollapseToFactors(out)
 }
 
 // modelActivations 在 activationsOf 之上丢弃**候选模型未建模**的因子。

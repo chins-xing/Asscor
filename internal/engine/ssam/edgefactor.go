@@ -243,6 +243,13 @@ func ActivationFromResult(r EdgeFactorResult, triggerCheck string) (edgefactor.F
 //     因子凭空产生比配置更强的惩罚。这里直接丢弃。
 //
 // Vectors 的查表在 Synthesize 内部进行，用的是同一个归一 ID，与这里的 Factors 查表口径一致。
+//
+// **返回前必须折叠到因子粒度**（Task 18，真机根因见 `edgefactor.CollapseToFactors`）：
+// 配置的双条目形态（`[edge_factors]` 大写 + `[edge_factors.custom]` 小写）会让**同一个逻辑
+// 因子**产出两条 `EdgeFactorResult`，而合成层的参数空间（`Factors` / `Vectors` / `Coupling`）
+// 只按因子 ID 建键 ⇒ 不折叠就等于把 `a_i` 加两次（实测主效应 ×2、耦合项 ×4）。
+// 折叠**只在这里**发生：链、配置、`ConfigToEdgeFactors` 与 legacy 的逐条目相乘路径
+// **一律不动**（前者是读取层契约，后者是 P4 载荷）。
 func activationsFromResults(p edgefactor.Params, results []EdgeFactorResult) []edgefactor.FactorActivation {
 	activations := make([]edgefactor.FactorActivation, 0, len(results))
 	for _, r := range results {
@@ -257,7 +264,7 @@ func activationsFromResults(p edgefactor.Params, results []EdgeFactorResult) []e
 		act.FactorID = id
 		activations = append(activations, act)
 	}
-	return activations
+	return edgefactor.CollapseToFactors(activations)
 }
 
 // synthesizePlan 是装配期为评分期算好的合成计划：**一致裁剪**后的参数集 + 请求域。

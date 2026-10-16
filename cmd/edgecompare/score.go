@@ -322,7 +322,13 @@ func installEngineHooks(p edgefactor.Params, plan synthesizePlan, results []ssam
 //   - ID 归一后再查 `p.Factors`，查不到即丢弃；
 //   - `EffectiveFactor(r.Factor, r.TriggerConfidence)` —— 对**已衰减一次**的观测值再衰减一次，
 //     合计 `1−(1−f)·c²`（spec §10.2 记录的既有口径，本工具复用而不修正）；
-//   - `TriggerCheck` 仅用于溯源，`Synthesize` 不消费，故不填。
+//   - `TriggerCheck` 仅用于溯源，`Synthesize` 不消费，故不填；
+//   - **返回前折叠到因子粒度**（Task 18，规则见 `edgefactor.CollapseToFactors`）：配置的双条目
+//     形态（内置大写 + custom 小写）会让同一个逻辑因子在链上出现两条，而合成层的参数空间
+//     （`Factors` / `Vectors` / `Coupling`）只按因子 ID 建键 ⇒ 不折叠就等于把 `a_i` 加两次
+//     （实测主效应 ×2、耦合项 ×4）。与在线 `ssam.activationsFromResults` **同一处实现**。
+//     折叠**只在这里**发生 —— `engineEdgeFactors` 产出的列表**不得**去重：legacy（M0）候选
+//     正是逐条目相乘（与在线引擎逐位一致，P4）。
 func activationsFromResults(p edgefactor.Params, results []ssam.EdgeFactorResult,
 	ts map[string]time.Time) []edgefactor.FactorActivation {
 
@@ -342,7 +348,7 @@ func activationsFromResults(p edgefactor.Params, results []ssam.EdgeFactorResult
 			TS:              ts[id],
 		})
 	}
-	return out
+	return edgefactor.CollapseToFactors(out)
 }
 
 // engineDomainScores 把观测域分装成 `SSAMV20Formula` 的域分切片。
