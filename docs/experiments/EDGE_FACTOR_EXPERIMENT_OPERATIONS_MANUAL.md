@@ -588,6 +588,15 @@ ALL-IDENTICAL-EXCEPT-LABEL: 11 / 11
   `(2,)×2 / (2,2)×6 / (2,2,2)×12 / (2,2,2,2)×8 / (2,2,2,2,2,2)×2 / (1,1,2,2,2)×2 / (1,2,2)×1`
   ⇒ **「每个因子恰好出现两次」只是这批矩阵的观测、不是不变量**（33 条里 **3 条**含 `n_i = 1`）。
 
+**★ 只靠仓库就能自证的三件事**（不需要宿主机、不需要 `.superpowers/`，
+判据全在 `run.d-qemu-20261016/` 的碎片里 —— **这就是为什么 harness 产物不入库也不影响复核**）：
+
+| 要自证什么 | 看哪个字段 | 本批实测 |
+|---|---|---|
+| **探针与观测在同一台机器上**（"这次真的是在 VM 里跑的"） | `collect-*.json` 的 `observation_subject`：`target_declared` / `record_observation_target` / `harness_probe_targets` / `ok` | **30/31** 个碎片的 `harness_probe_targets == ["asc-vm910"]` 且 `ok=true`（第 31 个是 `S0-baseline`，它的 `probes_expected=false` ⇒ 探针列表本来就该是空的） |
+| **每条记录都通过了进程内往返自检**（记录与复算一致） | `collect-*.json` 的 `gate2_round_trip.delta` | **31/31** 全部 `delta == 0`（容差 0.005） |
+| **当轮门禁①/② 是绿的**（不是 `null`/`skipped`） | `gate-gate1.json` / `gate-gate2.json` 的 `exit_code` | 两条**都是 `0`**，`records: 33`，`dataset: all-records` |
+
 **离线复算（分钟级，不需要 VM/CT/Caldera）**：
 
 ```bash
@@ -938,6 +947,31 @@ operation 会**同时**打在两台机器上，而 `compromised` 只看"目标 a
 **同族的第四条（环境相关）**：本机 Git Bash 设了 `POSIXLY_CORRECT` ⇒ **`grep -E` 退回 BRE 语义**，
 `+` / `?` 变成**字面量**（实测：`grep -E 'ssh (-o [^ ]+ )+-- …'` 对**完全匹配**的行报 NOMATCH）。
 **Linux（宿主/CI）没有这个变量 ⇒ 同一份夹具在两边行为不同。**
+
+### 6.19 ⚠️ 别把 C2 地址指到一台「什么请求都回 200」的假服务
+
+本项目历史上真的出现过这一幕：为了做**脱敏回归判据**（"未设 key 时脚本必须 `rc=2` 且 C2 收到 **0** 个请求"），
+现场起过一台**伪 C2**（一个只回 `200` + `[]` 的小脚本），而它**比真 C2 先起来**
+⇒ 后来有人改 **env** 或手工导出时把 `EDGEEXP_CALDERA_URL` **指到了它**。
+
+**它不会让跑批静默跑错**（agent 表恒为**空** ⇒ `edge_attack.sh` 会在"Caldera 里一条 agent 都没有"处**响亮失败**），
+但它会让**复位步骤的 `ensure_caldera` 通过**这件事变成**假绿** —— 而那一格正是"环境对不对"的自证。
+
+**三个判据（任一条命中就要怀疑地址给错了）**：
+
+```bash
+# ① 带不带 KEY 都 200 ⇒ 它根本不是真 C2（真 C2 不带 KEY 在 CT/客人侧回 401）
+curl -s -o /dev/null -w '%{http_code}\n' -H "KEY: $EDGEEXP_CALDERA_KEY" "$EDGEEXP_CALDERA_URL/api/v2/abilities"
+curl -s -o /dev/null -w '%{http_code}\n' "$EDGEEXP_CALDERA_URL/api/v2/abilities"
+# ② agent 表恒空（连历史残留都没有）
+curl -s -H "KEY: $EDGEEXP_CALDERA_KEY" "$EDGEEXP_CALDERA_URL/api/v2/agents"
+# ③ 监听地址对不对（真 C2 绑在**宿主**的管理 VLAN 地址上，不是 127.0.0.1）
+ss -ltnp | grep ':8888'
+```
+
+**处置**：把地址改回**真 C2**（`edge_c2_key.sh` 是取值的唯一入口），
+并**把假服务停掉** —— 留着它只会让"下一次有人改错"这件事继续可能发生
+（脚本本身可以留在磁盘上，重建是一条命令）。
 
 ---
 
