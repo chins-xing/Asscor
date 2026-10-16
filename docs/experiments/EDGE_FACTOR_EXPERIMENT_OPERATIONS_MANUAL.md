@@ -616,6 +616,60 @@ echo "rc=$?"
 > （`internal/edgefactor.CollapseToFactors`，取**最强观测惩罚**）。判据：**`legacy` 列逐位不变**
 > （链上的重复对 legacy 是**载荷**，`ConfigToEdgeFactors` 不许去重），**只有 V/G/C 逐条数值上升**。
 
+### 4.7 ★ **数据集怎么入库**（`.gitignore` 白名单；Task 20 规范化）
+
+**规则在哪**：根 `.gitignore` 的 `lunwen/clab-lab/data/*` 块里，紧跟在
+`!lunwen/clab-lab/data/experiments-final/` 之后。
+
+**它放行两类"证据本体"**（其余在这个目录里仍然忽略）：
+
+| 放行 | 是什么 |
+|---|---|
+| `lunwen/clab-lab/data/edgefactors/records-*.jsonl` | 每批实验的**记录集本体**（论文数据点，逐条可复核） |
+| `lunwen/clab-lab/data/edgefactors/run-<8 位日期>-<pid>.json` | 那一批的 **run 元数据**（口径/参数/门禁/耗时/条数断言） |
+
+**新增一批数据时的正确姿势**：
+
+```bash
+cp <新数据集> lunwen/clab-lab/data/edgefactors/records-dl360-<基质>-<YYYYMMDD>.jsonl
+git status --porcelain          # 必须**看得见**这两条 `??`（看不见就是被规则吃掉了，停下来查规则）
+git add lunwen/clab-lab/data/edgefactors/records-<…>.jsonl \
+        lunwen/clab-lab/data/edgefactors/run-<YYYYMMDD>-<pid>.json
+```
+
+> ✅ **不再需要 `git add -f`。** Task 19（`fa48ed8`）那 69 个文件是**规则化之前**的做法，
+> 保留在历史上不动；从 Task 20 起，数据集靠**规则**入库。
+
+**为什么要把惯例写进规则（而不是继续靠 `-f`）**：这两条曾经**同时成立** ——
+ignore 规则说"不该入库"，而 146 个已跟踪文件说"该入库"。实测代价就在这个目录里：
+
+```bash
+git ls-files lunwen/clab-lab/data | wc -l                    # 146（进了库的）
+git status --ignored --porcelain lunwen/clab-lab/data | wc -l #  33（在场却没进库的）
+```
+
+那 33 个里有 **19 个是"同类兄弟已经入库、这几个没入"的半跟踪态**：3 个 `attack-*.json`
+（另有 12 个已入库）、3 份 `records-wsl-clab-14-20260912-smoke*.jsonl`、13 个
+`run.d/` 碎片（同类碎片在 `run.d-qemu-20261016/` 里已入库）。
+⇒ **"要不要入库"取决于当班执行者记不记得加 `-f`** —— 证据的可得性不能取决于人的记性。
+
+**刻意保持忽略的**（都不构成"论文数据点"，见 `.gitignore` 里的逐条理由）：
+`attack-*.json`（harness 原始产物，**与旧批次同名**，平铺即静默覆盖）、`run.d*/`（现场碎片，
+每轮被 `edge_matrix.sh` 清掉）、`run.json` / `run-smoke1.json`（无批次号的临时件）、
+`records-wsl-clab-14-20260912-smoke*.jsonl`（一次性 WSL 试跑，一份还是 0 字节占位）。
+
+**三层复核（改完/新增后各跑一次，逐条可判真假）**：
+
+```bash
+git ls-files | wc -l                                      # 不得减少（白名单被误杀的第一个信号）
+git status --porcelain                                    # 新数据集必须是 `??`，不是"看不见"
+git check-ignore -q lunwen/clab-lab/data/edgefactors/records-<新>.jsonl   # rc=1 ⇒ 没被忽略
+```
+
+> ⚠️ **历史事故形态**：本项目曾因 `lunwen*/` 这类**整目录**排除规则把白名单**整体杀死**
+> （`!` 无法穿透被排除的父目录）⇒ 新文件**静默不被跟踪**。所以规则里的顺序是硬要求：
+> **先** negate `edgefactors/` 目录本身，**再** negate 目录里的文件（见 `.gitignore` 里的注释）。
+
 ---
 
 ## 5. 三道门禁与"基线活跃集"口径

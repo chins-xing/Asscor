@@ -64,6 +64,36 @@ lunwen/attachment/paper/
 !lunwen/clab-lab/data/
 lunwen/clab-lab/data/*
 !lunwen/clab-lab/data/experiments-final/
+#
+# ── 2026-10-16（Task 20）：**实验数据集是证据，必须入库** ───────────────────
+# 起因：上面那条 `lunwen/clab-lab/data/*` 与“数据集应当入库”这条惯例**正面冲突** ——
+# 数据集此前只能靠 `git add -f` 进库（Task 19 的 `fa48ed8` 就是 69 个文件全用 `-f`），
+# 于是“要不要入库”取决于**当班执行者记不记得加 `-f`**。实测代价（就在本目录里）：
+#   `git ls-files lunwen/clab-lab/data | wc -l`                    → 146（进了库的）
+#   `git status --ignored --porcelain lunwen/clab-lab/data | wc -l` →  33（在场却没进库的）
+#   其中 3 个 `attack-*.json` / 13 个 `run.d/` 碎片 / 3 份 `records-*-smoke*.jsonl`
+#   都有**已入库的同类兄弟**（如 12 个 `attack-*.json` 已入库）⇒ 半跟踪态。
+# **证据的可得性不能取决于人的记性**，所以把这条惯例从“命令行动作”变成“写的规则”。
+#
+# 放行**两类证据本体**（其余仍按原样忽略）：
+#   · `records-*.jsonl`           —— 每批实验的**记录集本体**（论文数据点，逐条可复核）
+#   · `run-<8 位日期>-<pid>.json` —— 那一批的 **run 元数据**（口径/参数/门禁/耗时）
+# 刻意**保持忽略**的（都不构成“论文数据点”）：
+#   · `attack-*.json`  harness 原始产物 —— 与旧批次**同名**，平铺进同一目录会静默覆盖旧证据；
+#   · `run.d*/`        现场碎片（每轮被 `edge_matrix.sh` 清掉）；
+#   · `run.json` / `run-smoke1.json` —— 无批次号的临时件；
+#   · `records-wsl-clab-14-20260912-smoke*.jsonl` —— 2026-09-12 的一次性 WSL 试跑
+#     （其中一份还是 0 字节占位），**不是**论文数据点。
+# ⚠️ 顺序不能反：git 的 `!` **无法穿透被排除的父目录**（教训见上面 49-50 行与 86-92 行）
+#    ⇒ 必须**先** negate `edgefactors/` 这个目录本身，**再** negate 目录里的文件。
+# ⚠️ 放行后新增的数据集文件会**直接以未跟踪出现**（不再静默消失）。复核：
+#      git status --porcelain            # 新数据集必须是 `??`，不是“看不见”
+#      git check-ignore -v <路径>        # 未命中任何规则 ⇒ rc=1（这才是“会被跟踪”）
+!lunwen/clab-lab/data/edgefactors/
+lunwen/clab-lab/data/edgefactors/*
+!lunwen/clab-lab/data/edgefactors/records-*.jsonl
+lunwen/clab-lab/data/edgefactors/records-wsl-clab-14-20260912-smoke*.jsonl
+!lunwen/clab-lab/data/edgefactors/run-[0-9]*.json
 # Containerlab 的**生成目录**（destroy/deploy 时重建）：含 `.state.clab.yaml`、
 # `topology-data.json`、ansible/nornir 清单，以及 `.tls/ca/ca.key`（**CA 私钥**）
 # ⇒ 一律不入库。此前它"看不见"只是因为白名单被下方整目录规则误杀；

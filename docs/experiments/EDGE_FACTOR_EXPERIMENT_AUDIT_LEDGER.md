@@ -444,3 +444,14 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 | **审计归档（本文）** | **B.3 口径修正**（−30 的成因）+ **B.3.1 链重复的判词与产物规则**；**B.5 新增四条**（33 而非 36 / `aa-exec` 的基质相关实现 / **两臂同读数同分数只差标签的 limitation**）；C.1 落地状态改"已落地"、C.2 新增迁移行 ④ 与"④ 内部的口径修正"、C.3 新增 qemu 纪律 5 条；**新增本 Part H** |
 | **设计文档** | Task 16/18 已改过（10.4 / 10.4B / 10.2）；Task 19 **只复核补齐**并清掉"当时状态"的表述 —— 见 Task 19 报告 §3 |
 
+
+## H.5 收口尾巴的三条（Task 20，2026-10-16）
+
+| # | 项 | 处置 | 判据 |
+|---|---|---|---|
+| 1 | **`.gitignore` 的数据目录规则与"数据集应当入库"正面冲突**（Task 19 concern 1） | 选 **甲：显式白名单**。放行 `records-*.jsonl` 与 `run-<8 位日期>-<pid>.json` 两类**证据本体**；其余（`attack-*.json`、`run.d*/`、无批次号的 `run.json`/`run-smoke1.json`、`records-*-smoke*.jsonl`）**明文保持忽略** | `git ls-files` **1181 → 1181**（不减少）；`git status --ignored` **33 → 33**（同一批，无新增"本该跟踪"的文件）；合成的"新数据集文件"在 `git status --porcelain` 里**以 `??` 出现**（不静默消失）。口径写进操作手册 **§4.7** |
+| 2 | **`cmd/edgescen/nodecollect.go` 一处过期注释**（Task 19 concern 7）：写"对齐之后 `B = {}`" | 改成与 Task 17 实测一致的表述（**`B = {EF-NO-IDS}`**），并写明**为什么不是空集** | 同一错误说法**全仓只有这一处**：`git grep -n -e 'B = {}'` 改后 **0 命中**；本改动**只动注释**，`git diff --numstat` 为 `+N -0` 且**无行为改动** |
+| 3 | **「两臂同读数同分数、只差标签」这条 limitation 没有机器判据**（Task 19 concern 3） | 新增离线夹具 **`lunwen/clab-lab/tests/test-arm-limitation.sh`**（读**已入库**的 33 条数据集，断言标签随臂翻转 / 链因子序列相同 / `final_score` 相同），接进 `run-all.sh` 的 `ORDER`/`EXPECT` | 实测 **红 → 绿**：最小变异（改掉一条臂的 `final_score`）⇒ `FAIL=1` **rc≠0**；恢复 ⇒ `PASS=8 FAIL=0` **rc=0**。**守的是"这条 limitation 依然成立"这个事实** —— 一旦两臂分数真的分开，判据变红是**提示去更新文档**，不是叫你去改断言 |
+
+> **①②③ 都是 Task 19 明确登记、按纪律没做的事**（见 Task 19 报告 §6.3 的 concern 1/7/3）。
+> 全套原始输出与未跑清单在 `.superpowers/sdd/2026-09-12-edge-factor-coupling-milestone-b/task-20-final-cleanup-report.md`。
