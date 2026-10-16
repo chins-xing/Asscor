@@ -1543,6 +1543,9 @@ CT = 快速验证 / 轻量 / 临时；VM = 长线 / 中重型 / 重要任务。
    `edge_factor_chain`（因子/触发检查/c_trigger/effective_factor）、`checks[]`、`domain_scores`、
    `final_score` 上**逐项相同**，**唯一不同的是 ground truth 标签**（`compromised`/`block_effective`
    互为反面）。⇒ **这条 limitation 换基质后依然成立，论文里不许撤**（见 §10.4B 结论四与本条）。
+   **机器判据（Task 20 Step 3）**：`lunwen/clab-lab/tests/test-arm-limitation.sh` —— 9 条断言直接读已入库的
+   33 条数据集（标签随臂翻转 / 去重后链序列相同 / `final_score` 相同 + 3 条加固），已接进 `run-all.sh`。
+   **它变红 = 提示去更新文档**（limitation 不再成立 ⇒ 论点要重写），不是叫你把断言放松。
 3. **附录 D 的"场景 × 可达因子普查表"** —— 表的**基质标注是 PVE CT**；`OT-005`/`KS-012` 两行的可达性
    在 VM 基质上**按结论四已变**（**前提是取数权限已对齐**）⇒ ✅ **已测出 VM 的实际取值**：
    `OT-005`/`KS-012` **通过**、`RS-006` **失败**、`RS-007` **通过** ⇒ **VM 上的 `B = {EF-NO-IDS}`**。

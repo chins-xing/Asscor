@@ -5,11 +5,15 @@
 （Task 4D Fix round 2 复审的 N-1）。现在它们在仓内可跟踪位置，并有统一入口。
 
 ```bash
-bash lunwen/clab-lab/tests/run-all.sh          # 全部 5 组
+bash lunwen/clab-lab/tests/run-all.sh          # 全部 7 组
 bash lunwen/clab-lab/tests/run-all.sh edge-lab # 只跑一组（名字取文件名去掉 .sh）
 ```
 
 **期望通过数**（任何一条不到就是回归；`run-all.sh` 会逐组比对）：
+
+> ⚠️ **权威值是 `run-all.sh` 里的 `EXPECT`**（目录里那句 `run-all: 全部通过（7 组：6/83/20/31/8/12/9）`
+> 与它同源）。下表里 `test-agent-readiness` / `test-edge-lab` 两行的数字是**它们各自引入时**的，
+> **后来被加格过、没有回填** —— 以 `EXPECT` 为准（这是 Task 20 复核时发现的历史遗留，**未在本任务里回填**）。
 
 | 夹具 | 通过数 | 钉住什么 |
 |---|---|---|
@@ -18,6 +22,7 @@ bash lunwen/clab-lab/tests/run-all.sh edge-lab # 只跑一组（名字取文件�
 | `test-edge-probe.sh` | **20** | 条件探针：六因子的探针判据体、探针根配错 ⇒ rc=2（不得产出"看似有效的结论"） |
 | `lab-diff.sh` | **31** | 基质抽象的**真基线**差分：`git archive <base>` 取抽象前的整棵树，两侧跑同一份假 CLI（clab/docker/curl），比较调用序列 / stdout / stderr / 退出码 / 产物 |
 | `test-chain-derivation.sh` | **8** | L2 标签口径：从 `edge_attack.sh` **抽出**判据块，用 Step 3B 两条真实 chain 跑（策略在 ⇒ `compromised=false`；旧口径在同一条链上给 `true`；`-3` 不算被拦住；缺少目标 link ⇒ 响亮失败） |
+| `test-arm-limitation.sh` | **9** | **两臂 limitation 的机器判据**（Task 20）：读**已入库的 33 条真实数据集**（`data/edgefactors/records-dl360-qemu-20261016.jsonl`），断言 ① **标签随臂翻转**（`meta.policy_on=0` ⇒ `compromised=true`、`=1` ⇒ `false`；11 个场景 × 2 臂 = 22 条）② **链因子序列（去重后）两臂相同** ③ **两臂 `final_score` 相同**；另加 3 格加固（**原始链条目序列**也相同 / 整个 `observed` 除 `ts` 外逐项相同 / 默认数据集 sha256 指纹）。**它守的是「这条 limitation 依然成立」这个事实** —— 将来有人让两臂分数真的分开时它**必须红**，那是提示去**更新文档**，不是叫你把断言放松。`T20_ARM_RECORDS=<路径>` 可换数据源（用于"最小变异 ⇒ 必须变红"的演示，用了会在输出里大声声明） |
 
 **纪律**：全部**只读、离线** —— 不碰 clab / LXD / 容器 / Caldera，不写仓库（临时目录在 `$HOME` 或 `/tmp`）。
 `lab-diff.sh` 需要一个 git 仓库（它用 `git archive` 取真基线）；默认 `base = 97581d8`，

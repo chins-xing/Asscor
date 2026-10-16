@@ -4,16 +4,17 @@
 # ============================================================================
 #
 # 用法（仓库根或任意位置都行；脚本按**自身位置**解析仓库根）：
-#   bash lunwen/clab-lab/tests/run-all.sh            # 跑全部 6 组夹具
+#   bash lunwen/clab-lab/tests/run-all.sh            # 跑全部 7 组夹具
 #   bash lunwen/clab-lab/tests/run-all.sh edge-lab   # 只跑其中一组
 #
 # 为什么要有这个入口（复审 N-1：判据此前全在 `build/`，而 `build/` 被 `.gitignore` 整个忽略 ⇒
 # **克隆者拿不到这些判据**，回归能力只存在于开发机上）：
-#   · 6 组夹具现在都在 `lunwen/clab-lab/tests/`（仓内可跟踪）——
+#   · 7 组夹具现在都在 `lunwen/clab-lab/tests/`（仓内可跟踪）——
 #     设计夹具（`lab-diff.sh` 的真基线差分）、基质层（`test-edge-lab.sh`）、
 #     条件探针（`test-edge-probe.sh`）、chain 派生（`test-chain-derivation.sh`）、
 #     agent 就绪判据（`test-agent-readiness.sh`）、矩阵层条件分类
-#     （`test-matrix-classification.sh`：Task 8 复审那颗"尾随空格翻转 basis"的雷的钉子）；
+#     （`test-matrix-classification.sh`：Task 8 复审那颗"尾随空格翻转 basis"的雷的钉子）、
+#     两臂 limitation 判据（`test-arm-limitation.sh`：Task 20，读**已入库的数据集**）；
 #   · 每组都**只读、离线**：不碰 clab / LXD / 容器 / Caldera，不写仓库（临时目录在 $HOME 或 /tmp）。
 #
 # 期望的通过数（复审 7.6 第 3 条的判据，**任何一条不到就是回归**）：
@@ -52,6 +53,14 @@
 #                                 Task 14 在**现在的 12 格版**上复测：缺陷版 **PASS=3 FAIL=9**（rc=1）、
 #                                 修好版 **PASS=12 FAIL=0** —— 尾随空白把 `R-no-siem` 整行打翻：
 #                                 它被判成 `recon_playbook`、分布塌成 0/25、臂与重复轴跟着一起塌）
+#   test-arm-limitation      9（Task 20：**「两臂同读数同分数、只差标签」这条 limitation 的机器判据** ——
+#                                 读**已入库**的 33 条数据集，断言：标签随臂翻转（policy_on=0 ⇒ True /
+#                                 =1 ⇒ False，11 场景 × 2 臂 = 22 条）/ 链因子序列（去重后）相同 /
+#                                 `final_score` 相同；另加 3 格加固：原始链**条目**序列也相同、
+#                                 整个 `observed` 除 `ts` 外逐项相同、默认数据集 sha256 指纹。
+#                                 它守的是「**limitation 依然成立**」这个**事实** —— 将来有人让两臂
+#                                 分数真的分开时它**必须红**，那是提示去**更新文档**，
+#                                 不是叫你把断言放松）
 #   test-agent-readiness    见上（Task 10 的 pid 复用/paw 归属三格）
 set -uo pipefail
 
@@ -66,8 +75,9 @@ declare -A EXPECT=(
   [lab-diff]=31
   [test-chain-derivation]=8
   [test-matrix-classification]=12
+  [test-arm-limitation]=9
 )
-ORDER=(test-agent-readiness test-edge-lab test-edge-probe lab-diff test-chain-derivation test-matrix-classification)
+ORDER=(test-agent-readiness test-edge-lab test-edge-probe lab-diff test-chain-derivation test-matrix-classification test-arm-limitation)
 
 WANT=("$@")
 TOTAL_FAIL=0
@@ -102,7 +112,7 @@ done
 
 echo
 if [ "$TOTAL_FAIL" -eq 0 ]; then
-  echo "run-all: 全部通过（6 组：6/83/20/31/8/12）"
+  echo "run-all: 全部通过（7 组：6/83/20/31/8/12/9）"
   exit 0
 fi
 echo "run-all: $TOTAL_FAIL 组未达标 —— 见上面的尾部输出" >&2
