@@ -441,6 +441,110 @@ records_extra_in_file        = max(0, 文件行数 - 实例数 × 重复号)
 record_counts_ok             = (文件行数 == 实例数 × 重复号)
 ```
 
+### 3.4 重复轴（`REPEAT>1`）怎么跑：驱动 `edge_repeat.sh` 与**口径定案**
+
+**一句话**：重复轴由 `lunwen/clab-lab/scripts/edge_repeat.sh` 驱动；**同一段批次的 N 遍写进
+同一份记录文件**（§3.3 的 `record_counts_ok` 就是按这个形态定义的），逐轮只隔离
+`meta.env`（`<base>-r<k>`）与逐轮的 `run-<id>.json`。
+
+#### 3.4.1 命令（**两段批次各一份记录文件**）
+
+```bash
+DATA=/path/to/data/edgefactors      # 或 EDGEEXP_DATA_DIR
+
+# ① 先做 1 场景 × 2 轮冒烟（判据见 3.4.2；别跳过它直接开 19 h 长跑）
+EDGEEXP_REPEATS=2 EDGEEXP_RUN_TAG=smoke \
+EDGEEXP_RECORDS="$DATA/records-<env>-rpt-smoke.jsonl" \
+  bash lunwen/clab-lab/scripts/edge_repeat.sh S1-selinux
+
+# ② 真跑 · 第 1 段：targeted（11 场景 × 2 臂 × 3 轮 = 66 条，约 3 h）
+EDGEEXP_REPEATS=3 EDGEEXP_RUN_TAG=targeted \
+EDGEEXP_RECORDS="$DATA/records-<env>-rpt-targeted.jsonl" \
+  bash lunwen/clab-lab/scripts/edge_repeat.sh \
+  S1-apparmor S1-selinux S2-2fa-selinux S2-apparmor-no-ids S2-selinux-apparmor \
+  S2-selinux-no-ids S2-selinux-no-siem S3-3fa-selinux-apparmor S3-selinux-apparmor-2fa \
+  S3-selinux-no-siem-no-ids S4-all
+
+# ③ 真跑 · 第 2 段：非 targeted（11 场景 × 1 臂 × 3 轮 = 33 条，约 15 h）
+#    必须**在 ② 结束之后**再起（同一台 VM、同一 agent 组）；记录文件另给一份
+EDGEEXP_REPEATS=3 EDGEEXP_RUN_TAG=nontargeted \
+EDGEEXP_RECORDS="$DATA/records-<env>-rpt-nontargeted.jsonl" \
+  bash lunwen/clab-lab/scripts/edge_repeat.sh \
+  S0-baseline S1-2fa S1-no-ids S1-no-siem S1-syn-cookie S2-no-siem-no-ids \
+  S2-syn-cookie-no-ids S2-syn-cookie-no-siem S3-syn-cookie-no-siem-no-ids S5-2fa-only S5-cascade-3fa
+```
+
+| 变量 | 缺省 | 作用 |
+|---|---|---|
+| `EDGEEXP_REPEATS` | `3` | 轮数（= 每场景的重复次数） |
+| `EDGEEXP_RECORDS` | `records-<env>-<date>.jsonl` | **段级**记录文件；两段各一份，**不许**把两段塞进同一份（门禁按段算） |
+| `EDGEEXP_RUN_TAG` | 空 | 段标识，进 `run-<id>.json`（`<date>[-<tag>]-r<k>`）⇒ 不同段/不同次重跑不会同名覆盖 |
+| `EDGEEXP_RESUME` | `1` | 中断后重跑同一轮时跳过"文件里已有该实例记录"的实例 |
+| `EDGEEXP_DRY_RUN` | `0` | `1` = **只看计划**（不碰实验室、不写记录、不写 `run.json`）；此时条数口径记 `skip(...)` |
+
+#### 3.4.2 ⚠️ 口径定案（Task 21 实测，2026-10-17）：**一份记录文件承载 1..REPEAT**
+
+这一条以前在代码里是**两套互相矛盾**的机制，2026-10-17 用 **1 场景 × 2 轮冒烟**定案到
+"路 B"，并把驱动改成与 §3.2/§3.3 一致：
+
+| 机制 | 它以为的形态 | 结果（实测） |
+|---|---|---|
+| 修前的 `edge_repeat.sh` | **逐轮一个**记录文件 `records-…-r<k>.jsonl` | 第 1 轮 `record_counts_ok=True`；**第 2 轮 `record_counts_ok=False`**（文件 2 行、门禁要 `2×2=4` 行，`records_missing_for_selected=2`），而**退出码仍是 0**、驱动还打印"全部 2 轮完成" ⇒ **不吭声的假红** |
+| `edge_matrix.sh` 的 `record_counts_ok` / §3.3 | **一份文件承载 1..REPEAT** | 与 §3.2 的原话一致（"同一份记录文件承载 1..REPEAT 各一遍"） |
+
+- **为什么"逐轮一个文件"的理由不成立**：`edge_repeat.sh` 原先写着"`edge_collect.sh` 的幂等守卫
+  按**场景名前缀**匹配，三轮同文件会被判重复而拒写"。守卫现在比的是**完整实例 id**
+  `<场景>-<实例号>`（`edge_collect.sh:167`），而实例号 `NN=(REPEAT−1)×NARMS+臂+1` **逐轮不重叠**
+  ⇒ 第 2 轮写同一份文件**不会**被判重复（冒烟实测：`-01/-02` 与 `-03/-04` 四行同在一份文件里）。
+- **为什么不动矩阵的门禁**：`record_counts_ok` 只有"文件行数 == 实例数 × 重复号"这一种语义；
+  给它加"这份文件是逐轮独立的"分支 = 同一字段两种语义，且必然**放松判据**。
+- **判据（冒烟必须达成）**：**两轮的 `record_counts_ok` 都是 `true`、驱动的 `rc=0`**，
+  且同一份文件里同时出现 `-01/-02`（第 1 轮）与 `-03/-04`（第 2 轮）。
+
+驱动另有两条护栏（都是实测踩出来的）：
+
+1. **`record_counts_ok=false` 也算这一轮失败**：驱动逐轮**读 `run-<id>.json`**（不 grep 猜），
+   `rc=0` 但 `record_counts_ok=false` 的那一轮记成失败（`overall_rc=1`）。
+2. **陈旧 `run.json` 护栏**：`RUN_ID` 缺省是 `<date>-r<k>` ⇒ 同一天重跑同名时，
+   驱动会读到**上一次**的 `record_counts_ok`（实测：一次什么都没做的干跑读到了前一次冒烟的 `true`）。
+   判据取 `run.json` 自己记的 `records_file`：与本次要写的不同 ⇒ 视为"没有本轮判据"。
+
+> **不许做的事**：把第 2 轮写进**另一份**记录文件（门禁会报"缺 N 条"）；
+> 把两段（targeted / 非 targeted）塞进同一份（门禁按段算，且 `run.json` 会混两段的条件台账）；
+> 用 `EDGEEXP_POLICY_ON_ARM=0` 冒充"控制重复"（那是**臂**，不是重复）。
+
+#### 3.4.3 中断与续跑（停在干净边界）
+
+- 默认 `EDGEEXP_RESUME=1`：矩阵逐实例跳过"文件里已有该实例记录"的那些，并把它记进
+  `run.json` 的 `scenarios_skipped_resume`（`record_counts_ok` 的第二个合取项会把它算作已完成）。
+- `REPEAT>1` 时矩阵的**硬门禁**是"**本轮每个实例 id 在文件里恰好一条**"（不是"文件行数 == 实例数"），
+  所以中断后重跑同一轮不会因为"文件里已有前几遍的行"而红。
+- 重跑 = **同一条命令**（记录文件、`RUN_TAG`、`REPEATS` 都不变）；换了记录文件就等于换了一批样本。
+
+#### 3.4.4 方差分析（Step 2/3）
+
+```bash
+python3 lunwen/clab-lab/scripts/edge_variance.py \
+  --records lunwen/clab-lab/data/edgefactors/records-<env>-rpt-targeted.jsonl \
+  --records lunwen/clab-lab/data/edgefactors/records-<env>-rpt-nontargeted.jsonl \
+  --baseline lunwen/clab-lab/data/edgefactors/records-dl360-qemu-20261016.jsonl \
+  --json docs/experiments/variance.json --md docs/experiments/variance-report.md
+```
+
+> **报告落在 `docs/experiments/variance-report.md`**（计划里的 `variance-report.md` 就是它）：
+> 数据目录 `data/edgefactors/` 的 `.gitignore` 白名单只放行 `records-*.jsonl` 与
+> `run-<8 位日期>-<pid>.json`（Task 20 的口径），故**报告不进数据目录**，
+> 与手册/审计归档放在一起（同样的可发现性，且不需要 `git add -f` 绕过白名单）。
+
+- **数值层**：`final_score`、五个域分、每条被观测因子的 `effective_factor`（键按
+  `因子#出现序号`，同 ID 多条不合并）的**极差**与**样本标准差（n−1）**；
+- **判定层**：`observed.acceptable` 是否翻转；**标签层**：`ground_truth.compromised` 是否翻转；
+- **门禁层**：链因子集是否 N 次相同（形状变了 = **环境敏感**）。
+- **判据**：**判定翻转的场景×臂必须单独列出并标注"环境敏感"，不隐去、不取平均掩盖**；
+  与 `REPEAT=1` 主批逐次对照（有没有哪一次与主批结论相反）。
+- **口径**：**重复样本不是独立样本**（同一宿主状态的重复，用来估方差/稳定性）⇒
+  决策层 N 写成 `N=<条数>（<场景数> × <重复数>）`，**不得**当独立样本虚增。
+
 ---
 
 ## 4. 怎么读记录
@@ -993,6 +1097,10 @@ operation 会**同时**打在两台机器上，而 `compromised` 只看"目标 a
 而 `EDGEEXP_RESUME=1` 只影响**逐实例循环**、**不影响**这条门禁
 ⇒ **拆成多次调用时，第 2 次起文件里已经有前一次的记录 ⇒ 门禁永远红**。
 **要分批就必须分批换记录文件**（或用 `REPEAT>1`）。
+
+> **`REPEAT>1` 走 `edge_repeat.sh`**（§3.4）：它把同一段的 N 遍写进**同一份**记录文件，
+> 于是这条门禁按 "文件行数 == 实例数 × 重复号" 自然成立；
+> 但"一份文件只装一段"仍是硬要求 —— 两段（targeted / 非 targeted）各给一份 `EDGEEXP_RECORDS`。
 
 **同族的第三条（R 组结构性不满足）**：`R-no-siem` / `R-no-2fa` 的语义是"目标机上**真的没有**这个防护"，
 而 `edge_attack.sh` 对 R 组有一条硬闸门：**真实缺失必须成立**（"不得用注入失败顶上"）。

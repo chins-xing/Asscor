@@ -455,3 +455,20 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 
 > **①②③ 都是 Task 19 明确登记、按纪律没做的事**（见 Task 19 报告 §6.3 的 concern 1/7/3）。
 > 全套原始输出与未跑清单在 `.superpowers/sdd/2026-09-12-edge-factor-coupling-milestone-b/task-20-final-cleanup-report.md`。
+
+## H.6 重复性与方差（Task 21 = 计划 Task 5，2026-10-17）
+
+| # | 项 | 裁定 / 处置 | 判据与依据 |
+|---|---|---|---|
+| 1 | **重复轴的两套口径互相矛盾**（`edge_repeat.sh` 逐轮一个记录文件 vs `record_counts_ok` 的"文件行数 == 实例数 × 重复号"） | 定案 **路 B：一份记录文件承载 1..REPEAT**，只改驱动、**不动矩阵门禁** | 1 场景 × 2 轮冒烟的原始输出：修前第 2 轮 `record_counts_ok=False`（文件 2 行、门禁要 4 行、`records_missing_for_selected=2`）而 `rc=0`（假红）；修后两轮都 `record_counts_ok=True`、`rc=0`、同一文件里 `-01/-02` 与 `-03/-04` 并存。详见操作手册 **§3.4** 与 Task 21 报告 §1 |
+| 2 | **"逐轮一个文件"的原始理由已失效** | 该理由（"幂等守卫按场景名前缀匹配"）在 Task 10/11 之后**不再成立**：守卫比的是**完整实例 id**，而实例号 `NN=(REPEAT−1)×NARMS+臂+1` 逐轮不重叠 | 实测：第 2 轮的两条记录 `S1-selinux-03` / `S1-selinux-04` 能正常写出（同文件写入不被拒）；代码依据 `edge_collect.sh:167`、`edge_matrix.sh:295-322` |
+| 3 | **新判据：「判定翻转 = 环境敏感」** | 同一场景×臂在**同一条件、同一剧本、同一采集配置**下的 N 次重复里，只要 `observed.acceptable` 取值不唯一 ⇒ 该场景×臂标注**环境敏感**，在报告里**单独列成一节**，**不隐去、不取平均掩盖**；标签翻转（`ground_truth.compromised`）与链形状翻转**同等级别单列** | 判据的可执行产物：`lunwen/clab-lab/scripts/edge_variance.py` 的 `flips.decision` / `flips.label` / `flips.chain_multiset`；报告 `docs/experiments/variance-report.md` 的 §4 / §4b / §4c |
+| 4 | **「重复样本不是独立样本」的记账口径** | 决策层 N 一律写成 `N=<条数>（<场景数> × <重复数>）`；n=3 的样本标准差只当"抖动尺度"，**不得**当独立同分布样本算置信区间/做显著性检验 | `edge_variance.py` 报告开头的口径声明与 `declaration.decision_layer_n`；操作手册 §3.4.4 |
+| 5 | **REPEAT>1 的批** | 两段（targeted 66 条 / 非 targeted 33 条）× 3 轮，**各一份记录文件**；主批数据集 `records-dl360-qemu-20261016.jsonl`（`sha256 82d37ead…f5b468`）**一个字节都没动** | 数据锚点、逐轮 `record_counts_ok` 与开跑前后的 sha256 原始输出见 Task 21 报告 §2 |
+
+> **措辞禁令仍然有效**（本任务没有推翻它，只是又实测了一遍）：
+> ① "每个因子恰好出现两次"**只是这批矩阵的观测、不是不变量**（本批每条链都是 6 条目 /
+> 3 个 ID 各两次 —— 那是出厂 `[edge_factors.custom]` 与本批注入集的联合结果）；
+> ② **两臂的链读数与分数逐项相同、只差标签** —— 这条 limitation **不许撤**
+> （`test-arm-limitation.sh` 守着它；若重复样本让两臂分数真的分开，夹具会红，
+> 那是提示更新文档，**不是**去放松断言）。
