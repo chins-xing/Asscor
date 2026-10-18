@@ -1,15 +1,28 @@
 {
   "meta": {
     "title": "方向② 边缘因子重复性（每场景 3 次）",
-    "generated_at": "2026-10-17T23:02:51Z",
+    "generated_at": "2026-10-18T16:15:37Z",
     "records": [
-      "lunwen/clab-lab/data/edgefactors/records-t21-qemu-rpt-targeted.jsonl"
+      "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-targeted.jsonl",
+      "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl"
     ],
     "baseline": [
-      "lunwen/clab-lab/data/edgefactors/records-dl360-qemu-20261016.jsonl"
+      "/root/t6/t17-data/records-t17-qemu.jsonl"
     ],
-    "n_records": 66,
-    "n_scenarios": 11,
+    "segments": [
+      "records-t21-qemu-rpt-targeted.jsonl",
+      "records-t21-qemu-rpt-nontargeted.jsonl"
+    ],
+    "thresholds_by_segment": {
+      "records-t21-qemu-rpt-targeted.jsonl": [
+        80.0
+      ],
+      "records-t21-qemu-rpt-nontargeted.jsonl": [
+        80.0
+      ]
+    },
+    "n_records": 99,
+    "n_scenarios": 22,
     "n_arms": 2,
     "repeat_numbers": [
       1,
@@ -27,64 +40,690 @@
       "meta.repeat"
     ],
     "inputs": {
-      "global": {
+      "segments": [
+        "records-t21-qemu-rpt-targeted.jsonl",
+        "records-t21-qemu-rpt-nontargeted.jsonl"
+      ],
+      "per_segment": {
+        "records-t21-qemu-rpt-targeted.jsonl": {
+          "records": 66,
+          "global": {
+            "config_hash": {
+              "label": "采集配置指纹 `meta.config_hash`",
+              "values": {
+                "dd334cd724ba0c4c": 66
+              }
+            },
+            "playbook_hash": {
+              "label": "剧本哈希 `meta.playbook_hash`",
+              "values": {
+                "sha256:e585b8465faab05d236e39b19cc99addfbf4adc0fa2fc8891c4ee278bef60f19": 66
+              }
+            },
+            "observation_target": {
+              "label": "观测主体 `meta.observation_target`",
+              "values": {
+                "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)": 66
+              }
+            }
+          },
+          "per_scenario": {
+            "expected_chain": {
+              "label": "注入集 `meta.expected_chain_factors`",
+              "scenarios": 11,
+              "varying_scenarios": [],
+              "distinct_values": [
+                "EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX",
+                "EF-002FA,EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE",
+                "EF-002FA,EF-APPARMOR,EF-SELINUX",
+                "EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX",
+                "EF-APPARMOR,EF-NO-IDS,EF-SELINUX",
+                "EF-APPARMOR,EF-NO-SIEM,EF-SELINUX",
+                "EF-APPARMOR,EF-SELINUX"
+              ]
+            },
+            "expected_baseline": {
+              "label": "基线集 `meta.expected_baseline_factors`",
+              "scenarios": 11,
+              "varying_scenarios": [],
+              "distinct_values": [
+                "EF-NO-IDS"
+              ]
+            }
+          }
+        },
+        "records-t21-qemu-rpt-nontargeted.jsonl": {
+          "records": 33,
+          "global": {
+            "config_hash": {
+              "label": "采集配置指纹 `meta.config_hash`",
+              "values": {
+                "dd334cd724ba0c4c": 33
+              }
+            },
+            "playbook_hash": {
+              "label": "剧本哈希 `meta.playbook_hash`",
+              "values": {
+                "sha256:b112ca3c2c888d439993a9a0ae0f972f73ac60b65d44dff1d12e2f5bb8a254cf": 33
+              }
+            },
+            "observation_target": {
+              "label": "观测主体 `meta.observation_target`",
+              "values": {
+                "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)": 33
+              }
+            }
+          },
+          "per_scenario": {
+            "expected_chain": {
+              "label": "注入集 `meta.expected_chain_factors`",
+              "scenarios": 11,
+              "varying_scenarios": [],
+              "distinct_values": [
+                "EF-002FA",
+                "EF-002FA,EF-3FA",
+                "EF-NO-IDS",
+                "EF-NO-IDS,EF-NO-SIEM",
+                "EF-NO-IDS,EF-NO-SIEM,EF-SYNCOOKIE",
+                "EF-NO-IDS,EF-SYNCOOKIE",
+                "EF-NO-SIEM",
+                "EF-NO-SIEM,EF-SYNCOOKIE",
+                "EF-SYNCOOKIE",
+                "（空）"
+              ]
+            },
+            "expected_baseline": {
+              "label": "基线集 `meta.expected_baseline_factors`",
+              "scenarios": 11,
+              "varying_scenarios": [],
+              "distinct_values": [
+                "EF-NO-IDS"
+              ]
+            }
+          }
+        }
+      },
+      "batch": {
         "config_hash": {
           "label": "采集配置指纹 `meta.config_hash`",
           "values": {
-            "dd334cd724ba0c4c": 66
+            "dd334cd724ba0c4c": 99
           }
         },
         "playbook_hash": {
           "label": "剧本哈希 `meta.playbook_hash`",
           "values": {
-            "sha256:e585b8465faab05d236e39b19cc99addfbf4adc0fa2fc8891c4ee278bef60f19": 66
+            "sha256:e585b8465faab05d236e39b19cc99addfbf4adc0fa2fc8891c4ee278bef60f19": 66,
+            "sha256:b112ca3c2c888d439993a9a0ae0f972f73ac60b65d44dff1d12e2f5bb8a254cf": 33
           }
         },
         "observation_target": {
           "label": "观测主体 `meta.observation_target`",
           "values": {
-            "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)": 66
+            "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)": 99
           }
-        }
-      },
-      "per_scenario": {
-        "expected_chain": {
-          "label": "注入集 `meta.expected_chain_factors`",
-          "scenarios": 11,
-          "varying_scenarios": [],
-          "distinct_values": [
-            "EF-002FA,EF-3FA,EF-APPARMOR,EF-SELINUX",
-            "EF-002FA,EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX,EF-SYNCOOKIE",
-            "EF-002FA,EF-APPARMOR,EF-SELINUX",
-            "EF-APPARMOR,EF-NO-IDS,EF-NO-SIEM,EF-SELINUX",
-            "EF-APPARMOR,EF-NO-IDS,EF-SELINUX",
-            "EF-APPARMOR,EF-NO-SIEM,EF-SELINUX",
-            "EF-APPARMOR,EF-SELINUX"
-          ]
-        },
-        "expected_baseline": {
-          "label": "基线集 `meta.expected_baseline_factors`",
-          "scenarios": 11,
-          "varying_scenarios": [],
-          "distinct_values": [
-            "EF-NO-IDS"
-          ]
         }
       }
     },
-    "input_diffs": []
+    "input_diffs": [],
+    "arms_per_scenario": {
+      "two_arm_scenarios": 11,
+      "single_arm_scenarios": 11
+    },
+    "decision_layer_n": "N=99（22 场景 × 3 次重复，含 11 个两臂组、11 个单臂组）"
   },
   "declaration": {
     "repeat_samples_are_not_independent": true,
-    "decision_layer_n": "N=66（11 场景 × 3 次重复，含每场景两臂）",
+    "decision_layer_n": "N=99（22 场景 × 3 次重复，含 11 个两臂组、11 个单臂组）",
     "stdev": "样本标准差（分母 n−1）；n=1 时记 None",
     "range": "max − min；n=1 时记 None"
   },
   "groups": [
     {
+      "scenario": "S0-baseline",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S0-baseline-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:1",
+          "timestamp": "2026-10-17T23:25:27Z"
+        },
+        {
+          "scenario_id": "S0-baseline-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:12",
+          "timestamp": "2026-10-18T04:26:06Z"
+        },
+        {
+          "scenario_id": "S0-baseline-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:23",
+          "timestamp": "2026-10-18T08:39:26Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          65.16,
+          65.16,
+          65.16
+        ],
+        "missing": 0,
+        "min": 65.16,
+        "max": 65.16,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 65.16
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": false,
+        "label_values": [
+          true,
+          true,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ]
+      ]
+    },
+    {
+      "scenario": "S1-2fa",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S1-2fa-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:2",
+          "timestamp": "2026-10-17T23:52:59Z"
+        },
+        {
+          "scenario_id": "S1-2fa-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:13",
+          "timestamp": "2026-10-18T04:52:37Z"
+        },
+        {
+          "scenario_id": "S1-2fa-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:24",
+          "timestamp": "2026-10-18T09:06:39Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          59.01,
+          59.01,
+          59.01
+        ],
+        "missing": 0,
+        "min": 59.01,
+        "max": 59.01,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 59.01
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-002FA#1": {
+          "n": 3,
+          "values": [
+            0.7,
+            0.7,
+            0.7
+          ],
+          "missing": 0,
+          "min": 0.7,
+          "max": 0.7,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.6999999999999998
+        },
+        "EF-002FA#2": {
+          "n": 3,
+          "values": [
+            0.85,
+            0.85,
+            0.85
+          ],
+          "missing": 0,
+          "min": 0.85,
+          "max": 0.85,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.85
+        },
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": false,
+        "label_values": [
+          true,
+          true,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ]
+      ]
+    },
+    {
       "scenario": "S1-apparmor",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -456,6 +1095,7 @@
       "scenario": "S1-apparmor",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -824,9 +1464,550 @@
       ]
     },
     {
+      "scenario": "S1-no-ids",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S1-no-ids-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:3",
+          "timestamp": "2026-10-18T00:20:41Z"
+        },
+        {
+          "scenario_id": "S1-no-ids-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:14",
+          "timestamp": "2026-10-18T05:18:47Z"
+        },
+        {
+          "scenario_id": "S1-no-ids-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:25",
+          "timestamp": "2026-10-18T09:34:42Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          65.16,
+          65.16,
+          65.16
+        ],
+        "missing": 0,
+        "min": 65.16,
+        "max": 65.16,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 65.16
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": false,
+        "label_values": [
+          true,
+          true,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ]
+      ]
+    },
+    {
+      "scenario": "S1-no-siem",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S1-no-siem-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:4",
+          "timestamp": "2026-10-18T00:48:13Z"
+        },
+        {
+          "scenario_id": "S1-no-siem-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:15",
+          "timestamp": "2026-10-18T05:45:17Z"
+        },
+        {
+          "scenario_id": "S1-no-siem-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:26",
+          "timestamp": "2026-10-18T10:03:07Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          62.28,
+          62.28,
+          62.28
+        ],
+        "missing": 0,
+        "min": 62.28,
+        "max": 62.28,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 62.28
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-SIEM#1": {
+          "n": 3,
+          "values": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "missing": 0,
+          "min": 0.9,
+          "max": 0.9,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.9
+        },
+        "EF-NO-SIEM#2": {
+          "n": 3,
+          "values": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "missing": 0,
+          "min": 0.9,
+          "max": 0.9,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.9
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": false,
+        "label_values": [
+          true,
+          true,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ]
+        ]
+      ]
+    },
+    {
       "scenario": "S1-selinux",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -1198,6 +2379,7 @@
       "scenario": "S1-selinux",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -1566,9 +2748,314 @@
       ]
     },
     {
+      "scenario": "S1-syn-cookie",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S1-syn-cookie-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:5",
+          "timestamp": "2026-10-18T01:17:40Z"
+        },
+        {
+          "scenario_id": "S1-syn-cookie-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:16",
+          "timestamp": "2026-10-18T06:13:11Z"
+        },
+        {
+          "scenario_id": "S1-syn-cookie-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:27",
+          "timestamp": "2026-10-18T10:31:31Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          58.52,
+          58.52,
+          58.52
+        ],
+        "missing": 0,
+        "min": 58.52,
+        "max": 58.52,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 58.52
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-SYNCOOKIE#1": {
+          "n": 3,
+          "values": [
+            0.75,
+            0.75,
+            0.75
+          ],
+          "missing": 0,
+          "min": 0.75,
+          "max": 0.75,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.75
+        },
+        "EF-SYNCOOKIE#2": {
+          "n": 3,
+          "values": [
+            0.75,
+            0.75,
+            0.75
+          ],
+          "missing": 0,
+          "min": 0.75,
+          "max": 0.75,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.75
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": false,
+        "label_values": [
+          true,
+          true,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ]
+      ]
+    },
+    {
       "scenario": "S2-2fa-selinux",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -2008,6 +3495,7 @@
       "scenario": "S2-2fa-selinux",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -2447,6 +3935,7 @@
       "scenario": "S2-apparmor-no-ids",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -2818,6 +4307,7 @@
       "scenario": "S2-apparmor-no-ids",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -3186,9 +4676,314 @@
       ]
     },
     {
+      "scenario": "S2-no-siem-no-ids",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S2-no-siem-no-ids-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:6",
+          "timestamp": "2026-10-18T01:44:39Z"
+        },
+        {
+          "scenario_id": "S2-no-siem-no-ids-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:17",
+          "timestamp": "2026-10-18T06:18:10Z"
+        },
+        {
+          "scenario_id": "S2-no-siem-no-ids-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:28",
+          "timestamp": "2026-10-18T10:59:43Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          62.28,
+          62.28,
+          62.28
+        ],
+        "missing": 0,
+        "min": 62.28,
+        "max": 62.28,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 62.28
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-SIEM#1": {
+          "n": 3,
+          "values": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "missing": 0,
+          "min": 0.9,
+          "max": 0.9,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.9
+        },
+        "EF-NO-SIEM#2": {
+          "n": 3,
+          "values": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "missing": 0,
+          "min": 0.9,
+          "max": 0.9,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.9
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": false,
+        "label_values": [
+          true,
+          true,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ]
+        ]
+      ]
+    },
+    {
       "scenario": "S2-selinux-apparmor",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -3560,6 +5355,7 @@
       "scenario": "S2-selinux-apparmor",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -3931,6 +5727,7 @@
       "scenario": "S2-selinux-no-ids",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -4302,6 +6099,7 @@
       "scenario": "S2-selinux-no-ids",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -4673,6 +6471,7 @@
       "scenario": "S2-selinux-no-siem",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -5112,6 +6911,7 @@
       "scenario": "S2-selinux-no-siem",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -5548,9 +7348,686 @@
       ]
     },
     {
+      "scenario": "S2-syn-cookie-no-ids",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S2-syn-cookie-no-ids-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:7",
+          "timestamp": "2026-10-18T02:10:35Z"
+        },
+        {
+          "scenario_id": "S2-syn-cookie-no-ids-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:18",
+          "timestamp": "2026-10-18T06:21:18Z"
+        },
+        {
+          "scenario_id": "S2-syn-cookie-no-ids-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:29",
+          "timestamp": "2026-10-18T11:27:03Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          58.52,
+          58.52,
+          58.52
+        ],
+        "missing": 0,
+        "min": 58.52,
+        "max": 58.52,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 58.52
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-SYNCOOKIE#1": {
+          "n": 3,
+          "values": [
+            0.75,
+            0.75,
+            0.75
+          ],
+          "missing": 0,
+          "min": 0.75,
+          "max": 0.75,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.75
+        },
+        "EF-SYNCOOKIE#2": {
+          "n": 3,
+          "values": [
+            0.75,
+            0.75,
+            0.75
+          ],
+          "missing": 0,
+          "min": 0.75,
+          "max": 0.75,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.75
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": true,
+        "label_values": [
+          true,
+          false,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ]
+      ]
+    },
+    {
+      "scenario": "S2-syn-cookie-no-siem",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S2-syn-cookie-no-siem-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:8",
+          "timestamp": "2026-10-18T02:37:21Z"
+        },
+        {
+          "scenario_id": "S2-syn-cookie-no-siem-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:19",
+          "timestamp": "2026-10-18T06:48:57Z"
+        },
+        {
+          "scenario_id": "S2-syn-cookie-no-siem-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:30",
+          "timestamp": "2026-10-18T11:56:13Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          56.91,
+          56.91,
+          56.91
+        ],
+        "missing": 0,
+        "min": 56.91,
+        "max": 56.91,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 56.91
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-SIEM#1": {
+          "n": 3,
+          "values": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "missing": 0,
+          "min": 0.9,
+          "max": 0.9,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.9
+        },
+        "EF-NO-SIEM#2": {
+          "n": 3,
+          "values": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "missing": 0,
+          "min": 0.9,
+          "max": 0.9,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.9
+        },
+        "EF-SYNCOOKIE#1": {
+          "n": 3,
+          "values": [
+            0.75,
+            0.75,
+            0.75
+          ],
+          "missing": 0,
+          "min": 0.75,
+          "max": 0.75,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.75
+        },
+        "EF-SYNCOOKIE#2": {
+          "n": 3,
+          "values": [
+            0.75,
+            0.75,
+            0.75
+          ],
+          "missing": 0,
+          "min": 0.75,
+          "max": 0.75,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.75
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": false,
+        "label_values": [
+          true,
+          true,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ]
+      ]
+    },
+    {
       "scenario": "S3-3fa-selinux-apparmor",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -5990,6 +8467,7 @@
       "scenario": "S3-3fa-selinux-apparmor",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -6429,6 +8907,7 @@
       "scenario": "S3-selinux-apparmor-2fa",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -6868,6 +9347,7 @@
       "scenario": "S3-selinux-apparmor-2fa",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -7307,6 +9787,7 @@
       "scenario": "S3-selinux-no-siem-no-ids",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -7746,6 +10227,7 @@
       "scenario": "S3-selinux-no-siem-no-ids",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -8182,9 +10664,382 @@
       ]
     },
     {
+      "scenario": "S3-syn-cookie-no-siem-no-ids",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S3-syn-cookie-no-siem-no-ids-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:9",
+          "timestamp": "2026-10-18T03:06:10Z"
+        },
+        {
+          "scenario_id": "S3-syn-cookie-no-siem-no-ids-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:20",
+          "timestamp": "2026-10-18T07:15:52Z"
+        },
+        {
+          "scenario_id": "S3-syn-cookie-no-siem-no-ids-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:31",
+          "timestamp": "2026-10-18T12:24:11Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          56.91,
+          56.91,
+          56.91
+        ],
+        "missing": 0,
+        "min": 56.91,
+        "max": 56.91,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 56.91
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-SIEM#1": {
+          "n": 3,
+          "values": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "missing": 0,
+          "min": 0.9,
+          "max": 0.9,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.9
+        },
+        "EF-NO-SIEM#2": {
+          "n": 3,
+          "values": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "missing": 0,
+          "min": 0.9,
+          "max": 0.9,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.9
+        },
+        "EF-SYNCOOKIE#1": {
+          "n": 3,
+          "values": [
+            0.75,
+            0.75,
+            0.75
+          ],
+          "missing": 0,
+          "min": 0.75,
+          "max": 0.75,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.75
+        },
+        "EF-SYNCOOKIE#2": {
+          "n": 3,
+          "values": [
+            0.75,
+            0.75,
+            0.75
+          ],
+          "missing": 0,
+          "min": 0.75,
+          "max": 0.75,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.75
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": false,
+        "label_values": [
+          true,
+          true,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-NO-SIEM",
+            "RS-007",
+            1.0
+          ],
+          [
+            "EF-SYNCOOKIE",
+            "RS-005",
+            1.0
+          ]
+        ]
+      ]
+    },
+    {
       "scenario": "S4-all",
       "arm": "0",
       "arm_label": "策略不在(policy_on=0)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -8760,6 +11615,7 @@
       "scenario": "S4-all",
       "arm": "1",
       "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "repeats": [
         1,
         2,
@@ -9330,6 +12186,648 @@
           ]
         ]
       ]
+    },
+    {
+      "scenario": "S5-2fa-only",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S5-2fa-only-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:10",
+          "timestamp": "2026-10-18T03:32:20Z"
+        },
+        {
+          "scenario_id": "S5-2fa-only-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:21",
+          "timestamp": "2026-10-18T07:43:36Z"
+        },
+        {
+          "scenario_id": "S5-2fa-only-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:32",
+          "timestamp": "2026-10-18T12:52:56Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          59.01,
+          59.01,
+          59.01
+        ],
+        "missing": 0,
+        "min": 59.01,
+        "max": 59.01,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 59.01
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-002FA#1": {
+          "n": 3,
+          "values": [
+            0.7,
+            0.7,
+            0.7
+          ],
+          "missing": 0,
+          "min": 0.7,
+          "max": 0.7,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.6999999999999998
+        },
+        "EF-002FA#2": {
+          "n": 3,
+          "values": [
+            0.85,
+            0.85,
+            0.85
+          ],
+          "missing": 0,
+          "min": 0.85,
+          "max": 0.85,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.85
+        },
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": false,
+        "label_values": [
+          true,
+          true,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ]
+      ]
+    },
+    {
+      "scenario": "S5-cascade-3fa",
+      "arm": "1",
+      "arm_label": "策略在(policy_on=1)",
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "repeats": [
+        1,
+        2,
+        3
+      ],
+      "n": 3,
+      "records": [
+        {
+          "scenario_id": "S5-cascade-3fa-01",
+          "instance": 1,
+          "repeat": 1,
+          "repeat_source": "absent=1",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r1",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:11",
+          "timestamp": "2026-10-18T03:58:58Z"
+        },
+        {
+          "scenario_id": "S5-cascade-3fa-02",
+          "instance": 2,
+          "repeat": 2,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r2",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:22",
+          "timestamp": "2026-10-18T08:12:38Z"
+        },
+        {
+          "scenario_id": "S5-cascade-3fa-03",
+          "instance": 3,
+          "repeat": 3,
+          "repeat_source": "meta.repeat",
+          "arm_source": "meta.policy_on",
+          "env": "t21-qemu-r3",
+          "src": "records-t21-qemu-rpt-nontargeted.jsonl:33",
+          "timestamp": "2026-10-18T13:19:54Z"
+        }
+      ],
+      "final_score": {
+        "n": 3,
+        "values": [
+          57.4,
+          57.4,
+          57.4
+        ],
+        "missing": 0,
+        "min": 57.4,
+        "max": 57.4,
+        "range": 0.0,
+        "stdev": 0.0,
+        "mean": 57.4
+      },
+      "domains": {
+        "attack_surface": {
+          "n": 3,
+          "values": [
+            44.0,
+            44.0,
+            44.0
+          ],
+          "missing": 0,
+          "min": 44.0,
+          "max": 44.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 44.0
+        },
+        "business_continuity": {
+          "n": 3,
+          "values": [
+            60.0,
+            60.0,
+            60.0
+          ],
+          "missing": 0,
+          "min": 60.0,
+          "max": 60.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 60.0
+        },
+        "kernel_security": {
+          "n": 3,
+          "values": [
+            54.0,
+            54.0,
+            54.0
+          ],
+          "missing": 0,
+          "min": 54.0,
+          "max": 54.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 54.0
+        },
+        "operation_trust": {
+          "n": 3,
+          "values": [
+            29.0,
+            29.0,
+            29.0
+          ],
+          "missing": 0,
+          "min": 29.0,
+          "max": 29.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 29.0
+        },
+        "resilience": {
+          "n": 3,
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": 0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.0
+        }
+      },
+      "factors": {
+        "EF-002FA#1": {
+          "n": 3,
+          "values": [
+            0.7,
+            0.7,
+            0.7
+          ],
+          "missing": 0,
+          "min": 0.7,
+          "max": 0.7,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.6999999999999998
+        },
+        "EF-002FA#2": {
+          "n": 3,
+          "values": [
+            0.85,
+            0.85,
+            0.85
+          ],
+          "missing": 0,
+          "min": 0.85,
+          "max": 0.85,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.85
+        },
+        "EF-3FA#1": {
+          "n": 3,
+          "values": [
+            0.82,
+            0.82,
+            0.82
+          ],
+          "missing": 0,
+          "min": 0.82,
+          "max": 0.82,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.82
+        },
+        "EF-NO-IDS#1": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        },
+        "EF-NO-IDS#2": {
+          "n": 3,
+          "values": [
+            0.88,
+            0.88,
+            0.88
+          ],
+          "missing": 0,
+          "min": 0.88,
+          "max": 0.88,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mean": 0.88
+        }
+      },
+      "flags": {
+        "decision_flip": false,
+        "decision_values": [
+          false,
+          false,
+          false
+        ],
+        "threshold_matches_acceptable": true,
+        "threshold_values": [
+          false,
+          false,
+          false
+        ],
+        "label_flip": false,
+        "label_values": [
+          true,
+          true,
+          true
+        ],
+        "chain_multiset_same": true,
+        "chain_sequence_same": true,
+        "factor_values_same": true
+      },
+      "threshold": 80.0,
+      "extra_domain_keys": [],
+      "label_basis": "recon_playbook",
+      "chain_multiset": [
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-3FA",
+          "EF-002",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ]
+      ],
+      "chain_seq_per_repeat": [
+        [
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-3FA",
+            "EF-002",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-3FA",
+            "EF-002",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ],
+        [
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ],
+          [
+            "EF-002FA",
+            "EF-001",
+            1.0
+          ],
+          [
+            "EF-3FA",
+            "EF-002",
+            1.0
+          ],
+          [
+            "EF-NO-IDS",
+            "RS-006",
+            1.0
+          ]
+        ]
+      ]
     }
   ],
   "cross_arm_limitation": {
@@ -9636,7 +13134,9 @@
   },
   "flips": {
     "decision": [],
-    "label": [],
+    "label": [
+      "S2-syn-cookie-no-ids/1"
+    ],
     "chain_multiset": [],
     "chain_sequence": [],
     "factor_values": [],
@@ -9644,9 +13144,144 @@
   },
   "baseline_comparison": [
     {
+      "scenario": "S0-baseline",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 64.63,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 43,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": false
+    },
+    {
+      "scenario": "S1-2fa",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 58.7,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 44,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": false
+    },
+    {
       "scenario": "S1-apparmor",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 55.73,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -9728,6 +13363,7 @@
       "scenario": "S1-apparmor",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 55.73,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -9806,9 +13442,144 @@
       "any_label_disagreement": false
     },
     {
+      "scenario": "S1-no-ids",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 64.63,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 43,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": false
+    },
+    {
+      "scenario": "S1-no-siem",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 61.84,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 44,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": false
+    },
+    {
       "scenario": "S1-selinux",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 55.73,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -9890,6 +13661,7 @@
       "scenario": "S1-selinux",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 55.73,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -9922,6 +13694,78 @@
         [
           "EF-SELINUX",
           "OT-005",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 44,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": false
+    },
+    {
+      "scenario": "S1-syn-cookie",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 58.23,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
           1.0
         ]
       ],
@@ -9971,6 +13815,7 @@
       "scenario": "S2-2fa-selinux",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 53.41,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -10062,6 +13907,7 @@
       "scenario": "S2-2fa-selinux",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 53.41,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -10153,6 +13999,7 @@
       "scenario": "S2-apparmor-no-ids",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 55.73,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -10234,6 +14081,7 @@
       "scenario": "S2-apparmor-no-ids",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 55.73,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -10312,9 +14160,82 @@
       "any_label_disagreement": false
     },
     {
+      "scenario": "S2-no-siem-no-ids",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 61.84,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 44,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": false
+    },
+    {
       "scenario": "S2-selinux-apparmor",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 55.73,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -10396,6 +14317,7 @@
       "scenario": "S2-selinux-apparmor",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 55.73,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -10477,6 +14399,7 @@
       "scenario": "S2-selinux-no-ids",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 55.73,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -10558,6 +14481,7 @@
       "scenario": "S2-selinux-no-ids",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 55.73,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -10639,6 +14563,7 @@
       "scenario": "S2-selinux-no-siem",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 54.64,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -10730,6 +14655,7 @@
       "scenario": "S2-selinux-no-siem",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 54.64,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -10772,6 +14698,160 @@
         [
           "EF-SELINUX",
           "OT-005",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 45,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": false
+    },
+    {
+      "scenario": "S2-syn-cookie-no-ids",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 58.23,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 44,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": false,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": true
+    },
+    {
+      "scenario": "S2-syn-cookie-no-siem",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 56.67,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
           1.0
         ]
       ],
@@ -10821,6 +14901,7 @@
       "scenario": "S3-3fa-selinux-apparmor",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 53.29,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -10912,6 +14993,7 @@
       "scenario": "S3-3fa-selinux-apparmor",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 53.29,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -11003,6 +15085,7 @@
       "scenario": "S3-selinux-apparmor-2fa",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 53.41,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -11094,6 +15177,7 @@
       "scenario": "S3-selinux-apparmor-2fa",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 53.41,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -11185,6 +15269,7 @@
       "scenario": "S3-selinux-no-siem-no-ids",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 54.64,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -11276,6 +15361,7 @@
       "scenario": "S3-selinux-no-siem-no-ids",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 54.64,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -11318,6 +15404,88 @@
         [
           "EF-SELINUX",
           "OT-005",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 45,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": false
+    },
+    {
+      "scenario": "S3-syn-cookie-no-siem-no-ids",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 56.67,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-NO-SIEM",
+          "RS-007",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
+          1.0
+        ],
+        [
+          "EF-SYNCOOKIE",
+          "RS-005",
           1.0
         ]
       ],
@@ -11367,6 +15535,7 @@
       "scenario": "S4-all",
       "arm": "0",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 51.55,
       "baseline_acceptable": false,
       "baseline_compromised": true,
@@ -11478,6 +15647,7 @@
       "scenario": "S4-all",
       "arm": "1",
       "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-targeted.jsonl",
       "baseline_final_score": 51.55,
       "baseline_acceptable": false,
       "baseline_compromised": false,
@@ -11544,6 +15714,155 @@
         ]
       ],
       "baseline_check_count": 47,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": false
+    },
+    {
+      "scenario": "S5-2fa-only",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 58.7,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 44,
+      "repeats_vs_baseline": [
+        {
+          "repeat": 1,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 2,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        },
+        {
+          "repeat": 3,
+          "decision_same": true,
+          "label_same": true,
+          "score_same": false,
+          "chain_same": true,
+          "check_diff_ids": [
+            "OT-018"
+          ],
+          "check_count_delta": -1
+        }
+      ],
+      "union_check_diff": [
+        "OT-018"
+      ],
+      "any_decision_disagreement": false,
+      "any_label_disagreement": false
+    },
+    {
+      "scenario": "S5-cascade-3fa",
+      "arm": "1",
+      "baseline_present": true,
+      "segment": "records-t21-qemu-rpt-nontargeted.jsonl",
+      "baseline_final_score": 57.14,
+      "baseline_acceptable": false,
+      "baseline_compromised": true,
+      "baseline_chain_multiset": [
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-002FA",
+          "EF-001",
+          1.0
+        ],
+        [
+          "EF-3FA",
+          "EF-002",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ],
+        [
+          "EF-NO-IDS",
+          "RS-006",
+          1.0
+        ]
+      ],
+      "baseline_check_count": 45,
       "repeats_vs_baseline": [
         {
           "repeat": 1,

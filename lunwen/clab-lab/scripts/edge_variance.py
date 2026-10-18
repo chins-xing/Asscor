@@ -191,6 +191,11 @@ def derive(rec):
         'expected_baseline': tuple((rec.get('meta') or {}).get('expected_baseline_factors') or ()),
         'observation_target': (rec.get('meta') or {}).get('observation_target'),
         'src': f"{os.path.basename(rec['_src'])}:{rec['_lineno']}",
+        # **段** = 记录文件（basename）。审计/报告的口径判据必须**按段**做：
+        # 一份报告可以把"targeted 段"与"非 targeted 段"合并分析（本批就是这样），
+        # 而两段本来就用**不同剧本**（TTP pair vs Discovery）⇒ 跨段合并后剧本哈希必然有 2 个取值。
+        # 那不是"重复之间换了条件"，是本报告把两个设计上不同的段并到一起的必然结果（Task 22）。
+        'segment': os.path.basename(rec['_src']),
         'timestamp': (rec.get('meta') or {}).get('timestamp'),
     }
 
@@ -235,11 +240,31 @@ def arm_label(arm):
     return '策略不在(policy_on=0)' if arm == '0' else '策略在(policy_on=1)'
 
 
+def arm_mix_phrase(n_scen, n_two):
+    """"每场景几条臂"的措辞（合并两个段时不能用"含每场景两臂"一句盖过去）。
+
+    本批的形态：targeted 段 11 个场景各两臂、非 targeted 段 11 个场景各单臂 ⇒
+    合并后写"22 场景 × 2 臂"是**错的**（有 11 个场景只有一条臂）。Task 22 实测踩到过。
+    """
+    if n_two == 0:
+        return '每场景单臂'
+    if n_two >= n_scen:
+        return '含每场景两臂'
+    return f'含 {n_two} 个两臂组、{n_scen - n_two} 个单臂组'
+
+
 GLOBAL_FINGERPRINTS = OrderedDict([
     ('config_hash', '采集配置指纹 `meta.config_hash`'),
     ('playbook_hash', '剧本哈希 `meta.playbook_hash`'),
     ('observation_target', '观测主体 `meta.observation_target`'),
 ])
+# ⚠️ **"全批唯一"这条判据必须按段做**（Task 22 实测踩到的假警报）：
+#   一份报告可以把多个**记录文件**（段）合并分析 —— 本批 = targeted 段（11 场景 × 2 臂 × 3 轮
+#   = 66 条）+ 非 targeted 段（11 场景 × 1 臂 × 3 轮 = 33 条）。两段**设计上**就用不同剧本
+#   （`targeted_ttp` 段用 TTP pair 剧本、非 targeted 段用固定 Discovery 侦察剧本）⇒
+#   把 `playbook_hash` 当"全批唯一"去比，必然得到"2 个取值"并喊出"重复之间换了条件" ——
+#   那是一条**假警报**（实测：段内各自 1 个取值、段间 2 个）。
+#   正确判据：**每个段内部**只有一种取值。跨段的取值差异只作可读性信息，不参与判据。
 # **按场景**才该唯一的指纹：不同场景的注入集本来就不同（S1-apparmor 注入 1 个因子、
 # S4-all 注入 5 个）⇒ 把它们当"全批唯一"去比会得到一条**假警报**。
 # 正确的判据是：**同一个场景的每次重复（且两个臂）必须声明同一个注入集/基线集**。
@@ -255,53 +280,73 @@ def _fingerprint_value(v):
     return str(v)
 
 
-def diff_fingerprints(inputs):
-    """批内**不唯一**的指纹（全批项取值 >1，或某场景的按场景项取值 >1）。
+def _count_values(items, key):
+    counter = OrderedDict()
+    for d in items:
+        v = str(_fingerprint_value(d.get(key)))
+        counter[v] = counter.get(v, 0) + 1
+    return counter
 
-    空列表 = 这批真是"同一条件"下的重复。返回的是人可读的条目名。
+
+def diff_fingerprints(inputs):
+    """**段内**不唯一的指纹（某段的全局项取值 >1，或某段某场景的按场景项取值 >1）。
+
+    空列表 = 每个段内部都是"同一条件"下的重复。返回的是人可读的条目名（带段名）。
     """
     bad = []
     inputs = inputs or {}
-    for key, node in (inputs.get('global') or {}).items():
-        if len(node.get('values') or {}) > 1:
-            bad.append(f"{node['label']}（全批 {len(node['values'])} 个取值）")
-    for key, node in (inputs.get('per_scenario') or {}).items():
-        for scen in node.get('varying_scenarios') or []:
-            bad.append(f"{node['label']} 在场景 {scen} 内不唯一")
+    for seg, node in (inputs.get('per_segment') or {}).items():
+        for key, gn in (node.get('global') or {}).items():
+            if len(gn.get('values') or {}) > 1:
+                bad.append(f"{gn['label']} 在段 `{seg}` 内 {len(gn['values'])} 个取值")
+        for key, sn in (node.get('per_scenario') or {}).items():
+            for scen in sn.get('varying_scenarios') or []:
+                bad.append(f"{sn['label']} 在段 `{seg}` 的场景 {scen} 内不唯一")
     return bad
 
 
 def input_fingerprints(der):
-    """Step 1 的"其余参数与主批完全一致（同一 config、同一剧本哈希）"—— 用记录自带的指纹证明。
+    """"其余参数与主批完全一致（同一 config、同一剧本哈希）"—— 用记录自带的指纹证明。
 
-    两类判据（口径不同，见上两处常量的注释）：
-      · **全批唯一**：`config_hash` / `playbook_hash` / `observation_target`；
-      · **按场景唯一**：注入集 / 基线集 —— 同一场景的重复之间必须声明同一份集合。
-    任何一个不满足就说明"重复"其实换了条件（那已经不是重复样本了），报告要喊出来。
+    三类判据（口径不同，见上两处常量的注释）：
+      · **段内唯一**（判据）：每个记录文件内部的 `config_hash` / `playbook_hash` /
+        `observation_target` 各只有一种取值；
+      · **段内按场景唯一**（判据）：同一段里同一场景的重复必须声明同一份注入集/基线集；
+      · **跨段取值**（只作可读性）：合并后的全批取值表 —— 跨段不同**不是**错误证据，
+        但它是"这份报告合了几段、各段是什么条件"的唯一机器可读记录，故照旧落盘。
+    任何一个判据不满足就说明"重复"其实换了条件（那已经不是重复样本了），报告要喊出来。
     """
     out = OrderedDict()
-    glob = OrderedDict()
-    for key, label in GLOBAL_FINGERPRINTS.items():
-        counter = OrderedDict()
-        for d in der:
-            counter[str(_fingerprint_value(d.get(key)))] = \
-                counter.get(str(_fingerprint_value(d.get(key))), 0) + 1
-        glob[key] = {'label': label, 'values': counter}
-    out['global'] = glob
+    segments = OrderedDict()
+    for d in der:
+        segments.setdefault(d.get('segment') or '（未知）', []).append(d)
+    out['segments'] = list(segments.keys())
 
-    per = OrderedDict()
-    for key, label in PER_SCENARIO_FINGERPRINTS.items():
-        by_scen = OrderedDict()
-        for d in der:
-            by_scen.setdefault(d['scenario'], set()).add(str(_fingerprint_value(d.get(key))))
-        varying = [s for s, vals in by_scen.items() if len(vals) > 1]
-        per[key] = {
-            'label': label,
-            'scenarios': len(by_scen),
-            'varying_scenarios': varying,
-            'distinct_values': sorted({v for vals in by_scen.values() for v in vals}),
-        }
-    out['per_scenario'] = per
+    per_seg = OrderedDict()
+    for seg, items in segments.items():
+        glob = OrderedDict()
+        for key, label in GLOBAL_FINGERPRINTS.items():
+            glob[key] = {'label': label, 'values': _count_values(items, key)}
+        per = OrderedDict()
+        for key, label in PER_SCENARIO_FINGERPRINTS.items():
+            by_scen = OrderedDict()
+            for d in items:
+                by_scen.setdefault(d['scenario'], set()).add(str(_fingerprint_value(d.get(key))))
+            varying = [s for s, vals in by_scen.items() if len(vals) > 1]
+            per[key] = {
+                'label': label,
+                'scenarios': len(by_scen),
+                'varying_scenarios': varying,
+                'distinct_values': sorted({v for vals in by_scen.values() for v in vals}),
+            }
+        per_seg[seg] = {'records': len(items), 'global': glob, 'per_scenario': per}
+    out['per_segment'] = per_seg
+
+    # 跨段（全批）取值表：**不参与判据**，只回答"这份报告由哪几段的哪些条件组成"。
+    batch = OrderedDict()
+    for key, label in GLOBAL_FINGERPRINTS.items():
+        batch[key] = {'label': label, 'values': _count_values(der, key)}
+    out['batch'] = batch
     return out
 
 
@@ -363,6 +408,11 @@ def build(recs):
             'scenario': scen,
             'arm': arm,
             'arm_label': arm_label(arm),
+            # **段**（记录文件）：合并多段进一份报告时，逐组的段归属必须可查 ——
+            # 否则"22/22 相同"这类跨批口径说不清是哪一个段（Task 22）。一组内的重复若跨了
+            # 文件（不该发生，重复号重复会被上面那道闸门先拦），这里如实把多段都列出来。
+            'segment': ('/'.join(sorted({d.get('segment') for d in items if d.get('segment')}))
+                        or '（未知）'),
             'repeats': [d['repeat'] for d in items],
             'n': len(items),
             'records': [{'scenario_id': d['sid'], 'instance': d['instance'],
@@ -436,7 +486,9 @@ def compare_baseline(groups, der, baseline_paths):
     rows = []
     for g in groups:
         b = bmap.get((g['scenario'], g['arm'], 1))
-        row = {'scenario': g['scenario'], 'arm': g['arm'], 'baseline_present': bool(b)}
+        row = {'scenario': g['scenario'], 'arm': g['arm'], 'baseline_present': bool(b),
+               # 段归属带进对照行：§5 的"逐段小计"要按它分组（跨段合并会让"22/22"说不清）
+               'segment': g.get('segment') or '（未知）'}
         if b:
             base_chain = json.loads(json.dumps(b['chain_multiset'], ensure_ascii=False))
             row.update({
@@ -497,17 +549,47 @@ def render_md(groups, baseline_rows, meta, preamble=None, cross_rows=None):
     if meta.get('baseline'):
         add(f"| 对照（REPEAT=1 主批） | {'<br>'.join(f'`{p}`' for p in meta['baseline'])} |")
     add(f"| 记录条数 | {n_records} |")
-    add(f"| 场景数 × 臂数 | {n_scen} 场景 × {meta['n_arms']} 臂 = {len(groups)} 个(场景,臂)组 |")
+    # **臂数分布要按实际算**（Task 22）：合并"targeted 段（每场景两臂）+ 非 targeted 段
+    # （每场景单臂）"之后，`n_arms=(场景,臂)组的臂取值个数` 会把 33 个组写成"22 场景 × 2 臂"，
+    # 而其中 11 个组其实只有一条臂 —— 那句话会让读者以为每个场景都有两条臂。
+    per_scen_arms = {}
+    for g in groups:
+        per_scen_arms.setdefault(g['scenario'], set()).add(g['arm'])
+    n_multi = sum(1 for v in per_scen_arms.values() if len(v) > 1)
+    arm_phrase = arm_mix_phrase(n_scen, n_multi)
+    arm_note = (f'{n_scen} 场景 = {n_multi} 个两臂组 + {n_scen - n_multi} 个单臂组'
+                if 0 < n_multi < n_scen else f'{n_scen} 场景 × {len(set().union(*per_scen_arms.values()))} 臂')
+    add(f"| 场景数 × 臂数 | {arm_note} ⇒ {len(groups)} 个(场景,臂)组 |")
+    # **段**（记录文件）必须先说清：合并分析的报告，"同一个条件吗"这个问题**按段**回答，
+    # 段与段之间本来就可以不同（不同剧本是设计，不是漂移）。故把每段的条数与剧本摆在这里。
+    seg_rows = []
+    for f in meta['records']:
+        seg = os.path.basename(f)
+        node = (meta.get('inputs', {}).get('per_segment') or {}).get(seg) or {}
+        seg_rows.append(f"`{seg}`（{node.get('records', '?')} 条）")
+    if seg_rows:
+        add(f"| 段 | {'<br>'.join(seg_rows)} |")
     add(f"| 每组的重复号 | {', '.join(str(r) for r in reps)}"
         f"（每组条数：{', '.join(str(c) for c in repeat_counts)}） |")
-    add(f"| 决策阈值 | {fmt(meta.get('threshold'))}（取记录 `observed.threshold`；本批逐条一致） |")
+    # 阈值也要**按段核对**：合并多段时"本批逐条一致"这句话必须能落到具体的段上，
+    # 否则"两个段各自一致但段间不同"会被这一行糊成"一致"（判定层不可比却看不出来）。
+    th_seg = meta.get('thresholds_by_segment') or {}
+    th_detail = '；'.join(f"`{seg}`={('/'.join(fmt(v) for v in vals) or '—')}"
+                         for seg, vals in th_seg.items())
+    add(f"| 决策阈值 | {fmt(meta.get('threshold'))}（取记录 `observed.threshold`；"
+        f"逐条一致 —— 按段核对：{th_detail or '—'}） |")
     add('')
     add('> **口径声明（必读）**：**重复样本不是独立样本**。这里的 N 次是**同一宿主状态的重复**，'
         '用来估方差与稳定性；**不得**当成 N 个独立样本去虚增决策层 N。'
-        f"决策层 N 一律写成 `N={n_records}（{n_scen} 场景 × {n_rep} 次重复"
-        f"{'，含每场景两臂' if meta['n_arms'] > 1 else ''}）`。"
+        f"决策层 N 一律写成 `N={n_records}（{n_scen} 场景 × {n_rep} 次重复，{arm_phrase}）`。"
         '报告的结论层**不使用平均值**：任何一个场景只要在 N 次里出现判定/标签/链形状翻转，'
         '就单独列进「判定翻转（环境敏感）」一节，**不隐去、不取平均掩盖**。')
+    add('')
+    add('> **用途边界（必读）**：「零方差」测的是**基质稳定性与评分确定性** —— 同一份输入在同一台基质上'
+        '重复采样，分数/域分/因子值逐项不变（确定性），且基质本身不抖（稳定性）。它**不是** '
+        '**模型噪声**的估计：模型（候选参数）在这些重复里根本没变，方差里不含任何模型随机性。'
+        '真正的环境敏感性不体现在"同一批的重复之间"，而体现在**批与批之间**'
+        '（不同生命周期的 VM/宿主状态 ⇒ 见 §5 与主批的对照）。')
     add('')
     add('> **数值层口径**：极差 = `max − min`；标准差 = **样本**标准差（分母 n−1）。'
         'n=1 时极差与标准差都记 `—`（**不是 0**：一条记录既没有极差也没有标准差，'
@@ -525,38 +607,57 @@ def render_md(groups, baseline_rows, meta, preamble=None, cross_rows=None):
     # ---- 输入指纹 ----
     add('## 0.1 输入指纹（证明这 N 次真是"同一条件"）')
     add('')
+    add('> **判据按段做**（Task 22 纠正的假警报）：一份报告可以把多个**记录文件**（段）合并分析，'
+        '而不同段**本来就可以用不同剧本**（本批：`targeted` 段用 TTP pair 剧本、'
+        '非 targeted 段用固定 Discovery 侦察剧本 —— 这是**设计如此**，不是"换了条件"）。'
+        '故"唯一"的判据只在**段内**成立：把段合并起来数取值个数，必然把段间差异读成"漂移"。')
+    add('')
     inputs = meta.get('inputs') or {}
-    add('**全批唯一项**（这批记录只有一种取值才叫"同一轮批"）：')
+    add('**段内唯一项**（每个段的每种指纹只允许一种取值）：')
     add('')
-    add('| 指纹 | 取值 | 条数 |')
-    add('|---|---|---|')
-    for key, node in (inputs.get('global') or {}).items():
-        for v, n in node['values'].items():
-            shown = v if len(v) <= 72 else v[:69] + '…'
-            add(f"| {node['label']} | `{shown}` | {n} |")
+    add('| 段（记录文件） | 条数 | 指纹 | 段内取值个数 | 段内取值 |')
+    add('|---|---|---|---|---|')
+    for seg, node in (inputs.get('per_segment') or {}).items():
+        for key, gn in (node.get('global') or {}).items():
+            vals = ', '.join(f'`{(v if len(v) <= 72 else v[:69] + "…")}`（{n} 条）'
+                             for v, n in gn['values'].items())
+            add(f"| `{seg}` | {node.get('records', '?')} | {gn['label']} "
+                f"| {len(gn['values'])} | {vals} |")
     add('')
-    add('**按场景唯一项**（不同场景的注入集本来就不同 ⇒ 判据是「同一场景的每次重复/两个臂」'
-        '必须声明同一份集合）：')
+    batch = inputs.get('batch') or {}
+    multi = [f"{n['label']}（{len(n['values'])} 个取值）"
+             for n in batch.values() if len(n.get('values') or {}) > 1]
+    if multi:
+        add('**跨段取值（只作可读性，不参与判据）**：合并后有 ' + '、'.join(multi)
+            + ' —— 它们来自**段与段之间**的差异（各段的剧本/条件本来就不同），'
+            '**不是**"重复之间换了条件"。段内是否唯一见上表。')
+    else:
+        add('**跨段取值（只作可读性，不参与判据）**：合并后每个指纹都只有一种取值。')
     add('')
-    add('| 指纹 | 覆盖场景数 | 各场景内唯一？ | 批内出现过的取值个数 |')
-    add('|---|---|---|---|')
-    for key, node in (inputs.get('per_scenario') or {}).items():
-        ok = not node['varying_scenarios']
-        add(f"| {node['label']} | {node['scenarios']} | {'是' if ok else '**否**：'}"
-            + ('' if ok else '、'.join(node['varying_scenarios']))
-            + f" | {len(node['distinct_values'])} |")
+    add('**段内按场景唯一项**（不同场景的注入集本来就不同 ⇒ 判据是「同一段里同一场景的每次重复/'
+        '两个臂」必须声明同一份集合）：')
+    add('')
+    add('| 段（记录文件） | 指纹 | 覆盖场景数 | 各场景内唯一？ | 段内出现过的取值个数 |')
+    add('|---|---|---|---|---|')
+    for seg, node in (inputs.get('per_segment') or {}).items():
+        for key, sn in (node.get('per_scenario') or {}).items():
+            ok = not sn['varying_scenarios']
+            add(f"| `{seg}` | {sn['label']} | {sn['scenarios']} | {'是' if ok else '**否**：'}"
+                + ('' if ok else '、'.join(sn['varying_scenarios']))
+                + f" | {len(sn['distinct_values'])} |")
     add('')
     diffs = meta.get('input_diffs') or []
     if diffs:
         add(f"**⚠️ 有 {len(diffs)} 项指纹不满足上面的判据**：" + '；'.join(diffs)
             + ' —— 这说明"重复"之间换了条件，方差里混进了条件差异，报告不得把它读成"抖动"。')
     else:
-        add('**两类判据都满足** ⇒ 这些重复确实是"同一 config、同一剧本哈希、同一观测主体、'
+        add('**两段内部的判据都满足** ⇒ 这些重复确实是"同一 config、同一剧本哈希、同一观测主体、'
             '且同一场景内注入集/基线集不变"下的重复采样。')
     add('')
-    add('> 为什么要分两类：把"注入集"当全批唯一去比，会因为**不同场景本来就注入不同因子**'
-        '（S1-apparmor 1 个、S4-all 5 个）报出假警报；反过来，只比全批而不管场景内部，'
-        '又会漏掉"同一场景的第 2 次换了注入集"这类真正的口径错误。')
+    add('> 为什么要分三类：把"注入集"当段内唯一去比，会因为**不同场景本来就注入不同因子**'
+        '（S1-apparmor 1 个、S4-all 5 个）报出假警报；把"剧本哈希"当**跨段**唯一去比，'
+        '会因为**两段设计上就用不同剧本**报出假警报；反过来，只比跨段而不管段内，'
+        '又会漏掉"同一段里第 2 次换了剧本"这类真正的口径错误。')
     add('')
 
     # ---- 主表 ----
@@ -799,6 +900,35 @@ def render_md(groups, baseline_rows, meta, preamble=None, cross_rows=None):
             add(f"- 只在重复批次里出现、主批没有的场景×臂：{len(miss)} 个"
                 '（主批是 REPEAT=1 的一段；重复批次若覆盖了主批之外的场景属正常，报告不得隐去）')
         add('')
+        # **逐段小计**（Task 22）：跨段合并后"22/22 相同、22/22 不同"这类口径会说不清 ——
+        # 本批的重复批覆盖了 33 个(场景,臂)组（targeted 段 22 个 + 非 targeted 段 11 个），
+        # 而"两段各自是什么结论"是**两个独立的命题**，必须分开报。
+        by_seg = OrderedDict()
+        for r in baseline_rows:
+            if not r['baseline_present']:
+                continue
+            by_seg.setdefault(r.get('segment') or '（未知）', []).append(r)
+        if len(by_seg) > 1:
+            add('**逐段小计**（判据按段做：段与段之间可以不同，合并后的总数不进结论）：')
+            add('')
+            add('| 段（记录文件） | 组数 | 判定相同 | 标签相同 | 链相同 | 分数不同 | 失败检查集之差（并集） |')
+            add('|---|---|---|---|---|---|---|')
+            for seg, rows in by_seg.items():
+                n = len(rows)
+                dec_same = sum(1 for r in rows if not r.get('any_decision_disagreement'))
+                lab_same = sum(1 for r in rows if not r.get('any_label_disagreement'))
+                chain_same = sum(1 for r in rows
+                                 if all(x['chain_same'] for x in r['repeats_vs_baseline']))
+                score_diff = sum(1 for r in rows
+                                 if any(not x['score_same'] for x in r['repeats_vs_baseline']))
+                ids = sorted({i for r in rows for i in r['union_check_diff']})
+                add(f"| `{seg}` | {n} | {dec_same}/{n} | {lab_same}/{n} | {chain_same}/{n} "
+                    f"| {score_diff}/{n} | {('`' + '`, `'.join(ids) + '`') if ids else '（无）'} |")
+            add('')
+            add('> 读法：**每一个段**的"判定/标签/链相同"与"分数不同"都是**该段自己**的结论。'
+                '把两段的计数加在一起再写成"22/22"是错误的 —— 那会把一个段的口径冒充成两段的；'
+                '反过来，段与段之间的差异（不同剧本、不同策略状态）**本来就不是**重复抖动。')
+            add('')
         add('> 与主批的对照是**同基质、同 config、同剧本哈希**下的对照；'
             '若某次重复与主批结论相反，那本身就是"判定不稳"的证据，'
             '不能因为它只是"n 次里的一次"而丢掉。')
@@ -817,7 +947,9 @@ def render_md(groups, baseline_rows, meta, preamble=None, cross_rows=None):
     add('3. **因子层的键按出现序号分**（§3）：同 ID 多条是配置层的真实形态，'
         '合并会制造引擎从未计算的量。')
     add('4. **复现命令**：`python3 lunwen/clab-lab/scripts/edge_variance.py '
-        '--records <本批记录> [--baseline <主批记录>] --json <out.json> --md <report.md>`；'
+        '--records <本批记录> [--records <第二段记录>] [--baseline <主批记录>] '
+        '[--preamble <手写结论.md>] --json <out.json> --md <report.md>`；'
+        '**多段合并时判据一律按段做**（§0.1：段内唯一才算"同一条件"，跨段不同是设计与合并的必然）；'
         '跑批侧的口径（一份文件承载 1..N、门禁判据）见操作手册「重复轴」一节。')
     add('')
     return '\n'.join(L) + '\n'
@@ -846,12 +978,21 @@ def main(argv=None):
 
     repeat_numbers = sorted({d['repeat'] for d in der})
     thresholds = {g['threshold'] for g in groups}
+    # 逐段的阈值：合并多段时，"本批逐条一致"这句话必须按段核对（段间不同也不该静默混算）
+    th_by_seg = OrderedDict()
+    for d in der:
+        th_by_seg.setdefault(d.get('segment') or '（未知）', set()).add(d['threshold'])
+    th_by_seg = OrderedDict((s, sorted(v, key=lambda x: (x is None, x)))
+                            for s, v in th_by_seg.items())
     fingerprints = input_fingerprints(der)
     meta_info = {
         'title': args.title,
         'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'records': args.records,
         'baseline': args.baseline or None,
+        # 段 = 记录文件（basename）：判据按段做，报告头与 §0.1 都按它分块
+        'segments': list((fingerprints.get('per_segment') or {}).keys()),
+        'thresholds_by_segment': th_by_seg,
         'n_records': len(recs),
         'n_scenarios': len({g['scenario'] for g in groups}),
         'n_arms': len({g['arm'] for g in groups}),
@@ -864,6 +1005,18 @@ def main(argv=None):
         'inputs': fingerprints,
         'input_diffs': diff_fingerprints(fingerprints),
     }
+    per_scen_arms = {}
+    for g in groups:
+        per_scen_arms.setdefault(g['scenario'], set()).add(g['arm'])
+    n_two = sum(1 for v in per_scen_arms.values() if len(v) > 1)
+    meta_info['arms_per_scenario'] = {
+        'two_arm_scenarios': n_two,
+        'single_arm_scenarios': len(per_scen_arms) - n_two,
+    }
+    arm_phrase = arm_mix_phrase(meta_info['n_scenarios'], n_two)
+    meta_info['decision_layer_n'] = (
+        f"N={len(recs)}（{meta_info['n_scenarios']} 场景 × {meta_info['n_repeats_max']} 次重复"
+        f"，{arm_phrase}）")
     if meta_info['input_diffs']:
         print('edge_variance: ⚠️ 输入指纹不满足"同一条件"判据：'
               f"{'；'.join(meta_info['input_diffs'])}（报告里会单独喊出来）")
@@ -886,9 +1039,7 @@ def main(argv=None):
         'meta': meta_info,
         'declaration': {
             'repeat_samples_are_not_independent': True,
-            'decision_layer_n': f"N={len(recs)}（{meta_info['n_scenarios']} 场景 × "
-                                f"{meta_info['n_repeats_max']} 次重复"
-                                f"{'，含每场景两臂' if meta_info['n_arms'] > 1 else ''}）",
+            'decision_layer_n': meta_info['decision_layer_n'],
             'stdev': '样本标准差（分母 n−1）；n=1 时记 None',
             'range': 'max − min；n=1 时记 None',
         },
