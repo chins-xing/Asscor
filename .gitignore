@@ -94,6 +94,16 @@ lunwen/clab-lab/data/edgefactors/*
 !lunwen/clab-lab/data/edgefactors/records-*.jsonl
 lunwen/clab-lab/data/edgefactors/records-wsl-clab-14-20260912-smoke*.jsonl
 !lunwen/clab-lab/data/edgefactors/run-[0-9]*.json
+# 2026-10-17（Task 23 收尾）：**归档的运行级证据目录** `run.d-<批次>/` 也要放行。
+# 起因：`run.d*/` 被刻意忽略（每轮会被矩阵清掉的临时碎片），但**归档型**目录
+#   `run.d-qemu-20261016/`（67 个）与 `run.d-t21-qemu-rpt/`（74 个）是**证据本体**
+#   （门禁①/② 碎片、逐实例自检原文），Task 19/23 都是靠 `git add -f` 塞进来的 ——
+#   同一个病根：**"要不要入库"取决于当班执行者记不记得加 `-f`**。
+# ⇒ 按名字区分：`run.d/`（无后缀，临时）**保持忽略**；`run.d-<后缀>/`（归档）**放行**。
+# ⚠️ 复核只能用 `git check-ignore -q`：命中**否定规则**时 `-v` 也返回 rc=0，
+#    会把人骗成"被忽略"（Task 20 实测）。rc=1 才是"会被跟踪"。
+!lunwen/clab-lab/data/edgefactors/run.d-*/
+!lunwen/clab-lab/data/edgefactors/run.d-*/**
 # Containerlab 的**生成目录**（destroy/deploy 时重建）：含 `.state.clab.yaml`、
 # `topology-data.json`、ansible/nornir 清单，以及 `.tls/ca/ca.key`（**CA 私钥**）
 # ⇒ 一律不入库。此前它"看不见"只是因为白名单被下方整目录规则误杀；
