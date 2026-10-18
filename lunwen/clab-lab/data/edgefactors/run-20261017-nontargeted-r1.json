@@ -1,0 +1,3344 @@
+{
+  "run_id": "20261017-nontargeted-r1",
+  "repeat_index": 1,
+  "env": "t21-qemu-r1",
+  "observation_target": "asc-vm910",
+  "mode": "smoke",
+  "started_at": "2026-10-17T22:58:19Z",
+  "finished_at": "2026-10-18T03:58:58Z",
+  "elapsed_s": 18039,
+  "scenarios_declared": 25,
+  "scenarios_selected": [
+    "S0-baseline",
+    "S1-2fa",
+    "S1-no-ids",
+    "S1-no-siem",
+    "S1-syn-cookie",
+    "S2-no-siem-no-ids",
+    "S2-syn-cookie-no-ids",
+    "S2-syn-cookie-no-siem",
+    "S3-syn-cookie-no-siem-no-ids",
+    "S5-2fa-only",
+    "S5-cascade-3fa"
+  ],
+  "scenarios_completed": [
+    "S0-baseline",
+    "S1-2fa",
+    "S1-no-ids",
+    "S1-no-siem",
+    "S1-syn-cookie",
+    "S2-no-siem-no-ids",
+    "S2-syn-cookie-no-ids",
+    "S2-syn-cookie-no-siem",
+    "S3-syn-cookie-no-siem-no-ids",
+    "S5-2fa-only",
+    "S5-cascade-3fa"
+  ],
+  "scenarios_skipped_resume": [],
+  "failed": {
+    "exit_code": 1,
+    "reason": "门禁① 离线比较失败：exit=1（见 run.d/.gate1.err）"
+  },
+  "progress_s": {
+    "S0-baseline": {
+      "reset": 20,
+      "attack": 1604,
+      "collect": 4,
+      "total": 1628
+    },
+    "S1-2fa": {
+      "reset": 18,
+      "attack": 1630,
+      "collect": 4,
+      "total": 1652
+    },
+    "S1-no-ids": {
+      "reset": 18,
+      "attack": 1641,
+      "collect": 4,
+      "total": 1663
+    },
+    "S1-no-siem": {
+      "reset": 18,
+      "attack": 1629,
+      "collect": 4,
+      "total": 1651
+    },
+    "S1-syn-cookie": {
+      "reset": 19,
+      "attack": 1744,
+      "collect": 4,
+      "total": 1767
+    },
+    "S2-no-siem-no-ids": {
+      "reset": 19,
+      "attack": 1596,
+      "collect": 4,
+      "total": 1619
+    },
+    "S2-syn-cookie-no-ids": {
+      "reset": 19,
+      "attack": 1533,
+      "collect": 4,
+      "total": 1556
+    },
+    "S2-syn-cookie-no-siem": {
+      "reset": 18,
+      "attack": 1583,
+      "collect": 4,
+      "total": 1605
+    },
+    "S3-syn-cookie-no-siem-no-ids": {
+      "reset": 18,
+      "attack": 1707,
+      "collect": 4,
+      "total": 1729
+    },
+    "S5-2fa-only": {
+      "reset": 18,
+      "attack": 1547,
+      "collect": 4,
+      "total": 1569
+    },
+    "S5-cascade-3fa": {
+      "reset": 18,
+      "attack": 1576,
+      "collect": 4,
+      "total": 1598
+    }
+  },
+  "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+  "records_expected": 11,
+  "records_written_this_run": 11,
+  "records_file_total_lines": 11,
+  "records_missing_for_selected": 0,
+  "records_extra_in_file": 0,
+  "record_counts_ok": true,
+  "run_inputs": {
+    "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+    "config_hash": "sha256:dd334cd724ba0c4c",
+    "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+    "hash_precision": {
+      "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+      "config_hash_full": "sha256[:64]",
+      "topology_hash": "sha256[:64]",
+      "playbook_hash": "sha256[:64]"
+    },
+    "factors_spec": "EF-002FA=0.70,EF-SYNCOOKIE=0.75,EF-SELINUX=0.80,EF-APPARMOR=0.82,EF-NO-SIEM=0.90,EF-NO-IDS=0.88,EF-3FA=0.82",
+    "weights_spec": "attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10",
+    "env": "t21-qemu-r1",
+    "note": "-factors 与 -weights 由采集配置解析而来（内置六因子取 [edge_factors] + [edge_factors.level4_override]，自定义因子取 [edge_factors.custom] 中不与内置同名的条目 ⇒ 含 EF-3FA=0.82），避免脚本里再抄一份而漂移",
+    "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+    "ts_source": "链条目 ts = 全部取评估时刻（同时注入场景，无时间结构 ⇒ C 与 V 在这条数据上同分）",
+    "collection_config": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini"
+  },
+  "chain_factor_set_equality": {
+    "per_scenario": {
+      "S0-baseline": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-NO-IDS"
+        ],
+        "actual": [
+          "EF-NO-IDS"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      },
+      "S1-2fa": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [
+          "EF-002FA"
+        ],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-002FA",
+          "EF-NO-IDS"
+        ],
+        "actual": [
+          "EF-002FA",
+          "EF-NO-IDS"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      },
+      "S1-no-ids": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-NO-IDS"
+        ],
+        "actual": [
+          "EF-NO-IDS"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      },
+      "S1-no-siem": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [
+          "EF-NO-SIEM"
+        ],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM"
+        ],
+        "actual": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      },
+      "S1-syn-cookie": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [
+          "EF-SYNCOOKIE"
+        ],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-NO-IDS",
+          "EF-SYNCOOKIE"
+        ],
+        "actual": [
+          "EF-NO-IDS",
+          "EF-SYNCOOKIE"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      },
+      "S2-no-siem-no-ids": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM"
+        ],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM"
+        ],
+        "actual": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      },
+      "S2-syn-cookie-no-ids": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [
+          "EF-NO-IDS",
+          "EF-SYNCOOKIE"
+        ],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-NO-IDS",
+          "EF-SYNCOOKIE"
+        ],
+        "actual": [
+          "EF-NO-IDS",
+          "EF-SYNCOOKIE"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      },
+      "S2-syn-cookie-no-siem": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [
+          "EF-NO-SIEM",
+          "EF-SYNCOOKIE"
+        ],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM",
+          "EF-SYNCOOKIE"
+        ],
+        "actual": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM",
+          "EF-SYNCOOKIE"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      },
+      "S3-syn-cookie-no-siem-no-ids": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM",
+          "EF-SYNCOOKIE"
+        ],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM",
+          "EF-SYNCOOKIE"
+        ],
+        "actual": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM",
+          "EF-SYNCOOKIE"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      },
+      "S5-2fa-only": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [
+          "EF-002FA"
+        ],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-002FA",
+          "EF-NO-IDS"
+        ],
+        "actual": [
+          "EF-002FA",
+          "EF-NO-IDS"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      },
+      "S5-cascade-3fa": {
+        "ok": true,
+        "declaration_face": "基线活跃集 ∪ 注入集",
+        "expected_injected": [
+          "EF-002FA",
+          "EF-3FA"
+        ],
+        "expected_baseline": [
+          "EF-NO-IDS"
+        ],
+        "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+        "expected": [
+          "EF-002FA",
+          "EF-3FA",
+          "EF-NO-IDS"
+        ],
+        "actual": [
+          "EF-002FA",
+          "EF-3FA",
+          "EF-NO-IDS"
+        ],
+        "missing": [],
+        "missing_injected": [],
+        "missing_baseline": [],
+        "extra": [],
+        "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+        "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+      }
+    },
+    "all_ok": true,
+    "failures": []
+  },
+  "gate0_duplicate_factors": {
+    "per_scenario": {
+      "S0-baseline": {
+        "chain_entries": 2,
+        "distinct_ids": 1,
+        "duplicate_entries": 1,
+        "duplicate_ids": {
+          "EF-NO-IDS": 2
+        },
+        "verdict": "观察到重复条目: EF-NO-IDS×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      },
+      "S1-2fa": {
+        "chain_entries": 4,
+        "distinct_ids": 2,
+        "duplicate_entries": 2,
+        "duplicate_ids": {
+          "EF-002FA": 2,
+          "EF-NO-IDS": 2
+        },
+        "verdict": "观察到重复条目: EF-002FA×2, EF-NO-IDS×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      },
+      "S1-no-ids": {
+        "chain_entries": 2,
+        "distinct_ids": 1,
+        "duplicate_entries": 1,
+        "duplicate_ids": {
+          "EF-NO-IDS": 2
+        },
+        "verdict": "观察到重复条目: EF-NO-IDS×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      },
+      "S1-no-siem": {
+        "chain_entries": 4,
+        "distinct_ids": 2,
+        "duplicate_entries": 2,
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-NO-SIEM": 2
+        },
+        "verdict": "观察到重复条目: EF-NO-IDS×2, EF-NO-SIEM×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      },
+      "S1-syn-cookie": {
+        "chain_entries": 4,
+        "distinct_ids": 2,
+        "duplicate_entries": 2,
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-SYNCOOKIE": 2
+        },
+        "verdict": "观察到重复条目: EF-NO-IDS×2, EF-SYNCOOKIE×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      },
+      "S2-no-siem-no-ids": {
+        "chain_entries": 4,
+        "distinct_ids": 2,
+        "duplicate_entries": 2,
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-NO-SIEM": 2
+        },
+        "verdict": "观察到重复条目: EF-NO-IDS×2, EF-NO-SIEM×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      },
+      "S2-syn-cookie-no-ids": {
+        "chain_entries": 4,
+        "distinct_ids": 2,
+        "duplicate_entries": 2,
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-SYNCOOKIE": 2
+        },
+        "verdict": "观察到重复条目: EF-NO-IDS×2, EF-SYNCOOKIE×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      },
+      "S2-syn-cookie-no-siem": {
+        "chain_entries": 6,
+        "distinct_ids": 3,
+        "duplicate_entries": 3,
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-NO-SIEM": 2,
+          "EF-SYNCOOKIE": 2
+        },
+        "verdict": "观察到重复条目: EF-NO-IDS×2, EF-NO-SIEM×2, EF-SYNCOOKIE×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      },
+      "S3-syn-cookie-no-siem-no-ids": {
+        "chain_entries": 6,
+        "distinct_ids": 3,
+        "duplicate_entries": 3,
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-NO-SIEM": 2,
+          "EF-SYNCOOKIE": 2
+        },
+        "verdict": "观察到重复条目: EF-NO-IDS×2, EF-NO-SIEM×2, EF-SYNCOOKIE×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      },
+      "S5-2fa-only": {
+        "chain_entries": 4,
+        "distinct_ids": 2,
+        "duplicate_entries": 2,
+        "duplicate_ids": {
+          "EF-002FA": 2,
+          "EF-NO-IDS": 2
+        },
+        "verdict": "观察到重复条目: EF-002FA×2, EF-NO-IDS×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      },
+      "S5-cascade-3fa": {
+        "chain_entries": 5,
+        "distinct_ids": 3,
+        "duplicate_entries": 2,
+        "duplicate_ids": {
+          "EF-002FA": 2,
+          "EF-NO-IDS": 2
+        },
+        "verdict": "观察到重复条目: EF-002FA×2, EF-NO-IDS×2",
+        "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+      }
+    },
+    "duplicate_observed": [
+      {
+        "scenario": "S0-baseline",
+        "duplicate_ids": {
+          "EF-NO-IDS": 2
+        }
+      },
+      {
+        "scenario": "S1-2fa",
+        "duplicate_ids": {
+          "EF-002FA": 2,
+          "EF-NO-IDS": 2
+        }
+      },
+      {
+        "scenario": "S1-no-ids",
+        "duplicate_ids": {
+          "EF-NO-IDS": 2
+        }
+      },
+      {
+        "scenario": "S1-no-siem",
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-NO-SIEM": 2
+        }
+      },
+      {
+        "scenario": "S1-syn-cookie",
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-SYNCOOKIE": 2
+        }
+      },
+      {
+        "scenario": "S2-no-siem-no-ids",
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-NO-SIEM": 2
+        }
+      },
+      {
+        "scenario": "S2-syn-cookie-no-ids",
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-SYNCOOKIE": 2
+        }
+      },
+      {
+        "scenario": "S2-syn-cookie-no-siem",
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-NO-SIEM": 2,
+          "EF-SYNCOOKIE": 2
+        }
+      },
+      {
+        "scenario": "S3-syn-cookie-no-siem-no-ids",
+        "duplicate_ids": {
+          "EF-NO-IDS": 2,
+          "EF-NO-SIEM": 2,
+          "EF-SYNCOOKIE": 2
+        }
+      },
+      {
+        "scenario": "S5-2fa-only",
+        "duplicate_ids": {
+          "EF-002FA": 2,
+          "EF-NO-IDS": 2
+        }
+      },
+      {
+        "scenario": "S5-cascade-3fa",
+        "duplicate_ids": {
+          "EF-002FA": 2,
+          "EF-NO-IDS": 2
+        }
+      }
+    ],
+    "chain_entries_total": 45,
+    "method": "按归一化因子 ID 统计每条真实记录链上的条目数（只看记录，不做静态推断）；per_scenario 只覆盖本次写过的场景，dataset_scan 覆盖整份记录文件",
+    "dataset_scan": {
+      "per_record": {
+        "S0-baseline-01": {
+          "chain_entries": 2,
+          "distinct_ids": 1,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2
+          }
+        },
+        "S1-2fa-01": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_ids": {
+            "EF-002FA": 2,
+            "EF-NO-IDS": 2
+          }
+        },
+        "S1-no-ids-01": {
+          "chain_entries": 2,
+          "distinct_ids": 1,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2
+          }
+        },
+        "S1-no-siem-01": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2
+          }
+        },
+        "S1-syn-cookie-01": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-SYNCOOKIE": 2
+          }
+        },
+        "S2-no-siem-no-ids-01": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2
+          }
+        },
+        "S2-syn-cookie-no-ids-01": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-SYNCOOKIE": 2
+          }
+        },
+        "S2-syn-cookie-no-siem-01": {
+          "chain_entries": 6,
+          "distinct_ids": 3,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2,
+            "EF-SYNCOOKIE": 2
+          }
+        },
+        "S3-syn-cookie-no-siem-no-ids-01": {
+          "chain_entries": 6,
+          "distinct_ids": 3,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2,
+            "EF-SYNCOOKIE": 2
+          }
+        },
+        "S5-2fa-only-01": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_ids": {
+            "EF-002FA": 2,
+            "EF-NO-IDS": 2
+          }
+        },
+        "S5-cascade-3fa-01": {
+          "chain_entries": 5,
+          "distinct_ids": 3,
+          "duplicate_ids": {
+            "EF-002FA": 2,
+            "EF-NO-IDS": 2
+          }
+        }
+      },
+      "duplicate_observed": [
+        {
+          "scenario_id": "S0-baseline-01",
+          "duplicate_ids": {
+            "EF-NO-IDS": 2
+          }
+        },
+        {
+          "scenario_id": "S1-2fa-01",
+          "duplicate_ids": {
+            "EF-002FA": 2,
+            "EF-NO-IDS": 2
+          }
+        },
+        {
+          "scenario_id": "S1-no-ids-01",
+          "duplicate_ids": {
+            "EF-NO-IDS": 2
+          }
+        },
+        {
+          "scenario_id": "S1-no-siem-01",
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2
+          }
+        },
+        {
+          "scenario_id": "S1-syn-cookie-01",
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-SYNCOOKIE": 2
+          }
+        },
+        {
+          "scenario_id": "S2-no-siem-no-ids-01",
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2
+          }
+        },
+        {
+          "scenario_id": "S2-syn-cookie-no-ids-01",
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-SYNCOOKIE": 2
+          }
+        },
+        {
+          "scenario_id": "S2-syn-cookie-no-siem-01",
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2,
+            "EF-SYNCOOKIE": 2
+          }
+        },
+        {
+          "scenario_id": "S3-syn-cookie-no-siem-no-ids-01",
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2,
+            "EF-SYNCOOKIE": 2
+          }
+        },
+        {
+          "scenario_id": "S5-2fa-only-01",
+          "duplicate_ids": {
+            "EF-002FA": 2,
+            "EF-NO-IDS": 2
+          }
+        },
+        {
+          "scenario_id": "S5-cascade-3fa-01",
+          "duplicate_ids": {
+            "EF-002FA": 2,
+            "EF-NO-IDS": 2
+          }
+        }
+      ],
+      "chain_entries_total": 45
+    },
+    "verdict": "观察到重复条目：S0-baseline→{'EF-NO-IDS': 2}; S1-2fa→{'EF-002FA': 2, 'EF-NO-IDS': 2}; S1-no-ids→{'EF-NO-IDS': 2}; S1-no-siem→{'EF-NO-IDS': 2, 'EF-NO-SIEM': 2}; S1-syn-cookie→{'EF-NO-IDS': 2, 'EF-SYNCOOKIE': 2}; S2-no-siem-no-ids→{'EF-NO-IDS': 2, 'EF-NO-SIEM': 2}; S2-syn-cookie-no-ids→{'EF-NO-IDS': 2, 'EF-SYNCOOKIE': 2}; S2-syn-cookie-no-siem→{'EF-NO-IDS': 2, 'EF-NO-SIEM': 2, 'EF-SYNCOOKIE': 2}; S3-syn-cookie-no-siem-no-ids→{'EF-NO-IDS': 2, 'EF-NO-SIEM': 2, 'EF-SYNCOOKIE': 2}; S5-2fa-only→{'EF-002FA': 2, 'EF-NO-IDS': 2}; S5-cascade-3fa→{'EF-002FA': 2, 'EF-NO-IDS': 2}"
+  },
+  "gate1_offline_compare": {
+    "dataset": "all-records",
+    "records": 11,
+    "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+    "exit_code": 1,
+    "factors_spec": "EF-002FA=0.70,EF-SYNCOOKIE=0.75,EF-SELINUX=0.80,EF-APPARMOR=0.82,EF-NO-SIEM=0.90,EF-NO-IDS=0.88,EF-3FA=0.82",
+    "weights_spec": "attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10",
+    "candidates": {
+      "legacy": "m0-baseline.ini（= 采集模型）",
+      "vector": "vector.ini",
+      "graph": "graph.ini",
+      "chain": "chain.ini"
+    },
+    "candidate_dir": "",
+    "ran_at": "2026-10-18T03:58:58Z",
+    "note": "跑在全量记录上（不再切 EF-3FA 子集）；候选名必须是模型名（legacy|vector|graph|chain）；-factors 必填且必须覆盖链上用到的每个因子（含 EF-3FA=0.82）"
+  },
+  "gate2_round_trip": {
+    "per_scenario": {
+      "S0-baseline": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 65.16,
+        "recorded": 65.16,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 65.1600 − 记录 65.1600 = +0（容差 0.005）"
+      },
+      "S1-2fa": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 59.01,
+        "recorded": 59.01,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 59.0100 − 记录 59.0100 = +0（容差 0.005）"
+      },
+      "S1-no-ids": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 65.16,
+        "recorded": 65.16,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 65.1600 − 记录 65.1600 = +0（容差 0.005）"
+      },
+      "S1-no-siem": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 62.28,
+        "recorded": 62.28,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 62.2800 − 记录 62.2800 = +0（容差 0.005）"
+      },
+      "S1-syn-cookie": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 58.52,
+        "recorded": 58.52,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 58.5200 − 记录 58.5200 = +0（容差 0.005）"
+      },
+      "S2-no-siem-no-ids": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 62.28,
+        "recorded": 62.28,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 62.2800 − 记录 62.2800 = +0（容差 0.005）"
+      },
+      "S2-syn-cookie-no-ids": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 58.52,
+        "recorded": 58.52,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 58.5200 − 记录 58.5200 = +0（容差 0.005）"
+      },
+      "S2-syn-cookie-no-siem": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 56.91,
+        "recorded": 56.91,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 56.9100 − 记录 56.9100 = +0（容差 0.005）"
+      },
+      "S3-syn-cookie-no-siem-no-ids": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 56.91,
+        "recorded": 56.91,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 56.9100 − 记录 56.9100 = +0（容差 0.005）"
+      },
+      "S5-2fa-only": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 59.01,
+        "recorded": 59.01,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 59.0100 − 记录 59.0100 = +0（容差 0.005）"
+      },
+      "S5-cascade-3fa": {
+        "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+        "recomputed": 57.4,
+        "recorded": 57.4,
+        "delta": 0.0,
+        "tolerance": 0.005,
+        "line": "round-trip: 复算 57.4000 − 记录 57.4000 = +0（容差 0.005）"
+      }
+    },
+    "max_abs_delta": 0.0,
+    "source": "edgescen 进程内自检（装配点，容差 0.005，不通过即拒绝写出）"
+  },
+  "gate2_offline_compare": {},
+  "threshold_sensitivity": null,
+  "injection_vs_collection": {
+    "all_ok": true,
+    "per_scenario": {
+      "S0-baseline": {
+        "status": "n/a",
+        "ok": null,
+        "injection_count": 0,
+        "collection_time": "2026-10-17T23:25:27Z"
+      },
+      "S1-2fa": {
+        "status": "ok",
+        "ok": true,
+        "injection_count": 1,
+        "collection_time": "2026-10-17T23:52:59Z"
+      },
+      "S1-no-ids": {
+        "status": "ok",
+        "ok": true,
+        "injection_count": 1,
+        "collection_time": "2026-10-18T00:20:41Z"
+      },
+      "S1-no-siem": {
+        "status": "ok",
+        "ok": true,
+        "injection_count": 1,
+        "collection_time": "2026-10-18T00:48:13Z"
+      },
+      "S1-syn-cookie": {
+        "status": "ok",
+        "ok": true,
+        "injection_count": 1,
+        "collection_time": "2026-10-18T01:17:40Z"
+      },
+      "S2-no-siem-no-ids": {
+        "status": "ok",
+        "ok": true,
+        "injection_count": 2,
+        "collection_time": "2026-10-18T01:44:39Z"
+      },
+      "S2-syn-cookie-no-ids": {
+        "status": "ok",
+        "ok": true,
+        "injection_count": 2,
+        "collection_time": "2026-10-18T02:10:35Z"
+      },
+      "S2-syn-cookie-no-siem": {
+        "status": "ok",
+        "ok": true,
+        "injection_count": 2,
+        "collection_time": "2026-10-18T02:37:21Z"
+      },
+      "S3-syn-cookie-no-siem-no-ids": {
+        "status": "ok",
+        "ok": true,
+        "injection_count": 3,
+        "collection_time": "2026-10-18T03:06:10Z"
+      },
+      "S5-2fa-only": {
+        "status": "ok",
+        "ok": true,
+        "injection_count": 1,
+        "collection_time": "2026-10-18T03:32:20Z"
+      },
+      "S5-cascade-3fa": {
+        "status": "ok",
+        "ok": true,
+        "injection_count": 2,
+        "collection_time": "2026-10-18T03:58:58Z"
+      }
+    }
+  },
+  "chain_ts_source": "逐场景不同（见 per_scenario[].collect.ts_source）：1 个场景 → 链条目 ts = 3/5 条按 harness 注入时刻（2 个注入阶段），其余 2 条取评估时刻; 2 个场景 → 链条目 ts = 4/4 条按 harness 注入时刻（2 个注入阶段），其余 0 条取评估时刻; 1 个场景 → 链条目 ts = 6/6 条按 harness 注入时刻（3 个注入阶段），其余 0 条取评估时刻; 1 个场景 → 链条目 ts = 全部取评估时刻（同时注入场景，无时间结构 ⇒ C 与 V 在这条数据上同分）; 5 个场景 → 链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 1 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）; 1 个场景 → 链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 2 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）",
+  "per_scenario": [
+    {
+      "instance": "S0-baseline",
+      "scenario": "S0-baseline",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S0-baseline",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-17T22:58:20Z",
+        "finished_at": "2026-10-17T22:58:39Z",
+        "elapsed_s": 19,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 19
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S0-baseline",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 0,
+        "records_after": 1,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 4,
+        "scenario_id": "S0-baseline-01",
+        "factors": [
+          "EF-NO-IDS"
+        ],
+        "injection": "none",
+        "chain_entries": 2,
+        "failed_checks": 42,
+        "final_score": 65.16,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 全部取评估时刻（同时注入场景，无时间结构 ⇒ C 与 V 在这条数据上同分）",
+        "collected_at": "2026-10-17T23:25:27Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [],
+          "record_in_node": true,
+          "probes_expected": false,
+          "phases": 0,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 0,
+          "probes": [],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S0-baseline.json",
+          "mtime": "2026-10-17T23:25:23Z",
+          "age_s": 0,
+          "started_at": "2026-10-17T22:58:43Z",
+          "finished_at": "2026-10-17T23:25:21Z",
+          "injections": 0,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-NO-IDS"
+          ],
+          "actual": [
+            "EF-NO-IDS"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 2,
+          "distinct_ids": 1,
+          "duplicate_entries": 1,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2
+          },
+          "verdict": "观察到重复条目: EF-NO-IDS×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": null,
+          "status": "n/a",
+          "collection_time": "2026-10-17T23:25:27Z",
+          "injection_count": 0,
+          "entries": [],
+          "note": "本场景没有注入时刻（S0 无因子 / R 组是真实缺失而非注入）—— 记录的 checks[].ts 取采集时刻，这是如实取值；时钟核对**不适用**（n/a），不是\"通过\""
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 65.16,
+          "recorded": 65.16,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 65.1600 − 记录 65.1600 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 31,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": false,
+        "ef3fa_note": "链上没有 EF-3FA"
+      },
+      "timings_s": {
+        "reset": 20,
+        "attack": 1604,
+        "collect": 4,
+        "total": 1628
+      }
+    },
+    {
+      "instance": "S1-2fa",
+      "scenario": "S1-2fa",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S1-2fa",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-17T23:25:27Z",
+        "finished_at": "2026-10-17T23:25:45Z",
+        "elapsed_s": 18,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 17
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S1-2fa",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 1,
+        "records_after": 2,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 4,
+        "scenario_id": "S1-2fa-01",
+        "factors": [
+          "EF-002FA",
+          "EF-NO-IDS"
+        ],
+        "injection": "check_fail",
+        "chain_entries": 4,
+        "failed_checks": 43,
+        "final_score": 59.01,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 1 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）",
+        "collected_at": "2026-10-17T23:52:59Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [
+            "asc-vm910"
+          ],
+          "record_in_node": true,
+          "probes_expected": true,
+          "phases": 1,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 1,
+          "probes": [
+            {
+              "factor": "EF-002FA",
+              "check": "EF-001",
+              "condition_holds": false,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            }
+          ],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S1-2fa.json",
+          "mtime": "2026-10-17T23:52:55Z",
+          "age_s": 0,
+          "started_at": "2026-10-17T23:25:54Z",
+          "finished_at": "2026-10-17T23:52:53Z",
+          "injections": 1,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [
+            "EF-002FA"
+          ],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-002FA",
+            "EF-NO-IDS"
+          ],
+          "actual": [
+            "EF-002FA",
+            "EF-NO-IDS"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_entries": 2,
+          "duplicate_ids": {
+            "EF-002FA": 2,
+            "EF-NO-IDS": 2
+          },
+          "verdict": "观察到重复条目: EF-002FA×2, EF-NO-IDS×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": true,
+          "status": "ok",
+          "collection_time": "2026-10-17T23:52:59Z",
+          "injection_count": 1,
+          "entries": [
+            {
+              "check": "EF-001",
+              "injected_at": "2026-10-17T23:25:48Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-17T23:25:48Z",
+              "recorded_chain_ts": "2026-10-17T23:52:59Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            }
+          ],
+          "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 59.01,
+          "recorded": 59.01,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 59.0100 − 记录 59.0100 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 54,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": false,
+        "ef3fa_note": "链上没有 EF-3FA"
+      },
+      "timings_s": {
+        "reset": 18,
+        "attack": 1630,
+        "collect": 4,
+        "total": 1652
+      }
+    },
+    {
+      "instance": "S1-no-ids",
+      "scenario": "S1-no-ids",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S1-no-ids",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-17T23:52:59Z",
+        "finished_at": "2026-10-17T23:53:17Z",
+        "elapsed_s": 18,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 17
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S1-no-ids",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 2,
+        "records_after": 3,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 3,
+        "scenario_id": "S1-no-ids-01",
+        "factors": [
+          "EF-NO-IDS"
+        ],
+        "injection": "check_fail",
+        "chain_entries": 2,
+        "failed_checks": 42,
+        "final_score": 65.16,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 1 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）",
+        "collected_at": "2026-10-18T00:20:41Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [
+            "asc-vm910"
+          ],
+          "record_in_node": true,
+          "probes_expected": true,
+          "phases": 1,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 1,
+          "probes": [
+            {
+              "factor": "EF-NO-IDS",
+              "check": "RS-006",
+              "condition_holds": true,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            }
+          ],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S1-no-ids.json",
+          "mtime": "2026-10-18T00:20:38Z",
+          "age_s": 0,
+          "started_at": "2026-10-17T23:53:26Z",
+          "finished_at": "2026-10-18T00:20:36Z",
+          "injections": 1,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-NO-IDS"
+          ],
+          "actual": [
+            "EF-NO-IDS"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 2,
+          "distinct_ids": 1,
+          "duplicate_entries": 1,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2
+          },
+          "verdict": "观察到重复条目: EF-NO-IDS×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": true,
+          "status": "ok",
+          "collection_time": "2026-10-18T00:20:41Z",
+          "injection_count": 1,
+          "entries": [
+            {
+              "check": "RS-006",
+              "injected_at": "2026-10-17T23:53:20Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-17T23:53:20Z",
+              "recorded_chain_ts": "2026-10-18T00:20:41Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            }
+          ],
+          "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 65.16,
+          "recorded": 65.16,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 65.1600 − 记录 65.1600 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 25,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": false,
+        "ef3fa_note": "链上没有 EF-3FA"
+      },
+      "timings_s": {
+        "reset": 18,
+        "attack": 1641,
+        "collect": 4,
+        "total": 1663
+      }
+    },
+    {
+      "instance": "S1-no-siem",
+      "scenario": "S1-no-siem",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S1-no-siem",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-18T00:20:42Z",
+        "finished_at": "2026-10-18T00:21:00Z",
+        "elapsed_s": 18,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 18
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S1-no-siem",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 3,
+        "records_after": 4,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 4,
+        "scenario_id": "S1-no-siem-01",
+        "factors": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM"
+        ],
+        "injection": "check_fail",
+        "chain_entries": 4,
+        "failed_checks": 43,
+        "final_score": 62.28,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 1 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）",
+        "collected_at": "2026-10-18T00:48:13Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [
+            "asc-vm910"
+          ],
+          "record_in_node": true,
+          "probes_expected": true,
+          "phases": 1,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 1,
+          "probes": [
+            {
+              "factor": "EF-NO-SIEM",
+              "check": "RS-007",
+              "condition_holds": false,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            }
+          ],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S1-no-siem.json",
+          "mtime": "2026-10-18T00:48:09Z",
+          "age_s": 0,
+          "started_at": "2026-10-18T00:21:09Z",
+          "finished_at": "2026-10-18T00:48:08Z",
+          "injections": 1,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [
+            "EF-NO-SIEM"
+          ],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-NO-IDS",
+            "EF-NO-SIEM"
+          ],
+          "actual": [
+            "EF-NO-IDS",
+            "EF-NO-SIEM"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_entries": 2,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2
+          },
+          "verdict": "观察到重复条目: EF-NO-IDS×2, EF-NO-SIEM×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": true,
+          "status": "ok",
+          "collection_time": "2026-10-18T00:48:13Z",
+          "injection_count": 1,
+          "entries": [
+            {
+              "check": "RS-007",
+              "injected_at": "2026-10-18T00:21:03Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T00:21:03Z",
+              "recorded_chain_ts": "2026-10-18T00:48:13Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            }
+          ],
+          "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 62.28,
+          "recorded": 62.28,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 62.2800 − 记录 62.2800 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 51,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": false,
+        "ef3fa_note": "链上没有 EF-3FA"
+      },
+      "timings_s": {
+        "reset": 18,
+        "attack": 1629,
+        "collect": 4,
+        "total": 1651
+      }
+    },
+    {
+      "instance": "S1-syn-cookie",
+      "scenario": "S1-syn-cookie",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S1-syn-cookie",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-18T00:48:14Z",
+        "finished_at": "2026-10-18T00:48:32Z",
+        "elapsed_s": 18,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 18
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S1-syn-cookie",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 4,
+        "records_after": 5,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 4,
+        "scenario_id": "S1-syn-cookie-01",
+        "factors": [
+          "EF-NO-IDS",
+          "EF-SYNCOOKIE"
+        ],
+        "injection": "check_fail",
+        "chain_entries": 4,
+        "failed_checks": 43,
+        "final_score": 58.52,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 1 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）",
+        "collected_at": "2026-10-18T01:17:40Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [
+            "asc-vm910"
+          ],
+          "record_in_node": true,
+          "probes_expected": true,
+          "phases": 1,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 1,
+          "probes": [
+            {
+              "factor": "EF-SYNCOOKIE",
+              "check": "RS-005",
+              "condition_holds": false,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            }
+          ],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S1-syn-cookie.json",
+          "mtime": "2026-10-18T01:17:36Z",
+          "age_s": 0,
+          "started_at": "2026-10-18T00:48:41Z",
+          "finished_at": "2026-10-18T01:17:34Z",
+          "injections": 1,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [
+            "EF-SYNCOOKIE"
+          ],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-NO-IDS",
+            "EF-SYNCOOKIE"
+          ],
+          "actual": [
+            "EF-NO-IDS",
+            "EF-SYNCOOKIE"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_entries": 2,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-SYNCOOKIE": 2
+          },
+          "verdict": "观察到重复条目: EF-NO-IDS×2, EF-SYNCOOKIE×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": true,
+          "status": "ok",
+          "collection_time": "2026-10-18T01:17:40Z",
+          "injection_count": 1,
+          "entries": [
+            {
+              "check": "RS-005",
+              "injected_at": "2026-10-18T00:48:35Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T00:48:35Z",
+              "recorded_chain_ts": "2026-10-18T01:17:40Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            }
+          ],
+          "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 58.52,
+          "recorded": 58.52,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 58.5200 − 记录 58.5200 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 44,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": false,
+        "ef3fa_note": "链上没有 EF-3FA"
+      },
+      "timings_s": {
+        "reset": 19,
+        "attack": 1744,
+        "collect": 4,
+        "total": 1767
+      }
+    },
+    {
+      "instance": "S2-no-siem-no-ids",
+      "scenario": "S2-no-siem-no-ids",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S2-no-siem-no-ids",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-18T01:17:40Z",
+        "finished_at": "2026-10-18T01:17:59Z",
+        "elapsed_s": 19,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 18
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S2-no-siem-no-ids",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 5,
+        "records_after": 6,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 4,
+        "scenario_id": "S2-no-siem-no-ids-01",
+        "factors": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM"
+        ],
+        "injection": "check_fail",
+        "chain_entries": 4,
+        "failed_checks": 43,
+        "final_score": 62.28,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 4/4 条按 harness 注入时刻（2 个注入阶段），其余 0 条取评估时刻",
+        "collected_at": "2026-10-18T01:44:39Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [
+            "asc-vm910"
+          ],
+          "record_in_node": true,
+          "probes_expected": true,
+          "phases": 2,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 2,
+          "probes": [
+            {
+              "factor": "EF-NO-SIEM",
+              "check": "RS-007",
+              "condition_holds": false,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            },
+            {
+              "factor": "EF-NO-IDS",
+              "check": "RS-006",
+              "condition_holds": true,
+              "phase": 2,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            }
+          ],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S2-no-siem-no-ids.json",
+          "mtime": "2026-10-18T01:44:35Z",
+          "age_s": 0,
+          "started_at": "2026-10-18T01:18:16Z",
+          "finished_at": "2026-10-18T01:44:33Z",
+          "injections": 2,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [
+            "EF-NO-IDS",
+            "EF-NO-SIEM"
+          ],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-NO-IDS",
+            "EF-NO-SIEM"
+          ],
+          "actual": [
+            "EF-NO-IDS",
+            "EF-NO-SIEM"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_entries": 2,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2
+          },
+          "verdict": "观察到重复条目: EF-NO-IDS×2, EF-NO-SIEM×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": true,
+          "status": "ok",
+          "collection_time": "2026-10-18T01:44:39Z",
+          "injection_count": 2,
+          "entries": [
+            {
+              "check": "RS-007",
+              "injected_at": "2026-10-18T01:18:02Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T01:18:02Z",
+              "recorded_chain_ts": "2026-10-18T01:18:02Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            },
+            {
+              "check": "RS-006",
+              "injected_at": "2026-10-18T01:18:10Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T01:18:10Z",
+              "recorded_chain_ts": "2026-10-18T01:18:10Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            }
+          ],
+          "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 62.28,
+          "recorded": 62.28,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 62.2800 − 记录 62.2800 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 32,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": false,
+        "ef3fa_note": "链上没有 EF-3FA"
+      },
+      "timings_s": {
+        "reset": 19,
+        "attack": 1596,
+        "collect": 4,
+        "total": 1619
+      }
+    },
+    {
+      "instance": "S2-syn-cookie-no-ids",
+      "scenario": "S2-syn-cookie-no-ids",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S2-syn-cookie-no-ids",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-18T01:44:39Z",
+        "finished_at": "2026-10-18T01:44:58Z",
+        "elapsed_s": 19,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 18
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S2-syn-cookie-no-ids",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 6,
+        "records_after": 7,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 4,
+        "scenario_id": "S2-syn-cookie-no-ids-01",
+        "factors": [
+          "EF-NO-IDS",
+          "EF-SYNCOOKIE"
+        ],
+        "injection": "check_fail",
+        "chain_entries": 4,
+        "failed_checks": 43,
+        "final_score": 58.52,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 4/4 条按 harness 注入时刻（2 个注入阶段），其余 0 条取评估时刻",
+        "collected_at": "2026-10-18T02:10:35Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [
+            "asc-vm910"
+          ],
+          "record_in_node": true,
+          "probes_expected": true,
+          "phases": 2,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 2,
+          "probes": [
+            {
+              "factor": "EF-SYNCOOKIE",
+              "check": "RS-005",
+              "condition_holds": false,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            },
+            {
+              "factor": "EF-NO-IDS",
+              "check": "RS-006",
+              "condition_holds": true,
+              "phase": 2,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            }
+          ],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S2-syn-cookie-no-ids.json",
+          "mtime": "2026-10-18T02:10:31Z",
+          "age_s": 0,
+          "started_at": "2026-10-18T01:45:14Z",
+          "finished_at": "2026-10-18T02:10:30Z",
+          "injections": 2,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [
+            "EF-NO-IDS",
+            "EF-SYNCOOKIE"
+          ],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-NO-IDS",
+            "EF-SYNCOOKIE"
+          ],
+          "actual": [
+            "EF-NO-IDS",
+            "EF-SYNCOOKIE"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_entries": 2,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-SYNCOOKIE": 2
+          },
+          "verdict": "观察到重复条目: EF-NO-IDS×2, EF-SYNCOOKIE×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": true,
+          "status": "ok",
+          "collection_time": "2026-10-18T02:10:35Z",
+          "injection_count": 2,
+          "entries": [
+            {
+              "check": "RS-005",
+              "injected_at": "2026-10-18T01:45:01Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T01:45:01Z",
+              "recorded_chain_ts": "2026-10-18T01:45:01Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            },
+            {
+              "check": "RS-006",
+              "injected_at": "2026-10-18T01:45:08Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T01:45:08Z",
+              "recorded_chain_ts": "2026-10-18T01:45:08Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            }
+          ],
+          "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 58.52,
+          "recorded": 58.52,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 58.5200 − 记录 58.5200 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 5,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": false,
+        "ef3fa_note": "链上没有 EF-3FA"
+      },
+      "timings_s": {
+        "reset": 19,
+        "attack": 1533,
+        "collect": 4,
+        "total": 1556
+      }
+    },
+    {
+      "instance": "S2-syn-cookie-no-siem",
+      "scenario": "S2-syn-cookie-no-siem",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S2-syn-cookie-no-siem",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-18T02:10:36Z",
+        "finished_at": "2026-10-18T02:10:54Z",
+        "elapsed_s": 18,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 18
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S2-syn-cookie-no-siem",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 7,
+        "records_after": 8,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 4,
+        "scenario_id": "S2-syn-cookie-no-siem-01",
+        "factors": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM",
+          "EF-SYNCOOKIE"
+        ],
+        "injection": "check_fail",
+        "chain_entries": 6,
+        "failed_checks": 44,
+        "final_score": 56.91,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 2 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）",
+        "collected_at": "2026-10-18T02:37:21Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [
+            "asc-vm910"
+          ],
+          "record_in_node": true,
+          "probes_expected": true,
+          "phases": 1,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 2,
+          "probes": [
+            {
+              "factor": "EF-SYNCOOKIE",
+              "check": "RS-005",
+              "condition_holds": false,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            },
+            {
+              "factor": "EF-NO-SIEM",
+              "check": "RS-007",
+              "condition_holds": false,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            }
+          ],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S2-syn-cookie-no-siem.json",
+          "mtime": "2026-10-18T02:37:17Z",
+          "age_s": 0,
+          "started_at": "2026-10-18T02:11:08Z",
+          "finished_at": "2026-10-18T02:37:16Z",
+          "injections": 2,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [
+            "EF-NO-SIEM",
+            "EF-SYNCOOKIE"
+          ],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-NO-IDS",
+            "EF-NO-SIEM",
+            "EF-SYNCOOKIE"
+          ],
+          "actual": [
+            "EF-NO-IDS",
+            "EF-NO-SIEM",
+            "EF-SYNCOOKIE"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 6,
+          "distinct_ids": 3,
+          "duplicate_entries": 3,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2,
+            "EF-SYNCOOKIE": 2
+          },
+          "verdict": "观察到重复条目: EF-NO-IDS×2, EF-NO-SIEM×2, EF-SYNCOOKIE×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": true,
+          "status": "ok",
+          "collection_time": "2026-10-18T02:37:21Z",
+          "injection_count": 2,
+          "entries": [
+            {
+              "check": "RS-005",
+              "injected_at": "2026-10-18T02:10:58Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T02:10:58Z",
+              "recorded_chain_ts": "2026-10-18T02:37:21Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            },
+            {
+              "check": "RS-007",
+              "injected_at": "2026-10-18T02:10:58Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T02:10:58Z",
+              "recorded_chain_ts": "2026-10-18T02:37:21Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            }
+          ],
+          "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 56.91,
+          "recorded": 56.91,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 56.9100 − 记录 56.9100 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 5,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": false,
+        "ef3fa_note": "链上没有 EF-3FA"
+      },
+      "timings_s": {
+        "reset": 18,
+        "attack": 1583,
+        "collect": 4,
+        "total": 1605
+      }
+    },
+    {
+      "instance": "S3-syn-cookie-no-siem-no-ids",
+      "scenario": "S3-syn-cookie-no-siem-no-ids",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S3-syn-cookie-no-siem-no-ids",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-18T02:37:21Z",
+        "finished_at": "2026-10-18T02:37:39Z",
+        "elapsed_s": 18,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 17
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S3-syn-cookie-no-siem-no-ids",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 8,
+        "records_after": 9,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 3,
+        "scenario_id": "S3-syn-cookie-no-siem-no-ids-01",
+        "factors": [
+          "EF-NO-IDS",
+          "EF-NO-SIEM",
+          "EF-SYNCOOKIE"
+        ],
+        "injection": "check_fail",
+        "chain_entries": 6,
+        "failed_checks": 44,
+        "final_score": 56.91,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 6/6 条按 harness 注入时刻（3 个注入阶段），其余 0 条取评估时刻",
+        "collected_at": "2026-10-18T03:06:10Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [
+            "asc-vm910"
+          ],
+          "record_in_node": true,
+          "probes_expected": true,
+          "phases": 3,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 3,
+          "probes": [
+            {
+              "factor": "EF-SYNCOOKIE",
+              "check": "RS-005",
+              "condition_holds": false,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            },
+            {
+              "factor": "EF-NO-SIEM",
+              "check": "RS-007",
+              "condition_holds": false,
+              "phase": 2,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            },
+            {
+              "factor": "EF-NO-IDS",
+              "check": "RS-006",
+              "condition_holds": true,
+              "phase": 3,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            }
+          ],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S3-syn-cookie-no-siem-no-ids.json",
+          "mtime": "2026-10-18T03:06:06Z",
+          "age_s": 1,
+          "started_at": "2026-10-18T02:38:03Z",
+          "finished_at": "2026-10-18T03:06:05Z",
+          "injections": 3,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [
+            "EF-NO-IDS",
+            "EF-NO-SIEM",
+            "EF-SYNCOOKIE"
+          ],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-NO-IDS",
+            "EF-NO-SIEM",
+            "EF-SYNCOOKIE"
+          ],
+          "actual": [
+            "EF-NO-IDS",
+            "EF-NO-SIEM",
+            "EF-SYNCOOKIE"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 6,
+          "distinct_ids": 3,
+          "duplicate_entries": 3,
+          "duplicate_ids": {
+            "EF-NO-IDS": 2,
+            "EF-NO-SIEM": 2,
+            "EF-SYNCOOKIE": 2
+          },
+          "verdict": "观察到重复条目: EF-NO-IDS×2, EF-NO-SIEM×2, EF-SYNCOOKIE×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": true,
+          "status": "ok",
+          "collection_time": "2026-10-18T03:06:10Z",
+          "injection_count": 3,
+          "entries": [
+            {
+              "check": "RS-005",
+              "injected_at": "2026-10-18T02:37:42Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T02:37:42Z",
+              "recorded_chain_ts": "2026-10-18T02:37:42Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            },
+            {
+              "check": "RS-007",
+              "injected_at": "2026-10-18T02:37:50Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T02:37:50Z",
+              "recorded_chain_ts": "2026-10-18T02:37:50Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            },
+            {
+              "check": "RS-006",
+              "injected_at": "2026-10-18T02:37:57Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T02:37:57Z",
+              "recorded_chain_ts": "2026-10-18T02:37:57Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            }
+          ],
+          "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 56.91,
+          "recorded": 56.91,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 56.9100 − 记录 56.9100 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 34,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": false,
+        "ef3fa_note": "链上没有 EF-3FA"
+      },
+      "timings_s": {
+        "reset": 18,
+        "attack": 1707,
+        "collect": 4,
+        "total": 1729
+      }
+    },
+    {
+      "instance": "S5-2fa-only",
+      "scenario": "S5-2fa-only",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S5-2fa-only",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-18T03:06:11Z",
+        "finished_at": "2026-10-18T03:06:29Z",
+        "elapsed_s": 18,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 18
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S5-2fa-only",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 9,
+        "records_after": 10,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 4,
+        "scenario_id": "S5-2fa-only-01",
+        "factors": [
+          "EF-002FA",
+          "EF-NO-IDS"
+        ],
+        "injection": "check_fail",
+        "chain_entries": 4,
+        "failed_checks": 43,
+        "final_score": 59.01,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 全部取评估时刻（同时注入场景：harness 报出的 1 个注入时刻不用于链条目，只用 checks[]，以免造出没人设计的顺序）",
+        "collected_at": "2026-10-18T03:32:20Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [
+            "asc-vm910"
+          ],
+          "record_in_node": true,
+          "probes_expected": true,
+          "phases": 1,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 1,
+          "probes": [
+            {
+              "factor": "EF-002FA",
+              "check": "EF-001",
+              "condition_holds": false,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            }
+          ],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S5-2fa-only.json",
+          "mtime": "2026-10-18T03:32:16Z",
+          "age_s": 0,
+          "started_at": "2026-10-18T03:06:38Z",
+          "finished_at": "2026-10-18T03:32:14Z",
+          "injections": 1,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [
+            "EF-002FA"
+          ],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-002FA",
+            "EF-NO-IDS"
+          ],
+          "actual": [
+            "EF-002FA",
+            "EF-NO-IDS"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 4,
+          "distinct_ids": 2,
+          "duplicate_entries": 2,
+          "duplicate_ids": {
+            "EF-002FA": 2,
+            "EF-NO-IDS": 2
+          },
+          "verdict": "观察到重复条目: EF-002FA×2, EF-NO-IDS×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": true,
+          "status": "ok",
+          "collection_time": "2026-10-18T03:32:20Z",
+          "injection_count": 1,
+          "entries": [
+            {
+              "check": "EF-001",
+              "injected_at": "2026-10-18T03:06:32Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T03:06:32Z",
+              "recorded_chain_ts": "2026-10-18T03:32:20Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            }
+          ],
+          "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 59.01,
+          "recorded": 59.01,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 59.0100 − 记录 59.0100 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 7,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": false,
+        "ef3fa_note": "链上没有 EF-3FA"
+      },
+      "timings_s": {
+        "reset": 18,
+        "attack": 1547,
+        "collect": 4,
+        "total": 1569
+      }
+    },
+    {
+      "instance": "S5-cascade-3fa",
+      "scenario": "S5-cascade-3fa",
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "reset": {
+        "scenario": "S5-cascade-3fa",
+        "phase": "reset",
+        "env": "t21-qemu-r1",
+        "substrate": "qemu",
+        "started_at": "2026-10-18T03:32:20Z",
+        "finished_at": "2026-10-18T03:32:38Z",
+        "elapsed_s": 18,
+        "instance": "asc-vm910",
+        "policy_on": "1",
+        "policy_rule": "audit deny /etc/shadow r,",
+        "timings_s": {
+          "caldera": 0,
+          "prepare": 17
+        },
+        "note": "qemu 基质：复位语义是『把既有实例准备成实验条件』（幂等），没有 build/destroy —— 见 edge_target_prepare.sh；probe-ot005 等对照容器不接受复位。"
+      },
+      "attack": null,
+      "collect": {
+        "scenario": "S5-cascade-3fa",
+        "phase": "collect",
+        "env": "t21-qemu-r1",
+        "run": 1,
+        "config": "m0-baseline.ini",
+        "config_path": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+        "config_hash": "sha256:dd334cd724ba0c4c",
+        "config_hash_full": "sha256:dd334cd724ba0c4c303d9455c127db54616d4d9e20297f13229eee2c067314f6",
+        "hash_precision": {
+          "config_hash": "sha256[:16]（= 记录 meta.config_hash 的口径）",
+          "config_hash_full": "sha256[:64]",
+          "topology_hash": "sha256[:64]",
+          "playbook_hash": "sha256[:64]"
+        },
+        "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+        "records_before": 10,
+        "records_after": 11,
+        "record_added": 1,
+        "record_kept": true,
+        "rolled_back": false,
+        "elapsed_s": 4,
+        "scenario_id": "S5-cascade-3fa-01",
+        "factors": [
+          "EF-002FA",
+          "EF-NO-IDS",
+          "EF-3FA"
+        ],
+        "injection": "check_fail",
+        "chain_entries": 5,
+        "failed_checks": 44,
+        "final_score": 57.4,
+        "threshold": 80,
+        "acceptable": false,
+        "effective_weights": {
+          "attack_surface": 35,
+          "business_continuity": 25,
+          "kernel_security": 10,
+          "operation_trust": 25,
+          "resilience": 15
+        },
+        "spc_score": 1,
+        "threat_coeff": 1,
+        "weight_source": "config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）",
+        "ts_source": "链条目 ts = 3/5 条按 harness 注入时刻（2 个注入阶段），其余 2 条取评估时刻",
+        "collected_at": "2026-10-18T03:58:58Z",
+        "config_hash_match": {
+          "ok": true,
+          "record": "dd334cd724ba0c4c",
+          "expected": "dd334cd724ba0c4c",
+          "note": "记录 meta.config_hash（16 位）必须等于本次采集配置的 sha256 前 16 位 —— 不等说明这条记录不是这份配置采的（配置在采集途中被换过），报告的权重口径会指向另一份配置"
+        },
+        "observation_subject": {
+          "target_declared": "asc-vm910",
+          "record_observation_target": "node:asc-vm910 (substrate=qemu, hostname=asc-vm910)",
+          "harness_probe_targets": [
+            "asc-vm910"
+          ],
+          "record_in_node": true,
+          "probes_expected": true,
+          "phases": 2,
+          "ok": true,
+          "note": "观测主体口径：声明了 EDGEEXP_TARGET 时记录必须带 meta.observation_target 且指向该节点；condition_probes 的 probe_target 必须与它一致（R 组的证据与 checks[] 的观测必须在同一台机器上）。probes_expected=false（S0 基线：无相位也无真实缺失）表示**本场景没有探针可做**，此时 condition_probes 为空是如实结果、不是缺陷"
+        },
+        "real_missing_evidence": {
+          "real_missing": "",
+          "real_missing_verified_at": "",
+          "probe_count": 2,
+          "probes": [
+            {
+              "factor": "EF-3FA",
+              "check": "EF-002",
+              "condition_holds": false,
+              "phase": 1,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            },
+            {
+              "factor": "EF-002FA",
+              "check": "EF-001",
+              "condition_holds": false,
+              "phase": 2,
+              "real_missing": false,
+              "probe_target": "asc-vm910",
+              "probe_host": "asc-vm910"
+            }
+          ],
+          "ok": true,
+          "note": "R 组的\"真实缺失\"必须有**节点侧**证据：condition_probes 至少一条、且 probe_host 非空（空数组却声称已核实，正是 Task 4C 之前的状态）"
+        },
+        "attack_product": {
+          "path": "/root/t6/t21-data/edgefactors/attack-S5-cascade-3fa.json",
+          "mtime": "2026-10-18T03:58:54Z",
+          "age_s": 0,
+          "started_at": "2026-10-18T03:32:55Z",
+          "finished_at": "2026-10-18T03:58:52Z",
+          "injections": 2,
+          "run_started_at": "2026-10-17T22:58:19Z",
+          "freshness": "mtime ≥ 本轮起始时刻"
+        },
+        "chain_factor_set_equality": {
+          "ok": true,
+          "declaration_face": "基线活跃集 ∪ 注入集",
+          "expected_injected": [
+            "EF-002FA",
+            "EF-3FA"
+          ],
+          "expected_baseline": [
+            "EF-NO-IDS"
+          ],
+          "expected_baseline_source": "VM(qemu) 实测（S0 探针，Task 17 Step 1-b，Task 21 沿用同一基质/同一 prepare）：RS-006 在 VM 上失败（suricata.service=failed、aide 无常驻服务、ps 无 IDS 进程）⇒ EF-NO-IDS 在链上；RS-007 通过（edge_target_prepare 写入 /etc/aide/aide.conf 的真实告警面）⇒ EF-NO-SIEM 不在链上；OT-005/KS-012 在 root 等价取数下通过 ⇒ EF-SELINUX/EF-APPARMOR 不在链上",
+          "expected": [
+            "EF-002FA",
+            "EF-3FA",
+            "EF-NO-IDS"
+          ],
+          "actual": [
+            "EF-002FA",
+            "EF-3FA",
+            "EF-NO-IDS"
+          ],
+          "missing": [],
+          "missing_injected": [],
+          "missing_baseline": [],
+          "extra": [],
+          "source": "采集器 edgescen -list 的声明面 + 级联展开（EF-3FA：配置有自定义条目则为普通因子，另外展开 级联目标=）；**Task 17 起**再按配置的『trigger.<因子>』表做**耦合闭包**（共用同一触发检查的因子一并纳入）",
+          "note": "链上的因子集必须与**声明面**（基线活跃集 ∪ 注入集）**相等**（不是包含）：注入集缺席 = 因子塌缩；基线集缺席 = 声明与现实不符；多出来的因子 = 这台宿主上还有别的检查在自然失败且无人声明（本场景的数据与其他场景不可区分，见 spec §5.4.7 的诚实边界）"
+        },
+        "gate0_duplicate_factors": {
+          "chain_entries": 5,
+          "distinct_ids": 3,
+          "duplicate_entries": 2,
+          "duplicate_ids": {
+            "EF-002FA": 2,
+            "EF-NO-IDS": 2
+          },
+          "verdict": "观察到重复条目: EF-002FA×2, EF-NO-IDS×2",
+          "method": "按归一化因子 ID（trim+upper，与 edgefactor.NormalizeFactorID 同义）统计链上条目数；只统计真实记录的链，不做静态推断"
+        },
+        "injection_vs_collection": {
+          "ok": true,
+          "status": "ok",
+          "collection_time": "2026-10-18T03:58:58Z",
+          "injection_count": 2,
+          "entries": [
+            {
+              "check": "EF-002",
+              "injected_at": "2026-10-18T03:32:42Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T03:32:42Z",
+              "recorded_chain_ts": "2026-10-18T03:32:42Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            },
+            {
+              "check": "EF-001",
+              "injected_at": "2026-10-18T03:32:49Z",
+              "injected_check_present": true,
+              "recorded_checks_ts": "2026-10-18T03:32:49Z",
+              "recorded_chain_ts": "2026-10-18T03:32:49Z",
+              "checks_ts_matches": true,
+              "before_collection": true
+            }
+          ],
+          "note": "注入时刻全部早于采集时刻（meta.timestamp = 记录装配时刻，即本工具能拿到的唯一采集时间戳）；recorded_checks_ts 与 harness 报的注入时刻逐条比较（采集器把 harness时刻原样写进 checks[].ts）"
+        },
+        "checks_ts_mismatch": [],
+        "injected_check_absent": [],
+        "gate2_round_trip": {
+          "source": "edgescen 进程内自检（装配点；不通过即拒绝写出该条记录）",
+          "recomputed": 57.4,
+          "recorded": 57.4,
+          "delta": 0.0,
+          "tolerance": 0.005,
+          "line": "round-trip: 复算 57.4000 − 记录 57.4000 = +0（容差 0.005）"
+        },
+        "ground_truth": {
+          "compromised": true,
+          "time_to_compromise_s": 0,
+          "ttps_achieved": 36,
+          "nodes_affected": 1,
+          "block_effective": false,
+          "basis": "recon_playbook"
+        },
+        "ef3fa_on_chain": true,
+        "ef3fa_note": "链上有 EF-3FA。四份实验模板都声明了 `vector.EF-3FA`，而出厂 [edge_factors.custom] 里的 `EF-3FA = 0.82` 使它成为一个**普通因子**（不是只有 CascadeOnly 那条）—— 故 `-factors` 必须带上 `EF-3FA=0.82`：漏掉它会让该条目被工具**静默丢弃**（那条惩罚凭空消失、分数被抬高、漏判率被低估），而不是什么\"fallback 向量惩罚\"。禁止的只是\"为了把门禁凑绿而静默塞值\"这种动作。"
+      },
+      "timings_s": {
+        "reset": 18,
+        "attack": 1576,
+        "collect": 4,
+        "total": 1598
+      }
+    }
+  ],
+  "notes": {
+    "per_scenario_records": "每场景只采 1 条（chain 在线不可执行；候选差异由离线 edgecompare 覆盖）",
+    "factor_set_equality": "链上的因子集必须与场景声明**相等**（edge_collect.sh 断言；多一个因子即整轮失败）",
+    "ef3fa": "EF-3FA 是普通因子（四份模板都声明 vector.EF-3FA；出厂 [edge_factors.custom] EF-3FA = 0.82）⇒ -factors 必须含 EF-3FA=0.82。漏掉它会让该条目被工具静默丢弃（那条惩罚凭空消失、分数被抬高），而不是什么\"fallback 向量惩罚\"；禁止的只是\"为让门禁变绿而静默塞值\"。",
+    "weights": "离线复算以记录自带的 observed.effective_weights 为准；-weights 只是回退表",
+    "gate1_dataset": "门禁① 跑在**全量**记录上（不再按 EF-3FA 切子集）",
+    "repeat_axis": "Task 11：**重复轴与臂是两个独立维度**。`run` 维度 = EDGEEXP_RUN_INDEX（第几次重复采样），`arm` 维度 = 0（POLICY_ON=0）/ 1（POLICY_ON=1）；记录的 `scenario_id` 尾号是**实例号** NN=(REPEAT-1)*NARMS+arm+1（NARMS = 该场景的实例数，targeted 开臂时=2）；实例键（碎片/`attack-*.json` 文件名）在 REPEAT>1 时带 `-r<N>` ⇒ 重复之间不覆盖。记录里三个维度分别可查：`scenario_id` / `meta.policy_on` / `meta.repeat`（`repeat` 只在 >1 时写 ⇒ 单 run 的记录与 Task 9 逐字节不变）。",
+    "records_file_pinned": "本脚本把解析出的记录路径 export 给子脚本（Fix round 3 / 第 2 项）：父子各自算 date +%Y%m%d 时，跨 00:00 UTC 的 sweep 会把数据集劈成两份",
+    "threshold_sensitivity": "阈值敏感性行（spec §5.4.6）**只在显式 opt-in 时**存在（EDGEEXP_SENSITIVITY_THRESHOLDS=60…）：它覆盖部署判定线，故其产物一律标注为敏感性分析、不得与主对比结论混排；本键为 null = 本轮没有跑敏感性行（默认路径不变）",
+    "scenario_conditions": "Task 5 / Step 0 + Task 10：逐**场景实例**条件由 edge_matrix.sh 按 edgescen -list 的注入因子集决定 —— 含 TTP 触发因子（默认 EF-SELINUX/EF-APPARMOR）⇒ basis=targeted_ttp + 目标/对照 ability，并且**每个场景两条臂**（POLICY_ON=0 与 POLICY_ON=1，后者是 Task 10 按用户裁定「甲」加的）；其余 ⇒ basis=recon_playbook + POLICY_ON=1（不得带 target ability）。`condition_summary` 的场景口径两列之和 == scenarios_selected 数，实例口径 `instances_total` == 选中实例数（干跑门禁同时查这两条）。两条臂只差策略、其余逐项相同；臂的身份写在记录的 **`meta.policy_on`** 里（additive），不许靠文件名或运行顺序区分。"
+  },
+  "records_file_agreement": {
+    "parent": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+    "children": {
+      "S0-baseline": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+      "S1-2fa": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+      "S1-no-ids": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+      "S1-no-siem": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+      "S1-syn-cookie": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+      "S2-no-siem-no-ids": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+      "S2-syn-cookie-no-ids": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+      "S2-syn-cookie-no-siem": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+      "S3-syn-cookie-no-siem-no-ids": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+      "S5-2fa-only": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+      "S5-cascade-3fa": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl"
+    },
+    "ok": true
+  },
+  "conditions": {
+    "S0-baseline": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S0-baseline"
+    },
+    "S1-2fa": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-2fa"
+    },
+    "S1-no-ids": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-no-ids"
+    },
+    "S1-no-siem": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-no-siem"
+    },
+    "S1-syn-cookie": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-syn-cookie"
+    },
+    "S2-no-siem-no-ids": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S2-no-siem-no-ids"
+    },
+    "S2-syn-cookie-no-ids": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S2-syn-cookie-no-ids"
+    },
+    "S2-syn-cookie-no-siem": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S2-syn-cookie-no-siem"
+    },
+    "S3-syn-cookie-no-siem-no-ids": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S3-syn-cookie-no-siem-no-ids"
+    },
+    "S5-2fa-only": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S5-2fa-only"
+    },
+    "S5-cascade-3fa": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S5-cascade-3fa"
+    }
+  },
+  "condition_summary": {
+    "targeted_ttp_scenarios": 0,
+    "recon_playbook_scenarios": 11,
+    "instances_total": 11,
+    "targeted_ttp_policy_off_instances": 0,
+    "targeted_ttp_policy_on_instances": 0,
+    "recon_playbook_instances": 11,
+    "policy_on_scenarios": 11,
+    "policy_off_scenarios": 0,
+    "policy_on_arm": "1"
+  }
+}

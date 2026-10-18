@@ -908,6 +908,38 @@ def link_time(l):
     return None
 
 
+# ---- 链级 link status 诊断（Task 23 / 第一次审计 Important-4 的**最小改动**）------------
+#
+# 为什么需要它（实测形态，不是假想）：重复批里 `S2-syn-cookie-no-ids` 的第 2 遍落成
+# `compromised=false`，同一次 `ttps_achieved=0 / nodes_affected=0`。要分清「**攻击侧没执行**」
+# 与「**被防护拦住**」，只看 `block_effective` 是不够的 —— recon 口径下它只是
+# `len(successes)==0`（见下面的 else 分支），两种成因在它上面**完全同形**。
+# 那一轮的真实区别在**链的形状**上：正常两遍 `chain_links=36`（36 条 success），那一遍
+# `chain_links=1` 且那条停在 `execute`（-3）—— 即**剧本只规划出 1 条 link、且它没有决定**。
+# 故把「链级状态直方图」+「逐条非成功 link 的明细」+「链比剧本声明少多少」写进产物，
+# 让这类翻转**事后可自证**（`attack-*.json` 从此自带诊断，不必再靠人回忆）。
+#
+# **本段只做诊断，不参与任何标签或门禁判定**：把 `-3` 守卫推广到 recon 口径属**判据变更**，
+# 需先裁定（见 task-23 报告的 concern #2），此处不擅自改。
+chain_status_histogram = statuses(chain)
+# `ordering`（剧本声明的 ability 顺序）在本文件的 python 块里更早处算出。**离线夹具
+# `tests/test-chain-derivation.sh` 只抽「派生客观结果」到产物字典那一段**去跑真实 chain，
+# 那段里没有 `ordering` ⇒ 这里必须容忍"未知"，写成 `null` 而不是 `false`
+# （`false` 会被读成"链没有退化"，而实际上我们根本不知道剧本声明了几个 ability）。
+# ⚠️ 也别在本文件里的这段注释中写出夹具的**结束标记原文**（那个标记是产物字典的赋值行）——
+# 夹具靠字符串查找切块，注释里出现它会把块**从中间截断**（Task 23 实测踩到一次）。
+_declared = globals().get('ordering')
+declared_abilities = (len(_declared) if _declared is not None else None)
+link_status_detail = [
+    {'ability_id': link_ability_id(l), 'ability_name': link_ability_name(l),
+     'paw': l.get('paw'), 'status': STATES.get(str(l.get('status')), 'unknown'),
+     'status_code': l.get('status'), 'last_event_at': link_time(l)}
+    for l in chain if l.get('status') != 0
+]
+degenerate_chain = (None if declared_abilities is None
+                    else len(chain) < declared_abilities)
+
+
 # `status = -3`（EXECUTE）**绝不算"被拦住"**：它的含义是"这条 link 挂在那里没有决定"，
 # 最常见的原因是 agent 已死（陈旧条目）或执行器不可用 —— 那是**攻击没跑起来**，不是防护起作用。
 # 旧实现的兜底只看"整条链有没有成功 link"，于是"目标 -3 + 对照 0"会被读成"目标被拦住"。
@@ -1005,6 +1037,37 @@ report = {
     },
     'other_links': {'count': len(other_links), 'status_counts': statuses(other_links),
                     'ability_ids': sorted({link_ability_id(l) for l in other_links})},
+    # ---- 链级诊断（Task 23 新增；**只诊断、不参与标签/门禁**）----
+    #
+    # 它回答的是"`compromised=false` 到底是**没执行**还是**被拦住**"这个事后问题：
+    #   · `status_histogram`：整条链按状态名计数（`success` / `execute` / `discard` / …）；
+    #   · `non_success_links`：逐条列出非成功 link（ability / paw / 状态名 / 状态码 / 最近时间戳）；
+    #   · `degenerate_chain`：链上的 link 数 **< 剧本声明的 ability 数** ⇒ 规划/投送没把剧本铺开
+    #     （实测形态：36 → 1，且那条停在 execute）—— 这种形态下的零成功是**没执行**。
+    # 有了这三项，`block_effective=true` 就不会再被单独引成"策略拦住了"。
+    'chain_status_diagnostics': {
+        'chain_links': len(chain),
+        'playbook_declared_abilities': declared_abilities,
+        'degenerate_chain': degenerate_chain,
+        'degenerate_chain_note': ('链上的 link 数 < 剧本声明的 ability 数 ⇒ 规划器/投送没有把剧本铺开'
+                                  '（实测：36 → 1，且那条停在 `execute`）。这种形态下的零成功是'
+                                  '**攻击侧没执行**，不是"被防护拦住"。本字段只做诊断，**不参与**标签判定。'),
+        'status_histogram': chain_status_histogram,
+        'status_histogram_note': ('整条链按状态名计数（`success` / `execute`（-3）/ `discard`（-2）/ '
+                                  '`high_viz`（-5）/ `pause`（-1）/ `error`（1）/ `timeout`（124））。'
+                                  '与 `operation.status_counts` 同源、同一份数据，'
+                                  '单列是为了让"这条链根本没跑"一眼可见。'),
+        'non_success_links_count': len(link_status_detail),
+        'non_success_links': link_status_detail,
+        'non_success_links_note': ('逐条列出**非成功**的 link（成功 link 不列 —— 它们由 '
+                                   '`attack.success_links` 与 `operation.status_counts` 表达）。'
+                                   '字段上限 = 链上非成功条数（本字段不截断）。'),
+        'label_interpretation': ('「非成功」在两种依据口径下含义不同：`targeted_ttp` 口径由目标 link 决定，'
+                                 '零成功另有两道守卫（目标 link 全为 DISCARD/HIGH_VIZ、目标 agent 已死）'
+                                 '直接失败；`recon_playbook` 口径下 `block_effective == (len(successes) == 0)`，'
+                                 '它**只表示"没有成功"**，**不区分**「攻击侧没执行」（链退化 / link 停在 EXECUTE / '
+                                 'agent 死了）与「被防护拦住」—— 后者必须结合本节的直方图、非成功明细与对照 link 才能判。'),
+    },
     'playbook_hash': playbook_hash,
     # lxd 基质下 `topology_hash` 为 null（没有拓扑对象，见上面的分支）；基质身份另给一栏。
     'topology_hash': os.environ['TOPO_HASH'] or None,
@@ -1075,6 +1138,14 @@ print(f'edge_attack: 目标 TTP ability={TARGET_ABILITY or "（未声明 ⇒ 侦
 print(f'edge_attack: agent 判据 (host={ATTACK_HOST or "任意"}, 活 pid={sorted(live_pids_at_end)}, ≤{AGENT_FRESH_S}s) '
       f'⇒ 结束时活着 {len(alive_at_end)} 只')
 print(f'edge_attack: 剧本 {PLAYBOOK_NAME}/{PLAYBOOK_ID} abilities={len(ordering)} hash={playbook_hash[:23]}…')
+# 链级诊断（Task 23）：让它出现在**日志**里，而不只是 JSON 里 —— 事后读批次日志的人
+# 也要能一眼看出"这一遍的链根本没跑起来"。
+print(f'edge_attack: 链级诊断 chain_links={len(chain)}/{declared_abilities}（剧本声明） '
+      f'degenerate_chain={degenerate_chain} status_histogram={chain_status_histogram} '
+      f'非成功 link {len(link_status_detail)} 条')
+for _l in link_status_detail[:10]:
+    print(f'  · 非成功 link ability={_l["ability_id"]} paw={_l["paw"]} '
+          f'status={_l["status"]}({_l["status_code"]}) last_event_at={_l["last_event_at"]}')
 print(f'edge_attack: 写出 {OUT}')
 PY
 

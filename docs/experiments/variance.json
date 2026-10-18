@@ -1,13 +1,13 @@
 {
   "meta": {
     "title": "方向② 边缘因子重复性（每场景 3 次）",
-    "generated_at": "2026-10-18T16:15:37Z",
+    "generated_at": "2026-10-18T17:19:11Z",
     "records": [
-      "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-targeted.jsonl",
-      "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl"
+      "lunwen/clab-lab/data/edgefactors/records-t21-qemu-rpt-targeted.jsonl",
+      "lunwen/clab-lab/data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl"
     ],
     "baseline": [
-      "/root/t6/t17-data/records-t17-qemu.jsonl"
+      "lunwen/clab-lab/data/edgefactors/records-dl360-qemu-20261016.jsonl"
     ],
     "segments": [
       "records-t21-qemu-rpt-targeted.jsonl",
@@ -199,7 +199,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:1",
-          "timestamp": "2026-10-17T23:25:27Z"
+          "timestamp": "2026-10-17T23:25:27Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 31,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S0-baseline-02",
@@ -209,7 +216,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:12",
-          "timestamp": "2026-10-18T04:26:06Z"
+          "timestamp": "2026-10-18T04:26:06Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 14,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S0-baseline-03",
@@ -219,7 +233,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:23",
-          "timestamp": "2026-10-18T08:39:26Z"
+          "timestamp": "2026-10-18T08:39:26Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 17,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -435,7 +456,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:2",
-          "timestamp": "2026-10-17T23:52:59Z"
+          "timestamp": "2026-10-17T23:52:59Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 54,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-2fa-02",
@@ -445,7 +473,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:13",
-          "timestamp": "2026-10-18T04:52:37Z"
+          "timestamp": "2026-10-18T04:52:37Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 19,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-2fa-03",
@@ -455,7 +490,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:24",
-          "timestamp": "2026-10-18T09:06:39Z"
+          "timestamp": "2026-10-18T09:06:39Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 45,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -739,7 +781,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:1",
-          "timestamp": "2026-10-17T19:44:16Z"
+          "timestamp": "2026-10-17T19:44:16Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 39,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-apparmor-03",
@@ -749,7 +798,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:23",
-          "timestamp": "2026-10-17T20:50:01Z"
+          "timestamp": "2026-10-17T20:50:01Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 27,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-apparmor-05",
@@ -759,7 +815,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:45",
-          "timestamp": "2026-10-17T21:54:41Z"
+          "timestamp": "2026-10-17T21:54:41Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 10,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -1111,7 +1174,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:2",
-          "timestamp": "2026-10-17T19:47:40Z"
+          "timestamp": "2026-10-17T19:47:40Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 38,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-apparmor-04",
@@ -1121,7 +1191,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:24",
-          "timestamp": "2026-10-17T20:53:15Z"
+          "timestamp": "2026-10-17T20:53:15Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 21,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-apparmor-06",
@@ -1131,7 +1208,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:46",
-          "timestamp": "2026-10-17T21:57:58Z"
+          "timestamp": "2026-10-17T21:57:58Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 18,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -1483,7 +1567,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:3",
-          "timestamp": "2026-10-18T00:20:41Z"
+          "timestamp": "2026-10-18T00:20:41Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 25,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-no-ids-02",
@@ -1493,7 +1584,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:14",
-          "timestamp": "2026-10-18T05:18:47Z"
+          "timestamp": "2026-10-18T05:18:47Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 8,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-no-ids-03",
@@ -1503,7 +1601,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:25",
-          "timestamp": "2026-10-18T09:34:42Z"
+          "timestamp": "2026-10-18T09:34:42Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 16,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -1719,7 +1824,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:4",
-          "timestamp": "2026-10-18T00:48:13Z"
+          "timestamp": "2026-10-18T00:48:13Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 51,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-no-siem-02",
@@ -1729,7 +1841,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:15",
-          "timestamp": "2026-10-18T05:45:17Z"
+          "timestamp": "2026-10-18T05:45:17Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 10,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-no-siem-03",
@@ -1739,7 +1858,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:26",
-          "timestamp": "2026-10-18T10:03:07Z"
+          "timestamp": "2026-10-18T10:03:07Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 56,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -2023,7 +2149,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:3",
-          "timestamp": "2026-10-17T19:50:53Z"
+          "timestamp": "2026-10-17T19:50:53Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 27,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-selinux-03",
@@ -2033,7 +2166,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:25",
-          "timestamp": "2026-10-17T20:56:20Z"
+          "timestamp": "2026-10-17T20:56:20Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 12,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-selinux-05",
@@ -2043,7 +2183,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:47",
-          "timestamp": "2026-10-17T22:01:04Z"
+          "timestamp": "2026-10-17T22:01:04Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 13,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -2395,7 +2542,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:4",
-          "timestamp": "2026-10-17T19:53:26Z"
+          "timestamp": "2026-10-17T19:53:26Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 30,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-selinux-04",
@@ -2405,7 +2559,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:26",
-          "timestamp": "2026-10-17T20:59:16Z"
+          "timestamp": "2026-10-17T20:59:16Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 16,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-selinux-06",
@@ -2415,7 +2576,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:48",
-          "timestamp": "2026-10-17T22:04:12Z"
+          "timestamp": "2026-10-17T22:04:12Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 11,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -2767,7 +2935,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:5",
-          "timestamp": "2026-10-18T01:17:40Z"
+          "timestamp": "2026-10-18T01:17:40Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 44,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-syn-cookie-02",
@@ -2777,7 +2952,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:16",
-          "timestamp": "2026-10-18T06:13:11Z"
+          "timestamp": "2026-10-18T06:13:11Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 7,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S1-syn-cookie-03",
@@ -2787,7 +2969,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:27",
-          "timestamp": "2026-10-18T10:31:31Z"
+          "timestamp": "2026-10-18T10:31:31Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 8,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -3071,7 +3260,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:5",
-          "timestamp": "2026-10-17T19:56:03Z"
+          "timestamp": "2026-10-17T19:56:03Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 30,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-2fa-selinux-03",
@@ -3081,7 +3277,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:27",
-          "timestamp": "2026-10-17T21:01:46Z"
+          "timestamp": "2026-10-17T21:01:46Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 2,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-2fa-selinux-05",
@@ -3091,7 +3294,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:49",
-          "timestamp": "2026-10-17T22:07:04Z"
+          "timestamp": "2026-10-17T22:07:04Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 24,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -3511,7 +3721,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:6",
-          "timestamp": "2026-10-17T19:59:14Z"
+          "timestamp": "2026-10-17T19:59:14Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 14,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-2fa-selinux-04",
@@ -3521,7 +3738,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:28",
-          "timestamp": "2026-10-17T21:04:48Z"
+          "timestamp": "2026-10-17T21:04:48Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 6,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-2fa-selinux-06",
@@ -3531,7 +3755,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:50",
-          "timestamp": "2026-10-17T22:09:37Z"
+          "timestamp": "2026-10-17T22:09:37Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 11,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -3951,7 +4182,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:7",
-          "timestamp": "2026-10-17T20:01:52Z"
+          "timestamp": "2026-10-17T20:01:52Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 26,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-apparmor-no-ids-03",
@@ -3961,7 +4199,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:29",
-          "timestamp": "2026-10-17T21:07:50Z"
+          "timestamp": "2026-10-17T21:07:50Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 18,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-apparmor-no-ids-05",
@@ -3971,7 +4216,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:51",
-          "timestamp": "2026-10-17T22:12:40Z"
+          "timestamp": "2026-10-17T22:12:40Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 36,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -4323,7 +4575,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:8",
-          "timestamp": "2026-10-17T20:04:32Z"
+          "timestamp": "2026-10-17T20:04:32Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 6,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-apparmor-no-ids-04",
@@ -4333,7 +4592,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:30",
-          "timestamp": "2026-10-17T21:10:23Z"
+          "timestamp": "2026-10-17T21:10:23Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 19,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-apparmor-no-ids-06",
@@ -4343,7 +4609,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:52",
-          "timestamp": "2026-10-17T22:15:45Z"
+          "timestamp": "2026-10-17T22:15:45Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 40,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -4695,7 +4968,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:6",
-          "timestamp": "2026-10-18T01:44:39Z"
+          "timestamp": "2026-10-18T01:44:39Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 32,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-no-siem-no-ids-02",
@@ -4705,7 +4985,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:17",
-          "timestamp": "2026-10-18T06:18:10Z"
+          "timestamp": "2026-10-18T06:18:10Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 37,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-no-siem-no-ids-03",
@@ -4715,7 +5002,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:28",
-          "timestamp": "2026-10-18T10:59:43Z"
+          "timestamp": "2026-10-18T10:59:43Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 41,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -4999,7 +5293,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:9",
-          "timestamp": "2026-10-17T20:07:39Z"
+          "timestamp": "2026-10-17T20:07:39Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 37,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-apparmor-03",
@@ -5009,7 +5310,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:31",
-          "timestamp": "2026-10-17T21:13:21Z"
+          "timestamp": "2026-10-17T21:13:21Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 26,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-apparmor-05",
@@ -5019,7 +5327,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:53",
-          "timestamp": "2026-10-17T22:19:05Z"
+          "timestamp": "2026-10-17T22:19:05Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 4,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -5371,7 +5686,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:10",
-          "timestamp": "2026-10-17T20:10:47Z"
+          "timestamp": "2026-10-17T20:10:47Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 27,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-apparmor-04",
@@ -5381,7 +5703,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:32",
-          "timestamp": "2026-10-17T21:16:11Z"
+          "timestamp": "2026-10-17T21:16:11Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 11,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-apparmor-06",
@@ -5391,7 +5720,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:54",
-          "timestamp": "2026-10-17T22:22:17Z"
+          "timestamp": "2026-10-17T22:22:17Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 0,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -5743,7 +6079,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:11",
-          "timestamp": "2026-10-17T20:14:00Z"
+          "timestamp": "2026-10-17T20:14:00Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 13,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-no-ids-03",
@@ -5753,7 +6096,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:33",
-          "timestamp": "2026-10-17T21:19:14Z"
+          "timestamp": "2026-10-17T21:19:14Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 5,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-no-ids-05",
@@ -5763,7 +6113,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:55",
-          "timestamp": "2026-10-17T22:25:12Z"
+          "timestamp": "2026-10-17T22:25:12Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 3,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -6115,7 +6472,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:12",
-          "timestamp": "2026-10-17T20:17:13Z"
+          "timestamp": "2026-10-17T20:17:13Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 18,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-no-ids-04",
@@ -6125,7 +6489,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:34",
-          "timestamp": "2026-10-17T21:22:19Z"
+          "timestamp": "2026-10-17T21:22:19Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 49,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-no-ids-06",
@@ -6135,7 +6506,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:56",
-          "timestamp": "2026-10-17T22:28:08Z"
+          "timestamp": "2026-10-17T22:28:08Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 29,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -6487,7 +6865,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:13",
-          "timestamp": "2026-10-17T20:20:20Z"
+          "timestamp": "2026-10-17T20:20:20Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 24,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-no-siem-03",
@@ -6497,7 +6882,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:35",
-          "timestamp": "2026-10-17T21:24:56Z"
+          "timestamp": "2026-10-17T21:24:56Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 17,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-no-siem-05",
@@ -6507,7 +6899,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:57",
-          "timestamp": "2026-10-17T22:30:45Z"
+          "timestamp": "2026-10-17T22:30:45Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 6,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -6927,7 +7326,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:14",
-          "timestamp": "2026-10-17T20:23:38Z"
+          "timestamp": "2026-10-17T20:23:38Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 6,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-no-siem-04",
@@ -6937,7 +7343,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:36",
-          "timestamp": "2026-10-17T21:28:06Z"
+          "timestamp": "2026-10-17T21:28:06Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 12,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-selinux-no-siem-06",
@@ -6947,7 +7360,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:58",
-          "timestamp": "2026-10-17T22:33:57Z"
+          "timestamp": "2026-10-17T22:33:57Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 2,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -7367,7 +7787,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:7",
-          "timestamp": "2026-10-18T02:10:35Z"
+          "timestamp": "2026-10-18T02:10:35Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 5,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-syn-cookie-no-ids-02",
@@ -7377,7 +7804,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:18",
-          "timestamp": "2026-10-18T06:21:18Z"
+          "timestamp": "2026-10-18T06:21:18Z",
+          "objective": {
+            "ttps_achieved": 0,
+            "nodes_affected": 0,
+            "time_to_compromise_s": 0,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-syn-cookie-no-ids-03",
@@ -7387,7 +7821,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:29",
-          "timestamp": "2026-10-18T11:27:03Z"
+          "timestamp": "2026-10-18T11:27:03Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 4,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -7671,7 +8112,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:8",
-          "timestamp": "2026-10-18T02:37:21Z"
+          "timestamp": "2026-10-18T02:37:21Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 5,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-syn-cookie-no-siem-02",
@@ -7681,7 +8129,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:19",
-          "timestamp": "2026-10-18T06:48:57Z"
+          "timestamp": "2026-10-18T06:48:57Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 29,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S2-syn-cookie-no-siem-03",
@@ -7691,7 +8146,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:30",
-          "timestamp": "2026-10-18T11:56:13Z"
+          "timestamp": "2026-10-18T11:56:13Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 21,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -8043,7 +8505,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:15",
-          "timestamp": "2026-10-17T20:26:25Z"
+          "timestamp": "2026-10-17T20:26:25Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 9,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-002\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-3fa-selinux-apparmor-03",
@@ -8053,7 +8522,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:37",
-          "timestamp": "2026-10-17T21:30:54Z"
+          "timestamp": "2026-10-17T21:30:54Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 39,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-002\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-3fa-selinux-apparmor-05",
@@ -8063,7 +8539,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:59",
-          "timestamp": "2026-10-17T22:36:47Z"
+          "timestamp": "2026-10-17T22:36:47Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 33,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-002\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -8483,7 +8966,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:16",
-          "timestamp": "2026-10-17T20:29:14Z"
+          "timestamp": "2026-10-17T20:29:14Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 2,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-002\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-3fa-selinux-apparmor-04",
@@ -8493,7 +8983,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:38",
-          "timestamp": "2026-10-17T21:33:55Z"
+          "timestamp": "2026-10-17T21:33:55Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 45,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-002\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-3fa-selinux-apparmor-06",
@@ -8503,7 +9000,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:60",
-          "timestamp": "2026-10-17T22:39:40Z"
+          "timestamp": "2026-10-17T22:39:40Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 20,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-002\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -8923,7 +9427,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:17",
-          "timestamp": "2026-10-17T20:32:13Z"
+          "timestamp": "2026-10-17T20:32:13Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 7,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-selinux-apparmor-2fa-03",
@@ -8933,7 +9444,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:39",
-          "timestamp": "2026-10-17T21:37:06Z"
+          "timestamp": "2026-10-17T21:37:06Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 1,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-selinux-apparmor-2fa-05",
@@ -8943,7 +9461,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:61",
-          "timestamp": "2026-10-17T22:42:41Z"
+          "timestamp": "2026-10-17T22:42:41Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 30,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -9363,7 +9888,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:18",
-          "timestamp": "2026-10-17T20:34:52Z"
+          "timestamp": "2026-10-17T20:34:52Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 25,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-selinux-apparmor-2fa-04",
@@ -9373,7 +9905,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:40",
-          "timestamp": "2026-10-17T21:39:47Z"
+          "timestamp": "2026-10-17T21:39:47Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 6,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-selinux-apparmor-2fa-06",
@@ -9383,7 +9922,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:62",
-          "timestamp": "2026-10-17T22:45:44Z"
+          "timestamp": "2026-10-17T22:45:44Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 31,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -9803,7 +10349,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:19",
-          "timestamp": "2026-10-17T20:37:46Z"
+          "timestamp": "2026-10-17T20:37:46Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 3,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-selinux-no-siem-no-ids-03",
@@ -9813,7 +10366,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:41",
-          "timestamp": "2026-10-17T21:42:42Z"
+          "timestamp": "2026-10-17T21:42:42Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 23,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-selinux-no-siem-no-ids-05",
@@ -9823,7 +10383,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:63",
-          "timestamp": "2026-10-17T22:48:41Z"
+          "timestamp": "2026-10-17T22:48:41Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 34,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -10243,7 +10810,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:20",
-          "timestamp": "2026-10-17T20:40:53Z"
+          "timestamp": "2026-10-17T20:40:53Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 44,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-selinux-no-siem-no-ids-04",
@@ -10253,7 +10827,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:42",
-          "timestamp": "2026-10-17T21:45:28Z"
+          "timestamp": "2026-10-17T21:45:28Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 39,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-selinux-no-siem-no-ids-06",
@@ -10263,7 +10844,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:64",
-          "timestamp": "2026-10-17T22:51:39Z"
+          "timestamp": "2026-10-17T22:51:39Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 17,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -10683,7 +11271,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:9",
-          "timestamp": "2026-10-18T03:06:10Z"
+          "timestamp": "2026-10-18T03:06:10Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 34,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-syn-cookie-no-siem-no-ids-02",
@@ -10693,7 +11288,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:20",
-          "timestamp": "2026-10-18T07:15:52Z"
+          "timestamp": "2026-10-18T07:15:52Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 24,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S3-syn-cookie-no-siem-no-ids-03",
@@ -10703,7 +11305,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:31",
-          "timestamp": "2026-10-18T12:24:11Z"
+          "timestamp": "2026-10-18T12:24:11Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 6,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -11055,7 +11664,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:21",
-          "timestamp": "2026-10-17T20:43:54Z"
+          "timestamp": "2026-10-17T20:43:54Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 6,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S4-all-03",
@@ -11065,7 +11681,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:43",
-          "timestamp": "2026-10-17T21:48:41Z"
+          "timestamp": "2026-10-17T21:48:41Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 46,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S4-all-05",
@@ -11075,7 +11698,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:65",
-          "timestamp": "2026-10-17T22:54:33Z"
+          "timestamp": "2026-10-17T22:54:33Z",
+          "objective": {
+            "ttps_achieved": 2,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 25,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -11631,7 +12261,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-targeted.jsonl:22",
-          "timestamp": "2026-10-17T20:46:45Z"
+          "timestamp": "2026-10-17T20:46:45Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 51,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S4-all-04",
@@ -11641,7 +12278,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-targeted.jsonl:44",
-          "timestamp": "2026-10-17T21:51:54Z"
+          "timestamp": "2026-10-17T21:51:54Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 46,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S4-all-06",
@@ -11651,7 +12295,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-targeted.jsonl:66",
-          "timestamp": "2026-10-17T22:57:29Z"
+          "timestamp": "2026-10-17T22:57:29Z",
+          "objective": {
+            "ttps_achieved": 1,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 21,
+            "block_effective": true
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-005\": [false, -15.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-005\": [false, -5.0], \"RS-006\": [false, -10.0], \"RS-007\": [false, -6.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -12207,7 +12858,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:10",
-          "timestamp": "2026-10-18T03:32:20Z"
+          "timestamp": "2026-10-18T03:32:20Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 7,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S5-2fa-only-02",
@@ -12217,7 +12875,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:21",
-          "timestamp": "2026-10-18T07:43:36Z"
+          "timestamp": "2026-10-18T07:43:36Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 7,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S5-2fa-only-03",
@@ -12227,7 +12892,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:32",
-          "timestamp": "2026-10-18T12:52:56Z"
+          "timestamp": "2026-10-18T12:52:56Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 45,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {
@@ -12511,7 +13183,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r1",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:11",
-          "timestamp": "2026-10-18T03:58:58Z"
+          "timestamp": "2026-10-18T03:58:58Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 0,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"EF-002\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S5-cascade-3fa-02",
@@ -12521,7 +13200,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r2",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:22",
-          "timestamp": "2026-10-18T08:12:38Z"
+          "timestamp": "2026-10-18T08:12:38Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 58,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"EF-002\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         },
         {
           "scenario_id": "S5-cascade-3fa-03",
@@ -12531,7 +13217,14 @@
           "arm_source": "meta.policy_on",
           "env": "t21-qemu-r3",
           "src": "records-t21-qemu-rpt-nontargeted.jsonl:33",
-          "timestamp": "2026-10-18T13:19:54Z"
+          "timestamp": "2026-10-18T13:19:54Z",
+          "objective": {
+            "ttps_achieved": 36,
+            "nodes_affected": 1,
+            "time_to_compromise_s": 35,
+            "block_effective": false
+          },
+          "checks_sig": "{\"AC-001\": [false, -15.0], \"AC-002\": [false, -20.0], \"AC-003\": [false, -10.0], \"AC-004\": [false, -10.0], \"AC-005\": [false, -10.0], \"AC-006\": [false, -10.0], \"AC-007\": [false, -5.0], \"AS-003\": [false, -10.0], \"AS-004\": [false, -8.0], \"AS-007\": [false, -6.0], \"AS-008\": [false, -3.0], \"AS-009\": [false, -8.0], \"AS-012\": [false, -6.0], \"AS-016\": [false, -10.0], \"AS-017\": [false, -5.0], \"BC-005\": [false, -10.0], \"BC-006\": [false, -10.0], \"BC-007\": [false, -20.0], \"EF-001\": [false, 0.0], \"EF-002\": [false, 0.0], \"KS-003\": [false, -15.0], \"KS-004\": [false, -8.0], \"KS-007\": [false, -10.0], \"KS-009\": [false, -8.0], \"KS-011\": [false, -5.0], \"OT-001\": [false, -10.0], \"OT-004\": [false, -5.0], \"OT-008\": [false, -5.0], \"OT-009\": [false, -8.0], \"OT-012\": [false, -3.0], \"OT-014\": [false, -10.0], \"OT-016\": [false, -5.0], \"OT-020\": [false, -10.0], \"OT-022\": [false, -15.0], \"RS-002\": [false, -8.0], \"RS-003\": [false, -6.0], \"RS-004\": [false, -10.0], \"RS-006\": [false, -10.0], \"RS-008\": [false, -8.0], \"RS-009\": [false, -6.0], \"RS-010\": [false, -4.0], \"RS-011\": [false, -15.0], \"RS-012\": [false, -10.0], \"RS-016\": [false, -10.0]}"
         }
       ],
       "final_score": {

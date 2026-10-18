@@ -202,6 +202,45 @@ func validateWeightsUsable(rec Record, weights map[string]float64) error {
 		rec.ScenarioID, resolvedWeightSource(rec))
 }
 
+// validateRecordInputs 是**逐条输入校验**：一条记录本身是否可用于打分（权重表可用、域分覆盖）。
+//
+// **它必须先于依据守卫跑，且覆盖全部输入记录**（Task 23 / 第一次审计 Important-1）。
+//
+// 为什么（这是一处真实的遮蔽洞，不是洁癖）：本函数的两条判据此前只写在 `EvaluateWith` 里
+// **遍历 `guard.kept` 的那个循环**内。缺省口径下侦察口径（`recon_playbook`）的记录会被
+// `applyBasisGuard` 全部丢出决策层，于是 `len(guard.kept) == 0` 提前返回、这**两条校验一次都没跑**，
+// 随后 `CompareWith` 抛 `*NoDecisionLayerRecordsError` ⇒ CLI 记成"不适用"（退出码 3）。
+// 后果是：**非 targeted 段的打分输入被破坏（比如删掉一条记录的某个加权域分）不再让任何门禁变红**
+// —— 它在修复前至少（因错误理由）是红的（exit=1），修复后彻底绿了。
+// 而 `main.go` 的退出码约定与 `edge_matrix.sh` 都写着"数据坏仍然是 1"，那句话对
+// "缺依据/读不出来/因子未覆盖"成立，对**这一类**不成立。
+//
+// 职责切分（本函数的全部意义）：
+//   - `applyBasisGuard` 只回答"**谁进决策层**"（标签口径问题），不再承担"输入是否完好"；
+//   - 本函数回答"**这条记录本身能不能打分**"，与依据无关 ⇒ 对**全部输入记录**跑。
+//
+// 与"有 `targeted_ttp` 时行为逐字不变"的关系：那时 `guard.kept` 就是全部输入记录、顺序不变，
+// 故这里逐个判的顺序与旧循环**逐位相同**（同一份数据、同一个先报的错误）。
+// 唯一的行为变化正是那条缺口要的：**全侦察口径 + 输入被破坏** 由"不适用(3)"回到"失败(1)"。
+func validateRecordInputs(records []Record, weights map[string]float64) error {
+	for _, rec := range records {
+		// 权重来源先解析（Task 3B Step 1）：**记录自带优先**，`weights` 只是回退表。
+		// 判据必须与实际参与聚合的域集**同源** —— 域覆盖判据若仍按 `-weights` 走，
+		// `-weights` 里多一个该部署没有聚合的域就会在**合法记录**上报"缺域"（门禁①）。
+		w := recordWeights(rec, weights)
+		// 解析后的表必须至少有一个正权重（Fix round 1 / Minor 1）：全零表绕过 CLI 守卫
+		// （它是记录自带的，不是命令行输入）后会让分母恒 0、指标退化成"全阻断"而报告照常打印。
+		if err := validateWeightsUsable(rec, w); err != nil {
+			return err
+		}
+		// 域覆盖（评审 I2）：缺域会被当作 0 聚合、静默扭曲主判据，必须在算分之前拒绝。
+		if err := validateDomainsCovered(rec, w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // countWeightSources 统计本次评估里权重表的来源分布（Task 3B Fix round 1 / Important 1）。
 //
 // 判据与"谁赢"同源（`recordCarriesWeights`），故报告里写的口径就是实际用的口径。
@@ -432,10 +471,20 @@ func EvaluateWith(records []Record, p edgefactor.Params, weights map[string]floa
 	if len(records) == 0 {
 		return m, nil
 	}
+	// **逐条输入校验排在依据守卫之前，且对全部输入记录跑**（Task 23 / 审计 Important-1）：
+	// 输入是否完好与"这批标签该不该放在一起算"是两回事，前者不依赖后者。放在守卫之后会漏掉
+	// "全部记录都是侦察口径"的那条路径（守卫把它们丢光 ⇒ 提前返回 ⇒ 校验一次都不跑），
+	// 于是打分输入被破坏的记录会被记成「不适用」而不是「失败」（详见 `validateRecordInputs`）。
+	if err := validateRecordInputs(records, weights); err != nil {
+		return Metrics{}, err
+	}
 	// 标签依据守卫**排在一切计算之前**（Task 4D Step 4）：它是"这批数据的标签能不能放在一起算"
 	// 的前置问题，先于"分数算得对不对"。过滤后为空 ⇒ 退回零值（与空输入同款：调用方
 	// `CompareWith` 已在**过滤前**拒过零记录，这里的空只可能来自"全部记录都是侦察口径"，
 	// 而 `CompareWith` 另有一道"过滤后 N == 0 也不给结论"的闸门 —— Fix round 2 / Minor-3）。
+	//
+	// 走到这一步的记录**已经**全部通过输入校验 ⇒ 这里的"空"只可能来自"没有决策层标签"，
+	// 不可能来自"数据坏"（Task 23 起的判据切分）。
 	guard, err := applyBasisGuard(records, opts)
 	if err != nil {
 		return Metrics{}, err
@@ -458,19 +507,10 @@ func EvaluateWith(records []Record, p edgefactor.Params, weights map[string]floa
 	agree, fn, fp := 0, 0, 0
 
 	for _, rec := range records {
-		// 权重来源先解析（Task 3B Step 1）：**记录自带优先**，`weights` 只是回退表。
-		// 下面两条判据必须与实际参与聚合的域集**同源** —— 域覆盖判据若仍按 `-weights` 走，
-		// `-weights` 里多一个该部署没有聚合的域就会在**合法记录**上报"缺域"（门禁①）。
+		// 权重来源在这里再解析一次（**只解析、不再校验**）：输入校验已在函数开头对**全部输入
+		// 记录**跑过一遍（`validateRecordInputs`），这里是它的子集，故两条判据必然已通过。
+		// 留着解析是因为算分要用这张表（`recordWeights` 是"谁赢"的唯一判据）。
 		w := recordWeights(rec, weights)
-		// 解析后的表必须至少有一个正权重（Fix round 1 / Minor 1）：全零表绕过 CLI 守卫
-		// （它是记录自带的，不是命令行输入）后会让分母恒 0、指标退化成"全阻断"而报告照常打印。
-		if err := validateWeightsUsable(rec, w); err != nil {
-			return Metrics{}, err
-		}
-		// 先校验域覆盖（评审 I2）：缺域会被当作 0 聚合、静默扭曲主判据，必须在算分之前拒绝。
-		if err := validateDomainsCovered(rec, w); err != nil {
-			return Metrics{}, err
-		}
 		score, err := OfflineScoreWithWeights(p, rec, w)
 		if err != nil {
 			// 返回零值 Metrics（而不是半填的 m）：错误必须让调用方无法把结果当成有效报告。

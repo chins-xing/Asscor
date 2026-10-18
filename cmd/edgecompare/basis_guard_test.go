@@ -576,3 +576,100 @@ func TestNoDecisionLayerIsAThirdExitStateNotAFailure(t *testing.T) {
 		t.Errorf("有决策层输入时必须照常给出结论：\n%s", truncForTest(stdout, 1200))
 	}
 }
+
+// TestInputValidationOutranksTheBasisGuard：**逐条输入校验必须先于依据守卫**（Task 23 / 审计 Important-1）。
+//
+// 被钉住的是一个真实的遮蔽洞（不是假想形态）：缺省口径下侦察口径的记录被守卫**全部**丢出决策层，
+// 于是 `len(guard.kept) == 0` 提前返回 —— 而"域覆盖/权重表可用"这两条校验此前只写在**遍历
+// `guard.kept` 的那个循环**里，一次都没跑；随后 `CompareWith` 抛 `*NoDecisionLayerRecordsError`，
+// CLI 记成"不适用"（退出码 3）。结果：**打分输入被破坏的记录（缺一个加权域分）在非 targeted 段上
+// 让门禁变绿**，而 `main.go`/`edge_matrix.sh` 都写着"数据坏仍然是 1"。
+//
+// 四条判据（①③ 是回归，②④ 是缺口本身）：
+//
+//	① 全侦察口径 + 输入完好 ⇒ 仍是第三态（3）—— 收紧判据不得把"不适用"打回"失败"；
+//	② 同一批 + 一条记录缺加权域分 ⇒ **失败（1）**，理由点名那个缺的域，且**不是** NoDecisionLayer；
+//	③ 有 targeted_ttp 时同一缺陷的行为**不变**：照样失败（1）、理由逐字同款；
+//	④ 同一批 + 一条记录的生效权重表没有任何正权重 ⇒ 也是失败（1）—— 两条判据都搬到了守卫之前。
+func TestInputValidationOutranksTheBasisGuard(t *testing.T) {
+	const (
+		R = edgeexp.BasisReconPlaybook
+		T = edgeexp.BasisTargetedTTP
+	)
+	cfg := writeConfig(t, "t23-cand-legacy.ini",
+		"[edge_factors.model]\nmodel = legacy\np_floor = 0.2\n")
+	args := func(records string) []string {
+		return []string{"-records", records, "-candidate", "legacy=" + cfg,
+			"-weights", "attack_surface=1", "-factors", "EF-SELINUX=0.8"}
+	}
+	// breakDomain 造审计那个形态：**删掉一条记录的加权域分**。夹具的 domain_scores 只有
+	// attack_surface，故先让这条记录自带一张把 resilience 也算进去的生效权重表
+	// （= 真实记录里引擎归一后的权重表），再保证 domain_scores 里没有 resilience。
+	// 危险是**静默压低**：引擎公式对缺失域取 0 却仍占一份权重 ⇒ 总分被无理由拉低、判定翻转。
+	breakDomain := func(recs []Record) []Record {
+		recs[1].Observed.EffectiveWeights = map[string]float64{"attack_surface": 1, "resilience": 1}
+		delete(recs[1].Observed.DomainScores, "resilience")
+		return recs
+	}
+
+	// ① 对照组：输入完好、只是没有决策层标签 ⇒ 第三态。
+	code, stdout, stderr := runCLIForTest(t,
+		args(writeRecordsJSONL(t, "t23-recon-ok.jsonl", basisRecords(t, R, R, R, R)))...)
+	if code != exitNotApplicable {
+		t.Fatalf("全侦察口径 + 输入完好 应仍是不适用（3），实际 %d；stderr=%s", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != "" {
+		t.Errorf("不适用时不得产出报告：%s", stdout)
+	}
+
+	// ② 同一批 + 缺加权域分 ⇒ 必须是**失败**，不是"不适用"。
+	code, stdout, stderr = runCLIForTest(t,
+		args(writeRecordsJSONL(t, "t23-recon-broken-domain.jsonl", breakDomain(basisRecords(t, R, R, R, R))))...)
+	if code != exitFailure {
+		t.Fatalf("全侦察口径 + 输入被破坏 必须是失败（1），实际 %d（这就是审计 Important-1 的遮蔽洞：修复前这里是 3）；stderr=%s",
+			code, stderr)
+	}
+	if !strings.Contains(stderr, "resilience") || !strings.Contains(stderr, "no observed domain score") {
+		t.Errorf("拒绝理由必须点名缺的那个域（resilience），实际：%s", stderr)
+	}
+	if strings.Contains(stderr, "不适用") {
+		t.Errorf("输入被破坏时不得再说『不适用』：%s", stderr)
+	}
+	if strings.TrimSpace(stdout) != "" {
+		t.Errorf("失败时不得产出报告：%s", stdout)
+	}
+	// 同一条错误**不是** `*NoDecisionLayerRecordsError`（CLI 的 3 只挂在这个类型上）：
+	// 这条断言把"判据切分"钉在类型层，而不只是退出码层。
+	_, err := CompareWith(breakDomain(basisRecords(t, R, R, R, R)),
+		map[string]edgefactor.Params{"legacy": t9LegacyCandidate()}, t9Weights(), EvaluateOptions{})
+	var noDecision *NoDecisionLayerRecordsError
+	if err == nil {
+		t.Fatal("输入被破坏时 CompareWith 必须报错")
+	}
+	if errors.As(err, &noDecision) {
+		t.Fatalf("输入被破坏不得落成 *NoDecisionLayerRecordsError（那会把数据坏记成不适用）：%v", err)
+	}
+
+	// ③ 有 targeted_ttp 时同一缺陷的行为**不变**（审计已证明修复前后 stdout 逐字节相同，
+	//    这条缺口只在"守卫把记录全丢光"的路径上；有决策层输入时旧代码同样先校验后报错）。
+	code, _, stderr = runCLIForTest(t,
+		args(writeRecordsJSONL(t, "t23-targeted-broken-domain.jsonl", breakDomain(basisRecords(t, T, T, T, T))))...)
+	if code != exitFailure {
+		t.Fatalf("有 targeted_ttp + 缺加权域分 必须是失败（1），实际 %d；stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "resilience") || !strings.Contains(stderr, "no observed domain score") {
+		t.Errorf("有 targeted_ttp 时的拒绝理由必须与修复前逐字同款，实际：%s", stderr)
+	}
+
+	// ④ 生效权重表全零（记录自带，绕过 CLI 的"全零"守卫）⇒ 同样必须先被拒。
+	zero := basisRecords(t, R, R, R, R)
+	zero[2].Observed.EffectiveWeights = map[string]float64{"attack_surface": 0}
+	code, _, stderr = runCLIForTest(t,
+		args(writeRecordsJSONL(t, "t23-recon-zero-weights.jsonl", zero))...)
+	if code != exitFailure {
+		t.Fatalf("全侦察口径 + 生效权重表无正权重 必须是失败（1），实际 %d；stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "正权重") {
+		t.Errorf("拒绝理由必须点名『没有任何正权重』，实际：%s", stderr)
+	}
+}

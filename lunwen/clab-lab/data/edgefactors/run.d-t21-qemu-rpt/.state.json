@@ -1,0 +1,179 @@
+{
+  "run_id": "20261017-nontargeted-r3",
+  "env": "t21-qemu-r3",
+  "mode": "smoke",
+  "records_file": "/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl",
+  "config": "/root/t6/t21-head/configs/edgeexp/m0-baseline.ini",
+  "started_at": "2026-10-18T08:12:39Z",
+  "start_s": 1792311159,
+  "observation_target": "asc-vm910",
+  "scenarios_selected": [
+    "S0-baseline",
+    "S1-2fa",
+    "S1-no-ids",
+    "S1-no-siem",
+    "S1-syn-cookie",
+    "S2-no-siem-no-ids",
+    "S2-syn-cookie-no-ids",
+    "S2-syn-cookie-no-siem",
+    "S3-syn-cookie-no-siem-no-ids",
+    "S5-2fa-only",
+    "S5-cascade-3fa"
+  ],
+  "completed": [
+    "S0-baseline-r3",
+    "S1-2fa-r3",
+    "S1-no-ids-r3",
+    "S1-no-siem-r3",
+    "S1-syn-cookie-r3",
+    "S2-no-siem-no-ids-r3",
+    "S2-syn-cookie-no-ids-r3",
+    "S2-syn-cookie-no-siem-r3",
+    "S3-syn-cookie-no-siem-no-ids-r3",
+    "S5-2fa-only-r3",
+    "S5-cascade-3fa-r3"
+  ],
+  "failed": {
+    "exit_code": 1,
+    "reason": "门禁① 离线比较失败：exit=1（见 run.d/.gate1.err）"
+  },
+  "instances": [
+    "S0-baseline-r3",
+    "S1-2fa-r3",
+    "S1-no-ids-r3",
+    "S1-no-siem-r3",
+    "S1-syn-cookie-r3",
+    "S2-no-siem-no-ids-r3",
+    "S2-syn-cookie-no-ids-r3",
+    "S2-syn-cookie-no-siem-r3",
+    "S3-syn-cookie-no-siem-no-ids-r3",
+    "S5-2fa-only-r3",
+    "S5-cascade-3fa-r3"
+  ],
+  "repeat": 3,
+  "conditions": {
+    "S0-baseline-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S0-baseline"
+    },
+    "S1-2fa-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-2fa"
+    },
+    "S1-no-ids-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-no-ids"
+    },
+    "S1-no-siem-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-no-siem"
+    },
+    "S1-syn-cookie-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S1-syn-cookie"
+    },
+    "S2-no-siem-no-ids-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S2-no-siem-no-ids"
+    },
+    "S2-syn-cookie-no-ids-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S2-syn-cookie-no-ids"
+    },
+    "S2-syn-cookie-no-siem-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S2-syn-cookie-no-siem"
+    },
+    "S3-syn-cookie-no-siem-no-ids-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S3-syn-cookie-no-siem-no-ids"
+    },
+    "S5-2fa-only-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S5-2fa-only"
+    },
+    "S5-cascade-3fa-r3": {
+      "basis": "recon_playbook",
+      "policy_on": 1,
+      "target_ability": null,
+      "scenario": "S5-cascade-3fa"
+    }
+  },
+  "progress": {
+    "S0-baseline-r3": {
+      "reset": 18,
+      "attack": 1584,
+      "collect": 4
+    },
+    "S1-2fa-r3": {
+      "reset": 18,
+      "attack": 1610,
+      "collect": 4
+    },
+    "S1-no-ids-r3": {
+      "reset": 18,
+      "attack": 1662,
+      "collect": 4
+    },
+    "S1-no-siem-r3": {
+      "reset": 19,
+      "attack": 1681,
+      "collect": 4
+    },
+    "S1-syn-cookie-r3": {
+      "reset": 18,
+      "attack": 1681,
+      "collect": 4
+    },
+    "S2-no-siem-no-ids-r3": {
+      "reset": 18,
+      "attack": 1669,
+      "collect": 4
+    },
+    "S2-syn-cookie-no-ids-r3": {
+      "reset": 19,
+      "attack": 1618,
+      "collect": 4
+    },
+    "S2-syn-cookie-no-siem-r3": {
+      "reset": 18,
+      "attack": 1727,
+      "collect": 5
+    },
+    "S3-syn-cookie-no-siem-no-ids-r3": {
+      "reset": 18,
+      "attack": 1655,
+      "collect": 4
+    },
+    "S5-2fa-only-r3": {
+      "reset": 19,
+      "attack": 1702,
+      "collect": 4
+    },
+    "S5-cascade-3fa-r3": {
+      "reset": 19,
+      "attack": 1595,
+      "collect": 4
+    }
+  }
+}

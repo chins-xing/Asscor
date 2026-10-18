@@ -1,0 +1,10 @@
+edgescen: 场景 S2-syn-cookie-no-ids-03（表内共 25 组场景）
+  因子 2：EF-NO-IDS, EF-SYNCOOKIE
+  权重来源：5 域｜config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）
+  链条目 ts：链条目 ts = 4/4 条按 harness 注入时刻（2 个注入阶段），其余 0 条取评估时刻
+  观测主体：node:asc-vm910 (substrate=qemu, hostname=asc-vm910)
+  注入：check_fail；注入时刻：RS-005@2026-10-18T11:00:05Z RS-006@2026-10-18T11:00:13Z
+  观测链 4 条｜失败检查 43 条｜总分 58.52（阈值 80，判 false）｜配置 m0-baseline.ini（指纹 dd334cd724ba0c4c）
+  round-trip: 复算 58.5200 − 记录 58.5200 = +0（容差 0.005）
+  装配错误：(无)
+  写出：/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl

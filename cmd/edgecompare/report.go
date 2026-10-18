@@ -153,6 +153,12 @@ func CompareWith(records []Record, paramsByModel map[string]edgefactor.Params, w
 	// **Task 22 起它是"第三态"**：返回带类型的 `*NoDecisionLayerRecordsError`，CLI 据此给出
 	// `exitNotApplicable`（3）而不是 `exitFailure`（1）。判据本身一个字没松 ——
 	// 有 `targeted_ttp` 时仍然照算，算不出来/数据坏仍然是 exit=1（见 main.go 的退出码约定）。
+	//
+	// **Task 23 起"数据坏"包含「打分输入被破坏」**：`EvaluateWith` 把逐条输入校验
+	// （`validateRecordInputs`：域覆盖 + 生效权重表可用）提到依据守卫**之前**、对全部输入记录跑。
+	// 故 `N == 0` 这一格的含义被收紧为"过滤后没有决策层标签"，**不再**是"也可能有记录本身不能打分"
+	// —— 后者在走到这里之前就已经以普通错误返回（exit=1）。缺了这一步，全侦察口径段里被破坏的
+	// 打分输入会被记成"不适用"而变绿（第一次审计 Important-1 的实测形态）。
 	if best := rep.Models[rep.Best]; best.N == 0 {
 		return Report{}, &NoDecisionLayerRecordsError{
 			RecordsTotal: best.RecordsTotal,

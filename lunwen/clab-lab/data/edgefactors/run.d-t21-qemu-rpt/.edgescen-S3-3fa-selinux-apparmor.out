@@ -1,0 +1,10 @@
+edgescen: 场景 S3-3fa-selinux-apparmor-06（表内共 25 组场景）
+  因子 5：EF-002FA, EF-APPARMOR, EF-NO-IDS, EF-SELINUX, EF-3FA
+  权重来源：5 域｜config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）
+  链条目 ts：链条目 ts = 5/8 条按 harness 注入时刻（2 个注入阶段），其余 3 条取评估时刻
+  观测主体：node:asc-vm910 (substrate=qemu, hostname=asc-vm910)
+  注入：check_fail；注入时刻：EF-002@2026-10-17T22:37:26Z OT-005@2026-10-17T22:37:33Z
+  观测链 8 条｜失败检查 44 条｜总分 53.42（阈值 80，判 false）｜配置 m0-baseline.ini（指纹 dd334cd724ba0c4c）
+  round-trip: 复算 53.4200 − 记录 53.4200 = +0（容差 0.005）
+  装配错误：(无)
+  写出：/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-targeted.jsonl

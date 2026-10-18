@@ -175,6 +175,20 @@ def derive(rec):
         'domain_keys_extra': sorted(set(dom) - set(DOMAINS)),
         'compromised': bool(gt.get('compromised')),
         'label_basis': gt.get('basis'),
+        # **客观层的四个字段**（Task 23 / 第一次审计 Important-4）：只有 `compromised` 一个 bool
+        # 时，"标签翻转"这一节只能写"某次没打成"，读者无从判断是**没跑**还是**被拦**，
+        # 而这两种在 `compromised=false` 上完全同形。四个字段一起看才能定性：
+        #   ttps_achieved=0 且 nodes_affected=0 ⇒ **攻击侧根本没执行**（不是防护生效、不是抖动）；
+        #   ttps_achieved>0 而 compromised=false ⇒ 那才可能是拦住了（仍需看 block_effective 的定义）。
+        # 注意 `block_effective` 在 recon 口径下**只是 `len(successes)==0`**（edge_attack.sh:948），
+        # 不是"防护生效"的证据 —— 报告 §4b 必须把这一点写在脸上。
+        'objective': {
+            'ttps_achieved': gt.get('ttps_achieved'),
+            'nodes_affected': gt.get('nodes_affected'),
+            'time_to_compromise_s': gt.get('time_to_compromise_s'),
+            'block_effective': (None if gt.get('block_effective') is None
+                                else bool(gt.get('block_effective'))),
+        },
         'chain_seq': seq,
         'checks': {(c.get('id') or '').strip().upper():
                    (bool(c.get('passed')), float(c.get('delta') or 0.0))
@@ -418,7 +432,14 @@ def build(recs):
             'records': [{'scenario_id': d['sid'], 'instance': d['instance'],
                          'repeat': d['repeat'], 'repeat_source': d['repeat_source'],
                          'arm_source': d['arm_source'], 'env': d['env'], 'src': d['src'],
-                         'timestamp': d['timestamp']} for d in items],
+                         'timestamp': d['timestamp'],
+                         # 标签翻转的**定性证据**（Task 23 / 审计 Important-4）：逐次的客观层四字段 +
+                         # 打分输入签名。`checks` 落盘时**不含 `ts`**（derive 只取 id/passed/delta），
+                         # 故"签名相同"= "打分输入逐字段相同"（去 ts），这正是"分数没变"的机器解释。
+                         'objective': d['objective'],
+                         'checks_sig': json.dumps(
+                             {k: [v[0], v[1]] for k, v in sorted(d['checks'].items())},
+                             ensure_ascii=False, sort_keys=True)} for d in items],
             'final_score': stats(fs),
             'domains': domains,
             'factors': factors,
@@ -545,9 +566,10 @@ def render_md(groups, baseline_rows, meta, preamble=None, cross_rows=None):
     add('')
     add('| 项目 | 值 |')
     add('|---|---|')
-    add(f"| 记录文件 | {'<br>'.join(f'`{p}`' for p in meta['records'])} |")
+    add(f"| 记录文件 | {'<br>'.join(f'`{os.path.basename(p)}`' for p in meta['records'])} |")
     if meta.get('baseline'):
-        add(f"| 对照（REPEAT=1 主批） | {'<br>'.join(f'`{p}`' for p in meta['baseline'])} |")
+        add(f"| 对照（REPEAT=1 主批） | "
+            f"{'<br>'.join(f'`{os.path.basename(p)}`' for p in meta['baseline'])} |")
     add(f"| 记录条数 | {n_records} |")
     # **臂数分布要按实际算**（Task 22）：合并"targeted 段（每场景两臂）+ 非 targeted 段
     # （每场景单臂）"之后，`n_arms=(场景,臂)组的臂取值个数` 会把 33 个组写成"22 场景 × 2 臂"，
@@ -578,6 +600,20 @@ def render_md(groups, baseline_rows, meta, preamble=None, cross_rows=None):
                          for seg, vals in th_seg.items())
     add(f"| 决策阈值 | {fmt(meta.get('threshold'))}（取记录 `observed.threshold`；"
         f"逐条一致 —— 按段核对：{th_detail or '—'}） |")
+    add('')
+    # **表头只打入库文件名**（Task 23 / 第一次审计 Minor-2）：此前这里打的是**运行时路径**
+    # （`/root/t6/t21-data/edgefactors/…`、`/root/t6/t17-data/…`），而正文 §0/§5 用文件名引用同一批数据
+    # ⇒ 读者会以为这是两批。审计已用 33 个 baseline 分数逐条吻合证明"两条路径指同一批"，
+    # 故这里改成文件名，并把运行时路径降级成**复现脚注**（复现命令要用它，但它不是口径）。
+    runtime_records = '、'.join(f'`{p}`' for p in meta['records'])
+    runtime_base = ('；对照 ' + '、'.join(f'`{p}`' for p in meta['baseline'])
+                    if meta.get('baseline') else '')
+    add('> **路径口径（Minor-2 修正）**：上表打的是**入库文件名** —— 三份数据集都在 '
+        '`lunwen/clab-lab/data/edgefactors/` 下，正文引用一律用文件名（否则同一批数据会因为'
+        '「运行时路径」与「入库文件名」两种写法被读成两批）。本次分析实际读取的路径见下面一行，'
+        '它只服务于复现，不是报告口径。')
+    add('')
+    add(f"> 本次调用的原始路径（复现用）：{runtime_records}{runtime_base}。")
     add('')
     add('> **口径声明（必读）**：**重复样本不是独立样本**。这里的 N 次是**同一宿主状态的重复**，'
         '用来估方差与稳定性；**不得**当成 N 个独立样本去虚增决策层 N。'
@@ -763,6 +799,66 @@ def render_md(groups, baseline_rows, meta, preamble=None, cross_rows=None):
         add('')
         add('标签翻转比判定翻转更严重：它说明"同一次攻击在客观层就成功了/没成功"都不稳定，'
             '该场景的监督信号不可用于拟合。')
+        add('')
+        # ---- 定性：**按客观层四个字段判**，不按「时间相关」之类的猜测（Task 23 / 审计 Important-4）----
+        add('#### 4b-1 定性证据：逐次的客观层四个字段（这一节才是「标签为什么翻」的判据）')
+        add('')
+        add('> 只看 `compromised` 一个 bool，「某次没打成」这件事有**三种**完全不同的成因：'
+            '**攻击侧没执行** / **被防护拦住** / **测量或评分抖动**。它们在数据上不同形，'
+            '下面四个字段一起看才能分开 —— 这是本节存在的唯一理由。')
+        add('')
+        add('| 场景 | 臂 | 第几次 | `compromised` | `ttps_achieved` | `nodes_affected` '
+            '| `time_to_compromise_s` | `block_effective` | 打分输入（`observed.checks`，'
+            '不含 `ts`）与本组第 1 次相同？ |')
+        add('|---|---|---|---|---|---|---|---|---|')
+        # 机器判据的输入：逐次（客观层四字段 + 打分输入签名）
+        verdicts = []      # (group, record, objective, is_not_executed) —— 只看 compromised=false 的那几次
+        success_ttps, success_nodes = [], []
+        for g in flip_lab:
+            first_sig = g['records'][0]['checks_sig']
+            for idx, r in enumerate(g['records']):
+                o = r['objective'] or {}
+                compromised = bool(g['flags']['label_values'][idx])
+                same_sig = (r['checks_sig'] == first_sig)
+                add(
+                    '| `{}` | {} | {} | {} | {} | {} | {} | {} | {} |'.format(
+                        g['scenario'], g['arm_label'], r['repeat'],
+                        fmt(compromised), fmt(o.get('ttps_achieved')),
+                        fmt(o.get('nodes_affected')), fmt(o.get('time_to_compromise_s')),
+                        fmt(o.get('block_effective')), '**是**' if same_sig else '**否**'))
+                not_executed = (o.get('ttps_achieved') == 0) and (o.get('nodes_affected') == 0)
+                if compromised:
+                    success_ttps.append(fmt(o.get('ttps_achieved')))
+                    success_nodes.append(fmt(o.get('nodes_affected')))
+                else:
+                    verdicts.append((g, r, o, not_executed))
+        add('')
+        if verdicts and all(v[3] for v in verdicts):
+            add('> **定性（按上表四个字段算出来的，不是按「时间相关」猜的）**：'
+                + f'`compromised=false` 的那 **{len(verdicts)}** 次里，**每一次**都满足 '
+                + '`ttps_achieved == 0` **且** `nodes_affected == 0` ⇒ 那几次是'
+                + '**攻击侧根本没有执行**（一条目标 TTP 都没打成、受影响节点为 0），'
+                + '**不是**「被防护拦住」，**也不是**「测量抖动」。')
+            add('')
+            add('> 作为对照，同一组里 `compromised=true` 的那几次：'
+                + f'`ttps_achieved = {", ".join(success_ttps) or "—"}`、'
+                + f'`nodes_affected = {", ".join(success_nodes) or "—"}`。')
+            add('')
+        elif verdicts:
+            add('> ⚠️ `compromised=false` 的那几次**不是全部**满足「零 TTP + 零节点」⇒ '
+                '不能一句「攻击侧没执行」盖过去，需逐次看上面的表（可能是真被拦，也可能是别的原因）。')
+            add('')
+        # `block_effective` 的口径警告：在**侦察口径**下它只是「没有成功」，极易被引成「策略拦住了」
+        if any((g.get('label_basis') or '') == 'recon_playbook' for g in flip_lab):
+            add('> ⚠️ **`block_effective=true` 在本段不是「防护生效」的证据**：侦察口径'
+                '（`recon_playbook`）下它的定义只是 `len(successes) == 0`（`edge_attack.sh:948`）'
+                '—— 而「攻击侧没执行」同样让 `successes` 为空 ⇒ 这个字段在 recon 口径下'
+                '**只是「没有成功」**，不等于「策略拦住了」。引用这一列时**必须**同时给出 '
+                '`ttps_achieved` 与 `nodes_affected`，否则读者会把非执行读成防护。')
+            add('')
+        add('> 打分侧与标签侧必须分开读：上表最后一列说明这几次的**打分输入逐字段相同**'
+            '（`observed.checks` 只落失败项、且不含 `ts`），故 `final_score` 本来就该相同 —— '
+            '「分数零方差」与「标签翻转」可以同时成立，它们描述的是两个不同的层。')
     add('')
 
     flip_chain = [g for g in groups if not g['flags']['chain_multiset_same']]
@@ -942,7 +1038,8 @@ def render_md(groups, baseline_rows, meta, preamble=None, cross_rows=None):
         '臂的身份写在 `meta.policy_on`，重复号写在 `meta.repeat`（**只在 >1 时写**）。'
         '故同一份记录文件可以承载 1..N 各一遍，且各次的 `scenario_id` 互不重叠。')
     add('2. **重复样本不是独立样本**（再强调一次）：各次重复共用同一宿主状态、同一 VM、'
-        '同一 Caldera、同一剧本；n=3 的样本标准差只能当"抖动尺度"的估计，'
+        '同一 Caldera、同一剧本；n 次全同只能说「**本次 n 次重复里未观测到抖动**」，'
+        '**给不出方差的界**（n 小时非参数上界不存在，样本标准差 0 也不是上界估计），'
         '**不能**当独立同分布样本去算置信区间或做显著性检验；决策层 N 的写法见本文开头。')
     add('3. **因子层的键按出现序号分**（§3）：同 ID 多条是配置层的真实形态，'
         '合并会制造引擎从未计算的量。')

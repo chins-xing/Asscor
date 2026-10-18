@@ -804,6 +804,12 @@ git check-ignore -q lunwen/clab-lab/data/edgefactors/records-<新>.jsonl   # rc=
 > `repeats.json` 里的 `exit_code` 是**驱动当时**读到的矩阵 rc —— 本批非 targeted 段那三轮的
 > `exit_code: 1` 是"门禁① 把不适用误报成失败"的**历史证据**，**原样保留**、不得手改
 > （纠正后的口径见 §5.1.1；重跑同一段现在会得到 `MATRIX_RC=0` + `not_applicable: true`）。
+> **Task 23 起该文件带三个显式标注**（`segment` / `pre_fix_record: true` / `pre_fix_note`）——
+> 加标注**不算**改历史：`runs[]` 的 `exit_code`/`elapsed_s`/`record_counts_ok` 一个字没动，
+> 标注只写明"这份是修复前产物、能用来证明什么、不能用来证明什么"。
+> targeted 段的驱动汇总另有一份：`docs/experiments/repeats-t21-qemu-rpt-targeted.json`
+> （**重建件**，来源逐条写在它的 `reconstruction` 里 —— 驱动把汇总固定写到 `$DATA_DIR/repeats.json`，
+> 那段被随后非 targeted 段原地覆盖了）。
 
 ---
 
@@ -834,7 +840,22 @@ git check-ignore -q lunwen/clab-lab/data/edgefactors/records-<新>.jsonl   # rc=
 |---|---|---|---|
 | 通过 | `0` | `exit_code: 0`, `not_applicable: false` | `0` |
 | **不适用**（本段无 `targeted_ttp`） | **`3`** | **`exit_code: null`, `not_applicable: true`, `not_applicable_reason: <工具 stderr 原文>`** | **`0`**（不算失败） |
-| 失败（数据坏：缺依据/读不出来/因子未覆盖…） | `1` | `exit_code: 1`, `not_applicable: false` | 非零 |
+| 失败（数据坏：缺依据/读不出来/因子未覆盖/缺加权域分/权重表无正权重） | `1` | `exit_code: 1`, `not_applicable: false` | 非零 |
+
+> **⚠️ 门禁① 的能力边界（引用这张表前必读 —— 第一次审计 Minor-4）**：
+> 上面这三个码判的是 **fail-fast 的可用性**：记录能不能读、依据能不能判、因子有没有覆盖、
+> 域分够不够、生效权重表可不可用。**它不是逐条复算门。** 实测（Task 23 报告 §1.8）：
+> 把一条记录的 `observed.final_score` 改 `+5`、或把 `acceptable` 改反，
+> `edgecompare` **仍然 `exit=0` 且报告逐字不变**；改一个域分只会让报告里的指标**悄悄漂移**。
+> 逐条"记录 ↔ 复算"一致由 `edgescen` 收集时的**进程内自检**（`gate2_round_trip`，不通过即
+> 拒绝写出该条记录）承担 —— **不在**门禁① 的退出码里。
+> ⇒ **「门禁① 绿」只等于「这份输入可用」，不能当作「这批数据好」的证据**；
+> 论文/台账里只写"门禁① 在该段上**无失败/不适用**"，**不许**写"该段数据通过了门禁复核"。
+>
+> **「不适用」的边界（Task 23 收紧）**：逐条输入校验（域覆盖 + 生效权重表可用）**排在依据守卫
+> 之前、对全部输入记录跑** ⇒ `exit=3` 严格等于"输入完好、只是没有决策层标签"。
+> 修复前这两条校验只对**进决策层**的记录跑，于是"全侦察口径段 + 打分输入被破坏"会被记成
+> 不适用而**变绿**（第一次审计 Important-1 实测：删一条 `domain_scores.resilience` ⇒ MATRIX_RC 由 1 变 0）。
 
 **红线（不许做的事）**：**不许把"不适用"改成 `exit=0`** —— 那是静默放行，不是第三态。
 第三态必须**带原因串落盘**、并在日志与 `run.json` 汇总行**显著打印**：

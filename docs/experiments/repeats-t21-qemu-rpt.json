@@ -51,6 +51,15 @@
   "records_expected_total": 33,
   "overall_exit_code": 1,
   "finished_at": "2026-10-18T13:19:55Z",
+  "segment": "nontargeted",
+  "pre_fix_record": true,
+  "pre_fix_note": {
+    "为什么标成修复前产物": "三轮 runs[].exit_code = 1 是**第三态（Task 22）修复之前**的工具行为：那时 edgecompare 对「整段都是侦查口径（recon_playbook）」的输入返回 exit=1（与『数据坏』同码），矩阵的门禁① 据此判『离线比较失败』⇒ 整轮 MATRIX_RC 非零；而同轮 record_counts_ok 仍是 true ⇒ 这正是审计 1.1.11 用修复前二进制（679768d）复现出来的『假红』形态。",
+    "这份文件不能用来证明什么": "① 不能用来证明『这一段是 not_applicable』（它记的是分类错误的那一版：exit=1）；② 也不能用来证明『这一段门禁失败/数据坏』（同一份记录在修复后的工具下是 exit=3）。",
+    "这份文件仍然能证明什么": "三轮各自 `record_counts_ok=true`、文件总行数 11→22→33（= 实例数 × 重复号）⇒ 『一份记录文件承载 1..3』这条 Task 21 定案在真实运行里成立；runs[].run_id 指向的运行级证据已入库：`lunwen/clab-lab/data/edgefactors/run-20261017-nontargeted-r{1,2,3}.json` 与 `run.d-t21-qemu-rpt/`。",
+    "修复后同一份输入的离线复核": "Task 23 实测：`edgecompare -records records-t21-qemu-rpt-nontargeted.jsonl …` 现在返回 exit=3（不适用）、stdout 为空、stderr 首行逐字不变；矩阵夹具上同一输入 MATRIX_RC=0 且 gate-gate1.json 写 `not_applicable: true` / `exit_code: null`（见 task-23 报告 §1.2/§1.3 的原始输出）。**这不是重跑这一段** —— VM 910 已销毁，这是同一份记录 + 修复后二进制的离线复核。",
+    "targeted 段的驱动汇总": "见同目录 `repeats-t21-qemu-rpt-targeted.json`（**重建件**：该段的 repeats.json 被随后那一次非 targeted 运行覆盖，故由三轮 run-<id>.json + 驱动日志重建，来源逐条写明）。"
+  },
   "notes": {
     "one_file_per_segment": "一份记录文件承载 1..REPEATS 各一遍（Task 21 定案）：矩阵的门禁与 run.json 的 record_counts_ok 都按\"文件行数 == 实例数 × 重复号\"判；逐轮各写一个文件会让第 2 轮起恒红。段级隔离用 EDGEEXP_RECORDS 显式指定（targeted / 非 targeted 各一份）。",
     "why_per_round_file_was_dropped": "原理由（幂等守卫按场景名前缀匹配）已不成立：守卫比的是完整实例 id `<场景>-<实例号>`，而实例号 NN=(REPEAT-1)*NARMS+臂+1 逐轮不重叠。",

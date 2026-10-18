@@ -160,15 +160,22 @@ mkdir -p "$DATA_DIR"
 BEFORE=0
 if [ -f "$RECORDS" ]; then BEFORE=$(wc -l < "$RECORDS"); fi
 if [ -f "$RECORDS" ]; then
-  # 场景标识形如 "<scenario>-r<run>"（JSONL 是 json.Marshal 的紧凑形式，无空格）；
-  # 同场景（不论 run 号）已有记录即拒绝。
-  # 判据是**完整实例 id**（`<场景>-<run>`），不是场景前缀 —— 加臂之后同一场景有两条记录
-# （`-01` = 策略不在、`-02` = 策略在），前缀匹配会把第二条臂判成重复而拒掉。
-DUP=$(grep -cE "\"scenario_id\":\"$SID\"" "$RECORDS" || true)
+  # 实例标识形如 `<场景>-<两位实例号>`（JSONL 是 json.Marshal 的紧凑形式，无空格）；
+  # **判据是完整实例 id**（`printf '%s-%02d' "$SCENARIO" "$RUN"`，见本文件上面那行的 `SID`），
+  # 不是场景前缀、也不是旧的 `<scenario>-r<run>` —— 下面那次 grep **带尾引号**
+  # （`"scenario_id":"<SID>"`），故比的是完整 id。
+  # 为什么必须比完整 id（Task 10 起加臂、Task 21 起一份文件承载 1..N）：
+  #   · 加臂后同一场景一条记录有两条（`-01` = 策略不在、`-02` = 策略在），前缀匹配会把
+  #     **第二条臂**判成重复而拒掉；
+  #   · 重复批把第 1..N 遍写进**同一份文件**，实例号 `NN=(REPEAT-1)*NARMS+臂+1` 逐轮不重叠，
+  #     故"同场景已有记录"**不该**被判重复。
+  # （旧注释写的是"同场景（不论 run 号）已有记录即拒绝"，那是加臂之前的实现 —— 已推翻，
+  #  Task 21 定案就是这么写的；留这段说明，免得后来的人按错的理由改代码。）
+  DUP=$(grep -cE "\"scenario_id\":\"$SID\"" "$RECORDS" || true)
   if [ "${DUP:-0}" -gt 0 ]; then
-    echo "edge_collect: $RECORDS 里已经有 $DUP 条 $SCENARIO 的记录 —— 拒绝再写。" >&2
-    echo "  同一场景每轮只采一条；重跑请归档旧文件（mv $RECORDS $RECORDS.done）或另给 EDGEEXP_RECORDS；" >&2
-    echo "  续跑整轮矩阵用 EDGEEXP_RESUME=1（矩阵脚本会跳过本文件里已有记录的场景）。" >&2
+    echo "edge_collect: $RECORDS 里已经有 $DUP 条实例 $SID 的记录 —— 拒绝再写。" >&2
+    echo "  同一实例每轮只采一条；重跑请归档旧文件（mv $RECORDS $RECORDS.done）或另给 EDGEEXP_RECORDS；" >&2
+    echo "  续跑整轮矩阵用 EDGEEXP_RESUME=1（矩阵脚本会跳过本文件里已有记录的场景实例）。" >&2
     exit 1
   fi
 fi

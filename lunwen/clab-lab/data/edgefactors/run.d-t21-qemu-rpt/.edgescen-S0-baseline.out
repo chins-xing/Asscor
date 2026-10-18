@@ -1,0 +1,10 @@
+edgescen: 场景 S0-baseline-03（表内共 25 组场景）
+  因子 1：EF-NO-IDS
+  权重来源：5 域｜config:[weights]+[extension_weights] via ssam.ConfigToWeights；键集 = 参与聚合的域（有检查的域 ∩ 权重非零）
+  链条目 ts：链条目 ts = 全部取评估时刻（同时注入场景，无时间结构 ⇒ C 与 V 在这条数据上同分）
+  观测主体：node:asc-vm910 (substrate=qemu, hostname=asc-vm910)
+  注入：none；注入时刻：(无)
+  观测链 2 条｜失败检查 42 条｜总分 65.16（阈值 80，判 false）｜配置 m0-baseline.ini（指纹 dd334cd724ba0c4c）
+  round-trip: 复算 65.1600 − 记录 65.1600 = +0（容差 0.005）
+  装配错误：(无)
+  写出：/root/t6/t21-data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl
