@@ -528,13 +528,25 @@ python3 lunwen/clab-lab/scripts/edge_variance.py \
   --records lunwen/clab-lab/data/edgefactors/records-<env>-rpt-targeted.jsonl \
   --records lunwen/clab-lab/data/edgefactors/records-<env>-rpt-nontargeted.jsonl \
   --baseline lunwen/clab-lab/data/edgefactors/records-dl360-qemu-20261016.jsonl \
+  --preamble docs/experiments/variance-report-preamble.md \
   --json docs/experiments/variance.json --md docs/experiments/variance-report.md
 ```
+
+> ⚠️ **两段的输入指纹判据必须「按段做」**（Task 22 纠正的一条假警报）：两份记录文件是**两个段**，
+> 而它们在**设计上就用不同剧本** —— `targeted` 段用 TTP pair 剧本（`playbook_hash = e585b846…`）、
+> 非 targeted 段用固定 Discovery 侦察剧本（`b112ca3c…`）。把 `meta.playbook_hash` 当"**全批**唯一"
+> 去数取值个数，合并后必然得到 **2 个取值**并喊出"重复之间换了条件" —— 那是**假警报**。
+> 现行判据：**每个段内部**每种指纹只有一种取值（§0.1 的「段内唯一项」表），
+> 跨段取值只作可读性、**不参与判据**；报告还会给「逐段小计」把两个段的跨批结论分开报
+> （合并后的总数**不得**写成"22/22"这类口径）。
 
 > **报告落在 `docs/experiments/variance-report.md`**（计划里的 `variance-report.md` 就是它）：
 > 数据目录 `data/edgefactors/` 的 `.gitignore` 白名单只放行 `records-*.jsonl` 与
 > `run-<8 位日期>-<pid>.json`（Task 20 的口径），故**报告不进数据目录**，
 > 与手册/审计归档放在一起（同样的可发现性，且不需要 `git add -f` 绕过白名单）。
+> `--preamble` 是**手写结论块**（`docs/experiments/variance-report-preamble.md`），插在 §0；
+> 它与脚本算出来的数冲突时**以脚本为准**，并回来修那一节。
+> 「零方差」的**用途边界**写在报告开头：它测的是**基质稳定性与评分确定性**，**不是模型噪声**。
 
 - **数值层**：`final_score`、五个域分、每条被观测因子的 `effective_factor`（键按
   `因子#出现序号`，同 ID 多条不合并）的**极差**与**样本标准差（n−1）**；
@@ -543,7 +555,12 @@ python3 lunwen/clab-lab/scripts/edge_variance.py \
 - **判据**：**判定翻转的场景×臂必须单独列出并标注"环境敏感"，不隐去、不取平均掩盖**；
   与 `REPEAT=1` 主批逐次对照（有没有哪一次与主批结论相反）。
 - **口径**：**重复样本不是独立样本**（同一宿主状态的重复，用来估方差/稳定性）⇒
-  决策层 N 写成 `N=<条数>（<场景数> × <重复数>）`，**不得**当独立样本虚增。
+  决策层 N 写成 `N=<条数>（<场景数> × <重复数>）`，**不得**当独立样本虚增；
+  合并两段时还要把"每场景几条臂"写准（本批 = 11 个两臂组 + 11 个单臂组，
+  **不是**"22 场景 × 2 臂"）。
+- **跑批侧的门禁怎么读这两段**：非 targeted 段里**一条 `targeted_ttp` 都没有** ⇒
+  门禁①/② 在这个段上**不适用**（`not_applicable: true`，不是失败，`MATRIX_RC` 不受影响），
+  见 **§5.1.1**。
 
 ---
 
@@ -777,6 +794,17 @@ git check-ignore -q lunwen/clab-lab/data/edgefactors/records-<新>.jsonl   # rc=
 > （`!` 无法穿透被排除的父目录）⇒ 新文件**静默不被跟踪**。所以规则里的顺序是硬要求：
 > **先** negate `edgefactors/` 目录本身，**再** negate 目录里的文件（见 `.gitignore` 里的注释）。
 
+**驱动层汇总（`repeats.json`）放哪儿**（Task 22 明确）：它**不在**数据目录 ——
+白名单只放行 `records-*.jsonl` 与 `run-<8 位日期>-<pid>.json`，`repeats.json` 会被规则忽略
+（`git check-ignore -q` **rc=0**）。按"报告与手册放一起"的既有口径，它落在
+**`docs/experiments/repeats-<环境>-<tag>.json`**（本批：`docs/experiments/repeats-t21-qemu-rpt.json`），
+与 `variance-report.md` / `variance.json` 相邻。判据：`git check-ignore -q docs/experiments/repeats-*.json`
+**rc=1**（会被跟踪）。
+
+> `repeats.json` 里的 `exit_code` 是**驱动当时**读到的矩阵 rc —— 本批非 targeted 段那三轮的
+> `exit_code: 1` 是"门禁① 把不适用误报成失败"的**历史证据**，**原样保留**、不得手改
+> （纠正后的口径见 §5.1.1；重跑同一段现在会得到 `MATRIX_RC=0` + `not_applicable: true`）。
+
 ---
 
 ## 5. 三道门禁与"基线活跃集"口径
@@ -786,9 +814,56 @@ git check-ignore -q lunwen/clab-lab/data/edgefactors/records-<新>.jsonl   # rc=
 | 门禁 | 键（在 `run.json` 里） | 查什么 | 失败后果 |
 |---|---|---|---|
 | **门禁⓪** | `gate0_duplicate_factors` | 逐场景统计链里的**重复因子 ID**（`trim + upper` 归一后），区分"真实重复"与"折叠形态" | 只报不拦（**记录事实**，因为重复是出厂部署的真实形态） |
-| **门禁①** | `gate1_offline_compare` | 用 `edgecompare` 对**同一数据集**离线重算，**exit_code 必须为 0** | **静默 skipped 是最危险形态**（报告照常打印 ⇒ 整轮作废） |
-| **门禁②** | `gate2_round_trip` / `gate2_offline_compare` | 记录**往返**（load → marshal → load）后**逐字节一致** | 契约漂移 |
+| **门禁①** | `gate1_offline_compare` | 用 `edgecompare` 对**同一数据集**离线重算，**exit_code 必须为 0**；**`not_applicable: true` 是第三态**（见 §5.1.1：本段没有任何 `targeted_ttp` ⇒ 决策层指标无输入，不算失败） | **静默 skipped 是最危险形态**（报告照常打印 ⇒ 整轮作废）；**不适用 ≠ 失败**，但也不许静默：它必须带原因串落盘 |
+| **门禁②** | `gate2_round_trip` / `gate2_offline_compare` | 记录**往返**（load → marshal → load）后**逐字节一致**；离线那半边的 `not_applicable` 与门禁① 同口径 | 契约漂移 |
 | **记录条数/集合** | `record_counts_ok`、`chain_factor_set_equality`、`records_file_agreement` | 文件行数 == 实例数 × 重复号；链因子集合 == 声明面；碎片与记录一致 | 少一条 = 有实例没采成 ⇒ 硬失败 |
+
+### 5.1.1 门禁① 的**第三态**：不适用 ≠ 失败（`targeted_ttp` 缺失的段）
+
+**形态（本里程碑实测）**：非 targeted 段 = 11 个侦察口径场景 × 3 轮 = **33 条**记录，
+其中**一条 `targeted_ttp` 都没有**（它们的标签口径是 `recon_playbook`，是**背景测量**）。
+决策层指标按裁定只覆盖 `targeted_ttp` ⇒ 过滤后 `N == 0` ⇒ **这个段上决策层指标本来就不存在**。
+
+**旧行为的错**：`edgecompare` 把它与"数据坏"归成同一个 `exit=1`，矩阵照着写
+`FAIL_REASON="门禁① 离线比较失败"` 并 `exit 1` ⇒ 整轮 `MATRIX_RC=1`。
+这不是数据坏，是**分类错了**（把"不适用"报成"失败"）。
+
+**现行口径（三态）**：
+
+| 形态 | `edgecompare` 退出码 | `gate-gate1.json` | `MATRIX_RC` |
+|---|---|---|---|
+| 通过 | `0` | `exit_code: 0`, `not_applicable: false` | `0` |
+| **不适用**（本段无 `targeted_ttp`） | **`3`** | **`exit_code: null`, `not_applicable: true`, `not_applicable_reason: <工具 stderr 原文>`** | **`0`**（不算失败） |
+| 失败（数据坏：缺依据/读不出来/因子未覆盖…） | `1` | `exit_code: 1`, `not_applicable: false` | 非零 |
+
+**红线（不许做的事）**：**不许把"不适用"改成 `exit=0`** —— 那是静默放行，不是第三态。
+第三态必须**带原因串落盘**、并在日志与 `run.json` 汇总行**显著打印**：
+```
+edge_matrix: 门禁① **不适用**（not_applicable：33 条记录里没有 targeted_ttp ⇒ 决策层指标无输入；exit_code=null）
+  原因：edgecompare: 过滤后没有任何记录进入决策层指标（过滤前 33 条；**跳过 recon_playbook=33**）……
+```
+同一口径覆盖三个消费者：门禁①、**门禁② 的离线那半边**（它的实质是逐条复算，由 `edgescen`
+进程内自检承担）、以及**阈值敏感性行**（`sensitivity.json` 里该阈值记 `not_applicable: true` +
+`exit_code: null`，并仍写一份标注"不适用"的产物）。
+
+**判据没有放宽**（三条可直接复核的验收；harness **尚未入库** —— 它在未跟踪的
+`.superpowers/sdd/2026-09-12-edge-factor-coupling-milestone-b/t22-gate-test.sh`，
+依赖宿主的绝对路径与三份真实记录文件；手工等价操作 = `EDGEEXP_RESUME=1` +
+`EDGEEXP_RUN_INDEX=3` + 对应段的场景清单，让它只跑"记录条数门禁 → 门禁①② → run.json"这一段）：
+
+```bash
+# ① 非 targeted 段（33 条）⇒ 门禁① 报"不适用"、MATRIX_RC=0
+bash t22-gate-test.sh nt
+# ② targeted 段（66 条）⇒ 门禁① 仍 exit=0、MATRIX_RC=0（回归）
+bash t22-gate-test.sh tg
+# ③ 故意造一个真失败（删一条记录的 ground_truth.basis）⇒ 门禁① 仍非零、MATRIX_RC 非零（还有牙）
+bash t22-gate-test.sh bad
+```
+
+> 注意 ③ 用的是"缺依据"而**不是**"改一条分数"：门禁① 判的是"工具能不能读**全量**记录、
+> 有无 fail-fast"，改分数**不会**让它变红（逐条复算的权威证据在门禁② 的进程内自检里）。
+> 拿"改分数"当"真失败"会造出一条假证据。
+
 
 ### 5.2 三道门禁的历史事故（**为什么它们现在是硬的**）
 
@@ -1153,7 +1228,7 @@ ss -ltnp | grep ':8888'
 | 7 | **"跳过的检查算通过"这条口径本身**（非 root 取数时 6 条检查 `detail = "skipped — requires root privileges"` 却算 `passed=true`） | **双向失真**：非 root 取数下既**假失败 4 条**、又**假通过 6 条** | ⏳ **已登记、不改**：改动属**判据语义变更** ⇒ 会让所有既有数据的口径失效（要整体重采）。**现行处置是"取数必须 root 等价"**（§5.3.2 第 4 条），从**测量侧**消除它 |
 | 8 | **门禁⓪ 只报不判死** | 链上的重复条目会被如实报出但不拦；**若收紧就是判据变更** | ⏳ **维持现状**：Task 18 已把"重复为什么会出现、对 `L_d` 有什么后果"查清并修复（折叠点在**消费侧**，链与配置**不动**）；收紧门禁需**先裁定** |
 | 9 | **Task 10 的拟合系数**（离线 `-fit` 的产物） | Task 18 顺带统一了 `fit.go:design()` 的**静默 last-wins 折叠**（真机取到 custom 的 `0.85` → 现在用**文档化的 0.70**）⇒ **旧系数是在"未文档化的 0.85"上算的** | ⏳ **只登记、不重跑**：论文若要引用**拟合出的耦合系数**，**必须重跑 `-fit`**（重跑成本 = 分钟级，但会改结论数值） |
-| 10 | **重复轴第 2/3 遍**（`EDGEEXP_RUN_INDEX=2,3`） | 本批只放了第 1 遍（`run=1`） | ⏳ **未跑**：与全量同一条命令，只是 `EDGEEXP_RUN_INDEX` 不同 —— 但那**是另一次数小时的长批次**，要跑先开任务 |
+| 10 | **重复轴第 2/3 遍**（`EDGEEXP_RUN_INDEX=2,3`） | 本批最初只放了第 1 遍（`run=1`） | ✅ **已跑（Task 21，数据 Task 22 入库）**：两段各 3 遍 —— targeted 段 66 条、非 targeted 段 33 条，均 `record_counts_ok=true`、门禁② 偏差 0（非 targeted 段的门禁① 属"不适用"，见 §5.1.1）。**第 4 遍起仍未跑**（另一次长批次） |
 | 11 | **`--count N` 多机拓扑** | 接口已留（`EDGEEXP_VM_SSH_HOST` 含 `%s` 按 vmid 展开），**真机上未验** | ⏳ **未实测**：本批只起 1 台 VM（内存账见白皮书 §5.3 乙）；"中重型拓扑"是后续里程碑 |
 | 12 | **`edge_probe.sh` 在 qemu 上不是 root 等价** | 探针经 `lab_target_exec`（登录用户 `asc`）执行，而**取数是 root 等价** ⇒ `condition_probes[].condition_holds` 与 `checks[]` 在 VM 上**可能不一致**（例：`EF-APPARMOR` 的探针走 `aa-status`，`asc` 下 rc=4） | ⏳ **未改**：改它要动 `edge_probe.sh` 与它的 20 条离线判据（**判据语义变更**）。对 S 组不阻断，但它**不是**一致证据 |
 | 13 | **`run.d/` 的清理会毁掉上一轮的碎片证据** | `edge_matrix.sh` **每轮开始时清 `run.d/`** ⇒ 小批验证的 `collect-*.json` 在随后启动的全量批次里被清掉 | ⏳ **未改**：**记录本体不受影响**（那是权威产物）。建议把证据目录与运行目录分开（或按 run_id 归档） |

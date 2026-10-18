@@ -472,3 +472,22 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 > ② **两臂的链读数与分数逐项相同、只差标签** —— 这条 limitation **不许撤**
 > （`test-arm-limitation.sh` 守着它；若重复样本让两臂分数真的分开，夹具会红，
 > 那是提示更新文档，**不是**去放松断言）。
+
+## H.7 门禁① 的第三态：「不适用」≠「失败」（Task 22，2026-10-18）
+
+> 一句话：**判据没放宽，是分类改对了**。非 targeted 段（33 条全 `recon_playbook`）上
+> 决策层指标**本来就不存在**，旧实现把它与"数据坏"归成同一个 `exit=1`，于是整轮 `MATRIX_RC`
+> 被一个空判据打红。现在它有了自己的第三态（退出码 **3**），**不是 0**。
+
+| # | 项 | 裁定 / 处置 | 判据与可执行产物 |
+|---|---|---|---|
+| 1 | **非 targeted 段的门禁① 被误报成失败**（`repeats.json` 三轮 `exit_code: 1` 的来源） | **增加第三态**，不改成 0：`edgecompare` 在"过滤后决策层 N==0"时返回带类型的 `*NoDecisionLayerRecordsError` 并以**退出码 3** 结束；矩阵据 `G1==3` 写 `not_applicable: true` + `exit_code: null` + `not_applicable_reason`（**原样抄工具 stderr**），**不 `state_fail`、不 exit** ⇒ `MATRIX_RC` 不受影响 | 代码：`cmd/edgecompare/main.go` 的 `exitNotApplicable = 3`、`cmd/edgecompare/report.go` 的 `*NoDecisionLayerRecordsError`（`Error()` 措辞**逐字不变**）；Go 用例 `TestNoDecisionLayerIsAThirdExitStateNotAFailure`（rc=3 / stdout 空 / stderr 写明"不适用，不是失败" / 同批加一条缺依据 ⇒ **rc 回到 1** / 含一条 `targeted_ttp` ⇒ **rc=0**） |
+| 2 | **三态的可机读证据** | `gate-gate1.json` 与 `run.json.gate1_offline_compare` 都有 `not_applicable` / `exit_code` / `not_applicable_reason`；门禁② 的离线那半边（`gate2_offline_compare`）与**阈值敏感性行**（`sensitivity.json.results[<阈值>]`）同口径 | 三条验收（全部真跑矩阵汇总段，`EDGEEXP_RESUME=1`）：**①非 targeted 33 条 ⇒ 门禁① `not_applicable`、`MATRIX_RC=0`；②targeted 66 条 ⇒ 门禁① `exit=0`、`MATRIX_RC=0`（回归）；③删一条记录的 `ground_truth.basis` ⇒ 门禁① `exit=1`、`MATRIX_RC=1`（**证明它还有牙**）**。原始输出见 Task 22 报告 §2 |
+| 3 | **输入指纹判据被跨段合并污染**（假警报："剧本哈希 2 个取值 ⇒ 重复之间换了条件"） | **判据按段做**：`edge_variance.py` 的 `input_fingerprints` 改成 `per_segment`（每段内部各指纹只允许一种取值），跨段取值只作可读性、**不参与判据**；§5 增加「逐段小计」把两段的跨批结论分开报（**合并后的总数不得写成"22/22"**） | 实测：targeted 段 66 条 = 1 个 `playbook_hash`（`sha256:e585b846…`）、非 targeted 段 33 条 = 1 个（`sha256:b112ca3c…`）⇒ 段内各自唯一；合并后 2 个取值是**设计如此**（TTP pair 剧本 vs Discovery 侦察剧本）。报告 §0.1 现按段列表，`⚠️ …换了条件` 那条结论**已删除** |
+| 4 | **两条结论必须保留（不许因改口径而弱化）** | ① **批内零方差**：targeted 段 22 组 + 非 targeted 段 11 组的 `final_score`/五域分/每条 `effective_factor` 三遍**逐项相同**；② **跨批环境敏感**：与主批（`records-dl360-qemu-20261016.jsonl`）对照，targeted 段 **决策/标签/链 22/22 相同、分数 22/22 不同**（非 targeted 段 11/11、11/11、10/11、11/11 不同），原因定位到**唯一检查差 `OT-018`** ⇒ **环境状态差、不是抖动** | 报告 `docs/experiments/variance-report.md` §0（手写结论块 `variance-report-preamble.md`）+ §0.1/§5 的逐段小计；`variance.json` 的 `meta.inputs.per_segment`、`baseline_comparison` |
+| 5 | **「零方差」的用途边界**（新增明文） | **「零方差」测的是基质稳定性与评分确定性，不是模型噪声**；真正的环境敏感性体现在**批与批之间**（§5）。重复样本不是独立样本，n=3 只当抖动尺度的上限证据 | 报告开头的「用途边界（必读）」段（脚本内固定生成，`render_md`）；操作手册 §3.4.4 |
+| 6 | **数据与锚点** | 非 targeted 段 33 条入库 `lunwen/clab-lab/data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl`（`sha256 b29a969c…27dae`）；驱动汇总入库 `docs/experiments/repeats-t21-qemu-rpt.json`（数据目录白名单只放行 `records-*.jsonl` 与 `run-<日期>-<pid>.json` ⇒ 它按"报告与手册放一起"的口径落 docs；两段各自的 rc/条数/耗时**原样保留**，其中三轮 `exit_code: 1` 就是本条要纠正的误报） | 取回前后 sha256 **逐字相同**（Task 22 报告 §4）；**主批数据集 `records-dl360-qemu-20261016.jsonl` 仍为 `sha256 82d37ead…f5b468`**（开工前后各算一次） |
+
+> **不适用 ≠ 失败，也不等于放行**：`not_applicable` 只出现在**退出码 3** 上；
+> 数据类的任何缺陷（缺依据 / 读不出来 / `-factors` 未覆盖）仍是 `exit=1` 且整轮红 ——
+> 验收 ③ 就是这个"牙"的机器证据。
