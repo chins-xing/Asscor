@@ -73,6 +73,15 @@
 #       EDGEEXP_TTP_GROUP             agent 分组名（默认 t4d-ttp；与 edge_target_prepare.sh 同源）
 #       EDGEEXP_TTP_FACTORS           触发"目标 TTP 口径"的因子集（默认 EF-SELINUX,EF-APPARMOR）
 #   选了目标 TTP 场景却没给**必需项** ⇒ **干跑前就响亮失败**（不许跑到一半才发现条件缺项）。
+#
+#   ---- Task 22：门禁①/② 的**第三态**（不适用 ≠ 失败）----
+#   非 targeted 段（11 个侦察口径场景 × 3 轮 = 33 条记录）里一条 `targeted_ttp` 都没有
+#   ⇒ 决策层指标**本来就没有输入**。此前 edgecompare 把它与"数据坏"归成同一个 exit=1，
+#   于是本脚本把"不适用"报成"门禁① 离线比较失败"、整轮 MATRIX_RC 非零（分类错误）。
+#   现在 edgecompare 用**独立的退出码 3** 表达这个形态，本脚本据此记
+#   `not_applicable: true` + `exit_code: null` + 原因串，并在汇总行**显著打印**（不静默跳过）。
+#   **判据没有放宽**：有 targeted_ttp 时行为逐字不变（exit=0 才算过）；数据坏（缺依据/
+#   读不出来/因子未覆盖）仍是 exit=1、整轮失败。门禁② 的离线那半边同口径。
 # ============================================================================
 set -euo pipefail
 
@@ -816,6 +825,12 @@ run = {
                  '分数被抬高），而不是什么"fallback 向量惩罚"；禁止的只是"为让门禁变绿而静默塞值"。',
         'weights': '离线复算以记录自带的 observed.effective_weights 为准；-weights 只是回退表',
         'gate1_dataset': '门禁① 跑在**全量**记录上（不再按 EF-3FA 切子集）',
+        'gate1_not_applicable': '**第三态（Task 22）**：本段记录里没有任何 `targeted_ttp` 口径的标签时，'
+                                'edgecompare 以退出码 3 结束（决策层指标无输入）⇒ 门禁① 记 '
+                                '`not_applicable: true` + `exit_code: null` + `not_applicable_reason`，'
+                                '**不算失败、MATRIX_RC 不受影响**。判据没有放宽：有 targeted_ttp 时行为逐字不变'
+                                '（exit=0 才算过），数据坏（缺依据/读不出来/因子未覆盖）仍是 exit=1 且整轮失败。'
+                                '门禁② 的离线那半边同口径（其 rc=3 同样记 not_applicable）。',
         'repeat_axis': 'Task 11：**重复轴与臂是两个独立维度**。`run` 维度 = EDGEEXP_RUN_INDEX（第几次重复采样），'
                        '`arm` 维度 = 0（POLICY_ON=0）/ 1（POLICY_ON=1）；记录的 `scenario_id` 尾号是'
                        '**实例号** NN=(REPEAT-1)*NARMS+arm+1（NARMS = 该场景的实例数，targeted 开臂时=2）；'
@@ -876,9 +891,24 @@ print(f'edge_matrix: 父子记录路径一致={records_agreement["ok"]}（{state
 print(f'edge_matrix: 门禁⓪ {gate0["verdict"]}')
 print(f'edge_matrix: 注入-采集时钟核对 all_ok={clock["all_ok"]}')
 if gate1:
-    print(f'edge_matrix: 门禁① exit={gate1.get("exit_code")}（{gate1.get("dataset","?")}，{gate1.get("records","?")} 条）')
+    if gate1.get('not_applicable'):
+        # 第三态必须在汇总行里**显著**打印（不是静默跳过）：读者要能一眼看出
+        # "这个段没有决策层指标"与"门禁① 没有跑"与"门禁① 失败"是三件事。
+        print(f'edge_matrix: 门禁① **不适用**（not_applicable：'
+              f'{gate1.get("records", "?")} 条记录里没有 targeted_ttp ⇒ 决策层指标无输入；exit_code=null）'
+              f'\n  原因：{gate1.get("not_applicable_reason")}')
+    else:
+        print(f'edge_matrix: 门禁① exit={gate1.get("exit_code")}（{gate1.get("dataset","?")}，{gate1.get("records","?")} 条）')
 if gate2:
     print(f'edge_matrix: 门禁② 最大偏差 {gate2["max_abs_delta"]:.4g}（{len(gate2["per_scenario"])} 条）')
+if gate2_out:
+    if gate2_out.get('not_applicable'):
+        print(f'edge_matrix: 门禁②（离线复核）**不适用**（not_applicable，'
+              f'{gate2_out.get("records", "?")} 条无 targeted_ttp；exit_code=null）')
+    elif gate2_out.get('skipped'):
+        print(f'edge_matrix: 门禁②（离线复核）跳过：{gate2_out.get("skipped")}')
+    else:
+        print(f'edge_matrix: 门禁②（离线复核）exit={gate2_out.get("exit_code")}')
 if sensitivity:
     print(f'edge_matrix: 阈值敏感性行 阈值 {sensitivity.get("thresholds")}'
           f'（records={sensitivity.get("records")}，产物 {sensitivity.get("artifact_role")}）—— '
@@ -1061,23 +1091,50 @@ if [ "$RECORD_COUNT" -gt 0 ]; then
 # 而它在加 `candidate_dir` 之前只 import 了 json/sys/time ⇒ 门禁① 的**碎片文件写不出来**，
 # `set -e` 下那一轮的 EXIT trap 就把整轮记成失败（而 edgecompare 本身其实是 rc=0）。
 import json, os, sys, time
+code = int(sys.argv[2])
+# **第三态**（Task 22）：rc=3 = edgecompare 说"这批记录里没有 targeted_ttp ⇒ 决策层指标不存在"。
+# 它不是失败，也不是成功：`exit_code` 写 null（"没有这个数"），`not_applicable: true` 显式标出，
+# 并把工具自己的原因串原样抄进 `not_applicable_reason`（读的人不必再翻 .gate1.err）。
+na = (code == 3)
+reason = None
+if na:
+    try:
+        with open(os.path.join(os.path.dirname(sys.argv[1]), '.gate1.err'), encoding='utf-8') as fh:
+            reason = (fh.read().splitlines() or [''])[0] or None
+    except OSError:
+        reason = None
+    if not reason:
+        reason = 'edgecompare 以退出码 3 结束（决策层无输入），但 stderr 为空 —— 见 run.d/.gate1.out'
 json.dump({
     'dataset': 'all-records', 'records': int(sys.argv[4]), 'records_file': sys.argv[3],
-    'exit_code': int(sys.argv[2]), 'factors_spec': sys.argv[5], 'weights_spec': sys.argv[6],
+    'exit_code': (None if na else code),
+    'not_applicable': na,
+    'not_applicable_reason': reason,
+    'factors_spec': sys.argv[5], 'weights_spec': sys.argv[6],
     'candidates': {'legacy': 'm0-baseline.ini（= 采集模型）', 'vector': 'vector.ini',
                    'graph': 'graph.ini', 'chain': 'chain.ini'},
     'candidate_dir': os.environ.get('CANDIDATE_DIR', ''),
     'ran_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
     'note': '跑在全量记录上（不再切 EF-3FA 子集）；候选名必须是模型名（legacy|vector|graph|chain）；'
-            '-factors 必填且必须覆盖链上用到的每个因子（含 EF-3FA=0.82）',
+            '-factors 必填且必须覆盖链上用到的每个因子（含 EF-3FA=0.82）。'
+            '`not_applicable: true` = 本段没有任何 targeted_ttp 记录，决策层指标无输入 ⇒'
+            '门禁① 在这个段上**不适用**（exit_code 记 null，不是 0 也不是 1）；'
+            '真正失败（数据坏）仍是 exit_code=1 且整轮 MATRIX_RC 非零',
 }, open(sys.argv[1], 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 PY
-    [ "$G1" -eq 0 ] || {
+    if [ "$G1" -eq 3 ]; then
+      # **不适用**（Task 22）：不是失败，不写 state_fail、不 exit。
+      # 但也不许静默 —— 三行摘要把"为什么没有决策层指标"直接摆在日志与摘要里。
+      echo "edge_matrix: 门禁① **不适用**（not_applicable，exit=3 —— 这是第三态，不是失败）" >&2
+      echo "  原因：本段记录里没有任何 targeted_ttp 口径的标签 ⇒ 决策层指标与选模在这个段上不存在。" >&2
+      echo "  工具原文：$(head -1 "$RUN_D/.gate1.err" 2>/dev/null)" >&2
+      echo "  ⇒ MATRIX_RC 不受影响（判据没有放宽：有 targeted_ttp 时行为逐字不变，数据坏仍是 exit=1）" >&2
+    elif [ "$G1" -ne 0 ]; then
       echo "edge_matrix: 门禁① 失败（exit $G1）—— 见 $RUN_D/.gate1.err" >&2
       FAIL_REASON="门禁① 离线比较失败：exit=$G1（见 run.d/.gate1.err）"
       state_fail "$G1" "$FAIL_REASON" || true
       exit "$G1"
-    }
+    fi
   else
     echo "edge_matrix: 警告：$EDGECOMPARE 不存在，跳过门禁①（离线比较）" >&2
     python3 - "$RUN_D/gate-gate1.json" "$RECORDS" "$RECORD_COUNT" <<'PY'
@@ -1108,17 +1165,40 @@ if [ "$RECORD_COUNT" -gt 0 ] && [ -x "$EDGECOMPARE" ]; then
   G2=$?
   set -e
   python3 - "$RUN_D/gate-gate2.json" "$G2" "$RECORDS" "$RECORD_COUNT" <<'PY'
-import json, sys, time
+import json, os, sys, time
+code = int(sys.argv[2])
+# 第三态（Task 22，与门禁① 同一口径）：单个候选（legacy）在**全侦察口径**的记录上同样没有
+# 决策层输入 ⇒ edgecompare 以 rc=3 结束。它不是失败（门禁② 的实质在 edgescen 的进程内自检里），
+# 故与门禁① 一样写 `not_applicable` + `exit_code: null`，而不是记一个假的 exit=3。
+na = (code == 3)
+reason = None
+if na:
+    try:
+        with open(os.path.join(os.path.dirname(sys.argv[1]), '.gate2.err'), encoding='utf-8') as fh:
+            lines = [l for l in fh.read().splitlines() if '不适用' in l or '过滤后没有任何记录' in l]
+        reason = (lines or [None])[0]
+    except OSError:
+        reason = None
+    if not reason:
+        reason = '本段没有任何 targeted_ttp 记录 ⇒ 决策层指标无输入（退出码 3）'
 json.dump({
     'dataset': 'all-records', 'records': int(sys.argv[4]), 'records_file': sys.argv[3],
     'candidate': 'legacy=m0-baseline.ini（采集模型；门禁② 只在采集模型下执行）',
-    'exit_code': int(sys.argv[2]), 'ran_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+    'exit_code': (None if na else code),
+    'not_applicable': na,
+    'not_applicable_reason': reason,
+    'ran_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
     'note': '逐条 |复算 − 记录| 的权威证据在 edgescen 的进程内自检（run.d/collect-*.json 的 gate2_round_trip，'
             '不通过即拒绝写出该条记录）；此处是离线工具在**采集模型**下读全量记录不 fail-fast 的复核，'
-            '失败只记 warning —— 记录写不出来就没得复核，门禁② 的实质已由进程内自检承担',
+            '失败只记 warning —— 记录写不出来就没得复核，门禁② 的实质已由进程内自检承担。'
+            '`not_applicable: true` = 本段没有 targeted_ttp ⇒ 决策层指标无输入（exit_code 记 null）',
 }, open(sys.argv[1], 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 PY
-  [ "$G2" -eq 0 ] || echo "edge_matrix: 警告：门禁②（离线复核）exit $G2 —— 见 $RUN_D/.gate2.err（记录本身已通过进程内自检）" >&2
+  if [ "$G2" -eq 3 ]; then
+    echo "edge_matrix: 门禁②（离线复核）**不适用**（not_applicable，exit=3）—— 本段没有 targeted_ttp，决策层指标无输入；门禁② 的实质（逐条复算）由 edgescen 进程内自检承担" >&2
+  elif [ "$G2" -ne 0 ]; then
+    echo "edge_matrix: 警告：门禁②（离线复核）exit $G2 —— 见 $RUN_D/.gate2.err（记录本身已通过进程内自检）" >&2
+  fi
 fi
 
 # --- 阈值敏感性行（**显式 opt-in**；spec §5.4.6）--------------------------------

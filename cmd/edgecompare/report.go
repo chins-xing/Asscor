@@ -60,6 +60,36 @@ type Report struct {
 	ThresholdOverride float64 `json:"threshold_override"`
 }
 
+// NoDecisionLayerRecordsError 是「过滤后决策层一条记录都不剩」这一**第三态**的错误值（Task 22）。
+//
+// 为什么要一个专门的类型（而不是继续用 fmt.Errorf）：这个形态既不是成功，也不是失败 ——
+// 它是**判据不适用**（not applicable）。本轮之前 CLI 把它与"数据坏"归成同一个 `exit=1`，
+// 于是矩阵的门禁① 在**非 targeted 段**（33 条全是 `recon_playbook`，决策层本来就没有输入）上
+// 报成"门禁① 离线比较失败"，整轮 MATRIX_RC 非零。这不是数据坏，是**分类错了**。
+//
+// 三条纪律：
+//  1. **不变成 exit=0**：第三态有自己的退出码（`exitNotApplicable`，见 main.go），
+//     "不适用"仍是一个**显式的、可机读**的结论，不是"静默放行"；
+//  2. **措辞逐字不变**：`Error()` 的文本与引入本类型之前完全相同 —— 已有断言与操作者对
+//     `.gate1.err` 的阅读习惯都依赖它，第三态只换退出码，不换理由；
+//  3. **原因串可被下游原样取用**：字段就是矩阵层写 `gate-gate1.json` 的
+//     `not_applicable_reason` 所需的那几个数（过滤前条数 + 被跳过的依据分布）。
+type NoDecisionLayerRecordsError struct {
+	RecordsTotal int            // 过滤**前**的记录条数
+	Basis        map[string]int // 参与决策层的依据分布（本形态下必然为空）
+	BasisSkipped map[string]int // 被跳过的依据分布（例如 recon_playbook=33）
+}
+
+// Error 与引入本类型之前的措辞**逐字相同**（见上面第 2 条）。
+func (e *NoDecisionLayerRecordsError) Error() string {
+	return fmt.Sprintf("edgecompare: 过滤后没有任何记录进入决策层指标（过滤前 %d 条；"+
+		"**跳过 %s**）—— 决策层指标与选模都无从计算，故不给出结论。"+
+		"缺省口径下侦察口径（%s）的记录是背景测量、不进决策层；"+
+		"本轮的记录里没有一条 %s 口径的标签时，请按『分数侧』口径报告、不要在这里选模",
+		e.RecordsTotal, fmtBasisCountsOrNone(e.BasisSkipped),
+		edgeexp.BasisReconPlaybook, edgeexp.BasisTargetedTTP)
+}
+
 // Compare 在同一份真实数据上评估全部候选，并按决策层主判据选优（spec §2.1）。
 //
 // **必须走 `Evaluate`**（主控裁定 2）：它是带域覆盖校验的决策层入口。低阶原语
@@ -119,13 +149,16 @@ func CompareWith(records []Record, paramsByModel map[string]edgefactor.Params, w
 	// 这不是假想形态（评审与 Task 5 都会撞上）：22 个非 AppArmor 场景没有目标 TTP ⇒ 它们的记录
 	// 必然是 `recon_playbook`，一旦整批里没有 `targeted_ttp`，决策层就只剩 N=0。此时唯一正确的
 	// 输出是**不给结论并说清为什么**（用户裁定的 (a) 口径：决策层只覆盖 AppArmor 耦合对）。
+	//
+	// **Task 22 起它是"第三态"**：返回带类型的 `*NoDecisionLayerRecordsError`，CLI 据此给出
+	// `exitNotApplicable`（3）而不是 `exitFailure`（1）。判据本身一个字没松 ——
+	// 有 `targeted_ttp` 时仍然照算，算不出来/数据坏仍然是 exit=1（见 main.go 的退出码约定）。
 	if best := rep.Models[rep.Best]; best.N == 0 {
-		return Report{}, fmt.Errorf("edgecompare: 过滤后没有任何记录进入决策层指标（过滤前 %d 条；"+
-			"**跳过 %s**）—— 决策层指标与选模都无从计算，故不给出结论。"+
-			"缺省口径下侦察口径（%s）的记录是背景测量、不进决策层；"+
-			"本轮的记录里没有一条 %s 口径的标签时，请按『分数侧』口径报告、不要在这里选模",
-			best.RecordsTotal, fmtBasisCountsOrNone(best.BasisSkipped),
-			edgeexp.BasisReconPlaybook, edgeexp.BasisTargetedTTP)
+		return Report{}, &NoDecisionLayerRecordsError{
+			RecordsTotal: best.RecordsTotal,
+			Basis:        best.Basis,
+			BasisSkipped: best.BasisSkipped,
+		}
 	}
 	return rep, nil
 }

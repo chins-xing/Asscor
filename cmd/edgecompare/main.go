@@ -8,12 +8,21 @@
 //	对比（-candidate）：在同一份数据上评估候选模型，按决策层主判据选优并导出参数段（Task 9）；
 //	拟合（-fit）：在带标签的记录上拟合"主效应 + 先验边"并把结果折回配置段（Task 10）。
 //
-// 退出码约定（CLI 错误面，Task 10 mandate 口径 4 + 本轮 I4）：
+// 退出码约定（CLI 错误面，Task 10 mandate 口径 4 + 本轮 I4 + Task 22 的第三态）：
 //
 //	0 成功；1 运行期失败（读取层 / Compare / RenderConfigSection / Fit 返回的错误，
 //	以及 `-factors` 未覆盖记录里用到的因子这类**数据相关**的拒绝）；
 //	2 用法错误（缺必填开关、权重表非法、`-factors` 整表为空、-candidate 形式错误、
-//	-fit 与 -candidate 冲突）。
+//	-fit 与 -candidate 冲突）；
+//	3 **不适用**（not applicable，Task 22）：本次输入里没有任何 `targeted_ttp` 记录，
+//	决策层指标**不存在**（`*NoDecisionLayerRecordsError`）。它不是成功、更不是"放宽成 0"：
+//	是一个显式可机读的第三态，调用方（矩阵的门禁①/②、阈值敏感性行）必须把它与失败分开记。
+//
+// 为什么要第三态（而不是继续用 1）：非 targeted 段（11 个侦察口径场景 × 3 轮 = 33 条记录）
+// 里一条 `targeted_ttp` 都没有 ⇒ 决策层指标在这个段上**本来就不适用**，而把"不适用"报成
+// `exit=1` 会让矩阵把它读成"门禁① 离线比较失败"、整轮 MATRIX_RC 非零 —— 分类错误，不是数据坏。
+// 判据一个字没松：有 `targeted_ttp` 时行为逐字不变（exit=0 才算过、其它非零仍是失败），
+// 数据坏（缺依据、读不出来、因子没覆盖）仍然是 1 而不是 3。
 //
 // 两条纪律贯穿全文件：
 //
@@ -27,6 +36,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -46,6 +56,10 @@ const (
 	exitOK      = 0
 	exitFailure = 1
 	exitUsage   = 2
+	// exitNotApplicable 是**第三态**（Task 22）：输入里没有 `targeted_ttp` 记录 ⇒
+	// 决策层指标不存在。它**不是** 0（不是成功，不能静默放行），也**不是** 1（不是失败）：
+	// 调用方必须显式记成 `not_applicable: true` 并把原因串落盘。
+	exitNotApplicable = 3
 )
 
 func main() {
@@ -347,6 +361,18 @@ func runCompare(records []Record, weights map[string]float64, pairs []candidateR
 			AssumeBasis: assumeBasis})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
+		// **第三态**（Task 22）：过滤后决策层一条都不剩 ⇒ 判据不适用，不是失败。
+		// 措辞必须把"不适用 vs 失败"写在脸上：读 `.gate1.err` 的人（与下游脚本）要能
+		// 一眼分辨"这批数据没有决策层输入"与"这批数据坏了"。
+		var noDecision *NoDecisionLayerRecordsError
+		if errors.As(err, &noDecision) {
+			fmt.Fprintf(stderr, "edgecompare: ⇒ 这是**不适用**（not applicable），不是失败：退出码 %d"+
+				"（不是 0，也不是 1）。本段记录里没有任何 `%s` 口径的标签 ⇒ 决策层指标与选模在这个段上"+
+				"本来就不存在，调用方应记成 `not_applicable: true` 并保留上面的原因串；"+
+				"数据坏（缺依据/读不出来/因子未覆盖）仍然是退出码 1\n",
+				exitNotApplicable, edgeexp.BasisTargetedTTP)
+			return exitNotApplicable
+		}
 		return exitFailure
 	}
 	// **过滤器必须可见**（Task 4D Step 4）：决策层指标的分母 `N` 会因为"丢掉了侦察口径的记录"

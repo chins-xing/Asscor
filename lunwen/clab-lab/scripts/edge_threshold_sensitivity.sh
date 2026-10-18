@@ -116,6 +116,10 @@ echo "  阈值       : ${#THRESHOLDS[@]} 个 → ${THRESHOLDS[*]}"
 echo "  产物目录   : $OUT_DIR"
 
 # --- 逐阈值复算 -----------------------------------------------------------------
+# **第三态**（Task 22）：记下哪些阈值是"不适用"（edgecompare 退出码 3）。
+# 理由与门禁① 完全相同：本段记录里没有 `targeted_ttp` 时，决策层指标**不存在**，
+# 敏感性行在这个段上也无从计算 —— 那是"不适用"，不是"复算失败"。
+NA_THRESHOLDS=()
 for T in "${THRESHOLDS[@]}"; do
   RAW="$OUT_DIR/report-threshold-$T.raw.md"
   LOG="$OUT_DIR/report-threshold-$T.log"
@@ -135,6 +139,27 @@ for T in "${THRESHOLDS[@]}"; do
     > "$RAW" 2> "$LOG"
   RC=$?
   set -e
+  if [ "$RC" -eq 3 ]; then
+    # 不适用：仍**写一份产物**（否则"没跑"与"跑了但不适用"在文件名上分不开），
+    # 但内容明确标注 not_applicable，且**不当成失败**（不 exit 非零、不中断其它阈值）。
+    {
+      echo "<!-- 阈值敏感性分析产物：本文件**不是**主对比报告；它是『不适用』的显式记录。 -->"
+      echo ""
+      echo "# 阈值敏感性分析：\`threshold = $T\` —— **不适用**（not applicable）"
+      echo ""
+      echo "> edgecompare 以**退出码 3**（第三态）结束：记录 \`$RECORDS\`（$RECORD_COUNT 条）里"
+      echo "> 没有任何 \`targeted_ttp\` 口径的标签 ⇒ 决策层指标**不存在**，换判定线也无从比较。"
+      echo "> **这不是失败**（数据坏仍是退出码 1），也不产出任何指标行。"
+      echo ""
+      echo "---"
+      echo ""
+      cat "$LOG"
+    } > "$REPORT"
+    NA_THRESHOLDS+=("$T")
+    echo "edge_threshold_sensitivity: 阈值 $T **不适用**（not_applicable，exit=3 —— 不是失败；产物 $REPORT）"
+    echo "  ⇒ 本段没有 targeted_ttp 记录，决策层指标无输入；MATRIX_RC 不受影响"
+    continue
+  fi
   if [ "$RC" -ne 0 ]; then
     echo "edge_threshold_sensitivity: 阈值 $T 的复算失败（exit $RC）—— 见 $LOG" >&2
     [ -s "$LOG" ] && tail -5 "$LOG" >&2
@@ -165,10 +190,12 @@ done
 
 # --- 汇总（含"用了哪个阈值"的显式记录）------------------------------------------
 python3 - "$OUT_DIR/sensitivity.json" "$RUN_ID" "$RECORDS" "$RECORD_COUNT" "$CONFIG" \
-  "$CONFIG_HASH" "$FACTORS_SPEC" "$WEIGHTS_SPEC" "$ENV_NAME" "$EDGECOMPARE" "${THRESHOLDS[@]}" <<'PY'
+  "$CONFIG_HASH" "$FACTORS_SPEC" "$WEIGHTS_SPEC" "$ENV_NAME" "$EDGECOMPARE" \
+  "${NA_THRESHOLDS[*]:-}" "${THRESHOLDS[@]}" <<'PY'
 import json, sys, time
 out, run_id, records, count, config, cfg_hash, factors, weights, env, tool = sys.argv[1:11]
-thresholds = sys.argv[11:]
+na = set((sys.argv[11] or '').split())
+thresholds = sys.argv[12:]
 json.dump({
     'artifact_role': 'threshold-sensitivity',
     'is_primary_comparison': False,
@@ -192,7 +219,8 @@ json.dump({
         'report': f'report-threshold-{t}.md',
         'tool_stdout': f'report-threshold-{t}.raw.md',
         'tool_stderr': f'report-threshold-{t}.log',
-        'exit_code': 0,
+        'not_applicable': t in na,
+        'exit_code': (None if t in na else 0),
     } for t in thresholds},
     'notes': {
         'not_primary': '本文件与同目录 report-threshold-*.md 都是**敏感性分析**产物：它们覆盖了'
@@ -203,6 +231,10 @@ json.dump({
                        '-factors/-weights 由 edge_spec_lib.sh 推导（与矩阵同一份实现）。',
         'no_lab': '本脚本不调用 clab、不碰 Caldera、不起任何容器：只读记录 + 配置 + 离线工具。',
         'explicit_opt_in': '只有显式给出 EDGEEXP_SENSITIVITY_THRESHOLDS 才会运行，故默认路径不受影响。',
+        'not_applicable_is_not_failure': '**第三态（Task 22）**：某阈值的 not_applicable=true 表示'
+                                         'edgecompare 以退出码 3 结束 —— 本段记录里没有任何 targeted_ttp，'
+                                         '决策层指标不存在，换判定线也无从比较。它**不是**失败'
+                                         '（数据坏仍是退出码 1），也没有产出任何指标行。',
     },
 }, open(out, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 print(f'edge_threshold_sensitivity: 汇总 → {out}')
@@ -210,3 +242,6 @@ PY
 
 echo "============================================================"
 echo "edge_threshold_sensitivity: 完成（阈值 ${THRESHOLDS[*]}）—— 引用这些结果时必须标注为敏感性分析"
+if [ "${#NA_THRESHOLDS[@]}" -gt 0 ]; then
+  echo "  其中**不适用**（not_applicable，不是失败）：${NA_THRESHOLDS[*]} —— 本段没有 targeted_ttp，决策层指标无输入"
+fi

@@ -20,6 +20,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -496,5 +497,82 @@ func TestNothingIsConcludedWhenTheFilterEmptiesTheDecisionLayer(t *testing.T) {
 	}
 	if strings.Contains(out, "**选定模型**") {
 		t.Errorf("N=0 的报告不得出现「选定模型」：\n%s", truncForTest(out, 1200))
+	}
+}
+
+// TestNoDecisionLayerIsAThirdExitStateNotAFailure：过滤后 N=0 在 **CLI 层**是**第三态**（Task 22）。
+//
+// 为什么单开一条用例：`CompareWith` 报错这件事本身早就有钉子，而本轮改的是**退出码的分类**。
+// 那正是矩阵门禁① 读不到的东西 —— 它只看 CLI 的 rc。判据四条：
+//
+//	① 全侦察口径（本段本来就没有决策层输入）⇒ rc == 3（**不是 0、也不是 1**）；
+//	② stdout 必须为空（不适用时不得产出半份报告）；
+//	③ stderr 必须把"不适用 vs 失败"写在脸上（读 `.gate1.err` 的人要能一眼分辨）；
+//	④ **还有牙**：同一批记录里只要有一条真坏的数据（这里取"缺 `ground_truth.basis`"），
+//	   rc 必须回到 1 —— 证明第三态是按判据给的，不是"整批非 targeted 就一律放行"。
+//
+// ④ 用的缺陷是"缺依据"而不是"改一条分数"：改分数**不会**让门禁① 变红（门禁① 判的是
+// "工具能不能读全量记录、有无 fail-fast"，不是逐条复算 —— 后者是门禁② 与 edgescen 的
+// 进程内自检），拿它当"真失败"会得到一条**假的**红/绿证据。
+func TestNoDecisionLayerIsAThirdExitStateNotAFailure(t *testing.T) {
+	const R = edgeexp.BasisReconPlaybook
+	cfg := writeConfig(t, "t22-cand-legacy.ini",
+		"[edge_factors.model]\nmodel = legacy\np_floor = 0.2\n")
+	args := func(records string) []string {
+		return []string{"-records", records, "-candidate", "legacy=" + cfg,
+			"-weights", "attack_surface=1", "-factors", "EF-SELINUX=0.8"}
+	}
+
+	// ① 全 recon_playbook ⇒ 不适用。
+	records := writeRecordsJSONL(t, "t22-all-recon.jsonl", basisRecords(t, R, R, R, R))
+	code, stdout, stderr := runCLIForTest(t, args(records)...)
+	if code != exitNotApplicable {
+		t.Fatalf("全侦察口径的退出码 = %d, want %d（不适用）；stderr=%s", code, exitNotApplicable, stderr)
+	}
+	if code == exitOK {
+		t.Fatal("不适用**不得**变成 exit=0 —— 那是静默放行，不是第三态")
+	}
+	if strings.TrimSpace(stdout) != "" {
+		t.Errorf("不适用时不得产出报告：%s", stdout)
+	}
+	for _, want := range []string{"不适用", "not applicable", "不是失败"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr 必须写明第三态（缺 %q）：%s", want, stderr)
+		}
+	}
+	if !strings.Contains(stderr, edgeexp.BasisReconPlaybook) {
+		t.Errorf("原因串必须点名被跳过的依据类别：%s", stderr)
+	}
+	// 类型本身可被 errors.As 取回（下游要读 RecordsTotal/BasisSkipped 落盘原因串）。
+	_, err := CompareWith(basisRecords(t, R, R, R, R),
+		map[string]edgefactor.Params{"legacy": t9LegacyCandidate()}, t9Weights(), EvaluateOptions{})
+	var noDecision *NoDecisionLayerRecordsError
+	if !errors.As(err, &noDecision) {
+		t.Fatalf("N=0 必须返回 *NoDecisionLayerRecordsError，实际 %T：%v", err, err)
+	}
+	if noDecision.RecordsTotal != 4 || noDecision.BasisSkipped[R] != 4 {
+		t.Errorf("原因串的取数不对：total=%d skipped=%v", noDecision.RecordsTotal, noDecision.BasisSkipped)
+	}
+
+	// ④ **还有牙**：同一批加一条缺依据的记录 ⇒ 真失败（exit=1），不是 3。
+	broken := basisRecords(t, R, R, R, R)
+	broken[2].GroundTruth.Basis = ""
+	code, stdout, stderr = runCLIForTest(t, args(writeRecordsJSONL(t, "t22-broken.jsonl", broken))...)
+	if code != exitFailure {
+		t.Fatalf("缺依据的记录必须让退出码回到 1（证明第三态不是放行），实际 %d；stderr=%s", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != "" {
+		t.Errorf("失败时不得产出报告：%s", stdout)
+	}
+
+	// ③ 回归：有一条 targeted_ttp 就照旧成功（退出码 0），行为逐字不变。
+	T := edgeexp.BasisTargetedTTP
+	mixed := basisRecords(t, T, R, R, R)
+	code, stdout, stderr = runCLIForTest(t, args(writeRecordsJSONL(t, "t22-mixed.jsonl", mixed))...)
+	if code != exitOK {
+		t.Fatalf("含 targeted_ttp 的批必须照旧成功（rc=0），实际 %d；stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "选定模型") {
+		t.Errorf("有决策层输入时必须照常给出结论：\n%s", truncForTest(stdout, 1200))
 	}
 }
