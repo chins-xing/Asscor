@@ -425,7 +425,7 @@ Task 15 用**TCP + 原始 HTTP** 复测 CT 904 → C2:8888，得到 **`HTTP/1.0 
 | 基质名 | 后端 | 观测原语 | 入口 |
 |---|---|---|---|
 | `docker` | Containerlab 容器 | `docker exec` | 开发机（WSL2） |
-| `lxd` | LXD 实例 | `lxc exec` / `lxc file push` | 远程 A-1 服务器 |
+| `lxd` | LXD 实例 | `lxc exec` / `lxc file push` | **（已退场）原远程 A-1**：驱动保留、**无可用宿主** —— 2026-10-19 退为备份端、数据归档 dl360gen9 的 `/RAID-Mirror/from-a1/`、即将重置。⚠️ **不要照这一行去跑 lxd 批次** |
 | `clab` | Containerlab 拓扑 | `docker exec`（拓扑级） | 开发机 |
 | **`pve`** | **PVE CT（LXC 容器）** | **`pct exec` / `pct push`** | **本文档描述的这台机** |
 | **`qemu`** | **PVE VM（QEMU/KVM）** | **`ssh`（目标内执行） + `scp`（送文件）** | **本文档描述的这台机（v1.1 起已落地）** |
