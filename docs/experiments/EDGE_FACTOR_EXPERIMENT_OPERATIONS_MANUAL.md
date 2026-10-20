@@ -23,6 +23,7 @@
 3. [矩阵的实例模型（三个维度）](#3-矩阵的实例模型三个维度)
 4. [怎么读记录](#4-怎么读记录)
 5. [三道门禁与"基线活跃集"口径](#5-三道门禁与基线活跃集口径)
+   （含 **5.5 拟合与选模怎么复跑**，Task 24）
 6. [常见坑（**逐条都是实测踩出来的**）](#6-常见坑逐条都是实测踩出来的)
 7. [已知问题与未修清单](#7-已知问题与未修清单)
 8. [附录：环境变量全表](#8-附录环境变量全表)
@@ -981,6 +982,54 @@ meta.observation_target = "node:<vmid> (substrate=pve,  hostname=<name>)"     �
 
 **落地状态**：全量批次（22 场景 / 33 实例）已在 **VM 基质**上跑完，数据入库见 §4.6；
 CT 基质的 11 条记录**保留在仓库里作为历史证据**（它们同时是"链重复与基质无关"的对照证据）。
+
+---
+
+### 5.5 拟合与选模怎么复跑（Task 24 = 计划 Task 6）
+
+> **只用离线数据 + `build/edgecompare`，不起 VM、不碰 Caldera**（本任务全程在仓内数据上完成）。
+
+```bash
+# 0) 先建二进制（与门禁①用的是同一个）
+GOPROXY=https://goproxy.cn,direct go build -tags edgeexp -o build/edgecompare ./cmd/edgecompare
+
+FACTORS='EF-002FA=0.70,EF-SYNCOOKIE=0.75,EF-SELINUX=0.80,EF-APPARMOR=0.82,EF-NO-SIEM=0.90,EF-NO-IDS=0.88,EF-3FA=0.82'
+EDGES='EF-SELINUX|EF-APPARMOR,EF-NO-SIEM|EF-NO-IDS,EF-002FA|EF-3FA,EF-SELINUX|EF-002FA,EF-SYNCOOKIE|EF-NO-IDS'
+DATA=lunwen/clab-lab/data/edgefactors
+
+# 1) 四候选对比（主判据 = 决策层：漏判率 → 误阻断率 → AUC → 字典序）
+./build/edgecompare -records $DATA/records-dl360-qemu-20261016.jsonl \
+  -candidate legacy=configs/edgeexp/m0-baseline.ini -candidate vector=configs/edgeexp/vector.ini \
+  -candidate graph=configs/edgeexp/graph.ini  -candidate chain=configs/edgeexp/chain.ini \
+  -factors "$FACTORS" -weights attack_surface=35,business_continuity=25,operation_trust=25,resilience=15,kernel_security=10 \
+  -out $DATA/compare-20261021.md
+
+# 2) 拟合（**权威口径：按实例重抽**）
+./build/edgecompare -records $DATA/records-dl360-qemu-20261016.jsonl -fit \
+  -config configs/edgeexp/graph.ini -factors "$FACTORS" -edges "$EDGES" \
+  -seed 20261021 -folds 3 -group-by scenario -out $DATA/fit-20261021.md
+```
+
+- **`-group-by scenario` 不是可选项**：矩阵的两臂（`policy_on=1/0`）读数与分数**逐项相同、只差标签**
+  （§5.4 的 limitation）。按**行**切折时同一实例的两臂会同时进训练与验证 ⇒ 泛化误差被系统性**估低**
+  （实测同一批数据：逐行 CVErr **3.491897** vs 按实例 **0.693147**，后者正是常数预测器的 `ln 2`）。
+  缺省（不给 `-group-by`）仍是逐行口径，**报告头会写明"逐行"**——读到那一行就该知道这不是权威口径。
+- **产物三件套**（参数可复现性 = 三件齐出，spec §5.2）：
+  `fit-<date>.md`（拟合报告 + `[edge_factors.model]` 段）、`params-<date>.ini`（该段单独成文件）、
+  `params-<date>-factors.ini`（`[edge_factors]` 段 —— **离线工具不读它**，不归档就复现不出来）。
+  另有 `fit-<date>-rowlevel.md`（逐行对照）与 `fit-<date>-diagnostics.md`（共线性/秩/VIF 的独立复算）。
+- **两条拟合纪律（违反即结论作废）**：
+  1. `-l1` **默认关闭**，且**不得**用它"解释边强度"：本设计上点估计已是 0（设计矩阵秩亏），
+     罚项无从再推高任何系数；而在共线夹具上**中等 L1 反而把耦合系数推高**（0.453→0.664→0.918）⇒
+     "`L1 > 0 ⇒ 耦合更小`"是**假命题**。
+  2. **不得为迁就实现而放宽偏置阈值**（`TestFitCouplingIsUnbiasedAcrossSeeds` 的 `0.08`、
+     `fitDefaultL2 = 0.01`）。要动就动默认值本身并重新论证，**不是**调阈值让绿灯回来。
+- **怎么读 NULL**：本次四候选三层判据逐位相同（一致率 0.500 / 漏判 0 / 误阻断 0.500 / AUC 0.500）
+  ⇒ **不选模**。原因不是"模型太像"，而是**设计矩阵秩亏**（22 条 → 5 个不同设计行、13 个参数）。
+  此时正确的写法是「决策层无法区分四候选」+ 降级选择原则（design §9.1 第 5 条），
+  **不许**硬选一个再编故事，也**不许**把它写成"耦合很弱"。
+- **`-fit` 也会拒坏输入**（Task 24 Step 0 起）：记录缺了"被加权的域分"或"拟合特征域（`DefaultDomains ∩ λ`）"
+  的观测分 ⇒ `exit=1`，与对比路径同口径同措辞；不会再被记成"没有可用的标签"。
 
 ---
 

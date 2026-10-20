@@ -94,6 +94,14 @@ lunwen/clab-lab/data/edgefactors/*
 !lunwen/clab-lab/data/edgefactors/records-*.jsonl
 lunwen/clab-lab/data/edgefactors/records-wsl-clab-14-20260912-smoke*.jsonl
 !lunwen/clab-lab/data/edgefactors/run-[0-9]*.json
+# 2026-10-21（Task 24 = 计划 Task 6）：**拟合与选模的产物是交付物**，也要放行。
+#   计划点名三件套：`fit-<date>.md` / `params-<date>.ini` / `params-<date>-factors.ini`；
+#   另有四候选对比报告 `compare-<date>.md` 与独立诊断 `fit-<date>-diagnostics.md`
+#   （`-rowlevel` 那份是"按行 vs 按实例重抽"的对照）。它们都是**证据本体**：
+#   重跑虽然可行（同一 JSONL + 同一 seed），但"当时跑出来的是哪一份"必须能从仓内复核。
+!lunwen/clab-lab/data/edgefactors/fit-*.md
+!lunwen/clab-lab/data/edgefactors/params-*.ini
+!lunwen/clab-lab/data/edgefactors/compare-*.md
 # 2026-10-17（Task 23 收尾）：**归档的运行级证据目录** `run.d-<批次>/` 也要放行。
 # 起因：`run.d*/` 被刻意忽略（每轮会被矩阵清掉的临时碎片），但**归档型**目录
 #   `run.d-qemu-20261016/`（67 个）与 `run.d-t21-qemu-rpt/`（74 个）是**证据本体**

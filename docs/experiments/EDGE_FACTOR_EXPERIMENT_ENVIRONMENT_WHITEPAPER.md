@@ -709,6 +709,14 @@ asscor-vmseed / 它的目录                  → **刻意保留**（见 §2.1 �
 | 8 | **残留 agent** | C2 里的历史 agent 会被误判成"本轮已沦陷" | `edge_agent_preflight.sh` 的就绪/归属判据 |
 | 9 | **`GOPROXY` 需指镜像** | 默认 `https://proxy.golang.org` 在隔离网段内**拉不动** ⇒ 构建失败 | `go env GOPROXY`；见下 |
 | 10 | **"生效二进制 == HEAD 构建"必须显式确认** | 工作区里的 `build/*` 可能是**很久以前**构建的（本机实测：某个跑批工作区的源码 HEAD 恒停在早期提交，历轮只同步了脚本 ⇒ 在那里 `go build` 出来的二进制**不支持 `pve:` 前缀**，会在采集步整轮失败） | `bash lunwen/clab-lab/scripts/edge_prebatch_check.sh`（它会把"HEAD 构建"这件事收成一道门） |
+| 11 | **拟合与选模（计划 Task 6 / 本仓 Task 24）不消耗任何基质** | 它只吃**已入库的 JSONL** + `build/edgecompare`（`-fit` / `-candidate`）⇒ **不需要起 VM/CT、不需要 Caldera、不碰网络**；换基质只会换数据，不换工具 | `bash lunwen/clab-lab/data/edgefactors/` 下的产物 + 操作手册 **§5.5** 的复跑命令 |
+
+> **本白皮书不承载的两条论文口径禁令**（取材时**必须**去别处核对，别从这里推）：
+> ① "每个因子恰好出现两次"是**这批矩阵上的观测**、不是不变量（design §10.2 的禁令条；
+> 实测 33 条里 3 条含 `n_i = 1`）；
+> ② **两臂的链读数与分数逐项相同、只差标签** —— 这条 limitation **不许撤**
+> （`test-arm-limitation.sh` 守着；它也是 Task 24「四候选在决策层无区分力」的结构性根因，
+> 见 design §9.1）。
 
 #### 5.4.1 第 7 条详述：**「−30」是「取数权限 × 基质」耦合出来的伪影**
 
