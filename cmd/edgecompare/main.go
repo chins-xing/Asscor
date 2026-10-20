@@ -29,6 +29,13 @@
 // 于是 3 只可能来自"这批记录没有决策层标签"，不可能来自"记录本身不能打分" ——
 // 修复前这两种形态会一起落进 3（全侦察口径的段里被破坏的记录因此不再让任何门禁变红）。
 //
+// **Task 24 起 `-fit` 有同一套牙**（`validateFitRecordInputs`，见 fit.go）：拟合此前只过依据守卫，
+// 于是"打分输入被破坏"的记录**不产生任何错误**（设计矩阵只吃因子链与标签、根本不读域分）——
+// `-fit` 照常 `exit=0` 并产出一份逐字节正常的参数段。现在它同样在守卫之前逐条校验、`exit=1`，
+// 且"输入被破坏"不会再被记成"没有可用的标签"。
+// `-group-by`（仅 `-fit`）决定 k 折/自助法的**重抽样单位**：缺省逐行（历史口径），
+// `scenario` = 按实例整组进/出（矩阵的两臂读数与分数逐项相同、只差标签，按行切折会把泛化误差估低）。
+//
 // **门禁① 的能力边界（第一次审计 Minor-4 —— 引用这张表前务必读这一段）**：
 // 上面的 0/1/3 判的是**fail-fast 的可用性**：记录能不能读、依据能不能判、因子有没有覆盖、
 // 域分够不够。**它不是一个逐条复算门**。实测（Task 23 报告里有原始输出）：把一条记录的
@@ -110,6 +117,10 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	folds := fs.Int("folds", fitDefaultFolds, "交叉验证折数")
 	l2 := fs.Float64("l2", fitDefaultL2, "L2 相对收缩率：标准化后每一列收缩 1/(1+l2)（不是绝对脊参数，见 FitOptions.L2 注释）")
 	l1 := fs.Float64("l1", 0, "L1 正则系数（默认 0：稀疏化由先验边集上限承担）")
+	groupBy := fs.String("group-by", "",
+		"**重抽样单位**（仅 -fit）：row（缺省 = 逐行，历史口径）｜scenario（按 `scenario_id` 去掉尾部 -NN 实例号后的场景分组）。"+
+			"按行切折时同一实例的两臂会同时进训练与验证集（两臂读数与分数逐项相同、只差标签）⇒ 泛化误差被系统性估低；"+
+			"矩阵数据必须用 scenario。取值会写进拟合报告头，未知取值是用法错误（不静默回落到逐行）")
 	thresholdOverride := fs.Float64("threshold", 0,
 		"覆盖记录里的 observed.threshold（> 0；**仅用于敏感性分析**，0 = 用记录自带的判定线）。"+
 			"选模必须用部署的真实判定线，故该开关不得出现在默认路径上；使用时报告头会写明覆盖值")
@@ -136,6 +147,12 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	// 到底选了谁"无从解释 —— 用法错误，在读取任何文件之前就拒绝。
 	if *fitMode && len(candidateFlags) > 0 {
 		fmt.Fprintln(stderr, "edgecompare: -fit 与 -candidate 不能同时给出 —— 前者产出拟合参数段，后者产出候选对比报告，混在一起就无法归因")
+		return exitUsage
+	}
+	// `-group-by` 是**拟合的重抽样单位**：对比模式下没有切折/自助法，给了它就意味着操作者以为
+	// 这次比较按实例重抽了 —— 那是必须喊出来的误解，不是可以静默忽略的多余开关。
+	if strings.TrimSpace(*groupBy) != "" && !*fitMode {
+		fmt.Fprintln(stderr, "edgecompare: -group-by 只对 -fit 生效（它决定 k 折/自助法的重抽样单位）—— 对比模式不做重抽样，给了它会让『这次是按实例抽的』成为一句没有依据的话")
 		return exitUsage
 	}
 	// -threshold 只改"决策层判定线"，只在候选对比模式下有意义：拟合模式选的是参数而不是判定线、
@@ -226,7 +243,7 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 			return exitFailure
 		}
 		return runFit(records, base, factors, edges,
-			FitOptions{L2: *l2, L1: *l1, Folds: *folds, Seed: *seed,
+			FitOptions{L2: *l2, L1: *l1, Folds: *folds, Seed: *seed, GroupBy: *groupBy,
 				AllowMixedBasis: *allowMixedBasis, AssumeBasis: *assumeBasis},
 			*outPath, stdout, stderr)
 	case len(candidateFlags) > 0:

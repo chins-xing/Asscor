@@ -943,6 +943,253 @@ func TestFitRejectsSingleClassLabels(t *testing.T) {
 //
 // 夹具：base 同时存 `A→B` 与 `B→A`，但先验边集只列 `A|B`（设计矩阵里只有一条列）。
 // `c = −1.0` 的数据让该列 β ≤ 0 ⇒ 只允许删 `A→B`；不在设计矩阵里的 `B→A` 必须保持基准旧值。
+// ============================================================================
+// Task 24 / Step 0：**拟合路径也要有逐条输入校验**（对比路径 Task 23 的对应面）
+// ============================================================================
+//
+// 背景（第一次独立审计 Important-1 在 `-fit` 上的同一面）：Task 23 把对比路径的
+// `validateRecordInputs` 提到了依据守卫之前，但 `Fit` 入口只有 `applyBasisGuard` ⇒
+// "打分输入被破坏"的记录在拟合路径上**不产生任何错误**：`-fit` 照常 rc=0 并产出一份
+// 逐字节正常的参数段（设计矩阵只吃因子链与标签，**根本不读域分**，所以缺陷在外面完全看不见）。
+// 实测（Task 24 报告的 §Step 0）：拿主批 33 条删掉一条 targeted 记录的 `resilience` 域分，
+// 修复前 `-fit` `rc=0`、产物与干净跑的 2514 字节**逐字节相同**；同一份输入喂对比路径是 `rc=1`。
+//
+// 判据分两半（为什么不能只抄对比路径那一半）：
+//   - **同口径那半**：记录自带 `observed.effective_weights` 时，走 `validateWeightsUsable` +
+//     `validateDomainsCovered`（**同一对函数、逐字同一句错误**）——"记录自带的表里有权重却没有
+//     对应的观测域分"在两条路径上是同一个缺陷；
+//   - **拟合专属那半**：拟合没有 `-weights` 回退表（`-fit` 的 CLI 不解析它），历史/夹具记录也
+//     允许不带 `effective_weights`。故第二个判据不看权重表，而看**本次拟合的特征域集合**
+//     （`fitDomains` = `DefaultDomains ∩ λ`，legacy 例外）：拟合出的参数会被应用到同一批记录的
+//     评分上，缺了特征域的观测分，那次评分就会把该域当 0 静默压低总分。
+func TestFitRejectsBrokenRecordInputs(t *testing.T) {
+	const T = edgeexp.BasisTargetedTTP
+	intact := func() []Record { return fitBasisRecords(t, T, T, T, T, T, T, T, T) }
+
+	t.Run("记录自带权重表：缺加权域分 ⇒ 与对比路径同一句话", func(t *testing.T) {
+		recs := intact()
+		for i := range recs {
+			// 这张表里 resilience 有份量，而 fitDomains（λ 只有 attack_surface）根本不含它 ⇒
+			// 命中的必然是"同口径那半"，不会被拟合专属那半掩盖。
+			recs[i].Observed.EffectiveWeights = map[string]float64{"attack_surface": 1, "resilience": 1}
+			recs[i].Observed.DomainScores["resilience"] = 40
+		}
+		delete(recs[3].Observed.DomainScores, "resilience")
+		_, _, err := Fit(recs, fitBaseParams(), fitEdgeOpts(7))
+		if err == nil {
+			t.Fatal("缺加权域分的记录必须被拒（修复前这里 rc=0，产物逐字节正常）")
+		}
+		if !strings.Contains(err.Error(), "no observed domain score") || !strings.Contains(err.Error(), "FITBASIS-03") {
+			t.Errorf("必须是 compare 路径那句逐字相同的判据，并点名场景；实际: %v", err)
+		}
+	})
+
+	t.Run("记录不带权重表：缺拟合特征域 ⇒ 拟合专属判据", func(t *testing.T) {
+		recs := intact()
+		delete(recs[2].Observed.DomainScores, "attack_surface")
+		_, _, err := Fit(recs, fitBaseParams(), fitEdgeOpts(7))
+		if err == nil {
+			t.Fatal("缺拟合特征域观测分的记录必须被拒")
+		}
+		if !strings.Contains(err.Error(), "attack_surface") || !strings.Contains(err.Error(), "FITBASIS-02") {
+			t.Errorf("错误必须点名缺失的域与场景；实际: %v", err)
+		}
+		if !strings.Contains(err.Error(), "拟合") {
+			t.Errorf("错误必须说明这是拟合的特征域判据（不是权重表判据）；实际: %v", err)
+		}
+	})
+
+	t.Run("反向：输入完好 ⇒ 照常拟合（不误报）", func(t *testing.T) {
+		intact_, _, err := Fit(intact(), fitBaseParams(), fitEdgeOpts(7))
+		if err != nil {
+			t.Fatalf("输入完好的记录不得被输入校验拦下：%v", err)
+		}
+		_ = intact_
+	})
+
+	t.Run("判据位置：全侦察口径 + 输入被破坏 ⇒ 报「输入坏」而不是「过滤后没有记录」", func(t *testing.T) {
+		const R = edgeexp.BasisReconPlaybook
+		recs := fitBasisRecords(t, R, R, R, R, R, R, R, R)
+		for i := range recs {
+			recs[i].Observed.EffectiveWeights = map[string]float64{"attack_surface": 1, "resilience": 1}
+			recs[i].Observed.DomainScores["resilience"] = 40
+		}
+		delete(recs[0].Observed.DomainScores, "resilience")
+		_, _, err := Fit(recs, fitBaseParams(), fitEdgeOpts(7))
+		if err == nil {
+			t.Fatal("必须报错")
+		}
+		if strings.Contains(err.Error(), "过滤后没有任何记录进入拟合") {
+			t.Errorf("守卫先跑会把这条缺陷记成「没有可用的标签」——输入校验必须排在守卫**之前**：%v", err)
+		}
+		if !strings.Contains(err.Error(), "no observed domain score") {
+			t.Errorf("应报输入坏；实际: %v", err)
+		}
+	})
+}
+
+// ============================================================================
+// Task 24 / Step 2：重抽样单位必须能按**实例**（不是按行）
+// ============================================================================
+
+// TestInstanceStemIsTheArmFreeScenarioName：实例 = `scenario_id` 去掉尾部 `-NN` 实例号。
+//
+// 矩阵写出的实例号是 `printf '%s-%02d'`（`edge_collect.sh`），两臂与重复批的多次重复共享同一个
+// 场景根名 ⇒ 它们属于同一次实例，必须整体进/出验证集。
+func TestInstanceStemIsTheArmFreeScenarioName(t *testing.T) {
+	cases := map[string]string{
+		"S1-apparmor-01":        "S1-apparmor",
+		"S2-selinux-no-siem-06": "S2-selinux-no-siem",
+		"SYN-0001":              "SYN",         // 尾号也像实例号：按"去掉最后一截数字"的规则归一
+		"S1-apparmor":           "S1-apparmor", // 没有尾号 ⇒ 整串就是实例名（逐行退化为逐行）
+		"-leading-dash-01":      "-leading-dash",
+		"":                      "",
+	}
+	for in, want := range cases {
+		if got := instanceStem(in); got != want {
+			t.Errorf("instanceStem(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestFitGroupsRejectsUnknownGroupBy：拼错的 `-group-by` 必须报错，不得静默回落到逐行。
+//
+// 为什么这是 Critical 级的判据而不是风格问题：静默回落会让报告里写着"按实例重抽"（如果操作者
+// 以为自己传对了）或干脆什么都不写，而实际是按行切折 ⇒ 泛化误差被系统性估低 10 个百分点量级。
+func TestFitGroupsRejectsUnknownGroupBy(t *testing.T) {
+	_, _, err := Fit(syntheticRecordsN(t, 0.4, 7, 64), fitBaseParams(),
+		FitOptions{PriorEdges: [][2]string{{"A", "B"}}, L2: 0.01, Folds: 3, Seed: 7, GroupBy: "instances"})
+	if err == nil {
+		t.Fatal("未知的 -group-by 取值必须报错（不得回落到逐行）")
+	}
+	if !strings.Contains(err.Error(), "group-by") || !strings.Contains(err.Error(), "scenario") {
+		t.Errorf("错误必须点名开关与两个合法取值：%v", err)
+	}
+}
+
+// TestGroupedResamplingKeepsInstancesTogether：**重抽样单位**的两条硬性质（判机制，不判数值）。
+//
+// 为什么判机制而不是判"按实例的 CVErr 更大"：CVErr 的方向依赖数据形态（两臂同读数、标签相反
+// 是极端情形：每个实例对模型来说都是"同一个输入、两个相反标签"），拿它当判据会把一条**结构性**
+// 的要求测成"数值碰巧"的要求 —— 实测该夹具上按行的 CVErr 反而更大，理由与重抽样单位无关。
+// 真正的判据是两条可以直接看的事实：
+//
+//	① 切折：任何一折的验证集里不得出现同一实例的两条记录（等价地：验证集的实例集 ∩ 训练集的
+//	   实例集 = ∅）—— 否则模型在验证时"见过"同胞，泛化误差被估低；
+//	② 整群自助：每个重采样样本里的行多重集必须由**若干完整实例**构成（抽中的实例要么全进、
+//	   要么全不进）—— 逐行抽会让同一实例的两臂分别被抽进来，等于人为放大样本量。
+//
+// ③ 端到端再钉两件事：报告头写明单位；点估计**不随**单位改变（变的只有 CVErr 与自助法区间）。
+func TestGroupedResamplingKeepsInstancesTogether(t *testing.T) {
+	// 夹具：12 条记录 = 6 个实例（含单行实例与三行实例，钉住"大小不齐"）。
+	groups := []int{0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 5}
+	const folds = 3
+
+	byFold := cvTestIndices(len(groups), folds, groups)
+	seen := map[int]int{}
+	for fold, testIdx := range byFold {
+		if len(testIdx) == 0 {
+			t.Fatalf("第 %d 折的验证集为空（6 个实例 ≥ 折数 %d，不应出现空折）", fold, folds)
+		}
+		for _, i := range testIdx {
+			if prev, ok := seen[groups[i]]; ok && prev != fold {
+				t.Fatalf("实例 %d 同时出现在第 %d 折与第 %d 折的验证集里 —— 切折拆散了实例", groups[i], prev, fold)
+			}
+			seen[groups[i]] = fold
+		}
+	}
+	if len(seen) != 6 {
+		t.Errorf("6 个实例应各落一折，实际只有 %d 个", len(seen))
+	}
+	// 逐行口径必须仍然按行切（历史行为逐位不变）。
+	rowFolds := cvTestIndices(len(groups), folds, nil)
+	for fold, idx := range rowFolds {
+		for _, i := range idx {
+			if i%folds != fold {
+				t.Errorf("逐行口径必须保持 i%%folds 切折：行 %d 落在第 %d 折", i, fold)
+			}
+		}
+	}
+
+	rowsOf := map[int][]int{}
+	for i, g := range groups {
+		rowsOf[g] = append(rowsOf[g], i)
+	}
+	rng := rand.New(rand.NewSource(7))
+	for round := 0; round < 200; round++ {
+		sample := bootstrapIndices(len(groups), groups, rng)
+		if len(sample) == 0 {
+			t.Fatalf("第 %d 轮样本为空", round)
+		}
+		got := map[int]int{}
+		for _, i := range sample {
+			got[groups[i]]++
+		}
+		for g, cnt := range got {
+			if cnt%len(rowsOf[g]) != 0 {
+				t.Fatalf("第 %d 轮：实例 %d 在样本里出现 %d 行，不是其行数 %d 的整数倍 —— 实例被拆开了",
+					round, g, cnt, len(rowsOf[g]))
+			}
+		}
+	}
+	if got := len(bootstrapIndices(len(groups), nil, rand.New(rand.NewSource(7)))); got != len(groups) {
+		t.Errorf("逐行口径的样本长度必须是 n=%d，实际 %d", len(groups), got)
+	}
+
+	// ③ 端到端（合成数据）：8 个可辨识实例 × 8 条记录。
+	recs := syntheticRecordsN(t, 0.4, 7, 64)
+	for i := range recs {
+		recs[i].ScenarioID = fmt.Sprintf("SYN-%02d-%02d", i/8+1, i%8+1)
+	}
+	rowParams, rowRep, err := Fit(recs, fitBaseParams(), fitEdgeOpts(7))
+	if err != nil {
+		t.Fatalf("逐行口径 Fit: %v", err)
+	}
+	grpParams, grpRep, err := Fit(recs, fitBaseParams(), FitOptions{
+		PriorEdges: [][2]string{{"A", "B"}}, L2: 0.01, Folds: 3, Seed: 7, GroupBy: "scenario"})
+	if err != nil {
+		t.Fatalf("按实例口径 Fit: %v", err)
+	}
+	if grpRep.GroupBy != "scenario" || grpRep.Groups != 8 {
+		t.Fatalf("报告头必须写明按实例口径：GroupBy=%q Groups=%d（want scenario/8）", grpRep.GroupBy, grpRep.Groups)
+	}
+	if rowRep.GroupBy != "" || rowRep.Groups != 0 {
+		t.Errorf("逐行口径不得声称按实例：GroupBy=%q Groups=%d", rowRep.GroupBy, rowRep.Groups)
+	}
+	if !reflect.DeepEqual(rowParams.Factors, grpParams.Factors) || !reflect.DeepEqual(rowParams.Coupling, grpParams.Coupling) {
+		t.Error("点估计不得随重抽样单位改变（变的只有 CVErr 与自助法区间）")
+	}
+	var b strings.Builder
+	if err := RenderFitReport(&b, grpParams, grpRep); err != nil {
+		t.Fatalf("RenderFitReport: %v", err)
+	}
+	if !strings.Contains(b.String(), "重抽样单位: **按实例**") || !strings.Contains(b.String(), "实例数 8") {
+		t.Errorf("拟合报告头必须写明按实例口径：\n%s", truncForTest(b.String(), 1200))
+	}
+	_, again, err := Fit(recs, fitBaseParams(), FitOptions{
+		PriorEdges: [][2]string{{"A", "B"}}, L2: 0.01, Folds: 3, Seed: 7, GroupBy: "scenario"})
+	if err != nil {
+		t.Fatalf("按实例口径 Fit #2: %v", err)
+	}
+	if !reflect.DeepEqual(grpRep, again) {
+		t.Error("按实例口径必须仍然确定（两次拟合的报告不同）")
+	}
+}
+
+// TestFitRejectsFoldsWiderThanInstances：折数 > 实例数 ⇒ 报错，而不是"剩下几折的平均"。
+func TestFitRejectsFoldsWiderThanInstances(t *testing.T) {
+	recs := syntheticRecordsN(t, 0.4, 7, 64) // 64 条、每条自成实例 ⇒ 但 scenario 尾号会把它们归成 1 组
+	// 夹具形态：SYN-0000…SYN-0063 去掉尾号后全是 "SYN" ⇒ 只有 1 个实例，远小于 Folds=3。
+	_, _, err := Fit(recs, fitBaseParams(), FitOptions{
+		PriorEdges: [][2]string{{"A", "B"}}, L2: 0.01, Folds: 3, Seed: 7, GroupBy: "scenario"})
+	if err == nil {
+		t.Fatal("折数 > 实例数时必须报错（空折被跳过后的平均值不是泛化误差）")
+	}
+	if !strings.Contains(err.Error(), "实例数") {
+		t.Errorf("错误必须点名实例数：%v", err)
+	}
+}
+
 func TestFitKeepsReverseDirectedEdgeForChain(t *testing.T) {
 	base := fitBaseParams()
 	base.Model = edgefactor.ModelChain

@@ -72,6 +72,26 @@ type FitOptions struct {
 	// AssumeBasis 见 `EvaluateOptions.AssumeBasis`（给缺依据的历史记录补一个显式假设；
 	// 空串 = 不假设 ⇒ 缺依据即报错）。假设的条数进 `FitReport.BasisAssumed`。
 	AssumeBasis string
+
+	// GroupBy 是**重抽样单位**的开关（Task 24 / Step 2 的硬要求）。
+	//
+	// **为什么必须能按实例重抽**：矩阵的两条臂（`policy_on=1/0`）观测到的读数与分数**逐项相同、
+	// 只差标签**（`test-arm-limitation.sh` 守着的 limitation）。按**行**做 k 折或自助法时，
+	// 同一实例的两臂会同时落进训练集与验证集 —— 验证集里的那条"新样本"与训练集里的同胞在特征
+	// 上逐位相同，于是泛化误差被系统性**估低**（模型实际上是在背书见过的点）。
+	// 按实例重抽（同一实例的行整体进/出）才给出诚实的泛化估计。
+	//
+	// 取值（`fitGroups` 之外一律报错，绝不静默回落到逐行）：
+	//   ""/"row"  ：**逐行重抽**（历史行为逐位不变，既有夹具与既有产物都是这个口径）
+	//   "scenario"：按 `scenario_id` 去掉尾部 `-NN` 实例号后的**场景**分组（矩阵的两臂、以及
+	//               重复批的 3 次重复都落在同一组里 —— 与"重复样本不是独立样本"同一口径）
+	GroupBy string
+
+	// Groups 是 `fitGroups` 从 `GroupBy` 推导出来的稠密编号（0..G-1）；`nil` = 逐行口径。
+	// 它是**输出字段**：调用方只给 `GroupBy`，其余由 `Fit` 负责，避免两处口径分叉。
+	// 编号取自**记录本体**（`scenario_id`）而不是调用方给的下标 —— 依据守卫会过滤记录，
+	// 按下标给的编号在过滤后会错位。
+	Groups []int
 }
 
 // FitReport 是一次拟合的数值证据。四张表都必须非空 —— 返回零值会被读成"测过了"。
@@ -105,6 +125,13 @@ type FitReport struct {
 	Basis        map[string]int `json:"basis"`
 	BasisSkipped map[string]int `json:"basis_skipped,omitempty"`
 	BasisAssumed int            `json:"basis_assumed,omitempty"`
+
+	// 重抽样单位（Task 24 / Step 2）：`GroupBy` 是取值（"" / "row" = 逐行、"scenario" = 按实例），
+	// `Groups` 是**实例数**（只在按实例重抽时非零）。这两个字段存在的理由与"标签依据口径"同款：
+	// 同一个 `CVErr` 在"按行切折"与"按实例切折"下是**两个不同的量**，报告不写清就无法比较，
+	// 而按行切折会把泛化误差系统性估低（同胞记录同时进训练与验证）。
+	GroupBy string `json:"group_by,omitempty"`
+	Groups  int    `json:"groups,omitempty"`
 }
 
 const (
@@ -207,6 +234,14 @@ func couplingFromCoefficient(beta float64) (float64, bool) {
 // `base` 绝不会被就地修改（Caller 从配置装载它，随后还要用它）。
 func Fit(records []Record, base edgefactor.Params, opts FitOptions) (edgefactor.Params, FitReport, error) {
 	opts = normaliseFitOptions(opts)
+	// **逐条输入校验排在依据守卫之前，且对全部输入记录跑**（Task 24 / Step 0）：与对比路径
+	// `EvaluateWith` 的第一步完全对称 —— "这条记录本身能不能用"与"这批标签该不该放在一起算"
+	// 是两个问题，前者不依赖后者。放在守卫之后会漏掉"全部记录都是侦察口径"的那条路径
+	// （守卫把它们丢光 ⇒ 上面那个 `len(guard.kept) == 0` 提前返回 ⇒ 校验一次都没跑），
+	// 于是打分输入被破坏的记录会被记成「没有可用的标签」而不是「数据坏」。
+	if err := validateFitRecordInputs(records, base); err != nil {
+		return edgefactor.Params{}, FitReport{}, err
+	}
 	// **标签依据守卫排在一切之前**（Task 4D Fix round 2 / Important-1）：与对比路径共用
 	// `applyBasisGuard`（同一套判据、同一套计数来源），故"缺依据 ⇒ 报错 / 侦察口径 ⇒ 丢出并记账 /
 	// 逃生开关下混装 ⇒ 报错"在两条路径上**逐字同源**。放在 `validateFitRequest` 之前还有一层
@@ -234,6 +269,23 @@ func Fit(records []Record, base edgefactor.Params, opts FitOptions) (edgefactor.
 			len(records), fmtBasisCountsOrNone(guard.skipped))
 	}
 	records = guard.kept
+	// 重抽样单位必须在**过滤之后**从保留的记录推导（`fitGroups` 只看记录本体，
+	// 故不存在"按下标给的编号被过滤错位"的问题）。
+	groups, groupCount, err := fitGroups(records, opts.GroupBy)
+	if err != nil {
+		return edgefactor.Params{}, FitReport{}, err
+	}
+	if len(groups) > 0 {
+		// 按实例重抽时折的单位是**实例**：折数 > 实例数会让某些折没有验证集（`crossValidate`
+		// 会跳过它们），于是 CVErr 只由剩下几折平均 —— 那是"看起来算过了"的假测量。
+		if opts.Folds > groupCount {
+			return edgefactor.Params{}, FitReport{}, fmt.Errorf(
+				"edgecompare: 折数 %d > 实例数 %d（-group-by=%s）—— 交叉验证按实例切折，实例不够就没有验证集："+
+					"这个数字会被读成『泛化误差』，实际只是空折被跳过后剩下几折的平均",
+				opts.Folds, groupCount, opts.GroupBy)
+		}
+	}
+	opts.Groups = groups
 	if err := validateFitRequest(records, base, opts); err != nil {
 		return edgefactor.Params{}, FitReport{}, err
 	}
@@ -251,6 +303,10 @@ func Fit(records []Record, base edgefactor.Params, opts FitOptions) (edgefactor.
 	rep.Coefficients = make(map[string]float64, len(d.names))
 	rep.EdgeCoefficients = make(map[string]float64, len(d.edges))
 	rep.CVErr = cvErr
+	rep.GroupBy = opts.GroupBy
+	if len(groups) > 0 {
+		rep.Groups = groupCount
+	}
 	rep.Bootstrap = bootstrapCoefficients(d.X, d.y, d.names, opts, d.coef, d.means, d.scales)
 	for i, name := range d.names {
 		rep.Coefficients[name] = beta[i]
@@ -410,6 +466,109 @@ func normaliseFitOptions(opts FitOptions) FitOptions {
 		opts.L1 = 0
 	}
 	return opts
+}
+
+// validateFitRecordInputs 是**拟合路径的逐条输入校验**：这条记录本身是否可用于"被拟合 + 被重算"。
+//
+// **它必须先于依据守卫跑，且覆盖全部输入记录**（Task 24 / Step 0）。这是对比路径 Task 23 那次
+// 修复（`validateRecordInputs`，第一次独立审计 Important-1）在拟合路径上的**对应面**：
+// `Fit` 此前只有 `applyBasisGuard` 一道守卫，于是"打分输入被破坏"的记录在拟合路径上
+// **不产生任何错误** —— 设计矩阵只吃因子链与标签、根本不读域分，所以 `-fit` 会 rc=0 并产出一份
+// 逐字节正常的参数段，缺陷在外面完全看不见。实测（Task 24 报告 §Step 0）：主批 33 条里删掉一条
+// targeted 记录的 `resilience` 域分，修复前 `-fit` rc=0、产物与干净跑**逐字节相同**；
+// 同一份输入喂对比路径是 rc=1。这就是"数据坏被记成别的状态"。
+//
+// 判据分两半（为什么不能只抄对比路径那一半）：
+//   - **① 同口径那半**：记录自带 `observed.effective_weights` 时，直接走
+//     `validateWeightsUsable` + `validateDomainsCovered` ——**同一对函数、逐字同一句错误**。
+//     "记录自带的表里有权重却没有对应的观测域分"在两条路径上是同一个缺陷。
+//   - **② 拟合专属那半**：`-fit` 的 CLI **不解析 `-weights`**（没有回退表），而历史数据集与
+//     夹具允许记录不带 `effective_weights`（读取层口径：可选）。故第二个判据不看权重表，
+//     而看**本次拟合的特征域集合** `fitDomains`（= `DefaultDomains ∩ λ`，legacy 例外）：
+//     拟合出的参数会被应用到同一批记录的评分上，缺了特征域的观测分，那次重算就会把该域
+//     当作 0 参与聚合（仍占一份权重）⇒ 静默压低总分。
+//
+// 参数本身坏（一个默认域都没声明 λ）时**不在这里抢那个错误**：它属于 `buildFitDesign`
+// 的 `fitDomains` 调用，报错顺序保持原样（本函数只在能算出域集合时做 ②）。
+func validateFitRecordInputs(records []Record, base edgefactor.Params) error {
+	domains, domErr := fitDomains(base)
+	for _, rec := range records {
+		if recordCarriesWeights(rec) {
+			// 权重来源与"谁赢"同源（`recordWeights`）：拟合没有回退表，回退项给 nil。
+			w := recordWeights(rec, nil)
+			if err := validateWeightsUsable(rec, w); err != nil {
+				return err
+			}
+			if err := validateDomainsCovered(rec, w); err != nil {
+				return err
+			}
+		}
+		if domErr != nil {
+			continue
+		}
+		for _, d := range domains {
+			if _, ok := rec.Observed.DomainScores[d]; !ok {
+				return fmt.Errorf("edgecompare: 拟合：scenario %s: domain %q 是本次拟合的特征域（DefaultDomains ∩ λ）之一，"+
+					"但记录里没有它的观测域分 —— 拟合产物会被贴回这批记录的评分上，缺域在重算时被当成 0 参与聚合"+
+					"（仍占一份权重），静默压低总分；这是**打分输入被破坏**，不是『没有标签』",
+					rec.ScenarioID, d)
+			}
+		}
+	}
+	return nil
+}
+
+// fitGroups 把 `FitOptions.GroupBy` 解析成**重抽样单位**（每条记录一个稠密实例编号）。
+//
+// 返回 (groups, 实例数, error)；`groups == nil` 表示逐行口径（历史行为）。
+//
+// 三条纪律：
+//  1. **未知取值必须报错**，不得静默回落到逐行 —— "以为按实例重抽了、其实是按行"会把泛化误差
+//     估低却看不出来，正是本字段存在的理由。
+//  2. **稠密化**（按首次出现顺序重编号）：k 折按下标取模切分，编号有空洞会让某些折为空；
+//     重编号后记录的相对顺序不变 ⇒ 随机数消费序与输入顺序一一对应，结果仍可复现。
+//  3. **分组键取自记录本体**（`scenario_id` / 实例号），不取调用方给的下标 —— 依据守卫会过滤
+//     记录，按下标给的编号在过滤后会错位。
+func fitGroups(records []Record, groupBy string) ([]int, int, error) {
+	switch groupBy {
+	case "", "row":
+		return nil, len(records), nil
+	case "scenario":
+	default:
+		return nil, 0, fmt.Errorf("edgecompare: -group-by %q 未知（只接受 row / scenario）—— "+
+			"拼错的取值会让『按实例重抽』静默退化成按行重抽，泛化误差被系统性估低而报告上看不出来", groupBy)
+	}
+	rank := make(map[string]int, len(records))
+	out := make([]int, len(records))
+	for i, rec := range records {
+		key := instanceStem(rec.ScenarioID)
+		r, ok := rank[key]
+		if !ok {
+			r = len(rank)
+			rank[key] = r
+		}
+		out[i] = r
+	}
+	return out, len(rank), nil
+}
+
+// instanceStem 把 `scenario_id` 归到**实例**：去掉尾部 `-NN`（矩阵写出的实例号，见
+// `edge_collect.sh` 的 `printf '%s-%02d'`）。
+//
+// 为什么实例是"去掉尾号"：矩阵的两臂与重复批的多次重复共享同一个场景根名，它们观测到的读数
+// 逐项相同、只差标签（arm limitation）⇒ 属于**同一次实例**，必须整体进/出验证集。
+// 没有尾号（手写夹具/历史数据）时整串就是实例名 —— 每条记录自成一组，退化为逐行口径。
+func instanceStem(scenarioID string) string {
+	i := strings.LastIndexByte(scenarioID, '-')
+	if i <= 0 || i == len(scenarioID)-1 {
+		return scenarioID
+	}
+	for _, c := range scenarioID[i+1:] {
+		if c < '0' || c > '9' {
+			return scenarioID
+		}
+	}
+	return scenarioID[:i]
 }
 
 // validateFitRequest 是拟合的前置条件检查（顺序即下面的分支顺序，错误信息点名问题所在）。
@@ -907,6 +1066,29 @@ func dot(row, w []float64) float64 {
 // 交叉验证与自助法
 // ============================================================================
 
+// cvTestIndices 给出 k 折交叉验证**每一折的验证集下标**（长度 = 折数，元素顺序 = 记录顺序）。
+//
+// **切折单位是这里唯一的口径决定**（Task 24 / Step 2）：
+//   - `groups == nil`（逐行口径）⇒ `i % folds`，与历史实现逐位相同；
+//   - `groups != nil`（按实例口径）⇒ `groups[i] % folds`，同一实例的所有行**必落同一折**。
+//     这正是为了 arm limitation（两臂读数与分数逐项相同、只差标签）：按行切折会让验证集里的
+//     记录在训练集里有逐位相同的同胞，模型等于在背见过的点 ⇒ 交叉验证误差被系统性估低。
+//
+// 单独抽成函数是为了让"折里有没有拆散实例"成为可直接断言的判据（`TestFitGroupedResampling…`），
+// 而不是只能从 CVErr 的数值大小去猜。
+func cvTestIndices(n, folds int, groups []int) [][]int {
+	out := make([][]int, folds)
+	for i := 0; i < n; i++ {
+		unit := i
+		if groups != nil {
+			unit = groups[i]
+		}
+		fold := unit % folds
+		out[fold] = append(out[fold], i)
+	}
+	return out
+}
+
 // crossValidate 返回 k 折交叉验证的平均对数损失（留出法，按样本下标取模切片，顺序稳定）。
 //
 // 折数 > 样本数在这里再次拒绝（`validateFitRequest` 已拦过一次）：本函数是导出路径上的
@@ -924,11 +1106,18 @@ func crossValidate(X [][]float64, y []bool, opts FitOptions, start []float64) (f
 		return 0, fmt.Errorf("edgecompare: 折数 %d > 样本数 %d —— 交叉验证无从进行", folds, n)
 	}
 	total, used := 0.0, 0
-	for fold := 0; fold < folds; fold++ {
+	for _, testIdx := range cvTestIndices(n, folds, opts.Groups) {
+		if len(testIdx) == 0 {
+			continue
+		}
+		inTest := make(map[int]bool, len(testIdx))
+		for _, i := range testIdx {
+			inTest[i] = true
+		}
 		var trainX, testX [][]float64
 		var trainY, testY []bool
 		for i := 0; i < n; i++ {
-			if i%folds == fold {
+			if inTest[i] {
 				testX = append(testX, X[i])
 				testY = append(testY, y[i])
 				continue
@@ -990,12 +1179,16 @@ func bootstrapCoefficients(X [][]float64, y []bool, names []string, opts FitOpti
 	}
 	rng := rand.New(rand.NewSource(opts.Seed))
 	samples := make([][]float64, len(names))
-	bx := make([][]float64, n)
-	by := make([]bool, n)
+	// 重采样单位（Task 24 / Step 2）：交给 `bootstrapIndices` —— 逐行抽（历史口径）或
+	// 按实例**整群**抽（抽实例、带它的全部行）。判据与 `cvTestIndices` 的切折单位同源：
+	// 逐行抽会把同一实例的两臂分别抽进来，重采样样本里"同一个实例"出现两次 ⇒ 区间偏窄。
+	bx := make([][]float64, 0, n)
+	by := make([]bool, 0, n)
 	for round := 0; round < fitBootstrapRounds; round++ {
-		for i := 0; i < n; i++ {
-			k := rng.Intn(n)
-			bx[i], by[i] = X[k], y[k]
+		bx, by = bx[:0], by[:0]
+		for _, k := range bootstrapIndices(n, opts.Groups, rng) {
+			bx = append(bx, X[k])
+			by = append(by, y[k])
 		}
 		raw := denormaliseCoefficients(fitElasticNet(bx, by, opts.L1, opts.L2, start), means, scales)
 		for j := range names {
@@ -1011,6 +1204,39 @@ func bootstrapCoefficients(X [][]float64, y []bool, names []string, opts FitOpti
 		lo := s[clampIndex(int(math.Floor(0.025*float64(len(s)))), len(s))]
 		hi := s[clampIndex(int(math.Ceil(0.975*float64(len(s))))-1, len(s))]
 		out[name] = [2]float64{lo, hi}
+	}
+	return out
+}
+
+// bootstrapIndices 返回**一个**自助法重采样样本的下标序列（有放回）。
+//
+// 重抽样单位与 `cvTestIndices` 同源（Task 24 / Step 2）：
+//   - `groups == nil`（逐行口径）⇒ 重复 n 次 `rng.Intn(n)`，与历史实现**逐位相同**
+//     （连随机数的消费序都一样：`Intn` 逐个消费，n 次一轮）；
+//   - `groups != nil`（按实例口径）⇒ 重复 G 次 `rng.Intn(G)`，每次把**该实例的全部行**
+//     整体放进样本 —— 整群重采样的标准做法。行数因此随抽中的实例大小浮动，
+//     与"重采样样本 = 对实例总体的经验分布的抽样"一致。
+//
+// 单独抽成函数同样是为了可断言：判据是"样本里的行多重集 = 若干**完整**实例的多重集"，
+// 而不是从区间宽度反推（那只是下游症状，且方向依赖数据）。
+func bootstrapIndices(n int, groups []int, rng *rand.Rand) []int {
+	if groups == nil {
+		out := make([]int, n)
+		for i := 0; i < n; i++ {
+			out[i] = rng.Intn(n)
+		}
+		return out
+	}
+	rowsOf := make([][]int, 0, n)
+	for i, g := range groups {
+		for len(rowsOf) <= g {
+			rowsOf = append(rowsOf, nil)
+		}
+		rowsOf[g] = append(rowsOf[g], i)
+	}
+	out := make([]int, 0, n)
+	for g := 0; g < len(rowsOf); g++ {
+		out = append(out, rowsOf[rng.Intn(len(rowsOf))]...)
 	}
 	return out
 }
@@ -1104,7 +1330,16 @@ func RenderFitReport(w io.Writer, p edgefactor.Params, rep FitReport) error {
 		fmt.Fprintf(&b, "｜过滤前共 %d 条\n", rep.RecordsTotal)
 	}
 	b.WriteString("\n")
-
+	// **重抽样单位必须写在报告头上**（Task 24 / Step 2）：同一个 `CVErr` 在"按行切折"与
+	// "按实例切折"下是两个不同的量 —— 按行切折时同一实例的两臂会同时进训练与验证
+	// （arm limitation：两臂读数与分数逐项相同、只差标签），泛化误差被系统性估低。
+	if rep.GroupBy == "" || rep.GroupBy == "row" {
+		b.WriteString("重抽样单位: **逐行**（k 折与自助法都按记录行切；同一实例的多条记录可能同时进训练与验证 —— 历史口径，既有产物即此口径）\n")
+	} else {
+		fmt.Fprintf(&b, "重抽样单位: **按实例**（`-group-by=%s`，实例数 %d、记录 %d 条；k 折与 100 次自助法都整组进/出）\n",
+			rep.GroupBy, rep.Groups, rep.N)
+	}
+	b.WriteString("\n")
 	b.WriteString("| 列 | 系数 β | 自助法 95% 区间 | 折回的参数 |\n")
 	b.WriteString("|---|---|---|---|\n")
 	for _, name := range sortedNames(rep.Coefficients) {
