@@ -108,6 +108,13 @@ export EDGEEXP_SUBSTRATE=pve      # docker | lxd | clab | pve | qemu
 
 ### 2.2 一份可以照抄的 env 文件（**脱敏版**）
 
+> ⚠️ **适用范围**：这一份是 **`pve`（PVE CT）快速验证**用的 —— `EDGEEXP_SUBSTRATE=pve`，且
+> `EDGEEXP_TARGET` 是**靶机 CT 的名字**（例 `asc-tgt-c2`）。**VM 批次不能照抄这一份**：
+> 现行生产基质是 `qemu`，`EDGEEXP_TARGET` 要写成 **VM 的 hostname**（例 `asc-vm910`），取数是
+> `EDGEEXP_VM_SSH_SUDO='sudo -n'` 的 **root 等价**，并需补上本节下半段那几格 VM 专用变量
+> （`EDGEEXP_VM_SSH_KEY` / `EDGEEXP_VM_SSH_USER` / `EDGEEXP_VM_GUEST_IFACE` 等）。**VM 批次的完整序列见 §2.5。**
+> 基质抄错的症状不是报错，而是前置门禁以"目标上没有活着的 agent"把整轮拒掉（见 §2.1 的注）。
+
 ```bash
 # ---- 基质与标识 ----
 export EDGEEXP_SUBSTRATE=pve

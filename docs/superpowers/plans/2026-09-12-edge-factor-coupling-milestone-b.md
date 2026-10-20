@@ -1,10 +1,34 @@
 # 边缘因子耦合与变量化实现计划 — 里程碑 B（场景矩阵执行 + 拟合选模 + 文档口径）
 
+> ⛔ **状态（仅存档）**：本文件是 **2026-09-12 的原始实施计划**，**未在此文件内维护勾选状态**。
+> 计划里的 Task 1–4D（含 3B/4C/4D）**已全部执行**，Task 5/6/7 也都已有对应的实际任务（编号对照见下一节）。
+> **50 个 `- [ ]` 不代表未完成**；实际执行结果与顺序以设计文档 §10 与审计归档 Part H 为准。
+> 原文以下**保留仅为史料**（它解释"当时为什么这样切任务、为什么这样排基质"），**不据此判断进度**。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+## 计划内的 Task 编号 ↔ 实际执行编号（Task 25 补，**两套编号并存，不互相替换**）
+
+> 本计划写于 2026-09-12，实际执行时任务被重排并拆分 ⇒ **同一个名字有两个编号**。
+> 引用历次评审/裁定原话时**保留旧称**（例如"Task 5 开工必带的口径"），查"实际做了没有"时按下表。
+> 设计文档侧的两处旧称（§5.4.15、§10.2）已各自加了指向本表的说明。
+
+| 计划内的 Task | 实际执行 | 说明 |
+|---|---|---|
+| Task 1 | Task 1 | 观测链落到输出层（默认路径逐位不变） |
+| Task 2 | Task 2 | 共享 JSONL 契约包 `internal/edgeexp` |
+| Task 3 | Task 3 | 采集器 `cmd/edgescen` |
+| Task 3B | Task 3B | 离线重算以记录自带权重为准 |
+| Task 4 | Task 4 | 实验模板与场景矩阵脚本 |
+| Task 4C | Task 4C | 观察对象搬到节点内 |
+| Task 4D | Task 4D | 基质搬到 A-1（LXD） |
+| **Task 5**（重复性与方差） | **Task 21** | 重复轴在 **VM 基质**上落地（台账 H.6：两段 66 + 33 = 99 条） |
+| **Task 6**（拟合与选模） | **Task 24** | 结论 = **NULL 结果**（设计文档 §9.1） |
+| **Task 7**（文档 / 论文口径 / 双分支同步） | **Task 19 / 20 / 22 / 23**（拆分执行） | 文档合流与清机、三条尾巴、脱敏与修复、文档失效盘点分别落地；其中「双分支同步」**已撤销**（见 Global Constraints 第 1 条） |
 
 **Goal:** 把方向② 的四候选（M0 legacy / V 逐域向量 / G 耦合图 / C 时序链）从"离线工具能算"推进到"用真实攻防实验数据选出部署模型"：先补齐**观测链的输出层承载**与**生产者/消费者共用的 JSONL 契约**，再实现采集器与 S0–S5(22)+R(3) 场景矩阵，最后用 `cmd/edgecompare` 拟合选模并把结论写进文档与论文口径。
 
-**Architecture:** 生产侧只做三件事 —— ① `model.AssessmentResult` 增加"本次评分实际观测到的边缘因子链"（`omitempty`，默认路径输出逐位不变）；② 新增**无 build tag** 的 `internal/edgeexp` 承载 spec §5.1 的记录 schema 与存在性/值域校验（消费者 `cmd/edgecompare` 与生产者 `cmd/edgescen` 共用同一份，杜绝契约漂移）；③ `cmd/edgescen`（tag `expr`）在实验环境里按场景注入检查失败、跑真实攻击、把引擎评估与客观结果 join 成一条 JSONL。实验执行侧是脚本化的场景矩阵（WSL2 Containerlab 主战场、A-1 做 3 次重复），产出物是数据集 + 拟合报告 + 参数文件（**必须三件一起给**：`[edge_factors.model]` 段 + `[edge_factors]` 段 + JSONL，见 spec §5.2）。
+**Architecture:** 生产侧只做三件事 —— ① `model.AssessmentResult` 增加"本次评分实际观测到的边缘因子链"（`omitempty`，默认路径输出逐位不变）；② 新增**无 build tag** 的 `internal/edgeexp` 承载 spec §5.1 的记录 schema 与存在性/值域校验（消费者 `cmd/edgecompare` 与生产者 `cmd/edgescen` 共用同一份，杜绝契约漂移）；③ `cmd/edgescen`（tag `expr`）在实验环境里按场景注入检查失败、跑真实攻击、把引擎评估与客观结果 join 成一条 JSONL。实验执行侧是脚本化的场景矩阵（~~WSL2 Containerlab 主战场、A-1 做 3 次重复~~ ⇒ ⛔ **失效（仅存档）**：实际基质序列是 **pve CT → qemu VM**，重复轴也在 VM 上，见本文件顶部编号对照与台账 C.2/H.6），产出物是数据集 + 拟合报告 + 参数文件（**必须三件一起给**：`[edge_factors.model]` 段 + `[edge_factors]` 段 + JSONL，见 spec §5.2）。
 
 **Tech Stack:** Go 1.26、build-tag 模块模式（`expr` / `edgeexp` / `engine`）、`internal/edgefactor`（无 tag 合成层）、`internal/engine`（tag engine 的真实评分入口）、Containerlab + Docker + Caldera（真实攻击剧本）、既有 `cmd/edgecompare`（离线重算/指标/拟合/报告）。
 
@@ -14,7 +38,10 @@
 
 ## Global Constraints
 
-- 分支 `ASSCOR-Research-Core`；提交说明必须**中文**（`feat(edgeexp): …` 前缀可保留英文分类词）；完成后同步 `main`（本地快进）并**两分支一起推送**。
+- 分支 `ASSCOR-Research-Core`；提交说明必须**中文**（`feat(edgeexp): …` 前缀可保留英文分类词）；**分支策略按台账 A.1（2026-09-13 裁定）：与 `main` 正式分叉、永不整体同步**，只有被点名的关键模块单独移植；历史债务 / 漏洞修复 / 审计修复三类必须**第一时间进 main**。
+  > ⛔ **失效（仅存档）**：本条原文是「**完成后同步 `main`（本地快进）并**两分支一起推送**」。
+  > 该动作已被 **2026-09-13 的分支策略裁定撤销** —— 照做就是一次**被禁的全量快进**（`git push . ARC:main` 之类）。
+  > 现行口径见台账 A.1 与本条前半句。
 - **默认行为不变（硬门禁）**：未配置 `[edge_factors.model]` 时评分与历史**逐位一致**；未启用必须零注册（不得注册"等价默认策略"）；显式 `model=legacy` 与"未配置"逐位一致（差别只在溯源输出）。新增输出字段一律 `omitempty`，不得改变任何既有 JSON 键的取值。
 - **契约单一来源**：JSONL 的字段名/存在性/值域只允许有一份实现（本计划落在 `internal/edgeexp`），`cmd/edgecompare` 改为消费它；此前"文档 §5.1 与读取层各写一份"已经漂移过一次（示例被自己的解析器拒绝）。
 - **记录构造要求**（spec §5.1，生产者必须满足，读取层不校验）：因子 ID 用**规范 ID**（`EF-SELINUX`，不是展示名）；`trigger_check` 与该因子在**当前部署解析出的**触发检查一致（内置因子 = `ResolveEdgeFactorTriggerMap`；`[edge_factors.custom]` 条目 = `[edge_factors.custom_triggers]` + `trigger.<ID>` 覆盖）；`c_trigger > 0` 时该检查必须以 `passed=false` 出现在 `checks[]`（**仅插件路径成立**：`c_trigger = 0` 的级联形态豁免，且 `model=legacy` 的 identity 分支激活时链上的 `trigger_check` 是登记值、未必是失败的那个检查 —— 详见 Task 2 Step 3）；`checks[].delta` **逐字**取自引擎检查登记表；`checks[]` 必须落盘引擎的**全部失败检查**；**引擎实际生效的逐域权重**写进记录（`observed.effective_weights`，键集 = 参与聚合的域），`meta.weight_source`/`config_hash` 说明其来源。
@@ -784,7 +811,7 @@ Expected: 全绿；**默认（不带目标参数）路径逐位不变**有显式
 
 - [ ] **Step 1 基质抽象**（**行为不变**是最硬的门禁）：把"建/毁拓扑、在目标内执行、把文件送进目标、取目标 IP"四件事收进 `edge_lab.sh`；`clab` 分支必须先证明与今天**逐位等价**（同一命令、同一顺序、同一错误串），既有干跑与离线夹具全绿。
 - [ ] **Step 2 LXD 节点驱动**：`edgescen -target` 接受 `docker:<容器>`（缺省，行为不变）与 `lxd:<实例>`；失败形态与 docker 路径**同粒度响亮**（实例不存在 / `lxc` 不可用 / 信封缺失 / 检查集为空 / nonce 不匹配），并复用 Task 4C 的 nonce 绑定。
-- [ ] **Step 3 硬化基线容器 + 基线记录**：建 `asc-tgt-1`（Ubuntu 24.04），装 NIDS（`suricata`：**已实测** `systemctl is-active suricata` 为 `active` 且 `Suricata-Main` 真在跑）、SIEM 告警文件（`/etc/aide/aide.conf` 里的 report/alert 配置）、PAM 2FA/3FA 子串（`pam_google_authenticator` + `pam_u2f` + `pam_fprintd`，三类齐备才会让引擎 `EF-002` 通过）；`OT-005`（AppArmor 已加载）与 `RS-005`（syncookies=1）**天然满足**。**门禁**：采集一条基线记录并断言**六个因子全部不激活**（链为空或只含基线声明项），且域分/总分与"全在缺失态"的今天**明显不同**（这正是 C1 要的方差来源）。控制侧已在 A-1 上把这条路径**走通一遍**（失败检查 48 → 42、六个触发检查全绿，见 ledger），实现者应复现而不是重新发明。
+- [ ] **Step 3 硬化基线容器 + 基线记录**：建 `asc-tgt-1`（Ubuntu 24.04），装 NIDS（`suricata`：**已实测** `systemctl is-active suricata` 为 `active` 且 `Suricata-Main` 真在跑）、SIEM 告警文件（`/etc/aide/aide.conf` 里的 report/alert 配置）、PAM 2FA/3FA 子串（`pam_google_authenticator` + `pam_u2f` + `pam_fprintd`，三类齐备才会让引擎 `EF-002` 通过）；`OT-005`（AppArmor 已加载）与 `RS-005`（syncookies=1）**天然满足**。**门禁**：采集一条基线记录并断言**六个因子全部不激活**（链为空或只含基线声明项），且域分/总分与"全在缺失态"的今天**明显不同**（这正是 C1 要的方差来源）。控制侧已在 A-1 上把这条路径**走通一遍**（失败检查 **43 → 42**：原文写的 `48 → 42` 是**控制侧一次性容器的手跑旧数**、其中 `RS-007` 那一格是**偶然**过的 —— 见设计文档 §5.4.13 的"留痕与更正"段与台账 B.5；六个触发检查全绿，见 ledger），实现者应复现而不是重新发明。
 - [ ] **Step 3B 目标 TTP 与真实 AppArmor 控制（用户裁定 L2 的实现）**：
   - 在 `asc-tgt-1` 上加一条**真实的自定义 AppArmor 限制策略**（例如禁止某二进制读 `/etc/shadow`、或禁止某类 `mount`），并用 `aa-status`/审计日志证明它**真的在 enforce**；
   - 选/造一条**会撞该策略**的目标 TTP（Caldera ability，随场景装载）：策略卸载 ⇒ 该 ability `status == 0`（成功）；策略加载 ⇒ 该 ability `status != 0`（被拒）。**判据**：至少各跑一次，把两种 link 状态与容器侧 AppArmor 拒绝痕迹一起贴进报告；
@@ -808,7 +835,10 @@ Expected: 全绿；**默认（不带目标参数）路径逐位不变**有显式
 - Create: `lunwen/clab-lab/scripts/edge_repeat.sh`、`lunwen/clab-lab/scripts/edge_variance.py`
 - Produce: `lunwen/clab-lab/data/edgefactors/records-a1-<date>.jsonl`、`variance-report.md`
 
-- [ ] **Step 1: 重复执行**（A-1：Ubuntu 2c/3.4GB，**agent ≤14**；历史教训：24 进程压垮 sshd）
+- [ ] **Step 1: 重复执行**（~~A-1：Ubuntu 2c/3.4GB，**agent ≤14**~~；历史教训：24 进程压垮 sshd）
+  > ⛔ **失效（仅存档）**：这个环境规格属于**已退场**的 A-1 宿主（2026-10-19 退为备份端、即将重置）；
+  > 重复轴**实际在 `qemu` VM 上执行** —— 台账 H.6 的两段共 **99 条**（66 + 33），驱动是 `edge_repeat.sh`。
+  > 历史教训"24 进程压垮 sshd"仍是有效的一般性提示，保留。
 ```bash
 # 每场景 3 次：run=1,2,3，其余参数与 WSL 完全一致（同一 config、同一剧本哈希）
 ```
@@ -874,6 +904,11 @@ Expected: 全绿；**默认（不带目标参数）路径逐位不变**有显式
   - **`threat_coeff` 无上界 ⇒ 总分可能 >100**：引擎公式是 `round2(0.5·base + 30·E + 20·T)`，`T = 1.4` 且 `base = 100`、`E = 1.0` 时得 `108`，而 `ssam-lib/ir.go:96` 的 `final_score ∈ [0,100]` 是**另一层**的约束。离线工具忠实复现引擎口径（这是 C1 裁定要求的），但**论文表格里出现 >100 的分数必须加脚注说明**，否则会被读成计算错误。
   - **排序层与标签同源（M2）**：与 Task 6 的口径一致，论文若引用 Spearman/Kendall 必须写明它测的是什么。
 - [ ] **Step 3: 双分支同步与推送**
+  > ⛔ **失效（仅存档）· 照做即违规**：下面这三条命令里的第一条 `git push . ASSCOR-Research-Core:main`
+  > 就是一次**被禁的全量快进**。2026-09-13 的分支策略裁定（台账 A.1）要求 `main` 与 ARC
+  > **正式分叉、永不整体同步**，只有被点名的关键模块**单独移植**（`cherry-pick`/逐模块移植）；
+  > 历史债务 / 漏洞修复 / 审计修复三类必须**第一时间进 main**。现行口径见台账 A.1 与 Global Constraints 第 1 条。
+  > 原文以下**保留仅为史料**，**不得执行**。
 ```bash
 git push . ASSCOR-Research-Core:main      # 本地快进 main（不切分支）
 git push origin ASSCOR-Research-Core && git push origin main
