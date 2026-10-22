@@ -154,7 +154,6 @@ type AssessmentHook func(ctx context.Context, input *AssessmentInput, output *As
 type AssessmentInput struct {
     HostID       string             `json:"host_id"`
     Hostname     string             `json:"hostname"`
-    Timestamp    time.Time          `json:"timestamp"`
     Threshold    float64            `json:"threshold"`
     Checks       []CheckInput       `json:"checks"`
     ThreatCoeff  float64            `json:"threat_coefficient"`
@@ -163,11 +162,17 @@ type AssessmentInput struct {
 }
 ```
 
+> **No timestamp fields (matches `ssam-lib/types.go`)** — for pure-function
+> determinism, `AssessmentInput` / `AssessmentOutput` / `AssessmentInputV2` /
+> `AssessmentOutputV2` carry **no** `Timestamp` / `CalculatedAt` fields (older
+> docs listed them; the code never had them). Callers that need the assessment
+> time keep it outside these structs (e.g. `ssam.NewIR` records it in the IR
+> `meta.timestamp`).
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `HostID` | string | Unique host identifier |
 | `Hostname` | string | Host name |
-| `Timestamp` | time.Time | Assessment timestamp |
 | `Threshold` | float64 | Acceptable threshold (0–100), defaults to 80 |
 | `Checks` | []CheckInput | List of check results |
 | `ThreatCoeff` | float64 | Threat-posture coefficient (0.60–1.00); auto-set to 1.0 when 0 |
@@ -186,6 +191,7 @@ type CheckInput struct {
     Passed  bool    `json:"passed"`
     Delta   float64 `json:"delta"`
     Detail  string  `json:"detail"`
+    Confidence float64 `json:"confidence,omitempty"`
 }
 ```
 
@@ -197,6 +203,7 @@ type CheckInput struct {
 | `Passed` | Whether the check passed |
 | `Delta` | Points deducted on failure (negative, e.g. -15) |
 | `Detail` | Check detail description |
+| `Confidence` | Confidence of this observation in [0,1]; 0 = unspecified (normalized by the active `ConfidencePolicy`) |
 
 ### 3.3 AssessmentOutput — Assessment Output
 
@@ -211,8 +218,12 @@ type AssessmentOutput struct {
     ThreatCoeff   float64            `json:"threat_coefficient"`
     SPCScore      float64            `json:"spc_score"`
     FormulaID     string             `json:"formula_id"`
-    CalculatedAt  time.Time          `json:"calculated_at"`
     Metadata      map[string]string  `json:"metadata,omitempty"`
+    // Confidence-aware posterior fields (additive)
+    FinalSigma         float64 `json:"final_sigma,omitempty"`
+    Lower95            float64 `json:"score_lower95,omitempty"`
+    Upper95            float64 `json:"score_upper95,omitempty"`
+    EvidenceConfidence float64 `json:"evidence_confidence,omitempty"`
 }
 ```
 
@@ -224,6 +235,9 @@ type AssessmentOutput struct {
 | `EdgeFactors` | Edge-factor evaluation results (including the `Active` flag) |
 | `FormulaID` | Identifier of the scoring formula used |
 | `Metadata` | Custom metadata (writable by hooks) |
+| `FinalSigma` | Posterior standard deviation (`0` when confidence-aware scoring is disabled) |
+| `Lower95` / `Upper95` | Heuristic 95% interval centered on `FinalScore`; only the lower bound is clamped to 0 |
+| `EvidenceConfidence` | Weighted mean evidence confidence in [0,1] (`1.0` with no failure evidence) |
 
 ### 3.4 EdgeFactorConfig — Edge Factor Configuration
 
@@ -267,25 +281,24 @@ EdgeFactorConfig{
 
 ```go
 type RiskContext struct {
-    ThreatCoeff    float64            `json:"threat_coefficient"`
-    SPCScore       float64            `json:"spc_score"`
-    WeightShifts   map[string]float64 `json:"weight_shifts,omitempty"`
-    EdgeFactors    []EdgeFactorResult `json:"edge_factors"`
-    Threshold      float64            `json:"threshold"`
-    CVEContext     []CVESummary       `json:"cve_context,omitempty"`
-    ThreatActors   []string           `json:"threat_actors,omitempty"`
+    Intrinsic float64 `json:"intrinsic"`
+    Exposure  float64 `json:"exposure"`
+    Threat    float64 `json:"threat"`
 }
 ```
+
+Three scalar coefficients (`Intrinsic` / `Exposure` / `Threat`): non-positive
+values are normalized to `1.0` before scoring, and `Exposure` / `Threat` have
+an additional `0.60` floor; `Intrinsic` is derived from the weighted domain scores.
 
 ### 3.5.2 RiskLayerDetail / RiskLayers — Three Risk Layers
 
 ```go
 type RiskLayerDetail struct {
-    Score       float64           `json:"score"`
-    Weight      float64           `json:"weight"`
-    Description string            `json:"description"`
-    Factors     []string          `json:"factors"`
-    Details     map[string]float64 `json:"details,omitempty"`
+    Coeff        float64            `json:"coeff"`
+    Weight       float64            `json:"weight"`
+    Contributors []string           `json:"contributors"`
+    Details      map[string]float64 `json:"details,omitempty"`
 }
 
 type RiskLayers struct {
@@ -305,12 +318,8 @@ type RiskLayers struct {
 
 ```go
 type FinalScore struct {
-    Value      float64             `json:"value"`
-    Acceptable bool                `json:"acceptable"`
-    Threshold  float64             `json:"threshold"`
-    Layers     RiskLayers          `json:"layers"`
-    FormulaID  string              `json:"formula_id"`
-    Metadata   map[string]string   `json:"metadata,omitempty"`
+    Total  float64    `json:"total"`
+    Layers RiskLayers `json:"layers"`
 }
 ```
 
@@ -318,11 +327,12 @@ type FinalScore struct {
 
 ```go
 type AssessmentInputV2 struct {
-    HostID    string       `json:"host_id"`
-    Hostname  string       `json:"hostname"`
-    Timestamp time.Time    `json:"timestamp"`
-    Context   RiskContext  `json:"context"`
-    Checks    []CheckInput `json:"checks"`
+    HostID       string             `json:"host_id"`
+    Hostname     string             `json:"hostname"`
+    Threshold    float64            `json:"threshold"`
+    Checks       []CheckInput       `json:"checks"`
+    RiskContext  RiskContext        `json:"risk_context"`
+    WeightShifts map[string]float64 `json:"weight_shifts,omitempty"`
 }
 ```
 
@@ -330,11 +340,19 @@ type AssessmentInputV2 struct {
 
 ```go
 type AssessmentOutputV2 struct {
-    HostID       string              `json:"host_id"`
-    FinalScore   FinalScore          `json:"final_score"`
-    DomainScores []DomainScore       `json:"domain_scores"`
-    EdgeFactors  []EdgeFactorResult  `json:"edge_factors"`
-    CalculatedAt time.Time           `json:"calculated_at"`
+    HostID       string             `json:"host_id"`
+    FinalScore   FinalScore         `json:"final_score"`
+    Acceptable   bool               `json:"acceptable"`
+    Threshold    float64            `json:"threshold"`
+    DomainScores []DomainScore      `json:"domain_scores"`
+    EdgeFactors  []EdgeFactorResult `json:"edge_factors"`
+    FormulaID    string             `json:"formula_id"`
+    Metadata     map[string]string  `json:"metadata,omitempty"`
+    // Confidence-aware posterior fields (additive)
+    FinalSigma         float64 `json:"final_sigma,omitempty"`
+    Lower95            float64 `json:"score_lower95,omitempty"`
+    Upper95            float64 `json:"score_upper95,omitempty"`
+    EvidenceConfidence float64 `json:"evidence_confidence,omitempty"`
 }
 ```
 

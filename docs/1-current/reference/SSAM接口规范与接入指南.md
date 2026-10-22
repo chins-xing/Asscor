@@ -166,7 +166,6 @@ type AssessmentHook func(ctx context.Context, input *AssessmentInput, output *As
 type AssessmentInput struct {
     HostID       string             `json:"host_id"`
     Hostname     string             `json:"hostname"`
-    Timestamp    time.Time          `json:"timestamp"`
     Threshold    float64            `json:"threshold"`
     Checks       []CheckInput       `json:"checks"`
     ThreatCoeff  float64            `json:"threat_coefficient"`
@@ -175,11 +174,16 @@ type AssessmentInput struct {
 }
 ```
 
+> **无时间戳字段（与 `ssam-lib/types.go` 一致）**：为保证评分的纯函数性与可复现性，
+> `AssessmentInput` / `AssessmentOutput` / `AssessmentInputV2` / `AssessmentOutputV2` 都**不包含**
+> `Timestamp` / `CalculatedAt` 字段
+> （旧版文档曾列出这两个字段，代码中从未实现）。如需记录评估时刻，由调用方在
+> 结构体之外保存（例如 `ssam.NewIR` 在 IR 的 `meta.timestamp` 中记录）。
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `HostID` | string | 主机唯一标识 |
 | `Hostname` | string | 主机名 |
-| `Timestamp` | time.Time | 评估时间戳 |
 | `Threshold` | float64 | 可接受阈值（0–100），默认 80 |
 | `Checks` | []CheckInput | 检查项结果列表 |
 | `ThreatCoeff` | float64 | 威胁态势系数（0.60–1.00），0 时自动设为 1.0 |
@@ -225,7 +229,6 @@ type AssessmentOutput struct {
     ThreatCoeff   float64            `json:"threat_coefficient"`
     SPCScore      float64            `json:"spc_score"`
     FormulaID     string             `json:"formula_id"`
-    CalculatedAt  time.Time          `json:"calculated_at"`
     Metadata      map[string]string  `json:"metadata,omitempty"`
     // 置信度后验字段（方向①，additive）
     FinalSigma         float64 `json:"final_sigma,omitempty"`
@@ -307,25 +310,23 @@ EdgeFactorConfig{
 
 ```go
 type RiskContext struct {
-    ThreatCoeff    float64            `json:"threat_coefficient"`
-    SPCScore       float64            `json:"spc_score"`
-    WeightShifts   map[string]float64 `json:"weight_shifts,omitempty"`
-    EdgeFactors    []EdgeFactorResult `json:"edge_factors"`
-    Threshold      float64            `json:"threshold"`
-    CVEContext     []CVESummary       `json:"cve_context,omitempty"`
-    ThreatActors   []string           `json:"threat_actors,omitempty"`
+    Intrinsic float64 `json:"intrinsic"`
+    Exposure  float64 `json:"exposure"`
+    Threat    float64 `json:"threat"`
 }
 ```
+
+三个标量系数（`Intrinsic` / `Exposure` / `Threat`）：非正值在评分前归一到 `1.0`，
+`Exposure` 与 `Threat` 另有 `0.60` 下限；`Intrinsic` 由域分加权得出。
 
 ### 3.5.2 RiskLayerDetail / RiskLayers — 三层风险层
 
 ```go
 type RiskLayerDetail struct {
-    Score       float64           `json:"score"`
-    Weight      float64           `json:"weight"`
-    Description string            `json:"description"`
-    Factors     []string          `json:"factors"`
-    Details     map[string]float64 `json:"details,omitempty"`
+    Coeff        float64            `json:"coeff"`
+    Weight       float64            `json:"weight"`
+    Contributors []string           `json:"contributors"`
+    Details      map[string]float64 `json:"details,omitempty"`
 }
 
 type RiskLayers struct {
@@ -345,12 +346,8 @@ type RiskLayers struct {
 
 ```go
 type FinalScore struct {
-    Value      float64             `json:"value"`
-    Acceptable bool                `json:"acceptable"`
-    Threshold  float64             `json:"threshold"`
-    Layers     RiskLayers          `json:"layers"`
-    FormulaID  string              `json:"formula_id"`
-    Metadata   map[string]string   `json:"metadata,omitempty"`
+    Total  float64    `json:"total"`
+    Layers RiskLayers `json:"layers"`
 }
 ```
 
@@ -358,11 +355,12 @@ type FinalScore struct {
 
 ```go
 type AssessmentInputV2 struct {
-    HostID    string       `json:"host_id"`
-    Hostname  string       `json:"hostname"`
-    Timestamp time.Time    `json:"timestamp"`
-    Context   RiskContext  `json:"context"`
-    Checks    []CheckInput `json:"checks"`
+    HostID       string             `json:"host_id"`
+    Hostname     string             `json:"hostname"`
+    Threshold    float64            `json:"threshold"`
+    Checks       []CheckInput       `json:"checks"`
+    RiskContext  RiskContext        `json:"risk_context"`
+    WeightShifts map[string]float64 `json:"weight_shifts,omitempty"`
 }
 ```
 
@@ -370,15 +368,23 @@ type AssessmentInputV2 struct {
 
 ```go
 type AssessmentOutputV2 struct {
-    HostID       string              `json:"host_id"`
-    FinalScore   FinalScore          `json:"final_score"`
-    DomainScores []DomainScore       `json:"domain_scores"`
-    EdgeFactors  []EdgeFactorResult  `json:"edge_factors"`
-    CalculatedAt time.Time           `json:"calculated_at"`
+    HostID       string             `json:"host_id"`
+    FinalScore   FinalScore         `json:"final_score"`
+    Acceptable   bool               `json:"acceptable"`
+    Threshold    float64            `json:"threshold"`
+    DomainScores []DomainScore      `json:"domain_scores"`
+    EdgeFactors  []EdgeFactorResult `json:"edge_factors"`
+    FormulaID    string             `json:"formula_id"`
+    Metadata     map[string]string  `json:"metadata,omitempty"`
+    // 置信度后验字段（方向①，additive）
+    FinalSigma         float64 `json:"final_sigma,omitempty"`
+    Lower95            float64 `json:"score_lower95,omitempty"`
+    Upper95            float64 `json:"score_upper95,omitempty"`
+    EvidenceConfidence float64 `json:"evidence_confidence,omitempty"`
 }
 ```
 
-`AssessmentOutputV2` 提供 `.ToIR()` 方法，导出声明的 SSAM IR JSON 结构（见 §13）。
+`AssessmentOutputV2` 提供 `.ToIR()` 方法，导出声明的 SSAM IR JSON 结构（见 §5）。
 
 ### 3.5.6 ScoringFormulaV2 — V2.0 公式接口
 
@@ -1095,7 +1101,7 @@ func main() {
 
 ---
 
-## 13. 测试
+## 16. 测试
 
 SSAM 模块包含完整的单元测试和集成测试：
 
