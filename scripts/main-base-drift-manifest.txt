@@ -90,7 +90,7 @@ ff9a03140b435877c307e1abe14d0df63701a4fe  cbee0f0a80e96dbb79ef00a776a28aa1464c89
 # 是**纯 ARC 工具**——main 没有 docs/1-current 布局，脚本在 main 上无从运行；
 # 按 Task 39 简报 §1 Step 2 的裁定登记为 ARC-only（而非改脚本"缺目录就跳过"，
 # 那会让工具在 main 上静默通过、失去门禁意义）。
-7750e2cf6c9d36ae08e22d01a3ebc8d9821823aa  ABSENT  scripts/check-doc-refs.sh  # ARC-only 工具（main 无 docs/1-current 布局）
+c22bd231b475bc30e51dc6aa89e2c27ddc8910f9  ABSENT  scripts/check-doc-refs.sh  # ARC-only 工具（main 无 docs/1-current 布局）；Task 40 消除 locale 依赖后按新 blob 更新登记
 # 以下两份是 `8e968d4` 的**文档收口**（新增 Confidence/Sigma/CI 字段表）。Task 39 同步到 main 的
 # 只有方向① 的代码/注释 hunk，文档面按纪律留在 ARC ⇒ main 的库文档没有这两段字段表。
 # （事实可用 `git show 8e968d4 -- ssam-lib/SSAM-README.md ssam-lib/SSAM-Theory.md` 复核。）
