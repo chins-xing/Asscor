@@ -1,15 +1,15 @@
 # ASSCOR 资产归属表（`main` vs `ASSCOR-Research-Core`）
 
 > **快照（2026-10-22 Task 39 重取）**：`main` = `81c27bb`（**本地就绪、尚未 push**）、
-> `ASSCOR-Research-Core`(ARC) = `4998dec`
+> `ASSCOR-Research-Core`(ARC) = `9dfc457`（**快照时点**；其后的收尾提交只改本组文档，不改任何口径）
 > **规模实测**：main **669** 文件 / ARC **1287** 文件；**ARC 独有 775 个**、**main 独有 157 个**
 > ⇒ 两分支的文件集**不是包含关系**（`main ⊄ ARC` 且 `ARC ⊄ main`），差异有三种：
 > "ARC 独有"、"main 独有"、"共有但内容不同"。
 > main 独有的 157 个几乎全在 `docs/`：`docs/audits/…`（82）+ 两份架构评审（20+20）+ `docs/en/…`（5）
 > + `docs/superpowers/…`（3）+ 27 个扁平文档 —— 即 main 仍是**扁平 docs 布局**，
 > ARC 已迁到 `docs/1-current`…`4-archive` 的分代布局。
-> **分叉点**（merge-base）= `df8342e`；此后 main **10** 提交、ARC **210** 提交
-> （提交总数 main 608 / ARC 808）。
+> **分叉点**（merge-base）= `df8342e`；此后 main **10** 提交、ARC **211** 提交
+> （提交总数 main 608 / ARC 809；均为快照时点 `9dfc457` 的值）。
 > 取数命令见 §4.1（上面每个数字都能现算，均可复现）。
 > **本表的依据**：用户 2026-09-13 的四条分支规则（下 §0）+ 可复跑判据（§4）。
 >
@@ -184,8 +184,8 @@ git ls-tree -r --name-only ASSCOR-Research-Core -- internal | wc -l
 bash scripts/check-main-base-consistency.sh        # 不加 MANIFEST ⇒ 只报漂移面
 ```
 
-> **2026-10-22 实测值**（Task 39，main=`81c27bb` 本地未 push / ARC=`4998dec`）：
-> merge-base `df8342e`；提交数 main 608 / ARC 808（分叉后 main 10 / ARC 210）；
+> **2026-10-22 实测值**（Task 39，main=`81c27bb` 本地未 push / ARC=`9dfc457` 快照时点）：
+> merge-base `df8342e`；提交数 main 608 / ARC 809（分叉后 main 10 / ARC 211）；
 > 文件数 main 669 / ARC 1287；ARC 独有 775 / main 独有 **157** / 共有 512；
 > `internal` 366、`internal/edgefactor` 9、`lunwen/clab-lab` 456、`cmd/edgecompare` 15、`cmd/edgescen` 14。
 
