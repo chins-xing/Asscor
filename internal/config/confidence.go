@@ -74,11 +74,12 @@ type ConfidencePatternRule struct {
 // enabled=true is not a no-op (audit I-2; design §3.4 "source defaults + config
 // overrides", "not a pure opt-in of all 1.0").
 //
-// The three values are the design §3.1 examples (builtin=1.0, user=0.90,
-// adapter=0.80). They are PRIORS, NOT experimentally calibrated values: the
-// §3.4 "calibrate during implementation" promise (I-3) has not been delivered,
-// so no external claim of calibration may rest on them. Every other source key
-// falls through to Default / [confidence.domain].
+// The shipped priors are the design §3.1 examples for user (0.90) and adapter
+// (0.80); builtin's 1.0 prior is the identity value and is expressed by Default
+// (see the BySource comment below). They are PRIORS, NOT experimentally
+// calibrated values: the §3.4 "calibrate during implementation" promise (I-3)
+// has not been delivered, so no external claim of calibration may rest on them.
+// Every other source key falls through to Default / [confidence.domain].
 func DefaultConfidenceConfig() ConfidenceConfig {
 	return ConfidenceConfig{
 		Enabled:            false,
@@ -92,8 +93,16 @@ func DefaultConfidenceConfig() ConfidenceConfig {
 		// win because parsing overlays this table). Enabled=false keeps the
 		// effective confidence at 1.0 for every entry → bit-identical legacy
 		// scores.
+		//
+		// builtin is deliberately NOT an explicit key: its prior is the
+		// identity value 1.0, which Default already provides. Storing it as a
+		// [confidence.source] rule would shadow [confidence.domain] for every
+		// built-in check (source is evaluated before domain), making domain
+		// fallbacks unreachable for the largest check population. Operators who
+		// lower `default` can still write an explicit `builtin = 1.0` to pin
+		// built-ins at full trust. (Deliberate deviation from design §3.1's
+		// illustrative `builtin = 1.0` line; same effective value.)
 		BySource: map[string]float64{
-			"builtin": 1.0,  // compiled-in platform checks (fully trusted)
 			"user":    0.90, // configuration-defined checks (CU-*)
 			"adapter": 0.80, // third-party adapter findings whose source is the generic class
 		},

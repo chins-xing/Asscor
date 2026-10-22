@@ -148,7 +148,9 @@ func TestDefaultConfidenceSourcePriors(t *testing.T) {
 		}
 	}
 
-	// Enabled: the shipped prior table takes effect.
+	// Enabled: the shipped prior table takes effect. builtin's identity prior
+	// comes from Default=1.0 (no explicit source key; see DefaultConfidenceConfig)
+	// so that [confidence.domain] stays reachable for built-in checks.
 	cc.Enabled = true
 	cases := []struct {
 		checkID, source, domain string
@@ -396,11 +398,11 @@ func TestConfigResolveChecks(t *testing.T) {
 		t.Fatalf("Parse failed: %v", err)
 	}
 	checks := []model.CheckResult{
-		{CheckID: "AS-001", Domain: "attack_surface", Source: model.CheckSourceBuiltin}, // exact rule 0.99
-		{CheckID: "CU-1", Domain: "operation_trust", Source: model.CheckSourceUser},     // source user 0.9
-		{CheckID: "XY-9", Domain: "resilience", Source: model.CheckSourceUser},          // source user 0.9 (no exact/regex hit)
+		{CheckID: "AS-001", Domain: "attack_surface", Source: model.CheckSourceBuiltin},     // exact rule 0.99
+		{CheckID: "CU-1", Domain: "operation_trust", Source: model.CheckSourceUser},         // source user 0.9
+		{CheckID: "XY-9", Domain: "resilience", Source: model.CheckSourceUser},              // source user 0.9 (no exact/regex hit)
 		{CheckID: "NOPE-1", Domain: "resilience", Source: model.CheckSource("unknown-src")}, // no rule → domain miss → default 0.85
-		{CheckID: "Y-9", Domain: "attack_surface", Confidence: 0.77},                    // upstream preserved
+		{CheckID: "Y-9", Domain: "attack_surface", Confidence: 0.77},                        // upstream preserved
 	}
 	cfg.ResolveChecks(checks)
 
