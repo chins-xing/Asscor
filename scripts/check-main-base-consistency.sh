@@ -34,6 +34,27 @@ BASE_REF="${BASE_REF:-main}"
 MANIFEST="${MANIFEST:-}"
 SHOW_ALL="${SHOW_ALL:-0}"
 
+# `BASE_REF` 的回退（2026-10-22 实测）：**本地不存在对照分支时不要假装红**。
+# 在宿主上用 `git clone --branch ASSCOR-Research-Core` 拿到的检出**只有远程跟踪分支**
+# （`origin/main`），没有本地 `main` ⇒ 每次 `blob main <path>` 都 MISSING，
+# 结果报成「main 侧登记失效 ×13 / active=0 / 红」—— 那是**检出形态**造成的假红，
+# 不是底座漂移（同一提交在带本地 main 的检出上是「黄 / active=18 / 未解释 0」）。
+# 故：本地 ref 不存在而 `origin/<BASE_REF>` 存在时，自动改用后者，并把选中的 ref 印出来；
+# 两者都不存在 ⇒ 响亮失败并给出修法（**不**静默退回"全 MISSING"）。
+if ! git rev-parse --verify --quiet "${BASE_REF}^{commit}" >/dev/null 2>&1; then
+  if git rev-parse --verify --quiet "origin/${BASE_REF}^{commit}" >/dev/null 2>&1; then
+    echo "check-main-base-consistency: 本地没有 '${BASE_REF}'，改用 'origin/${BASE_REF}'" \
+         "（$(git rev-parse --short "origin/${BASE_REF}")）—— 常见于只 clone 了单分支的检出" >&2
+    BASE_REF="origin/${BASE_REF}"
+  else
+    echo "check-main-base-consistency: **对照分支 '${BASE_REF}' 不存在**（本地与 origin 都没有）——" >&2
+    echo "  这不是"底座一致"，是"没法比"。修法（任选）：" >&2
+    echo "    ① git fetch origin ${BASE_REF} && git branch ${BASE_REF} origin/${BASE_REF}" >&2
+    echo "    ② BASE_REF=origin/${BASE_REF} bash $0" >&2
+    exit 1
+  fi
+fi
+
 BASE=(
   api pluginsdk optional deploy scripts
   cmd/agent cmd/asscor cmd/kernel
