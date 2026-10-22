@@ -18,6 +18,7 @@ import (
 	"github.com/chins-xing/asscor/internal/logger"
 	"github.com/chins-xing/asscor/internal/model"
 	prismlib "github.com/chins-xing/prism"
+	ssamlib "github.com/chins-xing/ssam"
 )
 
 // Module is the ASSCOR assessment engine plugin: it computes domain scores and
@@ -630,11 +631,28 @@ func (m *Module) applyCTIOnly(result *model.AssessmentResult) {
 	}
 	if ctiCoeff != result.ThreatCoeff {
 		if result.ThreatCoeff > 0 {
-			result.FinalScore = result.FinalScore * ctiCoeff / result.ThreatCoeff
+			// The threat coefficient rescales the whole final score linearly.
+			// Scale sigma and both interval endpoints by the same factor so the
+			// conservative lower-bound decision still uses an interval centered
+			// on the rescaled point estimate (audit B-2).
+			ratio := ctiCoeff / result.ThreatCoeff
+			result.FinalScore *= ratio
+			result.FinalSigma *= ratio
+			result.ScoreLower95 *= ratio
+			result.ScoreUpper95 *= ratio
 		}
 		result.ThreatCoeff = ctiCoeff
-		result.Acceptable = result.FinalScore >= result.Threshold
+		result.Acceptable = m.acceptable(result)
 	}
+}
+
+// acceptable applies the shared acceptability rule (audit B-2): the point
+// estimate by default, the conservative 95% lower bound when
+// [confidence] accept_by_lower_bound=true. It lives in ssam-lib so the legacy,
+// plugin and kernel post-correction decision points cannot diverge.
+func (m *Module) acceptable(result *model.AssessmentResult) bool {
+	byLower := m.cfg != nil && m.cfg.Confidence.AcceptByLowerBound
+	return ssamlib.AcceptanceDecision(result.FinalScore, result.ScoreLower95, result.Threshold, byLower)
 }
 
 func (m *Module) applyATTACK(hostID string, result *model.AssessmentResult) {

@@ -323,6 +323,17 @@ func PredictFuture(semantic *SemanticRiskReport, model InferenceModel, cfg Prism
 
 	future, confidence := model.Predict(semantic.StateVector, steps)
 
+	// Input-side trust cap (design §2.5, audit I-7): the prediction is only as
+	// trustworthy as the LESS trustworthy of (a) the model's own confidence
+	// and (b) the node evidence it rests on. min() is the weakest-link rule:
+	// it never inflates confidence and does not double-count the model
+	// uncertainty (the model already encoded it in its own entropy-based
+	// number). Risk quantities (Trend / CollapseRisk / probabilities) are NOT
+	// touched — only the reported inference confidence.
+	if inputConf := normalizeNodeConfidence(semantic.InputConfidence); inputConf < confidence {
+		confidence = inputConf
+	}
+
 	trend := determineTrend(semantic.StateVector, future)
 	collapseRisk := future[2] + future[3] // UntrustedProbm + CollapseProb
 

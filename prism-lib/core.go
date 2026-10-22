@@ -228,7 +228,12 @@ func nodeConfidence(node *NodeState) float64 {
 	if node == nil {
 		return 1.0
 	}
-	c := node.Confidence
+	return normalizeNodeConfidence(node.Confidence)
+}
+
+// normalizeNodeConfidence maps a node-level confidence into [0,1]; values
+// <=0 (unspecified) and >1 behave as full trust (legacy).
+func normalizeNodeConfidence(c float64) float64 {
 	if c <= 0 {
 		return 1.0
 	}

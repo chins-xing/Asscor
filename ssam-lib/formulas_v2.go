@@ -128,7 +128,6 @@ func ComputeScoreV2(config ScoringConfig, input AssessmentInputV2) (AssessmentOu
 	output := AssessmentOutputV2{
 		HostID:       input.HostID,
 		FinalScore:   finalScore,
-		Acceptable:   finalScore.Total >= input.Threshold,
 		Threshold:    input.Threshold,
 		DomainScores: domainScores,
 		EdgeFactors:  edgeFactors,
@@ -136,19 +135,21 @@ func ComputeScoreV2(config ScoringConfig, input AssessmentInputV2) (AssessmentOu
 		Metadata:     make(map[string]string),
 	}
 	fillPosteriorV2(&output, config, domainScores)
+	output.Acceptable = AcceptanceDecision(
+		output.FinalScore.Total, output.Lower95, output.Threshold, config.AcceptByLowerBound)
 
 	return output, nil
 }
 
 // fillPosteriorV2 attaches confidence-aware posterior statistics to a V2
-// output (same semantics as fillPosterior for the legacy output: interval
-// centered on the actual final score).
+// output (same semantics as fillPosterior for the legacy output: sigma folded
+// through the intrinsic layer weight, heuristic interval centered on the
+// actual final score, lower-bound-only clamping).
 func fillPosteriorV2(output *AssessmentOutputV2, config ScoringConfig, domainScores []DomainScore) {
-	sigma, _, _ := FinalBayesStats(config.Weights, domainScores)
+	sigma := FinalBayesStats(config.Weights, domainScores)
 	total := output.FinalScore.Total
 	output.FinalSigma = sigma
-	output.Lower95 = clamp95(total - 1.96*sigma)
-	output.Upper95 = clamp95(total + 1.96*sigma)
+	output.Lower95, output.Upper95 = ConfidenceInterval(total, sigma)
 	output.EvidenceConfidence = AggregateNodeConfidence(config.Weights, domainScores)
 }
 

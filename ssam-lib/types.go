@@ -89,6 +89,12 @@ type ScoringConfig struct {
 	// zero-valued (the default), confidence-aware scoring is DISABLED and all
 	// formulas behave exactly as before (backward compatibility).
 	ConfidencePolicy ConfidencePolicy `json:"confidence_policy,omitempty"`
+	// AcceptByLowerBound makes the acceptability decision use the 95%
+	// interval lower bound instead of the point estimate (conservative). It
+	// has no effect when the point estimate is the only quantity available
+	// (sigma = 0 makes both decisions identical). Default false = legacy
+	// point-estimate comparison (audit B-2).
+	AcceptByLowerBound bool `json:"accept_by_lower_bound,omitempty"`
 }
 
 type ScoringFormula func(domainScores []DomainScore, weights []WeightConfig, threatCoeff float64, spcScore float64, edgeFactors []EdgeFactorResult) float64

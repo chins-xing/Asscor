@@ -2,7 +2,11 @@
 
 package srd
 
-import "time"
+import (
+	"time"
+
+	kernelconfig "github.com/chins-xing/asscor/internal/config"
+)
 
 // ExternalAssessmentReport is the canonical form consumed by the SRD/Prism engine
 // from any external assessment tool. All tool-specific adapters normalize into this type.
@@ -135,6 +139,13 @@ type Config struct {
 	ScanPaths           map[string]string
 	DefaultProfile      string
 	EnabledAdapters     map[string]bool
+	// Confidence is the kernel's [confidence] rule table (same
+	// config.ConfidenceConfig the SSAM/legacy paths use). nil means "not
+	// wired" → legacy passthrough. When non-nil AND Enabled, a failed external
+	// item that carries no confidence of its own resolves through
+	// ConfidenceConfig.Resolve with the report's tool id as the source key
+	// (tool-supplied > [confidence.source] > default; audit I-8).
+	Confidence *kernelconfig.ConfidenceConfig
 }
 
 // DefaultConfig returns sensible defaults.

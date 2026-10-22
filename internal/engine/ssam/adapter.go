@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/engine"
 	"github.com/chins-xing/asscor/internal/model"
 )
 
@@ -199,22 +200,21 @@ func OutputV2ToModel(output *AssessmentOutputV2, result *model.AssessmentResult)
 	result.EdgeFactors = EdgeFactorsToModel(output.EdgeFactors)
 	result.ThreatCoeff = output.FinalScore.Layers.Threat.Coeff
 	result.SPCScore = output.FinalScore.Layers.Exposure.Coeff
+	// Posterior statistics (model-native; zeros when confidence disabled).
+	// Same four fields the V1 converter maps, so both SSAM output versions
+	// carry sigma/CI/evidence into the model (audit M-3).
+	result.FinalSigma = output.FinalSigma
+	result.ScoreLower95 = output.Lower95
+	result.ScoreUpper95 = output.Upper95
+	result.EvidenceConfidence = output.EvidenceConfidence
 }
 
 // ConfigToConfidencePolicy converts the kernel's [confidence] configuration
-// into the ssam-library policy. A disabled config yields the library's
-// default (disabled) policy — identical legacy behavior.
+// into the ssam-library policy. It delegates to the engine package so the
+// plugin path and the legacy DynamicScoringEngine use ONE conversion (audit
+// I-4); the legacy path imports the same ssam-library normalization below.
 func ConfigToConfidencePolicy(cfg *config.Config) ConfidencePolicy {
-	if cfg == nil || !cfg.Confidence.Enabled {
-		return DefaultConfidencePolicy()
-	}
-	cc := cfg.Confidence
-	return ConfidencePolicy{
-		Enabled:       true,
-		Default:       cc.Default,
-		Floor:         cc.Floor,
-		PriorStrength: cc.PriorStrength,
-	}
+	return engine.ConfidencePolicyFromConfig(cfg)
 }
 
 // ResolveCheckConfidence fills result.Checks[].Confidence from the kernel's

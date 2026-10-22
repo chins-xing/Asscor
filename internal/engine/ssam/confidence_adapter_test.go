@@ -14,11 +14,14 @@ import (
 // confPolicyCfg builds a kernel config with confidence enabled and a rule
 // table whose layers are distinguishable:
 //
-//	[confidence.check]    as-777 → 0.3   (exact-id beats everything)
-//	[confidence.checkrx]  ^ot-   → 0.55  (regex beats source/domain)
+//	[confidence.check]    as-777 → 0.3   (exact-id beats domain)
 //	[confidence.source]   user   → 0.9   (source beats domain)
 //	[confidence.domain]   attack_surface → 0.9, business_continuity → 0.95
 //	default → 0.5
+//
+// NOTE (audit M-9): this fixture deliberately has NO [confidence.checkrx]
+// rule — the previous header claimed a `^ot- → 0.55` selector that was never
+// installed, so the "regex beats source/domain" line was misleading.
 func confPolicyCfg() *config.Config {
 	cfg := config.Default()
 	cc := config.DefaultConfidenceConfig()
@@ -122,6 +125,46 @@ func TestEngineAdapterConfidenceChangesScore(t *testing.T) {
 	// Fully-trusted explicit confidence → sigma 0 (interval collapses).
 	if r4.FinalSigma != 0 {
 		t.Errorf("full-trust run must collapse sigma to 0, got %v", r4.FinalSigma)
+	}
+}
+
+// TestEngineFinalSigmaUsesIntrinsicWeight locks I-12 end to end on the plugin
+// path: one half-trusted -40 failure has domain σ = |−40|·√(0.5·0.5) = 20;
+// with attack_surface the only weighted domain the final σ must be 10
+// (0.5 × 20), not the raw domain RSS. The old code reported 20.
+func TestEngineFinalSigmaUsesIntrinsicWeight(t *testing.T) {
+	a := NewEngineAdapter(confPolicyCfg())
+	result := assessmentWithChecks([]model.CheckResult{
+		{CheckID: "AS-001", Domain: "attack_surface", Passed: false, Delta: -40, Confidence: 0.5},
+	})
+	if err := a.ComputeScore(context.Background(), result); err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(result.FinalSigma-10) > 1e-9 {
+		t.Errorf("FinalSigma = %v, want 10 (0.5 × domain sigma 20)", result.FinalSigma)
+	}
+}
+
+// TestEngineIntervalNotClampedTo100AndContainsPoint locks the other half of
+// I-12: the 95% interval is only clamped at the lower bound 0. With
+// ThreatCoeff=1.4 the V2.0 total is 108; the old clamp95 produced [100,100],
+// which does not even contain the point estimate.
+func TestEngineIntervalNotClampedTo100AndContainsPoint(t *testing.T) {
+	a := NewEngineAdapter(config.Default())
+	result := assessmentWithChecks(nil)
+	result.ThreatCoeff = 1.4
+	if err := a.ComputeScore(context.Background(), result); err != nil {
+		t.Fatal(err)
+	}
+	if result.FinalScore != 108 {
+		t.Fatalf("FinalScore = %v, want the 108 fixture (0.5·100 + 0.3·100 + 0.2·140)", result.FinalScore)
+	}
+	if result.ScoreLower95 > result.FinalScore || result.FinalScore > result.ScoreUpper95 {
+		t.Errorf("interval [%v,%v] must contain the point estimate %v",
+			result.ScoreLower95, result.ScoreUpper95, result.FinalScore)
+	}
+	if result.ScoreUpper95 <= 100 {
+		t.Errorf("upper bound must not be clamped to 100, got %v", result.ScoreUpper95)
 	}
 }
 

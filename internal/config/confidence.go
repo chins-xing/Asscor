@@ -2,12 +2,21 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/chins-xing/asscor/internal/model"
 )
+
+// ConfidenceAlgorithmWeightedEvidence is the ONLY implemented confidence
+// aggregation algorithm. The design §3.3 promise of an algorithm registry
+// (RegisterAlgorithm/Aggregator) and a beta_bayes aggregator was never
+// implemented; see audit I-10. Any other value in [confidence] algorithm is
+// rejected at parse time.
+const ConfidenceAlgorithmWeightedEvidence = "weighted_evidence"
 
 // ConfidenceConfig is the kernel-side configuration of the intelligence
 // confidence model (design CONFIDENCE_MODEL_DESIGN_2026-09-08 §3). It is
@@ -19,8 +28,12 @@ type ConfidenceConfig struct {
 	// Enabled turns confidence-aware scoring on. Default false → every check
 	// scores at full weight (legacy behavior).
 	Enabled bool
-	// Algorithm selects the confidence aggregation algorithm id
-	// ("weighted_evidence" default; extensible via registration).
+	// Algorithm is RESERVED: no algorithm registry exists. The only
+	// implemented aggregation is weighted_evidence (the field is parsed for
+	// forward compatibility, and any other value is rejected at parse time so
+	// an operator cannot believe they switched algorithms). beta_bayes and the
+	// RegisterAlgorithm/Aggregator API from design §3.3 were never implemented
+	// (audit I-10).
 	Algorithm string
 	// AcceptByLowerBound makes the acceptability decision use the 95%
 	// interval lower bound instead of the point estimate (conservative).
@@ -30,7 +43,10 @@ type ConfidenceConfig struct {
 	Default float64
 	// Floor is the minimum accepted confidence (clamp-up).
 	Floor float64
-	// PriorStrength is reserved for the beta_bayes aggregator.
+	// PriorStrength is RESERVED (no consumer): it belongs to the unimplemented
+	// beta_bayes aggregator. It is parsed and range-validated (0 = unset;
+	// non-numeric/negative fail) but never reaches the weighted_evidence
+	// formulas (audit I-10).
 	PriorStrength float64
 
 	// ByCheckID maps an exact check/rule id to a confidence.
@@ -41,8 +57,9 @@ type ConfidenceConfig struct {
 	// ByDomain maps a domain id to a domain-level fallback confidence.
 	ByDomain map[string]float64
 	// CheckPatterns are regex selectors evaluated after exact-id misses:
-	// pattern (compiled) → confidence. Evaluated in declaration order;
-	// first match wins (design §3.3 rule DSL subset).
+	// pattern (compiled) → confidence. Evaluated in BYTE-LEXICOGRAPHIC KEY
+	// ORDER (the parse structure is a map, so declaration order is not
+	// preserved); the first match wins (design §3.3 rule DSL subset, audit I-5).
 	CheckPatterns []ConfidencePatternRule
 }
 
@@ -52,7 +69,24 @@ type ConfidencePatternRule struct {
 	Confidence float64
 }
 
-// DefaultConfidenceConfig returns the disabled (legacy) configuration.
+// DefaultConfidenceConfig returns the factory configuration: disabled by
+// default (legacy behavior), but WITH a source prior table so that flipping
+// enabled=true is not a no-op (audit I-2; design §3.4 "source defaults + config
+// overrides", "not a pure opt-in of all 1.0").
+//
+// The shipped priors are the design §3.1 examples for user (0.90) and adapter
+// (0.80); builtin's 1.0 prior is the identity value and is expressed by Default
+// (see the BySource comment below). They are PRIORS, NOT experimentally
+// calibrated values: the §3.4 "calibrate during implementation" promise (I-3)
+// has not been delivered, so no external claim of calibration may rest on them.
+// Every other source key falls through to Default / [confidence.domain].
+//
+// "adapter" is a GENERIC class key: it only matches a caller that records
+// Source="adapter". The in-repo production adapters emit a concrete tool id
+// (trivy/ansible/netbox/...), so they do NOT hit it and fall through to
+// Default=1.0 unless the operator writes an explicit
+// [confidence.source] <tool> = <conf> rule (audit N-4). Do not rewrite the
+// adapters' Sources to force a match — that would change behavior.
 func DefaultConfidenceConfig() ConfidenceConfig {
 	return ConfidenceConfig{
 		Enabled:            false,
@@ -62,8 +96,29 @@ func DefaultConfidenceConfig() ConfidenceConfig {
 		Floor:              0.05,
 		PriorStrength:      2.0,
 		ByCheckID:          map[string]float64{},
-		BySource:           map[string]float64{},
-		ByDomain:           map[string]float64{},
+		// Source priors, overridable from [confidence.source] (values there
+		// win because parsing overlays this table). Enabled=false keeps the
+		// effective confidence at 1.0 for every entry → bit-identical legacy
+		// scores.
+		//
+		// builtin is deliberately NOT an explicit key: its prior is the
+		// identity value 1.0, which Default already provides. Storing it as a
+		// [confidence.source] rule would shadow [confidence.domain] for every
+		// built-in check (source is evaluated before domain), making domain
+		// fallbacks unreachable for the largest check population. Operators who
+		// lower `default` can still write an explicit `builtin = 1.0` to pin
+		// built-ins at full trust. (Deliberate deviation from design §3.1's
+		// illustrative `builtin = 1.0` line; same effective value.)
+		BySource: map[string]float64{
+			"user": 0.90, // configuration-defined checks (CU-*)
+			// Generic source class only: matches a caller that records
+			// Source="adapter". In-repo adapters (trivy/ansible/netbox/...) use
+			// concrete tool ids, so they miss this key and fall through to
+			// Default=1.0 unless [confidence.source] <tool> is configured
+			// (audit N-4).
+			"adapter": 0.80,
+		},
+		ByDomain: map[string]float64{},
 	}
 }
 
@@ -73,79 +128,158 @@ func DefaultConfidenceConfig() ConfidenceConfig {
 //	[confidence]  enabled / algorithm / accept_by_lower_bound / default /
 //	              floor / prior_strength
 //	[confidence.check]    <check_id> = <conf>       (exact)
-//	[confidence.checkrx]  <regex> = <conf>          (first-match pattern)
+//	[confidence.checkrx]  <regex> = <conf>          (first match in
+//	                                                 byte-lexicographic key order)
 //	[confidence.source]   <source_key> = <conf>
 //	[confidence.domain]   <domain> = <conf>
 //
-// Values are clamped to (0,1] on parse so a malformed entry cannot produce a
-// nonsense confidence (0 is reinterpreted as the default at resolve time).
+// Values are validated fail-fast (audit I-9): a non-numeric, non-finite or
+// out-of-range explicit entry returns an error naming section/key/value,
+// instead of being silently dropped (which used to fall back to default, often
+// 1.0). The ONLY allowed sentinel is 0 = "unset/clear": in the rule tables it
+// removes the entry (including a factory prior), and in the scalars it means
+// "unspecified" (Resolve then falls back to 1.0; floor 0 behaves as absent).
 func (cfg *Config) parseConfidenceSections(sections map[string]map[string]string) error {
 	cc := cfg.Confidence
 
 	// [confidence]
 	if sec, ok := sections["confidence"]; ok {
 		if v, ok := sec["enabled"]; ok {
-			cc.Enabled = strings.EqualFold(v, "true") || v == "1" || strings.EqualFold(v, "yes")
+			b, err := parseConfidenceBool(v)
+			if err != nil {
+				return confidenceValueError("confidence", "enabled", v, err)
+			}
+			cc.Enabled = b
 		}
-		if v, ok := sec["algorithm"]; ok && v != "" {
-			cc.Algorithm = strings.TrimSpace(v)
+		if v, ok := sec["algorithm"]; ok {
+			a := strings.TrimSpace(v)
+			switch {
+			case a == "":
+				// Explicit empty = unset → keep the factory weighted_evidence.
+			case a == ConfidenceAlgorithmWeightedEvidence:
+				cc.Algorithm = a
+			default:
+				// Fail-fast: a wrong id must never look like a switched
+				// algorithm (beta_bayes and the registration API are not
+				// implemented — audit I-10).
+				return confidenceValueError("confidence", "algorithm", v,
+					fmt.Errorf("unsupported algorithm %q: only %q is implemented (beta_bayes and the registration API do not exist)",
+						a, ConfidenceAlgorithmWeightedEvidence))
+			}
 		}
 		if v, ok := sec["accept_by_lower_bound"]; ok {
-			cc.AcceptByLowerBound = strings.EqualFold(v, "true") || v == "1" || strings.EqualFold(v, "yes")
+			b, err := parseConfidenceBool(v)
+			if err != nil {
+				return confidenceValueError("confidence", "accept_by_lower_bound", v, err)
+			}
+			cc.AcceptByLowerBound = b
 		}
 		if v, ok := sec["default"]; ok {
-			if f, err := parseConfidenceValue(v); err == nil {
+			f, err := parseUnitFloat(v)
+			if err != nil {
+				return confidenceValueError("confidence", "default", v, err)
+			}
+			// 0 = unset/clear → keep the factory default (1.0). Assigning 0
+			// would also trip validateRanges (default ∈ (0,1]) when enabled.
+			if f != 0 {
 				cc.Default = f
 			}
 		}
 		if v, ok := sec["floor"]; ok {
-			if f, err := parseConfidenceValue(v); err == nil {
+			f, err := parseUnitFloat(v)
+			if err != nil {
+				return confidenceValueError("confidence", "floor", v, err)
+			}
+			if f == 1 {
+				return confidenceValueError("confidence", "floor", v,
+					fmt.Errorf("must be < 1: floor is a clamp-up minimum, 1 would neutralize confidence"))
+			}
+			// 0 = unset/clear → keep the factory floor (0.05).
+			if f != 0 {
 				cc.Floor = f
 			}
 		}
 		if v, ok := sec["prior_strength"]; ok {
-			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			f, err := parseNonNegativeFloat(v)
+			if err != nil {
+				return confidenceValueError("confidence", "prior_strength", v, err)
+			}
+			// 0 = unset/clear → keep the factory value (2.0). Reserved anyway.
+			if f != 0 {
 				cc.PriorStrength = f
 			}
 		}
 	}
 
 	// [confidence.check]
-	if sec, ok := sections["confidence.check"]; ok {
-		for k, v := range sec {
-			if f, err := parseConfidenceValue(v); err == nil {
-				cc.ByCheckID[k] = f
+	if sec := sections["confidence.check"]; sec != nil {
+		for _, k := range sortedConfidenceKeys(sec) {
+			v := sec[k]
+			f, err := parseUnitFloat(v)
+			if err != nil {
+				return confidenceValueError("confidence.check", k, v, err)
 			}
+			if f == 0 {
+				delete(cc.ByCheckID, k) // 0 = clear
+				continue
+			}
+			cc.ByCheckID[k] = f
 		}
 	}
 	// [confidence.checkrx]
-	if sec, ok := sections["confidence.checkrx"]; ok {
-		for k, v := range sec {
-			f, err := parseConfidenceValue(v)
+	if sec := sections["confidence.checkrx"]; sec != nil {
+		// Deterministic tie-break (audit I-5): sections are parsed into a map,
+		// so declaration order is already lost; iterating the map directly made
+		// the "first match wins" order random per parse (same INI could resolve
+		// 0.1 or 0.9 after a hot reload). Sort keys BYTE-LEXICOGRAPHICALLY so
+		// overlapping regexes always evaluate in the same order. Byte order was
+		// chosen over re-plumbing the parser to keep declaration order: it is
+		// deterministic across processes and platforms, and requires no change
+		// to the shared section parser used by every other config block.
+		for _, k := range sortedConfidenceKeys(sec) {
+			v := sec[k]
+			f, err := parseUnitFloat(v)
 			if err != nil {
-				continue
+				return confidenceValueError("confidence.checkrx", k, v, err)
 			}
 			re, rerr := regexp.Compile(k)
 			if rerr != nil {
-				return fmt.Errorf("confidence.checkrx: invalid regex %q: %w", k, rerr)
+				return fmt.Errorf("confidence: [confidence.checkrx] %q: invalid regex: %w", k, rerr)
+			}
+			if f == 0 {
+				continue // 0 = clear
 			}
 			cc.CheckPatterns = append(cc.CheckPatterns, ConfidencePatternRule{Pattern: re, Confidence: f})
 		}
 	}
 	// [confidence.source]
-	if sec, ok := sections["confidence.source"]; ok {
-		for k, v := range sec {
-			if f, err := parseConfidenceValue(v); err == nil {
-				cc.BySource[k] = f
+	if sec := sections["confidence.source"]; sec != nil {
+		for _, k := range sortedConfidenceKeys(sec) {
+			v := sec[k]
+			f, err := parseUnitFloat(v)
+			if err != nil {
+				return confidenceValueError("confidence.source", k, v, err)
 			}
+			if f == 0 {
+				delete(cc.BySource, k) // 0 = clear (also removes a factory prior)
+				continue
+			}
+			cc.BySource[k] = f
 		}
 	}
 	// [confidence.domain]
-	if sec, ok := sections["confidence.domain"]; ok {
-		for k, v := range sec {
-			if f, err := parseConfidenceValue(v); err == nil {
-				cc.ByDomain[k] = f
+	if sec := sections["confidence.domain"]; sec != nil {
+		for _, k := range sortedConfidenceKeys(sec) {
+			v := sec[k]
+			f, err := parseUnitFloat(v)
+			if err != nil {
+				return confidenceValueError("confidence.domain", k, v, err)
 			}
+			if f == 0 {
+				delete(cc.ByDomain, k) // 0 = clear
+				continue
+			}
+			cc.ByDomain[k] = f
 		}
 	}
 
@@ -153,19 +287,66 @@ func (cfg *Config) parseConfidenceSections(sections map[string]map[string]string
 	return nil
 }
 
-// parseConfidenceValue parses a confidence entry and clamps it to (0,1].
-func parseConfidenceValue(v string) (float64, error) {
+// confidenceValueError wraps a validation failure with section/key/value so an
+// operator can locate the offending line without guessing (audit I-9).
+func confidenceValueError(section, key, value string, err error) error {
+	return fmt.Errorf("confidence: [%s] %s = %q: %w", section, key, value, err)
+}
+
+// sortedConfidenceKeys returns the map keys in byte-lexicographic order. Used
+// for deterministic pattern evaluation (I-5) and stable error messages.
+func sortedConfidenceKeys(sec map[string]string) []string {
+	keys := make([]string, 0, len(sec))
+	for k := range sec {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// parseUnitFloat parses an explicit confidence scalar. 0 is the documented
+// "unset/clear" sentinel; anything else must be a finite number in [0,1].
+func parseUnitFloat(v string) (float64, error) {
 	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid number: %w", err)
 	}
-	if f <= 0 {
-		return 0, fmt.Errorf("confidence must be > 0")
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, fmt.Errorf("must be a finite number")
 	}
-	if f > 1 {
-		return 1, nil
+	if f < 0 || f > 1 {
+		return 0, fmt.Errorf("must be in [0,1] (0 = unset)")
 	}
 	return f, nil
+}
+
+// parseNonNegativeFloat parses a reserved numeric parameter (prior_strength):
+// 0 = unset; negative, NaN and Inf are rejected.
+func parseNonNegativeFloat(v string) (float64, error) {
+	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid number: %w", err)
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, fmt.Errorf("must be a finite number")
+	}
+	if f < 0 {
+		return 0, fmt.Errorf("must be >= 0 (0 = unset)")
+	}
+	return f, nil
+}
+
+// parseConfidenceBool accepts only the documented spellings. Unknown text is a
+// hard error (audit I-9) instead of the old silent "false".
+func parseConfidenceBool(v string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "yes", "1":
+		return true, nil
+	case "false", "no", "0":
+		return false, nil
+	default:
+		return false, fmt.Errorf("not a boolean: want true/false/yes/no/1/0")
+	}
 }
 
 // Resolve applies the configured rule table to one check identified by

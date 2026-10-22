@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -92,6 +93,35 @@ func TestConfidenceResolveRulePriority(t *testing.T) {
 	}
 }
 
+// TestConfidenceResolveOverlappingCheckAndPattern is the M3 mutation tooth
+// (audit I-6): the exact `[confidence.check] as-001` rule and the regex
+// `[confidence.checkrx] ^as-` both match as-001. Exact-id must win regardless
+// of pattern order. Swapping the ByCheckID/CheckPatterns evaluation order in
+// Resolve makes this test red (the old priority test had no overlapping rules
+// and therefore could not detect the swap).
+func TestConfidenceResolveOverlappingCheckAndPattern(t *testing.T) {
+	cfg, err := Parse(`
+[confidence]
+enabled = true
+
+[confidence.check]
+as-001 = 0.99
+
+[confidence.checkrx]
+^as- = 0.11
+`)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	cc := cfg.Confidence
+	if got := cc.Resolve("as-001", "builtin", "attack_surface"); got != 0.99 {
+		t.Errorf("overlap Resolve(as-001) = %v, want 0.99 (exact check beats checkrx)", got)
+	}
+	if got := cc.Resolve("as-999", "builtin", "attack_surface"); got != 0.11 {
+		t.Errorf("overlap Resolve(as-999) = %v, want 0.11 (regex fallback)", got)
+	}
+}
+
 // TestConfidenceDisabledReturnsOne: when [confidence] is absent, every
 // resolution is 1.0 — the backward-compatible default.
 func TestConfidenceDisabledReturnsOne(t *testing.T) {
@@ -118,18 +148,273 @@ func TestConfidenceBadRegexFailsParse(t *testing.T) {
 	}
 }
 
-// TestConfidenceValueClamping: out-of-range confidences are clamped.
-func TestConfidenceValueClamping(t *testing.T) {
-	ini := "[confidence]\nenabled = true\n\n[confidence.source]\ncti = 2.0\nuser = -1\n"
+// TestConfidenceValueClamping was retired by the I-9 fail-fast contract: the
+// old case asserted that "cti = 2.0" was clamped to 1.0 and "extension = -1"
+// was silently dropped. Both outcomes were the audited defect. The same two
+// inputs are now covered (with stricter assertions) by
+// TestConfidenceBadValuesFailFast's "source value above one" and "domain value
+// negative" cases — no coverage was dropped.
+
+// TestDefaultConfidenceSourcePriors locks the factory prior table (audit I-2):
+// enabling [confidence] out of the box must not be a no-op. The factory values
+// are the design §3.1 examples adapted to §3.4's "source defaults + config
+// override" strategy; they are PRIORS (not experimentally calibrated — see
+// design §7.3/I-3). The default stays Enabled=false, so the disabled path is
+// untouched (1.0 everywhere).
+func TestDefaultConfidenceSourcePriors(t *testing.T) {
+	cc := DefaultConfidenceConfig()
+	if cc.Enabled {
+		t.Fatal("factory default must stay disabled (backward compatibility)")
+	}
+	// Disabled: every resolution is 1.0 regardless of the prior table.
+	for _, tc := range []struct{ checkID, source, domain string }{
+		{"AS-001", "builtin", "attack_surface"},
+		{"CU-1", "user", "operation_trust"},
+		{"NV-1", "adapter", "attack_surface"},
+	} {
+		if got := cc.Resolve(tc.checkID, tc.source, tc.domain); got != 1.0 {
+			t.Errorf("disabled Resolve(%q,%q) = %v, want 1.0", tc.checkID, tc.source, got)
+		}
+	}
+
+	// Enabled: the shipped prior table takes effect. builtin's identity prior
+	// comes from Default=1.0 (no explicit source key; see DefaultConfidenceConfig)
+	// so that [confidence.domain] stays reachable for built-in checks.
+	cc.Enabled = true
+	cases := []struct {
+		checkID, source, domain string
+		want                    float64
+	}{
+		{"AS-001", "builtin", "attack_surface", 1.0},
+		{"CU-1", "user", "operation_trust", 0.90},
+		{"NV-1", "adapter", "attack_surface", 0.80},
+	}
+	for _, tc := range cases {
+		if got := cc.Resolve(tc.checkID, tc.source, tc.domain); got != tc.want {
+			t.Errorf("enabled Resolve(%q,%q) = %v, want %v (factory prior table)", tc.checkID, tc.source, got, tc.want)
+		}
+	}
+}
+
+// TestConfidenceCheckPatternsDeterministic locks the tie-break for overlapping
+// [confidence.checkrx] patterns (audit I-5). The parser stores sections in a
+// map, so declaration order is not available; we document BYTE-LEXICOGRAPHIC
+// KEY ORDER instead ("^as-" sorts before "^as-0"), which is deterministic
+// across processes/platforms and needs no parser rewrite. Same INI parsed 300
+// times must yield the same rule order and the same first-match resolution.
+func TestConfidenceCheckPatternsDeterministic(t *testing.T) {
+	const ini = `
+[confidence]
+enabled = true
+
+[confidence.checkrx]
+^as- = 0.9
+^as-0 = 0.1
+`
+	const rounds = 300
+	var first []float64
+	for i := 0; i < rounds; i++ {
+		cfg, err := Parse(ini)
+		if err != nil {
+			t.Fatalf("round %d: Parse failed: %v", i, err)
+		}
+		got := make([]float64, len(cfg.Confidence.CheckPatterns))
+		for j, pr := range cfg.Confidence.CheckPatterns {
+			got[j] = pr.Confidence
+		}
+		if i == 0 {
+			first = got
+		} else if !reflect.DeepEqual(first, got) {
+			t.Fatalf("round %d: CheckPatterns order = %v, first round = %v — parse is nondeterministic", i, got, first)
+		}
+		// Both patterns match AS-001; the documented tie-break must pick ^as-.
+		if r := cfg.Confidence.Resolve("AS-001", "builtin", "attack_surface"); r != 0.9 {
+			t.Fatalf("round %d: Resolve = %v, want 0.9 (^as- first by byte-lexicographic key order)", i, r)
+		}
+	}
+	want := []float64{0.9, 0.1}
+	if !reflect.DeepEqual(first, want) {
+		t.Errorf("CheckPatterns = %v, want %v (byte-lexicographic key order)", first, want)
+	}
+}
+
+// TestConfidenceBadValuesFailFast is the I-9 contract: every explicit
+// [confidence*] value is validated at load time. A typo must not be silently
+// dropped and fall back to the (usually 1.0) default — the error names
+// section, key and the offending value so an operator can fix the rule.
+func TestConfidenceBadValuesFailFast(t *testing.T) {
+	cases := []struct {
+		name, ini, section, key, value string
+	}{
+		{
+			"check value non-numeric",
+			"[confidence]\nenabled = true\n\n[confidence.check]\nas-001 = abc\n",
+			"confidence.check", "as-001", "abc",
+		},
+		{
+			"default non-numeric",
+			"[confidence]\ndefault = abc\n",
+			"confidence", "default", "abc",
+		},
+		{
+			"floor negative",
+			"[confidence]\nfloor = -1\n",
+			"confidence", "floor", "-1",
+		},
+		{
+			"floor one is not a clamp minimum",
+			"[confidence]\nfloor = 1.0\n",
+			"confidence", "floor", "1.0",
+		},
+		{
+			"enabled non-boolean",
+			"[confidence]\nenabled = maybe\n",
+			"confidence", "enabled", "maybe",
+		},
+		{
+			"accept_by_lower_bound non-boolean",
+			"[confidence]\naccept_by_lower_bound = maybe\n",
+			"confidence", "accept_by_lower_bound", "maybe",
+		},
+		{
+			"source value above one",
+			"[confidence]\nenabled = true\n\n[confidence.source]\ncti = 2.0\n",
+			"confidence.source", "cti", "2.0",
+		},
+		{
+			"domain value negative",
+			"[confidence.domain]\nattack_surface = -0.5\n",
+			"confidence.domain", "attack_surface", "-0.5",
+		},
+		{
+			"checkrx value non-numeric",
+			"[confidence.checkrx]\n^rs- = nope\n",
+			"confidence.checkrx", "^rs-", "nope",
+		},
+		{
+			"prior_strength non-numeric",
+			"[confidence]\nprior_strength = abc\n",
+			"confidence", "prior_strength", "abc",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Parse(tc.ini)
+			if err == nil {
+				t.Fatalf("Parse succeeded; want fail-fast error naming [%s] %s = %q", tc.section, tc.key, tc.value)
+			}
+			for _, want := range []string{tc.section, tc.key, tc.value} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q must contain %q (section/key/value)", err, want)
+				}
+			}
+		})
+	}
+}
+
+// TestConfidenceZeroSentinelClears: 0 is the ONLY allowed sentinel and means
+// "unset/clear". For rule tables it removes the entry (including a factory
+// prior); scalars accept it as "unset" (Resolve then normalizes default 0 to
+// 1.0, exactly like an absent key).
+func TestConfidenceZeroSentinelClears(t *testing.T) {
+	ini := `
+[confidence]
+enabled = true
+default = 0
+floor = 0
+
+[confidence.check]
+as-001 = 0
+
+[confidence.checkrx]
+^rs- = 0
+
+[confidence.source]
+user = 0
+adapter = 0.75
+
+[confidence.domain]
+attack_surface = 0
+`
 	cfg, err := Parse(ini)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
-	if cfg.Confidence.BySource["cti"] != 1.0 {
-		t.Errorf("cti should clamp to 1.0, got %v", cfg.Confidence.BySource["cti"])
+	cc := cfg.Confidence
+	if _, ok := cc.ByCheckID["as-001"]; ok {
+		t.Error("check rule with value 0 must be cleared, not installed")
 	}
-	if _, ok := cfg.Confidence.BySource["user"]; ok {
-		t.Error("non-positive user confidence must be dropped")
+	if len(cc.CheckPatterns) != 0 {
+		t.Errorf("checkrx rule with value 0 must be cleared, got %d patterns", len(cc.CheckPatterns))
+	}
+	if _, ok := cc.BySource["user"]; ok {
+		t.Error("source value 0 must clear the factory user prior")
+	}
+	if got, ok := cc.BySource["adapter"]; !ok || got != 0.75 {
+		t.Errorf("adapter override = %v/%v, want 0.75 (non-zero values still override)", got, ok)
+	}
+	if _, ok := cc.ByDomain["attack_surface"]; ok {
+		t.Error("domain value 0 must be cleared, not installed")
+	}
+	// default=0 / floor=0 are "unset": the factory values (1.0 / 0.05) stay.
+	if got := cc.Resolve("XY-1", "unknown-src", "unknown-domain"); got != 1.0 {
+		t.Errorf("default=0 resolve = %v, want 1.0 (unset sentinel)", got)
+	}
+	if cc.Default != 1.0 {
+		t.Errorf("default = %v, want factory 1.0 (0 = unset)", cc.Default)
+	}
+	if cc.Floor != 0.05 {
+		t.Errorf("floor = %v, want factory 0.05 (0 = unset)", cc.Floor)
+	}
+}
+
+// TestConfidenceUnknownAlgorithmFailsParse is the I-10 fail-fast contract:
+// only weighted_evidence is implemented (there is no registration table and no
+// beta_bayes). An operator who writes algorithm=beta_bayes must get a load
+// error, never a silently different-but-identical score.
+func TestConfidenceUnknownAlgorithmFailsParse(t *testing.T) {
+	for _, algo := range []string{"beta_bayes", "no_such_algorithm"} {
+		ini := "[confidence]\nenabled = true\nalgorithm = " + algo + "\n"
+		_, err := Parse(ini)
+		if err == nil {
+			t.Fatalf("algorithm=%q: Parse succeeded; want unsupported-algorithm error", algo)
+		}
+		for _, want := range []string{"confidence", "algorithm", algo} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("algorithm=%q: error %q must contain %q", algo, err, want)
+			}
+		}
+	}
+
+	// The one implemented value (and an explicit empty value = unset) loads.
+	for _, ini := range []string{
+		"[confidence]\nenabled = true\nalgorithm = weighted_evidence\n",
+		"[confidence]\nenabled = true\nalgorithm =\n",
+	} {
+		cfg, err := Parse(ini)
+		if err != nil {
+			t.Fatalf("Parse(%q) failed: %v", ini, err)
+		}
+		if cfg.Confidence.Algorithm != "weighted_evidence" {
+			t.Errorf("algorithm = %q, want weighted_evidence", cfg.Confidence.Algorithm)
+		}
+	}
+}
+
+// TestConfidenceReservedPriorStrength documents that prior_strength is
+// reserved (no consumer) but still validated: non-numeric/negative fails
+// (I-9/I-10), a positive value parses, and the reserved fields do not alter
+// resolution.
+func TestConfidenceReservedPriorStrength(t *testing.T) {
+	cfg, err := Parse("[confidence]\nenabled = true\nprior_strength = 7.5\n")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if cfg.Confidence.PriorStrength != 7.5 {
+		t.Errorf("prior_strength = %v, want 7.5 (parsed though reserved)", cfg.Confidence.PriorStrength)
+	}
+	if got := cfg.Confidence.Resolve("AS-001", "builtin", "unknown-domain"); got != 1.0 {
+		t.Errorf("reserved prior_strength changed resolution: %v, want factory builtin 1.0", got)
 	}
 }
 
@@ -142,11 +427,11 @@ func TestConfigResolveChecks(t *testing.T) {
 		t.Fatalf("Parse failed: %v", err)
 	}
 	checks := []model.CheckResult{
-		{CheckID: "AS-001", Domain: "attack_surface", Source: model.CheckSourceBuiltin}, // exact rule 0.99
-		{CheckID: "CU-1", Domain: "operation_trust", Source: model.CheckSourceUser},     // source user 0.9
-		{CheckID: "XY-9", Domain: "resilience", Source: model.CheckSourceUser},          // source user 0.9 (no exact/regex hit)
-		{CheckID: "NOPE-1", Domain: "resilience", Source: model.CheckSourceBuiltin},     // domain miss → default 0.85
-		{CheckID: "Y-9", Domain: "attack_surface", Confidence: 0.77},                    // upstream preserved
+		{CheckID: "AS-001", Domain: "attack_surface", Source: model.CheckSourceBuiltin},     // exact rule 0.99
+		{CheckID: "CU-1", Domain: "operation_trust", Source: model.CheckSourceUser},         // source user 0.9
+		{CheckID: "XY-9", Domain: "resilience", Source: model.CheckSourceUser},              // source user 0.9 (no exact/regex hit)
+		{CheckID: "NOPE-1", Domain: "resilience", Source: model.CheckSource("unknown-src")}, // no rule → domain miss → default 0.85
+		{CheckID: "Y-9", Domain: "attack_surface", Confidence: 0.77},                        // upstream preserved
 	}
 	cfg.ResolveChecks(checks)
 

@@ -50,7 +50,6 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 		output := AssessmentOutput{
 			HostID:       input.HostID,
 			FinalScore:   finalScore,
-			Acceptable:   finalScore >= input.Threshold,
 			Threshold:    input.Threshold,
 			DomainScores: domainScores,
 			EdgeFactors:  edgeFactors,
@@ -60,6 +59,7 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 			Metadata:     make(map[string]string),
 		}
 		fillPosterior(&output, config, domainScores, policy)
+		output.Acceptable = AcceptanceDecision(output.FinalScore, output.Lower95, output.Threshold, config.AcceptByLowerBound)
 
 		if err := ValidateOutput(output); err != nil {
 			return AssessmentOutput{}, err
@@ -88,7 +88,6 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 		output := AssessmentOutput{
 			HostID:       input.HostID,
 			FinalScore:   v2FinalScore.Total,
-			Acceptable:   v2FinalScore.Total >= input.Threshold,
 			Threshold:    input.Threshold,
 			DomainScores: domainScores,
 			EdgeFactors:  edgeFactors,
@@ -98,6 +97,7 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 			Metadata:     make(map[string]string),
 		}
 		fillPosterior(&output, config, domainScores, policy)
+		output.Acceptable = AcceptanceDecision(output.FinalScore, output.Lower95, output.Threshold, config.AcceptByLowerBound)
 
 		if err := ValidateOutput(output); err != nil {
 			return AssessmentOutput{}, err
@@ -114,7 +114,6 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 	output := AssessmentOutput{
 		HostID:       input.HostID,
 		FinalScore:   finalScore,
-		Acceptable:   finalScore >= input.Threshold,
 		Threshold:    input.Threshold,
 		DomainScores: domainScores,
 		EdgeFactors:  edgeFactors,
@@ -124,6 +123,7 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 		Metadata:     make(map[string]string),
 	}
 	fillPosterior(&output, config, domainScores, policy)
+	output.Acceptable = AcceptanceDecision(output.FinalScore, output.Lower95, output.Threshold, config.AcceptByLowerBound)
 
 	if err := ValidateOutput(output); err != nil {
 		return AssessmentOutput{}, err
@@ -133,29 +133,22 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 }
 
 // fillPosterior attaches the confidence-aware posterior statistics to an
-// output. sigma comes from the RSS propagation over domain sigmas; the 95%
-// interval is centered on the ACTUAL final score (which may include
-// risk-layer coefficients), i.e. [score − 1.96σ, score + 1.96σ] ∩ [0,100].
-// With a disabled policy sigma collapses to 0 and the interval degrades to
-// the degenerate [score, score]; evidence confidence is 1 — exactly the
-// legacy semantics. Acceptability is NOT changed here (point-estimate
-// comparison); the conservative lower-bound mode is a kernel-side option.
+// output. sigma comes from the RSS propagation over domain sigmas folded
+// through the intrinsic layer weight (FinalBayesStats); the heuristic 95%
+// interval is centered on the ACTUAL final score (which also contains the
+// deterministic exposure/threat layers) and clamped only at the lower bound
+// (ConfidenceInterval). With a disabled policy sigma collapses to 0 and the
+// interval degrades to the degenerate [score, score]; evidence confidence is 1
+// — exactly the legacy semantics. Acceptability is NOT decided here: each
+// caller applies AcceptanceDecision after the interval exists, and the
+// v1/v1.2/v2 entry points in this file also pass config.AcceptByLowerBound
+// through, so accept_by_lower_bound is consumed inside the library too (audit
+// N-2).
 func fillPosterior(output *AssessmentOutput, config ScoringConfig, domainScores []DomainScore, policy ConfidencePolicy) {
-	sigma, _, _ := FinalBayesStats(config.Weights, domainScores)
+	sigma := FinalBayesStats(config.Weights, domainScores)
 	output.FinalSigma = sigma
-	output.Lower95 = clamp95(output.FinalScore - 1.96*sigma)
-	output.Upper95 = clamp95(output.FinalScore + 1.96*sigma)
+	output.Lower95, output.Upper95 = ConfidenceInterval(output.FinalScore, sigma)
 	output.EvidenceConfidence = AggregateNodeConfidence(config.Weights, domainScores)
-}
-
-func clamp95(v float64) float64 {
-	if v < 0 {
-		return 0
-	}
-	if v > 100 {
-		return 100
-	}
-	return v
 }
 
 func ComputeDomainScores(weights []WeightConfig, checks []CheckInput) []DomainScore {
