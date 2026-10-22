@@ -18,12 +18,12 @@
 
 ## 2. 方案选型（已确认）
 
-- **方案 A**：独立 `internal/securemode` 包 + CLI 命令接入（用户批准）。
-- 加密：**AES-256-GCM** 信封加密 + **argon2id** 密码派生（用户批准）。
-- 密码校验材料：哈希（argon2id）校验 + 信封加密（用户批准）。
-- 作用范围：内核 `config.ini` + agent `agent.ini`（用户批准）。
-- CLI 能力：`mode`（status/enter/exit/unlock/set-password/agent）+ `config-set`（`--temp`/`--persist`）作为配置写入口；内置 `config` 命令保持只读视图。原方案中的 `config view/set/encrypt/decrypt/rotate` 子命令集未实现（用户批准）。
-- 模式生命周期：持久化标记，跨重启保持（用户批准）。
+- **方案 A**：独立 `internal/securemode` 包 + CLI 命令接入（已批准）。
+- 加密：**AES-256-GCM** 信封加密 + **argon2id** 密码派生（已批准）。
+- 密码校验材料：哈希（argon2id）校验 + 信封加密（已批准）。
+- 作用范围：内核 `config.ini` + agent `agent.ini`（已批准）。
+- CLI 能力：`mode`（status/enter/exit/unlock/set-password/agent）+ `config-set`（`--temp`/`--persist`）作为配置写入口；内置 `config` 命令保持只读视图。原方案中的 `config view/set/encrypt/decrypt/rotate` 子命令集未实现（已批准）。
+- 模式生命周期：持久化标记，跨重启保持（已批准）。
 
 ## 3. 模块布局
 
@@ -190,7 +190,7 @@ config-set <key> <value>
   3. 死锁防护：kernel 重启后若登记表持久化失败/解密失败（fail-closed，见 §11），kernel 拒绝启动 run 模式，且已持久化的登记表不删除——人工处置路径（用内核密码恢复）。
 - **agent 单方重启（kernel 未重启）**：agent 重启后自生成**新**密码上报 → 内核更新该指纹下的登记（新密码覆盖旧密码）→ 与旧密码相关的解锁请求立即失效。
 
-> 设计理由（用户 2026-08-21）：以证书指纹为主键把防线从应用层压到传输层。伪造的 agent_id 无法通过指纹校验，非法登记在底层即被拒绝；也保证一个证书只能登记一个 agent 身份，与现有 BindAgentCert 的"一证书一身份"约束一致。
+> 设计理由（2026-08-21）：以证书指纹为主键把防线从应用层压到传输层。伪造的 agent_id 无法通过指纹校验，非法登记在底层即被拒绝；也保证一个证书只能登记一个 agent 身份，与现有 BindAgentCert 的"一证书一身份"约束一致。
 
 ## 11. 错误处理
 
@@ -233,7 +233,7 @@ config-set <key> <value>
 
 ## 14. 非目标（YAGNI）
 
-- 不做 TPM/系统 keyring 集成（用户选择哈希校验 + 信封加密）。
+- 不做 TPM/系统 keyring 集成（已选择哈希校验 + 信封加密）。
 - 不做多用户密码体系；单密码即解锁唯一途径。
 - 不对 agent 与 kernel 之间的加密配置同步做额外设计（agent 配置独立保护）。
 - **agent 端不做运行时配置修改能力**：agent 本地 CLI 无模式切换/配置修改命令；配置变更一律经内核 CLI 下发（内核托管模式）。
