@@ -32,11 +32,12 @@ ca50557000643e66a46d1cbfdf31cac742b08808  ffeb423620cb8f24fa3a6de0a59d28b5ad7454
 5f1375889f899a3dd1bbd5ffadd56f2409c980e4  fd0a385660b1e5c5140d7160ffa7d0f2b50b567b  internal/kernel/persistence_types.go  # 落盘结构增 additive 字段 EdgeFactorChain
 77cc2f961e3a46f2bff6276268a8bddde676fede  b842a11b9cd76672b24b0bbcd0a7dfcf57e6ed50  internal/persistence/persistence.go  # 落盘时透出观测链
 
-# ---- 待上 main（产品修复）：A.1 分类里属"漏洞/审计修复"，最终应在 main 落地 ----
-# 本任务（Task 26）只登记、**不推 main**（等用户点名）。main 侧的值是当前 main 的 blob，
-# 不是"已同步"；一旦 cherry-pick 上去，这两行会变成 [已同步] 并应从此清单移除。
-a921bbc9ef018f4551523a2fbe302bfd677b4488  cb362cb0c28173742cfca517c80c176d9530cf7f  internal/checks/linux/checks.go  # 待上 main（产品修复）：Task 14 修 OT-001/as010/as012 的 map 迭代顺序（Detail 逐字节可复现），产品面缺陷修复
-086c988c3fe5298c2fe7749a3cfb23c49d95ade0  ABSENT  internal/checks/linux/determinism_test.go  # 待上 main（产品修复）：上一条的回归测试（main 上不存在）；随 checks.go 一起 cherry-pick
+# ---- 已上 main（2026-10-22，用户批准）：两条产品修复已 cherry-pick 落地，此后不再登记 ----
+#   `cb14060` + `03db60b`（ARC）→ main `6ba127c` + `0a0e346`（`aef84de..0a0e346`）。
+#   落地后 `internal/checks/linux/checks.go` 与 `determinism_test.go` 在两侧**逐字节相同**
+#   ⇒ 不再是"漂移"，按本清单的语义（只登记**有意的差异**）**必须从清单移除**，否则会变 stale。
+#   校验（main 侧，2026-10-22）：`go build ./...` rc=0；`go test -tags checks ./internal/checks/...` rc=0；
+#   `TestOT001DetailIsDeterministic` / `TestOT001DetailFormatUnchanged` 各 `-count=20` 全 PASS。
 
 # ---- 研究线的测试（在底座路径内，但属研究接线的测试）----
 0f8a93ce7e6d79f3fc7032e7a9282845d9015263  ABSENT  internal/engine/assessor_chain_test.go  # 观测链在 legacy 路径的研究线新测试（main 上不存在）
