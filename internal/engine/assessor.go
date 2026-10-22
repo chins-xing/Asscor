@@ -1246,6 +1246,15 @@ func (a *Assessor) ReloadWeights(cfg *config.Config) {
 
 	a.cfg = cfg
 
+	// The result cache key covers the raw check results, not the resolved
+	// per-check confidence (which comes from [confidence] at scoring time), so
+	// every entry computed under the previous configuration is stale after a
+	// hot reload. Drop them all; the next assessment recomputes with cfg.
+	a.resultsCache.Range(func(key, _ any) bool {
+		a.resultsCache.Delete(key)
+		return true
+	})
+
 	w := cfg.Weights
 	a.scoringEngine.SetWeight(model.DomainAttackSurface, w.AttackSurface)
 	a.scoringEngine.SetWeight(model.DomainBusinessContinuity, w.BusinessContinuity)
@@ -1326,6 +1335,16 @@ func hashCheckResults(results []model.CheckResult) string {
 			buf[i] = byte(bits >> uint(i*8))
 		}
 		h.Write(buf[:])
+		// Confidence changes the score (confidence-aware scoring) and Source
+		// selects the [confidence] rule, so both are part of the identity of a
+		// check result; omitting them made a cache hit return a result computed
+		// from different evidence (audit M-4).
+		confBits := math.Float64bits(r.Confidence)
+		for i := 0; i < 8; i++ {
+			buf[i] = byte(confBits >> uint(i*8))
+		}
+		h.Write(buf[:])
+		h.Write([]byte(r.Source))
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))[:16]
 }
