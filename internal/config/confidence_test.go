@@ -119,20 +119,12 @@ func TestConfidenceBadRegexFailsParse(t *testing.T) {
 	}
 }
 
-// TestConfidenceValueClamping: out-of-range confidences are clamped.
-func TestConfidenceValueClamping(t *testing.T) {
-	ini := "[confidence]\nenabled = true\n\n[confidence.source]\ncti = 2.0\nextension = -1\n"
-	cfg, err := Parse(ini)
-	if err != nil {
-		t.Fatalf("Parse failed: %v", err)
-	}
-	if cfg.Confidence.BySource["cti"] != 1.0 {
-		t.Errorf("cti should clamp to 1.0, got %v", cfg.Confidence.BySource["cti"])
-	}
-	if _, ok := cfg.Confidence.BySource["extension"]; ok {
-		t.Error("non-positive extension confidence must be dropped")
-	}
-}
+// TestConfidenceValueClamping was retired by the I-9 fail-fast contract: the
+// old case asserted that "cti = 2.0" was clamped to 1.0 and "extension = -1"
+// was silently dropped. Both outcomes were the audited defect. The same two
+// inputs are now covered (with stricter assertions) by
+// TestConfidenceBadValuesFailFast's "source value above one" and "domain value
+// negative" cases — no coverage was dropped.
 
 // TestDefaultConfidenceSourcePriors locks the factory prior table (audit I-2):
 // enabling [confidence] out of the box must not be a no-op. The factory values
@@ -212,6 +204,136 @@ enabled = true
 	want := []float64{0.9, 0.1}
 	if !reflect.DeepEqual(first, want) {
 		t.Errorf("CheckPatterns = %v, want %v (byte-lexicographic key order)", first, want)
+	}
+}
+
+// TestConfidenceBadValuesFailFast is the I-9 contract: every explicit
+// [confidence*] value is validated at load time. A typo must not be silently
+// dropped and fall back to the (usually 1.0) default — the error names
+// section, key and the offending value so an operator can fix the rule.
+func TestConfidenceBadValuesFailFast(t *testing.T) {
+	cases := []struct {
+		name, ini, section, key, value string
+	}{
+		{
+			"check value non-numeric",
+			"[confidence]\nenabled = true\n\n[confidence.check]\nas-001 = abc\n",
+			"confidence.check", "as-001", "abc",
+		},
+		{
+			"default non-numeric",
+			"[confidence]\ndefault = abc\n",
+			"confidence", "default", "abc",
+		},
+		{
+			"floor negative",
+			"[confidence]\nfloor = -1\n",
+			"confidence", "floor", "-1",
+		},
+		{
+			"floor one is not a clamp minimum",
+			"[confidence]\nfloor = 1.0\n",
+			"confidence", "floor", "1.0",
+		},
+		{
+			"enabled non-boolean",
+			"[confidence]\nenabled = maybe\n",
+			"confidence", "enabled", "maybe",
+		},
+		{
+			"accept_by_lower_bound non-boolean",
+			"[confidence]\naccept_by_lower_bound = maybe\n",
+			"confidence", "accept_by_lower_bound", "maybe",
+		},
+		{
+			"source value above one",
+			"[confidence]\nenabled = true\n\n[confidence.source]\ncti = 2.0\n",
+			"confidence.source", "cti", "2.0",
+		},
+		{
+			"domain value negative",
+			"[confidence.domain]\nattack_surface = -0.5\n",
+			"confidence.domain", "attack_surface", "-0.5",
+		},
+		{
+			"checkrx value non-numeric",
+			"[confidence.checkrx]\n^rs- = nope\n",
+			"confidence.checkrx", "^rs-", "nope",
+		},
+		{
+			"prior_strength non-numeric",
+			"[confidence]\nprior_strength = abc\n",
+			"confidence", "prior_strength", "abc",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Parse(tc.ini)
+			if err == nil {
+				t.Fatalf("Parse succeeded; want fail-fast error naming [%s] %s = %q", tc.section, tc.key, tc.value)
+			}
+			for _, want := range []string{tc.section, tc.key, tc.value} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q must contain %q (section/key/value)", err, want)
+				}
+			}
+		})
+	}
+}
+
+// TestConfidenceZeroSentinelClears: 0 is the ONLY allowed sentinel and means
+// "unset/clear". For rule tables it removes the entry (including a factory
+// prior); scalars accept it as "unset" (Resolve then normalizes default 0 to
+// 1.0, exactly like an absent key).
+func TestConfidenceZeroSentinelClears(t *testing.T) {
+	ini := `
+[confidence]
+enabled = true
+default = 0
+floor = 0
+
+[confidence.check]
+as-001 = 0
+
+[confidence.checkrx]
+^rs- = 0
+
+[confidence.source]
+user = 0
+adapter = 0.75
+
+[confidence.domain]
+attack_surface = 0
+`
+	cfg, err := Parse(ini)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	cc := cfg.Confidence
+	if _, ok := cc.ByCheckID["as-001"]; ok {
+		t.Error("check rule with value 0 must be cleared, not installed")
+	}
+	if len(cc.CheckPatterns) != 0 {
+		t.Errorf("checkrx rule with value 0 must be cleared, got %d patterns", len(cc.CheckPatterns))
+	}
+	if _, ok := cc.BySource["user"]; ok {
+		t.Error("source value 0 must clear the factory user prior")
+	}
+	if got, ok := cc.BySource["adapter"]; !ok || got != 0.75 {
+		t.Errorf("adapter override = %v/%v, want 0.75 (non-zero values still override)", got, ok)
+	}
+	if _, ok := cc.ByDomain["attack_surface"]; ok {
+		t.Error("domain value 0 must be cleared, not installed")
+	}
+	// default=0 / floor=0 are "unset": the factory values (1.0 / 0.05) stay.
+	if got := cc.Resolve("XY-1", "unknown-src", "unknown-domain"); got != 1.0 {
+		t.Errorf("default=0 resolve = %v, want 1.0 (unset sentinel)", got)
+	}
+	if cc.Default != 1.0 {
+		t.Errorf("default = %v, want factory 1.0 (0 = unset)", cc.Default)
+	}
+	if cc.Floor != 0.05 {
+		t.Errorf("floor = %v, want factory 0.05 (0 = unset)", cc.Floor)
 	}
 }
 
