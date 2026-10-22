@@ -76,7 +76,7 @@
 
 ---
 
-## 本会话提交清单 (8次)
+## 本次提交清单 (8次)
 
 ```
 93b2f56 srd_adapters桥接 + extmgr生命周期 + adapterhub类型统一
