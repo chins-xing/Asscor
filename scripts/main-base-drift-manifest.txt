@@ -22,12 +22,21 @@
 # 生成方式（下次更新时照此重跑）：
 #   git diff --name-only main HEAD -- <底座路径…> <负路径…> | sort
 #   然后对每条取 `git rev-parse HEAD:<路径>` 与 `git rev-parse main:<路径>`。
+#
+# 最近一次全量对账（Task 39，2026-10-22）：
+#   方向①（置信度审计修复）的 15 个提交已 cherry-pick 到 main
+#   （main: 0a0e346 → 81c27bb，本地就绪、未 push）⇒ 原先 36 条"未解释漂移"
+#   降到 8 条；这 8 条与原先 7 条登记失效已在本文件逐条登记/更新。
+#   复算命令（两侧 blob 一次取全）：
+#     for p in <路径…>; do
+#       printf '%s  %s  %s\n' "$(git rev-parse HEAD:$p)" "$(git rev-parse main:$p)" "$p"
+#     done
 # ============================================================================
 
 # ---- 研究接线（底座文件被研究线改动过，按规则④留在 ARC）----
-eff549db9d44fb4cc4ada8f97109e890a5ce808a  17e2bf6a0b04603e5963b2e49d3b6dd58240b835  internal/model/model.go  # EdgeFactors / EdgeFactorObservation 的线上契约（研究线新增）
-35a2077e06a6c9f09980d529260166d48dbaa47f  d5fc5b4b45bfe2525a8945654e6918cb31d2cdaa  internal/engine/assessor.go  # legacy 评分路径回填观测链（evaluateEdgeFactorChain）
-42240d69ba0b2f8482e5e85ef62161f464a7183a  8baf132115796ccb46d4ce67e801ab9c980a3d66  internal/engine/ssam/adapter_engine.go  # 插件路径的合成策略钩子回填观测链
+e8008f54a81956f8fbaf8b8e85032830f7db7896  80f1fd71fadeb6ba4c9443d79c28eff7679eaf66  internal/model/model.go  # EdgeFactors / EdgeFactorObservation 的线上契约（研究线新增）；main 侧已随 Task 39 带入方向① 的 FinalSigma 注释
+3697ffa39ad0c40dce22be006cdb945656e93983  83670c3f083dfb7f4d09ca3d3d35d2c140d605a6  internal/engine/assessor.go  # legacy 评分路径回填观测链（evaluateEdgeFactorChain）；main 侧已随 Task 39 带入方向① 的共享贝叶斯域分（ConfidencePolicyFromConfig/legacyCheckInputs）
+de3d7595b0ade14f862ba126ffca7dffccdcb79d  e4e50b92d256b7a4488703d1eb1289f46bc55f7e  internal/engine/ssam/adapter_engine.go  # 插件路径的合成策略钩子回填观测链；main 侧已随 Task 39 带入 SetAcceptByLowerBound（ARC 版只多观测链）
 ca50557000643e66a46d1cbfdf31cac742b08808  ffeb423620cb8f24fa3a6de0a59d28b5ad745403  internal/engine/ssam/edgefactor.go  # ARC-only（有意差异）：`activationsFromResults` 返回前调 `edgefactor.CollapseToFactors`（Task 18 合成层双条目折叠）；这是研究线 V/G/C 装配钩子，main 的产品路径不装载 V/G/C ⇒ 不移植
 5f1375889f899a3dd1bbd5ffadd56f2409c980e4  fd0a385660b1e5c5140d7160ffa7d0f2b50b567b  internal/kernel/persistence_types.go  # 落盘结构增 additive 字段 EdgeFactorChain
 77cc2f961e3a46f2bff6276268a8bddde676fede  b842a11b9cd76672b24b0bbcd0a7dfcf57e6ed50  internal/persistence/persistence.go  # 落盘时透出观测链
@@ -46,7 +55,7 @@ e1f36206ad5873723040b343630c974bdc6355e1  ABSENT  internal/kernel/persistence_ty
 b7bd641ed381329328137dd4f2422546f42ef22b  ABSENT  internal/model/edgefactor_chain_test.go  # 观测链在契约层的研究线新测试（main 上不存在）
 f7c9b2e156dd9a088957c97c9f8e1c34f37ad5c6  ABSENT  internal/engine/ssam/task18_collapse_test.go  # ARC-only（有意差异）：Task 18 合成层双条目折叠的研究线测试（main 上不存在）
 05630b7943f29c3aefeed7f54ca2403d1e1ce39d  56829bd2f8f3f00d3384574a1c4e275ebc028834  internal/persistence/persistence_test.go  # 观测链落盘的往返测试（ARC 版多研究线断言）
-01a6de69ed85f540dd9810a8874f7b13f6ab8d26  6cd6894cfdfbc8b539005a90572b9c471020581b  internal/config/configs_templates_test.go  # ARC 版多 4 条读研究线契约（configs/edgeexp/、lunwen/）的用例
+a3663a4de25389daf6e9d6b028bd8c98220f112e  6cd6894cfdfbc8b539005a90572b9c471020581b  internal/config/configs_templates_test.go  # ARC 版多 4 条读研究线契约（configs/edgeexp/、lunwen/）的用例
 
 # ---- 构建面（研究线目标只在 ARC 上构建/测试）----
 bc39ebcf4568f1c223c3922a148d756672a992d3  6b499f759e53a0a5c63bca724770be20b1f5b5ae  scripts/build.sh  # ARC 的 BINARIES 多 cmd/edgescen / cmd/edgecompare 交叉编译目标
@@ -55,10 +64,40 @@ bc39ebcf4568f1c223c3922a148d756672a992d3  6b499f759e53a0a5c63bca724770be20b1f5b5
 # ---- 忽略规则 ----
 # 为何两侧不同：ARC 用 `lunwen/*` 白名单（可跟踪 lunwen/paper、lunwen/clab-lab 的研究数据与文档），
 # main 必须整目录忽略 `lunwen/`（产品分支不带研究资料）⇒ 两条规则**永不一致**。
-# ARC 侧的值随 Task 20/24 的白名单规则演进（`82c8500`/`9385b07`/`1adbb53`）；本次（Task 26）
-# 重跑检查后按实际值更新（旧登记 bfa7717647cc 已失效）。**main 侧不变**。
-99d2dc1fb835dbf39f53fecd7dc48c4fbaa4a3f5  e5f12282dbf31166fe8d963f0eb3682d1c404380  .gitignore  # 见本段上方说明（ARC 白名单 vs main 整目录忽略；两侧永不一致，属有意差异）
+# ARC 侧的值随 Task 20/24 的白名单规则演进（`82c8500`/`9385b07`/`1adbb53`）；Task 26
+# 重跑检查后按实际值更新过（旧登记 bfa7717647cc 已失效）。**main 侧不变**。
+1bd1a34d861acd73968433b7d8975ab687be63ad  e5f12282dbf31166fe8d963f0eb3682d1c404380  .gitignore  # 见本段上方说明（ARC 白名单 vs main 整目录忽略；两侧永不一致，属有意差异）
 
 # ---- 对外文档（按分支表述；除横幅与结构树外逐字相同）----
-8412e354c6070766c02af3516f4af3c84e4e95d1  35aa596ddff072e51720da40f041fe53c3af3550  README.md  # 仅横幅与结构树按分支表述（ARC 列研究线资产，main 列产品线）；其余逐字相同
-f3786c8012c512a41d5565d7ea913f7c497cb336  f841e1c1c7a48c2be05ea6a5b7f3e9c7cc77639f  README_EN.md  # 同上（英文版）
+2adc1483ec0996dc50623ad34160f5e37af58b80  35aa596ddff072e51720da40f041fe53c3af3550  README.md  # 仅横幅与结构树按分支表述（ARC 列研究线资产，main 列产品线）；其余逐字相同
+1c382623e068d3e478db038e1726c28916701827  f841e1c1c7a48c2be05ea6a5b7f3e9c7cc77639f  README_EN.md  # 同上（英文版）
+
+# ---- 文档布局引用差异（Task 39 登记；理由：两分支的 docs 目录布局不同）----
+# 实测（Task 39，2026-10-22）：
+#   git ls-tree --name-only main docs/   ⇒ 扁平布局（docs/CONFIDENCE_MODEL_DESIGN_2026-09-08.md、docs/audits/…）
+#   git ls-tree --name-only HEAD docs/   ⇒ 分代布局（docs/1-current、2-experiments、3-audits、4-archive）
+# ARC 侧把代码注释/配置注释里的文档路径改成了 `docs/3-audits/`、`docs/1-current/…`、`docs/4-archive/plans/…`。
+# 这些路径在 main 上**不成立**（main 没有分代目录）⇒ 不能同步：同步会把 main 的引用指向不存在的路径。
+# 故登记为有意差异：**只差引用路径，不含任何行为差异**。
+18cf9d5117cb369b9f0befd4576d9a01b618e0b6  71425ed972ef89986beddb44d607124a299fb0f1  CONTRIBUTING.md  # 审计报告目录按布局写作 `docs/3-audits/`（main 为 `docs/audits/`）；同处分叉还含首行 BOM 去除，属纯文档面
+419dc33307a10cab88fd5fa5b0f61cb57d2c241b  02d3ebb5b4440c9ffe004db030f33ca13ba201b8  config.ini  # 仅 `[confidence]` 段上方注释里的设计文档路径（ARC `docs/1-current/design/…` / main `docs/…`）；键与值两侧一致
+02027983c5b6b0b57d9a5e9bf302112b40b09cf2  cf3c30a8f496e6c4f4228f30eb5ef301dc1c4463  internal/config/config.go  # 仅 adapterSecretEnv 注释里的文档引用（ARC `docs/1-current/reference/…` / main `docs/…`）
+ff9a03140b435877c307e1abe14d0df63701a4fe  cbee0f0a80e96dbb79ef00a776a28aa1464c89db  internal/srdwrapper/srd_wrapper.go  # 仅模块 tag 依赖矩阵的注释引用（ARC `docs/4-archive/plans/…` / main `docs/…`）
+
+# ---- ARC-only 工具与文档（Task 39 登记）----
+# `scripts/check-doc-refs.sh`：检查 `docs/1-current/**` 的引用完整性（含 --selftest），
+# 是**纯 ARC 工具**——main 没有 docs/1-current 布局，脚本在 main 上无从运行；
+# 按 Task 39 简报 §1 Step 2 的裁定登记为 ARC-only（而非改脚本"缺目录就跳过"，
+# 那会让工具在 main 上静默通过、失去门禁意义）。
+7750e2cf6c9d36ae08e22d01a3ebc8d9821823aa  ABSENT  scripts/check-doc-refs.sh  # ARC-only 工具（main 无 docs/1-current 布局）
+# 以下两份是 `8e968d4` 的**文档收口**（新增 Confidence/Sigma/CI 字段表）。Task 39 同步到 main 的
+# 只有方向① 的代码/注释 hunk，文档面按纪律留在 ARC ⇒ main 的库文档没有这两段字段表。
+# （事实可用 `git show 8e968d4 -- ssam-lib/SSAM-README.md ssam-lib/SSAM-Theory.md` 复核。）
+39b797d2ca725a87f539b1eff053c166826bd352  74ebe96f1dbbdafdd8095245a817373cae41d3b2  ssam-lib/SSAM-README.md  # 方向① 文档收口留在 ARC（Task 39 未把文档 hunk 带进 main）
+d12675a81bb0539b43ccee7b627883c92c248038  702542f300be119544a38bdbf2f130104cabaa9f  ssam-lib/SSAM-Theory.md  # 同上
+
+# ---- 仅注释修正（Task 39 登记，待控制侧裁定是否单独上 main）----
+# `70c65cc`（白皮书订正批次，2026-10-22）把 ScoreFloor 注释从"默认 0.40"改成代码实际的 0.15；
+# 该提交 95% 是 docs/ 白皮书，唯一代码改动就是这一行注释，**不在方向① 的 15 个提交里**。
+# 现登记为 ARC-only 差异；如需 main 的注释也正确，可单条 cherry-pick 该文件的这一 hunk。
+16672d1d28025ce8e0dd3cc0034cfe61aee348b9  8545d3ac91d3add757ee6477a26636eb1e5a3c55  prism-lib/types.go  # 仅 ScoreFloor 注释 0.40 → 0.15（70c65cc）；行为两侧一致（config.go 均 0.15）
