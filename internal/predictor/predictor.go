@@ -105,7 +105,7 @@ func intentOfAction(a Action) attackerstate.Intent {
 //
 // 可解释规则:
 //  1. 基础权重 (常见路径先验);
-//  2. 意图延续: 当前 Intent 对应动作加权 (+1.5);
+//  2. 意图延续: 当前 Intent 对应动作加权 (+3.0，见 :119);
 //  3. 经验: 高经验偏向执行类高级动作 (Lateral/DataTheft +exp, Recon −exp);
 //  4. 目标知识: 高知识偏向执行类 (Credential/Lateral/DataTheft +kn);
 //  5. AI 依赖: 高依赖偏向常见攻击向量 (Credential/WebAttack +ai, Recon −ai);

@@ -24,7 +24,7 @@ docs/
     designs/                   # 被取代的设计文档
     releases/                  # 旧发布说明
     reviews/                   # 历史评审、历史债务总览等被取代的记录
-  en/                          # 英文文档（内部同样按 1-current / 4-archive 分层）
+  en/                          # 英文文档（目前只有 1-current/，暂无 4-archive/ 归档）
 ```
 
 判定口径：
@@ -41,7 +41,7 @@ docs/
 | `4-archive/designs/` | 被取代的设计 | 有后续设计/审计明确推翻，或描述的系统已不存在 |
 | `4-archive/releases/` | 旧发布说明 | 版本已发布且被更新版本取代 |
 | `4-archive/reviews/` | 历史评审/历史总览 | 结论已被后续审计或维护中的清单取代 |
-| `en/` | 英文文档 | 镜像同样的现行/归档分层 |
+| `en/` | 英文文档 | 目前只镜像现行层 `en/1-current/`；尚无英文归档文档 |
 
 `3-audits/` 的取舍规则：**以最新 `*-verdict.md` 为准**；`archive/` 与 `history/` 只作过程记录，
 其中与最新判决冲突的结论一律以最新判决为准。
@@ -147,6 +147,15 @@ bash scripts/check-doc-refs.sh
 ```
 
 脚本扫描**所有被跟踪文本文件**里形如 `docs/...` 的路径（含反引号与 Markdown 链接），
-断言每个路径都存在；输出 `DANGLING: N`，`rc=0` 当且仅当 `N=0`。
+对解析出的**完整路径**逐条断言存在性：目录引用按目录判定，文件引用必须真的存在
+（例如 `docs/1-current/design/` 目录存在、但其中编造的 `NO_SUCH_FILE.md` 不存在 ⇒ 报红）。
+`...`、`*`、`<name>` 等占位符按设计跳过。输出 `DANGLING: N`，`rc=0` 当且仅当 `N=0`。
 唯一例外是 [MIGRATION_MAP.md](MIGRATION_MAP.md) 本身（它按设计记录历史旧路径）与冻结的论文
 `lunwen/paper/attacker-cognitive-loop-paper.tex`（论文不改，历史路径保留），脚本会在输出中说明跳过数。
+
+可跑自测（在临时 git 仓库里造“目录在、文件不在”的引用，断言必须 `DANGLING: 1`、`rc=1`）：
+
+```bash
+bash scripts/check-doc-refs.sh --selftest
+# → SELFTEST: PASS (clean=0; dir-exists-file-missing=1)
+```

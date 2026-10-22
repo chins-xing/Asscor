@@ -433,7 +433,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 | 消费侧修复 | `4c1ab06`（**不改记录本体**：`legacy` 列逐位不变、门禁② 逐条偏差 0 ⇒ 不需要重采） |
 | 基线活跃集 | `meta.expected_baseline_factors = ['EF-NO-IDS']`（**实测**，见 B.3） |
 | 不可混用的边界 | 与 `records-dl360-pve-20261013.jsonl`（CT，11 条）**属于两套基质**；`recon` 的 `compromised` 是**旧口径**，**不得进决策层指标**（见操作手册 §4.6） |
-| **CT 数据集锚点**（第二次审计 Minor-4 补登记） | `lunwen/clab-lab/data/edgefactors/records-dl360-pve-20261013.jsonl`（CT 基质，**11 条**）；**sha256 `99be1b5c32e14e3c89ff02f14fae5e4837d3bdddab5558dea1088483f12b47f3`**（2026-10-22 由工作树与 `HEAD` blob 两侧独立复算，两值相同、84306 B） |
+| **CT 数据集锚点**（第二次审计 Minor-4 补登记） | `lunwen/clab-lab/data/edgefactors/records-dl360-pve-20261013.jsonl`（CT 基质，**11 条**）；**sha256 `99be1b5c32e14e3c89ff02f14fae5e4837d3bdddab5558dea1088483f12b47f3`**、84306 B（**以入库 `HEAD` blob 为权威锚点**，用 `git cat-file blob HEAD:<path>` 复算）。**工作树 sha 不是校验值**：本仓 `core.autocrlf=true` 且 `.gitattributes` 只固定 `*.sh`，JSONL 会被检出为 CRLF，工作树实测为 `c12481d4…`、84317 B |
 
 ## H.3 现场（清机后的收口状态）
 
