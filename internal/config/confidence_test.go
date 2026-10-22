@@ -120,7 +120,7 @@ func TestConfidenceBadRegexFailsParse(t *testing.T) {
 
 // TestConfidenceValueClamping: out-of-range confidences are clamped.
 func TestConfidenceValueClamping(t *testing.T) {
-	ini := "[confidence]\nenabled = true\n\n[confidence.source]\ncti = 2.0\nuser = -1\n"
+	ini := "[confidence]\nenabled = true\n\n[confidence.source]\ncti = 2.0\nextension = -1\n"
 	cfg, err := Parse(ini)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
@@ -128,8 +128,47 @@ func TestConfidenceValueClamping(t *testing.T) {
 	if cfg.Confidence.BySource["cti"] != 1.0 {
 		t.Errorf("cti should clamp to 1.0, got %v", cfg.Confidence.BySource["cti"])
 	}
-	if _, ok := cfg.Confidence.BySource["user"]; ok {
-		t.Error("non-positive user confidence must be dropped")
+	if _, ok := cfg.Confidence.BySource["extension"]; ok {
+		t.Error("non-positive extension confidence must be dropped")
+	}
+}
+
+// TestDefaultConfidenceSourcePriors locks the factory prior table (audit I-2):
+// enabling [confidence] out of the box must not be a no-op. The factory values
+// are the design §3.1 examples adapted to §3.4's "source defaults + config
+// override" strategy; they are PRIORS (not experimentally calibrated — see
+// design §7.3/I-3). The default stays Enabled=false, so the disabled path is
+// untouched (1.0 everywhere).
+func TestDefaultConfidenceSourcePriors(t *testing.T) {
+	cc := DefaultConfidenceConfig()
+	if cc.Enabled {
+		t.Fatal("factory default must stay disabled (backward compatibility)")
+	}
+	// Disabled: every resolution is 1.0 regardless of the prior table.
+	for _, tc := range []struct{ checkID, source, domain string }{
+		{"AS-001", "builtin", "attack_surface"},
+		{"CU-1", "user", "operation_trust"},
+		{"NV-1", "adapter", "attack_surface"},
+	} {
+		if got := cc.Resolve(tc.checkID, tc.source, tc.domain); got != 1.0 {
+			t.Errorf("disabled Resolve(%q,%q) = %v, want 1.0", tc.checkID, tc.source, got)
+		}
+	}
+
+	// Enabled: the shipped prior table takes effect.
+	cc.Enabled = true
+	cases := []struct {
+		checkID, source, domain string
+		want                    float64
+	}{
+		{"AS-001", "builtin", "attack_surface", 1.0},
+		{"CU-1", "user", "operation_trust", 0.90},
+		{"NV-1", "adapter", "attack_surface", 0.80},
+	}
+	for _, tc := range cases {
+		if got := cc.Resolve(tc.checkID, tc.source, tc.domain); got != tc.want {
+			t.Errorf("enabled Resolve(%q,%q) = %v, want %v (factory prior table)", tc.checkID, tc.source, got, tc.want)
+		}
 	}
 }
 
@@ -145,7 +184,7 @@ func TestConfigResolveChecks(t *testing.T) {
 		{CheckID: "AS-001", Domain: "attack_surface", Source: model.CheckSourceBuiltin}, // exact rule 0.99
 		{CheckID: "CU-1", Domain: "operation_trust", Source: model.CheckSourceUser},     // source user 0.9
 		{CheckID: "XY-9", Domain: "resilience", Source: model.CheckSourceUser},          // source user 0.9 (no exact/regex hit)
-		{CheckID: "NOPE-1", Domain: "resilience", Source: model.CheckSourceBuiltin},     // domain miss → default 0.85
+		{CheckID: "NOPE-1", Domain: "resilience", Source: model.CheckSource("unknown-src")}, // no rule → domain miss → default 0.85
 		{CheckID: "Y-9", Domain: "attack_surface", Confidence: 0.77},                    // upstream preserved
 	}
 	cfg.ResolveChecks(checks)

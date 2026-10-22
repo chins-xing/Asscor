@@ -52,7 +52,16 @@ type ConfidencePatternRule struct {
 	Confidence float64
 }
 
-// DefaultConfidenceConfig returns the disabled (legacy) configuration.
+// DefaultConfidenceConfig returns the factory configuration: disabled by
+// default (legacy behavior), but WITH a source prior table so that flipping
+// enabled=true is not a no-op (audit I-2; design §3.4 "source defaults + config
+// overrides", "not a pure opt-in of all 1.0").
+//
+// The three values are the design §3.1 examples (builtin=1.0, user=0.90,
+// adapter=0.80). They are PRIORS, NOT experimentally calibrated values: the
+// §3.4 "calibrate during implementation" promise (I-3) has not been delivered,
+// so no external claim of calibration may rest on them. Every other source key
+// falls through to Default / [confidence.domain].
 func DefaultConfidenceConfig() ConfidenceConfig {
 	return ConfidenceConfig{
 		Enabled:            false,
@@ -62,8 +71,16 @@ func DefaultConfidenceConfig() ConfidenceConfig {
 		Floor:              0.05,
 		PriorStrength:      2.0,
 		ByCheckID:          map[string]float64{},
-		BySource:           map[string]float64{},
-		ByDomain:           map[string]float64{},
+		// Source priors, overridable from [confidence.source] (values there
+		// win because parsing overlays this table). Enabled=false keeps the
+		// effective confidence at 1.0 for every entry → bit-identical legacy
+		// scores.
+		BySource: map[string]float64{
+			"builtin": 1.0,  // compiled-in platform checks (fully trusted)
+			"user":    0.90, // configuration-defined checks (CU-*)
+			"adapter": 0.80, // third-party adapter findings whose source is the generic class
+		},
+		ByDomain: map[string]float64{},
 	}
 }
 
