@@ -498,7 +498,7 @@ EDGEEXP_RECORDS="$DATA/records-<env>-rpt-nontargeted.jsonl" \
 | 机制 | 它以为的形态 | 结果（实测） |
 |---|---|---|
 | 修前的 `edge_repeat.sh` | **逐轮一个**记录文件 `records-…-r<k>.jsonl` | 第 1 轮 `record_counts_ok=True`；**第 2 轮 `record_counts_ok=False`**（文件 2 行、门禁要 `2×2=4` 行，`records_missing_for_selected=2`），而**退出码仍是 0**、驱动还打印"全部 2 轮完成" ⇒ **不吭声的假红** |
-| `edge_matrix.sh` 的 `record_counts_ok` / §3.3 | **一份文件承载 1..REPEAT** | 与 §3.2 的原话一致（"同一份记录文件承载 1..REPEAT 各一遍"） |
+| `edge_matrix.sh` 的 `record_counts_ok` / §3.3 | **一份文件承载 1..REPEAT** | 与 §3.2 的表述一致（"同一份记录文件承载 1..REPEAT 各一遍"） |
 
 - **为什么"逐轮一个文件"的理由不成立**：`edge_repeat.sh` 原先写着"`edge_collect.sh` 的幂等守卫
   按**场景名前缀**匹配，三轮同文件会被判重复而拒写"。守卫现在比的是**完整实例 id**
@@ -715,7 +715,7 @@ ALL-IDENTICAL-EXCEPT-LABEL: 11 / 11
   ⇒ **这条 limitation 不许撤**：分数侧与链侧**都区分不开两条臂**，能区分的只有标签。
   **★ 机器判据（Task 20 钉住）**：`lunwen/clab-lab/tests/test-arm-limitation.sh` —— 直接读本节的这个数据集（33 条），
   9 条断言（3 条硬判据 + 3 条加固 + 3 条计数/源指纹），已接进 `run-all.sh`（第 7 组，期望 `PASS=9`）。
-  **它变红 = 提示去更新文档**（limitation 不再成立、论点要重写），**不是**叫你把断言放松。
+  **它变红 = 提示去更新文档**（limitation 不再成立、论点要重写），**不是**放松断言的理由。
 - ② `n_i`（每个因子在链上出现几次）**不是常数 2**。实测的 `n_i` 多重集分布：
   `(2,)×2 / (2,2)×6 / (2,2,2)×12 / (2,2,2,2)×8 / (2,2,2,2,2,2)×2 / (1,1,2,2,2)×2 / (1,2,2)×1`
   ⇒ **「每个因子恰好出现两次」只是这批矩阵的观测、不是不变量**（33 条里 **3 条**含 `n_i = 1`）。
@@ -1224,8 +1224,8 @@ Host key verification failed.
 - **`wait_ssh` 是按 IP 连的**（那一刻 `/etc/hosts` 还没写），而 PVE 通常把**同一个 IP** 再分给新 VM
   ⇒ **只清名字不够，必须一并清 IP**（实测：不清就死等满 300 s 超时）；
 - 处置**不削弱检查**：新增 `EDGEEXP_VM_KNOWN_HOSTS`（默认 `/root/.ssh/asscor-edge-vm_known_hosts`），
-  建机侧在**新建 VM 之后、开始连它之前** `ssh-keygen -R <主机/ IP> -f <我们那一份>`
-  （**只清这一个主机、只清我们那一份文件**，不动 `~/.ssh/known_hosts` 里别人的）；
+  建机侧在**新建 VM 之后、开始连它之前** `ssh-keygen -R <主机/ IP> -f <本仓那一份>`
+  （**只清这一个主机、只清本仓这一份文件**，不动 `~/.ssh/known_hosts` 里别人的）；
   **取数侧（Go）与基质层（bash）都显式 `-o UserKnownHostsFile=<同一份>`**。
 - **为什么不改成 `StrictHostKeyChecking=no`**：那会把**真的**中间人也一起放过。
 
