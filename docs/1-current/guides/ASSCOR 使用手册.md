@@ -26,7 +26,9 @@
 14. [环境变量参考](#14-环境变量参考)
 15. [故障排查](#15-故障排查)
 16. [CLI 命令参考](#16-cli-命令参考)
-17. [Secure Mode 安全模式](#17-secure-mode-安全模式实验性build-tagsecuremode)
+17. [自定义扩展（无需编写 Go 代码）](#17-自定义扩展无需编写-go-代码)
+18. [算法防护配置](#18-算法防护配置-integrity)
+19. [Secure Mode 安全模式](#19-secure-mode-安全模式实验性build-tagsecuremode)
 
 ---
 
@@ -51,17 +53,21 @@ SSAM V2.0 引入三层语义模型（本征 Intrinsic / 暴露 Exposure / 威胁
 | SPC | 安全态势计算，NVD/EPSS/CISA KEV/CNNVD/CNVD 多源漏洞情报与本地资产比对 |
 | CTI | 网络威胁情报管理，动态威胁系数 μ 计算 |
 
-**评分公式**：
+**评分公式（默认 `ssam_v2.0`，三层加权）**：
 
 ```
-SSAM_final = (Σ(S_i × W_i) / ΣW_i) × ΠM_j × μ × P_score
+SSAM_base  = (Σ(S_i × W_i) / ΣW_i) × ΠM_j
+SSAM_final = 0.50 × SSAM_base + 30 × max(P_score, 0.60) + 20 × max(μ, 0.60)
 ```
 
 - `S_i`：核心域分数（0–100）
 - `W_i`：核心域权重（总和 100）
 - `M_j`：边缘因子乘数（仅对 Active 且 Factor ∈ (0,1) 的因子执行连乘）
-- `μ`：威胁系数（默认 1.0，由 CTI 模块动态调整）
-- `P_score`：SPC 修正因子（0.60–1.00，基于 CVE 匹配结果计算）
+- `μ`：威胁系数（默认 1.0，由 CTI 模块动态调整；输入 ≤0 时按 1.0 处理，否则下限 0.60）
+- `P_score`：SPC 修正因子（0.60–1.00；输入 ≤0 时按 1.0 处理）
+- 三层权重 **0.50 / 0.30 / 0.20 为代码硬编码**（`ssam-lib/formulas_v2.go`），当前没有 `[v2_layer_weights]` 配置段，不能通过配置调整。
+
+> 旧版 V1.2 连乘公式 `(Σ(S_i × W_i) / ΣW_i) × ΠM_j × μ × P_score` 仅在**直接调用 ssam-lib** 且显式指定 `FormulaID=ssam_v1.2` 时成立；ASSCOR 适配层的 `ComputeScore` 当前固定使用 V2 三层公式，**不是默认路径**。
 
 ---
 
@@ -977,7 +983,7 @@ ASSCOR> attck ti                                            # 威胁情报（IOC
   ASSCOR> plugin health
 ```
 
-### 16.9 外部源管理命令
+### 16.11 外部源管理命令
 
 **source** — 部署、配置、启停和审计外部集成源。
 
@@ -986,24 +992,24 @@ ASSCOR> attck ti                                            # 威胁情报（IOC
 选项：--category=scanner|management, --version=VERSION, --force, --limit=N（默认50）
 ```
 
-### 16.10 系统命令
+### 16.12 系统命令
 
 **config** — 查看当前 Kernel 配置：`config [key] [--format=json]`
 
 **health** — 对所有 Kernel 插件执行健康检查：`health [--json]`
 
-### 16.11 调试命令
+### 16.13 调试命令
 
 **history** — 查看命令执行历史记录：`history [count] [--failed] [--clear]`
 
-### 16.12 交互式终端功能
+### 16.14 交互式终端功能
 
 - **自动补全**：输入命令后按 `Tab` 键触发（命令名、子命令、选项均可补全）
 - **命令历史**：使用 `↑`/`↓` 箭头键浏览历史命令
 - **脚本集成**：所有命令支持 `--json` 选项输出结构化 JSON：`echo "spc summary --json" | asscor-cli`
 - **退出码**：0=成功，1=执行错误，2=用法错误，130=用户取消
 
-### 16.13 插件注册自定义命令
+### 16.15 插件注册自定义命令
 
 ```go
 cliPlugin, ok := k.Container().Resolve((*cli.CLIInterface)(nil))
@@ -1022,16 +1028,16 @@ if ok {
 
 ---
 
-## 15. 自定义扩展（无需编写 Go 代码）
+## 17. 自定义扩展（无需编写 Go 代码）
 
 ASSCOR 支持三类无需编写 Go 代码的扩展方式，从零门槛到专业开发逐级递进。
 
-### 15.1 配置文件定义检查项 (`[user_check]`)
+### 17.1 配置文件定义检查项 (`[user_check]`)
 
 在 `config.ini` 中直接添加安全检查，无需任何编程：
 
 ```ini
-# 命令检查：执行 shell 命令，exit 0 或输出匹配字符串 = 通过
+# 命令检查：直接 exec 白名单命令（不经过 shell），exit 0 或输出匹配字符串 = 通过
 [user_check.nginx]
 id = CU-001
 domain = attack_surface
@@ -1059,15 +1065,17 @@ delta = -10
 | `id` | ? | 唯一检查 ID，如 `CU-001` |
 | `domain` | ? | 归属域（attack_surface / business_continuity / operation_trust / resilience / kernel_security） |
 | `name` | ? | 检查名称 |
-| `command` | * | shell 命令（exit 0 = 通过） |
+| `command` | * | 白名单命令（直接 exec，**不经过 shell**；禁用管道/重定向/命令替换/作业控制等 shell 元字符，且首 token 必须在白名单内；exit 0 = 通过） |
 | `output_match` | 否 | 输出中出现此字符串 = 通过 |
 | `file_path` | * | 要检查的文件路径 |
 | `file_regex` | 否 | 文件内容匹配此正则 = 通过 |
 | `delta` | 否 | 失败扣分（默认 -10） |
 
 > *: `command` 和 `file_path` 至少提供一个。修改后执行 `systemctl reload asscor-kernel` 即可生效。
+>
+> `command` 的安全语义：解析器（`internal/config/user_check_parse.go`）直接 `exec`，**不经过 shell**；首个 token 必须命中白名单（`internal/common` 的通用执行白名单 + 只读诊断命令补充集），整串禁止管道、重定向、命令替换、作业控制等 shell 元字符。因此 `systemctl is-active nginx | grep active`、`$(...)`、`>` 等写法会在加载配置时被拒绝。
 
-### 15.2 外部脚本适配器 (`[adapter_script]`)
+### 17.2 外部脚本适配器 (`[adapter_script]`)
 
 运行任何语言编写的脚本（Bash/Python/任何），其 JSON stdout 自动成为适配器发现：
 
@@ -1098,7 +1106,7 @@ path = /opt/asscor/scripts/my-monitor.sh
 - 30 秒执行超时
 - 1MB 输出上限
 
-### 15.3 Plugin SDK（独立 Go 模块，专业开发）
+### 17.3 Plugin SDK（独立 Go 模块，专业开发）
 
 `pluginsdk/` 提供独立 Go 模块模板，插件通过 JSON-RPC (stdin/stdout) 与内核通信，**零 ASSCOR 源码依赖**：
 
@@ -1116,7 +1124,7 @@ pluginsdk/
 
 ---
 
-## 16. 算法防护配置 (`[integrity]`)
+## 18. 算法防护配置 (`[integrity]`)
 
 控制 ASSCOR 对 SSAM/Prism 核心算法的完整性保护：
 
@@ -1135,22 +1143,22 @@ anti_debug = false        # Linux 反调试检测（需显式开启）
 
 ---
 
-## 17. Secure Mode 安全模式（实验性，build-tag：securemode）
+## 19. Secure Mode 安全模式（实验性，build-tag：securemode）
 
 > Secure Mode（安全模式）是 ASSCOR-Research-Core 分支独有的实验性模块（`internal/securemode/`），为内核 `config.ini` 与 agent `agent.ini` 提供**默认/运行双模式**的静态配置保护。设计原理与安全模型详见《Secure Mode 安全模式白皮书》；本章为操作手册视角，聚焦命令用法与典型流程。
 
-### 17.1 概念速览
+### 19.1 概念速览
 
 | 模式 | 磁盘文件 | 内存 | 修改配置 | 切换 |
 |------|----------|------|----------|------|
-| **默认 (default)** | `config.ini` / `agent.ini` 明文 | 正常加载 | 直接改明文，立即生效 | `mode enter`（免密） |
+| **默认 (default)** | `config.ini` / `agent.ini` 明文 | 正常加载 | 直接改明文，立即生效 | `mode enter`（需设置密码） |
 | **运行 (run)** | `.enc` 密文（明文已删除） | 明文配置驻留内存（只读快照） | 需密码；可选临时/落盘 | `mode exit`（需密码） |
 
 - 模式是持久化状态（标记文件 `data_dir/.asscor-mode`），跨重启保持；上次处于运行模式时，重启后需 `mode unlock` 输入密码解锁启动。
-- 进入运行模式**免密**（但需已设置运行密码）；CLI 修改配置、退出运行模式需密码。
+- 进入运行模式**必须提供运行模式密码**（`mode enter --password` 或交互式输入，并通过强度校验；无旧密码校验，但密码不可省略）；CLI 修改配置、退出运行模式需密码。
 - 默认构建（无 `securemode` tag）不包含本模块，行为与旧版一致。
 
-### 17.2 启用与构建
+### 19.2 启用与构建
 
 启用 Secure Mode 能力（内核与 agent 均需带 tag 编译）：
 
@@ -1164,12 +1172,12 @@ go build -tags securemode ./cmd/kernel ./cmd/agent
 go build -tags "securemode,heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine" -o ASSCOR-kernel ./cmd/kernel/
 ```
 
-### 17.3 内核 CLI：mode / config-set 命令族
+### 19.3 内核 CLI：mode / config-set 命令族
 
 | 命令 | 说明 | 密码 |
 |------|------|------|
 | `mode status` | 查看当前模式、受保护文件、校验状态、已登记 agent | — |
-| `mode enter --password <pw>` | 默认→运行：加密源文件，配置载入内存 | 免密（需已设置运行密码） |
+| `mode enter --password <pw>` | 默认→运行：加密源文件，配置载入内存 | **需设置密码**（强度校验） |
 | `mode exit --password <pw>` | 运行→默认：解密恢复明文 | **需密码** |
 | `mode unlock --password <pw>` | kernel 重启后（run 标记）解锁并载入配置 | **需密码** |
 | `mode set-password --old <pw> --new <pw>` | 设置/轮换运行密码（config.ini 与登记表同步重加密） | 需旧密码 |
@@ -1177,11 +1185,11 @@ go build -tags "securemode,heartbeat,commander,policy,cti,assessor,attck_ext,spc
 | `mode agent <id> enter` | 指令 agent 加密进入运行模式（已自动进入时幂等） | —（内核权限） |
 | `mode agent <id> exit` | 指令 agent 解密回默认模式 | —（内核权限） |
 | `mode agent <id> rotate-password` | 指令 agent 轮换密码并重新加密 | —（内核权限） |
-| `config-set <key> <value> --temp\|--persist [--password <pw>]` | 修改配置（见 17.4） | 运行模式需密码 |
+| `config-set <key> <value> --temp\|--persist [--password <pw>]` | 修改配置（见 19.4） | 运行模式需密码 |
 
 > agent 本地 CLI 只提供只读的 `mode status`（及一次性查询 flag `--mode-status`），**不提供** `mode enter/exit/set-password` 与 `config-set`——agent 的模式切换与配置修改一律由内核 CLI 下发（内核托管）。
 
-### 17.4 config-set 两段式持久化
+### 19.4 config-set 两段式持久化
 
 ```
 config-set <key> <value>
@@ -1192,12 +1200,12 @@ config-set <key> <value>
 
 - 运行模式修改配置必须携带正确 `--password`；默认模式下修改内存无意义，需用 `--persist` 直接编辑明文文件。
 
-### 17.5 典型操作流程
+### 19.5 典型操作流程
 
 **首次进入运行模式（内核）：**
 
 ```
-ASSCOR> mode enter --password <pw>    # 免密进入；加密 config.ini → config.ini.enc，删除明文
+ASSCOR> mode enter --password <pw>    # 需设置密码；加密 config.ini → config.ini.enc，删除明文
 ASSCOR> mode status                    # 确认模式 = run、受保护文件已加密
 ```
 
@@ -1241,13 +1249,13 @@ ASSCOR> mode agent <id> exit          # 让 agent 解密回默认模式
 ASSCOR> mode agent <id> rotate-password
 ```
 
-### 17.6 agent 托管说明
+### 19.6 agent 托管说明
 
 - agent 启动时**自生成临时密码**（每次重启重新生成，不落盘），加密自身 `agent.ini`（保留 `[bootstrap]` 明文引导段）后经 mTLS 心跳上报内核，自动进入运行模式；agent 磁盘上不落任何密码材料。
 - agent 重启解锁：读明文引导段连接内核 → 内核经心跳响应通道下发登记的密码 → 解密受保护段 → 进入运行模式。
 - 若内核侧登记不可用（如 kernel 重启后登记表不可恢复），agent 走**自恢复**路径：自生成新密码并重新上报（旧受保护内容按设计丢弃）。
 
-### 17.7 故障恢复提示
+### 19.7 故障恢复提示
 
 | 现象 | 处理 |
 |------|------|

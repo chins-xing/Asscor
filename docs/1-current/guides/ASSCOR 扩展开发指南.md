@@ -276,6 +276,7 @@ package myadapters
 import (
     "context"
     "encoding/json"
+    "os/exec"
     "github.com/chins-xing/asscor/internal/adapter"
 )
 
@@ -289,11 +290,11 @@ func NewMyScanner() *MyScanner {
 }
 
 func (a *MyScanner) Fetch(ctx context.Context, cfg map[string]string) ([]byte, error) {
-    path := cfg["myscan.path"]
-    if path == "" {
-        path = "/usr/bin/myscan"
+    path, err := adapter.ResolveToolBinary(cfg, "adapter_paths.myscan", "myscan")
+    if err != nil {
+        return nil, err
     }
-    return adapter.RunTool(ctx, path, "--json")
+    return exec.CommandContext(ctx, path, "--json").Output()
 }
 
 func (a *MyScanner) Parse(raw []byte) ([]*adapter.NormalizedFinding, error) {
