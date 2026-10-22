@@ -24,13 +24,17 @@
 optional/adversary/packages/mitre-engage/
 ├── package.json       # 扩展包清单（9 种类型之 hook/adapter）
 ├── README.md          # 使用指南
-├── engage.go          # Blocker 接口实现 + 欺骗策略
-├── honeypot.go        # 轻量蜜端口（TCP listener，~50 行）
-├── honeytoken.go      # 蜜标/诱饵文件部署（~60 行）
-└── honeytoken_test.go # 测试
+├── engage.go          # Blocker/Guider 接口实现 + 欺骗策略
+├── honeypot.go        # 轻量蜜端口（TCP listener）
+├── honeypot_test.go   # 蜜罐/Blocker 测试
+├── honeytoken.go      # 蜜标/诱饵文件部署
+├── collector.go       # 捕获记录与 CaptureQuality 质量分级
+├── collector_test.go  # 采集/质量分级测试
+├── intent.go          # 攻击者意图分类与欺骗计划
+└── intent_test.go     # 意图分类测试
 ```
 
-**零外部依赖**：全部 Go 标准库（`net`/`os`/`sync`/`time`）。
+**零第三方依赖**：全部为 Go 标准库（`net`/`os`/`sync`/`time`/`context`/`sort`/`fmt`）加 ASSCOR 内核接口包 `internal/kernel`。
 
 ---
 
@@ -71,16 +75,16 @@ func (h *honeypot) listen(port int) {
 ## 四、Blocker 接口实现
 
 ```go
-// MITRE Engage 作为 Blocker 增强型实现
-type engageBlocker struct { ... }
+// MITRE Engage 作为 Blocker/Guider 增强型实现（导出类型）
+type EngageBlocker struct { ... }
 
-func (b *engageBlocker) Block(ctx, loc) (*BlockResult, error) {
+func (b *EngageBlocker) Block(ctx, loc) (*BlockResult, error) {
     // 1. 部署蜜罐(在 loc.ActiveSubnets 监听攻击端口)
     // 2. 部署蜜标(在 loc.FootholdHost 布设虚假凭据)
     // 3. 传统 isolate 由内核 Blocker 兜底
 }
-func (b *engageBlocker) Unblock(ctx, loc) error { /* 拆除蜜罐/蜜标 */ }
-func (b *engageBlocker) IsBlocked(ctx, hostID) bool { /* 查询状态 */ }
+func (b *EngageBlocker) Unblock(ctx, loc) error { /* 拆除蜜罐/蜜标 */ }
+func (b *EngageBlocker) IsBlocked(ctx, hostID) bool { /* 查询状态 */ }
 ```
 
 ---

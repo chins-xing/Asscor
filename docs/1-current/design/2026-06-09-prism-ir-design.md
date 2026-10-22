@@ -48,7 +48,7 @@ SSAM 已有成熟的 SSAM IR 设计（`ssam-lib/ir.go`），采用 Meta/Input/Ou
       "prop_cap": 0.25,
       "debt_cap": 0.30,
       "debt_norm_days": 1500,
-      "score_floor": 0.40,
+      "score_floor": 0.15,
       "max_path_depth": 5
     }
   },
@@ -142,7 +142,7 @@ SSAM 已有成熟的 SSAM IR 设计（`ssam-lib/ir.go`），采用 Meta/Input/Ou
 
 ```go
 // NewIR 从 Prism 三层输出构造完整 IR
-func NewIR(node NodeState, edges []EdgeState, cfg PrismConfig, core AssetRiskResult, sem SemanticRiskReport, inf FutureRiskReport) PrismIR
+func NewIR(node NodeState, edges []EdgeState, cfg PrismConfig, core AssetRiskResult, sem SemanticRiskReport, inf FutureRiskReport, modelName string) PrismIR
 
 // MarshalJSON 序列化为格式化 JSON
 func (ir PrismIR) MarshalJSON() ([]byte, error)

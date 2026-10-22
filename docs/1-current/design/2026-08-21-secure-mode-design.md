@@ -2,16 +2,16 @@
 
 - 日期：2026-08-21
 - 分支：ASSCOR-Research-Core
-- 状态：正在实现（2026-08-21）
+- 状态：已实现（设计定稿于 2026-08-21；`internal/securemode` 已落地，含 16 个测试文件与 e2e/registry/agent 覆盖）
 
 ## 1. 目标
 
 为 ASSCOR 内核与 agent 提供**默认模式**与**运行模式**双模式：
 
 - **默认模式**：config.ini / agent.ini 明文存放，可直接修改，行为与现状一致。
-- **运行模式**：配置文件源文件加密为 `.enc`（明文删除），配置内容载入内存；CLI 修改配置、退出运行模式均需密码；从默认模式进入运行模式**免密**。
+- **运行模式**：配置文件源文件加密为 `.enc`（明文删除），配置内容载入内存；CLI 修改配置、退出运行模式均需密码；从默认模式进入运行模式**必须提供/设置运行模式密码**（`mode enter --password` 或交互式输入，并通过强度校验），不再免密。
 - 模式为持久化状态（标记文件），跨重启保持；若上次处于运行模式，重启后需输入密码解锁启动。
-- CLI 提供一定程度的配置修改能力（`config set`），支持"临时不落盘立即生效"与"落盘但不立即生效需手动重载"两种持久化选项。
+- CLI 提供一定程度的配置修改能力（`config-set`），支持"临时不落盘立即生效"与"落盘但不立即生效需手动重载"两种持久化选项。
 - **内核与 agent 的能力差异（2026-08-21 补充）**：
   - **内核**：完整模式管理能力（CLI 模式切换、配置修改、密码轮换）。
   - **agent**：不提供良好的运行时配置能力；agent 启动时自生成密码，通过 mTLS 连接内核后上报密码，**自动进入运行模式**；agent 的模式切换**只允许由内核 CLI 发起**，agent 本地 CLI 不提供模式切换命令。
@@ -22,7 +22,7 @@
 - 加密：**AES-256-GCM** 信封加密 + **argon2id** 密码派生（用户批准）。
 - 密码校验材料：哈希（argon2id）校验 + 信封加密（用户批准）。
 - 作用范围：内核 `config.ini` + agent `agent.ini`（用户批准）。
-- CLI 能力：完整 `config` 子命令集 `view/set/encrypt/decrypt/rotate`（用户批准）。
+- CLI 能力：`mode`（status/enter/exit/unlock/set-password/agent）+ `config-set`（`--temp`/`--persist`）作为配置写入口；内置 `config` 命令保持只读视图。原方案中的 `config view/set/encrypt/decrypt/rotate` 子命令集未实现（用户批准）。
 - 模式生命周期：持久化标记，跨重启保持（用户批准）。
 
 ## 3. 模块布局
@@ -39,8 +39,8 @@ internal/securemode/
 挂载点：
 
 - `cmd/kernel/main.go` 与 `cmd/agent/main.go`：build-tag 文件 `securemode_on.go` / `securemode_off.go`（沿用现有 `assessor_on/off.go` 模式）。
-- CLI：`internal/cli` 注册 `mode` 命令族与 `config set/encrypt/decrypt/rotate` 子命令。
-- **agent 侧**：`cmd/agent/main.go` 挂载 securemode 的 agent 托管逻辑（自生成密码、上报、自动进入运行模式）；agent 本地 CLI 仅暴露 `mode status`（只读），**不暴露** `mode enter/exit/set-password` 与 `config encrypt/decrypt`。
+- CLI：`internal/cli` 注册 `mode` 命令族与 `config-set` 子命令（`config` 保持只读视图）。
+- **agent 侧**：`cmd/agent/main.go` 挂载 securemode 的 agent 托管逻辑（自生成密码、上报、自动进入运行模式）；agent 本地 CLI 仅暴露 `mode status`（只读），**不暴露** `mode enter/exit/set-password` 与 `config-set`。
 
 ## 3.1 agent 侧架构（内核托管模式）
 
@@ -68,7 +68,7 @@ agent 启动（磁盘 agent.ini 为明文 .ini + 引导段）
 
 | 模式 | 磁盘文件 | 内存 | 修改配置 | 切换 |
 |---|---|---|---|---|
-| **默认 (default)** | config.ini/agent.ini 明文 | 正常加载 | 直接改明文，立即生效 | `mode enter`（免密） |
+| **默认 (default)** | config.ini/agent.ini 明文 | 正常加载 | 直接改明文，立即生效 | `mode enter`（需设置密码） |
 | **运行 (run)** | `.enc` 密文（源文件加密后删除） | 明文配置驻留内存（只读快照） | 需密码；可选临时/落盘 | `mode exit`（需密码）→ 解密回明文 |
 
 ## 5. 加密设计（信封加密）
@@ -101,7 +101,7 @@ DEK ──AES-GCM(KEK)──→ 信封（DEK 密文，随 .enc 头存储）
 > **定位（评审 P1-3）**：本节措施是 **runtime hardening**（运行时加固），不是防篡改保证——它们提高攻击门槛、延迟内存取证、增加被检测概率，但不承诺能对抗拥有内核级权限（root/内核模块/物理内存访问）的攻击者。安全模型以"运行模式中的配置只在进程内存中出现明文"为边界，以下措施使**读取/改写该明文更困难、更可检测**，而非不可行。
 
 1. **基线校验和**：载入内存时计算配置明文的 SHA-256 基线；运行模式期间，每次 `config` 读取 / `mode exit` 前，重新计算当前内存内容哈希并与基线比对——检测到篡改（注入/调试器改写）→ 拒绝操作并告警。
-2. **只读快照**：运行模式中配置以不可变视图暴露（`config set` 通过受控通道重建新快照而非原地改写）。
+2. **只读快照**：运行模式中配置以不可变视图暴露（`config-set` 通过受控通道重建新快照而非原地改写）。
 3. **访问限制（hardening）**：运行模式中的明文内存区域使用 `mprotect(PROT_READ)` 只读页（Linux 下）；复用现有 `integrity.IsDebugged()` 反调试能力检测调试器附加——两者均为降低攻击便利性的加固手段，不构成完整性保证。
 
 ## 8. 状态机
@@ -109,7 +109,7 @@ DEK ──AES-GCM(KEK)──→ 信封（DEK 密文，随 .enc 头存储）
 ### 8.1 内核状态机
 
 ```
-         mode enter (免密)
+         mode enter --password（需设置密码）
   default ─────────────────────→ run
      ↑                              │
      │      mode exit (需密码)       │
@@ -142,12 +142,10 @@ agent 自身无交互式状态机，状态由内核驱动：
 | 命令 | 说明 | 密码 |
 |---|---|---|
 | `mode status` | 查看当前模式、受保护文件、校验状态 | — |
-| `mode enter` | 默认→运行：加密源文件，配置载入内存 | 免密 |
+| `mode enter` | 默认→运行：加密源文件，配置载入内存 | **必须提供/设置密码**（`--password` 或交互式输入，强度校验） |
 | `mode exit` | 运行→默认：解密恢复明文 | **需密码** |
 | `mode set-password` | 设置/轮换密码（rotate） | 需旧密码 |
-| `config set <key> <value>` | 修改内存配置 | 运行模式需密码 |
-| `config encrypt` | 加密指定文件 | 需密码 |
-| `config decrypt` | 解密指定文件 | 需密码 |
+| `config-set <key> <value>` | 修改内存/落盘配置（`--temp`/`--persist`） | 运行模式需密码 |
 | `mode agent <id> status` | 查看 agent 当前模式/登记状态 | — |
 | `mode agent <id> enter` | 指令 agent 加密进入运行模式（已自动进入时幂等） | —（内核权限） |
 | `mode agent <id> exit` | 指令 agent 解密回默认模式 | —（内核权限） |
@@ -159,12 +157,12 @@ agent 自身无交互式状态机，状态由内核驱动：
 |---|---|
 | `mode status` | 只读查看当前模式（由内核托管，本地不可切换） |
 
-agent 本地 CLI **不提供** `mode enter/exit/set-password`、`config encrypt/decrypt/set` 等修改能力——配置修改与模式切换一律经内核 CLI 下发。
+agent 本地 CLI **不提供** `mode enter/exit/set-password`、`config-set` 等修改能力——配置修改与模式切换一律经内核 CLI 下发。
 
-### config set 的两段式持久化
+### config-set 的两段式持久化
 
 ```
-config set <key> <value>
+config-set <key> <value>
   ├── --temp   （默认）：修改内存 + 立即生效，不落盘；重启后还原为磁盘值
   └── --persist：修改内存 + 写盘（默认模式写明文 / 运行模式写加密），
                   不立即生效——需 config reload 手动重新载入
@@ -174,7 +172,7 @@ config set <key> <value>
 
 - 内核：`config.ini`（`-config` 参数路径）
 - agent：`agent.ini`（`-config` 参数路径）——仅**受保护段**加密，`[bootstrap]` 明文引导段保留
-- 运行模式中 `config set` 写盘时按当前模式选择明文/密文格式
+- 运行模式中 `config-set` 写盘时按当前模式选择明文/密文格式
 
 ## 10.1 内核侧密码登记（agent 托管）
 
@@ -222,7 +220,7 @@ config set <key> <value>
 - `crypt_test.go`：信封加密往返、错误密码解密失败、篡改密文检测（GCM tag 失败）、argon2id 参数边界、引导段保留加密。
 - `state_test.go`：状态机转换、标记文件持久化、崩溃恢复场景（明文+.enc 共存各分支）、**缺失 vs 损坏标记文件（fail-closed：损坏拒绝降级默认）**、无标记默认。
 - `vault_test.go`：流式加密 OOM 安全（大文件分块）、内存基线校验和、篡改检测、只读快照。
-- `cli_test.go`：CLI 命令注册与解析、`config set --temp/--persist` 两段式持久化、密码提示流程（mock stdin）。
+- `cli_test.go`：CLI 命令注册与解析、`config-set --temp/--persist` 两段式持久化、密码提示流程（mock stdin）。
 - `agent_test.go`：agent 自生成密码流程、mTLS 上报、重启后内核下发密码解锁、内核 CLI 指令 agent 切换（mock mTLS 通道）。
 - `registry_test.go`：密码登记表——指纹为主键；伪造 agent_id（指纹未登记/不匹配）在传输层被拒；指纹已登记但 agent_id 不同被拒；一证书一身份约束；轮换更新；吊销证书后登记失效；**登记表加密持久化 + kernel 重启恢复**。
 - **组合测试（评审 P2-2：kernel crash/restart + agent restart）**：
