@@ -219,6 +219,51 @@ func TestFinalSigmaIntrinsicLayerWeight(t *testing.T) {
 	}
 }
 
+// TestAcceptanceDecisionUsesLowerBound locks B-2 at the library level: the
+// accept_by_lower_bound switch must turn a point-estimate acceptance into a
+// conservative rejection when the 95% lower bound is below the threshold.
+func TestAcceptanceDecisionUsesLowerBound(t *testing.T) {
+	// Direct rule table.
+	if !AcceptanceDecision(70, 11.2, 60, false) {
+		t.Error("point-estimate rule must accept 70 ≥ 60")
+	}
+	if AcceptanceDecision(70, 11.2, 60, true) {
+		t.Error("lower-bound rule must reject (11.2 < 60)")
+	}
+	if !AcceptanceDecision(70, 70, 60, true) {
+		t.Error("lower-bound rule must accept a degenerate interval at 70")
+	}
+
+	// End to end through ComputeScoreWithConfidence.
+	checks := []CheckInput{
+		{CheckID: "AS-001", Domain: "attack_surface", Passed: false, Delta: -120, Confidence: 0.5},
+	}
+	input := AssessmentInput{HostID: "b2", Threshold: 60, Checks: checks, SPCScore: 1.0, ThreatCoeff: 1.0}
+	cfg := DefaultScoringConfig
+	cfg.ConfidencePolicy = enabledPolicy()
+
+	out, err := ComputeScoreWithConfidence(cfg, input, enabledPolicy())
+	if err != nil {
+		t.Fatalf("ComputeScoreWithConfidence: %v", err)
+	}
+	if out.Lower95 >= out.Threshold {
+		t.Fatalf("fixture precondition: lower95 %v must be below threshold %v", out.Lower95, out.Threshold)
+	}
+	if !out.Acceptable {
+		t.Errorf("default rule must accept on the point estimate %v ≥ %v", out.FinalScore, out.Threshold)
+	}
+
+	cfg.AcceptByLowerBound = true
+	conservative, err := ComputeScoreWithConfidence(cfg, input, enabledPolicy())
+	if err != nil {
+		t.Fatalf("ComputeScoreWithConfidence (conservative): %v", err)
+	}
+	if conservative.Acceptable {
+		t.Errorf("accept_by_lower_bound=true must reject: lower95 %v < threshold %v (point %v)",
+			conservative.Lower95, conservative.Threshold, conservative.FinalScore)
+	}
+}
+
 // TestAggregateNodeConfidence: weight-normalized mean of domain confidence.
 func TestAggregateNodeConfidence(t *testing.T) {
 	// DomainScore lists only contain domains that appear in checks, so cover

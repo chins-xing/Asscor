@@ -962,7 +962,17 @@ func (a *Assessor) runLegacyScoring(result *model.AssessmentResult) {
 	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
 	// Posterior statistics are filled on the legacy path too (audit I-1).
 	a.fillLegacyPosterior(result, bayes)
-	result.Acceptable = result.FinalScore >= result.Threshold
+	result.Acceptable = a.acceptable(result)
+}
+
+// acceptable applies the shared acceptability rule (audit B-2): the point
+// estimate by default, the conservative 95% lower bound when
+// [confidence] accept_by_lower_bound=true. The rule itself lives in
+// ssam-lib (AcceptanceDecision) so the plugin, legacy and kernel paths cannot
+// diverge.
+func (a *Assessor) acceptable(result *model.AssessmentResult) bool {
+	byLower := a.cfg != nil && a.cfg.Confidence.AcceptByLowerBound
+	return ssamlib.AcceptanceDecision(result.FinalScore, result.ScoreLower95, result.Threshold, byLower)
 }
 
 // fillLegacyPosterior writes FinalSigma / Lower95 / Upper95 /
@@ -1288,7 +1298,7 @@ func (a *Assessor) RecomputeFinalScore(result *model.AssessmentResult) float64 {
 	// Re-derive the posterior statistics from the same evidence aggregation so
 	// a recomputed legacy score still carries sigma/CI/evidence (audit I-1).
 	a.fillLegacyPosterior(result, a.computeLegacyDomainBayes(result))
-	result.Acceptable = result.FinalScore >= result.Threshold
+	result.Acceptable = a.acceptable(result)
 	return result.FinalScore
 }
 

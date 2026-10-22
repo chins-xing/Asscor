@@ -34,6 +34,7 @@ func NewEngineAdapter(cfg *config.Config) *EngineAdapter {
 		e.SetWeights(ConfigToWeights(cfg))
 		e.SetEdgeFactors(ConfigToEdgeFactors(cfg))
 		e.SetConfidencePolicy(ConfigToConfidencePolicy(cfg))
+		e.SetAcceptByLowerBound(cfg.Confidence.AcceptByLowerBound)
 	}
 	e.InitializeDefaults(nil, nil)
 	// Task 7 的接线点：装配边缘因子合成模型（未配置 ⇒ 零注册，内仓默认路径逐位一致）。
@@ -155,6 +156,7 @@ func (a *EngineAdapter) ReloadWeights(cfg *config.Config) {
 	a.engine.SetWeights(ConfigToWeights(cfg))
 	a.engine.SetEdgeFactors(ConfigToEdgeFactors(cfg))
 	a.engine.SetConfidencePolicy(ConfigToConfidencePolicy(cfg))
+	a.engine.SetAcceptByLowerBound(cfg.Confidence.AcceptByLowerBound)
 	// 热重载必须**重装**合成模型：钩子是进程级全局状态、且闭包自带装配时的参数集，
 	// 不重装就会让新配置继续用旧模型/旧参数评分，而溯源戳记又已随之清空或错位 ——
 	// 「实际用的参数」与「声明的参数」必须永远同源（Task 7 验收条件 5/7）。

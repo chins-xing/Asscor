@@ -128,7 +128,6 @@ func ComputeScoreV2(config ScoringConfig, input AssessmentInputV2) (AssessmentOu
 	output := AssessmentOutputV2{
 		HostID:       input.HostID,
 		FinalScore:   finalScore,
-		Acceptable:   finalScore.Total >= input.Threshold,
 		Threshold:    input.Threshold,
 		DomainScores: domainScores,
 		EdgeFactors:  edgeFactors,
@@ -136,6 +135,8 @@ func ComputeScoreV2(config ScoringConfig, input AssessmentInputV2) (AssessmentOu
 		Metadata:     make(map[string]string),
 	}
 	fillPosteriorV2(&output, config, domainScores)
+	output.Acceptable = AcceptanceDecision(
+		output.FinalScore.Total, output.Lower95, output.Threshold, config.AcceptByLowerBound)
 
 	return output, nil
 }

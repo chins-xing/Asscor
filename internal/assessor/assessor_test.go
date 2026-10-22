@@ -3,14 +3,91 @@
 package assessor
 
 import (
+	"context"
 	"math"
 	"sort"
 	"testing"
 
 	"github.com/chins-xing/asscor/internal/checks"
+	"github.com/chins-xing/asscor/internal/config"
+	"github.com/chins-xing/asscor/internal/kernel"
 	"github.com/chins-xing/asscor/internal/model"
 	prismlib "github.com/chins-xing/prism"
 )
+
+// fakeKernelContext is the minimal KernelContext needed by applyCTIOnly: an
+// empty DI container (no CTI plugin), so the coefficient falls back to cfg.
+type fakeKernelContext struct{}
+
+func (fakeKernelContext) Container() *kernel.Container           { return kernel.NewContainer() }
+func (fakeKernelContext) Bus() *kernel.Bus                       { return kernel.NewBus(8) }
+func (fakeKernelContext) Extensions() kernel.ModuleExtensions    { return nil }
+func (fakeKernelContext) Context() context.Context               { return context.Background() }
+func (fakeKernelContext) Config() map[string]string              { return nil }
+func (fakeKernelContext) SetConfig(string, string)               {}
+func (fakeKernelContext) GetConfigObj() *config.Config           { return nil }
+func (fakeKernelContext) SetConfigObj(*config.Config)            {}
+func (fakeKernelContext) GetPlugin(string) (kernel.Plugin, bool) { return nil, false }
+func (fakeKernelContext) ListPlugins() []kernel.PluginInfo       { return nil }
+func (fakeKernelContext) HealthCheck(context.Context) []kernel.PluginHealthStatus {
+	return nil
+}
+
+// TestApplyCTIOnlyAcceptsByLowerBound covers the kernel post-correction
+// acceptance point (audit B-2, internal/assessor/assessor.go): applying a new
+// threat coefficient must re-decide acceptability with the shared rule, and
+// the sigma/interval must be rescaled alongside the point estimate so the
+// lower bound is not stale.
+func TestApplyCTIOnlyAcceptsByLowerBound(t *testing.T) {
+	newResult := func() *model.AssessmentResult {
+		return &model.AssessmentResult{
+			FinalScore:   90,
+			FinalSigma:   20,
+			ScoreLower95: 50.8,
+			ScoreUpper95: 129.2,
+			Threshold:    60,
+			ThreatCoeff:  1.0,
+		}
+	}
+
+	// cti coefficient 0.8: 90 → 72, lower 50.8 → 40.64 (< threshold 60).
+	cfg := config.Default()
+	cfg.Threshold = 60
+	cfg.ThreatCoeff = 0.8
+	cfg.Confidence.AcceptByLowerBound = false
+	m := &Module{cfg: cfg, kc: fakeKernelContext{}}
+
+	off := newResult()
+	m.applyCTIOnly(off)
+	if math.Abs(off.FinalScore-72) > 1e-9 {
+		t.Fatalf("FinalScore = %v, want 72 (rescaled by 0.8)", off.FinalScore)
+	}
+	if math.Abs(off.ScoreLower95-40.64) > 1e-9 {
+		t.Errorf("lower95 = %v, want 40.64 (interval must be rescaled with the point estimate)", off.ScoreLower95)
+	}
+	if math.Abs(off.FinalSigma-16) > 1e-9 {
+		t.Errorf("FinalSigma = %v, want 16", off.FinalSigma)
+	}
+	if !off.Acceptable {
+		t.Errorf("accept_by_lower_bound=false must accept on the point estimate (72 ≥ 60)")
+	}
+
+	cfgOn := config.Default()
+	cfgOn.Threshold = 60
+	cfgOn.ThreatCoeff = 0.8
+	cfgOn.Confidence.AcceptByLowerBound = true
+	mOn := &Module{cfg: cfgOn, kc: fakeKernelContext{}}
+
+	on := newResult()
+	mOn.applyCTIOnly(on)
+	if on.ScoreLower95 >= on.Threshold {
+		t.Fatalf("fixture precondition: lower95 %v must be below threshold %v", on.ScoreLower95, on.Threshold)
+	}
+	if on.Acceptable {
+		t.Errorf("accept_by_lower_bound=true must reject: lower95 %v < threshold %v (point estimate %v)",
+			on.ScoreLower95, on.Threshold, on.FinalScore)
+	}
+}
 
 func TestParseFloatConfig(t *testing.T) {
 	cases := []struct {

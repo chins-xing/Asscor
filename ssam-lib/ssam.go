@@ -50,7 +50,6 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 		output := AssessmentOutput{
 			HostID:       input.HostID,
 			FinalScore:   finalScore,
-			Acceptable:   finalScore >= input.Threshold,
 			Threshold:    input.Threshold,
 			DomainScores: domainScores,
 			EdgeFactors:  edgeFactors,
@@ -60,6 +59,7 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 			Metadata:     make(map[string]string),
 		}
 		fillPosterior(&output, config, domainScores, policy)
+		output.Acceptable = AcceptanceDecision(output.FinalScore, output.Lower95, output.Threshold, config.AcceptByLowerBound)
 
 		if err := ValidateOutput(output); err != nil {
 			return AssessmentOutput{}, err
@@ -88,7 +88,6 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 		output := AssessmentOutput{
 			HostID:       input.HostID,
 			FinalScore:   v2FinalScore.Total,
-			Acceptable:   v2FinalScore.Total >= input.Threshold,
 			Threshold:    input.Threshold,
 			DomainScores: domainScores,
 			EdgeFactors:  edgeFactors,
@@ -98,6 +97,7 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 			Metadata:     make(map[string]string),
 		}
 		fillPosterior(&output, config, domainScores, policy)
+		output.Acceptable = AcceptanceDecision(output.FinalScore, output.Lower95, output.Threshold, config.AcceptByLowerBound)
 
 		if err := ValidateOutput(output); err != nil {
 			return AssessmentOutput{}, err
@@ -114,7 +114,6 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 	output := AssessmentOutput{
 		HostID:       input.HostID,
 		FinalScore:   finalScore,
-		Acceptable:   finalScore >= input.Threshold,
 		Threshold:    input.Threshold,
 		DomainScores: domainScores,
 		EdgeFactors:  edgeFactors,
@@ -124,6 +123,7 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 		Metadata:     make(map[string]string),
 	}
 	fillPosterior(&output, config, domainScores, policy)
+	output.Acceptable = AcceptanceDecision(output.FinalScore, output.Lower95, output.Threshold, config.AcceptByLowerBound)
 
 	if err := ValidateOutput(output); err != nil {
 		return AssessmentOutput{}, err

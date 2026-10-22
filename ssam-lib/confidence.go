@@ -228,6 +228,19 @@ func ConfidenceInterval(point, sigma float64) (lower95, upper95 float64) {
 	return lower95, upper95
 }
 
+// AcceptanceDecision is the SINGLE acceptability rule shared by every scoring
+// path (audit B-2). By default the decision compares the point estimate with
+// the threshold; with accept_by_lower_bound=true it compares the conservative
+// 95% lower bound instead. A degenerate interval (sigma=0) makes both rules
+// identical, which is why the factory default (confidence disabled) is
+// bit-identical to the historical behavior.
+func AcceptanceDecision(point, lower95, threshold float64, acceptByLowerBound bool) bool {
+	if acceptByLowerBound {
+		return lower95 >= threshold
+	}
+	return point >= threshold
+}
+
 // AggregateNodeConfidence derives a node-level confidence from per-domain
 // evidence confidences (used when feeding Prism's NodeState). It is the
 // weight-normalized mean of domain evidence confidence; domains with no

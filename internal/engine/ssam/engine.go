@@ -132,7 +132,6 @@ func (e *Engine) ComputeScore(ctx context.Context, input *ssam.AssessmentInput) 
 	}
 	output.FinalScore = math.Round(finalScore*100) / 100
 	output.FormulaID = cfg.FormulaID
-	output.Acceptable = output.FinalScore >= output.Threshold
 
 	// Posterior statistics (model-native; degenerate [score,score] and
 	// evidence confidence 1.0 under the disabled policy). sigma is the
@@ -144,6 +143,11 @@ func (e *Engine) ComputeScore(ctx context.Context, input *ssam.AssessmentInput) 
 	output.FinalSigma = sigma
 	output.Lower95, output.Upper95 = ssam.ConfidenceInterval(output.FinalScore, sigma)
 	output.EvidenceConfidence = ssam.AggregateNodeConfidence(cfg.Weights, domainScores)
+
+	// Acceptability is decided AFTER the interval exists so the conservative
+	// accept_by_lower_bound mode has a lower bound to compare (audit B-2).
+	output.Acceptable = ssam.AcceptanceDecision(
+		output.FinalScore, output.Lower95, output.Threshold, cfg.AcceptByLowerBound)
 
 	return output, nil
 }
@@ -284,6 +288,23 @@ func (e *Engine) GetConfidencePolicy() ConfidencePolicy {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.cfg.ConfidencePolicy
+}
+
+// SetAcceptByLowerBound installs the kernel's conservative acceptability
+// switch ([confidence] accept_by_lower_bound). The decision point in
+// ComputeScore consumes it (audit B-2); hot reload must re-install it or the
+// option silently stops applying.
+func (e *Engine) SetAcceptByLowerBound(accept bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.cfg.AcceptByLowerBound = accept
+}
+
+// GetAcceptByLowerBound reports the installed switch (mainly for tests).
+func (e *Engine) GetAcceptByLowerBound() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.cfg.AcceptByLowerBound
 }
 
 func (e *Engine) ListDomains() []string {
