@@ -337,6 +337,56 @@ attack_surface = 0
 	}
 }
 
+// TestConfidenceUnknownAlgorithmFailsParse is the I-10 fail-fast contract:
+// only weighted_evidence is implemented (there is no registration table and no
+// beta_bayes). An operator who writes algorithm=beta_bayes must get a load
+// error, never a silently different-but-identical score.
+func TestConfidenceUnknownAlgorithmFailsParse(t *testing.T) {
+	for _, algo := range []string{"beta_bayes", "no_such_algorithm"} {
+		ini := "[confidence]\nenabled = true\nalgorithm = " + algo + "\n"
+		_, err := Parse(ini)
+		if err == nil {
+			t.Fatalf("algorithm=%q: Parse succeeded; want unsupported-algorithm error", algo)
+		}
+		for _, want := range []string{"confidence", "algorithm", algo} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("algorithm=%q: error %q must contain %q", algo, err, want)
+			}
+		}
+	}
+
+	// The one implemented value (and an explicit empty value = unset) loads.
+	for _, ini := range []string{
+		"[confidence]\nenabled = true\nalgorithm = weighted_evidence\n",
+		"[confidence]\nenabled = true\nalgorithm =\n",
+	} {
+		cfg, err := Parse(ini)
+		if err != nil {
+			t.Fatalf("Parse(%q) failed: %v", ini, err)
+		}
+		if cfg.Confidence.Algorithm != "weighted_evidence" {
+			t.Errorf("algorithm = %q, want weighted_evidence", cfg.Confidence.Algorithm)
+		}
+	}
+}
+
+// TestConfidenceReservedPriorStrength documents that prior_strength is
+// reserved (no consumer) but still validated: non-numeric/negative fails
+// (I-9/I-10), a positive value parses, and the reserved fields do not alter
+// resolution.
+func TestConfidenceReservedPriorStrength(t *testing.T) {
+	cfg, err := Parse("[confidence]\nenabled = true\nprior_strength = 7.5\n")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if cfg.Confidence.PriorStrength != 7.5 {
+		t.Errorf("prior_strength = %v, want 7.5 (parsed though reserved)", cfg.Confidence.PriorStrength)
+	}
+	if got := cfg.Confidence.Resolve("AS-001", "builtin", "unknown-domain"); got != 1.0 {
+		t.Errorf("reserved prior_strength changed resolution: %v, want factory builtin 1.0", got)
+	}
+}
+
 // TestConfigResolveChecks: the shared per-result resolver (used by both the
 // ssam plugin engine and the legacy DynamicScoringEngine) fills confidences
 // from the rule table and preserves upstream-set ones.

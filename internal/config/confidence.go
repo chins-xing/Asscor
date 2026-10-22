@@ -11,6 +11,13 @@ import (
 	"github.com/chins-xing/asscor/internal/model"
 )
 
+// ConfidenceAlgorithmWeightedEvidence is the ONLY implemented confidence
+// aggregation algorithm. The design §3.3 promise of an algorithm registry
+// (RegisterAlgorithm/Aggregator) and a beta_bayes aggregator was never
+// implemented; see audit I-10. Any other value in [confidence] algorithm is
+// rejected at parse time.
+const ConfidenceAlgorithmWeightedEvidence = "weighted_evidence"
+
 // ConfidenceConfig is the kernel-side configuration of the intelligence
 // confidence model (design CONFIDENCE_MODEL_DESIGN_2026-09-08 §3). It is
 // parsed from the [confidence] and [confidence.check]/[confidence.source]/
@@ -21,8 +28,12 @@ type ConfidenceConfig struct {
 	// Enabled turns confidence-aware scoring on. Default false → every check
 	// scores at full weight (legacy behavior).
 	Enabled bool
-	// Algorithm selects the confidence aggregation algorithm id
-	// ("weighted_evidence" default; extensible via registration).
+	// Algorithm is RESERVED: no algorithm registry exists. The only
+	// implemented aggregation is weighted_evidence (the field is parsed for
+	// forward compatibility, and any other value is rejected at parse time so
+	// an operator cannot believe they switched algorithms). beta_bayes and the
+	// RegisterAlgorithm/Aggregator API from design §3.3 were never implemented
+	// (audit I-10).
 	Algorithm string
 	// AcceptByLowerBound makes the acceptability decision use the 95%
 	// interval lower bound instead of the point estimate (conservative).
@@ -32,7 +43,10 @@ type ConfidenceConfig struct {
 	Default float64
 	// Floor is the minimum accepted confidence (clamp-up).
 	Floor float64
-	// PriorStrength is reserved for the beta_bayes aggregator.
+	// PriorStrength is RESERVED (no consumer): it belongs to the unimplemented
+	// beta_bayes aggregator. It is parsed and range-validated (0 = unset;
+	// non-numeric/negative fail) but never reaches the weighted_evidence
+	// formulas (audit I-10).
 	PriorStrength float64
 
 	// ByCheckID maps an exact check/rule id to a confidence.
@@ -116,8 +130,21 @@ func (cfg *Config) parseConfidenceSections(sections map[string]map[string]string
 			}
 			cc.Enabled = b
 		}
-		if v, ok := sec["algorithm"]; ok && strings.TrimSpace(v) != "" {
-			cc.Algorithm = strings.TrimSpace(v)
+		if v, ok := sec["algorithm"]; ok {
+			a := strings.TrimSpace(v)
+			switch {
+			case a == "":
+				// Explicit empty = unset → keep the factory weighted_evidence.
+			case a == ConfidenceAlgorithmWeightedEvidence:
+				cc.Algorithm = a
+			default:
+				// Fail-fast: a wrong id must never look like a switched
+				// algorithm (beta_bayes and the registration API are not
+				// implemented — audit I-10).
+				return confidenceValueError("confidence", "algorithm", v,
+					fmt.Errorf("unsupported algorithm %q: only %q is implemented (beta_bayes and the registration API do not exist)",
+						a, ConfidenceAlgorithmWeightedEvidence))
+			}
 		}
 		if v, ok := sec["accept_by_lower_bound"]; ok {
 			b, err := parseConfidenceBool(v)
