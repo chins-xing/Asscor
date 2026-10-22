@@ -531,15 +531,52 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 | 8 | **结论口径 M2 / M3 / C≡V / S5 / 双衰减** | M2：排序层与标签同源 ⇒ Spearman/Kendall 不是独立证据；M3：`ttc` 采集侧必填；**本数据集无法区分 C 与 V**（两者三层判据逐位相同）；`c=0` 的因子在 V/G/C 下不产生惩罚（S5 读法）；V/G/C 只在离线评估 ⇒ 双衰减不进入本次数字 | design §9.1 第 4 条 |
 | 9 | **降级选择原则（工程默认，不是数据选择）** | 解析简单性 `legacy` → 可解释性 `vector` → 参数可辨识性（`graph`/`chain` 的 `c_ij` 在本次设计上不可辨识，故不作默认）；**不许**拿辅助指标好一点就宣布选定 | design §9.1 第 5 条 |
 
-> **论文影响判定（Task 7 Step 2）：无需改动论文**（第二次审计 Important-3 落字）。三份论文源文件
-> `attacker-cognitive-loop-paper.tex` / `attacker-cognitive-loop.md` /
-> `attacker-cognitive-loop-preprints.tex` 里 `edge factor` / `coupling` / `边缘因子` / `耦合` /
+> **论文影响判定（Task 7 Step 2）—— 原判「无需改动论文」；2026-10-22 已按用户裁定改为「按实际写」**
+> （第二次审计 Important-3 落字的那条，原文保留如下，它是**改前**的事实）。
+>
+> **改前**：三份论文源文件里 `edge factor` / `coupling` / `边缘因子` / `耦合` /
 > `Spearman` / `Kendall` / `AUC` **0 命中**（`git grep -in … -- <三文件>` ⇒ `rc=1`，见 design §9.1
-> 第 6 条）；论文不涉及边缘因子/评分耦合，也未把排序层指标或 AUC 当证据 ⇒ 本方向的 NULL /
-> 不可辨识结论**不触达论文正文，无需改动论文**。`PP-01`（论文 σ 上界）是独立开放项，不因此关闭。
+> 第 6 条）；论文不涉及边缘因子/评分耦合，也未把排序层指标或 AUC 当证据 ⇒ 当时判「NULL /
+> 不可辨识结论不触达论文正文」。
+>
+> **改后（2026-10-22，用户原话：「论文正文按实际的来写」+「拟合的 NULL 需要进论文并且说明」）**：
+> ① **σ 上界按实现订正** —— `σ ∈ [0,100]` → **`σ ≥ 0`，名义 0–100 但上界不设**，
+> 并加脚注（`SSAMV20Formula` 无 `Total` 钳位、`clamp95` 只夹 CI 端点、`threat=1.4` 时 σ=108）；
+> ② **新增 §7.5 `Edge-Factor Coupling: An Identifiability Bound`**（三份文件同步），
+> 含 22 条 → 5 个设计行、`rank=5 < 13`、VIF 11/12 ∞ 且 `EF-3FA=12/11`、β 全 0、
+> 重复批 66 条仍 5 行、CV `ln 2` vs `3.491897`、四候选未选模；
+> ③ 提交 `02fbccb`；MDPI 版两遍编译 `rc=0`（23 页、未定义引用 0）。
+> **`PP-01` 仍开放** —— 论文按实际写 ≠ 代码要不要加 100 钳位（产品侧决定）。详见 design §9.1 第 6 条。
 
 > **两条禁令在本任务里又被实测了一遍**（措辞禁令未被推翻）：
 > ① "每个因子恰好出现两次"仍只是**观测**（本批 3 条记录含 `n_i = 1`，Task 5 的审计已独立复算）；
 > ② **两臂链读数与分数逐项相同、只差标签** 这条 limitation **不许撤** —— 它正是本任务 NULL 结果的
 > 结构性根因（`test-arm-limitation.sh` 9/9 守着）。
+
+## H.9 收口轮的三条裁定与两条工具修正（2026-10-22）
+
+| # | 事 | 裁定/处置 | 依据与落点 |
+|---|---|---|---|
+| 1 | **论文正文** | 「**按实际的来写**」⇒ σ 的取值表述按实现订正（**上界不设**）+ 新增 §7.5 拟合 NULL 小节 | 用户原话；`ssam-lib/formulas_v2.go` 的 `SSAMV20Formula`；提交 `02fbccb`；三条真源（design §9.1 第 6 条 / 本条 / `docs/experiments/`）已同步 |
+| 2 | **两条产品修复上 main** | 批准 ⇒ ARC `cb14060`+`03db60b` cherry-pick 为 main `6ba127c`+`0a0e346`（`aef84de..0a0e346`，**只推 main**，未做整体同步） | 用户原话；符合分支策略②「漏洞/审计修复第一时间进 main」 |
+| 3 | **拟合的 NULL** | 「**需要进论文并且说明**」⇒ 论文 §7.5 含五条机制 + 三条措辞禁令（不可辨识 ≠ 无耦合 / ln 2 是常数预测器 / 未选模不是"优于基线"） | 用户原话；数字取自 `fit-20261021*.md`、`compare-20261021.md` |
+
+**随之完成的两条工具修正**：
+
+- **底座差异清单收缩**：两条产品修复落地后，`internal/checks/linux/checks.go` 与 `determinism_test.go`
+  在两侧**逐字节相同** ⇒ 按清单语义（只登记有意差异）**移除**；清单 **20 → 18 条**，仍为**黄**、
+  清单外未解释漂移 **0**、stale **0**（提交 `10818c0`）。
+- **`scripts/check-main-base-consistency.sh` 的对照 ref 回退**：单分支 clone（`--branch ARC`）**没有本地 `main`**
+  ⇒ 旧脚本按 `main` 取 blob 全 MISSING，报「红 / active=0 / 登记失效×13」。**这是检出形态造成的假红**
+  （同一提交在带本地 `main` 的检出上是「黄 / active=18 / 未解释 0」，两种形态均已实测）。
+  改为：本地 ref 缺失而 `origin/<BASE_REF>` 存在 ⇒ 回退并打印提示；两者皆无 ⇒ **响亮失败**并给修法。
+  提交 `2214358`。
+
+**宿主侧证据（首次在 dl360gen9 的干净克隆上跑，2026-10-22）**：
+`/root/t6/verify-base-02fbccb`（检出 `02fbccb`，工作树 0 脏、克隆自 GitHub）上
+`MANIFEST=scripts/main-base-drift-manifest.txt bash scripts/check-main-base-consistency.sh` ⇒
+**清单 18 条 / active 18 / stale 0 / 登记失效 0 / 清单外未解释漂移 0 ⇒ 黄（rc=3）**，
+与 Windows 侧逐项一致（结论文件：宿主 `/tmp/base-02fbccb-2.out`）。
+
+**当前分支位置（2026-10-22 收口）**：ARC `2214358`（= 远端）· main `0a0e346`（= 远端）· 工作树干净。
 
