@@ -447,3 +447,17 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 
 **仍未兑现**：**实验标定 / CI 覆盖率验证**（I-3）。⇒ 对外口径：实现完成，
 数值是**先验**，不得声称“已标定”。
+
+### 7.8 内仓提交（两个算法库的历史补齐）
+
+外层仓把 `ssam-lib/`、`prism-lib/` 作为**普通目录**跟踪（`git ls-tree` mode `040000`），
+但两者**各自是独立 git 仓库**。本轮修复一度只体现在外层文件快照上、内仓工作树是脏的
+（`ssam-lib` 7 文件 / `prism-lib` 5 文件未提交）—— 2026-10-23 已补齐内仓提交：
+
+| 内仓 | 提交 | 内容 |
+|---|---|---|
+| `ssam-lib` | **`b2d0351`** | σ 折半传播（`IntrinsicLayerWeight=0.5`）、唯一区间 `ConfidenceInterval`（只钳下界）、唯一判定 `AcceptanceDecision`、先验表、测试加严 |
+| `prism-lib` | **`e79c517`** | `SemanticRiskReport.InputConfidence` + `PredictFuture` 用 `min(模型置信, node.Confidence)`；风险数值不变 |
+
+**用法**：外层读的是文件快照，所以**交付不受影响**；但引用库历史时以这两个内仓提交为准
+（此前的 `d21efc0` / `cd2c60b` 是“可信度原生变量”的**初版**，本表两笔是其上的审计修复）。
