@@ -103,3 +103,66 @@ func TestNodeConfidenceCarriedThrough(t *testing.T) {
 		t.Errorf("default node confidence = %v, want 1.0", res2.Confidence)
 	}
 }
+
+// TestNodeConfidenceCapsInferenceConfidence locks I-7: NodeState.Confidence
+// used to be only echoed into AssetRiskResult.Confidence. The inference
+// confidence must consume it (design §2.5: inference confidence =
+// f(model confidence, input trust)) WITHOUT touching any risk number.
+func TestNodeConfidenceCapsInferenceConfidence(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.HorizonDays = 1
+	now := int64(100 * 86400)
+
+	makeCore := func(nodeConf float64) AssetRiskResult {
+		node := &NodeState{
+			HostID:     "h1",
+			SSAMScore:  90,
+			Confidence: nodeConf,
+		}
+		return ComputeDynamicScore(node, nil, map[string]*NodeState{"h1": node}, cfg, now)
+	}
+
+	full := makeCore(1.0)
+	low := makeCore(0.5)
+
+	semFull := ComputeSemanticState(&full, cfg)
+	semLow := ComputeSemanticState(&low, cfg)
+
+	futureFull := PredictFuture(semFull, nil, cfg)
+	futureLow := PredictFuture(semLow, nil, cfg)
+	if futureFull == nil || futureLow == nil {
+		t.Fatal("PredictFuture returned nil")
+	}
+
+	if futureFull.Confidence <= 0.5 {
+		t.Fatalf("fixture precondition: model confidence must exceed 0.5, got %v", futureFull.Confidence)
+	}
+	if futureLow.Confidence >= futureFull.Confidence {
+		t.Errorf("inference confidence must drop with node confidence 0.5: full=%v low=%v",
+			futureFull.Confidence, futureLow.Confidence)
+	}
+	want := math.Min(futureFull.Confidence, 0.5)
+	if math.Abs(futureLow.Confidence-want) > 1e-9 {
+		t.Errorf("inference confidence = %v, want min(model %v, node 0.5) = %v",
+			futureLow.Confidence, futureFull.Confidence, want)
+	}
+
+	// Hard requirement: the risk values are unchanged (I-7 must not move
+	// direction-② data).
+	if futureLow.Trend != futureFull.Trend {
+		t.Errorf("Trend changed: %q vs %q", futureLow.Trend, futureFull.Trend)
+	}
+	if futureLow.CollapseRisk != futureFull.CollapseRisk {
+		t.Errorf("CollapseRisk changed: %v vs %v", futureLow.CollapseRisk, futureFull.CollapseRisk)
+	}
+	if futureLow.StableProb != futureFull.StableProb ||
+		futureLow.DegradedProb != futureFull.DegradedProb ||
+		futureLow.UntrustedProb != futureFull.UntrustedProb ||
+		futureLow.CollapseProb != futureFull.CollapseProb {
+		t.Errorf("future state distribution changed: %+v vs %+v", futureLow, futureFull)
+	}
+	if low.PrismScore != full.PrismScore || low.DebtPenalty != full.DebtPenalty ||
+		low.PropPenalty != full.PropPenalty || low.CollapseModifier != full.CollapseModifier {
+		t.Errorf("core risk values changed by node confidence: low=%+v full=%+v", low, full)
+	}
+}

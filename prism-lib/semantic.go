@@ -143,6 +143,9 @@ func ComputeSemanticState(core *AssetRiskResult, cfg PrismConfig) *SemanticRiskR
 		CollapseMembership:  collapse,
 		CurrentState:        state,
 		StateVector:         vector,
+		// Carry the node-level evidence confidence into the inference layer
+		// (design §2.5, audit I-7). The core result echoes it normalized.
+		InputConfidence: normalizeNodeConfidence(core.Confidence),
 	}
 }
 

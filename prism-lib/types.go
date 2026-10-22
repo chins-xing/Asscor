@@ -109,6 +109,11 @@ type SemanticRiskReport struct {
 	CollapseMembership  float64    // Collapse 隶属度 [0,1]
 	CurrentState        string     // 主导状态: "Stable" / "Degraded" / "Untrusted" / "Collapse"
 	StateVector         [4]float64 // 归一化状态向量 [Stable, Degraded, Untrusted, Collapse]
+	// InputConfidence is the node-level evidence confidence carried from the
+	// Core layer (NodeState.Confidence, normalized 0→1). The inference layer
+	// consumes it as a cap on the prediction confidence (design §2.5, audit
+	// I-7). Zero/unspecified behaves as 1.0 (legacy).
+	InputConfidence float64
 }
 
 // ============================================================
