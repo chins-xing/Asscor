@@ -75,8 +75,7 @@ Web 漏洞 → 低权 shell → 内核提权 → 加载 Rootkit → 持久化 �
 | 内核检查项                         | 已有检查项                   | 处理方式                                  |
 | :---------------------------- | :---------------------- | :------------------------------------ |
 | KS-007 中 `tcp_syncookies`     | RS-005 SYN Cookie 防护    | KS-007 改为引用 RS-005 结果，不重复扣分           |
-| KS-007 中 `randomize_va_space` | ED-012 内存保护             | KS-007 改为引用 ED-012 结果                 |
-| KS-010 Secure Boot            | ED-008 安全启动             | KS-010 聚焦内核验证链，ED-008 聚焦终端引导，两者保留     |
+| KS-010 Secure Boot            | RS-016 安全启动链完整性       | KS-010 聚焦内核验证链（Secure Boot/MOK/lockdown），RS-016 覆盖 UEFI/shim/GRUB/内核签名全链，两者互补保留 |
 | KS-012 LSM 状态                 | OT-005 SELinux/AppArmor | KS-012 检查所有 LSM，OT-005 仅查 SELinux，不冲突 |
 
 ***
@@ -176,7 +175,7 @@ lsmod | wc -l  # 与运维团队设定的基线对比
 | :------------------------------------------- | :------------- | :---------------------- |
 | `net.ipv4.tcp_syncookies`                    | 1              | SYN Flood 防护（引用 RS-005） |
 | `net.ipv4.ip_forward`                        | 0              | 禁止非路由器转发                |
-| `kernel.randomize_va_space`                  | 2              | 完整 ASLR（引用 ED-012）      |
+| `kernel.randomize_va_space`                  | 2              | 完整 ASLR（KS-007 自检；仓内无对应既有检查项） |
 | `kernel.kptr_restrict`                       | 2              | 内核指针完全隐藏                |
 | `kernel.yama.ptrace_scope`                   | 1              | 限制 ptrace               |
 | `kernel.core_pattern`                        | `\|/bin/false` | 禁止 core dump            |

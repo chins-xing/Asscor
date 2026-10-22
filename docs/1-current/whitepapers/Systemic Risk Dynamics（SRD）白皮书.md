@@ -203,7 +203,7 @@ SRD 使用：
 
 $$Risk = S \times C$$
 
-**工程实现**：Collapse 效应通过安全债务的累积自然体现——当多个关键检查项长期未通过时，债务呈超线性增长，等效于塌缩修正。Core Layer 在 RawRiskReport 中输出 CollapseModifier，供 Semantic Layer 进行状态判断。
+**工程实现**：Collapse 效应通过安全债务的累积自然体现——当多个关键检查项长期未通过时，债务呈超线性增长，等效于塌缩修正。Core Layer 在 AssetRiskResult 中输出 CollapseModifier，供 Semantic Layer 进行状态判断。
 
 ---
 
@@ -330,7 +330,7 @@ type PrismConfig struct {
     DebtNormDays  float64 // 债务归一化分母，默认 1500
     PathDecay     float64 // 路径衰减因子，默认 0.80
     MaxPathDepth  int     // 最大搜索深度，默认 5
-    ScoreFloor    float64 // 下界稳定项，默认 0.40
+    ScoreFloor    float64 // 下界稳定项，默认 0.15
     CollapseBeta  float64 // 塌缩超线性指数，默认 1.5
 
     // Semantic Layer 参数
@@ -349,7 +349,8 @@ type PrismConfig struct {
 ## 13.4 Core Layer 输出：原始风险报告
 
 ```go
-type RawRiskReport struct {
+// AssetRiskResult 是 Core Layer 输出（旧文称 RawRiskReport）。
+type AssetRiskResult struct {
     HostID           string
     SsamScore        float64 // 原始 SSAM 分数
     PrismScore       float64 // 正交化动态评分 [0, 100]
@@ -359,7 +360,7 @@ type RawRiskReport struct {
     DebtRaw          float64 // 未归一化的债务总值
     DebtPenalty      float64 // 归一化后的债务惩罚 ∈ [0, Cap_debt]
     CollapseModifier float64 // 塌缩修正值 ∈ [0, 1]
-    RiskVelocity     float64 // 风险变化速度（评分/天，负值表示恶化）
+    RiskVelocity     float64 // 风险变化速度（评分/天，负值表示恶化；由 ComputeRiskVelocity 填充）
 }
 ```
 
@@ -462,7 +463,7 @@ $$P_{debt}(v, t) = \min\left(Cap_{debt},\ \frac{\sum_c D(c, t)}{Norm_{debt}}\rig
 
 $$V_{risk}(v, t) = \frac{S_{prism}(v, t) - S_{prism}(v, t - \Delta t)}{\Delta t}$$
 
-当无历史快照时，可通过债务增长率和传播变化率近似估算。负值表示风险恶化。该值输出至 `RawRiskReport.RiskVelocity`。
+当无历史快照时，可通过债务增长率和传播变化率近似估算。负值表示风险恶化。该值输出至 `AssetRiskResult.RiskVelocity`（由 `ComputeRiskVelocity` 填充）。
 
 ## 14.6 塌缩修正（Core Layer）
 
@@ -536,7 +537,7 @@ $$\mathbf{T} = \begin{bmatrix}
 | `DebtNormDays` | 1500 | 债务归一化分母 | Core |
 | `PathDecay` | 0.80 | 路径衰减因子 | Core |
 | `MaxPathDepth` | 5 | 最大搜索深度 | Core |
-| `ScoreFloor` | 0.40 | 下界稳定项 | Core |
+| `ScoreFloor` | 0.15 | 下界稳定项 | Core |
 | `CollapseBeta` | 1.5 | 塌缩超线性指数 | Core |
 | `StableThreshold` | 0.90 | Stable 上界阈值 | Semantic |
 | `DegradedThreshold` | 0.70 | Degraded 上界阈值 | Semantic |
@@ -555,7 +556,7 @@ $$\mathbf{T} = \begin{bmatrix}
 
 $$S_{prism}(v, t) \geq S_{ssam}(v) \times \mathsf{Floor}$$
 
-默认 $\mathsf{Floor} = 0.40$。这意味着即便最坏情况（传播饱和 + 债务饱和），系统仍保留 SSAM 原始评分的 40%。这等价于“可恢复性保障”——系统不会因为多重独立惩罚因子而永久塌缩。
+默认 $\mathsf{Floor} = 0.15$。这意味着即便最坏情况（传播饱和 + 债务饱和），系统仍保留 SSAM 原始评分的 15%。这等价于“可恢复性保障”——系统不会因为多重独立惩罚因子而永久塌缩。
 
 ---
 
@@ -564,17 +565,18 @@ $$S_{prism}(v, t) \geq S_{ssam}(v) \times \mathsf{Floor}$$
 ## 17.1 Core Layer 接口
 
 ```go
-// ComputeRawRisk 计算节点的原始风险报告。
+// ComputeDynamicScore 计算节点的原始风险报告（Core Layer 入口）。
 // allNodes 用于查找上游节点的 SSAM 分数。
-// previousScore 可选，用于计算风险速度；为 nil 时速度估算。
-func ComputeRawRisk(
+func ComputeDynamicScore(
     node *NodeState,
     incomingEdges []EdgeState,
     allNodes map[string]*NodeState,
     cfg PrismConfig,
     nowUnix int64,
-    previousScore *float64, // 可选的上次评分，用于速度计算
-) RawRiskReport
+) AssetRiskResult
+
+// ComputeRiskVelocity 计算风险变化速度；prior 为 nil 时返回 0。
+func ComputeRiskVelocity(currentScore float64, prior *RiskSnapshot, nowUnix int64) float64
 
 // FindPropagationPaths 查找源到目标的前 N 条最高风险路径。
 func FindPropagationPaths(
@@ -588,14 +590,16 @@ func FindPropagationPaths(
 ) []PathResult
 ```
 
+> 风险速度不在 `ComputeDynamicScore` 内计算：调用方先取得 `AssetRiskResult`，再用 `ComputeRiskVelocity(result.PrismScore, prior, now)` 填入 `RiskVelocity`。
+
 ## 17.2 Semantic Layer 接口
 
 ```go
-// ComputeSemanticRisk 基于原始风险报告计算四态隶属度。
-func ComputeSemanticRisk(
-    raw RawRiskReport,
+// ComputeSemanticState 基于 Core Layer 输出计算四态隶属度。
+func ComputeSemanticState(
+    core *AssetRiskResult,
     cfg PrismConfig,
-) SemanticRiskReport
+) *SemanticRiskReport
 ```
 
 ## 17.3 Inference Layer 接口
@@ -622,9 +626,10 @@ func InferFutureRisk(
 
 **完整评估管线**（调用方视角）：
 ```go
-raw := ComputeRawRisk(node, edges, allNodes, cfg, now, &previousScore)
-semantic := ComputeSemanticRisk(raw, cfg)
-future := InferFutureRisk(semantic, cfg.HorizonDays, nil, cfg)
+raw := ComputeDynamicScore(node, edges, allNodes, cfg, now)
+raw.RiskVelocity = ComputeRiskVelocity(raw.PrismScore, priorSnapshot, now)
+semantic := ComputeSemanticState(&raw, cfg)
+future := InferFutureRisk(*semantic, cfg.HorizonDays, nil, cfg)
 ```
 
 **原则不变**：所有函数为纯函数。调用方传入数据，Prism 返回结果。无副作用，无状态。
@@ -640,7 +645,7 @@ Prism 是纯函数库。它不管理状态。具体来说：
 | `NodeState.SSAMScore` | ASSCOR 缓存 | 来自最近一次 SSAM 评估 |
 | `CheckFailure.FailUnix` | ASSCOR `failTracker` | 首次失败时间戳由 ASSCOR 记录和更新 |
 | `EdgeState.RiskTransmission` | ASSCOR 拓扑管理器 | 由调用方从 CMDB 或配置读取 |
-| 历史评分序列 | ASSCOR 持久化层 | Prism Core 通过 `previousScore` 参数接收，不存储 |
+| 历史评分序列 | ASSCOR 持久化层 | 通过 `ComputeRiskVelocity(currentScore, prior *RiskSnapshot, nowUnix)` 接收，不存储 |
 | 历史状态序列 | ASSCOR 持久化层 | 用于训练自定义推理模型，由调用方管理 |
 
 **Prism 只是“吃快照，吐报告”。**
@@ -649,7 +654,7 @@ Prism 是纯函数库。它不管理状态。具体来说：
 
 # 19. 全图重计算与增量传播（未来方向）
 
-当前实现中，`ComputeRawRisk` 每次评估一个节点时需要遍历所有入边——复杂度 $O(|E_{in}|)$。在多主机部署（N 个节点，每个有 N-1 条入边）中，单次调用复杂度为 $O(N)$。
+当前实现中，`ComputeDynamicScore` 每次评估一个节点时需要遍历所有入边——复杂度 $O(|E_{in}|)$。在多主机部署（N 个节点，每个有 N-1 条入边）中，单次调用复杂度为 $O(N)$。
 
 当 N 增长到 100k+ 时，需要引入**增量传播模型**：
 
@@ -859,7 +864,7 @@ $$R = (State, Velocity, Forecast)$$
 
 | 报告 | 所属层 | 核心问题 | 性质 |
 |---|---|---|---|
-| RawRiskReport | Core Layer | 系统发生了什么？变化有多快？ | 确定性、可审计 |
+| AssetRiskResult | Core Layer | 系统发生了什么？变化有多快？ | 确定性、可审计 |
 | SemanticRiskReport | Semantic Layer | 系统当前是什么状态？ | 模糊推理、可解释 |
 | FutureRiskReport | Inference Layer | 未来可能怎样？预测有多可靠？ | 概率推理、可验证 |
 

@@ -45,7 +45,7 @@ type PrismConfig struct {
 	DebtNormDays float64 // 债务归一化分母（天），默认 1500
 	PathDecay    float64 // 路径衰减因子，默认 0.80
 	MaxPathDepth int     // 最大搜索深度，默认 5
-	ScoreFloor   float64 // 下界稳定项，默认 0.40
+	ScoreFloor   float64 // 下界稳定项，默认 0.15
 	CollapseBeta float64 // 塌缩超线性指数，默认 1.5
 	AggregationMode string // 传播聚合模式: "rss"(默认)/"max"/"linear"
 

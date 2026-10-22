@@ -282,7 +282,7 @@ type ExtensionHandler func(ctx context.Context, data interface{}) error
 
 ### 4.4 业务模块扩展点（83 个）
 
-**AssessorModule（4 个）**：`assessor.pre_evaluate`、`assessor.pre_score`、`assessor.post_evaluate`、`assessor.report_generated`、`assessor.outbound`
+**AssessorModule（5 个）**：`assessor.pre_evaluate`、`assessor.pre_score`、`assessor.post_evaluate`、`assessor.report_generated`、`assessor.outbound`
 
 **PolicyModule（3 个）**：`policy.action_decided`、`policy.notify`、`policy.status_changed`
 

@@ -82,7 +82,7 @@ DEK ──AES-GCM(KEK)──→ 信封（DEK 密文，随 .enc 头存储）
 ```
 
 - **DEK**（Data Encryption Key）：每次加密随机生成 32 字节，直接以 AES-256-GCM 加密配置明文（nonce 前置）。
-- **KEK**（Key Encryption Key）：由口令经 **argon2id** 派生（默认参数：time=1、memory=64 MiB、threads=4、keyLen=32），用于加密 DEK——即使 KEK 被攻破也只暴露 DEK 信封，不解密出明文。
+- **KEK**（Key Encryption Key）：由口令经 **argon2id** 派生（默认参数：time=2、memory=64 MiB、threads=4、keyLen=32；旧文件 time=1 仍可验证），用于加密 DEK——即使 KEK 被攻破也只暴露 DEK 信封，不解密出明文。
 - **零化**：KEK/DEK 缓冲区使用后立即清零（zeroize），缩短密钥在内存中的存活时间。
 
 ### 3.2 `.enc` 文件格式
@@ -106,7 +106,7 @@ agent.ini 的 `[bootstrap]` 明文引导段（kernel 地址、mTLS 证书路径�
 `Decrypt`/`Verify` 对 `.enc` 头与校验文件执行**严格校验**：
 
 - **版本必须 == 1**；魔数不符、截断、字段越界 → 拒绝。
-- **KDF 四参数必须精确等于 `DefaultKDFParams()`**（N=1、R=64MiB、P=4、KeyLen=32）——v1 文件仅由 `Encrypt` 写出，恒记录默认参数；任何其他值都是攻击者可控的头输入，可能在 argon2（线程数 uint8 收窄后 <1 导致 panic）或 OOM/CPU DoS（无界内存/时间成本）上被利用，因此在任何派生之前拒绝。
+- **KDF 四参数必须命中 `supportedKDFParams` 白名单**（当前默认 N=2、R=64MiB、P=4、KeyLen=32；为兼容旧文件同时接受 N=1）——v1 文件仅由 `Encrypt` 写出：新文件记录 time=2，旧文件可能是 time=1；任何白名单外的值都是攻击者可控的头输入，可能在 argon2（线程数 uint8 收窄后 <1 导致 panic）或 OOM/CPU DoS（无界内存/时间成本）上被利用，因此在任何派生之前拒绝。
 - 文件大小上限 `MaxConfigSize`（10 MiB）校验。
 
 > **目的**：防止恶意构造的 `.enc`/校验文件触发 panic、OOM 或 CPU 耗尽（DoS），是 fail-closed 语义在文件解析层的落地。
