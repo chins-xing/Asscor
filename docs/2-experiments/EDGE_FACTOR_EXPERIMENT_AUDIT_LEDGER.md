@@ -38,7 +38,7 @@
 **含**：`internal/{kernel,engine,model,checks,config,agent,commander,attest,securemode,api,…}`、
 `cmd/{kernel,agent,asscor,…}`、`pluginsdk/`、`optional/`、`deploy/`、`scripts/` 等产品必需件。
 
-**不含**（研究线专属，默认只留 ARC）：`lunwen/`、`docs/superpowers/plans/`、`cmd/edgescen`、
+**不含**（研究线专属，默认只留 ARC）：`lunwen/`、`docs/4-archive/plans/`、`cmd/edgescen`、
 `cmd/edgecompare`、`internal/edgefactor`、`internal/edgeexp`、`configs/edgeexp/` 等。
 
 ## A.3 一致性判据（**可复跑**）
@@ -70,7 +70,7 @@
 | 一致性检查脚本 | `scripts/check-main-base-consistency.sh` |
 | 有意差异清单（双侧登记） | `scripts/main-base-drift-manifest.txt` |
 
-> **为什么必须落进仓内**：`docs/ASSET_OWNERSHIP.md` 此前给出的复跑方法指向
+> **为什么必须落进仓内**：`docs/1-current/reference/ASSET_OWNERSHIP.md` 此前给出的复跑方法指向
 > **未跟踪**的路径 ⇒ **clone 者照做必然失败**。这正是"报告写在 gitignore 之外等于没有披露"
 > 的实例。落进仓内后，判据成为**可交付能力**。
 
@@ -99,7 +99,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 |---|---|---|---|
 | 2026-09-13 | `main`/ARC **正式分叉**（从 main 撤出研究线内容） | 用户裁定 | `74cfeb2` |
 | 2026-09-13 | 底座一致性用**「有意差异清单」**约束，清单外强约束逐字节相同 | 用户裁定「乙」 | §A.2/A.3 |
-| —— | `docs/audits/TECHNICAL_DEBT_BACKLOG_2026-09-08.md` **不上 main** | 它是研究实测记录，且引用两个已从 main 撤出的文件 ⇒ 上了会造成"研究内容进主线 + 悬空引用" | 未上 main |
+| —— | `docs/3-audits/TECHNICAL_DEBT_BACKLOG_2026-09-08.md` **不上 main** | 它是研究实测记录，且引用两个已从 main 撤出的文件 ⇒ 上了会造成"研究内容进主线 + 悬空引用" | 未上 main |
 | —— | 漏洞修复类**必须**第一时间进 main | 规则② | `3094755`、`982f6b8`、`ef3f52a` 等 |
 
 ---
@@ -115,7 +115,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 | **目标 TTP 的选择** | 只做"**AppArmor 自定义限制策略 + 撞策略的 TTP**"一侧：在目标容器上加一条**真实**的限制性策略，用一条会撞它的 ability ⇒ 策略加载 ⇒ 被拒（`compromised=false`）、策略卸载 ⇒ 成功（`compromised=true`）。**禁止**用"只改标签"制造方差 |
 | **可算范围** | 决策层指标（漏判率/误阻断率/AUC）**只对带目标 TTP 的记录可算**；其余因子场景**只作分数侧**，其标签**不得**用固定侦察剧本的恒真结果顶替（用 `ground_truth.basis` 区分） |
 | **分数侧的诚实口径** | 容器内 `aa-status` 恒报 profiles loaded ⇒ `OT-005` 在真机上**不会**翻成失败，场景"该防护缺失"仍按既有机制**合成注入**；报告/论文**不得**写成"真机上该检查真的失败了" |
-| **落地位置** | `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` §2.1；`internal/edgeexp/record.go` 的 `GroundTruth.Basis` |
+| **落地位置** | `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` §2.1；`internal/edgeexp/record.go` 的 `GroundTruth.Basis` |
 
 ## B.2 `C1` 的三条（**实验设计级阻塞**的裁决）
 
@@ -142,7 +142,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 | **硬口径（随之而来）** | **取数必须 root 等价**（与 `pct exec` 同为 uid 0）；**拿不到就响亮失败、绝不降级**；**不许改判据语义**去掩盖（"跳过的检查算通过"是**已知的口径缺陷**，登记不改，从**测量侧**消除它） |
 | **两条措辞禁令** | ① **不得**把"控制项拒绝而环境未报出该因子"写成 **"系统被削弱 30%"**（或等价减法表述）—— 那是测量伪影，不是态势变化；② **不得**再写 **"VM 基质上不存在 −30"** —— 那句把权限与基质混在一起。**正确表述：「−30 由取数权限产生，在 CT 上被基质形态掩盖」。** |
 | **跨批次的可比性边界** | 「失败检查条数」这类量**依赖（基质 × 取数权限）这一对** ⇒ 两边口径不同时**不可直接比较**；`B` 必须**实测**（S0 基线探针），**不许写死、也不许从别的批次抄** |
-| **落地位置** | `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` §10.4 / §10.4B；`edge_attack.sh` 的 `EDGEEXP_BASELINE_FACTORS*`；`edge_vm_provision.sh` 的 `guest_root_equivalence()`；真机记录的 `meta.expected_baseline_factors[_source]` |
+| **落地位置** | `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` §10.4 / §10.4B；`edge_attack.sh` 的 `EDGEEXP_BASELINE_FACTORS*`；`edge_vm_provision.sh` 的 `guest_root_equivalence()`；真机记录的 `meta.expected_baseline_factors[_source]` |
 | **与"声明本身零新增机制"** | 声明机制是 Task 4D Step 4-B3 就做好的；Task 7 的贡献是**把口径定下来**并**真跑确认**；Task 16 的贡献是**把权限那一半补上** |
 
 ### B.3.1 「链上同一因子出现两次」的判词与产物规则（Task 18，2026-10-16）
@@ -172,7 +172,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 | **两臂只差什么** | 同一个场景、同一个目标 TTP、同一个 pair 剧本、同一个攻击组、同一份采集配置、默认 1800s 观察窗 —— **只差策略** |
 | **对本表的判定有什么影响** | **没有**。三条理由：① **声明面不随策略变**（`B` 的结构性理由与策略无关）⇒ 两臂的**因子集相等断言都必须过**；② **可达性的分母仍是"场景"** ⇒ 22 可达 / 3 结构性不可达**不受影响**；③ **臂的身份写在记录里**（`meta.policy_on`，additive）⇒ 读者只靠数据集就能把两臂分开 |
 | **实例记账** | `targeted_ttp` → 2 条实例，其余 → 1 条 ⇒ 全量一轮 **11×2 + 14 = 36** 实例；`EDGEEXP_POLICY_ON_ARM=0` 可关掉新臂（此时与旧矩阵**逐字节相同**） |
-| **落地位置** | `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` 附录 D.4；`edge_matrix.sh` 的 `POLICY_ON_ARM` 段 |
+| **落地位置** | `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` 附录 D.4；`edge_matrix.sh` 的 `POLICY_ON_ARM` 段 |
 
 ## B.5 观测口径的其它已登记裁定
 
@@ -183,7 +183,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 | **R 组的失败是**有意设计 | 未声明观测主体时 R 组的失败是**有意**的：R 组的语义是"在目标节点上**真的没有**该控制"，因此**必须**声明观测主体（否则整轮失败） | `edge_attack.sh` 硬门禁 |
 | **决策层标签依据口径** | 缺 `basis` 的三条出路：① 用带 `basis` 的采集产物**重采**；② 显式声明口径；③ 该条**不进**决策层统计 | `cmd/edgecompare` 为准；`grep docs/ "allow-mixed-basis\|assume-basis"` 零命中 |
 | **"48 → 42" 的留痕与更正** | `48` 是**一次性容器**手跑的旧数；真配方得 **42**。其中 `RS-007` 那一格是**偶然**过的 —— 旧配方那份 `aide.conf` **恰好**有一行含 `alert` 的注释 | 教训：**"手跑成功 ≠ 配方可复现"** |
-| **"既有夹具全绿" ≠ "某路径逐位不变"** | 两件事必须分开写；基质抽象的等价性**范围**要显式收窄 | `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` §5.4.12 |
+| **"既有夹具全绿" ≠ "某路径逐位不变"** | 两件事必须分开写；基质抽象的等价性**范围**要显式收窄 | `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` §5.4.12 |
 | **全量批次的规模是 33 实例，不是 36** | 矩阵口径是 **36**（`targeted 11×2 + recon 14`），但 `R-no-siem`/`R-no-2fa` 在**装齐六个控制**的靶机上**结构性不满足**（R 组硬闸门在**建 operation 之前**整轮失败），而它们在批次里会让 `REPEAT=1` 的**条数门禁必然为红** ⇒ 连门禁①/② 都拿不到。`R-no-ids` **相反**（真实缺失成立），已**单独跑通、不占批次** | Task 13 结论六早已记着「R 组三场景**结构性不可达**（Task 7）」；Task 9 也只跑了 11 个 targeted。**这是如实收口，不是跳过**：1 条跑通 + 2 条闸门原文均已留档 |
 | **`qemu` 上的"策略"是基质相关的实现**（`aa-exec -p asscor-edge-policy` 把**攻击进程**挂进 profile） | 与 CT 的 `lxc.apparmor.raw`（**容器级**、一切进程都受约束）**不是同一条命令**，但**是同一条实验条件**：策略在 ⇒ 目标 TTP 被拒（`compromised=false`）、策略不在 ⇒ 成功（`compromised=true`）；两臂的 `checks[]` 与链**逐项相同** | 为什么不"全机生效"：取数走 `ssh + sudo -n`，把**取数进程**也关进"拒绝读 `/etc/shadow`"的 profile 会**同时改掉 `checks[]` 的观测面** ⇒ 策略会从**实验条件**变成**测量扰动** |
 | **两臂的链读数与分数逐项相同、只有 ground truth 标签不同** | 11/11 个 targeted 场景实测如此（分数侧与链侧**都区分不开两条臂**） | **⚠️ 这条 limitation 换基质后依然成立，论文里不许撤。** **机器判据（Task 20 Step 3 钉住）：`lunwen/clab-lab/tests/test-arm-limitation.sh`** —— 9 条断言（标签随臂翻转 + 去重后链序列相同 + `final_score` 相同，另加 3 条加固），直接读已入库的 33 条数据集，已接进 `run-all.sh`（第 7 组）。 **判据变红 = 提示更新文档（limitation 不再成立），不是放松断言。** |
@@ -226,7 +226,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 
 | 阶段 | 基质 | 理由（当时的依据） | 落地提交 / 证据 |
 |---|---|---|---|
-| **① 2026-09 之前** | **WSL2 + Containerlab**（14 节点真实拓扑） | 唯一的开发环境；拓扑用真实 FRR 配置、节点用容器 | `lunwen/clab-lab/asscor.clab.yml`；`docs/clab-lab/data/*.jsonl` |
+| **① 2026-09 之前** | **WSL2 + Containerlab**（14 节点真实拓扑） | 唯一的开发环境；拓扑用真实 FRR 配置、节点用容器 | `lunwen/clab-lab/asscor.clab.yml`；`docs/2-experiments/clab-lab/data/*.jsonl` |
 | **② 2026-09-12** | **A-1 远程服务器 / LXD**（"环境真实"） | **用户裁定**：方向② 实验基质改到 A-1（已装 LXD，**环境真实**）；原话要点「**我需要用时间换工程质量**」。矩阵/攻击/采集都在 A-1 跑；WSL2 **退为开发与离线**（门禁、离线夹具、`edgecompare` 离线比较、论文复算） | 设计文档 §5.3、§10.2；`74cfeb2` 前后的 `1e16247` |
 | **③ 2026-10-13** | **dl360gen9 / PVE CT**（`EDGEEXP_SUBSTRATE=pve`） | dl360gen9 被指定为 **A-1 的上位替代**（本团队自有硬件 ⇒ 可控、可长期使用）；CT 起停快、成本低，适合先把**管线与口径**跑通 | `35edf79`（`edge_lab.sh` 新增 pve 基质）、`82f16b9`（`-target pve:<vmid>`）、`d7d8448`（流水线接线）、`c3b78a8`（收尾修复） |
 | **④ 2026-10-15 → 10-16** | **dl360gen9 / PVE VM（QEMU/KVM）**（`EDGEEXP_SUBSTRATE=qemu`） | **§C.1 的分工原则**：CT 只做快速验证/轻量模拟/临时短期；**长线 + 中重型拓扑 + 重要任务交给有完整环境的 VM**。落地的直接驱动是 CT 的**内核面不可观测**已经造成了基线活跃集的结构性缺口（B.3），而 VM 上有真内核、真 LSM、真 systemd | `541c504`（基质接线 + qemu 取数）→ `5ae2a96`（五个真机缺陷）→ `de34ee0`（**取数权限对齐**）→ `8ae3c4b`（复位接线 + **全量批次 33 条**）→ `4c1ab06`（链重复消费侧修复） |
@@ -367,7 +367,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 |---|---|---|---|
 | **AL-02** | 本 Part 的 **F1 / F2 / F3**（管理 VLAN 网段与主机名整体替换、实验数据里的实验代号、真名 + 邮箱是否保留） | **仍未裁定**的开放项（F4–F7 已 ✅ Task 14 执行）。任何"改文档"的动作都可能与它们冲突 | 引用 F1/F2/F3 的结论前，**先确认是否已有新裁定**；本任务未动这三项 |
 | **PP-01** | 论文的 **σ 上界**：`attacker-cognitive-loop-paper.tex`（+ preprints 版）三处 `$\sigma \in [0,100]$` | **改法需作者点头**（属已提交 Preprints 的口径；设计文档 §10.2 末条要求与已提交版本口径一致、不回退数字）⇒ **不改论文正文** | 上界**不成立**：`ssam-lib/formulas_v2.go` 的 `SSAMV20Formula` 全程**没有对 100 的钳位**，而 `exposureCoeff`/`threatCoeff` 只设**下界** 0.60、无上界；设计文档 §10.3 已登记"总分可 >100"。候选改法：(a) 改 `σ > 0`；(b) 保留 `[0,100]` 但加脚注说明上界是正常配置下的实测上界。**待作者裁定** |
-| **PD-01** | **产品线文档**的边缘因子覆盖缺口：`docs/ASSCOR 使用手册.md` §7.3 / §9.2 只写了 `[edge_factors]` 与 `level4_override`，未提 `[edge_factors.custom]` / `custom_triggers` / `model` | **技术债（覆盖缺口），不是失效**：产品**默认路径没变**（`model=legacy`、逐次连乘），V/G/C 只在实验侧装载 | **不要**因为研究线引入 V/G/C 就给产品文档打 `⛔` —— 那会把 legacy 默认路径一起误伤（M0 仍是默认路径） |
+| **PD-01** | **产品线文档**的边缘因子覆盖缺口：`docs/1-current/guides/ASSCOR 使用手册.md` §7.3 / §9.2 只写了 `[edge_factors]` 与 `level4_override`，未提 `[edge_factors.custom]` / `custom_triggers` / `model` | **技术债（覆盖缺口），不是失效**：产品**默认路径没变**（`model=legacy`、逐次连乘），V/G/C 只在实验侧装载 | **不要**因为研究线引入 V/G/C 就给产品文档打 `⛔` —— 那会把 legacy 默认路径一起误伤（M0 仍是默认路径） |
 
 ---
 
@@ -474,7 +474,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 |---|---|---|---|
 | 1 | **重复轴的两套口径互相矛盾**（`edge_repeat.sh` 逐轮一个记录文件 vs `record_counts_ok` 的"文件行数 == 实例数 × 重复号"） | 定案 **路 B：一份记录文件承载 1..REPEAT**，只改驱动、**不动矩阵门禁** | 1 场景 × 2 轮冒烟的原始输出：修前第 2 轮 `record_counts_ok=False`（文件 2 行、门禁要 4 行、`records_missing_for_selected=2`）而 `rc=0`（假红）；修后两轮都 `record_counts_ok=True`、`rc=0`、同一文件里 `-01/-02` 与 `-03/-04` 并存。详见操作手册 **§3.4** 与 Task 21 报告 §1 |
 | 2 | **"逐轮一个文件"的原始理由已失效** | 该理由（"幂等守卫按场景名前缀匹配"）在 Task 10/11 之后**不再成立**：守卫比的是**完整实例 id**，而实例号 `NN=(REPEAT−1)×NARMS+臂+1` 逐轮不重叠 | 实测：第 2 轮的两条记录 `S1-selinux-03` / `S1-selinux-04` 能正常写出（同文件写入不被拒）；代码依据 `edge_collect.sh:167`、`edge_matrix.sh:295-322` |
-| 3 | **新判据：「判定翻转 = 环境敏感」** | 同一场景×臂在**同一条件、同一剧本、同一采集配置**下的 N 次重复里，只要 `observed.acceptable` 取值不唯一 ⇒ 该场景×臂标注**环境敏感**，在报告里**单独列成一节**，**不隐去、不取平均掩盖**；标签翻转（`ground_truth.compromised`）与链形状翻转**同等级别单列** | 判据的可执行产物：`lunwen/clab-lab/scripts/edge_variance.py` 的 `flips.decision` / `flips.label` / `flips.chain_multiset`；报告 `docs/experiments/variance-report.md` 的 §4 / §4b / §4c |
+| 3 | **新判据：「判定翻转 = 环境敏感」** | 同一场景×臂在**同一条件、同一剧本、同一采集配置**下的 N 次重复里，只要 `observed.acceptable` 取值不唯一 ⇒ 该场景×臂标注**环境敏感**，在报告里**单独列成一节**，**不隐去、不取平均掩盖**；标签翻转（`ground_truth.compromised`）与链形状翻转**同等级别单列** | 判据的可执行产物：`lunwen/clab-lab/scripts/edge_variance.py` 的 `flips.decision` / `flips.label` / `flips.chain_multiset`；报告 `docs/2-experiments/variance-report.md` 的 §4 / §4b / §4c |
 | 4 | **「重复样本不是独立样本」的记账口径** | 决策层 N 一律写成 `N=<条数>（<场景数> × <重复数>）`；n=3 的样本标准差只当"抖动尺度"，**不得**当独立同分布样本算置信区间/做显著性检验 | `edge_variance.py` 报告开头的口径声明与 `declaration.decision_layer_n`；操作手册 §3.4.4 |
 | 5 | **REPEAT>1 的批** | 两段（targeted 66 条 / 非 targeted 33 条）× 3 轮，**各一份记录文件**；主批数据集 `records-dl360-qemu-20261016.jsonl`（`sha256 82d37ead…f5b468`）**一个字节都没动** | 数据锚点、逐轮 `record_counts_ok` 与开跑前后的 sha256 原始输出见 Task 21 报告 §2 |
 
@@ -496,10 +496,10 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 | 1 | **非 targeted 段的门禁① 被误报成失败**（`repeats.json` 三轮 `exit_code: 1` 的来源） | **增加第三态**，不改成 0：`edgecompare` 在"过滤后决策层 N==0"时返回带类型的 `*NoDecisionLayerRecordsError` 并以**退出码 3** 结束；矩阵据 `G1==3` 写 `not_applicable: true` + `exit_code: null` + `not_applicable_reason`（**原样抄工具 stderr**），**不 `state_fail`、不 exit** ⇒ `MATRIX_RC` 不受影响 | 代码：`cmd/edgecompare/main.go` 的 `exitNotApplicable = 3`、`cmd/edgecompare/report.go` 的 `*NoDecisionLayerRecordsError`（`Error()` 措辞**逐字不变**）；Go 用例 `TestNoDecisionLayerIsAThirdExitStateNotAFailure`（rc=3 / stdout 空 / stderr 写明"不适用，不是失败" / 同批加一条缺依据 ⇒ **rc 回到 1** / 含一条 `targeted_ttp` ⇒ **rc=0**） |
 | 2 | **三态的可机读证据** | `gate-gate1.json` 与 `run.json.gate1_offline_compare` 都有 `not_applicable` / `exit_code` / `not_applicable_reason`；门禁② 的离线那半边（`gate2_offline_compare`）与**阈值敏感性行**（`sensitivity.json.results[<阈值>]`）同口径 | 三条验收（全部真跑矩阵汇总段，`EDGEEXP_RESUME=1`）：**①非 targeted 33 条 ⇒ 门禁① `not_applicable`、`MATRIX_RC=0`；②targeted 66 条 ⇒ 门禁① `exit=0`、`MATRIX_RC=0`（回归）；③删一条记录的 `ground_truth.basis` ⇒ 门禁① `exit=1`、`MATRIX_RC=1`（**证明它还有牙**）**。原始输出见 Task 22 报告 §2 |
 | 3 | **输入指纹判据被跨段合并污染**（假警报："剧本哈希 2 个取值 ⇒ 重复之间换了条件"） | **判据按段做**：`edge_variance.py` 的 `input_fingerprints` 改成 `per_segment`（每段内部各指纹只允许一种取值），跨段取值只作可读性、**不参与判据**；§5 增加「逐段小计」把两段的跨批结论分开报（**合并后的总数不得写成"22/22"**） | 实测：targeted 段 66 条 = 1 个 `playbook_hash`（`sha256:e585b846…`）、非 targeted 段 33 条 = 1 个（`sha256:b112ca3c…`）⇒ 段内各自唯一；合并后 2 个取值是**设计如此**（TTP pair 剧本 vs Discovery 侦察剧本）。报告 §0.1 现按段列表，`⚠️ …换了条件` 那条结论**已删除** |
-| 4 | **两条结论必须保留（不许因改口径而弱化）** | ① **批内零方差**：targeted 段 22 组 + 非 targeted 段 11 组的 `final_score`/五域分/每条 `effective_factor` 三遍**逐项相同**；② **跨批环境敏感**：与主批（`records-dl360-qemu-20261016.jsonl`）对照，targeted 段 **决策/标签/链 22/22 相同、分数 22/22 不同**（非 targeted 段 11/11、11/11、10/11、11/11 不同），原因定位到**唯一检查差 `OT-018`** ⇒ **环境状态差、不是抖动** | 报告 `docs/experiments/variance-report.md` §0（手写结论块 `variance-report-preamble.md`）+ §0.1/§5 的逐段小计；`variance.json` 的 `meta.inputs.per_segment`、`baseline_comparison` |
+| 4 | **两条结论必须保留（不许因改口径而弱化）** | ① **批内零方差**：targeted 段 22 组 + 非 targeted 段 11 组的 `final_score`/五域分/每条 `effective_factor` 三遍**逐项相同**；② **跨批环境敏感**：与主批（`records-dl360-qemu-20261016.jsonl`）对照，targeted 段 **决策/标签/链 22/22 相同、分数 22/22 不同**（非 targeted 段 11/11、11/11、10/11、11/11 不同），原因定位到**唯一检查差 `OT-018`** ⇒ **环境状态差、不是抖动** | 报告 `docs/2-experiments/variance-report.md` §0（手写结论块 `variance-report-preamble.md`）+ §0.1/§5 的逐段小计；`variance.json` 的 `meta.inputs.per_segment`、`baseline_comparison` |
 | 5 | **「零方差」的用途边界**（新增明文） | **「零方差」测的是基质稳定性与评分确定性，不是模型噪声**；真正的环境敏感性体现在**批与批之间**（§5）。重复样本不是独立样本；**n=3 只能说「本次 3 次重复里未观测到抖动」，给不出方差的界**（第一次审计 Minor-1 的纠正：原先写"只当抖动尺度的上限证据"，而 3 个点不存在非参数上界、样本标准差 0 也不是上界估计） | 报告开头的「用途边界（必读）」段（脚本内固定生成，`render_md`）；操作手册 §3.4.4 |
-| 6 | **数据与锚点** | 非 targeted 段 33 条入库 `lunwen/clab-lab/data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl`（`sha256 b29a969c…27dae`）；驱动汇总入库 `docs/experiments/repeats-t21-qemu-rpt.json` —— **Task 23 起该文件带 `pre_fix_record: true` + `pre_fix_note`**（那三轮 `exit_code: 1` 是第三态修复前的**分类错误**，不能用来证明"不适用"，也不能用来证明"数据坏"） | 取回前后 sha256 **逐字相同**（Task 22 报告 §4）；**主批数据集 `records-dl360-qemu-20261016.jsonl` 仍为 `sha256 82d37ead…f5b468`**（Task 23 开工前后各算一次） |
-| 7 | **targeted 段的驱动汇总**（Task 23 补） | `docs/experiments/repeats-t21-qemu-rpt-targeted.json`（**重建件**：驱动把汇总固定写到 `$DATA_DIR/repeats.json`，被随后那段原地覆盖）⇒ 三轮 `exit_code` 全 **0**、`record_counts_ok` 全 true、`gate1_offline_compare.exit_code` 全 0、`gate2_round_trip` 每轮 22 条最大偏差 0；每一格的来源写在文件的 `reconstruction` 里 | 逐轮运行级证据已入库：`lunwen/clab-lab/data/edgefactors/run-20261017-targeted-r{1,2,3}.json`（Task 23 报告 §3） |
+| 6 | **数据与锚点** | 非 targeted 段 33 条入库 `lunwen/clab-lab/data/edgefactors/records-t21-qemu-rpt-nontargeted.jsonl`（`sha256 b29a969c…27dae`）；驱动汇总入库 `docs/2-experiments/repeats-t21-qemu-rpt.json` —— **Task 23 起该文件带 `pre_fix_record: true` + `pre_fix_note`**（那三轮 `exit_code: 1` 是第三态修复前的**分类错误**，不能用来证明"不适用"，也不能用来证明"数据坏"） | 取回前后 sha256 **逐字相同**（Task 22 报告 §4）；**主批数据集 `records-dl360-qemu-20261016.jsonl` 仍为 `sha256 82d37ead…f5b468`**（Task 23 开工前后各算一次） |
+| 7 | **targeted 段的驱动汇总**（Task 23 补） | `docs/2-experiments/repeats-t21-qemu-rpt-targeted.json`（**重建件**：驱动把汇总固定写到 `$DATA_DIR/repeats.json`，被随后那段原地覆盖）⇒ 三轮 `exit_code` 全 **0**、`record_counts_ok` 全 true、`gate1_offline_compare.exit_code` 全 0、`gate2_round_trip` 每轮 22 条最大偏差 0；每一格的来源写在文件的 `reconstruction` 里 | 逐轮运行级证据已入库：`lunwen/clab-lab/data/edgefactors/run-20261017-targeted-r{1,2,3}.json`（Task 23 报告 §3） |
 | 8 | **第三态曾被自己引入的遮蔽洞**（Task 23 修） | 逐条输入校验（域覆盖 + 生效权重表可用）**从依据守卫之后搬到之前**、对**全部输入记录**跑 ⇒ 「全侦察口径 + 打分输入被破坏」由 `exit=3`（误绿）回到 `exit=1`；`applyBasisGuard` 只负责"谁进决策层" | `cmd/edgecompare/metrics.go` 的 `validateRecordInputs`；Go 用例 `TestInputValidationOutranksTheBasisGuard`；矩阵层三态表见 Task 23 报告 §1.3 |
 
 > **不适用 ≠ 失败，也不等于放行**：`not_applicable` 只出现在**退出码 3** 上；
@@ -557,7 +557,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 
 | # | 事 | 裁定/处置 | 依据与落点 |
 |---|---|---|---|
-| 1 | **论文正文** | 「**按实际的来写**」⇒ σ 的取值表述按实现订正（**上界不设**）+ 新增 §7.5 拟合 NULL 小节 | 用户原话；`ssam-lib/formulas_v2.go` 的 `SSAMV20Formula`；提交 `02fbccb`；三条真源（design §9.1 第 6 条 / 本条 / `docs/experiments/`）已同步 |
+| 1 | **论文正文** | 「**按实际的来写**」⇒ σ 的取值表述按实现订正（**上界不设**）+ 新增 §7.5 拟合 NULL 小节 | 用户原话；`ssam-lib/formulas_v2.go` 的 `SSAMV20Formula`；提交 `02fbccb`；三条真源（design §9.1 第 6 条 / 本条 / `docs/2-experiments/`）已同步 |
 | 2 | **两条产品修复上 main** | 批准 ⇒ ARC `cb14060`+`03db60b` cherry-pick 为 main `6ba127c`+`0a0e346`（`aef84de..0a0e346`，**只推 main**，未做整体同步） | 用户原话；符合分支策略②「漏洞/审计修复第一时间进 main」 |
 | 3 | **拟合的 NULL** | 「**需要进论文并且说明**」⇒ 论文 §7.5 含五条机制 + 三条措辞禁令（不可辨识 ≠ 无耦合 / ln 2 是常数预测器 / 未选模不是"优于基线"） | 用户原话；数字取自 `fit-20261021*.md`、`compare-20261021.md` |
 

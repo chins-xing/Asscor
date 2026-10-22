@@ -7,11 +7,11 @@
 
 专注 ASSCOR **网络拓扑感知与风险传播层**的演进——该层当前为占位实现
 （静态子网重叠图），完整缺口见
-[`docs/TOPO_MODEL_GAP_SUMMARY_2026-08-16.md`](audits/TOPO_MODEL_GAP_SUMMARY_2026-08-16.md)。
+[`docs/3-audits/TOPO_MODEL_GAP_SUMMARY_2026-08-16.md`](../../3-audits/TOPO_MODEL_GAP_SUMMARY_2026-08-16.md)。
 
 ## 演进依据
 
-- **蓝图**: [`docs/TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md`](../TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md)（6 层基础设施清单 + 里程碑）
+- **蓝图**: [`docs/1-current/reference/TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md`](TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md)（6 层基础设施清单 + 里程碑）
 - **审计**: T1-T21（复杂拓扑/语义/动态性）、拓扑模型缺口全景
 - **规划文档区**: `lunwen/research-core/`（审计副本 + 研究资料）
 

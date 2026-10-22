@@ -1048,7 +1048,7 @@ func TestMarshalRecordRejectsUnconstructibleRecord(t *testing.T) {
 // ============================================================================
 
 // designDocPath 从本包目录（internal/edgeexp）相对定位设计文档。
-const designDocPath = "../../docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md"
+const designDocPath = "../../docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md"
 
 // loadDocSample 取 §5.1 标题之后第一个 ```json 围栏的内容，压成 JSONL 的真实形态后读入。
 //

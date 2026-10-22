@@ -1,7 +1,7 @@
 # ASSCOR Secure Mode 安全模式白皮书
 
 > **版本：** v1.0 | **适用：** ASSCOR v0.2.3（ASSCOR-Research-Core 分支，build-tag `securemode`） | **日期：** 2026-08-28
-> **配套文档：** [Secure Mode 模块设计（SDD）](superpowers/specs/2026-08-21-secure-mode-design.md)、工程实现白皮书（§11 微内核架构）、ASSCOR 使用手册（Secure Mode 章节）
+> **配套文档：** [Secure Mode 模块设计（SDD）](../design/2026-08-21-secure-mode-design.md)、工程实现白皮书（§11 微内核架构）、ASSCOR 使用手册（Secure Mode 章节）
 > **模块实现：** `internal/securemode/`（23 文件），build-tag：`securemode`
 
 ---
@@ -356,7 +356,7 @@ go build -tags "securemode,heartbeat,commander,policy,cti,assessor,attck_ext,spc
 
 ## 12. 参考
 
-- [Secure Mode 模块设计（SDD，2026-08-21）](superpowers/specs/2026-08-21-secure-mode-design.md)
+- [Secure Mode 模块设计（SDD，2026-08-21）](../design/2026-08-21-secure-mode-design.md)
 - README.md 「Secure Mode（实验性，build-tag：securemode）」章节
 - 工程实现白皮书 §11 微内核架构（§11.3 插件表 securemode 行）
 - ASSCOR 使用手册「Secure Mode 安全模式」章节（操作手册视角）

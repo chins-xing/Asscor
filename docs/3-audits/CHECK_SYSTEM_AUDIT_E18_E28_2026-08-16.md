@@ -37,4 +37,4 @@ user_check 命令受无 shell 白名单约束（安全修复 P0-2 的设计）�
 
 **检查系统 E18-E28 除 E22（环境受限）外全部通过**：PASS/FAIL 判定、边界值、异常捕获、空结果、重复一致性、并发、隔离、动态启停、版本一致性均正确。user_check 作为可编程检查扩展（CU- 前缀 + 无 shell 安全执行）功能完整可靠。
 
-*数据：`docs/clab-lab/data/assessments-checks.jsonl`。*
+*数据：`docs/2-experiments/clab-lab/data/assessments-checks.jsonl`。*

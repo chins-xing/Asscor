@@ -174,7 +174,7 @@ type AssessmentInput struct {
 | `SPCScore` | float64 | SPC posture-correction factor (0.60–1.00); auto-set to 1.0 when 0 |
 | `WeightShifts` | map[string]float64 | Temporary domain-weight shifts produced by SPC (optional) |
 
-> **SPC Assessment-Methodology Declaration**: `SPCScore` is produced by the SPC module through CPE string matching — i.e., comparing installed software package names/versions against the affected product versions in the CVE database. It does **not** involve exploit verification, runtime reachability analysis, or binary analysis. See the [SPC Security Posture Computation Module Technical Whitepaper](SPC安全态势计算模块技术白皮书.md).
+> **SPC Assessment-Methodology Declaration**: `SPCScore` is produced by the SPC module through CPE string matching — i.e., comparing installed software package names/versions against the affected product versions in the CVE database. It does **not** involve exploit verification, runtime reachability analysis, or binary analysis. See the [SPC Security Posture Computation Module Technical Whitepaper](../../../1-current/whitepapers/SPC安全态势计算模块技术白皮书.md).
 
 ### 3.2 CheckInput — Check Item Input
 

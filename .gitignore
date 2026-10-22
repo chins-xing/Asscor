@@ -149,10 +149,10 @@ lunwen?*/
 # 报 undefined: attachSPC。2026-09-08 修复: 删除规则并补提交这些文件。)
 
 # Audit reports (generated documentation, not tracked)
-#docs/audits/
+#docs/3-audits/
 
 # v0.3.0 optional research direction (moved to lunwen/, no longer under docs/)
-#docs/ASSCOR-Research-Core/*
+#（原“docs 下的 ASSCOR-Research-Core 目录”忽略规则已不再需要；研究资产在 lunwen/）
 
 #.trae
 .trae/
@@ -182,7 +182,8 @@ prism-lib/.git/
 # and ONE `git add -A` swallows it all. Task 12 made the rule explicit here.
 #
 # NOTE: this is `.superpowers/` (leading dot, project root). It is a DIFFERENT
-# path from `docs/superpowers/`, which holds *tracked* design/plan documents
+# path from the tracked document directories (`docs/1-current/design/` and
+# `docs/4-archive/plans/`), which hold *tracked* design/plan documents
 # and must stay tracked. Do not widen this rule.
 .superpowers/
 

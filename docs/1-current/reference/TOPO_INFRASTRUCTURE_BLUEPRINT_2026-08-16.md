@@ -1,7 +1,7 @@
 # 拓扑与传播层基础设施蓝图（v0.3.0 特化分支）
 
 **日期**: 2026-08-16 | **版本**: v0.2.3 | **性质**: 基础设施需求统计（不立即实现，为社区接入奠基）
-**依据**: `docs/audits/TOPO_MODEL_GAP_SUMMARY_2026-08-16.md`、`TOPO_COMPLEX_AUDIT_T1_T11`、`TOPO_SEMANTIC_AUDIT_T12_T16`、`TOPO_DYNAMICS_AUDIT_T17_T21`
+**依据**: `docs/3-audits/TOPO_MODEL_GAP_SUMMARY_2026-08-16.md`、`TOPO_COMPLEX_AUDIT_T1_T11`、`TOPO_SEMANTIC_AUDIT_T12_T16`、`TOPO_DYNAMICS_AUDIT_T17_T21`
 
 ## 一、背景
 

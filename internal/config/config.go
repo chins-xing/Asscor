@@ -664,7 +664,7 @@ func (cfg *Config) parseTopologySection(sections map[string]map[string]string) {
 }
 
 // adapterSecretEnv maps adapter config keys to the documented environment
-// variable names (see docs/ASSCOR 外部接入源完整清单.md §7.1 and the
+// variable names (see docs/1-current/reference/ASSCOR 外部接入源完整清单.md §7.1 and the
 // config.ini templates). Any secret key without an entry falls back to the
 // conventional name derived by common.SecretEnvName.
 var adapterSecretEnv = map[string]string{

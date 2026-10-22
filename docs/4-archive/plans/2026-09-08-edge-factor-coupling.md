@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.26、`math`、`encoding/json`、`crypto/sha256`、build-tag 模块模式（`edgefactor` / `edgeexp`）、既有 `internal/config` 纯解析范式、既有 `model.EdgeFactors` 契约。
 
-**Spec:** `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`
+**Spec:** `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`
 
 ## Global Constraints
 

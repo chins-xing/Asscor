@@ -66,9 +66,9 @@
 
 | # | 内容 | 状态 |
 |---|---|---|
-| ① | SSAM/SRD 情报可信度作为算法层原生变量（贝叶斯置信区间） | ✅ **已完成（审计 14 项已修），但标定仍后置**（2026-10-22 修复复核，提交链 `34b89c6`(B-1) → `929b454`(B-2) → `1a54c67`(I-12) → `e9d12ff`/`4e5db9c`(I-2) → `9a3f348`(I-10) → `78c2a1d`(I-9) → `e10977d`(I-5) → `36a5b2c`(I-8) → `cee657f`(I-1/I-4/I-6) → `7b307f2`(I-7) → `ac1bd29`(I-3 敏感性表)）。审计的 2 Blocker + 12 Important 全部闭环：外部 adapter 透传 `Source`/`Confidence` 使来源表对第三方扫描器生效；`accept_by_lower_bound` 已被插件/库/legacy/kernel 所有判定点消费；legacy 也写 σ/CI/`EvidenceConfidence`；`c` 归一只有一份；`checkrx` 按字节字典序；坏值 fail-fast；未知 `algorithm` 加载即错；`σ_final` 按 intrinsic 权重 0.5 折算且区间只钳下界。**唯一有意行为变更**：`passed=false && Delta>=0` 的检查两边统一跳过（旧 legacy 会累加正 delta）。**仍未兑现**：实验标定 / CI 覆盖率验证 —— 出厂 `user=0.90`/`adapter=0.80` 是**先验**，对外不得声称"已标定"。详见 `docs/CONFIDENCE_MODEL_DESIGN_2026-09-08.md` §7.7 与审计判决书后续复审 |
+| ① | SSAM/SRD 情报可信度作为算法层原生变量（贝叶斯置信区间） | ✅ **已完成（审计 14 项已修），但标定仍后置**（2026-10-22 修复复核，提交链 `34b89c6`(B-1) → `929b454`(B-2) → `1a54c67`(I-12) → `e9d12ff`/`4e5db9c`(I-2) → `9a3f348`(I-10) → `78c2a1d`(I-9) → `e10977d`(I-5) → `36a5b2c`(I-8) → `cee657f`(I-1/I-4/I-6) → `7b307f2`(I-7) → `ac1bd29`(I-3 敏感性表)）。审计的 2 Blocker + 12 Important 全部闭环：外部 adapter 透传 `Source`/`Confidence` 使来源表对第三方扫描器生效；`accept_by_lower_bound` 已被插件/库/legacy/kernel 所有判定点消费；legacy 也写 σ/CI/`EvidenceConfidence`；`c` 归一只有一份；`checkrx` 按字节字典序；坏值 fail-fast；未知 `algorithm` 加载即错；`σ_final` 按 intrinsic 权重 0.5 折算且区间只钳下界。**唯一有意行为变更**：`passed=false && Delta>=0` 的检查两边统一跳过（旧 legacy 会累加正 delta）。**仍未兑现**：实验标定 / CI 覆盖率验证 —— 出厂 `user=0.90`/`adapter=0.80` 是**先验**，对外不得声称"已标定"。详见 `docs/1-current/design/CONFIDENCE_MODEL_DESIGN_2026-09-08.md` §7.7 与审计判决书后续复审 |
 | ② | 边缘因子耦合放大缺理论边界 → 基于真实数据的**向量图** + 边缘因子**变量化**（非常量进算法） | ✅ **里程碑 B 已完成（2026-10-21）**：A（Task 1–10 + 2 独立任务，五轮复审闭环）已交付统一框架/四候选/配置注入/内仓钩子/溯源字段/离线工具。B 在 2026-09-12 **当时**的状态是「进行中」：采集器（`cmd/edgescen`）、共享 JSONL 契约（`internal/edgeexp`）、实验模板与场景矩阵脚本已就位，但**全量扫描被当时的宿主前提阻塞**（见 §七 C1）。**该阻塞已解除**：Task 13/17 把基质换到 qemu VM 并对齐取数权限，Task 19 入库 33/33 全量批次（22 targeted + 11 recon）、Task 21 完成重复轴 99 条（66 + 33）、Task 24 给出拟合 NULL / 不可辨识结论；门禁①/② 全绿。证据：台账 H.1/H.5/H.7/H.8 |
-| ③ | **熵扩展包**：行为/网络/基线三熵（瞬时熵相对零点的偏移，独立于评分体系）+ 独立收集器四面采集 + 时序情报存储（保密/完整/可用）+ 审计链 | 🗄 **已归档，未实现**（设计 `docs/ENTROPY_EXTENSION_DESIGN_2026-09-08.md`、计划 `docs/superpowers/plans/2026-09-08-entropy-pack.md`，提交 b737c18；里程碑 A Task 1–12 待执行；retention 分段链语义待定） |
+| ③ | **熵扩展包**：行为/网络/基线三熵（瞬时熵相对零点的偏移，独立于评分体系）+ 独立收集器四面采集 + 时序情报存储（保密/完整/可用）+ 审计链 | 🗄 **已归档，未实现**（设计 `docs/1-current/design/ENTROPY_EXTENSION_DESIGN_2026-09-08.md`、计划 `docs/4-archive/plans/2026-09-08-entropy-pack.md`，提交 b737c18；里程碑 A Task 1–12 待执行；retention 分段链语义待定） |
 | ④ | **CLI 定位重构**：剥离运维属性（Install/Uninstall/Upgrade/systemd），CLI 仅作为高危操作的唯一入口（熵包零点打点/重置、模式切换、密钥与导出等） | ❌ 未开始（待方向③ 落地后与熵命令一并收敛） |
 
 ## 五、工程/研究债（非审计项）
@@ -110,7 +110,7 @@
 - **标签侧是结构性的（当时）**：注入完全发生在采集器**本地**的检查集里，矩阵脚本**从不改动被攻击节点的防护**（`edge_reset` 只重建实验室、`edge_attack` 只推进剧本）⇒ 三条记录 `compromised=true / block_effective=false / nodes_affected=1` 恒定 ⇒ **单类别标签**，漏判率/误阻断率/AUC 与 logistic 拟合全部退化。
 - **更深一层（管线正确性，现在仍然成立）**：观察对象必须是**被注入/被攻击的那台机器**，否则"记录描述部署行为"这一前提不成立。这条**不是**阻塞、而是现行口径；VM 批次已按它执行。
 - **当时的选项（作者裁定，已由"换基质"取代）**：**(A)** 硬化基线宿主；**(B)** 反转设计；**(C)** 缩小矩阵。
-- 相关：`docs/superpowers/plans/2026-09-12-edge-factor-coupling-milestone-b.md` 的 Task 4 门禁与 §5.4 手册；等价采样矩阵实现在 `lunwen/clab-lab/scripts/edge_matrix.sh`。
+- 相关：`docs/4-archive/plans/2026-09-12-edge-factor-coupling-milestone-b.md` 的 Task 4 门禁与 §5.4 手册；等价采样矩阵实现在 `lunwen/clab-lab/scripts/edge_matrix.sh`。
 - **解除判据（可复核）**：`records-dl360-qemu-20261016.jsonl` = 33 条（`sha256 82d37ead…f5b468`），`substrate=qemu`；重复轴 targeted 66 + nontargeted 33；台账 H.1/H.5/H.7/H.8。
 
 ### 已实测确证的技术事实（可写进论文，需按注记口径）

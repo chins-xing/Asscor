@@ -32,9 +32,9 @@
 
 **Tech Stack:** Go 1.26、build-tag 模块模式（`expr` / `edgeexp` / `engine`）、`internal/edgefactor`（无 tag 合成层）、`internal/engine`（tag engine 的真实评分入口）、Containerlab + Docker + Caldera（真实攻击剧本）、既有 `cmd/edgecompare`（离线重算/指标/拟合/报告）。
 
-**Spec:** `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（§5.1 记录 schema 与记录构造要求、§5.2 流程与可复现性、§5.3 环境分工、§6 验证策略、§8 P5–P7、§10.1/§10.2 已知口径）
+**Spec:** `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（§5.1 记录 schema 与记录构造要求、§5.2 流程与可复现性、§5.3 环境分工、§6 验证策略、§8 P5–P7、§10.1/§10.2 已知口径）
 
-**前置计划（已完成）:** `docs/superpowers/plans/2026-09-08-edge-factor-coupling.md`（里程碑 A：Task 1–10 + 2 独立任务，全部收口并推送）
+**前置计划（已完成）:** `docs/4-archive/plans/2026-09-08-edge-factor-coupling.md`（里程碑 A：Task 1–10 + 2 独立任务，全部收口并推送）
 
 ## Global Constraints
 
@@ -97,7 +97,7 @@
 | `cmd/edgescen/scenario.go` | 新建（tag `expr`） | 场景定义（S0–S5/R 的因子集与注入规格）与 `--scenario` 解析 |
 | `cmd/edgescen/observe.go` | 新建（tag `expr`） | 通过 `internal/engine.Assessor` 取得评估（含观测链），并断言记录构造要求 |
 | `cmd/edgescen/groundtruth.go` | 新建（tag `expr`） | 从攻击harness产物解析客观结果（`compromised`/`ttc`/`ttps`/`nodes`/`block_effective`） |
-| `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` | 修改 | §5.1 指向 `internal/edgeexp`；§5.4 新增"实验执行手册"小节（场景脚本、复位流程、失败处理） |
+| `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` | 修改 | §5.1 指向 `internal/edgeexp`；§5.4 新增"实验执行手册"小节（场景脚本、复位流程、失败处理） |
 | `configs/edgeexp/*.ini` | 新建 | 实验模板：M0 基线（**无** `[edge_factors.model]` 段）、V/G/C 候选模板（含 `lambda`/`vector`/`coupling`/`chain`） |
 | `lunwen/clab-lab/scripts/` | 新建脚本 | `edge_*.sh`：场景矩阵驱动（clab 复位、注入、攻击、采集、落盘、日志） |
 | `lunwen/clab-lab/data/edgefactors/` | 新建目录 | 数据集与报告归档（JSONL、拟合报告、参数文件） |
@@ -613,7 +613,7 @@ Expected: 全绿；既有 `cmd/edgecompare` 语义用例（除 Step 2 明确更�
 **Files:**
 - Create: `configs/edgeexp/m0-baseline.ini`（**无** `[edge_factors.model]` 段）、`configs/edgeexp/vector.ini`、`configs/edgeexp/graph.ini`、`configs/edgeexp/chain.ini`
 - Create: `lunwen/clab-lab/scripts/edge_reset.sh`、`edge_attack.sh`、`edge_collect.sh`、`edge_matrix.sh`
-- Modify: `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（新增 §5.4 实验执行手册）
+- Modify: `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（新增 §5.4 实验执行手册）
 
 **Interfaces:**
 - Consumes: Task 3 的 `edgescen` 二进制（交叉编译 `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 -tags expr`）。
@@ -741,7 +741,7 @@ Expected: 逐条相等（浮点逐位或两位小数内相等，取整口径与�
 - [ ] **Step 7: 提交（脚本 + 模板 + spec §5.4）**
 
 ```bash
-git add configs/edgeexp lunwen/clab-lab/scripts docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md
+git add configs/edgeexp lunwen/clab-lab/scripts docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md
 git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实验模板（S0–S5 + R 共 22+3 组）
 ```
 
@@ -749,7 +749,7 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
 
 ### Task 4C: 观察对象搬到节点内 + R 组条件探测真相源（不依赖 C1 的正确性修复）
 
-**为什么加这个任务**（C1 只读勘测实测 —— 该勘测的结论逐条写在下面，**勘测报告本身是过程产物、不入库**；可交付版本见 `docs/experiments/EDGE_FACTOR_EXPERIMENT_ENVIRONMENT_WHITEPAPER.md` 与 `docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part B.2）：
+**为什么加这个任务**（C1 只读勘测实测 —— 该勘测的结论逐条写在下面，**勘测报告本身是过程产物、不入库**；可交付版本见 `docs/2-experiments/EDGE_FACTOR_EXPERIMENT_ENVIRONMENT_WHITEPAPER.md` 与 `docs/2-experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part B.2）：
 
 - **观察对象错位**：`cmd/edgescen` **没有** target/host 参数，`runHostChecks()` 跑的是**它自己所在宿主**的检查登记表，冒烟记录描述的因此是 **WSL 开发机**而不是**被攻击的节点**（输出路径 `/mnt/f/...` 是铁证）。C1 的两个候选分支（硬化基线 / 缩小矩阵）**都需要**这个修复 —— 否则"记录描述部署行为"这一前提不成立。
 - **R 组诚实性有洞**：`condition_holds()` / R 组"真实缺失"闸门探测的是**脚本宿主**，而 `attack-R-no-ids.json` 的 `condition_probes` 是**空数组** ⇒ "确实把 IDS 去掉了"这句话目前**没有节点侧证据**。
@@ -760,7 +760,7 @@ git commit -F build/commit-msg.txt   # feat(edgeexp): 场景矩阵脚本与实�
 - Modify: `cmd/edgescen/{main.go,scenario.go}`（CLI：目标/运行位置参数与其校验；新增参数必须 additive、默认行为不变）
 - Modify: `lunwen/clab-lab/scripts/edge_collect.sh`（把二进制送进节点并取回结果；失败即非零、不留半条记录）
 - Modify: `lunwen/clab-lab/scripts/edge_attack.sh`（R 组条件探测改为**在节点上**执行并落进 `condition_probes`）
-- Modify: `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（§5.3/§5.4：观测对象口径 + 节点内评估与宿主评估的**已知差异**）
+- Modify: `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（§5.3/§5.4：观测对象口径 + 节点内评估与宿主评估的**已知差异**）
 - Test: `cmd/edgescen/main_test.go`（新参数的存在性与校验、默认路径不变）
 
 - [ ] **Step 1: 目标口径与默认路径不变**
@@ -807,7 +807,7 @@ Expected: 全绿；**默认（不带目标参数）路径逐位不变**有显式
 - Create: `lunwen/clab-lab/scripts/edge_lab.sh`（**基质抽象**：`up`/`down`/`exec`/`push`/`ip`/`inspect`，由 `EDGEEXP_SUBSTRATE=clab|lxd` 选择）
 - Modify: `lunwen/clab-lab/scripts/{edge_reset,edge_attack,edge_collect,edge_matrix}.sh`（**只替换基质调用点**；门禁、注入、记录构造逻辑一行不动）
 - Create: `lunwen/clab-lab/a1/`（A-1 侧清单：容器创建、控制安装（硬化基线）、Caldera 安装与 agent 部署、路径约定）
-- Modify: `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（§5.3 环境分工 + §5.4 手册：A-1/LXD 为实验主场，WSL2 退为开发与离线）
+- Modify: `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（§5.3 环境分工 + §5.4 手册：A-1/LXD 为实验主场，WSL2 退为开发与离线）
 
 - [ ] **Step 1 基质抽象**（**行为不变**是最硬的门禁）：把"建/毁拓扑、在目标内执行、把文件送进目标、取目标 IP"四件事收进 `edge_lab.sh`；`clab` 分支必须先证明与今天**逐位等价**（同一命令、同一顺序、同一错误串），既有干跑与离线夹具全绿。
 - [ ] **Step 2 LXD 节点驱动**：`edgescen -target` 接受 `docker:<容器>`（缺省，行为不变）与 `lxd:<实例>`；失败形态与 docker 路径**同粒度响亮**（实例不存在 / `lxc` 不可用 / 信封缺失 / 检查集为空 / nonce 不匹配），并复用 Task 4C 的 nonce 绑定。
@@ -852,7 +852,7 @@ Expected: 全绿；**默认（不带目标参数）路径逐位不变**有显式
 
 **Files:**
 - Produce: `lunwen/clab-lab/data/edgefactors/fit-<date>.md`、`params-<date>.ini`（`[edge_factors.model]` 段）、`params-<date>-factors.ini`（`[edge_factors]` 段）
-- Modify: `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（§9 决策记录追加实测结论）
+- Modify: `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（§9 决策记录追加实测结论）
 
 - [ ] **Step 1: 四候选对比（决策层主判据：漏判率 → 误阻断率 → AUC → 字典序）**
 ```bash
@@ -895,8 +895,8 @@ Expected: 全绿；**默认（不带目标参数）路径逐位不变**有显式
 ### Task 7: 文档、论文口径与双分支同步
 
 **Files:**
-- Modify: `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（P5–P7 结论、§5.4 实测记录、§10 已知问题更新）
-- Modify: `docs/audits/TECHNICAL_DEBT_BACKLOG_2026-09-08.md`（债务状态更新）
+- Modify: `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（P5–P7 结论、§5.4 实测记录、§10 已知问题更新）
+- Modify: `docs/3-audits/TECHNICAL_DEBT_BACKLOG_2026-09-08.md`（债务状态更新）
 - Modify（若论文涉及）: `lunwen/paper/*.tex`（**只允许**加标注与升级路径，**不得回退**既有数字；E1–E9 的 upper bound 限定必须保留）
 
 - [ ] **Step 1: 债务与已知问题对账**：把本里程碑新发现的问题（含被评审记下但本轮未处理的项）逐条落到债务清单，标 Status/Decision。

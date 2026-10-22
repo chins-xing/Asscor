@@ -3,11 +3,11 @@
 > 🧪 **分支：`ASSCOR-Research-Core`（研究线；与 `main` 正式分叉，永不整体同步）**
 >
 > 本分支在 `main` 产品线之上承载研究内容：
-> - **方向② 边缘因子耦合与变量化**：实验工具与资产（`cmd/edgescen/`、`cmd/edgecompare/`、`configs/edgeexp/`、`lunwen/clab-lab/`），设计见 [docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md](docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md)
-> - **拓扑/传播层研究**：M0–M2 里程碑（图模型地基 → 生命周期 → 语义传播），见 [docs/ASSCOR-Research-Core.md](docs/ASSCOR-Research-Core.md) 与 `lunwen/research-core/`
+> - **方向② 边缘因子耦合与变量化**：实验工具与资产（`cmd/edgescen/`、`cmd/edgecompare/`、`configs/edgeexp/`、`lunwen/clab-lab/`），设计见 [docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md](docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md)
+> - **拓扑/传播层研究**：M0–M2 里程碑（图模型地基 → 生命周期 → 语义传播），见 [docs/1-current/reference/ASSCOR-Research-Core.md](docs/1-current/reference/ASSCOR-Research-Core.md) 与 `lunwen/research-core/`
 > - **论文与实验数据**：`lunwen/paper/`、`lunwen/clab-lab/data/`
 >
-> **分支规则与资产归属**见 [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)：两分支正式分叉、永不整体同步；
+> **分支规则与资产归属**见 [docs/1-current/reference/ASSET_OWNERSHIP.md](docs/1-current/reference/ASSET_OWNERSHIP.md)：两分支正式分叉、永不整体同步；
 > 债务清偿／漏洞／审计修复**第一时间进 main**；两分支的**底座保持一致**；研究接线类底座改动留本分支并登记为**有意差异**。
 
 > **ASSCOR**（**ASS**ess + **COR**e）是一个开源的、面向生产的安全可接受性评估平台。
@@ -79,7 +79,7 @@ ASSCOR 不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系�
 
 ## 1. ASSCOR 平台架构
 
-ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** 通信，支持 mTLS 加密。Kernel 负责评估协调和指令分发，Agent 负责本地检查执行与状态上报。核心能力见下表，完整细节见 [使用手册](docs/ASSCOR%20使用手册.md)。
+ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** 通信，支持 mTLS 加密。Kernel 负责评估协调和指令分发，Agent 负责本地检查执行与状态上报。核心能力见下表，完整细节见 [使用手册](docs/1-current/guides/ASSCOR%20使用手册.md)。
 
 | 组件 | 功能 |
 |------|------|
@@ -240,7 +240,7 @@ $$
 
 $P_{score}$ 下限为 0.60，防止 SPC 单方面"杀死"主机评分。多 CVE 罚分叠加采用平方和开方（√∑Penalty²）替代线性求和，防止大量低危 CVE 过早触底。
 
-详细计算示例请参阅 [SPC 安全态势计算模块技术白皮书](docs/SPC安全态势计算模块技术白皮书.md)。
+详细计算示例请参阅 [SPC 安全态势计算模块技术白皮书](docs/1-current/whitepapers/SPC安全态势计算模块技术白皮书.md)。
 
 ## 8. 等级保护制度接入
 
@@ -284,7 +284,7 @@ compliance_framework = GB/T 22239-2019 Level 3
 
 ## Secure Mode（实验性，build-tag：securemode）
 
-> 可选模块（`internal/securemode/`，build-tag `securemode`；**默认构建不含**）。保护 `config.ini` 与 `agent.ini` 的静态安全。设计与实现记录见 [docs/superpowers/specs/2026-08-21-secure-mode-design.md](docs/superpowers/specs/2026-08-21-secure-mode-design.md)；以下为总览。
+> 可选模块（`internal/securemode/`，build-tag `securemode`；**默认构建不含**）。保护 `config.ini` 与 `agent.ini` 的静态安全。设计与实现记录见 [docs/1-current/design/2026-08-21-secure-mode-design.md](docs/1-current/design/2026-08-21-secure-mode-design.md)；以下为总览。
 
 ### 功能
 
@@ -325,7 +325,7 @@ go build -tags securemode ./cmd/kernel ./cmd/agent
 ### 与其他分支的关系
 
 - 模块代码（`internal/securemode/`）在两条分支上**都在**；差别只在**默认构建是否启用该 build-tag**（默认不含）。
-- 两分支的分工、资产归属与「有意差异」清单见 [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)。
+- 两分支的分工、资产归属与「有意差异」清单见 [docs/1-current/reference/ASSET_OWNERSHIP.md](docs/1-current/reference/ASSET_OWNERSHIP.md)。
 
 ## 11. 项目结构
 
@@ -411,7 +411,7 @@ ASSCOR/
 │   └── edgeexp/       #   四候选实验模板（研究线：m0-baseline/vector/graph/chain）
 ├── certs/             # TLS/mTLS 证书目录（已排除于版本控制）
 ├── docs/              # 技术文档与白皮书
-├── lunwen/            # 论文与实验资产（研究线；归属见 docs/ASSET_OWNERSHIP.md）
+├── lunwen/            # 论文与实验资产（研究线；归属见 docs/1-current/reference/ASSET_OWNERSHIP.md）
 ├── build/             # 编译产物（Linux/Windows，已排除于版本控制）
 ├── config.ini         # 内核默认配置文件
 └── agent.ini          # Agent 默认配置文件
@@ -518,7 +518,7 @@ SSAM 2.0 提供了一套严谨且可进化的安全可接受性度量标准。�
 - **SSAM IR**：`AssessmentOutputV2.ToIR()` 输出机器可读的 JSON 中间表示（SSAMIR），便于下游工具链消费
 - **Formula DSL / AST**：`formulas_ast.go` 提供 `ParseFormula(expression string) (FormulaAST, error)` 及 `EvaluateFormula`，支持运行时动态构造评分公式
 
-详细接口规范与接入指南请参阅 [docs/SSAM接口规范与接入指南.md](docs/SSAM接口规范与接入指南.md)。
+详细接口规范与接入指南请参阅 [docs/1-current/reference/SSAM接口规范与接入指南.md](docs/1-current/reference/SSAM接口规范与接入指南.md)。
 
 Prism 项目拆分已整合入 [§4 Prism/SRD](#4-prism--srd-风险动力学引擎)。
 
@@ -837,4 +837,4 @@ ASSCOR 采用 **[Apache License 2.0](LICENSE)** —— 宽松许可证，允许�
 | **独立开发者** | 直接 Fork 后自由分支发展，可独立分发/商业化，无需等待上游合入 |
 | **维护者** | 保持 `main` 分支稳定，控制上游演进节奏 |
 
-`main` 分支始终为可构建、可测试、可发布状态（CI 全绿）；研究线内容（论文、实验工具与数据、研究计划）留在 `ASSCOR-Research-Core` 分支。两分支**正式分叉、永不整体同步**：只有维护者点名的改动才逐个 cherry-pick／移植上 `main`（**不要** `git merge` 研究分支——那会把研究线资产一次性带回）。资产归属、底座一致性与「有意差异」清单见 [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)。
+`main` 分支始终为可构建、可测试、可发布状态（CI 全绿）；研究线内容（论文、实验工具与数据、研究计划）留在 `ASSCOR-Research-Core` 分支。两分支**正式分叉、永不整体同步**：只有维护者点名的改动才逐个 cherry-pick／移植上 `main`（**不要** `git merge` 研究分支——那会把研究线资产一次性带回）。资产归属、底座一致性与「有意差异」清单见 [docs/1-current/reference/ASSET_OWNERSHIP.md](docs/1-current/reference/ASSET_OWNERSHIP.md)。

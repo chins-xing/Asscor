@@ -1,7 +1,7 @@
 # ASSCOR Secure Mode Whitepaper
 
 > **Version:** v1.0 | **Applies to:** ASSCOR v0.2.3 (ASSCOR-Research-Core branch, build tag `securemode`) | **Date:** 2026-08-28
-> **Companion documents:** [Secure Mode module design (SDD)](../superpowers/specs/2026-08-21-secure-mode-design.md), Engineering Implementation Whitepaper (§11 Micro-kernel Architecture), ASSCOR User Manual (Secure Mode chapter)
+> **Companion documents:** [Secure Mode module design (SDD)](../../../1-current/design/2026-08-21-secure-mode-design.md), Engineering Implementation Whitepaper (§11 Micro-kernel Architecture), ASSCOR User Manual (Secure Mode chapter)
 > **Module implementation:** `internal/securemode/` (23 files), build tag: `securemode`
 
 ---
@@ -357,7 +357,7 @@ go build -tags "securemode,heartbeat,commander,policy,cti,assessor,attck_ext,spc
 
 ## 12. References
 
-- [Secure Mode module design (SDD, 2026-08-21)](../superpowers/specs/2026-08-21-secure-mode-design.md)
+- [Secure Mode module design (SDD, 2026-08-21)](../../../1-current/design/2026-08-21-secure-mode-design.md)
 - README.md — "Secure Mode (experimental, build tag: securemode)" section
 - Engineering Implementation Whitepaper §11 Micro-kernel Architecture (§11.3 plugin table, securemode row)
 - ASSCOR User Manual — "Secure Mode" chapter (operator's-manual perspective)

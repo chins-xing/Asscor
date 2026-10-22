@@ -1,5 +1,9 @@
 # 审计报告索引
 
+> **以最新 `*-verdict.md` 为准。** 本目录内的审计结论若与最新判决（`*-verdict.md`）冲突，
+> 一律以最新判决为准；`archive/` 与 `history/` 只是过程记录，不是现行口径。
+> 分类规则见 [../README.md](../README.md)，迁移记录见 [../MIGRATION_MAP.md](../MIGRATION_MAP.md)。
+
 ## 活跃报告 (Active)
 
 | 文件 | 日期 | 说明 |

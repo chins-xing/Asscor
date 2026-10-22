@@ -7,15 +7,15 @@
 > - **Direction ② — edge-factor coupling & vectorisation:** experiment tooling
 >   and assets (`cmd/edgescen/`, `cmd/edgecompare/`, `configs/edgeexp/`,
 >   `lunwen/clab-lab/`); design in
->   [docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md](docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md);
+>   [docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md](docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md);
 > - **Topology / propagation research** — M0–M2 milestones (graph-model
 >   foundation → lifecycle → semantic propagation); see
->   [docs/ASSCOR-Research-Core.md](docs/ASSCOR-Research-Core.md) and
+>   [docs/1-current/reference/ASSCOR-Research-Core.md](docs/1-current/reference/ASSCOR-Research-Core.md) and
 >   `lunwen/research-core/`;
 > - **Paper and experiment data:** `lunwen/paper/`, `lunwen/clab-lab/data/`.
 >
 > **Branch rules and asset ownership** live in
-> [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md): the two branches are
+> [docs/1-current/reference/ASSET_OWNERSHIP.md](docs/1-current/reference/ASSET_OWNERSHIP.md): the two branches are
 > formally forked and never fully synced; debt / vulnerability / audit fixes
 > go to `main` **first**; the shared **base (product foundation)** must stay
 > identical; research-driven edits to base files stay here and are registered
@@ -262,7 +262,7 @@ installed as self-contained bundles with a `package.json` manifest.
 > An **optional** module (`internal/securemode/`, build-tag `securemode`;
 > **not part of the default build**) that protects the static security of
 > `config.ini` and `agent.ini`. Design & implementation records:
-> [docs/superpowers/specs/2026-08-21-secure-mode-design.md](docs/superpowers/specs/2026-08-21-secure-mode-design.md);
+> [docs/1-current/design/2026-08-21-secure-mode-design.md](docs/1-current/design/2026-08-21-secure-mode-design.md);
 > summary below.
 
 ### Features
@@ -324,7 +324,7 @@ for Estimating, Predicting, and Engaging Adaptive Attackers"** (Jiahao Lai)
 and the Containerlab experiment campaign (E1–E9) with its reviewer attachment
 bundle live on the **`ASSCOR-Research-Core`** branch, under `lunwen/` — they
 are intentionally **not** part of `main` (see
-[docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)). See the paper's own
+[docs/1-current/reference/ASSET_OWNERSHIP.md](docs/1-current/reference/ASSET_OWNERSHIP.md)). See the paper's own
 documentation for details.
 
 ## 11. Build & quick start
@@ -351,7 +351,7 @@ sudo ./ASSCOR-agent-linux-amd64 --install             # install agent on a targe
 asscor-cli                                             # connect to the kernel CLI
 ```
 
-See the [User Manual](docs/ASSCOR%20%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
+See the [User Manual](docs/1-current/guides/ASSCOR%20使用手册.md)
 (Chinese) for the full operational guide.
 
 ## 12. Repository structure
@@ -374,7 +374,7 @@ See the [User Manual](docs/ASSCOR%20%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
 ├── configs/             # industry configuration templates (+ edgeexp/: research templates)
 ├── deploy/              # Makefile, docker compose, deployment scripts
 ├── docs/                # documentation (see §13)
-├── lunwen/              # paper + experiment assets (research line; see docs/ASSET_OWNERSHIP.md)
+├── lunwen/              # paper + experiment assets (research line; see docs/1-current/reference/ASSET_OWNERSHIP.md)
 └── build/               # local build output (git-ignored)
 ```
 
@@ -384,14 +384,14 @@ See the [User Manual](docs/ASSCOR%20%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
 |----------|----------|---------|
 | [README_EN.md](README_EN.md) | English | this overview |
 | [README.md](README.md) | Chinese | full Chinese overview |
-| [docs/README_EN.md](docs/README_EN.md) | English | documentation index |
+| [docs/en/README.md](docs/en/README.md) | English | documentation index |
 | [docs/README.md](docs/README.md) | Chinese | documentation index |
-| [docs/en/engineering-whitepaper.md](docs/en/engineering-whitepaper.md) | English | engineering implementation whitepaper |
-| [docs/en/user-manual.md](docs/en/user-manual.md) | English | user manual |
-| [docs/en/ssam-interface-spec.md](docs/en/ssam-interface-spec.md) | English | SSAM interface specification |
-| [docs/en/srd-whitepaper.md](docs/en/srd-whitepaper.md) | English | SRD risk-dynamics whitepaper |
-| [docs/en/secure-mode-whitepaper.md](docs/en/secure-mode-whitepaper.md) | English | Secure Mode whitepaper |
-| Secure Mode design spec (`docs/superpowers/specs/2026-08-21-secure-mode-design.md`) | Chinese | module design & security model |
+| [docs/en/1-current/whitepapers/engineering-whitepaper.md](docs/en/1-current/whitepapers/engineering-whitepaper.md) | English | engineering implementation whitepaper |
+| [docs/en/1-current/guides/user-manual.md](docs/en/1-current/guides/user-manual.md) | English | user manual |
+| [docs/en/1-current/reference/ssam-interface-spec.md](docs/en/1-current/reference/ssam-interface-spec.md) | English | SSAM interface specification |
+| [docs/en/1-current/whitepapers/srd-whitepaper.md](docs/en/1-current/whitepapers/srd-whitepaper.md) | English | SRD risk-dynamics whitepaper |
+| [docs/en/1-current/whitepapers/secure-mode-whitepaper.md](docs/en/1-current/whitepapers/secure-mode-whitepaper.md) | English | Secure Mode whitepaper |
+| Secure Mode design spec (`docs/1-current/design/2026-08-21-secure-mode-design.md`) | Chinese | module design & security model |
 
 Chinese remains the primary documentation language for the in-depth
 originals; English versions are maintained alongside.

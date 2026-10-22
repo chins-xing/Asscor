@@ -536,8 +536,8 @@ python3 lunwen/clab-lab/scripts/edge_variance.py \
   --records lunwen/clab-lab/data/edgefactors/records-<env>-rpt-targeted.jsonl \
   --records lunwen/clab-lab/data/edgefactors/records-<env>-rpt-nontargeted.jsonl \
   --baseline lunwen/clab-lab/data/edgefactors/records-dl360-qemu-20261016.jsonl \
-  --preamble docs/experiments/variance-report-preamble.md \
-  --json docs/experiments/variance.json --md docs/experiments/variance-report.md
+  --preamble docs/2-experiments/variance-report-preamble.md \
+  --json docs/2-experiments/variance.json --md docs/2-experiments/variance-report.md
 ```
 
 > ⚠️ **两段的输入指纹判据必须「按段做」**（Task 22 纠正的一条假警报）：两份记录文件是**两个段**，
@@ -548,11 +548,11 @@ python3 lunwen/clab-lab/scripts/edge_variance.py \
 > 跨段取值只作可读性、**不参与判据**；报告还会给「逐段小计」把两个段的跨批结论分开报
 > （合并后的总数**不得**写成"22/22"这类口径）。
 
-> **报告落在 `docs/experiments/variance-report.md`**（计划里的 `variance-report.md` 就是它）：
+> **报告落在 `docs/2-experiments/variance-report.md`**（计划里的 `variance-report.md` 就是它）：
 > 数据目录 `data/edgefactors/` 的 `.gitignore` 白名单只放行 `records-*.jsonl` 与
 > `run-<8 位日期>-<pid>.json`（Task 20 的口径），故**报告不进数据目录**，
 > 与手册/审计归档放在一起（同样的可发现性，且不需要 `git add -f` 绕过白名单）。
-> `--preamble` 是**手写结论块**（`docs/experiments/variance-report-preamble.md`），插在 §0；
+> `--preamble` 是**手写结论块**（`docs/2-experiments/variance-report-preamble.md`），插在 §0；
 > 它与脚本算出来的数冲突时**以脚本为准**，并回来修那一节。
 > 「零方差」的**用途边界**写在报告开头：它测的是**基质稳定性与评分确定性**，**不是模型噪声**。
 
@@ -805,8 +805,8 @@ git check-ignore -q lunwen/clab-lab/data/edgefactors/records-<新>.jsonl   # rc=
 **驱动层汇总（`repeats.json`）放哪儿**（Task 22 明确）：它**不在**数据目录 ——
 白名单只放行 `records-*.jsonl` 与 `run-<8 位日期>-<pid>.json`，`repeats.json` 会被规则忽略
 （`git check-ignore -q` **rc=0**）。按"报告与手册放一起"的既有口径，它落在
-**`docs/experiments/repeats-<环境>-<tag>.json`**（本批：`docs/experiments/repeats-t21-qemu-rpt.json`），
-与 `variance-report.md` / `variance.json` 相邻。判据：`git check-ignore -q docs/experiments/repeats-*.json`
+**`docs/2-experiments/repeats-<环境>-<tag>.json`**（本批：`docs/2-experiments/repeats-t21-qemu-rpt.json`），
+与 `variance-report.md` / `variance.json` 相邻。判据：`git check-ignore -q docs/2-experiments/repeats-*.json`
 **rc=1**（会被跟踪）。
 
 > `repeats.json` 里的 `exit_code` 是**驱动当时**读到的矩阵 rc —— 本批非 targeted 段那三轮的
@@ -815,7 +815,7 @@ git check-ignore -q lunwen/clab-lab/data/edgefactors/records-<新>.jsonl   # rc=
 > **Task 23 起该文件带三个显式标注**（`segment` / `pre_fix_record: true` / `pre_fix_note`）——
 > 加标注**不算**改历史：`runs[]` 的 `exit_code`/`elapsed_s`/`record_counts_ok` 一个字没动，
 > 标注只写明"这份是修复前产物、能用来证明什么、不能用来证明什么"。
-> targeted 段的驱动汇总另有一份：`docs/experiments/repeats-t21-qemu-rpt-targeted.json`
+> targeted 段的驱动汇总另有一份：`docs/2-experiments/repeats-t21-qemu-rpt-targeted.json`
 > （**重建件**，来源逐条写在它的 `reconstruction` 里 —— 驱动把汇总固定写到 `$DATA_DIR/repeats.json`，
 > 那段被随后非 targeted 段原地覆盖了）。
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.26, AES-256-GCM (crypto/aes, crypto/cipher), argon2id (golang.org/x/crypto/argon2 v0.55.0), SHA-256, 现有 internal/kernel 插件体系, build-tag 模块模式。
 
-**Spec:** `docs/superpowers/specs/2026-08-21-secure-mode-design.md`
+**Spec:** `docs/1-current/design/2026-08-21-secure-mode-design.md`
 
 ## Global Constraints
 

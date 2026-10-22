@@ -28,7 +28,7 @@ ASSCOR v0.2.3 是一次**安全加固与可加入性发布**：完成攻击面�
 
 ### 一、攻击面管理专项审计与闭环修复（安全加固主线）
 
-专项审计（`docs/audits/ATTACK_SURFACE_MANAGEMENT_AUDIT_2026-08-15.md`）盘点 19 个攻击面，二次审计（`SECOND_AUDIT_2026-08-15.md`）验证修复并发现绕过，全部闭环：
+专项审计（`docs/3-audits/ATTACK_SURFACE_MANAGEMENT_AUDIT_2026-08-15.md`）盘点 19 个攻击面，二次审计（`SECOND_AUDIT_2026-08-15.md`）验证修复并发现绕过，全部闭环：
 
 | 审计项 | 修复 | 效果 |
 |--------|------|------|

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.26、`crypto/hmac`+`crypto/sha256`、`golang.org/x/crypto/argon2`（经 `internal/securemode` 复用）、AES-256-GCM（同）、`encoding/json`、build-tag 模块模式（`entropy` / `integrity`）。
 
-**Spec:** `docs/ENTROPY_EXTENSION_DESIGN_2026-09-08.md`
+**Spec:** `docs/1-current/design/ENTROPY_EXTENSION_DESIGN_2026-09-08.md`
 
 ## Global Constraints
 

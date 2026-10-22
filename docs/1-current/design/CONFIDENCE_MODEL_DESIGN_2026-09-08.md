@@ -248,7 +248,7 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 
 **⚠️ 标定未做**：`user=0.90` / `adapter=0.80` 是**先验**，不是从真实数据拟合出来的参数。
 设计原文“实现期用实验标定并记录”**仍未兑现**；已有的是先验敏感性表
-（`docs/experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md`，扫 `c ∈ [0.5,1.0]`），
+（`docs/2-experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md`，扫 `c ∈ [0.5,1.0]`），
 **不是标定**、也不是 CI 覆盖率验证。对外与论文口径不得声称“已标定 / 已验证”。
 
 ## 4. 数据流与覆盖矩阵（15 行；状态 = 修复后）
@@ -290,7 +290,7 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 | 4 | 边缘因子：c=1 与现状一致；c=0.5 半强度 | ✅ | `TestEdgeFactorTriggerConfidenceAttenuation`；legacy `TestChainRecords...` |
 | 5 | Prism：债务加权；节点置信注入 | ✅ | `TestDebtConfidenceWeighted`、`TestNodeConfidenceCapsInferenceConfidence`（I-7 后仅推断置信度取 min，风险数值不变） |
 | 6 | SRD：外部报告 confidence 归一化；缺省走来源表 | ✅ | `TestExternalToolIDConfidencePrecedence`、`TestExternalReportConfidenceToCheckFailure` |
-| 7 | 论文素材：可信度 0.5–1.0 扫描敏感性表 | ⚠️ **有产物、非标定** | `docs/experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md`（先验敏感性；明确不构成标定/覆盖率验证） |
+| 7 | 论文素材：可信度 0.5–1.0 扫描敏感性表 | ⚠️ **有产物、非标定** | `docs/2-experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md`（先验敏感性；明确不构成标定/覆盖率验证） |
 
 > 第 7 项按设计 §5.7 的**表格形态**交付了，但**没有**用真实数据标定、也没有验证 CI 覆盖率：
 > 它只回答“把先验 `c` 从 0.5 扫到 1.0 时分数/区间怎么变”。
@@ -371,7 +371,7 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
   `builtin` 用 `default=1.0` 身份值表达（保留域级可达性）；默认仍**禁用**。见 §3.4。
   开启 `enabled=true` 且不手写规则时**不再是纯 no-op**（`user`/`adapter` 会降权），
   其余来源仍落到 `default` / 域级兜底。
-- **敏感性表已有**（`docs/experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md`，`ac1bd29`）：
+- **敏感性表已有**（`docs/2-experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md`，`ac1bd29`）：
   它扫的是**先验** `c ∈ [0.5,1.0]`，明确标注“不是标定、不是 CI 覆盖率验证”。
 - **实验标定仍未做**：仓内没有标定产物（`git ls-files | grep -i calib` 为空），
   §3.4 的「实现期用实验标定并记录」**未兑现**。
@@ -430,7 +430,7 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 | **B-2** | 唯一判定 `AcceptanceDecision`，插件/库/legacy/kernel 全部消费 `accept_by_lower_bound` | `929b454` | `ssam-lib/confidence.go:231-242`；`engine.go:149`、`assessor.go:973-976`、`internal/assessor/assessor.go:655` | `TestAcceptanceDecisionUsesLowerBound`、`TestAcceptByLowerBoundPluginPath`、`TestAcceptByLowerBoundLegacyPath`、`TestApplyCTIOnlyAcceptsByLowerBound` | ✅ |
 | **I-1** | legacy 也写 σ/CI/`EvidenceConfidence` | `cee657f` | `internal/engine/assessor.go:949-988` | `TestLegacyScoringEmitsPosteriorStats` | ✅ |
 | **I-2** | 出厂来源先验表 `user=0.90`/`adapter=0.80`；`builtin` 用 `default=1.0` 表达；默认禁用 | `e9d12ff` / `4e5db9c` | `internal/config/confidence.go:90-123` | `TestDefaultConfidenceSourcePriors` | ✅（先验，未标定） |
-| **I-3** | 先验敏感性表（明确非标定） | `ac1bd29` | `docs/experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md` | 该表 §2 扫描结果 + §4 口径声明 | ⚠️ **有产物、仍非标定** |
+| **I-3** | 先验敏感性表（明确非标定） | `ac1bd29` | `docs/2-experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md` | 该表 §2 扫描结果 + §4 口径声明 | ⚠️ **有产物、仍非标定** |
 | **I-4** | `c` 归一只有一份；`Delta>=0` 失败项两边都跳过（唯一有意行为变更） | `cee657f` | `ssam-lib/confidence.go:92-118`；`internal/engine/assessor.go:524-533` | `TestLegacyAndPluginHalfConfidenceParity`、`TestFailedCheckWithPositiveDeltaSkippedOnBothPaths` | ✅ |
 | **I-5** | `[confidence.checkrx]` 按 key 字节字典序确定化 | `e10977d` | `internal/config/confidence.go:229-254` | `TestConfidenceCheckPatternsDeterministic`（300 次 parse） | ✅ |
 | **I-6** | 关键测试装牙（优先级/legacy 域分/disabled 评分） | `cee657f` / `e10977d` | `internal/config/confidence_test.go`、`internal/engine/ssam/legacy_confidence_test.go` | `TestConfidenceResolveOverlappingCheckAndPattern`、`TestLegacyDefaultConfigIgnoresExplicitConfidence`、`TestPluginDefaultConfigIgnoresExplicitConfidence` | ✅ |

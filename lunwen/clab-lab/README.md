@@ -1,6 +1,6 @@
 # ASSCOR Containerlab 多主机测试环境 — 归档与复现说明
 
-**归档日期**: 2026-08-16 | **关联审计**: `docs/audits/MULTIHOST_TOPO_AWARENESS_ASSESSMENT_2026-08-16.md`、`docs/audits/TOPO_COMPLEX_AUDIT_T1_T11_2026-08-16.md`
+**归档日期**: 2026-08-16 | **关联审计**: `docs/3-audits/MULTIHOST_TOPO_AWARENESS_ASSESSMENT_2026-08-16.md`、`docs/3-audits/TOPO_COMPLEX_AUDIT_T1_T11_2026-08-16.md`
 
 本目录归档 Containerlab 多主机 + 中形/复杂网络测试环境（18 节点 v3 拓扑）的可复现资产：拓扑定义、FRR 配置、部署/实验脚本、实验数据。
 
@@ -27,7 +27,7 @@ s5720 ── 82580 ── r1 (核心, NAT+OSPF 默认宣告) ── edge0 (ASSCO
 
 ```bash
 # 1. 上传资产到 clab 主机
-scp -P 2222 -r docs/clab-lab/* clab@localhost:~/clab/asscor/
+scp -P 2222 -r docs/2-experiments/clab-lab/* clab@localhost:~/clab/asscor/
 
 # 2. 制作本地基础镜像（一次性，需代理）
 bash scripts/make_base_img.sh        # 依赖代理 http://<WSL网关>:58187

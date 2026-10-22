@@ -34,4 +34,4 @@
 - **恢复能力**：E37-E39 确认故障后评估与响应完全正常；身份绑定在 engine 重启后持久化恢复（亮点）。
 - **待改进**：E33 暴露身份锚定对状态文件的单点依赖（P1）；E30 暴露 agent 无 supervisor 自动拉起（P2）；E36 观察 dashboard 写入错误噪音（P3）。
 
-*数据：`docs/clab-lab/data/assessments-checks.jsonl` 及同批评估轮次。*
+*数据：`docs/2-experiments/clab-lab/data/assessments-checks.jsonl` 及同批评估轮次。*

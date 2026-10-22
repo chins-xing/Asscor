@@ -1256,7 +1256,7 @@ ASSCOR> mode agent <id> rotate-password
 | 忘记运行密码 | 无恢复通道（单密码即解锁唯一途径）；只能按安全流程人工处置受保护文件 |
 | `mode unlock` 失败 | 确认密码正确、`.enc` 未被篡改；若登记表损坏 kernel 会拒绝启动 run 模式，需用内核密码人工恢复 |
 
-> 详细设计、加密格式与安全模型见《Secure Mode 安全模式白皮书》与 [Secure Mode 模块设计（SDD）](superpowers/specs/2026-08-21-secure-mode-design.md)。
+> 详细设计、加密格式与安全模型见《Secure Mode 安全模式白皮书》与 [Secure Mode 模块设计（SDD）](../design/2026-08-21-secure-mode-design.md)。
 
 ---
 

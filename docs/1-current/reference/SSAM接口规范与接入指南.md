@@ -173,7 +173,7 @@ type AssessmentInput struct {
 | `ThreatCoeff` | float64 | 威胁态势系数（0.60–1.00），0 时自动设为 1.0 |
 | `SPCScore` | float64 | SPC 态势修正因子（0.60–1.00），0 时自动设为 1.0 |
 
-> ?? **SPC 评估方法声明**：`SPCScore` 由 SPC 模块基于 CPE 字符串匹配（软件包名称/版本 ? CVE 数据库受影响产品版本）计算得出，不涉及漏洞利用验证、运行时可达性分析或二进制分析。详见 [SPC 安全态势计算模块技术白皮书](SPC安全态势计算模块技术白皮书.md)。
+> ?? **SPC 评估方法声明**：`SPCScore` 由 SPC 模块基于 CPE 字符串匹配（软件包名称/版本 ? CVE 数据库受影响产品版本）计算得出，不涉及漏洞利用验证、运行时可达性分析或二进制分析。详见 [SPC 安全态势计算模块技术白皮书](../whitepapers/SPC安全态势计算模块技术白皮书.md)。
 | `WeightShifts` | map | SPC 输出的域权重临时偏移（可选） |
 
 ### 3.2 CheckInput — 检查项输入
@@ -237,7 +237,7 @@ type AssessmentOutput struct {
 
 ### 3.3.1 置信度原生字段（方向①）
 
-> 设计：`docs/CONFIDENCE_MODEL_DESIGN_2026-09-08.md`。**默认 `enabled=false`**，
+> 设计：`docs/1-current/design/CONFIDENCE_MODEL_DESIGN_2026-09-08.md`。**默认 `enabled=false`**，
 > 此时这些字段退化为 `Sigma=0`、区间 `[FinalScore, FinalScore]`、`EvidenceConfidence=1.0`，
 > 评分与历史实现逐位一致。默认先验表（`user=0.90`/`adapter=0.80`）**未经标定**。
 

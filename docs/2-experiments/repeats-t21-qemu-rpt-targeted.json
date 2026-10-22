@@ -8,7 +8,7 @@
   "records_policy": "one_file_carries_all_repeats",
   "reconstructed": true,
   "reconstruction": {
-    "为什么是重建件": "驱动 `edge_repeat.sh` 把汇总**固定写到 `$DATA_DIR/repeats.json`**（脚本第 166 行），不按段命名；targeted 段（2026-10-17T19:41Z–22:57Z，TARGETED_RC=0）跑完后，非 targeted 段用**同一个 DATA_DIR** 又跑了三轮（2026-10-18T02:39Z–13:19Z），把那份 repeats.json **原地覆盖**了。仓内 `docs/experiments/repeats-t21-qemu-rpt.json` 就是被覆盖后的那份（records_file 指 nontargeted、finished_at=2026-10-18T13:19:55Z）。⇒ targeted 段的驱动汇总**必须重建**，并且必须写明每一格的来源。",
+    "为什么是重建件": "驱动 `edge_repeat.sh` 把汇总**固定写到 `$DATA_DIR/repeats.json`**（脚本第 166 行），不按段命名；targeted 段（2026-10-17T19:41Z–22:57Z，TARGETED_RC=0）跑完后，非 targeted 段用**同一个 DATA_DIR** 又跑了三轮（2026-10-18T02:39Z–13:19Z），把那份 repeats.json **原地覆盖**了。仓内 `docs/2-experiments/repeats-t21-qemu-rpt.json` 就是被覆盖后的那份（records_file 指 nontargeted、finished_at=2026-10-18T13:19:55Z）。⇒ targeted 段的驱动汇总**必须重建**，并且必须写明每一格的来源。",
     "重建依据（全部是可核的原始产物）": [
       "`run-20261017-targeted-r{1,2,3}.json`（矩阵逐轮 run.json，**已入库**：`lunwen/clab-lab/data/edgefactors/`）—— 提供 env / repeat_index / records_written_this_run / records_file_total_lines / records_expected / record_counts_ok / gate1_offline_compare / gate2_round_trip / condition_summary / observation_target / started_at / finished_at / elapsed_s",
       "宿主驱动日志 `/root/t6/t21-run-targeted.log`（**未入库**，逐字摘录见下面 evidence 字段）—— 提供驱动层的每轮 rc 与耗时、以及 `TARGETED_RC=0`"

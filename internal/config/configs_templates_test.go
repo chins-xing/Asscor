@@ -148,7 +148,7 @@ func TestLabKernelConfigDecisionKeysAreInEffect(t *testing.T) {
 	// ③ 文件声明的**意图**钉住（这些键本来就在解析器会读的段里，取值与内置默认不同，
 	// 因此它们"在生效"这件事本身可判）。阈值在本用例里固定为 80.0 是**文档化的部署判定线**
 	// （GB/T 22239-2019 Level 3）：实验里"全部记录落进不可接受"是**结论**，改阈值属于敏感性分析，
-	// 走 `edgecompare -threshold`（见 docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md §5.4.6），
+	// 走 `edgecompare -threshold`（见 docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md §5.4.6），
 	// 不在这里把部署判定线改掉。
 	if cfg.Threshold != 80.0 {
 		t.Errorf("lab 配置的部署判定线 = %v，期望 80.0", cfg.Threshold)

@@ -10,16 +10,16 @@
   底座一致性 **黄**（18 条有意差异、清单外未解释漂移 0）。**仍未决**：`PP-01`（σ 要不要加钳位，产品侧决定）、
   `AL-02`（台账 F1–F3）、以及 §10 列出的风险项。
   （原表述「设计定稿，等待实现计划」已过期，保留于此仅作历史。）
-- **关联**：债务清单 §四 ②（边缘因子耦合放大缺理论边界）+ RC-M4（ACL 硬编码权重参数化，本轮只参数化、标定后置）；方向① 设计 `docs/CONFIDENCE_MODEL_DESIGN_2026-09-08.md`（本方向不改其语义）
+- **关联**：债务清单 §四 ②（边缘因子耦合放大缺理论边界）+ RC-M4（ACL 硬编码权重参数化，本轮只参数化、标定后置）；方向① 设计 `docs/1-current/design/CONFIDENCE_MODEL_DESIGN_2026-09-08.md`（本方向不改其语义）
 - **实验环境**（**2026-10-19 更新**；环境画像见
-  `docs/experiments/EDGE_FACTOR_EXPERIMENT_ENVIRONMENT_WHITEPAPER.md`）：
+  `docs/2-experiments/EDGE_FACTOR_EXPERIMENT_ENVIRONMENT_WHITEPAPER.md`）：
   - **`qemu` = 生产基质**：dl360gen9 上的 QEMU/KVM VM（全量批次 33 实例、重复轴 99 条都跑在这里；
     判据见 §10.4B 结论零）；
   - **`pve` = 快速验证**：dl360gen9 的 PVE CT（`CT 904` = `asc-tgt-c2` 保留为"快速验证"那一格的现成靶机）；
   - **`lxd` = 驱动保留、宿主已退场**：原远程 A-1 已于 **2026-10-19** 退为备份端（数据归档至 dl360gen9 的
     `/RAID-Mirror/from-a1/`、即将重置）⇒ **现无可用宿主**；
   - **`clab`**（WSL2 Containerlab，14 节点拓扑）= **开发与离线**（门禁、离线夹具、`edgecompare` 复算）。
-  历次迁移与每次的理由见 `docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part C。
+  历次迁移与每次的理由见 `docs/2-experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part C。
   > ⛔ **失效（仅存档）**：本条目 **2026-10-15 版**写的是「当前基质是 **dl360gen9 / PVE CT**
   > （`EDGEEXP_SUBSTRATE=pve`）；…远程 A-1/LXD 保留为可选基质」。生产基质自 Task 13/17 起已是 `qemu`，
   > 且 A-1 已退场（不是"可选基质"）⇒ 那是读全文"当前口径"的错误入口。
@@ -37,7 +37,7 @@
 >    本文中凡需要口令处一律写占位符 `<c2-key>`。
 > 3. **带外管理控制器绝对不许访问**（不登录、不探测、不扫描、不改配置、不重启），
 >    其地址**从未**写入本仓库。
-> 4. 完整口径与处置台账见 `docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part E。
+> 4. 完整口径与处置台账见 `docs/2-experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part E。
 
 ---
 
@@ -478,7 +478,7 @@ A-1 上**不要**跑的：攻击（Caldera 已在跑，`/opt/caldera`，API `:88
    > **凭据口径（脱敏）**：C2 的 API 口令**不写入本仓库**。它由**未跟踪的本地配置**提供，
    > 环境变量名是 `EDGEEXP_CALDERA_KEY`（URL 是 `EDGEEXP_CALDERA_URL`）。
    > **缺 key 时跑批前置会响亮失败** —— **不允许**回落成"没 key 也继续"。
-   > 原因与处置见 `docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` 的脱敏处置台账。
+   > 原因与处置见 `docs/2-experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` 的脱敏处置台账。
 4. **两个 Linux 工具**（交叉编译，脚本默认读 `build/`）：
    ```bash
    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags 'expr,engine,checks' -o build/edgescen  ./cmd/edgescen
@@ -934,7 +934,7 @@ Fix round 1 / I-6 把这个数字从"7 纯身份 + 1 交互"改正 —— 后者
 > 📌 **本节是 A-1/LXD 基质在 2026-09-13 前后的**历史状态快照**，其内容对**该基质**仍然成立。
 > 但从 **2026-10-13 起实验基质已迁到 dl360gen9 / PVE CT**，本节里的"未跑"**不再代表当前基质的状态** ——
 > 当前基质的进度见本文件 §5.4.11 之后的各节与附录 D；历次迁移与理由见
-> `docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part C。
+> `docs/2-experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` Part C。
 > **引用"未跑"时请写清基质**，否则会把"A-1 上没跑"误读成"整个方向没跑"。
 >
 > ⛔ **2026-10-19 补充**：A-1 已退为备份端（数据归档至 dl360gen9 的 `/RAID-Mirror/from-a1/`、即将重置）
@@ -1134,7 +1134,7 @@ Step 4-B1 的脚本是**离线**写完的（`bash -n` + lab-diff 夹具全绿）
 
 > 编号提示：标题原文是「**Task 5 开工必带** 的 durable 口径」—— 这里的 `Task 5` 指**计划里的**
 > Task 5（重复性与方差），它**已执行完毕**（实际任务号 **Task 21**，台账 H.6）。两套编号并存不互相替换，
-> 完整对照表见 `docs/superpowers/plans/2026-09-12-edge-factor-coupling-milestone-b.md` 顶部。
+> 完整对照表见 `docs/4-archive/plans/2026-09-12-edge-factor-coupling-milestone-b.md` 顶部。
 
 **这一节是"决策层能不能算"的唯一权威口径**（此前它只活在 CLI help、源码注释与 gitignored 的报告里
 —— 复审 N-3 指出 `grep docs/ "allow-mixed-basis|assume-basis"` 零命中）。
@@ -1423,7 +1423,7 @@ git grep -in -e 'edge factor' -e 'coupling' -e '边缘因子' -e '耦合' \
 
 来源：Task 1–4/3B 的实现 + 多轮独立评审 + 一次真实 WSL2 Containerlab + Caldera 冒烟（3 场景 / 1322s）。**下表只写实测确证的；静态推断已标注。**
 
-- **观察对象必须是"被注入/被攻击的那台机器"（实验设计级阻塞）**：当前采集器评估的是它**自己所在的宿主**，而该宿主上六个因子的触发检查本就全部失败（55 项失败、总分 52.21）⇒ "注入检查失败"是 no-op，冒烟的 `S0-baseline`/`S5-cascade-3fa`/`R-no-ids` 三条记录**除场景名与时间戳外逐字段相同**；按该宿主的自然失败集推算，**25 场景只买到 2 个不同数据点**。更关键的是**标签侧**：注入只发生在采集器**本地**的检查集里，矩阵脚本从不改动被攻击节点的防护 ⇒ `compromised/block_effective/nodes_affected` 恒定 ⇒ **单类别标签**，§2.1 的漏判率/误阻断率/AUC 与 §3.5 的拟合全部退化。处置选项（硬化基线 / 反转设计 / 缩小矩阵）见 `docs/audits/TECHNICAL_DEBT_BACKLOG_2026-09-08.md` §七 C1，**待作者裁定后方可跑全量扫描**。
+- **观察对象必须是"被注入/被攻击的那台机器"（实验设计级阻塞）**：当前采集器评估的是它**自己所在的宿主**，而该宿主上六个因子的触发检查本就全部失败（55 项失败、总分 52.21）⇒ "注入检查失败"是 no-op，冒烟的 `S0-baseline`/`S5-cascade-3fa`/`R-no-ids` 三条记录**除场景名与时间戳外逐字段相同**；按该宿主的自然失败集推算，**25 场景只买到 2 个不同数据点**。更关键的是**标签侧**：注入只发生在采集器**本地**的检查集里，矩阵脚本从不改动被攻击节点的防护 ⇒ `compromised/block_effective/nodes_affected` 恒定 ⇒ **单类别标签**，§2.1 的漏判率/误阻断率/AUC 与 §3.5 的拟合全部退化。处置选项（硬化基线 / 反转设计 / 缩小矩阵）见 `docs/3-audits/TECHNICAL_DEBT_BACKLOG_2026-09-08.md` §七 C1，**待作者裁定后方可跑全量扫描**。
 - **门禁⓪（重复因子条目）实测确证**：出厂 `configs/*.ini` 的 `[edge_factors.custom]` 与内置因子同名 ⇒ 引擎**确实把同一因子乘两次**，链上出现重复 ID（三条冒烟记录均 11 条链 / 6 个 ID，重复对分别带 0.70（内置）与 0.85（custom））。**边界**：`EF-SYNCOOKIE` 的重复**未观测到**（宿主 `tcp_syncookies=1`，该因子未激活）；该结论不适用于**不带** `[edge_factors.custom]` 重复段的配置。
 - **`C` 与 `V` 在无时间结构的场景上数值等价**：单条链只有一个 `ts` ⇒ `from.ts.Before(to.ts)` 恒假 ⇒ 耦合项消失、`L_d = Σ a_i[d]`。故 **C 的全部信号只来自顺序注入场景**（本矩阵 7 个 × 重复），其余 18 条是**对照**而非信号；这不是缺陷，但决定了 C 候选的可辨识性。
 - **`ts` 基准按记录"全有或全无"**：非顺序场景一律取评估时刻（不混用 harness 注入时刻 —— 混用会造出"没人设计、也没人报告"的顺序），顺序场景才用注入阶段时刻；该基准逐条写进 `meta.ts_source`。顺序记录里"取评估时刻"的条目**不是设计顺序**（注入在前、自然失败在后由环境造成），**不得**当作级联时序证据。
@@ -1810,7 +1810,7 @@ CT = 快速验证 / 轻量 / 临时；VM = 长线 / 中重型 / 重要任务。
 **背景**：Task 6（`pve` 基质驱动）独立复审判 Approved（Critical 0 / **Important 1** / Minor 1）。
 Important-1 指出一处**字面违反硬不变式**的改动，复审判**可接受**但**必须登记到可跟踪处**
 （此前只写在**未跟踪**的过程报告里 ⇒ 等于没有披露）。此处即为登记（另见
-`docs/experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` 的有意差异登记）。
+`docs/2-experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md` 的有意差异登记）。
 
 | 项 | 内容 |
 |---|---|
@@ -2123,7 +2123,7 @@ EDGEEXP_CALDERA_URL=http://<pve-host-ip>:8888 EDGEEXP_CALDERA_KEY=<c2-key> \
 
 > 上例中的两个值必须来自**未跟踪的本地配置**：`<pve-host-ip>` 是本机在管理 VLAN 上的地址，
 > `<c2-key>` 是 C2 的 API 口令（**不得**写进仓库）。占位符口径见
-> `docs/experiments/EDGE_FACTOR_EXPERIMENT_ENVIRONMENT_WHITEPAPER.md` §0。
+> `docs/2-experiments/EDGE_FACTOR_EXPERIMENT_ENVIRONMENT_WHITEPAPER.md` §0。
 
 脚本做三件事：**已存在则不重建，而是核对关键字段**（ability 的 `command`、adversary 的
 `atomic_ordering`）—— 不一致就**响亮失败**，因为那意味着"C2 上的实体与夹具/文档引用的不是

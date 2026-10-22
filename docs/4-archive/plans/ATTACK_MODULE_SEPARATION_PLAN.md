@@ -1,6 +1,6 @@
 # ATT&CK 模块分离为扩展包 — 实施计划
 
-**日期**: 2026-08-02 | **版本**: v0.2.2 | **基于**: `docs/audits/ATTACK_MODULE_EXTRACTION_AUDIT_2026-08-02.md`
+**日期**: 2026-08-02 | **版本**: v0.2.2 | **基于**: `docs/3-audits/ATTACK_MODULE_EXTRACTION_AUDIT_2026-07-17.md`
 
 ---
 

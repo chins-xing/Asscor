@@ -9,7 +9,7 @@
 
 ## 一、审计方法
 
-逐文件读源码核对 + 对照 spec（docs/superpowers/specs/2026-08-21-secure-mode-design.md）与既有修复记录（audit 归档、final-fix-report、deferred-fix-report）。重点复核：并发正确性、错误处理、边界条件、状态机完整性、安全弱点、新代码（mprotect/anti-debug/cert reset）质量、测试盲点。
+逐文件读源码核对 + 对照 spec（docs/1-current/design/2026-08-21-secure-mode-design.md）与既有修复记录（audit 归档、final-fix-report、deferred-fix-report）。重点复核：并发正确性、错误处理、边界条件、状态机完整性、安全弱点、新代码（mprotect/anti-debug/cert reset）质量、测试盲点。
 
 ## 二、逐文件结论
 

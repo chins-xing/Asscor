@@ -75,4 +75,4 @@ host1 基线 AS 域 58 = 100 − (AS-003 −10 + AS-007 −6 + AS-008 −3 + AS-
 
 **Assessment 引擎正确性整体优秀**：SSAM 评分层（确定性、隔离性、公式、线性累加、边界保护）全部通过验证。唯一瑕疵是 **PRISM 的非确定性漂移**（E1）——这是已知拓扑模型缺陷（固定传播系数 + 传播边累积，见 `TOPO_MODEL_GAP_SUMMARY`）在评估正确性上的体现，修复拓扑生命周期与传播加权后应随之解决。
 
-*数据：`docs/clab-lab/data/assessments-correctness.jsonl`。*
+*数据：`docs/2-experiments/clab-lab/data/assessments-correctness.jsonl`。*

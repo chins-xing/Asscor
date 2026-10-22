@@ -30,7 +30,7 @@ import (
 // 反向对照（有牙齿的证明）：把示例里的必填项抹掉后，读取层**必须**拒绝、且理由必须是"缺失"
 // —— 否则本测试只证明"某个 JSON 能读进来"，而不能证明它在守这些字段的存在性（详见测试内注释）。
 
-const designDocPath = "../../docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md"
+const designDocPath = "../../docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md"
 
 // compactLine 把 §5.1 里**缩进打印**的示例压成 JSONL 的真实形态（一条记录一行）。
 //

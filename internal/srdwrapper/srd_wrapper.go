@@ -10,7 +10,7 @@
 // `-tags srdwrapper` alone fails the build instead of silently compiling a
 // module with no implementation (coupling audit 2026-09-03, finding F2).
 // Build it with `-tags "srdwrapper,engine"`. See
-// docs/REMAINING_ARCHITECTURE_PLAN.md for the module tag dependency matrix.
+// docs/4-archive/plans/REMAINING_ARCHITECTURE_PLAN.md for the module tag dependency matrix.
 
 package srdwrapper
 

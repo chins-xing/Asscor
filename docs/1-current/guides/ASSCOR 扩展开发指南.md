@@ -834,4 +834,4 @@ orch.Register(k.PlatformExtensionRegistry())
 - 扩展管理器：`internal/extmgr/`
 - 外部扩展模块：`optional/algorithms/modules/multi-algo-orchestrator/`
 - 扩展包示例：`optional/algorithms/packages/example-pack/package.json`
-- SSAM 接口规范：`docs/SSAM接口规范与接入指南.md`
+- SSAM 接口规范：`docs/1-current/reference/SSAM接口规范与接入指南.md`

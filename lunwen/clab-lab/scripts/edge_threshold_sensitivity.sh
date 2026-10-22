@@ -202,7 +202,7 @@ json.dump({
     'run_id': run_id,
     'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
     'script': 'lunwen/clab-lab/scripts/edge_threshold_sensitivity.sh',
-    'spec': 'docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md §5.4.6（阈值敏感性）',
+    'spec': 'docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md §5.4.6（阈值敏感性）',
     'env': env,
     'edgecompare': tool,
     'records_file': records,

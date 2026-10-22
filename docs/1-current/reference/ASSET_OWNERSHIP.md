@@ -38,14 +38,14 @@
 | `cmd/edgecompare/` | 14 | 离线重算/对比/拟合工具（**全部**带 `//go:build edgeexp`） | 研究线工具（消费实验记录） |
 | `cmd/edgescen/` | **13** | 实验采集器（tag `expr,engine,checks`） | 研究线工具（产出实验记录） |
 | `configs/edgeexp/` | 4 | 四候选实验模板（`m0-baseline`/`vector`/`graph`/`chain`） | 研究线配置 |
-| `docs/clab-lab/` | 3 | 实验室文档 | 研究 |
-| `docs/superpowers/plans/2026-09-08-edge-factor-coupling.md`<br>`…/2026-09-08-entropy-pack.md`<br>`…/2026-09-12-edge-factor-coupling-milestone-b.md` | 3 | 方向② 里程碑 A/B 计划、方向③ 熵包计划 | 研究线过程文档（同目录的 `2026-08-21-secure-mode.md` 属**产品线**，两侧都有） |
-| `docs/ASSCOR-Research-Core.md` | 1 | 研究线总览 | 研究 |
-| `docs/ENTROPY_EXTENSION_DESIGN_2026-09-08.md` | 1 | 方向③ 熵扩展包设计（已归档、未实现） | 研究（归档） |
-| `docs/TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md` | 1 | 拓扑蓝图 | 用户裁定撤出。**撤出时暴露的悬空引用已修**：`internal/kernel/topo_types.go` 与 `internal/topology/topology.go` 的注释原本指向该文档 ⇒ 已在**两分支同步**改为不引用（`f9d96d1`），因此这两处**不产生新的有意差异**（两侧仍逐字节相同） |
+| `docs/2-experiments/clab-lab/` | 3 | 实验室文档 | 研究 |
+| `docs/4-archive/plans/2026-09-08-edge-factor-coupling.md`<br>`…/2026-09-08-entropy-pack.md`<br>`…/2026-09-12-edge-factor-coupling-milestone-b.md` | 3 | 方向② 里程碑 A/B 计划、方向③ 熵包计划 | 研究线过程文档（同目录的 `2026-08-21-secure-mode.md` 属**产品线**，两侧都有） |
+| `docs/1-current/reference/ASSCOR-Research-Core.md` | 1 | 研究线总览 | 研究 |
+| `docs/1-current/design/ENTROPY_EXTENSION_DESIGN_2026-09-08.md` | 1 | 方向③ 熵扩展包设计（已归档、未实现） | 研究（归档） |
+| `docs/1-current/reference/TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md` | 1 | 拓扑蓝图 | 用户裁定撤出。**撤出时暴露的悬空引用已修**：`internal/kernel/topo_types.go` 与 `internal/topology/topology.go` 的注释原本指向该文档 ⇒ 已在**两分支同步**改为不引用（`f9d96d1`），因此这两处**不产生新的有意差异**（两侧仍逐字节相同） |
 | `internal/edgeexp/` | 2 | 共享 JSONL 契约（`Record`/`Validate`/`MarshalRecord`） | 研究线契约（`cmd/edgescen`+`cmd/edgecompare` 共用） |
 | `internal/engine/assessor_chain_test.go`<br>`internal/engine/ssam/edgefactor_chain_test.go`<br>`internal/kernel/persistence_types_test.go`<br>`internal/model/edgefactor_chain_test.go` | 4 | 观测链在 legacy/插件/落盘/契约四处的**研究线新测试** | 研究接线的测试（被测代码差异见 §3） |
-| `docs/experiments/` | 3 | 本方向的**三份标准文档**：环境画像白皮书、实验技术文档与操作手册、审计归档与裁定台账 | 研究线的可交付文档（此前只散落在记忆与会话产物里 ⇒ 外人看不到） |
+| `docs/2-experiments/` | 3 | 本方向的**三份标准文档**：环境画像白皮书、实验技术文档与操作手册、审计归档与裁定台账 | 研究线的可交付文档（此前只散落在记忆与会话产物里 ⇒ 外人看不到） |
 
 ---
 
@@ -63,7 +63,7 @@
 | `.gitattributes`（`*.sh text eol=lf`）、`.gitignore` | 行尾与忽略规则（`.gitignore` **内容必然不同**，见 §3） |
 | `ssam-lib/`、`prism-lib/` | 两个内嵌独立仓库**的产品侧文件**（外层只跟踪快照；内仓各自维护） |
 | `LICENSE`、`CONTRIBUTING.md` | 许可与贡献指南 |
-| `docs/audits/`（82）、`docs/superpowers/specs/`（2）、`docs/superpowers/plans/2026-08-21-secure-mode.md`、`docs/CONFIDENCE_MODEL_DESIGN_2026-09-08.md`、`docs/asscor-architecture-review.md` 与 `-zh` | 审计/债务记录、产品特性设计、架构评审（用户裁定**留 main**） |
+| `docs/3-audits/`（82）、`docs/1-current/design/`（2）、`docs/4-archive/plans/2026-08-21-secure-mode.md`、`docs/1-current/design/CONFIDENCE_MODEL_DESIGN_2026-09-08.md`、`docs/1-current/reference/asscor-architecture-review/` 与 `-zh` | 审计/债务记录、产品特性设计、架构评审（用户裁定**留 main**） |
 | ~~`README.md`、`README_EN.md`~~ | **2026-09-13 起改为按分支表述** ⇒ 移入 §3.1 有意差异（原本两侧同一份文本，但通篇按研究线口径写，在 main 上是错的） |
 
 ---
@@ -90,10 +90,10 @@
 
 | 路径 | 差异内容 | 处理 |
 |---|---|---|
-| `docs/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` | ARC 版多出里程碑 B 的实测章节（§5.4 手册、§10.3 实测纠正等） | 登记为有意差异；随方向② 收口、用户点名后再决定是否上 main |
-| `docs/audits/TECHNICAL_DEBT_BACKLOG_2026-09-08.md` | ARC 版有 §七「里程碑 B 实测发现与债务」（C1、B-1…B-6、"不得夸大"口径） | **用户裁定不上 main**（`54adcce`）：它是**研究实测记录**、且引用两个已从 main 撤出的文件 ⇒ 上了会造成"研究内容进主线 + 悬空引用" |
+| `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md` | ARC 版多出里程碑 B 的实测章节（§5.4 手册、§10.3 实测纠正等） | 登记为有意差异；随方向② 收口、用户点名后再决定是否上 main |
+| `docs/3-audits/TECHNICAL_DEBT_BACKLOG_2026-09-08.md` | ARC 版有 §七「里程碑 B 实测发现与债务」（C1、B-1…B-6、"不得夸大"口径） | **用户裁定不上 main**（`54adcce`）：它是**研究实测记录**、且引用两个已从 main 撤出的文件 ⇒ 上了会造成"研究内容进主线 + 悬空引用" |
 
-> **教训（记档）**：把 `54adcce` 判成"该上 main 的债务修复"是**只按路径（`docs/audits/`）判的**；
+> **教训（记档）**：把 `54adcce` 判成"该上 main 的债务修复"是**只按路径（`docs/3-audits/`）判的**；
 > **分类必须看内容**。该提交已改为登记为有意差异。
 
 ---

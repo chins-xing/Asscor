@@ -189,13 +189,13 @@
 
 | 文档 | 说明 |
 |------|------|
-| docs/audits/EXTENSION_ARCHITECTURE_AUDIT_2026-07-25.md | 扩展体系架构审计 (27 缺陷) |
-| docs/audits/PARALLEL_CAPABILITY_AUDIT_2026-07-17.md | 并行能力审计 (7 建议) |
-| docs/audits/ATTACK_MODULE_EXTRACTION_AUDIT_2026-07-17.md | ATT&CK 提取可行性审计 |
-| docs/audits/BUGFIX_ROUNDUP_2026-07-16.md | BUGFIX 集中修复报告 |
-| docs/ATTACK_MODULE_SEPARATION_PLAN.md | ATT&CK 分离实施计划 |
-| docs/REMAINING_ARCHITECTURE_PLAN.md | 剩余架构规划 (19 天/4 阶段) |
-| docs/TECH_DEBT_OVERVIEW.md | 技术债务总览 (87 项 → 7 剩余) |
+| docs/3-audits/EXTENSION_ARCHITECTURE_AUDIT_2026-07-25.md | 扩展体系架构审计 (27 缺陷) |
+| docs/3-audits/PARALLEL_CAPABILITY_AUDIT_2026-07-17.md | 并行能力审计 (7 建议) |
+| docs/3-audits/ATTACK_MODULE_EXTRACTION_AUDIT_2026-07-17.md | ATT&CK 提取可行性审计 |
+| docs/3-audits/BUGFIX_ROUNDUP_2026-07-16.md | BUGFIX 集中修复报告 |
+| docs/4-archive/plans/ATTACK_MODULE_SEPARATION_PLAN.md | ATT&CK 分离实施计划 |
+| docs/4-archive/plans/REMAINING_ARCHITECTURE_PLAN.md | 剩余架构规划 (19 天/4 阶段) |
+| docs/4-archive/reviews/TECH_DEBT_OVERVIEW.md | 技术债务总览 (87 项 → 7 剩余) |
 | optional/SCHEMA.md | 扩展包 package.json 格式规范 |
 | internal/adapter/_README_ARCHITECTURE.md | 适配器架构分层说明 |
 

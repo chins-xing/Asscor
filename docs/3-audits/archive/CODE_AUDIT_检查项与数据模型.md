@@ -60,7 +60,7 @@ func (w *Weights) Normalize() {
 
 - **位置**：
   - `internal/ssam/engine.go:L401-429`（实际实现）
-  - `docs/SSAM接口规范与接入指南.md`（文档描述）
+  - `docs/1-current/reference/SSAM接口规范与接入指南.md`（文档描述）
 
 - **描述**：文档描述 SSAM 1.3 为 4 域模型（攻击面35 + 业务连续性25 + 操作可信度25 + 韧性15 = 100），但代码实现了 5 域模型（增加了 `kernel_security` 扩展域）。
 
