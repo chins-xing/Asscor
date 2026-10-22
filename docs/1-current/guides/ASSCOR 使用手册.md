@@ -267,7 +267,7 @@ ASSCOR-kernel [选项]
 ./ASSCOR-kernel-linux --force-regen-certs --cert-dir=/etc/asscor/certs
 ```
 
-### 4.3 启动输出
+### 4.8 启动输出
 
 Kernel 启动后将显示加载状态：
 
