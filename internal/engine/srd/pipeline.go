@@ -192,11 +192,20 @@ func (p *Pipeline) reportToNodeState(report *ExternalAssessmentReport) *prismlib
 			if failAt == 0 {
 				failAt = report.ScanTime.Unix()
 			}
+			confidence := item.Confidence
+			// 0 = the tool did not supply one → resolve through the SAME rule
+			// table as the kernel, keyed by the tool id (audit I-8). The
+			// Enabled guard keeps the default path bit-identical: with
+			// confidence disabled the item stays 0 (prism treats 0 as full
+			// trust), exactly as before.
+			if confidence <= 0 && p.cfg.Confidence != nil && p.cfg.Confidence.Enabled {
+				confidence = p.cfg.Confidence.Resolve(item.CheckID, report.Tool, item.Category)
+			}
 			node.FailedChecks = append(node.FailedChecks, prismlib.CheckFailure{
 				CheckID:    item.CheckID,
 				Delta:      item.Delta,
 				FailUnix:   failAt,
-				Confidence: item.Confidence, // 0 → prism treats as 1.0 (legacy)
+				Confidence: confidence, // 0 → prism treats as 1.0 (legacy)
 			})
 		}
 	}

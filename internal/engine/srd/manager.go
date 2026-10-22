@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/chins-xing/asscor/internal/common"
+	kernelconfig "github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/logger"
 )
 
@@ -258,6 +259,12 @@ func (m *Manager) registerAdapters() {
 }
 
 func (m *Manager) loadConfig(cfgObj interface{}) {
+	// Wire the kernel [confidence] rule table so failed findings from external
+	// tools resolve their source confidence exactly like the kernel paths
+	// ([confidence.source] keyed by tool id; audit I-8).
+	if kcfg, ok := cfgObj.(*kernelconfig.Config); ok {
+		m.cfg.Confidence = &kcfg.Confidence
+	}
 	if cfg, ok := cfgObj.(interface {
 		Get(string) string
 	}); ok {

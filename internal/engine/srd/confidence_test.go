@@ -7,7 +7,104 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	kernelconfig "github.com/chins-xing/asscor/internal/config"
 )
+
+// newConfidencePipeline wires a parsed kernel [confidence] rule table into an
+// SRD pipeline, mirroring what the kernel does through GetConfigObj.
+func newConfidencePipeline(t *testing.T, ini string) *Pipeline {
+	t.Helper()
+	kcfg, err := kernelconfig.Parse(ini)
+	if err != nil {
+		t.Fatalf("Parse confidence config: %v", err)
+	}
+	cfg := DefaultConfig()
+	cfg.Confidence = &kcfg.Confidence
+	return NewPipeline(cfg)
+}
+
+// TestExternalToolIDResolvesSourceTable is the I-8 contract: the SRD side must
+// consult the SAME rule table as the kernel. A failing item with no confidence
+// of its own, from tool "nuclei", resolves via [confidence.source] nuclei=0.65
+// into prism.CheckFailure.Confidence. Before the fix it stayed 0.
+func TestExternalToolIDResolvesSourceTable(t *testing.T) {
+	p := newConfidencePipeline(t, `
+[confidence]
+enabled = true
+
+[confidence.source]
+nuclei = 0.65
+`)
+	now := time.Now()
+	p.Process(context.Background(), &ExternalAssessmentReport{
+		Tool:     "nuclei",
+		HostID:   "h1",
+		ScanTime: now,
+		Items: []ExternalCheckResult{
+			{CheckID: "N-1", Result: "fail", Delta: -10, FailAt: now.Unix()},
+		},
+	})
+	p.mu.RLock()
+	node := p.snapshots["h1"]
+	p.mu.RUnlock()
+	if node == nil || len(node.FailedChecks) != 1 {
+		t.Fatalf("expected 1 failed check, got %+v", node)
+	}
+	if got := node.FailedChecks[0].Confidence; math.Abs(got-0.65) > 1e-9 {
+		t.Errorf("CheckFailure.Confidence = %v, want 0.65 (tool id → [confidence.source])", got)
+	}
+}
+
+// TestExternalToolIDConfidencePrecedence pins the full I-8 order:
+// tool-supplied confidence > [confidence.source] (keyed by tool id) > default.
+// The disabled case stays bit-identical (0 passthrough, legacy).
+func TestExternalToolIDConfidencePrecedence(t *testing.T) {
+	cases := []struct {
+		name, ini, tool string
+		toolConfidence  float64
+		want            float64
+	}{
+		{
+			name: "tool-supplied wins over source table",
+			ini:  "[confidence]\nenabled = true\n\n[confidence.source]\nnuclei = 0.65\n",
+			tool: "nuclei", toolConfidence: 0.42, want: 0.42,
+		},
+		{
+			name: "unlisted tool falls back to default",
+			ini:  "[confidence]\nenabled = true\ndefault = 0.85\n",
+			tool: "some-other-tool", want: 0.85,
+		},
+		{
+			name: "disabled config keeps legacy passthrough (0)",
+			ini:  "[confidence]\nenabled = false\n\n[confidence.source]\nnuclei = 0.65\n",
+			tool: "nuclei", want: 0,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newConfidencePipeline(t, tc.ini)
+			now := time.Now()
+			p.Process(context.Background(), &ExternalAssessmentReport{
+				Tool:     tc.tool,
+				HostID:   "h1",
+				ScanTime: now,
+				Items: []ExternalCheckResult{
+					{CheckID: "N-1", Result: "fail", Delta: -10, FailAt: now.Unix(), Confidence: tc.toolConfidence},
+				},
+			})
+			p.mu.RLock()
+			node := p.snapshots["h1"]
+			p.mu.RUnlock()
+			if node == nil || len(node.FailedChecks) != 1 {
+				t.Fatalf("expected 1 failed check, got %+v", node)
+			}
+			if got := node.FailedChecks[0].Confidence; math.Abs(got-tc.want) > 1e-9 {
+				t.Errorf("CheckFailure.Confidence = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
 // TestExternalReportConfidenceToCheckFailure: a failed external finding with
 // an explicit confidence must reach prism.CheckFailure.Confidence; without
