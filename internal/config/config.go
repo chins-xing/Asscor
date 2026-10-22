@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -330,6 +331,23 @@ func Parse(content string) (*Config, error) {
 					cfg.ACIDLPMeasures = f
 				}
 			}
+		}
+	}
+
+	// [prism] 段：`default_transmission` 是**跨主机风险传播的基数**
+	// （`internal/assessor/assessor.go` 用它构造 `EdgeState.RiskTransmission` 的基值）。
+	// 此前该键**没有任何解析点** —— `Config.PrismDefaultTransmission` 恒为代码默认 0.3，
+	// 运维在配置里改了也不生效。这里补齐解析，并对坏值 fail-fast（与 `[confidence]` 同一纪律）。
+	if sec, ok := sections["prism"]; ok {
+		if raw, ok := sec["default_transmission"]; ok {
+			f, err := strconv.ParseFloat(raw, 64)
+			if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+				return nil, fmt.Errorf("config: [prism] default_transmission = %q: must be a finite number", raw)
+			}
+			if !(f > 0 && f <= 1) {
+				return nil, fmt.Errorf("config: [prism] default_transmission = %q: must be in (0,1] (0 would drop all propagated risk; >1 would amplify it)", raw)
+			}
+			cfg.PrismDefaultTransmission = f
 		}
 	}
 
