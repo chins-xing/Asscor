@@ -224,16 +224,21 @@ go build ./... && go test ./...
 
 ## 4. Branches
 
-- **`main`** — stable baseline (v0.2.x): the assessment runtime
-  (SSAM/PRISM/SRD, microkernel, plugins) without the attack-loop extension.
-- **`ASSCOR-Research-Core`** — the topology-specialized research branch
-  (formerly v0.3.0) on which the ACL engine, its adversarial modules, and
-  the paper are developed. The paper's implementation artifacts are
+- **`main`** — stable product baseline (v0.2.x): the assessment runtime
+  (SSAM/PRISM/SRD, microkernel, plugins). It already carries the ACL engine
+  (`cmd/tracecheck/`, `internal/{attackerstate,predictor,engagement,defensecycle}/`,
+  `optional/adversary/packages/mitre-engage/`) — at the paper's referenced
+  commit (`ad812c4`) those paths are byte-identical to this branch.
+- **`ASSCOR-Research-Core`** — the research branch (formerly v0.3.0) on which
+  the ACL engine, its adversarial modules, and the paper are developed. The
+  branch adds the research line relative to `main`: edge-factor experiment
+  tooling, confidence-model extensions, the reorganized `docs/` tree and the
+  lab assets under `lunwen/`. The paper's implementation artifacts are
   reproducible from this branch.
 
 The split is deliberate: `main` preserves the stable, production-facing
-assessment platform; the research branch carries experimental topology and
-engagement work without destabilizing the release baseline.
+assessment platform; the research branch carries experimental topology,
+edge-factor and engagement work without destabilizing the release baseline.
 
 ---
 

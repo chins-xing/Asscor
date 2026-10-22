@@ -701,7 +701,7 @@ of deception. These weights are tunable per deployment.
 
 $\mathit{Layer}$, $\mathit{NodeType}$, and $\mathit{EdgeType}$ are plain
 strings. Predefined constants cover the common semantics (six graph layers,
-23 node types, nine edge types), but any model can introduce new values
+25 node types, nine edge types), but any model can introduce new values
 without changing the engine. This decouples the graph engine from any
 specific domain vocabulary --- the same engine serves network topology,
 identity, attacker, capability, and evidence layers.
@@ -819,19 +819,36 @@ The reference implementation lives in the public repository
 \texttt{github.com/chins-xing/asscor}, Go 1.26, Apache-2.0). Two long-lived
 branches exist:
 \begin{itemize}
-\item \textbf{\texttt{main}} --- the stable baseline (v0.2.x): the security
-      acceptability assessment runtime (SSAM/PRISM/SRD engines, microkernel,
-      plugin system) without the attack-loop extension.
-\item \textbf{\texttt{ASSCOR-Research-Core}} --- the topology-specialized
-      research branch (formerly v0.3.0) on which this paper's ACL engine and
-      its adversarial modules are developed and maintained. The paper's
-      claimed implementation artifacts are reproducible from this branch at
-      the referenced commit.
+\item \textbf{\texttt{main}} --- the stable product baseline (v0.2.x): the
+      security acceptability assessment runtime (SSAM/PRISM/SRD engines,
+      microkernel, plugin system). It \textbf{already carries the ACL
+      engine}: \url{cmd/tracecheck/},
+      \url{internal/attackerstate/}, \url{internal/predictor/},
+      \url{internal/engagement/}, \url{internal/defensecycle/}
+      and \url{optional/adversary/packages/mitre-engage/} are present on
+      \texttt{main} (at \texttt{0a0e346}) and --- at the referenced commit
+      (\texttt{ad812c4}) --- are byte-identical to this branch:
+      \texttt{git diff --stat origin/main..ad812c4} over those paths is
+      empty.
+\item \textbf{\texttt{ASSCOR-Research-Core}} --- the research branch
+      (formerly v0.3.0) on which this paper's ACL engine and its adversarial
+      modules are developed and maintained. Relative to \texttt{main}
+      (\texttt{0a0e346}) at the referenced commit (\texttt{ad812c4}), the
+      branch adds the research line itself: 828 files changed
+      ($+166{,}763/-1{,}167$), dominated by the reorganized \texttt{docs/}
+      tree (182 files) and the paper/lab assets under \texttt{lunwen/} (553
+      files), plus the edge-factor experiment tooling
+      (\url{cmd/edgecompare/}, \url{cmd/edgescen/},
+      \url{internal/edgefactor/}, \url{internal/edgeexp/},
+      \url{configs/edgeexp/}) and the confidence-model extensions
+      (\url{ssam-lib/}, \url{internal/config/confidence.go},
+      \url{internal/engine/ssam/}). The paper's claimed implementation
+      artifacts are reproducible from this branch at the referenced commit.
 \end{itemize}
-The branch split is deliberate: \texttt{main} preserves the stable,
-production-facing assessment platform, while the research branch carries
-experimental topology and engagement work without destabilizing the release
-baseline.
+The split is deliberate: \texttt{main} preserves the stable, production-facing
+assessment platform, while the research branch carries experimental topology,
+edge-factor and engagement work without destabilizing the release baseline. It
+is \textbf{not} a split along ACL components --- those exist on both sides.
 
 \subsection{Host Platform}
 
@@ -883,8 +900,8 @@ Eq.~\ref{eq:strategy} incl.\ contain \\
 Intent-driven deception & \texttt{optional/adversary/packages/mitre-engage/} &
 lightweight decoys (ports/tokens), anti-pivot lifecycle \\
 Reproduction harness & \texttt{cmd/tracecheck/} (build tag
-\texttt{tracecheck}) & replays Section~\ref{sec:trace} and
-Section~\ref{sec:sensitivity} numbers \\
+\texttt{tracecheck}) & recomputes Section~\ref{sec:trace} and
+Section~\ref{sec:sensitivity} from hard-coded inputs \\
 \bottomrule
 \end{tabular}\end{adjustbox}
 \caption{ACL component $\to$ repository path mapping. All listed packages
@@ -905,14 +922,17 @@ Three layers guarantee that the paper's numbers are checkable:
       recomputes the four-round trace (Section~\ref{sec:trace}) and both sensitivity tables
       (Section~\ref{sec:sensitivity}) directly from the engine code, so every
       value in this paper can be regenerated in seconds.
-\item \textbf{Lab environment}: the Containerlab multi-host topology
-      (\texttt{lunwen/clab-lab/}) plus the SSAM/PRISM assessment pipeline
-      constitute the reproducible substrate for the Phase~1 validation
-      experiments. The adversarial simulation stack --- MITRE Caldera and
-      Atomic Red Team --- is shipped as source in the paper's artifact
-      (\texttt{lunwen/atomic-red-team-master.zip},
-      \texttt{lunwen/caldera-master.zip}) and orchestrated per
-      Section~\ref{sec:experiment}.
+\item \textbf{Lab environment}: the assessment data lives under
+      \texttt{docs/2-experiments/clab-lab/}; the Containerlab topology itself
+      is defined in \texttt{lunwen/clab-lab/asscor.clab.yml} (an 18-node base
+      topology that the lab extends at run time to the 24-node substrate used
+      in Section~\ref{sec:experiment}). Together with the SSAM/PRISM
+      assessment pipeline they constitute the reproducible substrate for the
+      Phase~1 validation experiments. The adversarial simulation stack ---
+      MITRE Caldera and Atomic Red Team --- is provisioned in the lab
+      environment (Caldera installed under \texttt{/opt/caldera}; the Atomic
+      Red Team source archive is a local, non-versioned asset in
+      \texttt{lunwen/}) and orchestrated per Section~\ref{sec:experiment}.
 \end{enumerate}
 No number in this paper is claimed from a private or unverifiable run; the
 repository commit referenced in this paper is the single source of truth.
@@ -1141,7 +1161,7 @@ $P(a)$ & 0.649 & 0.097 & 0.088 & 0.072 & 0.075 & 0.020 \\
 \bottomrule
 \end{tabular}\end{adjustbox}
 \end{center}
-(recon receives $+3.0$ intent-continuity and $+0.06$ knowledge; execution
+(recon receives $+3.0$ intent-continuity only; execution
 actions receive $+0.06$ knowledge and $+0.84$ vulnerability.) Entropy
 $H = 1.181$; $S = 1 - 1.181/\ln 6 = 0.341 \geq \theta$; intent is now
 known, so the fallback does not trigger and strategy =
@@ -1312,8 +1332,10 @@ experiment.
 \subsubsection{Attacker Simulation Stack}
 
 Phase~1 replaces ad-hoc scripted injection with two open-source adversary
-simulation frameworks, both shipped as source in the paper's artifact
-(\texttt{lunwen/}). The choice is grounded in the structured comparisons of
+simulation frameworks, both provisioned in the lab environment (Caldera
+installed under \texttt{/opt/caldera}; Atomic Red Team kept as a local source
+archive in \texttt{lunwen/}). The choice is grounded in the structured
+comparisons of
 Landauer et al.\ \citep{red-team-redemption} and the SoK survey of
 open-source threat emulators \citep{sok-threat-emulators}: Caldera is the
 only tool combining an orchestrating server, a live agent (implant)
@@ -1352,9 +1374,11 @@ $t$ we record: the observed evidence stream
 (Eq.~\ref{eq:softmax}), the decision sharpness $S_t$
 (Eq.~\ref{eq:sharpness}), the strategy
 $\mathit{strategy}_t$ (Eq.~\ref{eq:strategy}), the deployed interventions,
-and the decoy interaction chains. The full trace is stored as JSONL and
-replayed by \texttt{cmd/tracecheck} against the reference implementation,
-so every reported number is regenerable.
+and the decoy interaction chains. The per-round trace is stored as JSONL by
+the lab harness. \texttt{cmd/tracecheck} takes no file input: it re-derives
+the four-round reference trace and both sensitivity tables from hard-coded
+inputs using the engine code, so those numbers are regenerable independently
+of the recorded JSONL.
 
 \subsubsection{Experiment Matrix}
 
@@ -1399,19 +1423,26 @@ triggered and whether the interaction chain fed evidence back into the
 state engine; (iv) \textbf{fallback correctness} --- for unknown-TTP runs,
 whether \act{contain} fired before any engagement; (v) \textbf{latency} ---
 per-round wall-clock (extending Table~\ref{tab:perf} to real runs). All
-metrics are computed from the recorded JSONL by \texttt{cmd/tracecheck}.
+metrics are derived from the recorded JSONL by the lab analysis scripts
+(\texttt{lunwen/clab-lab/scripts/exp\_*.{sh,py}}); \texttt{cmd/tracecheck}
+does not read these files --- it recomputes the reference trace and
+sensitivity tables from hard-coded inputs as an independent check of the
+engine.
 
 \subsubsection{Results}
 
-All nine runs (E1--E9) and the comparison campaign (CR) were executed
-against the live \textbf{24-node} Containerlab topology (18 hosts + 5 FRR
+The eight live runs (E1--E7 and E9) and the comparison campaign (CR) were
+executed against the live \textbf{24-node} Containerlab topology (18 hosts + 5 FRR
 routers + kernel edge) with the ASSCOR kernel and 18 agents running, an
 active MITRE Caldera server (1984 abilities loaded from Atomic Red Team),
 and the ACL closed loop in the loop. The attacker steps were executed from
 an attacker container against decoy listeners deployed on the target
 containers; every round's full trajectory (evidence, distribution,
 sharpness, strategy, interventions, deployed ports, decoy hits) is stored in
-\texttt{lunwen/clab-lab/data/experiments-final/} as JSONL.
+\texttt{lunwen/clab-lab/data/experiments-final/} as one JSONL file per run:
+\texttt{E1.jsonl}--\texttt{E7.jsonl} and \texttt{E9.jsonl} (\texttt{E8} is an
+offline ablation over the \texttt{E2} records and has no standalone JSONL),
+plus \texttt{CR-C1/C2/C3.jsonl} for the comparison campaign.
 
 \begin{table}[ht]
 \centering
@@ -1430,7 +1461,7 @@ E9 & 6 & recon$\to$cred$\to$lateral$\to$exfil$\to$web$\to$exfil & all 6 correct 
 \bottomrule
 \end{tabular}\end{adjustbox}
 \caption{Phase 1 results: intent-tracking accuracy was 100\% across all 28
-rounds (E1--E9). This is an \textbf{upper bound under the ideal test
+recorded rounds (E1--E7, E9). This is an \textbf{upper bound under the ideal test
 environment}: ground truth is labeled from the preset Caldera playbook of
 each run, so the attacker's intended stage is known a priori and the
 engine's mapping is measured against exactly the techniques the playbook
@@ -1438,7 +1469,10 @@ emits. E6 confirms the defensive fallback: an unmapped technique
 leaves intent \act{unknown} and the strategy is \act{contain} (no decoys
 deployed). E9 demonstrates multi-target intent tracking across six hosts in
 six subnets, covering all five intents. Data:
-\texttt{lunwen/clab-lab/data/experiments-final/E1--E9.jsonl}.}
+\texttt{lunwen/clab-lab/data/experiments-final/} ---
+\texttt{E1.jsonl}--\texttt{E7.jsonl} and \texttt{E9.jsonl} (no
+\texttt{E8.jsonl}; the E8 ablation reuses the \texttt{E2} records) plus
+\texttt{CR-C1/C2/C3.jsonl}.}
 \label{tab:results}
 \end{table}
 
@@ -1462,7 +1496,7 @@ prediction each round (dynamic), versus C2's fixed set. Data:
 \label{tab:cr}
 \end{table}
 
-\textbf{Intent tracking.} All 28 rounds across E1--E9 achieved correct
+\textbf{Intent tracking.} All 28 recorded rounds across E1--E7 and E9 achieved correct
 intent inference (100\% intent-tracking accuracy): the engine's inferred
 intent matched the ground-truth stage of the adversary profile in every
 round, including the multi-stage E5 campaign (recon$\to$credential$\to$data\_theft
@@ -1728,9 +1762,11 @@ animals; it concerns defensive security software design and simulation.}
 \texttt{ASSCOR-Research-Core}, Apache-2.0). The trace and sensitivity
 numbers in this paper are regenerated by \texttt{cmd/tracecheck} (build tag
 \texttt{tracecheck}) against the reference implementation. The Containerlab
-multi-host lab configuration and the adversarial simulation stack (MITRE
-Caldera and Atomic Red Team sources) are included in the paper artifact
-under \texttt{lunwen/}.}
+topology (\texttt{lunwen/clab-lab/asscor.clab.yml}), the lab scripts and the
+recorded experiment data are tracked in the repository; the MITRE Caldera
+installation and the Atomic Red Team source archive are provisioned in the
+lab environment (Caldera under \texttt{/opt/caldera}, Atomic Red Team as a
+local asset in \texttt{lunwen/}).}
 
 \conflictsofinterest{The authors declare no conflicts of interest.}
 

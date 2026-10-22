@@ -623,7 +623,7 @@ of deception. These weights are tunable per deployment.
 
 $\mathit{Layer}$, $\mathit{NodeType}$, and $\mathit{EdgeType}$ are plain
 strings. Predefined constants cover the common semantics (six graph layers,
-23 node types, nine edge types), but any model can introduce new values
+25 node types, nine edge types), but any model can introduce new values
 without changing the engine. This decouples the graph engine from any
 specific domain vocabulary --- the same engine serves network topology,
 identity, attacker, capability, and evidence layers.
@@ -741,19 +741,36 @@ The reference implementation lives in the public repository
 \texttt{github.com/chins-xing/asscor}, Go 1.26, Apache-2.0). Two long-lived
 branches exist:
 \begin{itemize}
-\item \textbf{\texttt{main}} --- the stable baseline (v0.2.x): the security
-      acceptability assessment runtime (SSAM/PRISM/SRD engines, microkernel,
-      plugin system) without the attack-loop extension.
-\item \textbf{\texttt{ASSCOR-Research-Core}} --- the topology-specialized
-      research branch (formerly v0.3.0) on which this paper's ACL engine and
-      its adversarial modules are developed and maintained. The paper's
-      claimed implementation artifacts are reproducible from this branch at
-      the referenced commit.
+\item \textbf{\texttt{main}} --- the stable product baseline (v0.2.x): the
+      security acceptability assessment runtime (SSAM/PRISM/SRD engines,
+      microkernel, plugin system). It \textbf{already carries the ACL
+      engine}: \url{cmd/tracecheck/},
+      \url{internal/attackerstate/}, \url{internal/predictor/},
+      \url{internal/engagement/}, \url{internal/defensecycle/}
+      and \url{optional/adversary/packages/mitre-engage/} are present on
+      \texttt{main} (at \texttt{0a0e346}) and --- at the referenced commit
+      (\texttt{ad812c4}) --- are byte-identical to this branch:
+      \texttt{git diff --stat origin/main..ad812c4} over those paths is
+      empty.
+\item \textbf{\texttt{ASSCOR-Research-Core}} --- the research branch
+      (formerly v0.3.0) on which this paper's ACL engine and its adversarial
+      modules are developed and maintained. Relative to \texttt{main}
+      (\texttt{0a0e346}) at the referenced commit (\texttt{ad812c4}), the
+      branch adds the research line itself: 828 files changed
+      ($+166{,}763/-1{,}167$), dominated by the reorganized \texttt{docs/}
+      tree (182 files) and the paper/lab assets under \texttt{lunwen/} (553
+      files), plus the edge-factor experiment tooling
+      (\texttt{cmd/edgecompare/}, \texttt{cmd/edgescen/},
+      \texttt{internal/edgefactor/}, \texttt{internal/edgeexp/},
+      \texttt{configs/edgeexp/}) and the confidence-model extensions
+      (\texttt{ssam-lib/}, \texttt{internal/config/confidence.go},
+      \texttt{internal/engine/ssam/}). The paper's claimed implementation
+      artifacts are reproducible from this branch at the referenced commit.
 \end{itemize}
-The branch split is deliberate: \texttt{main} preserves the stable,
-production-facing assessment platform, while the research branch carries
-experimental topology and engagement work without destabilizing the release
-baseline.
+The split is deliberate: \texttt{main} preserves the stable, production-facing
+assessment platform, while the research branch carries experimental topology,
+edge-factor and engagement work without destabilizing the release baseline. It
+is \textbf{not} a split along ACL components --- those exist on both sides.
 
 \subsection{Host Platform}
 
@@ -804,8 +821,8 @@ Eq.~\ref{eq:strategy} incl.\ contain \\
 Intent-driven deception & \texttt{optional/adversary/packages/mitre-engage/} &
 lightweight decoys (ports/tokens), anti-pivot lifecycle \\
 Reproduction harness & \texttt{cmd/tracecheck/} (build tag
-\texttt{tracecheck}) & replays \S\ref{sec:trace} and
-\S\ref{sec:sensitivity} numbers \\
+\texttt{tracecheck}) & recomputes \S\ref{sec:trace} and
+\S\ref{sec:sensitivity} from hard-coded inputs \\
 \bottomrule
 \end{tabular}\end{adjustbox}
 \caption{ACL component $\to$ repository path mapping. All listed packages
@@ -826,10 +843,13 @@ Three layers guarantee that the paper's numbers are checkable:
       recomputes the four-round trace (\S\ref{sec:trace}) and both sensitivity tables
       (\S\ref{sec:sensitivity}) directly from the engine code, so every
       value in this paper can be regenerated in seconds.
-\item \textbf{Lab environment}: the Containerlab multi-host topology
-      (\url{2-experiments/clab-lab/} under \texttt{docs/}) plus the SSAM/PRISM assessment pipeline
-      constitute the reproducible substrate for the Phase~1 validation
-      experiments.
+\item \textbf{Lab environment}: the assessment data lives under
+      \texttt{docs/2-experiments/clab-lab/}; the Containerlab topology itself
+      is defined in \texttt{lunwen/clab-lab/asscor.clab.yml} (18 nodes), and
+      \texttt{lunwen/clab-lab/scripts/exp\_extend\_topo.sh} extends it at run
+      time for larger substrates. Together with the SSAM/PRISM assessment
+      pipeline they constitute the reproducible substrate for the Phase~1
+      validation experiments.
 \end{enumerate}
 No number in this paper is claimed from a private or unverifiable run; the
 repository commit referenced in this paper is the single source of truth.
@@ -1058,7 +1078,7 @@ $P(a)$ & 0.649 & 0.097 & 0.088 & 0.072 & 0.075 & 0.020 \\
 \bottomrule
 \end{tabular}\end{adjustbox}
 \end{center}
-(recon receives $+3.0$ intent-continuity and $+0.06$ knowledge; execution
+(recon receives $+3.0$ intent-continuity only; execution
 actions receive $+0.06$ knowledge and $+0.84$ vulnerability.) Entropy
 $H = 1.181$; $S = 1 - 1.181/\ln 6 = 0.341 \geq \theta$; intent is now
 known, so the fallback does not trigger and strategy =

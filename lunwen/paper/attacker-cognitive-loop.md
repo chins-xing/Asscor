@@ -249,7 +249,7 @@ interpretable rules:
 - **Target knowledge**: each observation with a target raises
   `TargetKnowledge` by `0.1 × Confidence`, capped at 1.
 - **TTP repertoire**: observed TTPs are added to the known set (deduplicated).
-- **Experience**: successful outcomes `+0.05`, failures `—.03`, clamped to
+- **Experience**: successful outcomes `+0.05`, failures `-0.03`, clamped to
   [0,1].
 - **Capability**: each TTP's required capability is added to the attacker's
   capability set.
@@ -458,7 +458,7 @@ deployment.
 ### 5.5 Open Semantic Vocabulary
 
 `Layer`, `NodeType`, and `EdgeType` are plain strings. Predefined constants
-cover the common semantics (six graph layers, 23 node types, nine edge types),
+cover the common semantics (six graph layers, 25 node types, nine edge types),
 but any model can introduce new values without changing the engine. This
 decouples the graph engine from any specific domain vocabulary — the same
 engine serves network topology, identity, attacker, capability, and evidence
@@ -588,18 +588,30 @@ The reference implementation lives in the public repository
 https://github.com/chins-xing/Asscor (module `github.com/chins-xing/asscor`, Go
 1.26, Apache-2.0). Two long-lived branches exist:
 
-- **`main`** — the stable baseline (v0.2.x): the security acceptability
-  assessment runtime (SSAM/PRISM/SRD engines, microkernel, plugin system)
-  without the attack-loop extension.
-- **`ASSCOR-Research-Core`** — the topology-specialized research branch
-  (formerly v0.3.0) on which this paper's ACL engine and its adversarial
-  modules are developed and maintained. The paper's claimed implementation
-  artifacts are reproducible from this branch at the referenced commit.
+- **`main`** — the stable product baseline (v0.2.x): the security
+  acceptability assessment runtime (SSAM/PRISM/SRD engines, microkernel,
+  plugin system). It **already carries the ACL engine**: `cmd/tracecheck/`,
+  `internal/{attackerstate,predictor,engagement,defensecycle}/` and
+  `optional/adversary/packages/mitre-engage/` are present on `main` (at
+  `0a0e346`) and — at the referenced commit (`ad812c4`) — are byte-identical
+  to this branch: `git diff --stat origin/main..ad812c4` over those paths is
+  empty.
+- **`ASSCOR-Research-Core`** — the research branch (formerly v0.3.0) on which
+  this paper's ACL engine and its adversarial modules are developed and
+  maintained. Relative to `main` (`0a0e346`) at the referenced commit
+  (`ad812c4`), the branch adds the research line itself: 828 files changed
+  (+166,763/−1,167), dominated by the reorganized `docs/` tree (182 files)
+  and the paper/lab assets under `lunwen/` (553 files), plus the edge-factor
+  experiment tooling (`cmd/edgecompare/`, `cmd/edgescen/`,
+  `internal/edgefactor/`, `internal/edgeexp/`, `configs/edgeexp/`) and the
+  confidence-model extensions (`ssam-lib/`, `internal/config/confidence.go`,
+  `internal/engine/ssam/`). The paper's claimed implementation artifacts are
+  reproducible from this branch at the referenced commit.
 
-The branch split is deliberate: `main` preserves the stable,
-production-facing assessment platform, while the research branch carries
-experimental topology and engagement work without destabilizing the release
-baseline.
+The split is deliberate: `main` preserves the stable, production-facing
+assessment platform, while the research branch carries experimental topology,
+edge-factor and engagement work without destabilizing the release baseline. It
+is **not** a split along ACL components — those exist on both sides.
 
 ### 7.2 Host Platform
 
@@ -633,7 +645,7 @@ inputs and consumes its outputs through existing interfaces:
 | Engagement planner | `internal/engagement/` | utility (Eq. utility), decoy catalog, decoy→evidence sensor |
 | Closed-loop controller | `internal/defensecycle/` | Step, sharpness (Eq. sharpness), three-way strategy incl. contain |
 | Intent-driven deception | `optional/adversary/packages/mitre-engage/` | lightweight decoys (ports/tokens), anti-pivot lifecycle |
-| Reproduction harness | `cmd/tracecheck/` (build tag `tracecheck`) | replays §8 and §11.1 numbers |
+| Reproduction harness | `cmd/tracecheck/` (build tag `tracecheck`) | recomputes the §8 trace and §11.1 sensitivity tables from hard-coded inputs |
 
 All listed packages compile and pass their unit tests in the
 `ASSCOR-Research-Core` branch.
@@ -649,12 +661,15 @@ Three layers guarantee that the paper's numbers are checkable:
    tracecheck ./cmd/tracecheck`) recomputes the four-round trace (§8) and
    both sensitivity tables (§11.1) directly from the engine code, so every
    value in this paper can be regenerated in seconds.
-3. **Lab environment**: the Containerlab multi-host topology
-   (`lunwen/clab-lab/`) plus the SSAM/PRISM assessment pipeline constitute the
-   reproducible substrate for the Phase 1 validation experiments. The
-   adversarial simulation stack — MITRE Caldera and Atomic Red Team — is
-   shipped as source in the paper's artifact (`lunwen/`) and orchestrated per
-   §11.1.
+3. **Lab environment**: the assessment data lives under
+   `docs/2-experiments/clab-lab/`; the Containerlab topology itself is defined
+   in `lunwen/clab-lab/asscor.clab.yml` (an 18-node base topology that the lab
+   extends at run time to the 24-node substrate used in §11). Together with
+   the SSAM/PRISM assessment pipeline they form the reproducible substrate for
+   the Phase 1 validation experiments. The adversarial simulation stack —
+   MITRE Caldera and Atomic Red Team — is provisioned in the lab environment
+   (Caldera installed under `/opt/caldera`; the Atomic Red Team source archive
+   is a local, non-versioned asset in `lunwen/`) and orchestrated per §11.1.
 
 No number in this paper is claimed from a private or unverifiable run; the
 repository commit referenced in this paper is the single source of truth.
@@ -833,7 +848,7 @@ target is kept isolated until the first observation arrives.
 `host-a`, confidence 0.6. State update: K = 0.06, B[host-a] = 0.09, I =
 recon (T1595 -> recon), repertoire {T1595}. Scores: recon 4.00, credential
 2.10, lateral 2.00, data_theft 1.80, web_attack 1.84, maintain 0.50 (recon
-receives +3.0 continuity and +0.06 knowledge; execution actions receive
+receives +3.0 intent-continuity only; execution actions receive
 +0.06 knowledge and +0.84 vulnerability). P = (0.649, 0.097, 0.088, 0.072,
 0.075, 0.020). H = 1.181; S = 0.341 ≥ θ; intent is now known, so the
 fallback does not trigger and strategy = **engage**. All five
@@ -941,8 +956,9 @@ experiment.
 #### 11.1.1 Attacker Simulation Stack
 
 Phase 1 replaces ad-hoc scripted injection with two open-source adversary
-simulation frameworks, both shipped as source in the paper's artifact
-(`lunwen/`). The choice is grounded in the structured comparisons of
+simulation frameworks, both provisioned in the lab environment (Caldera
+installed under `/opt/caldera`; Atomic Red Team kept as a local source archive
+in `lunwen/`). The choice is grounded in the structured comparisons of
 Landauer et al. [15] and the SoK survey of open-source threat emulators
 [16]: Caldera is the only tool combining an orchestrating server, a live
 agent (implant) channel, and a planner-driven ability executor, while Atomic
@@ -972,9 +988,11 @@ Each experiment run executes one adversary profile against the 24-node
 Containerlab substrate while the ACL engine runs in the loop. Per round t we
 record: the observed evidence stream, the predicted action distribution
 P_t, the decision sharpness S_t, the strategy (contain/collect/engage), the
-deployed interventions, and the decoy interaction chains. The full trace is
-stored as JSONL and replayed by `cmd/tracecheck` against the reference
-implementation, so every reported number is regenerable.
+deployed interventions, and the decoy interaction chains. The per-round trace
+is stored as JSONL by the lab harness. `cmd/tracecheck` takes no file input:
+it re-derives the four-round reference trace and both sensitivity tables from
+hard-coded inputs using the engine code, so those numbers are regenerable
+independently of the recorded JSONL.
 
 #### 11.1.3 Experiment Matrix
 
@@ -1011,20 +1029,24 @@ whether the strategy switched contain→collect→engage appropriately; (iii)
 chain fed evidence back into the state engine; (iv) **fallback correctness**
 — for unknown-TTP runs, whether contain fired before any engagement; (v)
 **latency** — per-round wall-clock (extending the simulated benchmark to real
-runs). All metrics are computed from the recorded JSONL by
-`cmd/tracecheck`.
+runs). All metrics are derived from the recorded JSONL by the lab analysis
+scripts (`lunwen/clab-lab/scripts/exp_*.{sh,py}`); `cmd/tracecheck` does not
+read these files — it recomputes the reference trace and sensitivity tables
+from hard-coded inputs as an independent check of the engine.
 
 #### 11.1.5 Results
 
-All nine runs (E1–E9) and the comparison campaign (CR) were executed against
-the live **24-node** Containerlab topology (18 hosts + 5 FRR routers + kernel
-edge) with the ASSCOR kernel and 18 agents running, an active MITRE Caldera
+The eight live runs (E1–E7 and E9) and the comparison campaign (CR) were
+executed against the live **24-node** Containerlab topology (18 hosts + 5 FRR
+routers + kernel edge) with the ASSCOR kernel and 18 agents running, an active MITRE Caldera
 server (1984 abilities loaded from Atomic Red Team), and the ACL closed loop
 in the loop. The attacker steps were executed from an attacker container
 against decoy listeners deployed on the target containers; every round's
 full trajectory (evidence, distribution, sharpness, strategy, interventions,
 deployed ports, decoy hits) is stored in
-`lunwen/clab-lab/data/experiments-final/` as JSONL.
+`lunwen/clab-lab/data/experiments-final/` as one JSONL file per run:
+`E1`–`E7` and `E9` (`E8` is an offline ablation over the `E2` records and has
+no standalone JSONL), plus `CR-C1/C2/C3.jsonl` for the comparison campaign.
 
 | Run | Rounds | Ground truth | Inferred intent | Strategy | Hits |
 |-----|--------|--------------|-----------------|----------|------|
@@ -1037,17 +1059,19 @@ deployed ports, decoy hits) is stored in
 | E7 | 10 | credential ×10 | credential (100%) | engage | 30 |
 | E9 | 6 | recon→cred→lateral→exfil→web→exfil | all 6 correct | engage | 11 |
 
-**Phase 1 results.** Intent-tracking accuracy was 100% across all 28 rounds
-(E1–E9). This is an **upper bound under the ideal test environment**: ground
+**Phase 1 results.** Intent-tracking accuracy was 100% across all 28 recorded
+rounds (E1–E7, E9). This is an **upper bound under the ideal test environment**: ground
 truth is labeled from the preset Caldera playbook of each run, so the
 attacker's intended stage is known a priori and the engine's mapping is
 measured against exactly the techniques the playbook emits. E6 confirms the
 defensive fallback: an unmapped technique leaves intent unknown and the
 strategy is contain (no decoys deployed). E9 demonstrates multi-target
 intent tracking across six hosts in six subnets, covering all five intents.
-Data: `lunwen/clab-lab/data/experiments-final/E1–E9.jsonl`.
+Data: `lunwen/clab-lab/data/experiments-final/` —
+`E1`–`E7.jsonl` and `E9.jsonl` (no `E8.jsonl`; the E8 ablation reuses the
+`E2` records) plus `CR-C1/C2/C3.jsonl`.
 
-**Intent tracking.** All 28 rounds across E1–E9 achieved correct intent
+**Intent tracking.** All 28 recorded rounds across E1–E7 and E9 achieved correct intent
 inference (100% intent-tracking accuracy): the engine's inferred intent
 matched the ground-truth stage of the adversary profile in every round,
 including the multi-stage E5 campaign (recon→credential→data_theft across

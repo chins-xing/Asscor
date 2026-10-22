@@ -97,7 +97,7 @@ ATT&CK-style commands (the "attack surface" the decoys cover). The full
 Caldera orchestration path is also provided:
 
 ```bash
-# Caldera v5 (see lunwen/caldera-master.zip):
+# Caldera v5 (installed under /opt/caldera; its source is NOT shipped in this repository):
 cd /opt/caldera
 python3 -m venv venv && venv/bin/pip install -r requirements.txt
 git clone --depth 1 https://github.com/mitre/sandcat.git plugins/sandcat   # etc.
