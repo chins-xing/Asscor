@@ -1,5 +1,7 @@
 # 边缘因子耦合与变量化实现计划 — 里程碑 A（统一框架 + 四候选 + 变量化 + 离线工具）
 
+> ⛔ 已废弃（仅存档）：里程碑 A 计划已执行完毕、方向② 已实现并收口，本文件不再维护执行状态。现行口径见 `docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md`（设计）与 `docs/2-experiments/EDGE_FACTOR_EXPERIMENT_AUDIT_LEDGER.md`（实验台账）。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实现边缘因子耦合的统一合成框架（`M0 legacy` / `V 逐域向量` / `G 耦合图` / `C 时序链` 四候选）、全参数配置注入与校验、`ssam-lib` 单点合成策略钩子，以及离线重算/拟合/报告工具 `cmd/edgecompare`；默认配置与历史评分逐位一致。

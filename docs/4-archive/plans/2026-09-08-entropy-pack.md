@@ -1,5 +1,7 @@
 # 熵扩展包实现计划 — 里程碑 A（算法内核 + 存储 CIA + 审计）
 
+> ⛔ 已废弃（仅存档）：本实施计划按规则归档、不再维护执行状态；方向③ 熵扩展包目前尚未实现。现行口径见 `docs/1-current/design/ENTROPY_EXTENSION_DESIGN_2026-09-08.md`（设计已定稿、等待实现）。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实现熵扩展包的纯内核部分：行为/网络/基线三维的瞬时偏移算法（ΔH + KL 双读、多尺度）、加密情报存储（独立密钥域、逐帧哈希链、链头签名、原子写与崩溃恢复）、完整审计链（含审计失败时高危操作拒绝），全部可在无系统依赖下单元测试。

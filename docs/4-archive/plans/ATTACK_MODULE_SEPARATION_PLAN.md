@@ -1,5 +1,7 @@
 # ATT&CK 模块分离为扩展包 — 实施计划
 
+> ⛔ 已废弃（仅存档）：计划已执行完毕（`optional/algorithms/packages/attck-ext-pack/` 已落地）。现行口径见 `docs/1-current/guides/ASSCOR 扩展开发指南.md`（build-tag 模块清单）。
+
 **日期**: 2026-08-02 | **版本**: v0.2.2 | **基于**: `docs/3-audits/ATTACK_MODULE_EXTRACTION_AUDIT_2026-07-17.md`
 
 ---

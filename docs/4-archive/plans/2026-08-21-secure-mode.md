@@ -1,5 +1,7 @@
 # Secure Mode 实现计划（ASSCOR-Research-Core）
 
+> ⛔ 已废弃（仅存档）：Secure Mode 计划已执行完毕、模块已实现，本文件不再维护执行状态。现行口径见 `docs/1-current/design/2026-08-21-secure-mode-design.md`（模块设计）与 `docs/1-current/whitepapers/Secure Mode 安全模式白皮书.md`。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实现默认/运行双模式：配置信封加密（AES-256-GCM + argon2id）、三段式原子转换、持久化模式标记、agent 内核托管（自生成临时密码 + mTLS 上报 + 证书指纹主键登记）、CLI 模式切换与配置修改。
