@@ -276,10 +276,16 @@ action a is the sum of six interpretable terms:
     coefficients are mapped to 1.0 when non-positive and floored at 0.60
     otherwise, with no upper clamp, and the weighted total is not clamped to
     100. With coefficients (1.0, 1.0, 1.4) the total evaluates to
-    (1.0·50 + 1.0·30 + 1.4·20)/100 = 1.08, i.e. σ = 108. Only the endpoints
-    of the 95% confidence interval are clamped to [0,100]. In the idealized
-    environment used for the ACL experiments (threat_coeff = 1) this reduces
-    to σ ≤ 100.
+    (1.0·50 + 1.0·30 + 1.4·20)/100 = 1.08, i.e. σ = 108. Only the **lower**
+    endpoint of the 95% confidence interval is clamped (at 0); the upper
+    endpoint is **not** clamped, so the interval stays centred on its point
+    estimate and still contains it when Total > 100 (e.g. 108 with
+    σ_final = 10 gives [88.4, 127.6]). The interval is a documented
+    heuristic — domain-score uncertainty folded through the 0.5
+    intrinsic-layer weight — not a validated posterior over the three-layer
+    score; and the shipped per-source confidence table is a **prior that has
+    not been calibrated**. In the idealized environment used for the ACL
+    experiments (threat_coeff = 1) this reduces to σ ≤ 100.
 
 ```
 score_t(a) = b_a                                    (i) baseline prior

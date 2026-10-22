@@ -130,6 +130,36 @@ SSAM 的核心理论贡献在于统一了两种风险模型：
 
 这种 $$\sum + \prod$$ 的混合结构在安全评估领域是**首次被明确形式化**。
 
+### 2.4 情报可信度与后验区间（方向①）
+
+当每条检查/情报携带可信度 $$c_i \in [0,1]$$ 时，域分从"确定累计"变为**带噪观测的期望扣分**：
+
+$$E_d=\sum_{i\in F_d}|\delta_i|\,c_i,\qquad \text{score}_d=\max(0,\,100-E_d)$$
+
+$$U_d=\sum_{i\in F_d}|\delta_i|^2\,c_i(1-c_i),\qquad \sigma_d=\sqrt{U_d}$$
+
+只有 intrinsic（域分）层被视为随机量，exposure / threat 是配置系数；因此最终分的
+后验标准差按 intrinsic 层权重 $$0.5$$ 折算：
+
+$$\text{FinalSigma}=0.5\cdot\frac{\sqrt{\sum_d (w_d\,\sigma_d)^2}}{\sum_d w_d}$$
+
+95% 区间为 $$[\text{FinalScore}-1.96\,\text{FinalSigma},\ \text{FinalScore}+1.96\,\text{FinalSigma}]$$，
+**只把下界钳到 0、上界不夹**：三层聚合总分可 > 100（配置使然），钳上界会让区间不含
+自己的点估计。该区间是**文档化的启发式**，不是对三层总分的严格后验区间。
+
+| 结构 | 字段 | 语义 |
+|---|---|---|
+| `CheckInput` | `Confidence` | 观测可信度 ∈ [0,1]；0 = 未指定（→ policy `Default`），低于 `Floor` 抬到 `Floor` |
+| `DomainScore` | `Sigma` | 域分后验标准差 $$\sigma_d$$ |
+| `DomainScore` | `Confidence` | 域证据平均可信度 `Σ(abs(δ)·c)/Σabs(δ)`（无失败证据 1.0） |
+| `AssessmentOutput` | `FinalSigma` | 按 intrinsic 权重折算后的最终分 σ |
+| `AssessmentOutput` | `Lower95` / `Upper95` | 上述启发式 95% 区间 |
+| `AssessmentOutput` | `EvidenceConfidence` | 域证据可信度的权重归一均值 ∈ [0,1] |
+
+默认策略禁用（`enabled=false`）时 $$c\equiv1$$、$$\sigma_d\equiv0$$，全部公式退化为
+历史实现。出厂来源先验表（`user=0.90` / `adapter=0.80`）**未经实验标定**，
+不得据此声称"已标定 / CI 覆盖率已验证"。
+
 ---
 
 ## 三、边缘因子理论

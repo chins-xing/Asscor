@@ -14,11 +14,14 @@ import (
 // confPolicyCfg builds a kernel config with confidence enabled and a rule
 // table whose layers are distinguishable:
 //
-//	[confidence.check]    as-777 → 0.3   (exact-id beats everything)
-//	[confidence.checkrx]  ^ot-   → 0.55  (regex beats source/domain)
+//	[confidence.check]    as-777 → 0.3   (exact-id beats domain)
 //	[confidence.source]   user   → 0.9   (source beats domain)
 //	[confidence.domain]   attack_surface → 0.9, business_continuity → 0.95
 //	default → 0.5
+//
+// NOTE (audit M-9): this fixture deliberately has NO [confidence.checkrx]
+// rule — the previous header claimed a `^ot- → 0.55` selector that was never
+// installed, so the "regex beats source/domain" line was misleading.
 func confPolicyCfg() *config.Config {
 	cfg := config.Default()
 	cc := config.DefaultConfidenceConfig()

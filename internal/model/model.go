@@ -374,8 +374,13 @@ type AssessmentResult struct {
 	UncertaintyNote            string                   `json:"uncertainty_note,omitempty"`
 	ModelCoverageRatio         float64                  `json:"model_coverage_ratio,omitempty"`
 	// Confidence-aware posterior statistics (model-native, design
-	// CONFIDENCE_MODEL_DESIGN_2026-09-08 §2.3). Zero when confidence-aware
-	// scoring is disabled.
+	// CONFIDENCE_MODEL_DESIGN_2026-09-08 §2.3). BOTH scoring paths fill them:
+	// the plugin engine and the legacy DynamicScoringEngine (audit I-1).
+	// Zero values here do NOT mean "confidence-aware scoring is off": under a
+	// disabled policy both paths still write them, as Sigma=0 with the interval
+	// collapsed to [FinalScore, FinalScore] and EvidenceConfidence=1.0 (every
+	// check counts as fully confident). Zeros mean the caller did not compute
+	// the posterior (e.g. a conversion path that does not populate them).
 	FinalSigma         float64 `json:"final_sigma,omitempty"`
 	ScoreLower95       float64 `json:"score_lower95,omitempty"`
 	ScoreUpper95       float64 `json:"score_upper95,omitempty"`

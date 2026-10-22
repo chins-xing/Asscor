@@ -180,12 +180,13 @@ type AssessmentInput struct {
 
 ```go
 type CheckInput struct {
-    CheckID string  `json:"check_id"`
-    Domain  string  `json:"domain"`
-    Name    string  `json:"name"`
-    Passed  bool    `json:"passed"`
-    Delta   float64 `json:"delta"`
-    Detail  string  `json:"detail"`
+    CheckID    string  `json:"check_id"`
+    Domain     string  `json:"domain"`
+    Name       string  `json:"name"`
+    Passed     bool    `json:"passed"`
+    Delta      float64 `json:"delta"`
+    Detail     string  `json:"detail"`
+    Confidence float64 `json:"confidence,omitempty"` // 情报可信度（方向①）
 }
 ```
 
@@ -197,6 +198,7 @@ type CheckInput struct {
 | `Passed` | 是否通过 |
 | `Delta` | 未通过时的扣分值（负数，如 -15） |
 | `Detail` | 检查详情说明 |
+| `Confidence` | 本条情报的可信度 ∈ [0,1]；**0 = 未指定**，由生效的 `ConfidencePolicy` 归一为 `Default`。`enabled=false` 时恒按 1.0 计（历史语义）。见 §3.3.1 |
 
 ### 3.3 AssessmentOutput — 评估输出
 
@@ -213,17 +215,43 @@ type AssessmentOutput struct {
     FormulaID     string             `json:"formula_id"`
     CalculatedAt  time.Time          `json:"calculated_at"`
     Metadata      map[string]string  `json:"metadata,omitempty"`
+    // 置信度后验字段（方向①，additive）
+    FinalSigma         float64 `json:"final_sigma,omitempty"`
+    Lower95            float64 `json:"score_lower95,omitempty"`
+    Upper95            float64 `json:"score_upper95,omitempty"`
+    EvidenceConfidence float64 `json:"evidence_confidence,omitempty"`
 }
 ```
 
 | 字段 | 说明 |
 |------|------|
-| `FinalScore` | 最终评估分数（0–100，保留两位小数） |
-| `Acceptable` | 是否可接受（`FinalScore >= Threshold`） |
-| `DomainScores` | 各核心域得分 |
-| `EdgeFactors` | 边缘因子评估结果（含 Active 标记） |
+| `FinalScore` | 最终评估分数（0–100，保留两位小数）；三层聚合**不做上界钳位**，配置可使它 > 100 |
+| `Acceptable` | 是否可接受；默认 `FinalScore >= Threshold`，`accept_by_lower_bound=true` 时改为 `Lower95 >= Threshold`（唯一实现 `ssam.AcceptanceDecision`） |
+| `DomainScores` | 各核心域得分（含 `Sigma`/`Confidence`，见 §3.3.1） |
+| `EdgeFactors` | 边缘因子评估结果（含 Active 标记、`TriggerConfidence`） |
 | `FormulaID` | 使用的评分公式标识 |
 | `Metadata` | 自定义元数据（钩子可写入） |
+| `FinalSigma` | 最终分后验标准差：域分 σ 的 RSS **再乘 intrinsic 层权重 0.5**；`enabled=false` 时为 0。它是启发式不确定度，不是三层总分的严格后验 σ |
+| `Lower95` / `Upper95` | `FinalScore ± 1.96·FinalSigma`，**只把下界钳到 0，上界不夹**——因此 `Total>100` 时区间仍包含点估计（如 108 → 上界可 > 100） |
+| `EvidenceConfidence` | 域证据的可信度加权均值 ∈ [0,1]；无失败证据或 `enabled=false` 时为 1.0 |
+
+### 3.3.1 置信度原生字段（方向①）
+
+> 设计：`docs/CONFIDENCE_MODEL_DESIGN_2026-09-08.md`。**默认 `enabled=false`**，
+> 此时这些字段退化为 `Sigma=0`、区间 `[FinalScore, FinalScore]`、`EvidenceConfidence=1.0`，
+> 评分与历史实现逐位一致。默认先验表（`user=0.90`/`adapter=0.80`）**未经标定**。
+
+| 结构 | 字段 | 语义 |
+|---|---|---|
+| `CheckInput` | `Confidence` | 本条观测的可信度 ∈ [0,1]；0 = 未指定（→ policy `Default`），低于 `Floor` 时抬到 `Floor` |
+| `DomainScore` | `Sigma` | 该域得分的后验标准差：`sigma_d = sqrt(Σ abs(delta)²·c·(1−c))` |
+| `DomainScore` | `Confidence` | 该域证据平均可信度：`Σ(abs(delta)·c)/Σabs(delta)`；无失败证据时 1.0 |
+| `AssessmentOutput` | `FinalSigma` | `0.5 · sqrt(Σ(w_d·σ_d)²)/Σw_d`（仅 intrinsic 层随机） |
+| `AssessmentOutput` | `Lower95` / `Upper95` | 以实际 `FinalScore` 为中心的 95% 启发式区间；只钳下界 0 |
+| `AssessmentOutput` | `EvidenceConfidence` | 域证据可信度的权重归一均值 |
+
+> ⚠️ 这些是**模型原生字段**，不是展示层标签；但区间是文档化的启发式，
+> 不得对外声称“已标定 / CI 覆盖率已验证”。
 
 ### 3.4 EdgeFactorConfig — 边缘因子配置
 

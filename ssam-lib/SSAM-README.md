@@ -77,6 +77,31 @@ $$\text{FinalScore} = \text{Layer}_1 \cdot \text{Layer}_2 \cdot \text{Layer}_3 \
 
 每层独立可追溯（Contributors），消除 V1.2 的 double penalization 问题。
 
+### 情报可信度与后验区间（方向①）
+
+每条检查/情报可带一个可信度 `c ∈ [0,1]`。它进入**算法层**而不只是展示层：
+
+$$\text{score}_d=\max\left(0,\;100-\sum_{i\in F_d}|\delta_i|\,c_i\right),\qquad
+\sigma_d=\sqrt{\sum_{i\in F_d}|\delta_i|^2\,c_i(1-c_i)}$$
+
+$$\text{FinalSigma}=0.5\cdot\frac{\sqrt{\sum_d (w_d\,\sigma_d)^2}}{\sum_d w_d}$$
+
+| 结构 | 字段 | 语义 |
+|---|---|---|
+| `CheckInput` | `Confidence` | 本条观测的可信度 ∈ [0,1]；0 = 未指定（由 `ConfidencePolicy.Default` 归一），低于 `Floor` 时抬到 `Floor` |
+| `DomainScore` | `Sigma` | 域分后验标准差 |
+| `DomainScore` | `Confidence` | 域证据平均可信度 `Σ(abs(δ)·c)/Σabs(δ)`（无失败证据时 1.0） |
+| `AssessmentOutput` | `FinalSigma` | 域分 σ 的 RSS **乘 intrinsic 层权重 0.5** |
+| `AssessmentOutput` | `Lower95` / `Upper95` | `FinalScore ± 1.96·FinalSigma`；**只钳下界 0，上界不夹**（`Total>100` 时区间仍含点估计） |
+| `AssessmentOutput` | `EvidenceConfidence` | 域证据可信度的权重归一均值 ∈ [0,1] |
+
+- **默认禁用**：`DefaultConfidencePolicy()` 下 `c` 恒为 1.0，`Sigma=0`、区间退化为
+  `[FinalScore, FinalScore]`，与历史实现逐位一致。
+- **区间是启发式**：只有 intrinsic（域分）层被视为随机量，exposure/threat 是配置系数；
+  因此它不是三层总分的严格后验区间。
+- **未标定**：出厂先验表（`user=0.90`/`adapter=0.80`）是 prior，没有实验标定；
+  不得据此声称“已标定 / CI 覆盖率已验证”。
+
 ## 快速开始
 
 ```go
