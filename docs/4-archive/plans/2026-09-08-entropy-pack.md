@@ -29,7 +29,7 @@
 - 非 Linux 平台必须可编译（`syscall.Umask` 相关测试限定 `linux`）。
 - gofmt 必须干净（提交前对改动文件做 LF 归一的 `gofmt -l` 检查，Windows 本地 CRLF 会假阳性）。
 
-**Scope 说明（拆分为两个计划）**：本计划只覆盖里程碑 A。保留策略滚动（retention）因涉及链分段语义（spec §6.4 与 §6.3 的衔接）延后到里程碑 B 并与作者确认，本里程碑只实现无破坏性的导出。里程碑 B（kernel SPI 契约、`cmd/kernel` on/off 装配、`[entropy]` 配置、agent 侧四面采集器、独立熵帧通道、kernel 汇聚发布、CLI 熵命令、扩展包清单、MODULE_TAGS/agent tags、依赖闭包断言与非回归验收）的任务清单见文末 §里程碑 B，待 A 验收并合并后另写逐步骤计划。
+**Scope 说明（拆分为两个计划）**：本计划只覆盖里程碑 A。保留策略滚动（retention）因涉及链分段语义（spec §6.4 与 §6.3 的衔接）延后到里程碑 B 并单独定案，本里程碑只实现无破坏性的导出。里程碑 B（kernel SPI 契约、`cmd/kernel` on/off 装配、`[entropy]` 配置、agent 侧四面采集器、独立熵帧通道、kernel 汇聚发布、CLI 熵命令、扩展包清单、MODULE_TAGS/agent tags、依赖闭包断言与非回归验收）的任务清单见文末 §里程碑 B，待 A 验收并合并后另写逐步骤计划。
 
 ---
 
@@ -4056,5 +4056,5 @@ Expected: PASS
 4. **agent 侧采集器**：四面采集（Linux `/proc` 实现 + stub）、隐私最小化哈希化、采集节拍。
 5. **独立熵帧通道**：传输、接收、背压、`frame.gap` 记录、时钟回拨检测接线。
 6. **kernel 侧汇聚与发布**：多 agent 汇聚、三维多尺度读数生成、阈值熵事件 hook。
-7. **保留策略滚动（retention）**：spec §6.4 要求原始帧滚动保留（默认 30 天），但删除最旧帧会让哈希链失去起点——实现前需与作者确认**分段链语义**（每段独立链头、段头签名留存于审计链、校验以当前段起点为基准），本文档不擅自确定该设计。
+7. **保留策略滚动（retention）**：spec §6.4 要求原始帧滚动保留（默认 30 天），但删除最旧帧会让哈希链失去起点——实现前需先确定**分段链语义**（每段独立链头、段头签名留存于审计链、校验以当前段起点为基准），本文档不擅自确定该设计。
 8. **CLI 与分发**：`entropy status/show/history/export/verify` + `baseline set` / `reset` 高危入口（不含 CLI 结构重构，后者属方向④）、`optional/algorithms/packages/entropy-pack/` 清单、`MODULE_TAGS` 增 `entropy`、agent 构建 tags 增 `entropy`、`entropy→integrity` 半启用告警登记、依赖闭包断言测试。
