@@ -34,7 +34,7 @@ ASSCOR 采用"微内核 + 插件"架构，通过标准化接口、依赖注入�
 
 ### 1.1 Plugin（核心接口）
 
-所有 ASSCOR 模块必须实现 `Plugin` 接口，核心定义位于 [plugin.go](file:///f:/Argus/internal/kernel/plugin.go#L102-L114)。
+所有 ASSCOR 模块必须实现 `Plugin` 接口，核心定义位于 [plugin.go](../../../internal/kernel/plugin.go#L102-L114)。
 
 ```go
 type Plugin interface {
@@ -129,7 +129,7 @@ type PluginDependency struct {
 
 ## 二、DI 容器与依赖注入
 
-DI 容器定义于 [di.go](file:///f:/Argus/internal/kernel/di.go)，提供类型安全的依赖注入。
+DI 容器定义于 [di.go](../../../internal/kernel/di.go)，提供类型安全的依赖注入。
 
 ### 2.1 容器接口
 
@@ -148,20 +148,20 @@ DI 容器定义于 [di.go](file:///f:/Argus/internal/kernel/di.go)，提供类�
 | 序号 | 绑定接口 | 绑定实例 | 文件位置 |
 |:---:|------|------|------|
 | 1 | `(*kernel.AssessorEngine)(nil)` | `ssam.NewEngineAdapter(cfg)` | `main.go` (平台层注入) |
-| 2 | `(*AssessorInterface)(nil)` | AssessorModule | [assessor.go:L117](file:///f:/Argus/internal/assessor/assessor.go#L117) |
-| 3 | `(*PersistenceInterface)(nil)` | PersistenceModule | [persistence.go:L181](file:///f:/Argus/internal/persistence/persistence.go#L181) |
-| 4 | `(*ConcurrencyInterface)(nil)` | ConcurrencyModule | [workerpool.go](file:///f:/Argus/internal/kernel/workerpool.go) |
-| 5 | `(*WorkerPoolInterface)(nil)` | WorkerPool | [workerpool.go](file:///f:/Argus/internal/kernel/workerpool.go) |
-| 6 | `(*SPCInterface)(nil)` | SPCModule | [spc.go:L139](file:///f:/Argus/internal/spc/spc.go#L139) |
-| 7 | `(*AdapterIntegrationInterface)(nil)` | AdapterIntegrationModule | [adapter_integration.go](file:///f:/Argus/internal/kernel/adapter_integration.go) |
-| 8 | `(*CTIInterface)(nil)` | CTIModule | [cti.go:L91](file:///f:/Argus/internal/cti/cti.go#L91) |
-| 9 | `(*HeartbeatInterface)(nil)` | HeartbeatModule | [heartbeat.go:L63](file:///f:/Argus/internal/heartbeat/heartbeat.go#L63) |
-| 10 | `(*ATTACKInterface)(nil)` | ATTACKModule | [attck.go:L306](file:///f:/Argus/internal/attck/attck.go#L306) |
-| 11 | `(*CommanderInterface)(nil)` | CommanderModule | [commander.go:L126](file:///f:/Argus/internal/commander/commander.go#L126) |
-| 12 | `(*PolicyInterface)(nil)` | PolicyModule | [policy.go:L67](file:///f:/Argus/internal/policy/policy.go#L67) |
-| 13 | `(*SourceManagerInterface)(nil)` | SourceManagerModule | [sourcemanager.go:L72](file:///f:/Argus/internal/sourcemanager/sourcemanager.go#L72) |
-| 14 | `(*LogCollectorInterface)(nil)` | LogCollectorModule | [collector.go:L78](file:///f:/Argus/internal/collector/collector.go#L78) |
-| 15 | `(*ScoringEngineProvider)(nil)` | ScoringEngineModule | [main.go](file:///f:/Argus/cmd/kernel/main.go) |
+| 2 | `(*AssessorInterface)(nil)` | AssessorModule | [assessor.go:L117](../../../internal/assessor/assessor.go#L117) |
+| 3 | `(*PersistenceInterface)(nil)` | PersistenceModule | [persistence.go:L181](../../../internal/persistence/persistence.go#L181) |
+| 4 | `(*ConcurrencyInterface)(nil)` | ConcurrencyModule | [workerpool.go](../../../internal/kernel/workerpool.go) |
+| 5 | `(*WorkerPoolInterface)(nil)` | WorkerPool | [workerpool.go](../../../internal/kernel/workerpool.go) |
+| 6 | `(*SPCInterface)(nil)` | SPCModule | [spc.go:L139](../../../internal/spc/spc.go#L139) |
+| 7 | `(*AdapterIntegrationInterface)(nil)` | AdapterIntegrationModule | [adapter_integration.go](../../../internal/kernel/adapter_integration.go) |
+| 8 | `(*CTIInterface)(nil)` | CTIModule | [cti.go:L91](../../../internal/cti/cti.go#L91) |
+| 9 | `(*HeartbeatInterface)(nil)` | HeartbeatModule | [heartbeat.go:L63](../../../internal/heartbeat/heartbeat.go#L63) |
+| 10 | `(*ATTACKInterface)(nil)` | ATTACKModule | [attck.go:L306](../../../internal/attck/attck.go#L306) |
+| 11 | `(*CommanderInterface)(nil)` | CommanderModule | [commander.go:L126](../../../internal/commander/commander.go#L126) |
+| 12 | `(*PolicyInterface)(nil)` | PolicyModule | [policy.go:L67](../../../internal/policy/policy.go#L67) |
+| 13 | `(*SourceManagerInterface)(nil)` | SourceManagerModule | [sourcemanager.go:L72](../../../internal/sourcemanager/sourcemanager.go#L72) |
+| 14 | `(*LogCollectorInterface)(nil)` | LogCollectorModule | [collector.go:L78](../../../internal/collector/collector.go#L78) |
+| 15 | `(*ScoringEngineProvider)(nil)` | ScoringEngineModule | [main.go](../../../cmd/kernel/main.go) |
 
 > **模块剥离说明：** 上表中实现位于 `internal/<模块名>/` 的插件均已从内核剥离为 build-tag 可选模块（`//go:build <tag>`），契约接口定义保留在 `internal/kernel/*_interface.go`（评估引擎契约上移至 `internal/kernel/engine_types.go`）。`(*ATTACKInterface)(nil)` 是 ATT&CK 模块内部接口（`internal/attck/`），对外经 `kernel.ATTACKProvider` 注入评估引擎。`ConcurrencyModule`/`WorkerPool`/`AdapterIntegrationModule` 属于内核核心基础设施，仍常编译于 `internal/kernel/`。
 
@@ -192,7 +192,7 @@ if impl, ok := kc.Container().Resolve((*SPCInterface)(nil)); ok {
 
 ### 3.1 话题常量
 
-定义于 [plugin.go](file:///f:/Argus/internal/kernel/plugin.go#L83-L100)：
+定义于 [plugin.go](../../../internal/kernel/plugin.go#L83-L100)：
 
 | 常量 | 值 | 说明 |
 |------|-----|------|
@@ -243,7 +243,7 @@ Agent 上报 → HeartbeatModule
 
 ## 四、扩展点系统
 
-扩展点定义于 [extensions.go](file:///f:/Argus/internal/kernel/extensions.go)。
+扩展点定义于 [extensions.go](../../../internal/kernel/extensions.go)。
 
 ### 4.1 核心类型
 
@@ -369,7 +369,7 @@ kc.Extensions().RegisterExtension("my_plugin", "spc.pre_calculate",
 
 ### 5.1 ScoringEngineProvider
 
-[scoring_engine_interface.go](file:///f:/Argus/internal/kernel/scoring_engine_interface.go) — SSAM 评分引擎提供者
+[scoring_engine_interface.go](../../../internal/kernel/scoring_engine_interface.go) — SSAM 评分引擎提供者
 
 ```go
 type ScoringEngineProvider interface {
@@ -386,7 +386,7 @@ type ScoringEngineProvider interface {
 
 ### 5.2 AssessorInterface
 
-[assessor_interface.go](file:///f:/Argus/internal/kernel/assessor_interface.go) — 评估调度器（实现 `internal/assessor/`，`//go:build assessor`）
+[assessor_interface.go](../../../internal/kernel/assessor_interface.go) — 评估调度器（实现 `internal/assessor/`，`//go:build assessor`）
 
 ```go
 type AssessorInterface interface {
@@ -399,7 +399,7 @@ type AssessorInterface interface {
 
 ### 5.3 PolicyInterface
 
-[policy_types.go](file:///f:/Argus/internal/kernel/policy_types.go) — 策略引擎（实现 `internal/policy/`，`//go:build policy`）
+[policy_types.go](../../../internal/kernel/policy_types.go) — 策略引擎（实现 `internal/policy/`，`//go:build policy`）
 
 ```go
 type PolicyInterface interface {
@@ -410,7 +410,7 @@ type PolicyInterface interface {
 
 ### 5.4 SPCInterface
 
-[spc_interface.go](file:///f:/Argus/internal/kernel/spc_interface.go) — 安全态势计算（实现 `internal/spc/`，`//go:build spc`）
+[spc_interface.go](../../../internal/kernel/spc_interface.go) — 安全态势计算（实现 `internal/spc/`，`//go:build spc`）
 
 ```go
 type SPCInterface interface {
@@ -437,7 +437,7 @@ type SPCInterface interface {
 
 ### 5.5 CTIInterface
 
-[cti_interface.go](file:///f:/Argus/internal/kernel/cti_interface.go) — 网络威胁情报（实现 `internal/cti/`，`//go:build cti`）
+[cti_interface.go](../../../internal/kernel/cti_interface.go) — 网络威胁情报（实现 `internal/cti/`，`//go:build cti`）
 
 ```go
 type CTIInterface interface {
@@ -451,15 +451,15 @@ type CTIInterface interface {
 
 | 接口 | 契约文件位置 | 实现包 (build-tag) | 方法数 |
 |------|------|------|:---:|
-| `HeartbeatInterface` | [heartbeat_types.go](file:///f:/Argus/internal/kernel/heartbeat_types.go) | `internal/heartbeat/` (`heartbeat`) | 5 |
-| `CommanderInterface` | [commander_interface.go](file:///f:/Argus/internal/kernel/commander_interface.go) | `internal/commander/` (`commander`) | 3 |
-| `PersistenceInterface` | [persistence_interface.go](file:///f:/Argus/internal/kernel/persistence_interface.go) | `internal/persistence/` (`persistence`) | 9 |
-| `ConcurrencyInterface` | [workerpool_interface.go](file:///f:/Argus/internal/kernel/workerpool_interface.go) | `internal/kernel/` (常编译) | 6 |
-| `WorkerPoolInterface` | [workerpool_interface.go](file:///f:/Argus/internal/kernel/workerpool_interface.go) | `internal/kernel/` (常编译) | 6 |
-| `ATTACKInterface` | [attck.go](file:///f:/Argus/internal/attck/attck.go) | `internal/attck/` (`attck_ext`) | 30+ |
-| `AdapterIntegrationInterface` | [adapter_integration_interface.go](file:///f:/Argus/internal/kernel/adapter_integration_interface.go) | `internal/kernel/` (常编译) | 2 |
-| `LogCollectorInterface` | [collector_interface.go](file:///f:/Argus/internal/kernel/collector_interface.go) | `internal/collector/` (`collector`) | 2 |
-| `SourceManagerInterface` | [source_manager_interface.go](file:///f:/Argus/internal/kernel/source_manager_interface.go) | `internal/sourcemanager/` (`sourcemanager`) | 14 |
+| `HeartbeatInterface` | [heartbeat_types.go](../../../internal/kernel/heartbeat_types.go) | `internal/heartbeat/` (`heartbeat`) | 5 |
+| `CommanderInterface` | [commander_interface.go](../../../internal/kernel/commander_interface.go) | `internal/commander/` (`commander`) | 3 |
+| `PersistenceInterface` | [persistence_interface.go](../../../internal/kernel/persistence_interface.go) | `internal/persistence/` (`persistence`) | 9 |
+| `ConcurrencyInterface` | [workerpool_interface.go](../../../internal/kernel/workerpool_interface.go) | `internal/kernel/` (常编译) | 6 |
+| `WorkerPoolInterface` | [workerpool_interface.go](../../../internal/kernel/workerpool_interface.go) | `internal/kernel/` (常编译) | 6 |
+| `ATTACKInterface` | [attck.go](../../../internal/attck/attck.go) | `internal/attck/` (`attck_ext`) | 30+ |
+| `AdapterIntegrationInterface` | [adapter_integration_interface.go](../../../internal/kernel/adapter_integration_interface.go) | `internal/kernel/` (常编译) | 2 |
+| `LogCollectorInterface` | [collector_interface.go](../../../internal/kernel/collector_interface.go) | `internal/collector/` (`collector`) | 2 |
+| `SourceManagerInterface` | [source_manager_interface.go](../../../internal/kernel/source_manager_interface.go) | `internal/sourcemanager/` (`sourcemanager`) | 14 |
 
 ---
 
@@ -467,7 +467,7 @@ type CTIInterface interface {
 
 ### 6.1 注册表机制
 
-检查器通过 [registry.go](file:///f:/Argus/internal/checks/registry.go) 中全局注册表管理：
+检查器通过 [registry.go](../../../internal/checks/registry.go) 中全局注册表管理：
 
 ```go
 var (
@@ -482,7 +482,7 @@ func GetByID(checkID string) (model.CheckItem, bool)  // 按 ID 查找
 func GetByDomain(domain model.ScoreDomain) []model.CheckItem  // 按域筛选
 ```
 
-默认检查项在 [init.go](file:///f:/Argus/internal/checks/init.go) 中通过 `init()` 自动注册：
+默认检查项在 [init.go](../../../internal/checks/init.go) 中通过 `init()` 自动注册：
 
 ```go
 func init() {
@@ -532,7 +532,7 @@ checks.Register(keep...)
 
 ### 7.1 DI 容器替换原理
 
-DI 容器（[di.go](file:///f:/Argus/internal/kernel/di.go#L23-L32)）的 `Bind` 采用**覆盖策略**——重复绑定同一接口会静默覆盖之前的实现：
+DI 容器（[di.go](../../../internal/kernel/di.go#L23-L32)）的 `Bind` 采用**覆盖策略**——重复绑定同一接口会静默覆盖之前的实现：
 
 ```go
 func (c *Container) Bind(iface interface{}, impl interface{}) {
@@ -587,7 +587,7 @@ k.Container().Bind((*kernel.SPCInterface)(nil), &MySPC{})
 
 ### 8.1 外部适配器机制
 
-[AdapterIntegrationModule](file:///f:/Argus/internal/kernel/adapter_integration.go) 提供外部安全工具的集成：
+[AdapterIntegrationModule](../../../internal/kernel/adapter_integration.go) 提供外部安全工具的集成：
 
 ```
 外部安全工具            AdapterIntegration          Assessor
@@ -644,7 +644,7 @@ type CheckResult struct {
 5. 在 `Init` 中：通过 `kc.Container().Resolve()` 获取依赖、通过 `kc.Container().Bind()` 注册自身接口、通过 `kc.Extensions().RegisterExtension()` 订阅扩展点
 6. 在 `Start` 中：通过 `kc.Bus().Subscribe()` 订阅事件、启动 goroutine
 7. 在 `Stop` 中：关闭 goroutine、清理资源
-8. 在 [main.go](file:///f:/Argus/cmd/kernel/main.go) 中实例化并注册
+8. 在 [main.go](../../../cmd/kernel/main.go) 中实例化并注册
 
 ### 9.2 新增扩展点（平台层操作）
 
@@ -663,7 +663,7 @@ errs := kc.Extensions().Execute(ctx, "module.phase", data)
 
 ### 9.3 新增事件主题
 
-1. 在 [plugin.go](file:///f:/Argus/internal/kernel/plugin.go) 中添加 `Topic*` 常量
+1. 在 [plugin.go](../../../internal/kernel/plugin.go) 中添加 `Topic*` 常量
 2. 发布方调用 `kc.Bus().Publish(ctx, TopicXxx, payload)`
 3. 订阅方调用 `kc.Bus().Subscribe(TopicXxx, "my_id", handler)`
 4. Handler 签名：`func(ctx context.Context, msg Message) error`
