@@ -433,6 +433,7 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 | 消费侧修复 | `4c1ab06`（**不改记录本体**：`legacy` 列逐位不变、门禁② 逐条偏差 0 ⇒ 不需要重采） |
 | 基线活跃集 | `meta.expected_baseline_factors = ['EF-NO-IDS']`（**实测**，见 B.3） |
 | 不可混用的边界 | 与 `records-dl360-pve-20261013.jsonl`（CT，11 条）**属于两套基质**；`recon` 的 `compromised` 是**旧口径**，**不得进决策层指标**（见操作手册 §4.6） |
+| **CT 数据集锚点**（第二次审计 Minor-4 补登记） | `lunwen/clab-lab/data/edgefactors/records-dl360-pve-20261013.jsonl`（CT 基质，**11 条**）；**sha256 `99be1b5c32e14e3c89ff02f14fae5e4837d3bdddab5558dea1088483f12b47f3`**（2026-10-22 由工作树与 `HEAD` blob 两侧独立复算，两值相同、84306 B） |
 
 ## H.3 现场（清机后的收口状态）
 
@@ -522,13 +523,20 @@ $ git ls-tree -r --name-only main | wc -l ; git ls-tree -r --name-only ASSCOR-Re
 |---|---|---|---|
 | 1 | **拟合路径缺逐条输入校验**（第一次审计 Important-1 在 `-fit` 上的对应面） | 与对比路径**同口径**：`validateFitRecordInputs` 提到 `applyBasisGuard` **之前**、对全部输入记录跑（① 记录自带 `effective_weights` ⇒ 走 `validateWeightsUsable` + `validateDomainsCovered`，逐字同一句错误；② 拟合没有 `-weights` 回退表 ⇒ 另加"`DefaultDomains ∩ λ` 必须有观测域分"一条） | 先造红再修：主批 33 条删掉一条 targeted 记录的 `resilience` 域分 ⇒ 修前 `-fit` **rc=0 且产物与干净跑逐字节相同**（2514 B，同一 sha256）、修后 **rc=1** 且不留半份产物（stderr 就是 compare 路径那句）；Go 用例 `TestFitRejectsBrokenRecordInputs`（4 个子用例：同口径/拟合专属/反向不误报/**判据位置在守卫之前**）。回归：输入完好时 `-fit` stdout **逐字节相同**（`A9D07FC7…DB48`），Step 2 起只多一行"重抽样单位"声明 |
 | 2 | **自助法/交叉验证的重抽样单位** | **必须按实例重抽**：新增 `-group-by scenario`（`scenario_id` 去掉尾部 `-NN` 即实例；缺省 `row` = 历史口径、逐位不变）。判据写成机制级：折不得拆散实例、整群自助样本必须是**若干完整实例**的并集 | 代码 `cmd/edgecompare/fit.go` 的 `fitGroups` / `instanceStem` / `cvTestIndices` / `bootstrapIndices`；Go 用例 `TestGroupedResamplingKeepsInstancesTogether`（切折/整群/端到端/确定性）、`TestFitGroupsRejectsUnknownGroupBy`（未知取值必须报错，不静默回落）、`TestFitRejectsFoldsWiderThanInstances`；CLI 用例：`-group-by` 与 `-candidate` 同给 ⇒ 用法错误 |
-| 3 | **主判据：决策层** | 四候选在主批（N=22）与重复批（N=66）上 **决策一致率 0.500 / 漏判率 0.000 / 误阻断率 0.500 / AUC 0.500**，三层判据逐位相同 ⇒ **未选模**（"最优候选"只能是字典序的产物） | `lunwen/clab-lab/data/edgefactors/compare-20261021.md`、`compare-20261021-rpt-targeted.md`（工具原样输出）；重复批非 targeted 段 `exit=3`（不适用） |
+| 3 | **主判据：决策层** | 四候选在主批（N=22）与重复批（N=66）上 **决策一致率 0.500 / 漏判率 0.000 / 误阻断率 0.500 / AUC 0.500**，**决策层四项**逐位相同 ⇒ **未选模**（"最优候选"只能是字典序的产物）。排序层**不是**逐位相同：`legacy` Spearman/Kendall = −0.036/−0.062、其余 = −0.011/−0.031，但按 M2 不作独立证据 | `lunwen/clab-lab/data/edgefactors/compare-20261021.md`、`compare-20261021-rpt-targeted.md`（工具原样输出）；重复批非 targeted 段 `exit=3`（不适用） |
 | 4 | **为什么必然 0.500（结构性，不是噪声）** | 同一实例两臂的 `observed` 除 `ts` 外**逐字段相同** ⇒ 任何只看读数的模型给两臂**同一分数** ⇒ 判定线只能"一起放行/一起阻断" ⇒ 一对里必有一条判错 ⇒ 一致率上限 0.5。实测 22 条全部判 not acceptable | `fit-20261021-diagnostics.md` §1（逐键比对）+ 报告 §Step 1 |
-| 5 | **可辨识性**（"够不够估 5 边 + 7 主效应"） | **不够，而且是秩亏**：22 行 → 5 个不同设计行、13 个参数 ⇒ `rank(X)=5`、条件数 ∞、12 个非截距列 **VIF 全 ∞**；每个 x 双标签 ⇒ MLE **精确为 0**、5 条先验边全被移除。重复批 66 条同样是 5 行（重数 30/12/12/6/6）⇒ 3 次重复**不增广**独立信息（有效样本 = 11 个实例） | `fit-20261021-diagnostics.md` §2–§4（独立复算脚本 `build/fit24/analysis.py`）；`fit-20261021.md` / `params-20261021.ini` |
+| 5 | **可辨识性**（"够不够估 5 边 + 7 主效应"） | **不够，而且是秩亏**：22 行 → 5 个不同设计行、13 个参数 ⇒ `rank(X)=5`、条件数 ∞；**VIF = 11/12 个非截距列 ∞，`EF-3FA` 为有限值 12/11 ≈ 1.0909**（仅 2 条记录非零、仍不足以支撑可用估计；**秩亏 ≠ 每列都 ∞**）；每个 x 双标签 ⇒ MLE **精确为 0**、5 条先验边全被移除。重复批 66 条同样是 5 行（重数 30/12/12/6/6）⇒ 3 次重复**不增广**独立信息（有效样本 = 11 个实例）⇒ **加重复救不了可辨识性**，要估出耦合必须设计**新的、每实例独立的协变量变化** | `fit-20261021-diagnostics.md` §2–§4（独立复算脚本 `build/fit24/analysis.py`）；`fit-20261021.md` / `params-20261021.ini` |
 | 6 | **拟合纪律：`-l1` 默认关闭、且不得用它解释边强度** | 权威运行 `-l1 0`。另跑 `-l1 0.05`：CVErr 3.491897 → 1.174674，**点估计仍全 0** ⇒ 在本设计上"L1 让耦合变小/变大"**连方向都无从建立**；与 Task 10 共线夹具的实测（0.453 → 0.664 → 0.918）一起构成禁令依据 | `fit-20261021-diagnostics.md` §C.1 |
 | 7 | **拟合纪律：不得为迁就实现而放宽偏置阈值** | `TestFitCouplingIsUnbiasedAcrossSeeds` 的 `0.08` 与 `fitDefaultL2 = 0.01` **一个字都没动** | 见 Task 24 报告 §门禁（该用例零改动、全绿） |
 | 8 | **结论口径 M2 / M3 / C≡V / S5 / 双衰减** | M2：排序层与标签同源 ⇒ Spearman/Kendall 不是独立证据；M3：`ttc` 采集侧必填；**本数据集无法区分 C 与 V**（两者三层判据逐位相同）；`c=0` 的因子在 V/G/C 下不产生惩罚（S5 读法）；V/G/C 只在离线评估 ⇒ 双衰减不进入本次数字 | design §9.1 第 4 条 |
 | 9 | **降级选择原则（工程默认，不是数据选择）** | 解析简单性 `legacy` → 可解释性 `vector` → 参数可辨识性（`graph`/`chain` 的 `c_ij` 在本次设计上不可辨识，故不作默认）；**不许**拿辅助指标好一点就宣布选定 | design §9.1 第 5 条 |
+
+> **论文影响判定（Task 7 Step 2）：无需改动论文**（第二次审计 Important-3 落字）。三份论文源文件
+> `attacker-cognitive-loop-paper.tex` / `attacker-cognitive-loop.md` /
+> `attacker-cognitive-loop-preprints.tex` 里 `edge factor` / `coupling` / `边缘因子` / `耦合` /
+> `Spearman` / `Kendall` / `AUC` **0 命中**（`git grep -in … -- <三文件>` ⇒ `rc=1`，见 design §9.1
+> 第 6 条）；论文不涉及边缘因子/评分耦合，也未把排序层指标或 AUC 当证据 ⇒ 本方向的 NULL /
+> 不可辨识结论**不触达论文正文，无需改动论文**。`PP-01`（论文 σ 上界）是独立开放项，不因此关闭。
 
 > **两条禁令在本任务里又被实测了一遍**（措辞禁令未被推翻）：
 > ① "每个因子恰好出现两次"仍只是**观测**（本批 3 条记录含 `n_i = 1`，Task 5 的审计已独立复算）；
