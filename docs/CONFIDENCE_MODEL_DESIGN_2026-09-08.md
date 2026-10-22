@@ -1,8 +1,11 @@
 # 情报可信度原生变量 — 设计文档（SSAM/SRD 算法层）
 
-> 状态：设计定稿（2026-09-08）｜分支：ASSCOR-Research-Core｜关联：研究方向 ①
+> 状态：**已实现并合入**（设计定稿 2026-09-08；实现 2026-09 完成，2026-10-22 补做落点核对）｜分支：ASSCOR-Research-Core｜关联：研究方向 ①
 > 作者决策：贝叶斯置信区间语义 + config 内可替换规则引擎（用户 2026-09-08 确认）
 > 配套方向 ②（边缘因子向量图变量化）另行设计，本设计只保证 ① 覆盖到边缘因子触发链。
+>
+> **实现落点与遗留见 §7**（11/11 覆盖矩阵有落点；**「实验标定」未兑现** ⇒ 默认表是先验、
+> 对外不得声称"已标定"；`PP-01` 的 σ 上界问题与论文口径见 §7.4）。
 
 ---
 
@@ -234,3 +237,70 @@ floor = 0.05                           ; 可信度下限(不允许0 → 完全�
 - P4 engine 接入（主评分 + 边缘因子链）+ 集成测试
 - P5 srd 管道 + adapter 来源映射
 - P6 全量回归 + conf=1 基线验证 + 提交（中文说明）
+
+---
+
+## 7. 实现落点核对与遗留（2026-10-22 补记，逐条对照代码）
+
+> 本节是**事后补记**：P1–P6 已实现并合入 `ASSCOR-Research-Core`。
+> 债务清单第 ② 项 ① 的登记：`✅ 完成（584b418/14652db/1bc2938 + 内仓 d21efc0/cd2c60b）`。
+
+### 7.1 §4 覆盖矩阵逐行核对（11/11 有落点）
+
+| §4 声称的层 | 实际落点（文件:符号） | 状态 |
+|---|---|---|
+| `model.CheckResult.Confidence` | `internal/model/model.go:201`（`json:"confidence,omitempty"`） | ✅ |
+| `ssam-lib.CheckInput.Confidence` | `ssam-lib/types.go`（`CheckInput.Confidence`）+ `NormalizeConfidence` | ✅ |
+| `DomainScore.Sigma / Conf` | `ssam-lib/types.go:9`（`Sigma`）、`DomainScore.Confidence` | ✅ |
+| `EdgeFactorResult` 触发衰减 + 触发可信度 | `ssam-lib/types.go:20-23`（`TriggerConfidence`）、`ast.go` 的 `c_trigger` 衰减 | ✅ |
+| `ScoringConfig.ConfidencePolicy` | `ssam-lib/types.go:35,88` | ✅ |
+| `AssessmentOutput`：`FinalSigma` + 区间 | `ssam-lib/types.go:61-66`（`FinalSigma`/`Lower95`/`Upper95`/`EvidenceConfidence`） | ✅ |
+| adapter `CheckResultsToInputs` 透传 | `internal/engine/ssam/adapter.go:103`（`Confidence: c.Confidence`） | ✅ |
+| engine/assessor 主评分路径 | `internal/engine/assessor.go:486-504`（`delta*conf`，禁用策略下 `conf=1.0` ⇒ 与旧累积逐位一致） | ✅ |
+| engine/ssam 装配路径 | `internal/engine/ssam/engine.go:93`（`ssam.ComputeDomainScoresBayes`） | ✅ |
+| `prism-lib.CheckFailure.Confidence` + `computeDebtRaw` 加权 | `prism-lib`（`TestDebtConfidenceWeighted`：`|delta|·confidence`，`c=1` 兼容） | ✅ |
+| 统一入口 `ComputeDomainScoresBayes` | `ssam-lib/confidence.go:125`；`ComputeDomainScores` 委托给它（`ssam.go:161-167`） | ✅ |
+
+### 7.2 ⚠️ 两处实现同一语义（一致性风险，须记）
+
+1. **域分的「证据期望扣分」有两处实现**：`ssam-lib/confidence.go:92` 的 `DomainBayes`（走
+   `NormalizeConfidence`），与 `internal/engine/assessor.go:498-503` 的内联 `current + delta*conf`。
+   **两者在禁用策略下等价**，但启用策略后**归一规则不同**，实测差异点：
+
+   | 输入 `check.Confidence` | 内联（assessor） | `NormalizeConfidence`（内库） | 是否一致 |
+   |---|---|---|---|
+   | `0`（未指定） | → `1.0` | → `policy.Default`（默认 1.0） | ✅（默认配置下） |
+   | `0.01`（低于 floor 0.05） | **`0.01`** | **`0.05`**（抬到 floor） | ❌ **不一致** |
+   | `0.5` | `0.5` | `0.5` | ✅ |
+   | `>1`（如 1.2） | → `1.0` | → `1`（夹到上限） | ✅ |
+
+   ⇒ **真正的分歧在 `0 < conf < floor`**：内联不收 floor，于是「低于下限的可信度」在 legacy 主评分路径上
+   会**全额生效**，而在 ssam-lib 路径上会被抬到 floor。
+
+   **实测证据**（`build/confdiv/` 一次性程序，2026-10-22；`go run ./build/confdiv/` rc=0）：
+
+   ```
+   raw=0     inline=1      normalize=1      same
+   raw=0.01  inline=0.01   normalize=0.05   DIFF
+   raw=0.03  inline=0.03   normalize=0.05   DIFF
+   raw=0.05  inline=0.05   normalize=0.05   same
+   raw=0.5   inline=0.5    normalize=0.5    same
+   raw=1     inline=1      normalize=1      same
+   raw=1.2   inline=1      normalize=1      same
+   ```
+
+2. **改任一处必须同步核另一处**；上表应当由测试钉住（见审计报告的结论与修法）。
+
+### 7.3 ❌ 未兑现的一条设计要求：**实验标定**
+
+§3.4 原文：「…具体数值在**实现期用实验标定并记录**」。
+**截至 2026-10-22，仓内没有任何标定产物**（`git ls-files | grep -i calib` 为空；
+`lunwen/clab-lab/data/` 下只有方向② 的边缘因子数据）。
+⇒ 默认置信表的值是**先验**，**未经实验标定**。**对外与论文口径不得声称"已标定/已验证"。**
+
+### 7.4 与论文口径的关系（`PP-01`）
+
+`clamp95` 只夹 `Lower95`/`Upper95`（`ssam.go:146-147`），**`FinalScore`/`Total` 本身没有 100 钳位**
+⇒ 总分可达 >100。论文原写 `σ ∈ [0,100]` 不成立，已于 `02fbccb` 按实际改为
+「**σ ≥ 0，名义 0–100 但上界不设**」。**代码要不要加钳位**仍开放（是否属产品侧决定）。
+
