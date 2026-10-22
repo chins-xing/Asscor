@@ -14,30 +14,43 @@
 
 | 文件 | 职责 |
 |------|------|
-| `ssam.go` | Engine 核心实现：`Provider` 接口、输入验证、钩子机制、公式调度 |
+| `ssam.go` | 纯函数评分入口：`ComputeScore` / `ComputeScoreWithConfidence`、`ComputeDomainScores`、`ComputeWeightedSum`、`ApplyEdgeFactors*` |
 | `types.go` | V1.x 数据类型定义（`AssessmentInput`, `AssessmentOutput` 等），保持向后兼容 |
 | `types_v2.go` | V2.0 数据类型：`RiskContext`, `RiskLayerDetail`, `RiskLayers`, `FinalScore`, `AssessmentInputV2`, `AssessmentOutputV2`, `ScoringFormulaV2` |
-| `formulas.go` | V1.x 公式实现（`ssam_v1.2`, `simple_weighted`），保持向后兼容 |
-| `formulas_v2.go` | V2.0 公式 `SSAMV20Formula`：三层语义模型（本征/暴露/威胁）独立风险层评估 |
+| `formulas.go` | V1.x 公式实现（`ssam_v1.2`, `simple_weighted`） |
+| `formulas_v2.go` | V2.0 公式 `SSAMV20Formula` 与 `ComputeScoreV2`：三层语义模型（本征/暴露/威胁）加权 |
 | `ir.go` | SSAM IR JSON 中间表示：`AssessmentOutputV2.ToIR()` 输出机器可读的结构化评估结果 |
-| `ast.go` | Formula DSL/AST：`ParseFormula(expression)` 解析公式字符串为 AST；`EvaluateFormula(ast, ctx)` 求值 |
-| `formulas_ast.go` | AST 驱动的公式实现，支持运行时动态构造评分公式 |
-| `engine_test.go` | 完整测试覆盖（V1.x 回归 + V2.0 三层模型 + IR 导出 + AST 解析） |
+| `ast.go` | 公式 AST：`FormulaAST`、`EvalAST`、`ASTToFormula`、`RegisterEdgeFactorStrategy`（**无字符串解析器**） |
+| `formulas_ast.go` | 内置 AST：`SSAMV12AST()` / `SSAMV20AST()` |
+| `confidence.go` | 置信度策略、贝叶斯后验与可接受性判定 |
+| `domain_adjust.go` | 域级修正注册（`RegisterDomainAdjust`） |
+| `defaults.go` | 默认权重、边缘因子与 `DefaultScoringConfig` |
+| `validation.go` | `ValidateInput` / `ValidateOutput` |
+| `errors.go` | `SSAMError` 与错误变量 |
+| `*_test.go` | 6 个测试文件：`ast_test.go` / `confidence_test.go` / `domain_adjust_test.go` / `ir_test.go` / `ssam_test.go` / `ssam_v2_test.go` |
 
-ASSCOR 适配层（`internal/engine/ssam/`）精简为两个文件：
+> **分层提示**：ssam-lib 只提供纯函数，**不含** `Engine` / `Provider` / 钩子。`Engine`、`Provider` 与钩子属于 ASSCOR 适配层 `internal/engine/ssam/`（见 §2）。
+
+ASSCOR 适配层（`internal/engine/ssam/`，build tag `engine`）的非测试文件共 **6 个**：
 
 | 文件 | 职责 |
 |------|------|
-| `adapter.go` | ASSCOR 配置/模型与 SSAM 格式的双向转换（委托给 ssam-lib Engine） |
-| `defaults.go` | 默认权重、边缘因子及工厂函数 |
+| `engine.go` | `Engine` 实现 `Provider`；钩子调度、公式选择、委托 ssam-lib 评分 |
+| `interfaces.go` | `Provider` / `ScoringProvider` / `DomainProvider` / `EdgeFactorProvider` / `HookProvider` 定义 |
+| `adapter.go` | ASSCOR 配置/模型与 SSAM 格式的双向转换 |
+| `adapter_engine.go` | `EngineAdapter` 实现内核 `kernel.AssessorEngine` |
+| `edgefactor.go` | 边缘因子触发映射与模型参数适配 |
+| `re_exports.go` | ssam-lib 类型别名与符号转发 |
 
 ---
 
-## 2. 核心接口
+## 2. 核心接口（ASSCOR 适配层）
+
+> 本节及 §2.2–§2.5 描述的是 **ASSCOR 适配层** `internal/engine/ssam/` 的接口（build tag `engine`），**不是** `ssam-lib` 的公开 API。独立使用 ssam-lib 时请直接调用 §6 的 AST 与 §8.1 的 `ComputeScore` 纯函数。
 
 ### 2.1 Provider 聚合接口
 
-`Provider` 是 SSAM 模块对外暴露的顶层接口，聚合了四个子接口：
+`Provider` 定义在 `internal/engine/ssam/interfaces.go`，聚合四个子接口：
 
 ```go
 type Provider interface {
@@ -48,7 +61,7 @@ type Provider interface {
 }
 ```
 
-`Engine` 结构体实现了 `Provider` 接口，并通过编译时断言保证：
+`Engine`（`internal/engine/ssam/engine.go:17`）实现 `Provider`，编译期断言位于 `engine.go:37`：
 
 ```go
 var _ Provider = (*Engine)(nil)
@@ -76,8 +89,7 @@ type ScoringProvider interface {
 | `ComputeWeightedSum` | 计算域得分的加权和 |
 | `ApplyEdgeFactors` | 对基础分应用活跃边缘因子的乘法修正 |
 | `SetWeights` / `GetWeights` | 动态设置/获取核心域权重 |
-| `SetFormula` / `GetFormula` | 切换/获取评分公式（内置 `ssam_v1.2` 和 `simple_weighted`） |
-| `SetFormulaV2` / `GetFormulaV2` | 切换/获取 V2.0 评分公式（内置 `ssam_v2.0`，使用三层语义模型） |
+| `SetFormula` / `GetFormula` | 设置/获取评分公式 ID；适配层 `ComputeScore` 在未注册同名自定义公式时固定使用 V2 三层公式（`SSAMV20Formula`），内置 V1 公式仅在直接调用 ssam-lib 时生效 |
 
 ### 2.3 DomainProvider — 域信息接口
 
@@ -460,31 +472,46 @@ SSAM IR 的设计目标：
 
 ---
 
-## 6. Formula DSL / AST
+## 6. Formula AST
 
-SSAM V2.0 提供公式 DSL，允许在运行时通过字符串表达式构造评分公式，无需修改代码：
+`ssam-lib` **不提供**字符串 DSL 解析器（没有 `ParseFormula()` / `EvaluateFormula()`）。公式以 `FormulaAST` 程序化表达，内置两套 AST：
+
+- `SSAMV12AST()` — V1.2 连乘公式
+- `SSAMV20AST()` — 默认的 V2 三层加权公式
 
 ```go
-import "github.com/chins-xing/ssam"
+package main
 
-ast, err := ssam.ParseFormula("intrinsic * 0.5 + exposure * 0.3 + threat * 0.2")
-if err != nil {
-    log.Fatal(err)
+import (
+    "fmt"
+    "log"
+
+    "github.com/chins-xing/ssam"
+)
+
+func main() {
+    ast := ssam.SSAMV20AST() // 也可自行构造 ssam.FormulaAST
+
+    ctx := ssam.EvalContext{
+        DomainScores: []ssam.DomainScore{{Domain: "attack_surface", Score: 80}},
+        Weights:      ssam.DefaultWeights,
+        RiskContext:  ssam.RiskContext{Exposure: 0.9, Threat: 1.0},
+    }
+
+    score, err := ssam.EvalAST(ast, ctx) // 直接求值
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("AST score: %.2f\n", score)
+
+    compiled := ssam.ASTToFormula(ast) // 编译为 ssam.ScoringFormula
+    fmt.Printf("compiled score: %.2f\n", compiled(ctx.DomainScores, ctx.Weights, 1.0, 0.9, nil))
 }
-
-engine := ssam.NewDefaultEngine()
-engine.SetFormulaAST(ast)
-
-output, err := engine.ComputeScoreV2(ctx, inputV2)
 ```
 
-支持的 DSL 语法：
-- 变量：`intrinsic`, `exposure`, `threat`（三层风险层得分）
-- 运算符：`+`, `-`, `*`, `/`, `(`, `)`
-- 字面量：整数和浮点数
-- 函数：`min(a,b)`, `max(a,b)`, `round(x)`, `sqrt(x)`
+AST 节点用 `Op` 字段表达，支持：`weighted_sum`、`multiply`、`divide`、`add`、`min`、`max`、`product_chain`、`ref`、`const`。`EvalAST` 与 `ASTToFormula` 共用域级修正与边缘因子合成策略入口。
 
-DSL 表达式会被 `ParseFormula()` 编译为 AST，由 `EvaluateFormula()` 高效求值，无需运行时字符串解析。
+> 配置文件驱动的公式（`[v2_formula] expression = ...`）**未实现**；见《项目篇章-系统安全可接受性模型》§V2.0。
 
 ---
 
@@ -564,7 +591,6 @@ SSAM 模块可完全脱离 ASSCOR 框架独立使用：
 package main
 
 import (
-    "context"
     "fmt"
     "log"
 
@@ -572,24 +598,28 @@ import (
 )
 
 func main() {
-    engine := ssam.NewDefaultEngine()
+    config := ssam.ScoringConfig{
+        Weights:     ssam.DefaultWeights,
+        EdgeFactors: ssam.DefaultEdgeFactors,
+        FormulaID:   "ssam_v2.0", // 默认三层加权；"ssam_v1.2" 为旧连乘公式
+    }
 
-    input := &ssam.AssessmentInput{
-        HostID:    "server-01",
-        Hostname:  "web-prod-01",
-        Threshold: 80,
+    input := ssam.AssessmentInput{
+        HostID:      "server-01",
+        Hostname:    "web-prod-01",
+        Threshold:   80,
         ThreatCoeff: 1.0,
         SPCScore:    1.0,
         Checks: []ssam.CheckInput{
-            {CheckID: "AS-001", Domain: "attack_surface", Name: "SSH Root Login", Passed: true, Delta: 0},
+            {CheckID: "AS-001", Domain: "attack_surface", Name: "SSH Root Login", Passed: true},
             {CheckID: "AS-002", Domain: "attack_surface", Name: "Unused Services", Passed: false, Delta: -10, Detail: "telnet enabled"},
-            {CheckID: "BC-001", Domain: "business_continuity", Name: "Critical Service", Passed: true, Delta: 0},
+            {CheckID: "BC-001", Domain: "business_continuity", Name: "Critical Service", Passed: true},
             {CheckID: "OT-001", Domain: "operation_trust", Name: "File Permissions", Passed: false, Delta: -15, Detail: "/etc/passwd world-writable"},
-            {CheckID: "RS-001", Domain: "resilience", Name: "Auto-ban Accuracy", Passed: true, Delta: 0},
+            {CheckID: "RS-001", Domain: "resilience", Name: "Auto-ban Accuracy", Passed: true},
         },
     }
 
-    output, err := engine.ComputeScore(context.Background(), input)
+    output, err := ssam.ComputeScore(config, input) // 值传入、值返回
     if err != nil {
         log.Fatal(err)
     }
@@ -609,33 +639,39 @@ func main() {
 }
 ```
 
+> `ssam.ComputeScore(config ScoringConfig, input AssessmentInput) (AssessmentOutput, error)`：**按值**接收与返回，不接收 `context`；需要取消/超时由调用方在外层控制。
+
 ### 8.2 方式二：自定义配置
 
 ```go
-engine := ssam.NewEngine()
+config := ssam.DefaultScoringConfig
 
-engine.SetWeights([]ssam.WeightConfig{
+config.Weights = []ssam.WeightConfig{
     {Domain: "attack_surface", Weight: 40},
     {Domain: "business_continuity", Weight: 20},
     {Domain: "operation_trust", Weight: 25},
     {Domain: "resilience", Weight: 15},
-})
+}
 
-engine.SetEdgeFactors([]ssam.EdgeFactorConfig{
+config.EdgeFactors = []ssam.EdgeFactorConfig{
     {ID: "EF-002FA", Name: "2FA Missing", Factor: 0.85, TriggerCheck: "EF-001"},
-    {ID: "EF-SYNCOOKIE", Name: "SYN Cookie Disabled", Factor: 0.75, TriggerCheck: "EF-SYNCOOKIE"},
-    {ID: "EF-SELINUX", Name: "SELinux Disabled", Factor: 0.80, TriggerCheck: "EF-SELINUX"},
-})
+    {ID: "EF-SYNCOOKIE", Name: "SYN Cookie Disabled", Factor: 0.75, TriggerCheck: "RS-005"},
+    {ID: "EF-SELINUX", Name: "SELinux Disabled", Factor: 0.80, TriggerCheck: "OT-005"},
+}
 
-engine.SetFormula("ssam_v1.2")
+config.FormulaID = "ssam_v1.2" // 也可保持默认 "ssam_v2.0"
+
+output, err := ssam.ComputeScore(config, input)
 ```
 
-### 8.3 方式三：注册自定义公式
+> 适配层的 `Engine.SetWeights` / `Engine.SetEdgeFactors` / `Engine.SetFormula` 是同一份配置的包装接口；ssam-lib 本身只接受 `ScoringConfig`。
+
+### 8.3 方式三：自定义公式（`ScoringFormula` / AST）
+
+ssam-lib **没有全局公式注册表**；自定义公式就是一个 `ScoringFormula` 函数（或由 `ASTToFormula` 编译出的函数），由调用方直接调用。适配层的 `Engine.RegisterFormula` 是 ASSCOR 内部 API，不属于 ssam-lib。
 
 ```go
-engine := ssam.NewDefaultEngine()
-
-engine.RegisterFormula("custom_v1", func(
+customFormula := func(
     domainScores []ssam.DomainScore,
     weights []ssam.WeightConfig,
     threatCoeff float64,
@@ -669,29 +705,42 @@ engine.RegisterFormula("custom_v1", func(
     }
 
     return math.Round(base*100) / 100
-})
+}
 
-engine.SetFormula("custom_v1")
+// 自行准备公式输入：
+config := ssam.DefaultScoringConfig
+domainScores := ssam.ComputeDomainScores(config.Weights, input.Checks)
+factors := ssam.ApplyEdgeFactorsToChecks(config.EdgeFactors, input.Checks, nil)
+score := customFormula(domainScores, config.Weights, 1.0, 1.0, factors)
 ```
 
-### 8.4 方式四：使用钩子扩展评分流程
+### 8.4 方式四：使用钩子扩展评分流程（仅 ASSCOR 适配层）
+
+钩子（`RegisterHook` / `HookPhase`）只存在于 ASSCOR 适配层 `internal/engine/ssam/`，**ssam-lib 没有钩子机制**；且 `internal` 包不能被第三方模块导入，因此本节仅适用于 ASSCOR 仓内开发者（构建需 `-tags engine`）。
 
 ```go
-engine := ssam.NewDefaultEngine()
+import (
+    "context"
+    "fmt"
 
-engine.RegisterHook(ssam.HookPreScore, "log-input", func(
+    adapter "github.com/chins-xing/asscor/internal/engine/ssam"
+)
+
+engine := adapter.NewDefaultEngine()
+
+engine.RegisterHook(adapter.HookPreScore, "log-input", func(
     ctx context.Context,
-    input *ssam.AssessmentInput,
-    output *ssam.AssessmentOutput,
+    input *adapter.AssessmentInput,
+    output *adapter.AssessmentOutput,
 ) error {
     fmt.Printf("[pre_score] Evaluating host=%s with %d checks\n", input.HostID, len(input.Checks))
     return nil
 }, 10)
 
-engine.RegisterHook(ssam.HookPostEdge, "enrich-metadata", func(
+engine.RegisterHook(adapter.HookPostEdge, "enrich-metadata", func(
     ctx context.Context,
-    input *ssam.AssessmentInput,
-    output *ssam.AssessmentOutput,
+    input *adapter.AssessmentInput,
+    output *adapter.AssessmentOutput,
 ) error {
     output.Metadata["evaluated_by"] = "custom-engine"
     output.Metadata["compliance_framework"] = "GB/T 22239-2019 Level 3"
@@ -801,22 +850,23 @@ no_ids = 0.88
 
 ## 10. 输入验证
 
-`ValidateInput` 在 `ComputeScore` 入口自动调用，验证规则如下：
+`ssam.ValidateInput(input AssessmentInput)` 在 `ssam.ComputeScore` 入口自动调用。它**按值接收**参数，因此没有 nil 分支：
 
-| 字段 | 规则 | 错误类型 |
+| 字段 | 规则 | 错误 |
 |------|------|----------|
-| `input` | 不得为 nil | `ErrNilInput` |
-| `HostID` | 不得为空 | `ValidationError{Field: "host_id"}` |
-| `Threshold` | 必须在 (0, 100] 范围内 | `ValidationError{Field: "threshold"}` |
-| `Checks[i].Domain` | 不得为空 | `ValidationError{Field: "checks[i].domain"}` |
+| `HostID` | 不得为空 | `*SSAMError{Code: "empty_host_id"}` |
+| `Threshold` | 必须在 (0, 100] 范围内 | `*SSAMError{Code: "invalid_threshold"}` |
+| `Checks[i].Domain` | 不得为空 | `*SSAMError{Code: "empty_domain"}` |
+
+> `ErrNilInput` 只由 **ASSCOR 适配层**的 `Engine.ComputeScore(ctx, *AssessmentInput)` 在收到 nil 指针时返回；ssam-lib 的 `ComputeScore` 接收值类型，不存在 nil 输入。
 
 自定义验证示例：
 
 ```go
 if err := ssam.ValidateInput(input); err != nil {
-    var ve ssam.ValidationError
-    if errors.As(err, &ve) {
-        fmt.Printf("Validation failed: field=%s, message=%s\n", ve.Field, ve.Message)
+    var se *ssam.SSAMError
+    if errors.As(err, &se) {
+        fmt.Printf("Validation failed: code=%s, message=%s\n", se.Code, se.Message)
     }
     return err
 }
@@ -842,26 +892,27 @@ if err := ssam.ValidateInput(input); err != nil {
 | ID | 名称 | 因子 | 触发检查 |
 |----|------|------|----------|
 | EF-002FA | 2FA Missing | 0.85 | EF-001 |
-| EF-SYNCOOKIE | SYN Cookie Disabled | 0.75 | EF-SYNCOOKIE |
-| EF-SELINUX | SELinux Disabled | 0.80 | EF-SELINUX |
-| EF-APPARMOR | AppArmor Disabled | 0.82 | EF-APPARMOR |
-| EF-NO-SIEM | SIEM Integration Missing | 0.90 | EF-NO-SIEM |
-| EF-NO-IDS | IDS/IPS Missing | 0.88 | EF-NO-IDS |
+| EF-SYNCOOKIE | SYN Cookie Disabled | 0.75 | RS-005 |
+| EF-SELINUX | SELinux Disabled | 0.80 | OT-005 |
+| EF-APPARMOR | AppArmor Disabled | 0.82 | OT-005 |
+| EF-NO-SIEM | SIEM Integration Missing | 0.90 | RS-007 |
+| EF-NO-IDS | IDS/IPS Missing | 0.88 | RS-006 |
 | EF-3FA | 3FA Not Met | 0.82 | EF-002（级联至 EF-002FA） |
 
-使用默认配置创建引擎：
+使用默认配置评分：
 
 ```go
-engine := ssam.NewDefaultEngine()
+config := ssam.DefaultScoringConfig // 默认权重 + 7 个边缘因子 + FormulaID "ssam_v2.0"
+output, err := ssam.ComputeScore(config, input)
 ```
 
 ---
 
 ## 12. 并发安全
 
-ssam-lib（`github.com/chins-xing/ssam`）是纯函数式库，零 goroutine、零锁、零共享状态。评估函数是无副作用的纯函数：相同的输入产生相同的输出，天然线程安全。并发调用由调用方管理。
+ssam-lib 的评分函数是纯函数、**不使用 goroutine**；但包级存在两处共享可变状态：边缘因子合成策略（`ast.go:215` `strategyMu`）与域级修正函数（`domain_adjust.go:31` `domainAdjustMu`）。它们通过 `RegisterEdgeFactorStrategy` / `RegisterDomainAdjust` 在启动期写入、评分期读取，由 `sync.RWMutex` 保护；默认（未注册）路径下评分结果逐位不变。
 
-ASSCOR 适配层（`internal/engine/ssam/`）的 `Engine` 包装器在读写权重、边缘因子、钩子配置时使用 `sync.RWMutex` 保护，但核心计算路径为无锁纯函数调用 ssam-lib。
+ASSCOR 适配层（`internal/engine/ssam/`）的 `Engine` 另有一个 `sync.RWMutex`，保护权重、边缘因子、公式 ID 与钩子配置（`engine.go:18`）；核心计算仍委托无状态的 ssam-lib 纯函数。
 
 ---
 
@@ -869,18 +920,17 @@ ASSCOR 适配层（`internal/engine/ssam/`）的 `Engine` 包装器在读写权�
 
 | 错误变量 | 含义 |
 |----------|------|
-| `ErrNilInput` | 输入为 nil |
+| `*SSAMError{Code, Message}` | 唯一的错误类型（`errors.As(err, &se)` 可取出）；字段验证失败时 `Code` 为 `empty_host_id` / `invalid_threshold` / `empty_domain` 等 |
+| `ErrNilInput` | 输入指针为 nil；仅由 ASSCOR 适配层 `Engine.ComputeScore` 返回（ssam-lib 按值接收，不使用） |
 | `ErrUnknownFormula` | 指定的公式 ID 不存在 |
 | `ErrEmptyWeights` | 未配置任何权重 |
 | `ErrInvalidScore` | 输出分数超出 [0, 100] 范围 |
-| `ValidationError` | 输入字段验证失败，含 `Field` 和 `Message` 字段 |
 
 `ComputeScore` 的错误返回策略：
 
-- 输入为 nil → 返回 `ErrNilInput`
-- 输入验证失败 → 返回 `ValidationError`
-- 上下文取消 → 返回 `ctx.Err()`
+- 输入验证失败 → 返回 `*SSAMError`（具体 `Code` 见 §10）
 - 正常完成 → 返回 `(output, nil)`
+- 适配层 `Engine.ComputeScore` 额外处理：nil 指针 → `ErrNilInput`，上下文取消 → `ctx.Err()`
 
 ---
 
@@ -984,52 +1034,36 @@ handler := chain.Then(func(ctx context.Context, svc, method string, payload []by
 package main
 
 import (
-    "context"
     "fmt"
     "log"
-    "math"
     "strings"
-    "time"
 
     "github.com/chins-xing/ssam"
 )
 
 func main() {
-    engine := ssam.NewEngine()
+    config := ssam.ScoringConfig{
+        Weights:     ssam.DefaultWeights,
+        EdgeFactors: ssam.DefaultEdgeFactors,
+        FormulaID:   "ssam_v2.0",
+    }
 
-    engine.SetWeights(ssam.DefaultWeights)
-    engine.SetEdgeFactors(ssam.DefaultEdgeFactors)
-
-    engine.RegisterHook(ssam.HookPostScore, "audit-log", func(
-        ctx context.Context,
-        input *ssam.AssessmentInput,
-        output *ssam.AssessmentOutput,
-    ) error {
-        for _, ds := range output.DomainScores {
-            fmt.Printf("[audit] domain=%s score=%.0f\n", ds.Domain, ds.Score)
-        }
-        return nil
-    }, 10)
-
-    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-
-    input := &ssam.AssessmentInput{
+    input := ssam.AssessmentInput{
         HostID:      "prod-web-01",
         Hostname:    "web.example.com",
         Threshold:   80,
         ThreatCoeff: 0.95,
         SPCScore:    0.92,
         Checks: []ssam.CheckInput{
-            {CheckID: "AS-001", Domain: "attack_surface", Name: "SSH Hardening", Passed: true, Delta: 0},
+            {CheckID: "AS-001", Domain: "attack_surface", Name: "SSH Hardening", Passed: true},
             {CheckID: "AS-003", Domain: "attack_surface", Name: "Open Ports", Passed: false, Delta: -15, Detail: "port 23 open"},
-            {CheckID: "BC-001", Domain: "business_continuity", Name: "Service Status", Passed: true, Delta: 0},
+            {CheckID: "BC-001", Domain: "business_continuity", Name: "Service Status", Passed: true},
             {CheckID: "OT-002", Domain: "operation_trust", Name: "Audit Log", Passed: false, Delta: -20, Detail: "auditd not running"},
-            {CheckID: "RS-001", Domain: "resilience", Name: "Fail2ban", Passed: true, Delta: 0},
+            {CheckID: "RS-001", Domain: "resilience", Name: "Fail2ban", Passed: true},
         },
     }
 
-    output, err := engine.ComputeScore(ctx, input)
+    output, err := ssam.ComputeScore(config, input)
     if err != nil {
         log.Fatalf("assessment failed: %v", err)
     }
