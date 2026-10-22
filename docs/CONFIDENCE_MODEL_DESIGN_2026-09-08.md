@@ -265,8 +265,12 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 | config | `[confidence]` | 5 层规则解析；坏值 fail-fast；checkrx 字节字典序；algorithm reserved | ✅（I-5/I-9/I-10） |
 | 输出 | `AssessmentResult` | `FinalSigma/Lower95/Upper95/EvidenceConfidence`（additive，旧字段不变） | ✅ |
 
-**向后兼容原则**：`confidence=1` 且 `[confidence] enabled=false` 时，所有路径输出与
-历史实现一致。**唯一的例外（有意行为变更）**：`passed=false` 且 `Delta >= 0` 的检查
+**向后兼容原则（additive）**：`confidence=1` 且 `[confidence] enabled=false` 时，**既有字段**的
+语义与取值逐位不变；输出是 **additive** 的 —— `domain_scores[].confidence`、
+`score_lower95`/`score_upper95`、`evidence_confidence` 是**新增字段**（默认配置下 σ=0、
+区间退化为 `[score, score]`、`evidence_confidence=1.0`，仍会随非零值出现在 JSON 中）。
+因此**不能说“输出与改造前完全一致”**，只能说“**既有字段逐位一致 + 新增字段**”。
+**唯一的既有字段行为变更（有意）**：`passed=false` 且 `Delta >= 0` 的检查
 在修复前 legacy 会累加正 delta、插件会跳过；现在两边统一**跳过**（`DomainBayes` 只处理
 `Delta < 0`，legacy 复用同一实现，`cee657f`）。
 
