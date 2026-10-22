@@ -60,6 +60,13 @@ type NormalizedFinding struct {
 	Domain      string
 	DelegatedTo string
 
+	// Confidence is the third-party tool's own confidence/score for this
+	// finding in [0,1]. 0 means unspecified: ToCheckResult leaves it 0 so the
+	// kernel rule table (config.ConfidenceConfig.ResolveChecks) can resolve it
+	// from [confidence.source] (keyed by Source). An explicit >0 value wins
+	// over the source table (design CONFIDENCE_MODEL_DESIGN_2026-09-08 §3.2).
+	Confidence float64
+
 	Title       string
 	Description string
 	Resource    string
@@ -85,6 +92,15 @@ func (n NormalizedFinding) ToCheckResult() model.CheckResult {
 		Delta:         n.severityToDelta(),
 		Detail:        n.Detail,
 		ComplianceRef: n.Reference,
+		// Source is the rule-table source key (e.g. "nuclei", "trivy"). It
+		// must survive the conversion or [confidence.source] can never match
+		// an external scanner (audit B-1). An empty source is left empty on
+		// purpose: ResolveChecks maps it to "builtin", preserving the legacy
+		// behavior for findings that never carried one.
+		Source: model.CheckSource(n.Source),
+		// 0 stays 0 (unspecified) — ResolveChecks fills it from the source
+		// table; a tool-supplied value is preserved as the explicit override.
+		Confidence: n.Confidence,
 	}
 }
 
