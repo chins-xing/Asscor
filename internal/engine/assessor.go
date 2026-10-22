@@ -19,6 +19,7 @@ import (
 	"github.com/chins-xing/asscor/internal/kernel"
 	"github.com/chins-xing/asscor/internal/logger"
 	"github.com/chins-xing/asscor/internal/model"
+	ssamlib "github.com/chins-xing/ssam"
 )
 
 // Contract type aliases. The canonical definitions live in the microkernel
@@ -466,43 +467,77 @@ func (a *Assessor) buildDelegatedSet(results []adapter.PipelineResult) map[strin
 	return delegated
 }
 
+// ConfidencePolicyFromConfig is the SINGLE conversion from the kernel's
+// [confidence] configuration to the ssam-library policy. The plugin adapter
+// (internal/engine/ssam.ConfigToConfidencePolicy) delegates here, so the legacy
+// DynamicScoringEngine and the plugin path cannot drift apart (audit I-4).
+func ConfidencePolicyFromConfig(cfg *config.Config) ssamlib.ConfidencePolicy {
+	if cfg == nil || !cfg.Confidence.Enabled {
+		return ssamlib.DefaultConfidencePolicy()
+	}
+	cc := cfg.Confidence
+	return ssamlib.ConfidencePolicy{
+		Enabled:       true,
+		Default:       cc.Default,
+		Floor:         cc.Floor,
+		PriorStrength: cc.PriorStrength,
+	}
+}
+
+// legacyCheckInputs maps the result's checks into the ssam-library input, using
+// the same effective delta the legacy path has always used: an explicit
+// [checks] per-check delta override wins over the value carried by the check.
+func (a *Assessor) legacyCheckInputs(result *model.AssessmentResult) []ssamlib.CheckInput {
+	inputs := make([]ssamlib.CheckInput, 0, len(result.Checks))
+	for _, c := range result.Checks {
+		delta := c.Delta
+		if a.cfg != nil {
+			if d := a.cfg.CheckDeltas[c.CheckID]; d != 0 {
+				delta = d
+			}
+		}
+		inputs = append(inputs, ssamlib.CheckInput{
+			CheckID:    c.CheckID,
+			Domain:     c.Domain,
+			Name:       c.Name,
+			Passed:     c.Passed,
+			Delta:      delta,
+			Detail:     c.Detail,
+			Confidence: c.Confidence,
+		})
+	}
+	return inputs
+}
+
+// legacyWeights converts the DynamicScoringEngine weights into the library
+// form used by FinalBayesStats / AggregateNodeConfidence.
+func (a *Assessor) legacyWeights() []ssamlib.WeightConfig {
+	all := a.scoringEngine.GetWeights().GetAll()
+	out := make([]ssamlib.WeightConfig, 0, len(all))
+	for domain, weight := range all {
+		out = append(out, ssamlib.WeightConfig{Domain: domain, Weight: weight})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Domain < out[j].Domain })
+	return out
+}
+
+// computeLegacyDomainBayes is the legacy path's ONLY domain-score aggregation.
+// It calls the same ssam.ComputeDomainScoresBayes (and therefore the same
+// NormalizeConfidence / delta>=0 skip rule) as the plugin path — the inline
+// `delta*conf` accumulation is gone (audit I-4). It returns the per-domain
+// posterior statistics as well, so runLegacyScoring can fill
+// FinalSigma/Lower95/Upper95/EvidenceConfidence (audit I-1).
+func (a *Assessor) computeLegacyDomainBayes(result *model.AssessmentResult) []ssamlib.DomainScore {
+	return ssamlib.ComputeDomainScoresBayes(
+		a.legacyWeights(), a.legacyCheckInputs(result), ConfidencePolicyFromConfig(a.cfg))
+}
+
 func (a *Assessor) computeDynamicDomainScores(result *model.AssessmentResult) *model.DynamicDomainScores {
 	scores := model.NewDynamicDomainScores()
-
-	activeDomains := make(map[string]bool)
-	for _, c := range result.Checks {
-		activeDomains[c.Domain] = true
+	// Single source of truth: the same Bayesian aggregation the plugin uses.
+	for _, ds := range a.computeLegacyDomainBayes(result) {
+		scores.Set(ds.Domain, ds.Score)
 	}
-	if len(activeDomains) == 0 {
-		for _, id := range model.ListDomainIDs() {
-			activeDomains[id] = true
-		}
-	}
-
-	for domain := range activeDomains {
-		scores.Set(domain, 100)
-	}
-
-	for _, check := range result.Checks {
-		if check.Passed {
-			continue
-		}
-		delta := a.cfg.CheckDeltas[check.CheckID]
-		if delta == 0 {
-			delta = check.Delta
-		}
-		// Confidence-native expected deduction (design
-		// CONFIDENCE_MODEL_DESIGN_2026-09-08 §2.1): scale the delta by the
-		// observation confidence. Under the disabled policy every
-		// confidence is 1.0 → identical to the legacy accumulation.
-		conf := check.Confidence
-		if conf <= 0 || conf > 1 {
-			conf = 1.0
-		}
-		current := scores.Get(check.Domain)
-		scores.Set(check.Domain, math.Max(0, current+delta*conf))
-	}
-
 	return scores
 }
 
@@ -913,14 +948,33 @@ func (a *Assessor) tryPluginScore(ctx context.Context, result *model.AssessmentR
 
 func (a *Assessor) runLegacyScoring(result *model.AssessmentResult) {
 	a.resolveChecksConfidence(result)
-	dynScores := a.computeDynamicDomainScores(result)
-	for domain, score := range dynScores.GetAll() {
-		result.DomainScores.Set(domain, score)
+	// Domain point estimates, sigma and evidence confidence all come from the
+	// same library aggregation the plugin path uses (audit I-4); legacy used to
+	// inline its own `delta*conf` accumulation.
+	bayes := a.computeLegacyDomainBayes(result)
+	dynScores := model.NewDynamicDomainScores()
+	for _, ds := range bayes {
+		result.DomainScores.Set(ds.Domain, ds.Score)
+		dynScores.Set(ds.Domain, ds.Score)
 	}
 	a.evaluateEdgeFactorChain(result)
 	a.ensureDefaults(result)
 	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
+	// Posterior statistics are filled on the legacy path too (audit I-1).
+	a.fillLegacyPosterior(result, bayes)
 	result.Acceptable = result.FinalScore >= result.Threshold
+}
+
+// fillLegacyPosterior writes FinalSigma / Lower95 / Upper95 /
+// EvidenceConfidence from the same domain posterior statistics the plugin path
+// uses. The interval is centered on the actual legacy final score (which also
+// contains the deterministic exposure/threat layers and any active edge-factor
+// multiplier) and only its lower bound is clamped (audit I-12).
+func (a *Assessor) fillLegacyPosterior(result *model.AssessmentResult, bayes []ssamlib.DomainScore) {
+	weights := a.legacyWeights()
+	result.FinalSigma = ssamlib.FinalBayesStats(weights, bayes)
+	result.ScoreLower95, result.ScoreUpper95 = ssamlib.ConfidenceInterval(result.FinalScore, result.FinalSigma)
+	result.EvidenceConfidence = ssamlib.AggregateNodeConfidence(weights, bayes)
 }
 
 func (a *Assessor) computeDynamicFinalScore(scores *model.DynamicDomainScores, result *model.AssessmentResult) float64 {
@@ -1231,6 +1285,9 @@ func (a *Assessor) RecomputeFinalScore(result *model.AssessmentResult) float64 {
 	dynScores := model.NewDynamicDomainScores()
 	dynScores.FillFromLegacy(result.DomainScores)
 	result.FinalScore = a.computeDynamicFinalScore(dynScores, result)
+	// Re-derive the posterior statistics from the same evidence aggregation so
+	// a recomputed legacy score still carries sigma/CI/evidence (audit I-1).
+	a.fillLegacyPosterior(result, a.computeLegacyDomainBayes(result))
 	result.Acceptable = result.FinalScore >= result.Threshold
 	return result.FinalScore
 }

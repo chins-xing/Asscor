@@ -93,6 +93,35 @@ func TestConfidenceResolveRulePriority(t *testing.T) {
 	}
 }
 
+// TestConfidenceResolveOverlappingCheckAndPattern is the M3 mutation tooth
+// (audit I-6): the exact `[confidence.check] as-001` rule and the regex
+// `[confidence.checkrx] ^as-` both match as-001. Exact-id must win regardless
+// of pattern order. Swapping the ByCheckID/CheckPatterns evaluation order in
+// Resolve makes this test red (the old priority test had no overlapping rules
+// and therefore could not detect the swap).
+func TestConfidenceResolveOverlappingCheckAndPattern(t *testing.T) {
+	cfg, err := Parse(`
+[confidence]
+enabled = true
+
+[confidence.check]
+as-001 = 0.99
+
+[confidence.checkrx]
+^as- = 0.11
+`)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	cc := cfg.Confidence
+	if got := cc.Resolve("as-001", "builtin", "attack_surface"); got != 0.99 {
+		t.Errorf("overlap Resolve(as-001) = %v, want 0.99 (exact check beats checkrx)", got)
+	}
+	if got := cc.Resolve("as-999", "builtin", "attack_surface"); got != 0.11 {
+		t.Errorf("overlap Resolve(as-999) = %v, want 0.11 (regex fallback)", got)
+	}
+}
+
 // TestConfidenceDisabledReturnsOne: when [confidence] is absent, every
 // resolution is 1.0 — the backward-compatible default.
 func TestConfidenceDisabledReturnsOne(t *testing.T) {
