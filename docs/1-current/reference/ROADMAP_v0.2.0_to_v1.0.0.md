@@ -21,7 +21,7 @@ v1.0.0 不是"功能做完了"，而是：
 **目标**: 消除架构债务，强化边界。
 
 ### 0.3.0 — 内核解耦
-- [ ] 拆分 `ATTACKInterface`（85 方法 → ~12 子接口）
+- [x] 拆分 `ATTACKInterface`（89 方法 → 8 个子接口，已完成）
 - [ ] 拆分 `SPCInterface`（20 方法 → ~4 子接口）
 - [ ] 移除所有 `io.Copy` / `os.Remove` / `time.Parse` 静默错误丢弃
 - [ ] 补齐 9 个关键文件测试（services.go/bus.go/circuitbreaker.go/server.go 等）
@@ -47,7 +47,7 @@ v1.0.0 不是"功能做完了"，而是：
 ### 0.4.0 — extmgr 接线完成
 - [ ] `ExtTypeScoringPlugin` → `Engine.RegisterFormula()` 实际注册
 - [ ] `ExtTypeCLICommand` → `cli.command.register` 扩展点桥接
-- [x] ~~`ExtTypeWebPanel` → `webui.route.register`~~ → Web UI 组件已移除 (2026-08-15)，该类型取消
+- [x] ~~`ExtTypeWebPanel` → `webui.route.register`~~ → Web UI 组件已移除 (2026-08-15)，Web UI 桥接取消；`ExtTypeWebPanel` 常量、校验与 manager 分支仍保留（`extension_spec.go:24/308`、`extension_manager.go:402`）
 - [ ] `ExtTypeAdapter` → `adapter.Register()` 桥接
 - [ ] ExtensionManager 测试覆盖
 
