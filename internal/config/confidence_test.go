@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -169,6 +170,48 @@ func TestDefaultConfidenceSourcePriors(t *testing.T) {
 		if got := cc.Resolve(tc.checkID, tc.source, tc.domain); got != tc.want {
 			t.Errorf("enabled Resolve(%q,%q) = %v, want %v (factory prior table)", tc.checkID, tc.source, got, tc.want)
 		}
+	}
+}
+
+// TestConfidenceCheckPatternsDeterministic locks the tie-break for overlapping
+// [confidence.checkrx] patterns (audit I-5). The parser stores sections in a
+// map, so declaration order is not available; we document BYTE-LEXICOGRAPHIC
+// KEY ORDER instead ("^as-" sorts before "^as-0"), which is deterministic
+// across processes/platforms and needs no parser rewrite. Same INI parsed 300
+// times must yield the same rule order and the same first-match resolution.
+func TestConfidenceCheckPatternsDeterministic(t *testing.T) {
+	const ini = `
+[confidence]
+enabled = true
+
+[confidence.checkrx]
+^as- = 0.9
+^as-0 = 0.1
+`
+	const rounds = 300
+	var first []float64
+	for i := 0; i < rounds; i++ {
+		cfg, err := Parse(ini)
+		if err != nil {
+			t.Fatalf("round %d: Parse failed: %v", i, err)
+		}
+		got := make([]float64, len(cfg.Confidence.CheckPatterns))
+		for j, pr := range cfg.Confidence.CheckPatterns {
+			got[j] = pr.Confidence
+		}
+		if i == 0 {
+			first = got
+		} else if !reflect.DeepEqual(first, got) {
+			t.Fatalf("round %d: CheckPatterns order = %v, first round = %v — parse is nondeterministic", i, got, first)
+		}
+		// Both patterns match AS-001; the documented tie-break must pick ^as-.
+		if r := cfg.Confidence.Resolve("AS-001", "builtin", "attack_surface"); r != 0.9 {
+			t.Fatalf("round %d: Resolve = %v, want 0.9 (^as- first by byte-lexicographic key order)", i, r)
+		}
+	}
+	want := []float64{0.9, 0.1}
+	if !reflect.DeepEqual(first, want) {
+		t.Errorf("CheckPatterns = %v, want %v (byte-lexicographic key order)", first, want)
 	}
 }
 

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -41,8 +42,9 @@ type ConfidenceConfig struct {
 	// ByDomain maps a domain id to a domain-level fallback confidence.
 	ByDomain map[string]float64
 	// CheckPatterns are regex selectors evaluated after exact-id misses:
-	// pattern (compiled) → confidence. Evaluated in declaration order;
-	// first match wins (design §3.3 rule DSL subset).
+	// pattern (compiled) → confidence. Evaluated in BYTE-LEXICOGRAPHIC KEY
+	// ORDER (the parse structure is a map, so declaration order is not
+	// preserved); the first match wins (design §3.3 rule DSL subset, audit I-5).
 	CheckPatterns []ConfidencePatternRule
 }
 
@@ -90,7 +92,8 @@ func DefaultConfidenceConfig() ConfidenceConfig {
 //	[confidence]  enabled / algorithm / accept_by_lower_bound / default /
 //	              floor / prior_strength
 //	[confidence.check]    <check_id> = <conf>       (exact)
-//	[confidence.checkrx]  <regex> = <conf>          (first-match pattern)
+//	[confidence.checkrx]  <regex> = <conf>          (first match in
+//	                                                 byte-lexicographic key order)
 //	[confidence.source]   <source_key> = <conf>
 //	[confidence.domain]   <domain> = <conf>
 //
@@ -137,7 +140,21 @@ func (cfg *Config) parseConfidenceSections(sections map[string]map[string]string
 	}
 	// [confidence.checkrx]
 	if sec, ok := sections["confidence.checkrx"]; ok {
-		for k, v := range sec {
+		// Deterministic tie-break (audit I-5): sections are parsed into a map,
+		// so declaration order is already lost; iterating the map directly made
+		// the "first match wins" order random per parse (same INI could resolve
+		// 0.1 or 0.9 after a hot reload). Sort keys BYTE-LEXICOGRAPHICALLY so
+		// overlapping regexes always evaluate in the same order. Byte order was
+		// chosen over re-plumbing the parser to keep declaration order: it is
+		// deterministic across processes and platforms, and requires no change
+		// to the shared section parser used by every other config block.
+		keys := make([]string, 0, len(sec))
+		for k := range sec {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			v := sec[k]
 			f, err := parseConfidenceValue(v)
 			if err != nil {
 				continue
