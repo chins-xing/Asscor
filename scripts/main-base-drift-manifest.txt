@@ -28,14 +28,22 @@
 eff549db9d44fb4cc4ada8f97109e890a5ce808a  17e2bf6a0b04603e5963b2e49d3b6dd58240b835  internal/model/model.go  # EdgeFactors / EdgeFactorObservation 的线上契约（研究线新增）
 35a2077e06a6c9f09980d529260166d48dbaa47f  d5fc5b4b45bfe2525a8945654e6918cb31d2cdaa  internal/engine/assessor.go  # legacy 评分路径回填观测链（evaluateEdgeFactorChain）
 42240d69ba0b2f8482e5e85ef62161f464a7183a  8baf132115796ccb46d4ce67e801ab9c980a3d66  internal/engine/ssam/adapter_engine.go  # 插件路径的合成策略钩子回填观测链
+ca50557000643e66a46d1cbfdf31cac742b08808  ffeb423620cb8f24fa3a6de0a59d28b5ad745403  internal/engine/ssam/edgefactor.go  # ARC-only（有意差异）：`activationsFromResults` 返回前调 `edgefactor.CollapseToFactors`（Task 18 合成层双条目折叠）；这是研究线 V/G/C 装配钩子，main 的产品路径不装载 V/G/C ⇒ 不移植
 5f1375889f899a3dd1bbd5ffadd56f2409c980e4  fd0a385660b1e5c5140d7160ffa7d0f2b50b567b  internal/kernel/persistence_types.go  # 落盘结构增 additive 字段 EdgeFactorChain
 77cc2f961e3a46f2bff6276268a8bddde676fede  b842a11b9cd76672b24b0bbcd0a7dfcf57e6ed50  internal/persistence/persistence.go  # 落盘时透出观测链
+
+# ---- 待上 main（产品修复）：A.1 分类里属"漏洞/审计修复"，最终应在 main 落地 ----
+# 本任务（Task 26）只登记、**不推 main**（等用户点名）。main 侧的值是当前 main 的 blob，
+# 不是"已同步"；一旦 cherry-pick 上去，这两行会变成 [已同步] 并应从此清单移除。
+a921bbc9ef018f4551523a2fbe302bfd677b4488  cb362cb0c28173742cfca517c80c176d9530cf7f  internal/checks/linux/checks.go  # 待上 main（产品修复）：Task 14 修 OT-001/as010/as012 的 map 迭代顺序（Detail 逐字节可复现），产品面缺陷修复
+086c988c3fe5298c2fe7749a3cfb23c49d95ade0  ABSENT  internal/checks/linux/determinism_test.go  # 待上 main（产品修复）：上一条的回归测试（main 上不存在）；随 checks.go 一起 cherry-pick
 
 # ---- 研究线的测试（在底座路径内，但属研究接线的测试）----
 0f8a93ce7e6d79f3fc7032e7a9282845d9015263  ABSENT  internal/engine/assessor_chain_test.go  # 观测链在 legacy 路径的研究线新测试（main 上不存在）
 7adb8f52d67360a1ec93c1b77ad064163d04f290  ABSENT  internal/engine/ssam/edgefactor_chain_test.go  # 观测链在插件路径的研究线新测试（main 上不存在）
 e1f36206ad5873723040b343630c974bdc6355e1  ABSENT  internal/kernel/persistence_types_test.go  # 观测链在落盘层的研究线新测试（main 上不存在）
 b7bd641ed381329328137dd4f2422546f42ef22b  ABSENT  internal/model/edgefactor_chain_test.go  # 观测链在契约层的研究线新测试（main 上不存在）
+f7c9b2e156dd9a088957c97c9f8e1c34f37ad5c6  ABSENT  internal/engine/ssam/task18_collapse_test.go  # ARC-only（有意差异）：Task 18 合成层双条目折叠的研究线测试（main 上不存在）
 05630b7943f29c3aefeed7f54ca2403d1e1ce39d  56829bd2f8f3f00d3384574a1c4e275ebc028834  internal/persistence/persistence_test.go  # 观测链落盘的往返测试（ARC 版多研究线断言）
 01a6de69ed85f540dd9810a8874f7b13f6ab8d26  6cd6894cfdfbc8b539005a90572b9c471020581b  internal/config/configs_templates_test.go  # ARC 版多 4 条读研究线契约（configs/edgeexp/、lunwen/）的用例
 
@@ -44,7 +52,11 @@ bc39ebcf4568f1c223c3922a148d756672a992d3  6b499f759e53a0a5c63bca724770be20b1f5b5
 99a290f8a5f1c08165b31e90d350fc2c75253c54  296bf021f624141d6206fd61ae85b3b321c0abee  .github/workflows/ci.yml  # ARC 的 MODULE_TAGS 含 edgeexp，且含两个研究线工具的构建与测试步骤
 
 # ---- 忽略规则 ----
-bfa7717647cc93129e42df0a02a96c4b1fbf457d  e5f12282dbf31166fe8d963f0eb3682d1c404380  .gitignore  # ARC 用 lunwen/* 白名单（可跟踪 lunwen/paper、lunwen/clab-lab 等）；main 必须整目录忽略 ⇒ 永不一致
+# 为何两侧不同：ARC 用 `lunwen/*` 白名单（可跟踪 lunwen/paper、lunwen/clab-lab 的研究数据与文档），
+# main 必须整目录忽略 `lunwen/`（产品分支不带研究资料）⇒ 两条规则**永不一致**。
+# ARC 侧的值随 Task 20/24 的白名单规则演进（`82c8500`/`9385b07`/`1adbb53`）；本次（Task 26）
+# 重跑检查后按实际值更新（旧登记 bfa7717647cc 已失效）。**main 侧不变**。
+99d2dc1fb835dbf39f53fecd7dc48c4fbaa4a3f5  e5f12282dbf31166fe8d963f0eb3682d1c404380  .gitignore  # 见本段上方说明（ARC 白名单 vs main 整目录忽略；两侧永不一致，属有意差异）
 
 # ---- 对外文档（按分支表述；除横幅与结构树外逐字相同）----
 8412e354c6070766c02af3516f4af3c84e4e95d1  35aa596ddff072e51720da40f041fe53c3af3550  README.md  # 仅横幅与结构树按分支表述（ARC 列研究线资产，main 列产品线）；其余逐字相同
