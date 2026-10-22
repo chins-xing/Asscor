@@ -80,6 +80,13 @@ type ConfidencePatternRule struct {
 // calibrated values: the §3.4 "calibrate during implementation" promise (I-3)
 // has not been delivered, so no external claim of calibration may rest on them.
 // Every other source key falls through to Default / [confidence.domain].
+//
+// "adapter" is a GENERIC class key: it only matches a caller that records
+// Source="adapter". The in-repo production adapters emit a concrete tool id
+// (trivy/ansible/netbox/...), so they do NOT hit it and fall through to
+// Default=1.0 unless the operator writes an explicit
+// [confidence.source] <tool> = <conf> rule (audit N-4). Do not rewrite the
+// adapters' Sources to force a match — that would change behavior.
 func DefaultConfidenceConfig() ConfidenceConfig {
 	return ConfidenceConfig{
 		Enabled:            false,
@@ -103,8 +110,13 @@ func DefaultConfidenceConfig() ConfidenceConfig {
 		// built-ins at full trust. (Deliberate deviation from design §3.1's
 		// illustrative `builtin = 1.0` line; same effective value.)
 		BySource: map[string]float64{
-			"user":    0.90, // configuration-defined checks (CU-*)
-			"adapter": 0.80, // third-party adapter findings whose source is the generic class
+			"user": 0.90, // configuration-defined checks (CU-*)
+			// Generic source class only: matches a caller that records
+			// Source="adapter". In-repo adapters (trivy/ansible/netbox/...) use
+			// concrete tool ids, so they miss this key and fall through to
+			// Default=1.0 unless [confidence.source] <tool> is configured
+			// (audit N-4).
+			"adapter": 0.80,
 		},
 		ByDomain: map[string]float64{},
 	}

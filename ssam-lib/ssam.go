@@ -139,9 +139,11 @@ func computeScoreInternal(config ScoringConfig, input AssessmentInput, policy Co
 // deterministic exposure/threat layers) and clamped only at the lower bound
 // (ConfidenceInterval). With a disabled policy sigma collapses to 0 and the
 // interval degrades to the degenerate [score, score]; evidence confidence is 1
-// — exactly the legacy semantics. Acceptability is NOT changed here (point
-// estimate comparison); the conservative lower-bound mode is a kernel-side
-// option.
+// — exactly the legacy semantics. Acceptability is NOT decided here: each
+// caller applies AcceptanceDecision after the interval exists, and the
+// v1/v1.2/v2 entry points in this file also pass config.AcceptByLowerBound
+// through, so accept_by_lower_bound is consumed inside the library too (audit
+// N-2).
 func fillPosterior(output *AssessmentOutput, config ScoringConfig, domainScores []DomainScore, policy ConfidencePolicy) {
 	sigma := FinalBayesStats(config.Weights, domainScores)
 	output.FinalSigma = sigma

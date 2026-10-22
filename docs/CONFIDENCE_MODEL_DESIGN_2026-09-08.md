@@ -133,8 +133,8 @@ debt += effective_delta · elapsedDays^α
 **当前唯一的算法消费点**是 Prism 推断层：`PredictFuture` 把模型置信与输入可信度取
 `min` 作为**推断置信度**（`prism-lib/inference.go:302-351`，审计 I-7）；传播风险、
 债务与塌缩判定的**数值不变**（它们只由 per-failure `CheckFailure.Confidence` 驱动）。
-SRD `ExternalCheckResult` 增加 `Confidence`，adapter 规范化时按 tool id 走同一
-`ConfidenceConfig.Resolve`（工具自带 > 来源表 > default；审计 I-8）。
+SRD `ExternalCheckResult` 增加 `Confidence`，`pipeline` 装配 `CheckFailure` 时按 tool id 走同一
+`ConfidenceConfig.Resolve`（工具自带 > 来源表 > default；审计 I-8）；`adapter` 只做字段搬运。
 
 ## 3. 可信度规则引擎（config 内可配置）
 
@@ -229,7 +229,7 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 | 来源键 | 先验值 | 说明 |
 |---|---|---|
 | `user` | **0.90** | 配置自定义检查 |
-| `adapter` | **0.80** | 第三方适配器 finding 的通用来源 |
+| `adapter` | **0.80** | 仅对「来源记为 `adapter`」的**通用类**调用方生效；仓库内生产适配器填具体 tool id（`trivy`/`ansible`/`netbox`…），**不会命中此键**（复审 N-4） |
 | `builtin` | **1.0**（**不建显式 source 键**） | 设计 §3.1 的 `builtin = 1.0` 是**身份值**，由 `default = 1.0` 表达 |
 
 `builtin` 刻意不写成 `[confidence.source]` 键：`source` 层先于 `domain` 层求值，一旦为
@@ -239,6 +239,12 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 **默认仍禁用**（`enabled = false`）：`Resolve` 对每条检查恒回 1.0，评分与历史逐位一致。
 开启 `enabled=true` 且不手写规则时，因出厂先验表存在，已**不是**纯 no-op（`user`/`adapter`
 两类会降到 0.90/0.80），其余来源仍落到 `default=1.0` + 域级兜底。
+
+> **`adapter=0.80` 的适用范围（复审 N-4）**：它只对「**真的把 `Source` 记为 `adapter`**」的调用方生效。
+> 仓库内的生产适配器（`trivy`/`ansible`/`netbox` 等）产出的 `NormalizedFinding.Source` 是具体
+> tool id，B-1 又把它原样搬进 `CheckResult.Source`，因此这些 finding **不会命中 `adapter` 键**，
+> 而会落到 `default=1.0`。要让它们降权，必须按 tool id 显式写 `[confidence.source] trivy = …`
+> 之类的规则。**不要**为了「让先验命中」去改适配器的 `Source` —— 那会改行为。
 
 **⚠️ 标定未做**：`user=0.90` / `adapter=0.80` 是**先验**，不是从真实数据拟合出来的参数。
 设计原文“实现期用实验标定并记录”**仍未兑现**；已有的是先验敏感性表
@@ -261,7 +267,7 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 | engine/assessor | `computeDynamicFinalScore`/`computeDynamicDomainScores` | legacy 域分**调用** `ComputeDomainScoresBayes`（唯一实现）+ 写 σ/CI/证据置信度；`evaluateEdgeFactorChain` 接触发衰减 | ✅（I-1/I-4） |
 | prism-lib | `CheckFailure.Confidence` | 加字段；`computeDebtRaw` 加权、塌缩计数加权 | ✅ |
 | prism-lib | `NodeState.Confidence` | 加字段；**仅影响推断置信度**（`min(模型置信, node)`），风险数值不变 | ✅（I-7） |
-| engine/srd | `ExternalCheckResult.Confidence` | 加字段；adapter 按 tool id 走同一 `Resolve`（工具自带优先） | ✅（I-8） |
+| engine/srd | `ExternalCheckResult.Confidence` | 加字段；`pipeline` 按 tool id 走同一 `Resolve`（工具自带优先）；`adapter` 只搬运字段 | ✅（I-8） |
 | config | `[confidence]` | 5 层规则解析；坏值 fail-fast；checkrx 字节字典序；algorithm reserved | ✅（I-5/I-9/I-10） |
 | 输出 | `AssessmentResult` | `FinalSigma/Lower95/Upper95/EvidenceConfidence`（additive，旧字段不变） | ✅ |
 
@@ -325,11 +331,11 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 | `EdgeFactorResult` 触发衰减 + 触发可信度 | `TriggerConfidence` 在 `types.go:20-23`，**衰减在 `ssam-lib/ssam.go:225-298`**（`ast.go` 0 命中，此前写错） | ✅ |
 | `ScoringConfig.ConfidencePolicy` | `ssam-lib/types.go:36,91`（此前写 35,88，行号漂移） | ✅ |
 | `AssessmentOutput`：`FinalSigma` + 区间 | `ssam-lib/types.go:60-66`；插件 `engine.go:142-145`，legacy `assessor.go:978-988` | ✅（插件 + legacy；I-1 已修） |
-| adapter `CheckResultsToInputs` 透传 | `internal/engine/ssam/adapter.go:103` | ✅ |
+| adapter `CheckResultsToInputs` 透传 | `internal/engine/ssam/adapter.go:104`（`Confidence: c.Confidence`；此前写 103，行号漂移） | ✅ |
 | engine/assessor 域分与后验 | `internal/engine/assessor.go:524-533` **调用** `ComputeDomainScoresBayes`（唯一实现）；`978-988` 写 σ/CI/证据置信度 | ✅（I-1/I-4） |
 | `prism-lib.CheckFailure.Confidence` + `computeDebtRaw` 加权 | `prism-lib/core.go:98-141`（`failureConfidence` → `abs(delta)·c`；塌缩计数同样加权） | ✅ |
 | `prism-lib NodeState.Confidence` | `prism-lib/core.go:221` 回显；**唯一算法消费**在 `inference.go:328-334`：推断置信度取 `min(模型置信, node)`，风险数值不变 | ✅（I-7；`7b307f2`） |
-| `engine/srd ExternalCheckResult.Confidence` | `internal/engine/srd/adapter.go:124-140` 按 tool id 走同一 `ConfidenceConfig.Resolve`（工具自带优先） | ✅（I-8；`36a5b2c`） |
+| `engine/srd ExternalCheckResult.Confidence` | `internal/engine/srd/pipeline.go:201-203` 按 tool id 走同一 `ConfidenceConfig.Resolve`（工具自带优先）；`adapter.go:124-140` 只搬运字段 | ✅（I-8；`36a5b2c`） |
 | config `[confidence]` | `internal/config/confidence.go`：5 层解析 + 坏值 fail-fast + `checkrx` 字节字典序 + `algorithm` reserved | ✅（I-5/I-9/I-10） |
 | 输出 `AssessmentResult` | `internal/model/model.go:376-382`（additive 后验字段，旧字段不变） | ✅ |
 
@@ -423,15 +429,15 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 | **B-1** | `ToCheckResult` 搬 `Source`/`Confidence`，来源表对第三方扫描器生效 | `34b89c6` | `internal/adapter/adapter.go:86-105` | `TestNormalizedFindingToCheckResultCarriesSource`、`...CarriesToolConfidence`、`TestExternalFindingDomainDeductionUsesSourceConfidence` | ✅ |
 | **B-2** | 唯一判定 `AcceptanceDecision`，插件/库/legacy/kernel 全部消费 `accept_by_lower_bound` | `929b454` | `ssam-lib/confidence.go:231-242`；`engine.go:149`、`assessor.go:973-976`、`internal/assessor/assessor.go:655` | `TestAcceptanceDecisionUsesLowerBound`、`TestAcceptByLowerBoundPluginPath`、`TestAcceptByLowerBoundLegacyPath`、`TestApplyCTIOnlyAcceptsByLowerBound` | ✅ |
 | **I-1** | legacy 也写 σ/CI/`EvidenceConfidence` | `cee657f` | `internal/engine/assessor.go:949-988` | `TestLegacyScoringEmitsPosteriorStats` | ✅ |
-| **I-2** | 出厂来源先验表 `user=0.90`/`adapter=0.80`；`builtin` 用 `default=1.0` 表达；默认禁用 | `e9d12ff` / `4e5db9c` | `internal/config/confidence.go:83-111` | `TestDefaultConfidenceSourcePriors` | ✅（先验，未标定） |
+| **I-2** | 出厂来源先验表 `user=0.90`/`adapter=0.80`；`builtin` 用 `default=1.0` 表达；默认禁用 | `e9d12ff` / `4e5db9c` | `internal/config/confidence.go:90-123` | `TestDefaultConfidenceSourcePriors` | ✅（先验，未标定） |
 | **I-3** | 先验敏感性表（明确非标定） | `ac1bd29` | `docs/experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md` | 该表 §2 扫描结果 + §4 口径声明 | ⚠️ **有产物、仍非标定** |
 | **I-4** | `c` 归一只有一份；`Delta>=0` 失败项两边都跳过（唯一有意行为变更） | `cee657f` | `ssam-lib/confidence.go:92-118`；`internal/engine/assessor.go:524-533` | `TestLegacyAndPluginHalfConfidenceParity`、`TestFailedCheckWithPositiveDeltaSkippedOnBothPaths` | ✅ |
-| **I-5** | `[confidence.checkrx]` 按 key 字节字典序确定化 | `e10977d` | `internal/config/confidence.go:217-242` | `TestConfidenceCheckPatternsDeterministic`（300 次 parse） | ✅ |
+| **I-5** | `[confidence.checkrx]` 按 key 字节字典序确定化 | `e10977d` | `internal/config/confidence.go:229-254` | `TestConfidenceCheckPatternsDeterministic`（300 次 parse） | ✅ |
 | **I-6** | 关键测试装牙（优先级/legacy 域分/disabled 评分） | `cee657f` / `e10977d` | `internal/config/confidence_test.go`、`internal/engine/ssam/legacy_confidence_test.go` | `TestConfidenceResolveOverlappingCheckAndPattern`、`TestLegacyDefaultConfigIgnoresExplicitConfidence`、`TestPluginDefaultConfigIgnoresExplicitConfidence` | ✅ |
 | **I-7** | `NodeState.Confidence` 只影响推断置信度（`min`），风险数值不变 | `7b307f2` | `prism-lib/inference.go:328-334`、`types.go:112-116` | `TestNodeConfidenceCapsInferenceConfidence`、`TestNodeConfidenceCarriedThrough` | ✅ |
-| **I-8** | SRD 按 tool id 走同一 `Resolve`（工具自带 > 来源表 > default） | `36a5b2c` | `internal/engine/srd/adapter.go:124-140` | `TestExternalToolIDConfidencePrecedence`、`TestExternalReportConfidenceToCheckFailure` | ✅ |
-| **I-9** | `[confidence*]` 坏数值/坏布尔 fail-fast（带 section/key/value），`0` 是唯一哨兵 | `78c2a1d` | `internal/config/confidence.go:124-129,278-338` | `TestConfidenceBadValuesFailFast`、`TestConfidenceZeroSentinelClears` | ✅ |
-| **I-10** | 未知 `algorithm` 加载即错；`algorithm`/`prior_strength` 标 reserved；只有 `weighted_evidence` | `9a3f348` | `internal/config/confidence.go:14-19,142-157` | `TestConfidenceUnknownAlgorithmFailsParse`、`TestConfidenceReservedPriorStrength` | ✅ |
+| **I-8** | SRD 按 tool id 走同一 `Resolve`（工具自带 > 来源表 > default） | `36a5b2c` | `internal/engine/srd/pipeline.go:201-203`（`adapter.go:124-140` 只搬运字段） | `TestExternalToolIDConfidencePrecedence`、`TestExternalReportConfidenceToCheckFailure` | ✅ |
+| **I-9** | `[confidence*]` 坏数值/坏布尔 fail-fast（带 section/key/value），`0` 是唯一哨兵 | `78c2a1d` | `internal/config/confidence.go:136-141,290-350` | `TestConfidenceBadValuesFailFast`、`TestConfidenceZeroSentinelClears` | ✅ |
+| **I-10** | 未知 `algorithm` 加载即错；`algorithm`/`prior_strength` 标 reserved；只有 `weighted_evidence` | `9a3f348` | `internal/config/confidence.go:14-19,154-169` | `TestConfidenceUnknownAlgorithmFailsParse`、`TestConfidenceReservedPriorStrength` | ✅ |
 | **I-11** | §7.1 改为 §4 逐行（15 行）、修正 `ast.go`/行号/prism 落点 | 本次文档收口（Task 31） | §7.1 | 本文 §7.1 与 `git show` 对照 | ✅ |
 | **I-12** | `σ_final = 0.5·σ_domain`；区间只钳下界、上界不夹 | `1a54c67` | `ssam-lib/confidence.go:154-229` | `TestFinalSigmaIntrinsicLayerWeight`、`TestFinalBayesStats`、`TestEngineIntervalNotClampedTo100AndContainsPoint` | ✅ |
 

@@ -210,9 +210,6 @@ func OutputV2ToModel(output *AssessmentOutputV2, result *model.AssessmentResult)
 }
 
 // ConfigToConfidencePolicy converts the kernel's [confidence] configuration
-// into the ssam-library policy. A disabled config yields the library's
-// default (disabled) policy — identical legacy behavior.
-// ConfigToConfidencePolicy converts the kernel's [confidence] configuration
 // into the ssam-library policy. It delegates to the engine package so the
 // plugin path and the legacy DynamicScoringEngine use ONE conversion (audit
 // I-4); the legacy path imports the same ssam-library normalization below.

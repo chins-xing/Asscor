@@ -410,10 +410,13 @@ to $(1.0\cdot50+1.0\cdot30+1.4\cdot20)/100=1.08$, i.e.\ $\sigma=108$. Only
 the \emph{lower} endpoint of the $95\%$ confidence interval is clamped (at
 $0$); the upper endpoint is \emph{not} clamped, so the interval stays centred
 on its point estimate and still contains it when the total exceeds $100$
-(e.g.\ $108$ with $\sigma_{\mathrm{final}}=10$ gives $[88.4,127.6]$). The
-interval is a documented heuristic --- domain-score uncertainty folded
-through the $0.5$ intrinsic-layer weight --- not a validated posterior over
-the three-layer score; and the shipped per-source confidence table is a
+(e.g.\ $108$ with $\sigma_{\mathrm{final}}=10$ gives $[88.4,127.6]$). Before
+this fix \emph{both} endpoints were clamped to $[0,100]$; a total of $108$
+therefore produced $[100,100]$ --- an interval that did \emph{not} contain its
+own point estimate. The lower-bound-only clamp above is the fix for that
+defect. The interval is a documented heuristic --- domain-score uncertainty
+folded through the $0.5$ intrinsic-layer weight --- not a validated posterior
+over the three-layer score; and the shipped per-source confidence table is a
 \emph{prior that has not been calibrated}.
 In the idealized environment used for the ACL experiments
 ($\mathit{threat\_coeff}=1$) this reduces to $\sigma\le100$.}

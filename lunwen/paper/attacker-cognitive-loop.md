@@ -280,12 +280,15 @@ action a is the sum of six interpretable terms:
     endpoint of the 95% confidence interval is clamped (at 0); the upper
     endpoint is **not** clamped, so the interval stays centred on its point
     estimate and still contains it when Total > 100 (e.g. 108 with
-    σ_final = 10 gives [88.4, 127.6]). The interval is a documented
-    heuristic — domain-score uncertainty folded through the 0.5
-    intrinsic-layer weight — not a validated posterior over the three-layer
-    score; and the shipped per-source confidence table is a **prior that has
-    not been calibrated**. In the idealized environment used for the ACL
-    experiments (threat_coeff = 1) this reduces to σ ≤ 100.
+    σ_final = 10 gives [88.4, 127.6]). Before this fix **both** endpoints
+    were clamped to [0, 100]; a total of 108 therefore produced [100, 100] —
+    an interval that did **not** contain its own point estimate. The
+    lower-bound-only clamp above is the fix for that defect.
+    The interval is a documented heuristic — domain-score uncertainty folded
+    through the 0.5 intrinsic-layer weight — not a validated posterior over
+    the three-layer score; and the shipped per-source confidence table is a
+    **prior that has not been calibrated**. In the idealized environment used
+    for the ACL experiments (threat_coeff = 1) this reduces to σ ≤ 100.
 
 ```
 score_t(a) = b_a                                    (i) baseline prior
