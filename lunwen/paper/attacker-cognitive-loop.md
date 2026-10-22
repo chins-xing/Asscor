@@ -266,8 +266,20 @@ The prediction engine converts state plus target state into a normalized
 action distribution over six actions a ∈ {recon, credential, lateral,
 data_theft, web_attack, maintain}. Let the state at round t have intent I_t,
 experience E_t, target knowledge K_t, and AI dependence A_t; and let the
-target have SSAM score σ ∈ [0,100] and exposure ρ ∈ [0,1]. The raw score of
+target have SSAM score σ ≥ 0, nominally on a 0–100 scale but not clamped at
+the top,[^sigma-range] and exposure ρ ∈ [0,1]. The raw score of
 action a is the sum of six interpretable terms:
+
+[^sigma-range]: The SSAM 2.0 reference implementation (`SSAMV20Formula` in
+    `ssam-lib/formulas_v2.go`) enforces only lower bounds: the intrinsic
+    coefficient is a domain score in [0,1], the exposure and threat
+    coefficients are mapped to 1.0 when non-positive and floored at 0.60
+    otherwise, with no upper clamp, and the weighted total is not clamped to
+    100. With coefficients (1.0, 1.0, 1.4) the total evaluates to
+    (1.0·50 + 1.0·30 + 1.4·20)/100 = 1.08, i.e. σ = 108. Only the endpoints
+    of the 95% confidence interval are clamped to [0,100]. In the idealized
+    environment used for the ACL experiments (threat_coeff = 1) this reduces
+    to σ ≤ 100.
 
 ```
 score_t(a) = b_a                                    (i) baseline prior
@@ -282,7 +294,9 @@ score_t(a) = b_a                                    (i) baseline prior
 
 where `v_t = (100 − σ)/100 + ρ`, `w_int = 3.0`, `w_vuln = 0.8`, and the
 baseline priors are b = {recon 1.0, credential 1.2, lateral 1.1, data_theft
-0.9, web_attack 1.0, maintain 0.5}. Scores are clamped to [0, ∞), then
+0.9, web_attack 1.0, maintain 0.5}. When σ > 100, the first term
+(100 − σ)/100 is negative; `v_t` is evaluated exactly as written, with no
+additional guard or extrapolation. Action scores are clamped to [0, ∞), then
 normalized by a temperature-controlled softmax (T = 1.0, stabilized by
 subtracting the max score):
 
@@ -587,7 +601,8 @@ acceptability of each monitored host. The platform provides the loop's
 inputs and consumes its outputs through existing interfaces:
 
 - **Assessment pipeline**: SSAM 2.0 (system security acceptability model)
-  computes per-host acceptability scores σ ∈ [0,100]; the Prism/SRD engine
+  computes per-host acceptability scores σ ≥ 0 (nominally on a 0–100 scale;
+  §4.3); the Prism/SRD engine
   (Systemic Risk Dynamics) propagates risk over the network graph. Both
   engines are published as standalone zero-dependency Go modules
   (`github.com/chins-xing/ssam`, `github.com/chins-xing/prism`) and vendored
@@ -634,6 +649,71 @@ Three layers guarantee that the paper's numbers are checkable:
 
 No number in this paper is claimed from a private or unverifiable run; the
 repository commit referenced in this paper is the single source of truth.
+
+### 7.5 Edge-Factor Coupling: An Identifiability Bound
+
+SSAM optionally exposes an edge-factor extension in which pairwise couplings
+between host factors modulate σ, the score that the ACL predictor consumes
+through v_t. Before adopting that extension we fitted its coefficients on the
+targeted records of the Phase 1 matrix. The fit returns a NULL result, which
+we report here because it bounds what the current experimental design can
+support.
+
+**Data and design.** The fit uses the 22 targeted records (11 scenarios × 2
+arms) of `records-dl360-qemu-20261016.jsonl`. The design matrix follows the
+implementation: an intercept, seven main effects (one per factor), and five
+prior edges, i.e. p = 13 parameters. The 22 records collapse to five
+pairwise-distinct design rows, so rank(X) = 5 < 13 and X is structurally
+singular (the condition number is infinite). Eleven of the twelve
+non-intercept columns have VIF = ∞; the twelfth (`EF-3FA`) has
+VIF = 1.090909 = 12/11, which is finite but rests on only two non-zero rows.
+The fit, its design diagnostics, and the model comparison are archived as
+`fit-20261021.md`, `fit-20261021-diagnostics.md`, and `compare-20261021.md`
+under `lunwen/clab-lab/data/edgefactors/`.
+
+**Why the estimate is exactly zero.** Within each instance the two arms
+differ only in their timestamp: the `observed` payload is field-for-field
+identical. The two arms therefore share a design row while carrying opposite
+labels. Each of the five rows occurs with both y = 1 and y = 0
+(multiplicities 10/4/4/2/2, split evenly), so the gradient of the logistic
+log-likelihood vanishes at w = 0, and the L2 penalty makes that point the
+unique optimum. The fit returns β = 0 for all thirteen coefficients, and the
+mapping omits all five prior edges because their estimates satisfy β ≤ 0.
+This is not evidence that the couplings vanish; it is evidence that this
+design cannot identify any of them.
+
+**Repetition does not help.** A repeated batch of 66 targeted records
+(11 instances × 2 arms × 3 repetitions) still yields the same five distinct
+design rows, with multiplicities 30/12/12/6/6 and an even label split within
+every row. The 66 records therefore still carry the information of only
+11 instances: repeating a run adds no independent variation. Identifiability
+requires the covariates of the same instance to vary across scenarios — a new
+experimental design, not additional repetitions.
+
+**Decision layer.** Because the two arms of an instance have identical
+scoring inputs and the scorer is deterministic, they receive the same score.
+Any threshold therefore admits or blocks both arms together, so the
+agreement rate is upper-bounded by 0.5 for every candidate. The four
+candidates (chain, graph, vector, legacy) are numerically identical at the
+decision layer: agreement 0.500, missed-detection rate 0.000, false-block
+rate 0.500, AUC 0.500. The comparison consequently selects no model.
+
+**Cross-validation.** Under instance-grouped resampling (three folds, and
+leave-one-instance-out) the mean log loss is 0.693147 = ln 2, exactly the
+loss of a constant predictor that reports p = 0.5 for every record; the
+model carries no information about unseen instances. A row-level split,
+which places the sibling arm of the same instance in the training set,
+inflates the loss to 3.491897. That value is pathological rather than a
+generalization estimate: the model is confidently wrong on the held-out
+sibling, so it must not be read as an ordinary out-of-sample error.
+
+**Relation to ACL.** The ACL vulnerability term v_t is a function of σ, and
+edge-factor coupling extends σ. The NULL above therefore says that, under
+the current design, that extension cannot be estimated; it does not say that
+coupling is absent. The ACL main line is unaffected, because the loop
+consumes the σ produced by the base SSAM 2.0 formula. Closing the gap
+requires per-instance covariate variation across scenarios, not a larger
+number of identical runs.
 
 ## 8. Key Implementations
 

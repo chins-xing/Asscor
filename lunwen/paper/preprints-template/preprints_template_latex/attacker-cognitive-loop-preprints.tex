@@ -279,7 +279,8 @@ diffusion over a network graph \citep{asscor-wp}; we reuse its substrate for
 the topology layer and as the dynamic state-evolution layer of the
 cognitive loop.
 
-Our work is built on ASSCOR (ASSess + CORE), an open-source security acceptability assessment platform. ASSCOR provides the three substrates that ACL requires: (i) a six-layer temporal graph (Network, Dependency, Identity, Attacker, Capability, Evidence) that carries observations and alerts as temporal events; (ii) SSAM 2.0, a multidimensional computable assessment model that produces per-host acceptability scores $\sigma \in [0,100]$; and (iii) Prism/SRD, a three-layer risk propagation engine that models how compromise diffuses through the network. Without these substrates, ACL's cognitive loop would have no data to consume --- the state engine needs graph topology to localize observations, the predictor needs SSAM scores as vulnerability signals, and the engagement planner needs Prism risk edges to prioritize containment targets.
+Our work is built on ASSCOR (ASSess + CORE), an open-source security acceptability assessment platform. ASSCOR provides the three substrates that ACL requires: (i) a six-layer temporal graph (Network, Dependency, Identity, Attacker, Capability, Evidence) that carries observations and alerts as temporal events; (ii) SSAM 2.0, a multidimensional computable assessment model that produces per-host acceptability scores $\sigma \ge 0$ (nominally on a
+0--100 scale; Section~\ref{sec:prediction-formal}); and (iii) Prism/SRD, a three-layer risk propagation engine that models how compromise diffuses through the network. Without these substrates, ACL's cognitive loop would have no data to consume --- the state engine needs graph topology to localize observations, the predictor needs SSAM scores as vulnerability signals, and the engagement planner needs Prism risk edges to prioritize containment targets.
 
 ACL is thus not a replacement for these engines; it is an orchestration layer that closes the loop between assessment (passive) and intervention (active). ASSCOR's main branch provides the stable assessment baseline; ACL lives in the ASSCOR-Research-Core branch, an experimental sandbox explicitly designated for active-defense prototyping. This split is not merely a code-management convenience --- it reflects the different development rhythms of assessment (stable, auditable) and active defense (iterative, replaceable), and ensures that experimental prediction logic never compromises the production-grade assessment pipeline.
 
@@ -398,8 +399,18 @@ action distribution over six actions $a \in \mathcal{A} = \{\act{recon},
 \act{credential}, \act{lateral}, \act{data\_theft}, \act{web\_attack},
 \act{maintain}\}$. Let the state at round $t$ be $s_t$ with intent $I_t$,
 experience $E_t$, target knowledge $K_t$, and AI dependence $A_t$; and let
-the target have SSAM score $\sigma \in [0,100]$ and exposure
-$\rho \in [0,1]$. The raw score of action $a$ is the sum of six
+the target have SSAM score $\sigma \ge 0$, nominally on a 0--100 scale but
+not clamped to it at the top,\footnote{The SSAM~2.0 reference implementation
+(\texttt{SSAMV20Formula} in \texttt{ssam-lib/formulas\_v2.go}) enforces only
+lower bounds: the intrinsic coefficient is a domain score in $[0,1]$, the
+exposure and threat coefficients are mapped to $1.0$ when non-positive and
+floored at $0.60$ otherwise, with no upper clamp, and the weighted total is
+not clamped to $100$. With coefficients $(1.0,1.0,1.4)$ the total evaluates
+to $(1.0\cdot50+1.0\cdot30+1.4\cdot20)/100=1.08$, i.e.\ $\sigma=108$. Only
+the endpoints of the $95\%$ confidence interval are clamped to $[0,100]$.
+In the idealized environment used for the ACL experiments
+($\mathit{threat\_coeff}=1$) this reduces to $\sigma\le100$.}
+and exposure $\rho \in [0,1]$. The raw score of action $a$ is the sum of six
 interpretable terms:
 \begin{equation}
 \label{eq:score}
@@ -418,7 +429,9 @@ with
 v_t \;=\; \frac{100-\sigma}{100} + \rho
 \label{eq:vuln}
 \end{equation}
-and the action subsets are
+Equation~\ref{eq:vuln} is evaluated exactly as written: when $\sigma>100$
+the first term $(100-\sigma)/100$ is negative, and the implementation
+applies no additional guard or extrapolation to $v_t$. The action subsets are
 \[
 \begin{aligned}
 \mathcal{A}_{\mathrm{exec}} &= \{\act{lateral}, \act{data\_theft}\}, &
@@ -428,8 +441,8 @@ and the action subsets are
 \end{aligned}
 \]
 The baseline priors and weights used by the reference implementation are
-listed in Table~\ref{tab:params}. All scores are clamped to $[0,\infty)$
-before normalization.
+listed in Table~\ref{tab:params}. All action scores
+$\mathrm{score}_t(a)$ are clamped to $[0,\infty)$ before normalization.
 
 \begin{table}[ht]
 \centering
@@ -819,7 +832,8 @@ of each monitored host. The platform provides the loop's inputs and
 consumes its outputs through existing interfaces:
 \begin{itemize}
 \item \textbf{Assessment pipeline}: SSAM 2.0 (system security acceptability
-      model) computes per-host acceptability scores $\sigma \in [0,100]$;
+      model) computes per-host acceptability scores $\sigma \ge 0$
+      (nominally on a 0--100 scale; Section~\ref{sec:prediction-formal});
       the Prism/SRD engine (Systemic Risk Dynamics) propagates risk over the
       network graph. Both engines are published as standalone zero-dependency
       Go modules (\texttt{github.com/chins-xing/ssam},
@@ -892,6 +906,76 @@ Three layers guarantee that the paper's numbers are checkable:
 \end{enumerate}
 No number in this paper is claimed from a private or unverifiable run; the
 repository commit referenced in this paper is the single source of truth.
+
+\subsection{Edge-Factor Coupling: An Identifiability Bound}
+\label{sec:edge-null}
+
+SSAM optionally exposes an edge-factor extension in which pairwise couplings
+between host factors modulate $\sigma$, the score that the ACL predictor
+consumes through $v_t$ (Eq.~\ref{eq:vuln}). Before adopting that extension we
+fitted its coefficients on the targeted records of the Phase~1 matrix. The
+fit returns a NULL result, which we report here because it bounds what the
+current experimental design can support.
+
+\textbf{Data and design.} The fit uses the 22 targeted records (11 scenarios
+$\times$ 2 arms) of
+\url{records-dl360-qemu-20261016.jsonl}. The design matrix follows the
+implementation: an intercept, seven main effects (one per factor), and five
+prior edges, i.e.\ $p=13$ parameters. The 22 records collapse to five
+pairwise-distinct design rows, so $\mathrm{rank}(X)=5<13$ and $X$ is
+structurally singular (the condition number is infinite). Eleven of the
+twelve non-intercept columns have VIF $=\infty$; the twelfth
+(\texttt{EF-3FA}) has VIF $=1.090909=12/11$, which is finite but rests on
+only two non-zero rows. The fit, its design diagnostics, and the model
+comparison are archived as \texttt{fit-20261021.md},
+\texttt{fit-20261021-diagnostics.md}, and \texttt{compare-20261021.md} under
+\url{lunwen/clab-lab/data/edgefactors/}.
+
+\textbf{Why the estimate is exactly zero.} Within each instance the two arms
+differ only in their timestamp: the \texttt{observed} payload is
+field-for-field identical. The two arms therefore share a design row while
+carrying opposite labels. Each of the five rows occurs with both $y=1$ and
+$y=0$ (multiplicities $10/4/4/2/2$, split evenly), so the gradient of the
+logistic log-likelihood vanishes at $w=0$, and the $L_2$ penalty makes that
+point the unique optimum. The fit returns $\beta=0$ for all thirteen
+coefficients, and the mapping omits all five prior edges because their
+estimates satisfy $\beta\le0$. This is not evidence that the couplings
+vanish; it is evidence that this design cannot identify any of them.
+
+\textbf{Repetition does not help.} A repeated batch of 66 targeted records
+(11 instances $\times$ 2 arms $\times$ 3 repetitions) still yields the same
+five distinct design rows, with multiplicities $30/12/12/6/6$ and an even
+label split within every row. The 66 records therefore still carry the
+information of only 11 instances: repeating a run adds no independent
+variation. Identifiability requires the covariates of the same instance to
+vary across scenarios --- a new experimental design, not additional
+repetitions.
+
+\textbf{Decision layer.} Because the two arms of an instance have identical
+scoring inputs and the scorer is deterministic, they receive the same score.
+Any threshold therefore admits or blocks both arms together, so the
+agreement rate is upper-bounded by $0.5$ for every candidate. The four
+candidates (chain, graph, vector, legacy) are numerically identical at the
+decision layer: agreement $0.500$, missed-detection rate $0.000$,
+false-block rate $0.500$, AUC $0.500$. The comparison consequently selects
+no model.
+
+\textbf{Cross-validation.} Under instance-grouped resampling (three folds,
+and leave-one-instance-out) the mean log loss is $0.693147=\ln 2$, exactly
+the loss of a constant predictor that reports $p=0.5$ for every record; the
+model carries no information about unseen instances. A row-level split,
+which places the sibling arm of the same instance in the training set,
+inflates the loss to $3.491897$. That value is pathological rather than a
+generalization estimate: the model is confidently wrong on the held-out
+sibling, so it must not be read as an ordinary out-of-sample error.
+
+\textbf{Relation to ACL.} The ACL vulnerability term $v_t$ is a function of
+$\sigma$, and edge-factor coupling extends $\sigma$. The NULL above
+therefore says that, under the current design, that extension cannot be
+estimated; it does not say that coupling is absent. The ACL main line is
+unaffected, because the loop consumes the $\sigma$ produced by the base
+SSAM~2.0 formula. Closing the gap requires per-instance covariate variation
+across scenarios, not a larger number of identical runs.
 
 \section{Key Implementations}
 \label{sec:impl}
