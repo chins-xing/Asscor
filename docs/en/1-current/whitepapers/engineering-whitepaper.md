@@ -1539,7 +1539,7 @@ Newly built components — the EventBus, DI container, JSON Codec — are "new w
 |----------|----------|-----------|
 | Concurrency resource exhaustion | Goroutine pool + semaphore limiting, preventing unbounded goroutine explosion | §6 concurrency and performance design |
 | Chaotic component-init state | Strictly ordered, dependency-injected Bootstrap flow | §11.2.4 plugin lifecycle management |
-| Panic propagation | EventBus recovers each subscriber's panic in isolation; BusMetrics tracks panic/error/message counts | [bus.go](file:///f:/ASSCOR/internal/kernel/bus.go) |
+| Panic propagation | EventBus recovers each subscriber's panic in isolation; BusMetrics tracks panic/error/message counts | [bus.go](../../../internal/kernel/bus.go) |
 
 **Missing the security interceptors of the gRPC ecosystem**
 
@@ -1549,11 +1549,11 @@ The standard gRPC framework ships authentication, audit logging, traffic rate li
 |----------|----------|-----------|
 | Transport authentication | Go standard-library mTLS (TLS 1.2+); security equivalent to standard gRPC transport guarantees | §11.11, §7 |
 | Command tamper protection | Every kernel-dispatched command carries an HMAC-SHA256 signature; Agents execute only after verification | §4.1, §7 |
-| Audit logs | LogCollector writes append-only; logs cannot be deleted; file permission 0600 | §3.1.7, [collector.go](file:///f:/ASSCOR/internal/collector/collector.go) |
+| Audit logs | LogCollector writes append-only; logs cannot be deleted; file permission 0600 | §3.1.7, [collector.go](../../../internal/collector/collector.go) |
 | Agent permission sandbox | Runs as non-root; executes only audited system-administration commands via sudo whitelist | §7 |
-| Traffic rate limiting | RateLimiter token-bucket interceptor; stale client buckets cleaned automatically (5-minute cycle, 30-minute expiry) | [ratelimit.go](file:///f:/ASSCOR/internal/kernel/ratelimit.go) |
-| Circuit-breaking fallback | CircuitBreaker interceptor; window capped at 1000 entries to prevent unbounded memory growth | [circuitbreaker.go](file:///f:/ASSCOR/internal/kernel/circuitbreaker.go) |
-| Audit interceptor | AuditLogInterceptor records client, service, method, latency and result for every request | [interceptor.go](file:///f:/ASSCOR/internal/kernel/interceptor.go) |
+| Traffic rate limiting | RateLimiter token-bucket interceptor; stale client buckets cleaned automatically (5-minute cycle, 30-minute expiry) | [ratelimit.go](../../../internal/kernel/ratelimit.go) |
+| Circuit-breaking fallback | CircuitBreaker interceptor; window capped at 1000 entries to prevent unbounded memory growth | [circuitbreaker.go](../../../internal/kernel/circuitbreaker.go) |
+| Audit interceptor | AuditLogInterceptor records client, service, method, latency and result for every request | [interceptor.go](../../../internal/kernel/interceptor.go) |
 
 **JSON parsing may face injection-style attacks**
 
