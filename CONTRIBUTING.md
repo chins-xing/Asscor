@@ -169,6 +169,25 @@ docs/              白皮书 / 审计报告 / 架构审查（20 章中英双语�
 | 想提交 ssam-lib/prism-lib 的改动？ | 它们是独立仓库，代码由本仓库跟踪，但独立 git 历史在各自目录中 |
 | 扩展点不够用？ | 扩展点定义是平台专属（`RegisterPoint`），模块只能订阅；新增扩展点需先讨论 |
 
+## 9. 本地开发已知坑（先读，避免把"环境红"当成"代码红"）
+
+以下每一条都**在本仓真实踩过**，并会让门禁看起来像失败。判断纪律：**先确认是哪一类，再下结论。**
+
+| 现象 | 真实原因 | 正确做法 |
+|---|---|---|
+| `gofmt -l` 列出**几百个**文件 | `core.autocrlf=true`：工作树是 CRLF，入库是 LF，`gofmt` 按工作树字节判断 | 按**入库内容**算：`git ls-files --eol` 看 `i/lf`，或把跟踪文件以 LF 写进临时树再 `gofmt -l`。本仓真实债是 **15 个**既有不合规文件，不是 325 个 |
+| `go test` 报 `open ...\xxx.test.exe: Access is denied` | Windows 临时目录/杀毒拦截测试二进制（**不是**断言失败） | 重跑一次；仍失败就 `go test -c -o <显式路径> ./包/` 再直接运行该 exe。**不要**据此判定代码红 |
+| `go test ./...` 偶发 `directory is not empty` | Windows `TempDir` 清理竞态（`securemode`/`agent` 偶现） | 单包复跑；两次都绿即环境问题 |
+| Git Bash 里 `python3` 提示 "Python was not found" | 命中 Windows Store 的 `python3` 别名 | 用 shim：`PYTHONUTF8=1 /c/Python314/python.exe "$@"`，并把它放到 `PATH` 前面 |
+| `bash script.sh \| tail` 的 `$?` 恒为 0 | **管道返回的是 `tail` 的 rc** | 直接跑再 `echo rc=$?`，或取 `${PIPESTATUS[0]}`。**判 rc 绝不许用管道** |
+| `git cat-file blob X \| git hash-object --stdin` 得到的 sha 不对 | PowerShell 管道会改写行尾/编码 | 用 `git rev-parse HEAD:<path>` 取 blob id |
+| PowerShell `Get-Content -Raw` + `Set-Content` 改中文文件后乱码 | 往返会把 UTF-8 中文写成替换字符并加 BOM | 改文本用编辑器/`write` 工具；校验用 `python -c "open(p,'rb').read().decode('utf-8')"` |
+| `git check-ignore -v` 返回 0 却以为"被忽略" | 命中**否定规则**时它同样返回 0 | 判"是否会被跟踪"只信 `git check-ignore -q`（rc=1 = 会被跟踪） |
+| `lab-diff` / `test-matrix-classification` 在 Windows 必红 | 前者需 `unshare -rm`；后者需 exec bash 桩（Windows 上 `WinError 193`） | 这两组只在 Linux 上算数；在 Windows 上请给出"干净 HEAD 同样红"的对照再下结论 |
+
+内仓提醒：`ssam-lib/` 与 `prism-lib/` **各自是独立 git 仓库**，外层按普通目录跟踪其文件。
+改这两个库时，**外层提交 + 内仓提交要都做**（否则内仓会出现"旧代码 + 一堆未提交改动"）。
+
 ---
 
 *本指南与 `README.md`、`docs/` 保持同步。发现不一致请提交 issue。*
