@@ -200,6 +200,13 @@ func OutputV2ToModel(output *AssessmentOutputV2, result *model.AssessmentResult)
 	result.EdgeFactors = EdgeFactorsToModel(output.EdgeFactors)
 	result.ThreatCoeff = output.FinalScore.Layers.Threat.Coeff
 	result.SPCScore = output.FinalScore.Layers.Exposure.Coeff
+	// Posterior statistics (model-native; zeros when confidence disabled).
+	// Same four fields the V1 converter maps, so both SSAM output versions
+	// carry sigma/CI/evidence into the model (audit M-3).
+	result.FinalSigma = output.FinalSigma
+	result.ScoreLower95 = output.Lower95
+	result.ScoreUpper95 = output.Upper95
+	result.EvidenceConfidence = output.EvidenceConfidence
 }
 
 // ConfigToConfidencePolicy converts the kernel's [confidence] configuration
