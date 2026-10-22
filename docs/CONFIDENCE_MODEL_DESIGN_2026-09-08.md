@@ -1,11 +1,13 @@
 # 情报可信度原生变量 — 设计文档（SSAM/SRD 算法层）
 
-> 状态：**已实现并合入**（设计定稿 2026-09-08；实现 2026-09 完成，2026-10-22 补做落点核对）｜分支：ASSCOR-Research-Core｜关联：研究方向 ①
+> 状态：**主体已实现，但首次独立审计判「不通过」—— 2 个 Blocker 未修**（审计 2026-10-22；
+> 设计定稿 2026-09-08；实现 2026-09）｜分支：ASSCOR-Research-Core｜关联：研究方向 ①
 > 作者决策：贝叶斯置信区间语义 + config 内可替换规则引擎（用户 2026-09-08 确认）
 > 配套方向 ②（边缘因子向量图变量化）另行设计，本设计只保证 ① 覆盖到边缘因子触发链。
 >
-> **实现落点与遗留见 §7**（11/11 覆盖矩阵有落点；**「实验标定」未兑现** ⇒ 默认表是先验、
-> 对外不得声称"已标定"；`PP-01` 的 σ 上界问题与论文口径见 §7.4）。
+> **⚠️ 不要按「✅ 完成」对外**。债务清单那一行应读作「主体实现 + 2 Blocker 未修 + 标定后置」。
+> 详见 §7：**B-1** 外部 adapter 丢弃 `Source`/`Confidence`（`[confidence.source]` 对第三方扫描器
+> 永不命中）· **B-2** `accept_by_lower_bound` 只解析不消费 · 标定未兑现 · 两条评分路径归一不一致 等。
 
 ---
 
@@ -240,67 +242,92 @@ floor = 0.05                           ; 可信度下限(不允许0 → 完全�
 
 ---
 
-## 7. 实现落点核对与遗留（2026-10-22 补记，逐条对照代码）
+## 7. 实现落点核对与遗留（2026-10-22；含**首次独立审计**结论）
 
-> 本节是**事后补记**：P1–P6 已实现并合入 `ASSCOR-Research-Core`。
-> 债务清单第 ② 项 ① 的登记：`✅ 完成（584b418/14652db/1bc2938 + 内仓 d21efc0/cd2c60b）`。
+> ⚠️ **本节在 2026-10-22 被审计推翻后重写**。本节的初版写过两处**乐观的错误结论**，均已作废并保留在
+> §7.6 的「曾经写错的地方」里：
+> ① 「§4 覆盖矩阵 11/11 有落点」——实际是**选择性核对**，且省略的一行里包含一条**未实现**的算法子项；
+> ② 「两条路径的归一分歧只在 `0<conf<floor`」——实际有**三类**（见 §7.2）。
+>
+> **审计判决：不通过**（2 Blocker + 12 Important + 12 Minor）。依据：
+> `.superpowers/sdd/2026-09-12-edge-factor-coupling-milestone-b/audit-3-direction1-verdict.md`。
+> **债务清单「✅ 完成」因此言过其实**，应读作「**主体实现 + 2 个 Blocker 未修 + 标定后置**」。
 
-### 7.1 §4 覆盖矩阵逐行核对（11/11 有落点）
+### 7.1 §4 覆盖矩阵：逐行现状（含 4 行不是「已实现」）
 
-| §4 声称的层 | 实际落点（文件:符号） | 状态 |
+§4 共 **14 行**（不是 11 行）。下表逐行给落点，并用状态区分「真接上了」与「字段/解析在但不生效」：
+
+| §4 的层 | 落点（文件:符号） | 状态 |
 |---|---|---|
-| `model.CheckResult.Confidence` | `internal/model/model.go:201`（`json:"confidence,omitempty"`） | ✅ |
-| `ssam-lib.CheckInput.Confidence` | `ssam-lib/types.go`（`CheckInput.Confidence`）+ `NormalizeConfidence` | ✅ |
-| `DomainScore.Sigma / Conf` | `ssam-lib/types.go:9`（`Sigma`）、`DomainScore.Confidence` | ✅ |
-| `EdgeFactorResult` 触发衰减 + 触发可信度 | `ssam-lib/types.go:20-23`（`TriggerConfidence`）、`ast.go` 的 `c_trigger` 衰减 | ✅ |
-| `ScoringConfig.ConfidencePolicy` | `ssam-lib/types.go:35,88` | ✅ |
-| `AssessmentOutput`：`FinalSigma` + 区间 | `ssam-lib/types.go:61-66`（`FinalSigma`/`Lower95`/`Upper95`/`EvidenceConfidence`） | ✅ |
-| adapter `CheckResultsToInputs` 透传 | `internal/engine/ssam/adapter.go:103`（`Confidence: c.Confidence`） | ✅ |
-| engine/assessor 主评分路径 | `internal/engine/assessor.go:486-504`（`delta*conf`，禁用策略下 `conf=1.0` ⇒ 与旧累积逐位一致） | ✅ |
-| engine/ssam 装配路径 | `internal/engine/ssam/engine.go:93`（`ssam.ComputeDomainScoresBayes`） | ✅ |
-| `prism-lib.CheckFailure.Confidence` + `computeDebtRaw` 加权 | `prism-lib`（`TestDebtConfidenceWeighted`：`|delta|·confidence`，`c=1` 兼容） | ✅ |
-| 统一入口 `ComputeDomainScoresBayes` | `ssam-lib/confidence.go:125`；`ComputeDomainScores` 委托给它（`ssam.go:161-167`） | ✅ |
+| `model.CheckResult.Confidence` | `internal/model/model.go:201` | ✅ |
+| `model.CheckResult.Source` | 字段在（`model.go`），但**外部 adapter 不填** ⇒ `[confidence.source]` 对第三方扫描器永不命中 | ❌ **B-1** |
+| `ssam-lib.CheckInput.Confidence` | `ssam-lib/types.go` + `NormalizeConfidence` | ✅ |
+| `DomainScore.Sigma / Conf` | `ssam-lib/types.go:9`（`Sigma`） | ✅ |
+| `EdgeFactorResult` 触发衰减 + 触发可信度 | `TriggerConfidence` 定义在 `types.go:20-23`，**衰减实现在 `ssam-lib/ssam.go:225-298`**（`ast.go` 里 **0 命中**，此前写错） | ✅ |
+| `ScoringConfig.ConfidencePolicy` | `ssam-lib/types.go:36,91`（此前写 35,88，行号漂移） | ✅ |
+| `AssessmentOutput`：`FinalSigma` + 区间 | `ssam-lib/types.go:61-66` | ✅（插件路径）/ ❌ **legacy 路径不写，见 I-1** |
+| adapter `CheckResultsToInputs` 透传 | `internal/engine/ssam/adapter.go:103` | ✅ |
+| engine/assessor 主评分路径 | `internal/engine/assessor.go:486-504` —— 是**内联 `delta*conf`**，**不是**贝叶斯域分（此前描述不准确） | ⚠️ 实现但不是同一份代码 |
+| engine/ssam 装配路径 | `internal/engine/ssam/engine.go:93` | ✅ |
+| `evaluateEdgeFactorChain` | `internal/engine/assessor.go`（触发衰减） | ✅ |
+| `prism-lib.CheckFailure.Confidence` + `computeDebtRaw` 加权 | `prism-lib/core.go:98-138`（`failureConfidence` → `|delta|·c`） | ✅ |
+| `prism-lib NodeState.Confidence`「传播/推断用」 | `prism-lib/core.go:221` **只回显**；`nodeConfidence` 无其它调用点 ⇒ 不参与传播/塌缩/推断 | ❌ **I-7 未实现** |
+| `engine/srd ExternalCheckResult.Confidence` | `internal/engine/srd/adapter.go:124-136` 只透传，**不查 `[confidence.source]`** | ⚠️ **I-8 接线不完整** |
 
-### 7.2 ⚠️ 两处实现同一语义（一致性风险，须记）
+### 7.2 两条路径对 `c` 的归一：**三类**不一致（不是一类）
 
-1. **域分的「证据期望扣分」有两处实现**：`ssam-lib/confidence.go:92` 的 `DomainBayes`（走
-   `NormalizeConfidence`），与 `internal/engine/assessor.go:498-503` 的内联 `current + delta*conf`。
-   **两者在禁用策略下等价**，但启用策略后**归一规则不同**，实测差异点：
+1. **`0 < conf < floor`**：插件抬到 floor（`0.01 → 0.05`，域分 98），legacy 用 raw（`0.01`，域分 99.6）。
+2. **`policy.Enabled = false` + 显式正置信**：`internal/engine/assessor.go:498-503` 的内联**完全不看
+   `policy.Enabled`** ⇒ check 自带 `Confidence=0.5` 时 legacy 仍扣一半（score 90 / domain 80），
+   而插件按 `NormalizeConfidence` 恒回 `1.0`（score 80 / domain 60）。
+   ⇒ 这与 `ConfidencePolicy` 注释「disabled ⇒ every check treated as fully confident」**直接冲突**。
+3. **failed 且 `Delta > 0`**：插件 `DomainBayes` 跳过（域分 90），legacy 内联仍累加（93）；
+   改前快照对比 `old=93 / new=90` ⇒ **「`enabled=false` ⇒ 历史逐位一致」并非普遍成立**。
 
-   | 输入 `check.Confidence` | 内联（assessor） | `NormalizeConfidence`（内库） | 是否一致 |
-   |---|---|---|---|
-   | `0`（未指定） | → `1.0` | → `policy.Default`（默认 1.0） | ✅（默认配置下） |
-   | `0.01`（低于 floor 0.05） | **`0.01`** | **`0.05`**（抬到 floor） | ❌ **不一致** |
-   | `0.5` | `0.5` | `0.5` | ✅ |
-   | `>1`（如 1.2） | → `1.0` | → `1`（夹到上限） | ✅ |
+> 此前初版只写了第 1 类并断言「真正的分歧只在 `0<conf<floor`」——**错**。
+> 归一/累积应当抽成**一份**共享实现，并由测试钉住；修法见审计报告 I-4。
 
-   ⇒ **真正的分歧在 `0 < conf < floor`**：内联不收 floor，于是「低于下限的可信度」在 legacy 主评分路径上
-   会**全额生效**，而在 ssam-lib 路径上会被抬到 floor。
-
-   **实测证据**（`build/confdiv/` 一次性程序，2026-10-22；`go run ./build/confdiv/` rc=0）：
-
-   ```
-   raw=0     inline=1      normalize=1      same
-   raw=0.01  inline=0.01   normalize=0.05   DIFF
-   raw=0.03  inline=0.03   normalize=0.05   DIFF
-   raw=0.05  inline=0.05   normalize=0.05   same
-   raw=0.5   inline=0.5    normalize=0.5    same
-   raw=1     inline=1      normalize=1      same
-   raw=1.2   inline=1      normalize=1      same
-   ```
-
-2. **改任一处必须同步核另一处**；上表应当由测试钉住（见审计报告的结论与修法）。
-
-### 7.3 ❌ 未兑现的一条设计要求：**实验标定**
+### 7.3 ❌ 未兑现：实验标定（保留）
 
 §3.4 原文：「…具体数值在**实现期用实验标定并记录**」。
-**截至 2026-10-22，仓内没有任何标定产物**（`git ls-files | grep -i calib` 为空；
-`lunwen/clab-lab/data/` 下只有方向② 的边缘因子数据）。
-⇒ 默认置信表的值是**先验**，**未经实验标定**。**对外与论文口径不得声称"已标定/已验证"。**
+**截至 2026-10-22，仓内没有任何标定产物**（`git ls-files | grep -i calib` 为空），§5.7 的
+「可信度 0.5–1.0 扫描敏感性表」也未交付。另：**出厂 `config.ini` 没有来源默认表**
+（`ByCheckID/BySource/ByDomain/CheckPatterns` 全空、`Default=1.0`）⇒ `enabled=true` 目前是**纯 no-op**，
+与 §3.4「不提供全 1.0 纯 opt-in」直接冲突（I-2）。
+⇒ 默认置信表是**先验**，**对外与论文口径不得声称"已标定/已验证"**。
 
-### 7.4 与论文口径的关系（`PP-01`）
+### 7.4 `PP-01` 与 σ 边界（补审计实测）
 
-`clamp95` 只夹 `Lower95`/`Upper95`（`ssam.go:146-147`），**`FinalScore`/`Total` 本身没有 100 钳位**
-⇒ 总分可达 >100。论文原写 `σ ∈ [0,100]` 不成立，已于 `02fbccb` 按实际改为
-「**σ ≥ 0，名义 0–100 但上界不设**」。**代码要不要加钳位**仍开放（是否属产品侧决定）。
+`clamp95` 只夹 `Lower95`/`Upper95`（`ssam.go:146-147`），`Total` 无钳位 ⇒ 总分可达 >100。
+审计实测出更难看的一面：`Total=108` 时 **`Lower95 = Upper95 = 100`** ⇒ **点估计不在区间内**
+（区间被夹到 `[0,100]`，而点估计在区间外）。论文脚注需补这一句。
+另：`FinalBayesStats` 的 σ 只是**域分 RSS**，没有按 V2.0 三层权重（0.5/0.3/0.2）传播
+⇒ 把它叫作「最终分的 95% 后验区间」**不成立**（I-12）；要么改公式，要么改称「域分不确定度启发式」。
 
+### 7.5 首次审计的问题清单（摘要，详见 verdict 文件）
+
+| 级别 | 编号 | 问题 |
+|---|---|---|
+| **Blocker** | B-1 | 外部 adapter `ToCheckResult` 丢弃 `Source`/`Confidence` ⇒ `[confidence.source] nuclei=0.65` **永不命中**（方向① 的主要动机失效） |
+| **Blocker** | B-2 | `accept_by_lower_bound` **只解析、从未被消费** ⇒ 打开后无任何行为变化 |
+| Important | I-1 | legacy `runLegacyScoring` 完全不写 σ/CI/`EvidenceConfidence` |
+| Important | I-2 | 出厂无来源默认表 ⇒ `enabled=true` 是纯 no-op（与 §3.4 冲突） |
+| Important | I-3 | 标定未兑现（见 §7.3） |
+| Important | I-4 | 两条路径归一不一致的三类（见 §7.2） |
+| Important | I-5 | `[confidence.checkrx]` 首个命中**顺序不确定**（同一 INI 300 次 parse 出现两种结果） |
+| Important | I-6 | 关键测试**没有牙**：调换规则优先级、删掉 legacy `*conf` 均全绿 |
+| Important | I-7 | `NodeState.Confidence` 未用于传播/塌缩/推断（见 §7.1） |
+| Important | I-8 | SRD 侧只透传、不查来源表（见 §7.1） |
+| Important | I-9 | 坏数值**静默**（只有坏正则 fail-fast） |
+| Important | I-10 | `algorithm` / `prior_strength` / `beta_bayes` 是**死配置**（Go 代码 `beta_bayes` 0 命中）；`[confidence.algorithm]` 段不解析 |
+| Important | I-11 | 本节初版「11/11」误导 + `ast.go` 引用错误（已按 7.1 纠正） |
+| Important | I-12 | σ 传播与 `SSAMV20Formula` 三层聚合不一致（见 §7.4） |
+
+### 7.6 曾经写错的地方（留痕，防复发）
+
+1. 「§4 覆盖矩阵 11/11 有落点」→ 实为**选择性核对**：§4 有 14 行，省略行里含未实现的 `NodeState.Confidence` 子项。
+2. 「分歧只在 `0<conf<floor`」→ 实为**三类**（其中「disabled 下 legacy 仍按显式 c 扣分」最严重）。
+3. 「`ast.go` 的 `c_trigger` 衰减」→ 实际在 `ssam-lib/ssam.go:225-298`，`ast.go` 0 命中。
+4. 「engine/assessor 主评分接贝叶斯域分」→ 实际是**内联 `delta*conf`**，不是同一份实现。
+
+**教训**：核对落点时「字段存在」≠「接上了」≠「生效了」。这三层必须分开判。
