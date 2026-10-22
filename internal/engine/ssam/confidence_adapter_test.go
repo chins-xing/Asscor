@@ -125,6 +125,46 @@ func TestEngineAdapterConfidenceChangesScore(t *testing.T) {
 	}
 }
 
+// TestEngineFinalSigmaUsesIntrinsicWeight locks I-12 end to end on the plugin
+// path: one half-trusted -40 failure has domain σ = |−40|·√(0.5·0.5) = 20;
+// with attack_surface the only weighted domain the final σ must be 10
+// (0.5 × 20), not the raw domain RSS. The old code reported 20.
+func TestEngineFinalSigmaUsesIntrinsicWeight(t *testing.T) {
+	a := NewEngineAdapter(confPolicyCfg())
+	result := assessmentWithChecks([]model.CheckResult{
+		{CheckID: "AS-001", Domain: "attack_surface", Passed: false, Delta: -40, Confidence: 0.5},
+	})
+	if err := a.ComputeScore(context.Background(), result); err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(result.FinalSigma-10) > 1e-9 {
+		t.Errorf("FinalSigma = %v, want 10 (0.5 × domain sigma 20)", result.FinalSigma)
+	}
+}
+
+// TestEngineIntervalNotClampedTo100AndContainsPoint locks the other half of
+// I-12: the 95% interval is only clamped at the lower bound 0. With
+// ThreatCoeff=1.4 the V2.0 total is 108; the old clamp95 produced [100,100],
+// which does not even contain the point estimate.
+func TestEngineIntervalNotClampedTo100AndContainsPoint(t *testing.T) {
+	a := NewEngineAdapter(config.Default())
+	result := assessmentWithChecks(nil)
+	result.ThreatCoeff = 1.4
+	if err := a.ComputeScore(context.Background(), result); err != nil {
+		t.Fatal(err)
+	}
+	if result.FinalScore != 108 {
+		t.Fatalf("FinalScore = %v, want the 108 fixture (0.5·100 + 0.3·100 + 0.2·140)", result.FinalScore)
+	}
+	if result.ScoreLower95 > result.FinalScore || result.FinalScore > result.ScoreUpper95 {
+		t.Errorf("interval [%v,%v] must contain the point estimate %v",
+			result.ScoreLower95, result.ScoreUpper95, result.FinalScore)
+	}
+	if result.ScoreUpper95 <= 100 {
+		t.Errorf("upper bound must not be clamped to 100, got %v", result.ScoreUpper95)
+	}
+}
+
 // TestEngineAdapterDisabledProducesZeroSigma: when [confidence] is absent the
 // adapter must leave the posterior DEGENERATE (sigma 0, interval collapsed to
 // the point estimate, evidence confidence 1) — the legacy output shape.

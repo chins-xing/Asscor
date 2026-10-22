@@ -51,6 +51,7 @@ var (
 	NormalizeConfidence      = ssam.NormalizeConfidence
 	ComputeDomainScoresBayes = ssam.ComputeDomainScoresBayes
 	FinalBayesStats          = ssam.FinalBayesStats
+	ConfidenceInterval       = ssam.ConfidenceInterval
 	AggregateNodeConfidence  = ssam.AggregateNodeConfidence
 )
 

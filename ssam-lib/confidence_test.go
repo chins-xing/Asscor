@@ -146,29 +146,76 @@ func TestEdgeFactorTriggerConfidenceAttenuation(t *testing.T) {
 	}
 }
 
-// TestFinalBayesStats: RSS variance propagation for two domains.
+// TestFinalBayesStats: RSS variance propagation for two domains, folded
+// through the intrinsic layer weight (I-12), plus the heuristic interval built
+// from the actual point estimate (I-12/M-5: one endpoint implementation).
 func TestFinalBayesStats(t *testing.T) {
 	checks := []CheckInput{
 		{CheckID: "AS-1", Domain: "attack_surface", Passed: false, Delta: -10, Confidence: 0.5},  // σ²=25
 		{CheckID: "OT-1", Domain: "operation_trust", Passed: false, Delta: -20, Confidence: 0.5}, // σ²=100
 	}
 	domains := ComputeDomainScoresBayes(DefaultWeights, checks, enabledPolicy())
-	sigma, lo, hi := FinalBayesStats(DefaultWeights, domains)
+	sigma := FinalBayesStats(DefaultWeights, domains)
 
 	// Manual: attack_surface weight 35, σ=5 → w·σ=175; operation_trust w=25, σ=10 → 250.
-	// RSS = sqrt(175² + 250²) = sqrt(30625+62500)=sqrt(93125)=305.16; /60 = 5.086.
-	want := math.Sqrt(175*175+250*250) / 60
+	// RSS = sqrt(175² + 250²) = sqrt(30625+62500)=sqrt(93125)=305.16; /60 = 5.086;
+	// × intrinsic-layer weight 0.5 = 2.543.
+	want := 0.5 * math.Sqrt(175*175+250*250) / 60
 	if math.Abs(sigma-want) > 1e-6 {
 		t.Errorf("sigma_final = %v, want %v", sigma, want)
 	}
-	if lo < 0 || hi > 100 || lo > hi {
-		t.Errorf("interval invalid: [%v, %v]", lo, hi)
+	// The interval must be centered on the weighted point estimate and contain
+	// it; the upper bound is not clamped to 100 (the total may exceed it).
+	point := (95.0*35 + 90.0*25) / 60
+	lo, hi := ConfidenceInterval(point, sigma)
+	if lo < 0 || lo > hi || point < lo || point > hi {
+		t.Errorf("interval [%v, %v] invalid around point %v", lo, hi, point)
 	}
-	// Disabled policy → degenerate interval.
+	// Disabled policy → sigma 0 and a degenerate interval at the point estimate.
 	domainsLegacy := ComputeDomainScoresBayes(DefaultWeights, checks, DefaultConfidencePolicy())
-	sigma2, lo2, hi2 := FinalBayesStats(DefaultWeights, domainsLegacy)
-	if sigma2 != 0 || lo2 != hi2 {
-		t.Errorf("disabled policy interval must be degenerate [score,score], got σ=%v [%v,%v]", sigma2, lo2, hi2)
+	sigma2 := FinalBayesStats(DefaultWeights, domainsLegacy)
+	lo2, hi2 := ConfidenceInterval(point, sigma2)
+	if sigma2 != 0 || lo2 != point || hi2 != point {
+		t.Errorf("disabled policy interval must be degenerate [point,point], got σ=%v [%v,%v]", sigma2, lo2, hi2)
+	}
+}
+
+// TestFinalSigmaIntrinsicLayerWeight locks the I-12 σ propagation: the final
+// score is Total = 0.5·intrinsic + 0.3·exposure·100 + 0.2·threat·100, and only
+// the intrinsic layer (the measured domain scores) is random. For a single
+// domain with σ_d = 20 the final σ must therefore be 0.5·20 = 10, NOT the raw
+// domain RSS (20) that used to be reported as the final σ.
+//
+// It also locks the interval rule: only the lower bound is clamped at 0; the
+// upper bound is not clamped to 100, so a Total=108 point estimate stays
+// inside its own interval (the old clamp95 produced [100,100]).
+func TestFinalSigmaIntrinsicLayerWeight(t *testing.T) {
+	weights := []WeightConfig{{Domain: "attack_surface", Weight: 100}}
+	domains := []DomainScore{{Domain: "attack_surface", Score: 80, Sigma: 20}}
+
+	sigma := FinalBayesStats(weights, domains)
+	if math.Abs(sigma-10) > 1e-12 {
+		t.Errorf("final sigma = %v, want 10 (0.5 × domain sigma 20)", sigma)
+	}
+
+	lo, hi := ConfidenceInterval(108, sigma)
+	if want := 108 - 1.96*10; math.Abs(lo-want) > 1e-9 {
+		t.Errorf("lower95 = %v, want %v", lo, want)
+	}
+	if want := 108 + 1.96*10; math.Abs(hi-want) > 1e-9 {
+		t.Errorf("upper95 = %v, want %v (not clamped to 100)", hi, want)
+	}
+	if lo > 108 || 108 > hi {
+		t.Errorf("interval [%v,%v] must contain the 108 point estimate", lo, hi)
+	}
+
+	// Lower-bound-only clamping: a negative lower bound is clamped to 0.
+	loNeg, hiNeg := ConfidenceInterval(-5, 100)
+	if loNeg != 0 {
+		t.Errorf("negative lower bound must clamp to 0, got %v", loNeg)
+	}
+	if hiNeg <= 100 {
+		t.Errorf("upper bound must stay unclamped, got %v", hiNeg)
 	}
 }
 

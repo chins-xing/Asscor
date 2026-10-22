@@ -151,17 +151,43 @@ func ComputeDomainScoresBayes(weights []WeightConfig, checks []CheckInput, polic
 	return results
 }
 
-// FinalBayesStats propagates per-domain sigma into a final-score posterior
-// standard deviation under the (documented) independent-domain assumption,
-// and derives the 95% interval clipped to [0,100].
+// IntrinsicLayerWeight is the weight of the intrinsic (domain-quality) layer in
+// the authoritative SSAM V2.0 three-layer aggregation:
 //
-//	sigma_final = sqrt( Σ (w_d · σ_d)² ) / Σ w_d
+//	Total = 0.5·intrinsic + 0.3·exposure·100 + 0.2·threat·100
 //
-// A disabled policy yields sigma 0 and the degenerate interval [score, score].
-func FinalBayesStats(weights []WeightConfig, domains []DomainScore) (sigmaFinal, lower95, upper95 float64) {
+// Only the intrinsic layer is a random quantity: it is the measured domain
+// score. Exposure and threat are configuration coefficients (SPC score and CTI
+// threat coefficient) and carry no sampling variance under this model. Hence,
+// for an independent-domain model,
+//
+//	∂Total/∂score_d = IntrinsicLayerWeight · w_d / Σw
+//	Var(Total)      = Σ (IntrinsicLayerWeight · w_d/Σw)² · σ_d²
+//	σ_final         = IntrinsicLayerWeight · sqrt( Σ (w_d·σ_d)² ) / Σw
+//
+// i.e. the domain RSS must be folded through the intrinsic weight (audit
+// I-12). Edge-factor / domain-adjust scaling of the intrinsic layer is NOT
+// modelled here — this is a documented heuristic interval, not a valid
+// posterior over the three-layer score.
+const IntrinsicLayerWeight = 0.5
+
+// FinalBayesStats propagates per-domain sigma into the final-score posterior
+// standard deviation under the (documented) independent-domain assumption:
+//
+//	sigma_final = IntrinsicLayerWeight · sqrt( Σ (w_d · σ_d)² ) / Σ w_d
+//
+// The 0.5 factor is the intrinsic-layer weight of SSAMV20Formula: variance
+// from the domain layer reaches the final score only through the 0.5·intrinsic
+// term (see IntrinsicLayerWeight for the derivation). A disabled policy yields
+// sigma 0.
+//
+// The interval itself is NOT returned here: it must be centered on the ACTUAL
+// final score (which also contains the 0.3/0.2 deterministic layers), so
+// callers use ConfidenceInterval. This keeps a single endpoint implementation
+// (audit M-5).
+func FinalBayesStats(weights []WeightConfig, domains []DomainScore) (sigmaFinal float64) {
 	wMap := BuildWeightMap(weights)
 
-	weightedScore := 0.0
 	totalWeight := 0.0
 	varSum := 0.0
 	for _, ds := range domains {
@@ -169,24 +195,37 @@ func FinalBayesStats(weights []WeightConfig, domains []DomainScore) (sigmaFinal,
 		if !ok || w <= 0 {
 			continue
 		}
-		weightedScore += ds.Score * w
 		totalWeight += w
 		varSum += (w * ds.Sigma) * (w * ds.Sigma)
 	}
 	if totalWeight == 0 {
-		return 0, 0, 0
+		return 0
 	}
-	mean := weightedScore / totalWeight
-	sigmaFinal = math.Sqrt(varSum) / totalWeight
-	lower := mean - 1.96*sigmaFinal
-	upper := mean + 1.96*sigmaFinal
-	if lower < 0 {
-		lower = 0
+	return IntrinsicLayerWeight * math.Sqrt(varSum) / totalWeight
+}
+
+// ConfidenceInterval derives the heuristic 95% interval around a point
+// estimate: [point − 1.96σ, point + 1.96σ].
+//
+// Clamping (audit I-12 / M-1): ONLY the lower bound is clamped at 0. The upper
+// bound is deliberately NOT clamped to 100: the three-layer total can exceed
+// 100 (e.g. threat_coeff=1.4 gives Total=108), and clamping both ends made the
+// interval [100,100] — an interval that did not even contain its own point
+// estimate. The nominal score range is 0–100, but this heuristic interval must
+// stay consistent with the point estimate. It is NOT a valid posterior
+// interval: it is the domain-score uncertainty folded through the intrinsic
+// weight, centered on the point estimate.
+func ConfidenceInterval(point, sigma float64) (lower95, upper95 float64) {
+	if sigma < 0 {
+		sigma = 0
 	}
-	if upper > 100 {
-		upper = 100
+	half := 1.96 * sigma
+	lower95 = point - half
+	upper95 = point + half
+	if lower95 < 0 {
+		lower95 = 0
 	}
-	return sigmaFinal, lower, upper
+	return lower95, upper95
 }
 
 // AggregateNodeConfidence derives a node-level confidence from per-domain

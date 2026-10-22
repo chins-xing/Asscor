@@ -135,12 +135,14 @@ func (e *Engine) ComputeScore(ctx context.Context, input *ssam.AssessmentInput) 
 	output.Acceptable = output.FinalScore >= output.Threshold
 
 	// Posterior statistics (model-native; degenerate [score,score] and
-	// evidence confidence 1.0 under the disabled policy). The interval is
-	// centered on the actual final score.
-	sigma, _, _ := ssam.FinalBayesStats(cfg.Weights, domainScores)
+	// evidence confidence 1.0 under the disabled policy). sigma is the
+	// domain-layer uncertainty folded through the intrinsic weight (I-12);
+	// the heuristic interval is centered on the actual final score and clamped
+	// only at the lower bound — the three-layer total can exceed 100, so an
+	// upper clamp would make the interval exclude its own point estimate.
+	sigma := ssam.FinalBayesStats(cfg.Weights, domainScores)
 	output.FinalSigma = sigma
-	output.Lower95 = math.Max(0, math.Min(100, output.FinalScore-1.96*sigma))
-	output.Upper95 = math.Max(0, math.Min(100, output.FinalScore+1.96*sigma))
+	output.Lower95, output.Upper95 = ssam.ConfidenceInterval(output.FinalScore, sigma)
 	output.EvidenceConfidence = ssam.AggregateNodeConfidence(cfg.Weights, domainScores)
 
 	return output, nil
