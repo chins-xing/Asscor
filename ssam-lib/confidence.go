@@ -39,9 +39,9 @@ type ConfidencePolicy struct {
 // scoring disabled, so legacy behavior is preserved exactly.
 func DefaultConfidencePolicy() ConfidencePolicy {
 	return ConfidencePolicy{
-		Enabled:      false,
-		Default:      1.0,
-		Floor:        0.05,
+		Enabled:       false,
+		Default:       1.0,
+		Floor:         0.05,
 		PriorStrength: 2.0,
 	}
 }

@@ -58,9 +58,9 @@ type AssessmentOutput struct {
 	FormulaID    string             `json:"formula_id"`
 	Metadata     map[string]string  `json:"metadata,omitempty"`
 	// Confidence-aware posterior statistics (model-native, design §2.3).
-	FinalSigma  float64 `json:"final_sigma,omitempty"`
-	Lower95     float64 `json:"score_lower95,omitempty"`
-	Upper95     float64 `json:"score_upper95,omitempty"`
+	FinalSigma float64 `json:"final_sigma,omitempty"`
+	Lower95    float64 `json:"score_lower95,omitempty"`
+	Upper95    float64 `json:"score_upper95,omitempty"`
 	// EvidenceConfidence is the aggregate domain-level confidence of the
 	// scoring evidence in [0,1].
 	EvidenceConfidence float64 `json:"evidence_confidence,omitempty"`

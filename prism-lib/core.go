@@ -208,17 +208,17 @@ func ComputeDynamicScore(
 	prismScore = math.Min(100.0, prismScore)
 
 	return AssetRiskResult{
-		HostID:           node.HostID,
-		SsamScore:        node.SSAMScore,
-		PrismScore:       math.Round(prismScore*100) / 100,
-		ExternalRisk:     math.Round(externalRisk(node.SSAMScore)*10000) / 10000,
-		PropagatedRisk:   math.Round(propRiskRaw*10000) / 10000,
-		PropPenalty:      math.Round(propPenalty*10000) / 10000,
-		DebtRaw:          math.Round(debtRaw*100) / 100,
-		DebtPenalty:      math.Round(debtPenalty*10000) / 10000,
-		CollapseModifier: math.Round(collapseMod*10000) / 10000,
-		RiskVelocity:     0.0, // caller fills via ComputeRiskVelocity
-		Confidence:       nodeConfidence(node),
+		HostID:            node.HostID,
+		SsamScore:         node.SSAMScore,
+		PrismScore:        math.Round(prismScore*100) / 100,
+		ExternalRisk:      math.Round(externalRisk(node.SSAMScore)*10000) / 10000,
+		PropagatedRisk:    math.Round(propRiskRaw*10000) / 10000,
+		PropPenalty:       math.Round(propPenalty*10000) / 10000,
+		DebtRaw:           math.Round(debtRaw*100) / 100,
+		DebtPenalty:       math.Round(debtPenalty*10000) / 10000,
+		CollapseModifier:  math.Round(collapseMod*10000) / 10000,
+		RiskVelocity:      0.0, // caller fills via ComputeRiskVelocity
+		Confidence:        nodeConfidence(node),
 		EffectiveFailures: math.Round(effFailures*1000) / 1000,
 	}
 }

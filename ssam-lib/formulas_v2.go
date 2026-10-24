@@ -69,7 +69,7 @@ func SSAMV20Formula(domainScores []DomainScore, weights []WeightConfig, riskCtx 
 	totalLayerWeight := intrinsicWeight + exposureWeight + threatWeight
 
 	weightedAvg := (intrinsicCoeff*intrinsicWeight + exposureCoeff*exposureWeight + threatCoeff*threatWeight) / totalLayerWeight
-	finalScore := math.Round(weightedAvg * 100 * 100) / 100
+	finalScore := math.Round(weightedAvg*100*100) / 100
 
 	return FinalScore{
 		Total: finalScore,

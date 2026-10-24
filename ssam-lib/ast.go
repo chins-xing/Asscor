@@ -293,10 +293,10 @@ func applyEdgeFactorStrategyToBase(base float64, factors []EdgeFactorResult) flo
 }
 
 type compiledOp struct {
-	op    string
-	left  int
-	right int
-	ref   string
+	op       string
+	left     int
+	right    int
+	ref      string
 	constVal float64
 }
 

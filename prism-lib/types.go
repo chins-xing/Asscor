@@ -39,15 +39,15 @@ type EdgeState struct {
 
 type PrismConfig struct {
 	// Core Layer
-	DebtAlpha    float64 // 安全债务超线性指数，默认 1.2
-	PropCap      float64 // 传播惩罚上限，默认 0.25
-	DebtCap      float64 // 债务惩罚上限，默认 0.30
-	DebtNormDays float64 // 债务归一化分母（天），默认 1500
-	PathDecay    float64 // 路径衰减因子，默认 0.80
-	MaxPathDepth int     // 最大搜索深度，默认 5
-	ScoreFloor   float64 // 下界稳定项，默认 0.15
-	CollapseBeta float64 // 塌缩超线性指数，默认 1.5
-	AggregationMode string // 传播聚合模式: "rss"(默认)/"max"/"linear"
+	DebtAlpha       float64 // 安全债务超线性指数，默认 1.2
+	PropCap         float64 // 传播惩罚上限，默认 0.25
+	DebtCap         float64 // 债务惩罚上限，默认 0.30
+	DebtNormDays    float64 // 债务归一化分母（天），默认 1500
+	PathDecay       float64 // 路径衰减因子，默认 0.80
+	MaxPathDepth    int     // 最大搜索深度，默认 5
+	ScoreFloor      float64 // 下界稳定项，默认 0.15
+	CollapseBeta    float64 // 塌缩超线性指数，默认 1.5
+	AggregationMode string  // 传播聚合模式: "rss"(默认)/"max"/"linear"
 
 	// Semantic Layer
 	StableThreshold    float64 // Stable 隶属度上界阈值，默认 0.90
