@@ -466,8 +466,13 @@ probe_entry() {
   esac
   # `phase` 默认 `null`（JSON 的 null，不是 0）：R 组**没有相位**，写 0 会被读成"第 1 相位"
   # （Fix round 1 / M-7）。R 组的条目另带 `real_missing: true` 与阶段语义区分开。
+  #
+  # `privilege`（Task 42，additive）：本条判据在节点内**实际**以什么权限执行 ——
+  # root / sudo / unprivileged，由 `probe_condition_holds` 从判据体的 PROBE_PRIVILEGE 行解析。
+  # 它让记录层面能回答"这条证据是在什么权限下取得的"：CT 上是 root、qemu 上是 sudo 或
+  # unprivileged，而**同一判据必须给出同一个结论**（拿不到提权时探针返回 2，不会写进结论）。
   python3 -c 'import json,sys;a=json.loads(sys.argv[1]);a.append(json.loads(sys.argv[2]));print(json.dumps(a))' \
-    "$PROBES_JSON" "{\"factor\":\"$factor\",\"check\":\"$check\",\"condition_holds\":$holds,\"phase\":$phase,\"real_missing\":$real_missing,\"probe_target\":\"${EDGEEXP_TARGET:-}\",\"probe_host\":\"$PROBE_HOST\"}"
+    "$PROBES_JSON" "{\"factor\":\"$factor\",\"check\":\"$check\",\"condition_holds\":$holds,\"phase\":$phase,\"real_missing\":$real_missing,\"probe_target\":\"${EDGEEXP_TARGET:-}\",\"probe_host\":\"$PROBE_HOST\",\"privilege\":\"$probe_last_privilege\"}"
 }
 
 # probe_skipped_entry 是"探针没执行时不留空条目"的守卫：S 组未声明目标节点时**如实**记下未执行
@@ -479,7 +484,7 @@ probe_entry() {
 probe_skipped_entry() {
   local factor="$1" check="$2" phase="${3:-null}"
   python3 -c 'import json,sys;a=json.loads(sys.argv[1]);a.append(json.loads(sys.argv[2]));print(json.dumps(a))' \
-    "$PROBES_JSON" "{\"factor\":\"$factor\",\"check\":\"$check\",\"condition_holds\":null,\"phase\":$phase,\"real_missing\":false,\"probe_target\":\"\",\"probe_host\":\"\",\"skipped\":\"未声明 EDGEEXP_TARGET：探针不执行（S 组不阻断，但这条**不是**证据）\"}"
+    "$PROBES_JSON" "{\"factor\":\"$factor\",\"check\":\"$check\",\"condition_holds\":null,\"phase\":$phase,\"real_missing\":false,\"probe_target\":\"\",\"probe_host\":\"\",\"privilege\":null,\"skipped\":\"未声明 EDGEEXP_TARGET：探针不执行（S 组不阻断，但这条**不是**证据）\"}"
 }
 
 # --- 相位推进 ---------------------------------------------------------------
@@ -1110,7 +1115,11 @@ report = {
     'condition_probes_note': ('每条探针都在**被攻节点内**执行（经基质层下发：clab 基质是 docker exec、'
                               'lxd 基质是 lxc exec；判据与 internal/checks/linux '
                               '的同名检查逐条对齐）；probe_host 是节点内进程自证的 hostname，'
-                              'probe_target 是节点名（clab: 容器名；lxd: 实例名）。condition_holds 为 null 表示**探针未执行**'
+                              'probe_target 是节点名（clab: 容器名；lxd: 实例名）。'
+                              'privilege 是**本条判据实际的执行权限**（root / sudo / unprivileged，Task 42）：'
+                              'CT 上探针天生 root、qemu 上 ssh asc 非 root，故同一判据在两侧必须**'
+                              '按提权等价**后再比较结论；拿不到提权时探针返回 2，不会写成 condition_holds。'
+                              'condition_holds 为 null 表示**探针未执行**'
                               '（未声明 EDGEEXP_TARGET），那**不是**"条件不成立"，也不是证据。'),
     'real_missing': os.environ['REAL_MISSING'],
     'real_missing_verified_at': os.environ['REAL_MISSING_AT'],

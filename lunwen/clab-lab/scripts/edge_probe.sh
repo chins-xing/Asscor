@@ -25,8 +25,19 @@
 # 三类退出码（调用方必须区分前两个）：
 #   0 = 该防护在这台节点上**确实缺失**（条件成立）
 #   1 = 条件不成立（防护在位）
-#   2 = 探针**没跑成**（docker 不可用 / 容器不在跑 / 节点里没有 bash / **判据没有跑到底**）
+#   2 = 探针**没跑成**（docker 不可用 / 容器不在跑 / 节点里没有 bash / **判据没有跑到底** /
+#       **判据需要 root 而节点上既不是 root、也没有可用的 `sudo -n`**）
 #       —— 这不是"条件不成立"，把它当成 1 会让"探针没执行"静默变成一条有效的否定证据。
+#
+# **root 等价（Task 42）**：同一判据在 CT 上（`pct exec` 天生 root）与 qemu 上（ssh `asc`
+# 非 root）必须得到**同一个结论**。判据体里的 `as_root` 是统一提权入口（root 直接跑 /
+# `sudo -n` / 都不可用 ⇒ 2），只包**真的需要特权**的那几条（`getenforce` / AppArmor
+# `aa-status` / 仅 root 可读的告警配置文件）；读 `/proc`、`ps -eo comm`、`/etc/pam.d/*`
+# 这些**不提权**（它们本来就是可读的，一刀切提权反而会制造新的失败面）。
+# 提权失败时判据体打印 `PROBE_NO_PRIVILEGE` 而不是 `DEFENSE_*`，父进程据此返回 2，
+# 于是"没权限"**不可能**被读成 0（防护缺失）。每条判据实际以什么权限执行会由判据体在退出时
+# 打一行 `PROBE_PRIVILEGE=root|sudo|unprivileged`，父进程解析进 `probe_last_privilege`，
+# 最终写进 `condition_probes[].privilege`（additive：原有字段语义不变）。
 #
 # 命名与调用约定（Fix round 1 / M-11）：本文件在**顶层**定义 `probe_target` 与
 # `probe_docker_bin` 两个全局变量，并读取**调用方的 `$1`/`$EDGEEXP_TARGET`**。因此：
@@ -82,6 +93,15 @@ probe_sentinel="__edge_probe_ran__"
 # probe_tmp_prefix 是"判据体临时文件"的容器内前缀（父进程落本地文件 → docker cp → 执行 → 删）。
 # 用固定前缀 + PID：同一台机器上并发跑两轮探针时不会互相覆盖。
 probe_tmp_prefix="/tmp/edge_probe"
+
+# probe_last_privilege 是**最近一次**探针在节点内**实际**以什么权限执行判据（Task 42）：
+#   root          = 节点内进程本身就是 root（CT 的 `pct exec` 就是这种）
+#   sudo          = 非 root，但判据通过 `sudo -n` 提权执行
+#   unprivileged  = 非 root 且**不需要**提权的判据（读 /proc、ps、/etc/pam.d）
+# 由 `probe_condition_holds` 从判据体退出时的 `PROBE_PRIVILEGE=` 行解析（空 = 没有记录，
+# 那是协议违约 ⇒ 该次探针按 2 处理）。`edge_attack.sh` 的 `probe_entry` 读它写进
+# `condition_probes[].privilege`，让记录层面能看出"这条证据是在什么权限下取得的"。
+probe_last_privilege=""
 
 # probe_host 返回节点内进程**自报**的 hostname（写进 condition_probes，让"探针在哪台机器上
 # 跑的"这句话本身可核对）。它是自报、不是密码学自证（被控节点上的进程能报任何值）。
@@ -151,13 +171,24 @@ _probe_script() {
       #
       # `aa-status` 那条同理要用绝对路径：引擎在容器里跑的是 `common.RunCmd`（按 PATH 查找），
       # 而判据体是喂给 `bash -s` 的**字符串**、不走 PATH 缓存，故显式写绝对路径最贴近它。
+      #
+      # **Task 42 / root 等价**：`getenforce` 与 `aa-status` 都是**特权判据**（后者读
+      # securityfs 下的 AppArmor profile，非 root 读不到 ⇒ 旧实现会把"没权限"读成"缺失"）。
+      # 故在真正调用它们之前先 `require_root`：拿不到提权就打印 PROBE_NO_PRIVILEGE 并退出
+      # （父进程返回 2 = 探针没跑成），**绝不**继续走到 `echo DEFENSE_ABSENT`。
+      # 注意 `require_root` 只在**命令行确实存在**时才要求提权：夹具/节点上根本没有这两个
+      # 工具时，`DEFENSE_ABSENT` 不需要任何权限就能得出（保持原结论）。
       body='
 if command -v getenforce >/dev/null 2>&1; then
-  if [ "$(getenforce 2>/dev/null | tr -d "[:space:]")" = "Enforcing" ]; then echo DEFENSE_PRESENT; else echo DEFENSE_ABSENT; fi
+  require_root || exit 0
+  if [ "$(as_root getenforce 2>/dev/null | tr -d "[:space:]")" = "Enforcing" ]; then echo DEFENSE_PRESENT; else echo DEFENSE_ABSENT; fi
   exit 0
 fi
 for p in /usr/sbin/aa-status /sbin/aa-status /usr/bin/aa-status; do
-  if [ -x "$PROBE_ROOT$p" ] && [ "$("$PROBE_ROOT$p" 2>/dev/null | grep -c "profiles are loaded")" -gt 0 ]; then echo DEFENSE_PRESENT; exit 0; fi
+  if [ -x "$PROBE_ROOT$p" ]; then
+    require_root || exit 0
+    if [ "$(as_root "$PROBE_ROOT$p" 2>/dev/null | grep -c "profiles are loaded")" -gt 0 ]; then echo DEFENSE_PRESENT; exit 0; fi
+  fi
 done
 echo DEFENSE_ABSENT' ;;
     EF-SYNCOOKIE)
@@ -188,10 +219,17 @@ if [ "$present" -eq 1 ]; then echo DEFENSE_PRESENT; else echo DEFENSE_ABSENT; fi
       #
       # 逐文件用 `grep -c` 而不是 `grep -q`：`-q` 命中即退出会让上游吃到 SIGPIPE
       # （实测：判据体的 stdout 被杀 ⇒ 哨兵没打出来 ⇒ 整轮被判"没跑到底"）。
+      #
+      # **Task 42 / root 等价**：两份告警配置是 **root 专属**的（`/var/ossec/etc/ossec.conf`
+      # 与 `/etc/wazuh-agent/ossec.conf` 都是 `0640 root:wazuh`，所在目录对普通用户不可穿越），
+      # 非 root 读不到 ⇒ 旧实现把"没权限"静默读成"没有告警配置"=0，正是本任务要堵的那条假证据。
+      # 故本判据整体走提权入口：拿不到 root/sudo 就返回 2（探针没跑成），不产出 DEFENSE_*。
+      # `/etc/aide/aide.conf` 本身是可读的，但它与另两份共用同一条判据结论，故不拆。
       body='
+require_root || exit 0
 present=0
 for cfg in /var/ossec/etc/ossec.conf /etc/wazuh-agent/ossec.conf /etc/aide/aide.conf; do
-  if [ -r "$PROBE_ROOT$cfg" ] && [ "$(grep -ciE "email|alert|notification" "$PROBE_ROOT$cfg")" -gt 0 ]; then present=1; fi
+  if [ -e "$PROBE_ROOT$cfg" ] && [ "$(as_root grep -ciE "email|alert|notification" "$PROBE_ROOT$cfg" 2>/dev/null)" -gt 0 ]; then present=1; fi
 done
 if [ "$present" -eq 1 ]; then echo DEFENSE_PRESENT; else echo DEFENSE_ABSENT; fi' ;;
     EF-002FA)
@@ -242,7 +280,7 @@ if [ "$factor_count" -ge 3 ]; then echo DEFENSE_PRESENT; else echo DEFENSE_ABSEN
   # 末尾那句 `echo 哨兵` 就永远不会执行，整轮被误判成"没跑到底"）。
   # 退出码不再承担语义 ⇒ 判据体的 `exit` 可以是任意值。
   #
-  # preamble 做三件事：
+  # preamble 做四件事：
   #   · 给夹具一条**明确的失败路径**：`EDGEEXP_PROBE_ROOT` 指向的树必须长得像一个根
   #     （至少有 `/proc`），否则直接报 PROBE_FIXTURE_ROOT（父进程读成"没给出结论"=2）。
   #     这堵住的是"夹具配错 ⇒ 判据在残缺的 PATH/根上乱跑 ⇒ 给出一个看似有效的结论"。
@@ -253,8 +291,35 @@ if [ "$factor_count" -ge 3 ]; then echo DEFENSE_PRESENT; else echo DEFENSE_ABSEN
   #     生产上 `PROBE_ROOT=/`，于是路径退化成 `/usr/sbin:/sbin:/usr/bin:/bin`（Docker 容器的
   #     默认 PATH 子集；判据体用的都是绝对路径或这几个目录里的命令）。
   #   · 清掉节点侧可能存在的 `CDPATH`（它会污染 `cd` 的输出；本判据体不用 `cd`，防将来）。
+  #   · **统一提权入口（Task 42）**：`PROBE_PRIVILEGE` 初值按 `id -u` 定（root / unprivileged），
+  #     `require_root` 在**需要特权**的判据分支里先确认提权能力（root 或可用的 `sudo -n`；
+  #     都没有就打印 PROBE_NO_PRIVILEGE 并返回 2），`as_root` 是实际执行入口（root 直接跑 /
+  #     `sudo -n` / 都没有 ⇒ 2）。**两者都不带 `exit`**：`exit` 由判据体决定，父进程只认
+  #     `DEFENSE_*` / `PROBE_NO_PRIVILEGE` / 哨兵三样东西。
   preamble='export PROBE_ROOT='"$probe_root"'
-trap "echo '"$probe_sentinel"'" EXIT
+# 判据实际以什么权限执行：root / sudo / unprivileged（退出时由 _probe_exit_report 落成一行
+# PROBE_PRIVILEGE=…，父进程解析进 probe_last_privilege，最终写进 condition_probes[].privilege）。
+if [ "$(id -u)" -eq 0 ]; then PROBE_PRIVILEGE=root; else PROBE_PRIVILEGE=unprivileged; fi
+probe_can_escalate() {
+  command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1
+}
+as_root() {
+  if [ "$(id -u)" -eq 0 ]; then PROBE_PRIVILEGE=root; "$@"; return $?; fi
+  if probe_can_escalate; then PROBE_PRIVILEGE=sudo; sudo -n "$@"; return $?; fi
+  return 2
+}
+require_root() {
+  if [ "$(id -u)" -eq 0 ]; then PROBE_PRIVILEGE=root; return 0; fi
+  if probe_can_escalate; then PROBE_PRIVILEGE=sudo; return 0; fi
+  echo PROBE_NO_PRIVILEGE
+  return 2
+}
+# 哨兵与权限行都由 EXIT trap 打：判据体自己的 `exit`（例如 EF-SELINUX 的 `exit 0`）顶替不了它们。
+_probe_exit_report() {
+  echo '"$probe_sentinel"'
+  echo "PROBE_PRIVILEGE=$PROBE_PRIVILEGE"
+}
+trap _probe_exit_report EXIT
 if [ ! -d "$PROBE_ROOT/proc" ]; then echo PROBE_FIXTURE_ROOT; exit 0; fi
 PATH="$PROBE_ROOT/usr/sbin:$PROBE_ROOT/sbin:$PROBE_ROOT/usr/bin:$PROBE_ROOT/bin:/usr/sbin:/sbin:/usr/bin:/bin"
 export PATH
@@ -278,7 +343,8 @@ unset CDPATH'
 probe_condition_holds() {
   # `out`/`probe_err` 显式初始化：`set -u` 下"没有赋值就被读"会直接终止脚本，而
   # "探针没跑成"这条路径**本来**就不给 `out` 赋值（判据体没生成 ⇒ 不进 docker exec 分支）。
-  local factor="$1" body="" dc=0 out="" probe_err="" verdict="" script_in_container=""
+  local factor="$1" body="" dc=0 out="" probe_err="" verdict="" verdict_rc="" script_in_container=""
+  probe_last_privilege=""
   probe_host_ready || return 2
 
   # M-10：保存调用方的 `-e` / `pipefail` 状态，函数返回前**原样还原** —— 无条件 `set -e`
@@ -340,14 +406,37 @@ probe_condition_holds() {
     return 2
   fi
 
+  # 权限留痕（Task 42）：判据体在 EXIT trap 里打一行 `PROBE_PRIVILEGE=root|sudo|unprivileged`。
+  # 只认这三种取值（其余一律当没记录）；它是"这条证据是在什么权限下取得的"的**唯一**来源。
+  probe_last_privilege="$(printf '%s\n' "$out" | grep -oE '^PROBE_PRIVILEGE=(root|sudo|unprivileged)$' | tail -n 1 | sed 's/^PROBE_PRIVILEGE=//')"
+
+  # 提权失败 ⇒ 2，**绝不能**落到 0：这是本任务的核心。判据体打印 PROBE_NO_PRIVILEGE 说明
+  # "这条判据需要 root 而节点上拿不到"，它既不是 DEFENSE_PRESENT 也不是 DEFENSE_ABSENT，
+  # 所以不给结论；但如果把它当成"没给出结论"的泛化分支，诊断会误导（读者会去查夹具）。
+  if printf '%s\n' "$out" | grep -qx 'PROBE_NO_PRIVILEGE'; then
+    echo "edge_probe: 探针 $factor 在节点 $probe_target 内**没有提权能力**（该判据需要 root，而节点上既不是 root、也没有可用的 sudo -n）——" >&2
+    echo "  『没权限读到』不是『防护缺失』：把它当成 0 会造出一条有效的否定证据。整轮失败。" >&2
+    return 2
+  fi
+
   verdict="$(printf '%s\n' "$out" | grep -xE 'DEFENSE_(PRESENT|ABSENT)' | tail -n 1)"
+  verdict_rc=""
   case "$verdict" in
-    DEFENSE_PRESENT) return 1 ;;
-    DEFENSE_ABSENT) return 0 ;;
+    DEFENSE_PRESENT) verdict_rc=1 ;;
+    DEFENSE_ABSENT) verdict_rc=0 ;;
     *)
       echo "edge_probe: 探针 $factor 在节点 $probe_target 内跑到底了，但没给出结论（哨兵在、DEFENSE_* 不在）——" >&2
       echo "  最常见的原因是夹具根配错（preamble 会报 PROBE_FIXTURE_ROOT）或判据体写错；" >&2
       echo "  整轮失败，不得据此写任何结论。" >&2
       return 2 ;;
   esac
+
+  # 给了结论就必须给权限留痕：缺了它，记录无法回答"这条证据是在什么权限下取得的"
+  # （正是本任务要在记录层面堵的那个缺口），按协议违约返回 2。
+  if [ -z "$probe_last_privilege" ]; then
+    echo "edge_probe: 探针 $factor 在节点 $probe_target 内给出了结论，但没有报告执行权限（PROBE_PRIVILEGE 缺失）——" >&2
+    echo "  未经留痕的结论不得入库；整轮失败。" >&2
+    return 2
+  fi
+  return "$verdict_rc"
 }

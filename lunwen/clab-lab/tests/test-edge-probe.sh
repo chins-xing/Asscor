@@ -9,6 +9,8 @@
 #   I-5  节点里的 profile/logout 不再能顶替结论；判据没跑到底 ⇒ 2（而不是 0/1）
 #   M-6  getenforce 能跑但输出非 Enforcing 时不再回退 aa-status（与引擎 ot005 同构）
 #   基础 六因子的两种取值 + 未知因子 + 未声明目标（既有行为不回归）
+#   T42  root 等价：特权判据在 root / sudo 下同结论；**拿不到提权 ⇒ 2（不是 0）**；
+#        privilege 留痕取 root / sudo / unprivileged；不碰无特权需求的判据（不一刀切）。
 #
 # 夹具纪律：每棵夹具树都必须**像一个根**（至少要有 /proc，见 edge_probe.sh 的 preamble 守卫）；
 # EF-3FA 的"类"按 checks.go 的 ef002 三类**每次命中各计一次**（同一文件同时命中两类算两次）。
@@ -91,16 +93,44 @@ build_root() { # $1 = 根目录；$2 = pam 内容（同一个字符串写进 ssh
 
 build_root_split() { # $1 = 根目录；$2 = sshd 内容；$3 = common-auth 内容
   local r="$1" sshd="$2" common="$3"
-  rm -rf "$r"; mkdir -p "$r/etc/pam.d" "$r/proc/sys/net/ipv4" "$r/usr/sbin"
+  rm -rf "$r"; mkdir -p "$r/etc/pam.d" "$r/proc/sys/net/ipv4" "$r/usr/sbin" "$r/usr/bin"
   # 遮蔽 `systemctl`：夹具不是 systemd 机器（空的同名可执行文件 ⇒ command -v 命中、输出为空 ⇒
   # 判据走 ps 分支，与容器里的行为同构）。
   : > "$r/usr/sbin/systemctl"; chmod +x "$r/usr/sbin/systemctl"
+  # T42：夹具默认**提供可用的提权通道**（`sudo -n` 直接执行，本机测试无法真提权）——
+  # 于是"非 root 但 sudo 可用"这条路径在每个既有夹具上都成立，既有断言的期望值不变。
+  # 需要"拿不到提权"的用例用 break_sudo；需要"root 身份"的用例用 fake_root_id。
+  cat > "$r/usr/bin/sudo" <<'SH'
+#!/bin/sh
+# 夹具：模拟非 root 但 `sudo -n` 可用（判据体仍在夹具根上跑；这里不做真提权）
+[ "${1:-}" = "-n" ] && shift
+exec "$@"
+SH
+  chmod +x "$r/usr/bin/sudo"
   printf '%s\n' "$sshd" > "$r/etc/pam.d/sshd"
   printf '%s\n' "$common" > "$r/etc/pam.d/common-auth"
   printf '1\n' > "$r/proc/sys/net/ipv4/tcp_syncookies"
 }
 
-run_probe() { # $1 = factor, $2 = probe_root, $3 = 备选 docker bin 目录
+# break_sudo：把夹具里的 `sudo` 换成"存在但 `sudo -n` 不可用"（恒失败）——
+# 这正是"非 root 且拿不到提权"的形态（也覆盖"sudo 存在但要密码"这一更常见的现实）。
+break_sudo() { # $1 = 根目录
+  printf '#!/bin/sh\nexit 1\n' > "$1/usr/bin/sudo"; chmod +x "$1/usr/bin/sudo"
+}
+
+# fake_root_id：让夹具里的 `id -u` 报 0 —— 模拟 CT 上 `pct exec` 的**天生 root**。
+fake_root_id() { # $1 = 根目录
+  cat > "$1/usr/bin/id" <<'SH'
+#!/bin/sh
+# 夹具：只把 `id -u` 报成 0（判据体只这样用 id）
+[ "${1:-}" = "-u" ] && { echo 0; exit 0; }
+exec /usr/bin/id "$@"
+SH
+  chmod +x "$1/usr/bin/id"
+}
+
+run_probe_full() { # $1 = factor, $2 = probe_root, $3 = 备选 docker bin 目录
+  # 输出 `rc|privilege`（privilege 来自 edge_probe.sh 的 probe_last_privilege，Task 42）。
   local factor="$1" root="$2" bin="${3:-}"
   # `$$` 在子 shell 里也是**父进程**的 PID，故整棵调用树里稳定；`$BASHPID` 不是（每个命令替换
   # 都是新的 BASHPID）—— 调试时踩到过一次，导致 cp 与 exec 用了两个不同的文件名。
@@ -116,8 +146,21 @@ run_probe() { # $1 = factor, $2 = probe_root, $3 = 备选 docker bin 目录
     export EDGEEXP_PROBE_ROOT PATH
     # shellcheck source=/dev/null
     . "$PROBE" probe-fixture
-    if probe_condition_holds "$factor"; then echo 0; else echo $?; fi
+    if probe_condition_holds "$factor"; then rc=0; else rc=$?; fi
+    printf '%s|%s\n' "$rc" "${probe_last_privilege:-}"
   )
+}
+
+run_probe() { # $1 = factor, $2 = probe_root, $3 = 备选 docker bin 目录 ⇒ 只输出 rc
+  local r
+  r="$(run_probe_full "$@")"
+  printf '%s\n' "${r%%|*}"
+}
+
+priv_of() { # $1 = factor, $2 = probe_root ⇒ 只输出 privilege 留痕
+  local r
+  r="$(run_probe_full "$@")"
+  printf '%s\n' "${r#*|}"
 }
 
 expect() { # $1 = 说明, $2 = got, $3 = want
@@ -218,6 +261,35 @@ printf '#!/bin/sh\necho Enforcing\n' > "$RP/usr/sbin/getenforce"; chmod +x "$RP/
 expect "getenforce=Enforcing ⇒ 在位（rc=1）" "$(run_probe EF-SELINUX "$RP")" 1
 rm -f "$RP/usr/sbin/getenforce"
 expect "getenforce 不存在、aa-status 在位 ⇒ 回退生效（rc=1）" "$(run_probe EF-SELINUX "$RP")" 1
+
+echo
+echo "############ T42：root 等价 —— 特权判据在 root / sudo 下同结论；拿不到提权 ⇒ 2（不是 0）"
+# 三份副本长**同一棵树**（getenforce=Enforcing ⇒ 在位），只差"执行身份 / 提权能力"：
+#   RP42ROOT : id -u 报 0（CT 上 pct exec 的**天生 root**形态）⇒ rc=1，privilege=root
+#   RP42SUDO : 非 root，夹具 sudo -n 直接执行           ⇒ rc=1（**与 root 同结论**），privilege=sudo
+#   RP42NONE : 非 root，sudo 存在但恒失败（无提权通道）  ⇒ rc=2（**不是** 0=『防护缺失』）
+RP42ROOT="$D/root/t42_root"; RP42SUDO="$D/root/t42_sudo"; RP42NONE="$D/root/t42_none"
+for r in "$RP42ROOT" "$RP42SUDO" "$RP42NONE"; do
+  build_root "$r" ""
+  printf '#!/bin/sh\necho Enforcing\n' > "$r/usr/sbin/getenforce"; chmod +x "$r/usr/sbin/getenforce"
+done
+fake_root_id "$RP42ROOT"
+break_sudo "$RP42NONE"
+
+expect "root（pct exec 形态）⇒ getenforce=Enforcing 判在位（rc=1）" \
+  "$(run_probe EF-SELINUX "$RP42ROOT")" 1
+expect "非 root + sudo -n 可用 ⇒ 与 root **同结论**（rc=1）" \
+  "$(run_probe EF-SELINUX "$RP42SUDO")" 1
+expect "非 root + 无可用提权 ⇒ 特权判据 rc=2（**不是** 0=缺失）" \
+  "$(run_probe EF-SELINUX "$RP42NONE")" 2
+expect "非 root + 无可用提权 ⇒ 另一条特权判据 EF-NO-SIEM 也 rc=2" \
+  "$(run_probe EF-NO-SIEM "$RP42NONE")" 2
+expect "privilege 留痕：root|sudo|unprivileged（第三格 = 无特权需求的判据不提权）" \
+  "$(priv_of EF-SELINUX "$RP42ROOT")|$(priv_of EF-SELINUX "$RP42SUDO")|$(priv_of EF-SYNCOOKIE "$RP42SUDO")" \
+  "root|sudo|unprivileged"
+expect "无特权需求的判据（EF-SYNCOOKIE）在没有提权通道时仍照常给结论（rc=1）" \
+  "$(run_probe EF-SYNCOOKIE "$RP42NONE")" 1
+echo "  （T42 修正前的危害：非 root 读不到 getenforce / AppArmor profile / 仅 root 可读的告警配置 ⇒ 命令失败被读成 0=『防护缺失』）"
 
 echo
 echo "############ I-5：判据没跑到底 ⇒ 2（不是 0、也不是 1）"

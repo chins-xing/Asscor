@@ -11,7 +11,7 @@ bash lunwen/clab-lab/tests/run-all.sh edge-lab # 只跑一组（名字取文件�
 
 **期望通过数**（任何一条不到就是回归；`run-all.sh` 会逐组比对）：
 
-> **权威值是 `run-all.sh` 里的 `EXPECT`**（目录里那句 `run-all: 全部通过（7 组：6/83/20/31/8/12/9）`
+> **权威值是 `run-all.sh` 里的 `EXPECT`**（目录里那句 `run-all: 全部通过（7 组：6/83/26/31/8/12/9）`
 > 与它同源）。下表已按 `EXPECT` 回填（`test-agent-readiness` 3→**6**、`test-edge-lab` 51→**83**，
 > 并补上此前整行缺失的 `test-matrix-classification`；Task 20 复核时发现的双源漂移，已订正）。
 > **改夹具的格数就必须同时改 `EXPECT` 与本表** —— 两处不一致时以 `EXPECT` 为准。
@@ -20,7 +20,7 @@ bash lunwen/clab-lab/tests/run-all.sh edge-lab # 只跑一组（名字取文件�
 |---|---|---|
 | `test-agent-readiness.sh` | **6** | agent 就绪判据：pid 列表 ⇒ 必须回出 paw（旧布局把 pid 列表喂 stdin 时**恒回空**，于是"目标上有没有活着的 agent"恒为否）；空列表回空；旧布局回空（回归钉） |
 | `test-edge-lab.sh` | **83** | 基质层：clab 分支命令序列逐行不变、lxd 分支在假 `lxc` 上真干活、`lab_up/down` 响亮失败、非法基质名中止调用方、`EDGEEXP_DOCKER_BIN` 覆盖生效且不泄漏到拓扑级、detached argv 保真，以及 **G 段**：STOPPED 的实例**不得**被判成"已就绪"（旧写法 0 轮就通过）；**H 段（Task 6）**：`pve` 分支在假 `pct` 上逐项对应 lxd（`pct exec <vmid> -- …` / `pct push <vmid> <本地> <目标> --perms 755` / `pct status` / `pct config`）、名字→vmid 是**唯一**解析点且名字**绝不进参数位**、解析不到与**重名**都响亮失败且**一次 pct 都没起过**、`lab_up/down` 与 `lab_node_counts` 同 lxd 处置、pve 路径**只**起 pct（绝不回落到 docker/lxc）、只读（无 create/destroy/start/stop）；**I 段（Task 13）**：`qemu` 分支在假 `qm`/`ssh`/`scp` 上逐项对应（exec/push/ip/pids 走 ssh、状态与配置走 `qm`、`qm list` 取**第 2 格**、`lab_target_spec` 收 vmid 与名字、`lab_node_ssh_host` 三种语义、`lab_up/down` 仍 rc=2 但**点名** `edge_vm_provision.sh`、三项 require_bins、只读且**不顶替**别的基质） |
-| `test-edge-probe.sh` | **20** | 条件探针：六因子的探针判据体、探针根配错 ⇒ rc=2（不得产出"看似有效的结论"） |
+| `test-edge-probe.sh` | **26** | 条件探针：六因子的探针判据体、探针根配错 ⇒ rc=2（不得产出"看似有效的结论"）；**Task 42** 另钉 **root 等价**：特权判据（`getenforce` / AppArmor `aa-status` / 仅 root 可读的告警配置）在 root 与 `sudo -n` 下**同结论**、**拿不到提权 ⇒ 2（不是 0）**、`privilege` 留痕取 root/sudo/unprivileged，且读 `/proc` 这类无特权判据**不被一刀切提权** |
 | `lab-diff.sh` | **31** | 基质抽象的**真基线**差分：`git archive <base>` 取抽象前的整棵树，两侧跑同一份假 CLI（clab/docker/curl），比较调用序列 / stdout / stderr / 退出码 / 产物 |
 | `test-chain-derivation.sh` | **8** | L2 标签口径：从 `edge_attack.sh` **抽出**判据块，用 Step 3B 两条真实 chain 跑（策略在 ⇒ `compromised=false`；旧口径在同一条链上给 `true`；`-3` 不算被拦住；缺少目标 link ⇒ 响亮失败） |
 | `test-matrix-classification.sh` | **12** | 矩阵层**条件分类**的逗号边界（Task 8 复审修复轮）：桩采集器把 TTP 因子挂在**最后一行**，钉住 `targeted_ttp` / `recon_playbook` 的判据不被"尾随空格 / 逗号边界"翻转（`edge_matrix.sh:191` 那个多出来的空格曾让一个场景**静默改类**）；Task 11 加 H/I 两格钉重复轴与臂的实例键 |

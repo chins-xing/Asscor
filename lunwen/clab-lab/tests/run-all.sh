@@ -46,7 +46,9 @@
 #                                   名字→vmid 解析 2 格 / `lab_instance_exists` 的名字分支 1 格）。
 #   lab-diff              31
 #   test-chain-derivation  8
-#   test-edge-probe       20（它按 `ok` 行计数，没有 PASS= 汇总行）
+#   test-edge-probe       26（它按 `ok` 行计数，没有 PASS= 汇总行；Task 42 由 20 增至 26 ——
+#                              新增 6 格钉「root 等价」：特权判据在 root / sudo 下同结论、
+#                              拿不到提权 ⇒ 2（不是 0）、privilege 留痕取值、以及不碰无特权判据）
 #   test-matrix-classification 12（Task 8 的 7 格 + Task 10 的臂 3 格 + Task 11 的重复轴 2 格：H/I；
 #                                 它在**缺陷版**（`SCEN_FACTORS_RAW="$( … ) "`）上必须红 ——
 #                                 Task 8 当时（7 格版）实测 PASS=2 FAIL=5，修好后 PASS=7 FAIL=0；
@@ -71,7 +73,7 @@ export REPO
 declare -A EXPECT=(
   [test-agent-readiness]=6
   [test-edge-lab]=83
-  [test-edge-probe]=20
+  [test-edge-probe]=26
   [lab-diff]=31
   [test-chain-derivation]=8
   [test-matrix-classification]=12
@@ -112,7 +114,7 @@ done
 
 echo
 if [ "$TOTAL_FAIL" -eq 0 ]; then
-  echo "run-all: 全部通过（7 组：6/83/20/31/8/12/9）"
+  echo "run-all: 全部通过（7 组：6/83/26/31/8/12/9）"
   exit 0
 fi
 echo "run-all: $TOTAL_FAIL 组未达标 —— 见上面的尾部输出" >&2
