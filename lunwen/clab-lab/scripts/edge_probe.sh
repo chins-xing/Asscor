@@ -299,7 +299,7 @@ if [ "$factor_count" -ge 3 ]; then echo DEFENSE_PRESENT; else echo DEFENSE_ABSEN
   preamble='export PROBE_ROOT='"$probe_root"'
 # 判据实际以什么权限执行：root / sudo / unprivileged（退出时由 _probe_exit_report 落成一行
 # PROBE_PRIVILEGE=…，父进程解析进 probe_last_privilege，最终写进 condition_probes[].privilege）。
-if [ "$(id -u)" -eq 0 ]; then PROBE_PRIVILEGE=root; else PROBE_PRIVILEGE=unprivileged; fi
+# ⚠️ 初值判定的位置很重要：**必须放在下面 PATH 重设之后**（见那里的注释）。
 probe_can_escalate() {
   command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1
 }
@@ -323,7 +323,11 @@ trap _probe_exit_report EXIT
 if [ ! -d "$PROBE_ROOT/proc" ]; then echo PROBE_FIXTURE_ROOT; exit 0; fi
 PATH="$PROBE_ROOT/usr/sbin:$PROBE_ROOT/sbin:$PROBE_ROOT/usr/bin:$PROBE_ROOT/bin:/usr/sbin:/sbin:/usr/bin:/bin"
 export PATH
-unset CDPATH'
+unset CDPATH
+# 权限初值：**在 PATH 重设之后**判 `id -u` —— 节点侧的真实身份来自 `$PROBE_ROOT/usr/bin/id`。
+# 放在 PATH 之前会读到**宿主的** id：在 root 宿主上，一台非 root 的节点会被误判成 root
+# （夹具实测：三条 T42 断言里 privilege 全报 root，`require_root` 于是跳过提权、直接给结论）。
+if [ "$(id -u)" -eq 0 ]; then PROBE_PRIVILEGE=root; else PROBE_PRIVILEGE=unprivileged; fi'
   printf '#!/bin/bash\n%s\n%s\nexit 0\n' "$preamble" "$body"
 }
 

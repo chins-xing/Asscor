@@ -155,7 +155,7 @@
 
 | # | 项 | 依据 / 判据 | 现状与处置 |
 |---|---|---|---|
-| D-1 | **`gofmt -l` 起点上就有 15 个既有文件**（`prism-lib/*` 9 个、`ssam-lib/*` 5 个、`lunwen/attachment/scripts/exprunner-main.go` 1 个） | 按**入库内容（LF）**复算（`build/fit24/gofmt_check.py`：498 个跟踪 `.go`，把 CRLF 归一后整树跑 `gofmt -l`）⇒ **15 行**；文件清单见操作手册 §7 第 6 条 | ⏳ **未修**（另开任务）。判据是**差集为空**：Task 18 在起点与 HEAD 各跑一次都是 15 行；Task 26 复算仍是同 15 行 |
+| D-1 | **`gofmt -l` 起点上就有 15 个既有文件**（`prism-lib/*` 9 个、`ssam-lib/*` 5 个、`lunwen/attachment/scripts/exprunner-main.go` 1 个） | 按**入库内容（LF）**复算（`build/fit24/gofmt_check.py`：498 个跟踪 `.go`，把 CRLF 归一后整树跑 `gofmt -l`）⇒ **15 行**；文件清单见操作手册 §7 第 6 条 | ✅ **已修（2026-10-24，ARC e308422 / main 7acb200）**：15 个文件全部 gofmt -w，语义中性（git diff -w 后仅 prism-lib/prism_test.go 的 UTF-8 BOM 被去掉）。判据按**入库内容（LF）**复算：git -c core.autocrlf=false archive HEAD | tar -x -C /tmp/… && gofmt -l ⇒ **0 行**（505 个 .go）。⚠️ 直接在工作树跑 gofmt -l 仍会报 5 个 CRLF 假阳性 —— 归零只认 archive 口径 |
 | D-2 | **门禁⓪「只报不判死」是否收紧** | 链上重复条目如实报出但不拦；收紧 = 判据变更（台账 B.1 / 操作手册 §7 第 8 条） | ⏳ **维持现状**：Task 18 已修消费侧折叠、链与配置不动；**收紧需先定案**（会改判据语义） |
 | D-3 | **`-group-by` 缺省仍是 `row`（逐行）** | `cmd/edgecompare/fit.go` 的 `fs.String("group-by", "", …)` + `fitGroups` 的 `case "", "row"`；手册 §5.5 / 设计 D10 已写明风险 | ⏳ **有意保留历史口径**：改缺省会让既有命令的输出口径静默改变；报告头已强制写明单位。是否翻转缺省**待定案** |
 | D-4 | **`edge_probe.sh` 在 qemu 上不是 root 等价** | 探针经 `lab_target_exec`（登录用户 `asc`）执行，而取数是 root 等价 ⇒ `condition_probes[].condition_holds` 与 `checks[]` 可能不一致（如 `EF-APPARMOR` 走 `aa-status`，`asc` 下 rc=4）；操作手册 §7 第 12 条 | ⏳ **未改**：改它要动 `edge_probe.sh` 与 20 条离线判据（判据语义变更）。对 S 组不阻断，但它**不是**一致证据 |

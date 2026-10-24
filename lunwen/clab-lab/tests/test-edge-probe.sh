@@ -118,15 +118,18 @@ break_sudo() { # $1 = 根目录
   printf '#!/bin/sh\nexit 1\n' > "$1/usr/bin/sudo"; chmod +x "$1/usr/bin/sudo"
 }
 
+# fake_uid：让夹具里的 `id -u` 报**指定 uid**（默认 0）。宿主本身是 root 还是普通用户都无影响
+# —— 这保证 T42 的三条断言在任何宿主上都跑同样的分支（此前只造"假 root"，
+# 宿主真是 root 时"非 root"用例会被宿主身份顶掉，实测在 Linux/root 上失败）。
+fake_uid() { # $1 = 根目录；$2 = uid（缺省 0）
+  local uid="${2:-0}"
+  printf '#!/bin/sh\n[ "${1:-}" = "-u" ] && { echo %s; exit 0; }\nexec /usr/bin/id "$@"\n' "$uid" > "$1/usr/bin/id"
+  chmod +x "$1/usr/bin/id"
+}
+
 # fake_root_id：让夹具里的 `id -u` 报 0 —— 模拟 CT 上 `pct exec` 的**天生 root**。
 fake_root_id() { # $1 = 根目录
-  cat > "$1/usr/bin/id" <<'SH'
-#!/bin/sh
-# 夹具：只把 `id -u` 报成 0（判据体只这样用 id）
-[ "${1:-}" = "-u" ] && { echo 0; exit 0; }
-exec /usr/bin/id "$@"
-SH
-  chmod +x "$1/usr/bin/id"
+  fake_uid "$1" 0
 }
 
 run_probe_full() { # $1 = factor, $2 = probe_root, $3 = 备选 docker bin 目录
@@ -266,14 +269,18 @@ echo
 echo "############ T42：root 等价 —— 特权判据在 root / sudo 下同结论；拿不到提权 ⇒ 2（不是 0）"
 # 三份副本长**同一棵树**（getenforce=Enforcing ⇒ 在位），只差"执行身份 / 提权能力"：
 #   RP42ROOT : id -u 报 0（CT 上 pct exec 的**天生 root**形态）⇒ rc=1，privilege=root
-#   RP42SUDO : 非 root，夹具 sudo -n 直接执行           ⇒ rc=1（**与 root 同结论**），privilege=sudo
-#   RP42NONE : 非 root，sudo 存在但恒失败（无提权通道）  ⇒ rc=2（**不是** 0=『防护缺失』）
+#   RP42SUDO : id -u 报 1000，夹具 sudo -n 直接执行         ⇒ rc=1（**与 root 同结论**），privilege=sudo
+#   RP42NONE : id -u 报 1000，sudo 存在但恒失败（无提权通道）⇒ rc=2（**不是** 0=『防护缺失』）
+# ⚠️ 三份都必须**显式指定 uid**：只造"假 root"是不够的 —— 宿主本身若是 root（Linux 上常见），
+#    "非 root"两条用例会被宿主身份顶掉（实测在 Linux/root 上 3 条断言失败）。
 RP42ROOT="$D/root/t42_root"; RP42SUDO="$D/root/t42_sudo"; RP42NONE="$D/root/t42_none"
 for r in "$RP42ROOT" "$RP42SUDO" "$RP42NONE"; do
   build_root "$r" ""
   printf '#!/bin/sh\necho Enforcing\n' > "$r/usr/sbin/getenforce"; chmod +x "$r/usr/sbin/getenforce"
 done
-fake_root_id "$RP42ROOT"
+fake_uid "$RP42ROOT" 0
+fake_uid "$RP42SUDO" 1000
+fake_uid "$RP42NONE" 1000
 break_sudo "$RP42NONE"
 
 expect "root（pct exec 形态）⇒ getenforce=Enforcing 判在位（rc=1）" \
