@@ -18,9 +18,9 @@ import (
 // original code.
 
 type PrismIR struct {
-	PrismIRVersion string       `json:"prismir_version"`
-	Meta           PrismIRMeta  `json:"meta"`
-	Input          PrismIRInput `json:"input"`
+	PrismIRVersion string        `json:"prismir_version"`
+	Meta           PrismIRMeta   `json:"meta"`
+	Input          PrismIRInput  `json:"input"`
 	Output         PrismIROutput `json:"output"`
 }
 
@@ -40,11 +40,11 @@ type PrismIRMeta struct {
 // ----------------------------------------------------------
 
 type PrismIRInput struct {
-	HostID            string                `json:"host_id"`
-	SSAMScore         float64               `json:"ssam_score"`
-	FailedChecks      []IRCheckFailure      `json:"failed_checks"`
-	PropagationEdges  []IRPropagationEdge   `json:"propagation_edges,omitempty"`
-	Config            IRPrismConfig         `json:"config"`
+	HostID           string              `json:"host_id"`
+	SSAMScore        float64             `json:"ssam_score"`
+	FailedChecks     []IRCheckFailure    `json:"failed_checks"`
+	PropagationEdges []IRPropagationEdge `json:"propagation_edges,omitempty"`
+	Config           IRPrismConfig       `json:"config"`
 }
 
 type IRCheckFailure struct {
@@ -94,7 +94,7 @@ type IRCoreLayer struct {
 // Semantic Layer
 
 type IRSemanticLayer struct {
-	StateVector  [4]float64    `json:"state_vector"`
+	StateVector   [4]float64   `json:"state_vector"`
 	DominantState string       `json:"dominant_state"`
 	Membership    IRMembership `json:"membership"`
 }
@@ -109,12 +109,12 @@ type IRMembership struct {
 // Inference Layer
 
 type IRInferenceLayer struct {
-	HorizonDays  int       `json:"horizon_days"`
+	HorizonDays  int        `json:"horizon_days"`
 	FutureVector [4]float64 `json:"future_vector"`
-	Confidence   float64   `json:"confidence"`
-	Trend        string    `json:"trend"`
-	CollapseRisk float64   `json:"collapse_risk"`
-	Model        string    `json:"model"`
+	Confidence   float64    `json:"confidence"`
+	Trend        string     `json:"trend"`
+	CollapseRisk float64    `json:"collapse_risk"`
+	Model        string     `json:"model"`
 }
 
 // ----------------------------------------------------------

@@ -3,14 +3,14 @@ package prism
 func DefaultConfig() PrismConfig {
 	return PrismConfig{
 		// Core Layer
-		DebtAlpha:    1.2,
-		PropCap:      0.25,
-		DebtCap:      0.30,
-		DebtNormDays: 1500.0,
-		PathDecay:    0.80,
-		MaxPathDepth: 5,
-		ScoreFloor:   0.15,
-		CollapseBeta: 1.5,
+		DebtAlpha:       1.2,
+		PropCap:         0.25,
+		DebtCap:         0.30,
+		DebtNormDays:    1500.0,
+		PathDecay:       0.80,
+		MaxPathDepth:    5,
+		ScoreFloor:      0.15,
+		CollapseBeta:    1.5,
 		AggregationMode: "rss",
 
 		// Semantic Layer

@@ -1,4 +1,4 @@
-﻿package prism
+package prism
 
 import (
 	"math"
@@ -122,7 +122,7 @@ func TestComputeRiskVelocity_StaleTimestamp(t *testing.T) {
 func TestSemanticState_PerfectScore(t *testing.T) {
 	cfg := DefaultConfig()
 	core := &AssetRiskResult{
-		HostID:    "perfect",
+		HostID:     "perfect",
 		PrismScore: 100.0,
 	}
 	report := ComputeSemanticState(core, cfg)
@@ -152,7 +152,7 @@ func TestSemanticState_PerfectScore(t *testing.T) {
 func TestSemanticState_ZeroScore(t *testing.T) {
 	cfg := DefaultConfig()
 	core := &AssetRiskResult{
-		HostID:    "broken",
+		HostID:     "broken",
 		PrismScore: 0.0,
 	}
 	report := ComputeSemanticState(core, cfg)
@@ -172,7 +172,7 @@ func TestSemanticState_DegradedTransition(t *testing.T) {
 
 	// Score at threshold boundary: 70% 鈫?70/100=0.70 鈫?exactly at T_degraded
 	core := &AssetRiskResult{
-		HostID:    "degrading",
+		HostID:     "degrading",
 		PrismScore: 70.0,
 	}
 	report := ComputeSemanticState(core, cfg)
@@ -190,7 +190,7 @@ func TestSemanticState_UntrustedTransition(t *testing.T) {
 	cfg := DefaultConfig()
 
 	core := &AssetRiskResult{
-		HostID:    "untrusted",
+		HostID:     "untrusted",
 		PrismScore: 50.0, // exactly at UntrustedThreshold
 	}
 	report := ComputeSemanticState(core, cfg)
@@ -208,7 +208,7 @@ func TestSemanticState_FuzzyBoundaries(t *testing.T) {
 
 	// Score 60 should be partly Degraded, partly Untrusted
 	core := &AssetRiskResult{
-		HostID:    "fuzzy",
+		HostID:     "fuzzy",
 		PrismScore: 60.0,
 	}
 	report := ComputeSemanticState(core, cfg)

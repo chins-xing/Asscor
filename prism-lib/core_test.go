@@ -107,7 +107,7 @@ func TestComputeDynamicScore_WithPropagation(t *testing.T) {
 func TestComputeDynamicScore_WithDebt(t *testing.T) {
 	cfg := DefaultConfig()
 	node := &NodeState{
-		HostID: "host",
+		HostID:    "host",
 		SSAMScore: 90,
 		FailedChecks: []CheckFailure{
 			{CheckID: "AS-001", Delta: -15, FailUnix: 0},
@@ -257,17 +257,17 @@ func TestScoreFloorDefaultDoesNotFloorHealthyNode(t *testing.T) {
 func TestWeightedTransmission(t *testing.T) {
 	base := 0.3
 	cases := []struct {
-		name  string
-		ssam  float64
-		want  float64
+		name string
+		ssam float64
+		want float64
 	}{
-		{"full-risk", 0, base},                      // 最高风险 → 满传播
+		{"full-risk", 0, base},                         // 最高风险 → 满传播
 		{"mid-risk", 58.27, base * (0.1 + 0.9*0.4173)}, // 中等 → 按风险缩放
-		{"low-risk", 90, base * (0.1 + 0.9*0.1)},    // 低风险 → 衰减到近保底
-		{"no-risk", 100, base * 0.1},                // 无风险 → 保底传播 (残余风险)
-		{"clamp-over", 120, base * 0.1},                   // ssam>100 → 视为无风险 → 保底
-		{"clamp-under", -10, base},                        // ssam<0 → 视为最高风险 → 满传播
-		{"zero-base", 50, 0},                              // base=0 → 0 (调用时 base 传 0)
+		{"low-risk", 90, base * (0.1 + 0.9*0.1)},       // 低风险 → 衰减到近保底
+		{"no-risk", 100, base * 0.1},                   // 无风险 → 保底传播 (残余风险)
+		{"clamp-over", 120, base * 0.1},                // ssam>100 → 视为无风险 → 保底
+		{"clamp-under", -10, base},                     // ssam<0 → 视为最高风险 → 满传播
+		{"zero-base", 50, 0},                           // base=0 → 0 (调用时 base 传 0)
 	}
 	for _, c := range cases {
 		got := WeightedTransmission(base, c.ssam)

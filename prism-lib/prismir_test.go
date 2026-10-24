@@ -45,15 +45,15 @@ func sampleIR() PrismIR {
 	}
 
 	inf := FutureRiskReport{
-		HostID:       "prod-web-01",
-		HorizonDays:  30,
-		StableProb:   0.08,
-		DegradedProb: 0.35,
+		HostID:        "prod-web-01",
+		HorizonDays:   30,
+		StableProb:    0.08,
+		DegradedProb:  0.35,
 		UntrustedProb: 0.38,
-		CollapseProb: 0.19,
-		Confidence:   0.85,
-		Trend:        "collapsing",
-		CollapseRisk: 0.57,
+		CollapseProb:  0.19,
+		Confidence:    0.85,
+		Trend:         "collapsing",
+		CollapseRisk:  0.57,
 	}
 
 	return NewIR(node, edges, cfg, core, sem, inf, "MarkovChain")
