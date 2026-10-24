@@ -186,6 +186,8 @@ docs/              白皮书 / 审计报告 / 架构审查（20 章中英双语�
 | PowerShell `Get-Content -Raw` + `Set-Content` 改中文文件后乱码 | 往返会把 UTF-8 中文写成替换字符并加 BOM | 改文本用编辑器/`write` 工具；校验用 `python -c "open(p,'rb').read().decode('utf-8')"` |
 | `git check-ignore -v` 返回 0 却以为"被忽略" | 命中**否定规则**时它同样返回 0 | 判"是否会被跟踪"只信 `git check-ignore -q`（rc=1 = 会被跟踪） |
 | `lab-diff` / `test-matrix-classification` 在 Windows 必红 | 前者需 `unshare -rm`；后者需 exec bash 桩（Windows 上 `WinError 193`） | 这两组只在 Linux 上算数；在 Windows 上请给出"干净 HEAD 同样红"的对照再下结论 |
+| `git push` 报 `Failed to connect to github.com port 443`，但 `ping 223.5.5.5` 通 | **本地代理没起**（该环境下 GitHub 需经代理） | 先确认代理端口在监听（`Test-NetConnection 127.0.0.1 -Port <端口>`），再用 `git -c http.proxy=http://127.0.0.1:<端口> push`。**推送失败不要反复重试**，确认代理后推一次即可；本地提交不会丢 |
+| 直接 `gofmt -l` 与"按入库内容算"结果差几百个 | `git archive` 默认也受 `core.autocrlf` 影响（会导出 CRLF） | 要用 `git -c core.autocrlf=false archive HEAD \| tar -x -C <dir>` 再 `gofmt -l`，那才是**入库内容**的真实形态 |
 
 内仓提醒：`ssam-lib/` 与 `prism-lib/` **各自是独立 git 仓库**，外层按普通目录跟踪其文件。
 改这两个库时，**外层提交 + 内仓提交要都做**（否则内仓会出现"旧代码 + 一堆未提交改动"）。
