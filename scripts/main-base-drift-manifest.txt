@@ -101,4 +101,4 @@ d12675a81bb0539b43ccee7b627883c92c248038  702542f300be119544a38bdbf2f130104cabaa
 # `70c65cc`（白皮书订正批次，2026-10-22）把 ScoreFloor 注释从"默认 0.40"改成代码实际的 0.15；
 # 该提交 95% 是 docs/ 白皮书，唯一代码改动就是这一行注释，**不在方向① 的 15 个提交里**。
 # 现登记为 ARC-only 差异；如需 main 的注释也正确，可单条 cherry-pick 该文件的这一 hunk。
-16672d1d28025ce8e0dd3cc0034cfe61aee348b9  8545d3ac91d3add757ee6477a26636eb1e5a3c55  prism-lib/types.go  # 仅 ScoreFloor 注释 0.40 → 0.15（70c65cc）；行为两侧一致（config.go 均 0.15）
+108da55b3e6e01bb4a03eae46ab0542c2bf06573  9e75eec42347b016c58610a6fa12c2f8152603ae  prism-lib/types.go  # 仅 ScoreFloor 注释 0.40 → 0.15（70c65cc）；行为两侧一致（config.go 均 0.15）
