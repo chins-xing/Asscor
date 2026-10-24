@@ -160,7 +160,7 @@
 | D-3 | **`-group-by` 缺省仍是 `row`（逐行）** | `cmd/edgecompare/fit.go` 的 `fs.String("group-by", "", …)` + `fitGroups` 的 `case "", "row"`；手册 §5.5 / 设计 D10 已写明风险 | ⏳ **有意保留历史口径**：改缺省会让既有命令的输出口径静默改变；报告头已强制写明单位。是否翻转缺省**待定案** |
 | D-4 | **`edge_probe.sh` 在 qemu 上不是 root 等价** | 探针经 `lab_target_exec`（登录用户 `asc`）执行，而取数是 root 等价 ⇒ `condition_probes[].condition_holds` 与 `checks[]` 可能不一致（如 `EF-APPARMOR` 走 `aa-status`，`asc` 下 rc=4）；操作手册 §7 第 12 条 | ⏳ **未改**：改它要动 `edge_probe.sh` 与 20 条离线判据（判据语义变更）。对 S 组不阻断，但它**不是**一致证据 |
 | D-5 | **19 个"半跟踪"历史文件**（3 个 `attack-*.json`、3 份 `records-wsl-clab-14-20260912-smoke*.jsonl`、13 个 `run.d/` 碎片） | 操作手册 §4.6：`git ls-files lunwen/clab-lab/data` = 146、`git status --ignored` = 33，其中 19 个是"同类兄弟已入库、这几个没入" | ⏳ **待定是否补录**：现行规则（Task 20 起白名单 + 规则入库）已不让**新**数据依赖记忆；这 19 个是规则化之前的存量，补录会改历史证据集，需维护者确认 |
-| D-6 | **`PP-01`：论文 σ 上界 `[0,100]` 不成立** | `ssam-lib/formulas_v2.go` 的 `SSAMV20Formula` 无 100 钳位、`exposureCoeff`/`threatCoeff` 只设下界；台账 F.1 | ⏳ **待定案**（改法 (a)/(b) 见台账）。本方向"无需改动论文"的判定**不关闭**它 |
+| D-6 | **`PP-01`：σ 上界 `[0,100]` 不成立** | `ssam-lib/formulas_v2.go` 的 `SSAMV20Formula` 无 100 钳位、`exposureCoeff`/`threatCoeff` 只设下界；台账 F.1 | ✅ **已结案（2026-10-23）**：按「文档与代码不一致时以代码为唯一权威」⇒ **不加钳位**，论文三份与文档统一写"名义 0–100、上界不设"；论文附 `108 → [88.4,127.6]` 算例 |
 | D-7 | **`AL-02`：台账 F1/F2/F3 的脱敏口径仍未定**（管理 VLAN 网段/主机名、实验数据里的实验代号、真名+邮箱） | 台账 F.1；Part F 的 F4–F7 已执行 | ⏳ **未定案**：引用 F1/F2/F3 结论前先确认新口径；Task 26 未动这三项 |
 | D-8 | **VIF 误判这个教训（工具口径）：秩亏 ≠ 每列都 ∞** | 第二次审计 Important-1：`build/fit24/analysis.py` 旧 `vif_values()` 把"正规方程出现 `<1e-14` 主元"判成该列 `inf`；秩亏时对**每列**触发 ⇒ 误报"12 列全 ∞"（真值：11 列 ∞、`EF-3FA` = 12/11）。修法：用 MGS/QR 求 LS 投影后按 `1/(1−R²)` 算 | 📝 **已修脚本并重跑产物**（诊断文件是重跑产生）；教训固化为口径：**共线性诊断必须按定义算 R²，不能把"求解器奇异"当成"该列被完全解释"** |
 
