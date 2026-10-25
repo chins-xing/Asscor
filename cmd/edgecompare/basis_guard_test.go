@@ -440,8 +440,11 @@ func TestFitCLIHonoursBasisSwitches(t *testing.T) {
 	records := writeRecordsJSONL(t, "fit-nobasis.jsonl", recs)
 	cfg := writeConfig(t, "fit-base.ini",
 		"[edge_factors.model]\nmodel = graph\np_floor = 0.5\nlambda.attack_surface = 1\nvector.A = 1,0,0,0,0\nvector.B = 1,0,0,0,0\n")
+	// `-group-by row`：本用例的夹具是**合成单实例**数据（`SYN-*` 全部归到同一实例），
+	// 而缺省口径已改为按实例 ⇒ 不显式给 row 会因"折数 3 > 实例数 1"被正确拒绝。
+	// 这里测的是**标签依据过滤**，不是重抽样口径，故钉死历史口径。
 	base := []string{"-records", records, "-fit", "-config", cfg, "-factors", "A=0.5,B=0.5",
-		"-edges", "A|B", "-seed", "7", "-folds", "3", "-l2", "0.01"}
+		"-edges", "A|B", "-seed", "7", "-folds", "3", "-l2", "0.01", "-group-by", "row"}
 
 	code, _, stderr := runCLIForTest(t, base...)
 	if code == 0 {

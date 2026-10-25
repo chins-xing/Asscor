@@ -33,8 +33,9 @@
 // 于是"打分输入被破坏"的记录**不产生任何错误**（设计矩阵只吃因子链与标签、根本不读域分）——
 // `-fit` 照常 `exit=0` 并产出一份逐字节正常的参数段。现在它同样在守卫之前逐条校验、`exit=1`，
 // 且"输入被破坏"不会再被记成"没有可用的标签"。
-// `-group-by`（仅 `-fit`）决定 k 折/自助法的**重抽样单位**：缺省逐行（历史口径），
-// `scenario` = 按实例整组进/出（矩阵的两臂读数与分数逐项相同、只差标签，按行切折会把泛化误差估低）。
+// `-group-by`（仅 `-fit`）决定 k 折/自助法的**重抽样单位**：**缺省 `scenario`**（按实例，权威口径），
+// `row` = 逐行（历史口径，仅作对照）。按行切折时同一实例的两臂读数与分数逐项相同、只差标签
+// ⇒ 泛化误差被系统性估低，故权威口径必须是缺省；显式 `row` 仍可复现旧产物。
 //
 // **门禁① 的能力边界（第一次审计 Minor-4 —— 引用这张表前务必读这一段）**：
 // 上面的 0/1/3 判的是**fail-fast 的可用性**：记录能不能读、依据能不能判、因子有没有覆盖、
@@ -117,10 +118,10 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	folds := fs.Int("folds", fitDefaultFolds, "交叉验证折数")
 	l2 := fs.Float64("l2", fitDefaultL2, "L2 相对收缩率：标准化后每一列收缩 1/(1+l2)（不是绝对脊参数，见 FitOptions.L2 注释）")
 	l1 := fs.Float64("l1", 0, "L1 正则系数（默认 0：稀疏化由先验边集上限承担）")
-	groupBy := fs.String("group-by", "",
-		"**重抽样单位**（仅 -fit）：row（缺省 = 逐行，历史口径）｜scenario（按 `scenario_id` 去掉尾部 -NN 实例号后的场景分组）。"+
+	groupBy := fs.String("group-by", "scenario",
+		"**重抽样单位**（仅 -fit）：scenario（**缺省** = 按实例，权威口径）｜row（逐行，历史口径，仅作对照）。"+
 			"按行切折时同一实例的两臂会同时进训练与验证集（两臂读数与分数逐项相同、只差标签）⇒ 泛化误差被系统性估低；"+
-			"矩阵数据必须用 scenario。取值会写进拟合报告头，未知取值是用法错误（不静默回落到逐行）")
+			"矩阵数据必须用 scenario，故它是缺省值。取值会写进拟合报告头，未知取值是用法错误（不静默回落到逐行）")
 	thresholdOverride := fs.Float64("threshold", 0,
 		"覆盖记录里的 observed.threshold（> 0；**仅用于敏感性分析**，0 = 用记录自带的判定线）。"+
 			"选模必须用部署的真实判定线，故该开关不得出现在默认路径上；使用时报告头会写明覆盖值")
@@ -138,6 +139,14 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
+	// `-group-by` 的**缺省值现在是 scenario**（权威口径）⇒ 不能用"值非空"判断操作者是否显式给了它。
+	// 只有**显式给过**时，"对比模式下给了它"才是一句需要喊出来的误解（见下面的校验）。
+	groupBySet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "group-by" {
+			groupBySet = true
+		}
+	})
 	if strings.TrimSpace(*recordsPath) == "" {
 		fmt.Fprintln(stderr, "edgecompare: -records 是必填项（实验 JSONL 路径）")
 		fs.Usage()
@@ -151,7 +160,8 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	}
 	// `-group-by` 是**拟合的重抽样单位**：对比模式下没有切折/自助法，给了它就意味着操作者以为
 	// 这次比较按实例重抽了 —— 那是必须喊出来的误解，不是可以静默忽略的多余开关。
-	if strings.TrimSpace(*groupBy) != "" && !*fitMode {
+	// 注意判据是"**显式给过**"（groupBySet），不是"值非空"：缺省值现在是 scenario。
+	if groupBySet && !*fitMode {
 		fmt.Fprintln(stderr, "edgecompare: -group-by 只对 -fit 生效（它决定 k 折/自助法的重抽样单位）—— 对比模式不做重抽样，给了它会让『这次是按实例抽的』成为一句没有依据的话")
 		return exitUsage
 	}

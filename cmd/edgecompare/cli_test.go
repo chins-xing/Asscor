@@ -298,9 +298,12 @@ func TestCLIFitExportsReparseableSection(t *testing.T) {
 	records := writeRecordsJSONL(t, "syn.jsonl", syntheticRecords(t, 0.4, 7))
 	cfg := writeConfig(t, "base.ini",
 		"[edge_factors.model]\nmodel = graph\np_floor = 0.5\nlambda.attack_surface = 1\nvector.A = 1,0,0,0,0\nvector.B = 1,0,0,0,0\n")
+	// `-group-by row`：合成夹具是**单实例**（`SYN-%04d` 的尾号归一并后只有一个实例），
+	// 缺省口径已改为按实例 ⇒ 不显式给 row 会因"折数 3 > 实例数 1"被拒绝。
+	// 本用例测的是**导出产物可回填**，与重抽样口径无关，故显式钉住历史口径。
 	code, stdout, stderr := runCLIForTest(t,
 		"-records", records, "-fit", "-config", cfg, "-factors", "A=0.5,B=0.5", "-edges", "A|B",
-		"-seed", "7", "-folds", "3", "-l2", "0.01")
+		"-seed", "7", "-folds", "3", "-l2", "0.01", "-group-by", "row")
 	if code != 0 {
 		t.Fatalf("退出码 = %d, want 0；stderr=%s", code, stderr)
 	}
@@ -327,10 +330,51 @@ func TestCLIFitExportsReparseableSection(t *testing.T) {
 	}
 }
 
+// TestCLIDefaultGroupByIsScenario：`-group-by` 的**缺省**必须是按实例（权威口径）。
+//
+// 为什么：按行切折时同一实例的两臂会同时进训练与验证集（arm limitation：两臂读数与分数逐项相同、
+// 只差标签）⇒ 泛化误差被系统性估低；论文与台账引用的数字都是按实例口径
+// （CV = ln 2 = 0.693147；逐行为 3.491897）。缺省=权威值，误用面最小。
+// 同时钉住逃生门：显式 `-group-by row` 仍能复现历史口径。
+func TestCLIDefaultGroupByIsScenario(t *testing.T) {
+	recs := generateSyntheticRecords(t, 0.4, 7, 60)
+	// 改成 3 个**互不相同**的实例名（无尾部 `-NN` 时 instanceStem 不剥离，正好每 20 条一实例）。
+	for i := range recs {
+		recs[i].ScenarioID = fmt.Sprintf("DEF-%c", 'A'+i/20)
+	}
+	records := writeRecordsJSONL(t, "default-group.jsonl", recs)
+	cfg := writeConfig(t, "def-base.ini",
+		"[edge_factors.model]\nmodel = graph\np_floor = 0.5\nlambda.attack_surface = 1\nvector.A = 1,0,0,0,0\nvector.B = 1,0,0,0,0\n")
+	common := []string{"-records", records, "-fit", "-config", cfg, "-factors", "A=0.5,B=0.5",
+		"-edges", "A|B", "-seed", "7", "-folds", "3", "-l2", "0.01"}
+
+	code, stdout, stderr := runCLIForTest(t, common...)
+	if code != 0 {
+		t.Fatalf("缺省（按实例）下 3 实例/3 折应当成功：rc=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "重抽样单位: **按实例**") || !strings.Contains(stdout, "-group-by=scenario") {
+		t.Fatalf("缺省必须写「按实例」并在报告头标明 -group-by=scenario：\n%s", truncForTest(stdout, 1200))
+	}
+	if !strings.Contains(stdout, "实例数 3") {
+		t.Errorf("报告头必须给出实例数（本例 3）：\n%s", truncForTest(stdout, 1200))
+	}
+	if strings.Contains(stdout, "重抽样单位: **逐行**") {
+		t.Errorf("缺省不得退化成逐行口径")
+	}
+
+	// 逃生门：显式 row 仍可复现历史口径。
+	code, stdout, stderr = runCLIForTest(t, append(append([]string{}, common...), "-group-by", "row")...)
+	if code != 0 {
+		t.Fatalf("显式 -group-by row 应当成功：rc=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "重抽样单位: **逐行**") {
+		t.Fatalf("显式 row 必须写「逐行」口径：\n%s", truncForTest(stdout, 1200))
+	}
+}
+
 // TestCLIFitRequiresBaseParams：拟合必须有基准参数（-config + -factors），
 // 缺一不可 —— 凭空造一份基准会让拟合结果与任何真实部署都没有关系。
-func TestCLIFitRequiresBaseParams(t *testing.T) {
-	records := writeRecordsJSONL(t, "syn.jsonl", syntheticRecords(t, 0.4, 7))
+func TestCLIFitRequiresBaseParams(t *testing.T) {	records := writeRecordsJSONL(t, "syn.jsonl", syntheticRecords(t, 0.4, 7))
 	for _, args := range [][]string{
 		{"-records", records, "-fit"},
 		{"-records", records, "-fit", "-config", writeConfig(t, "base.ini", "[edge_factors.model]\nmodel = graph\np_floor = 0.5\nlambda.attack_surface = 1\nvector.A = 1,0,0,0,0\n")},
