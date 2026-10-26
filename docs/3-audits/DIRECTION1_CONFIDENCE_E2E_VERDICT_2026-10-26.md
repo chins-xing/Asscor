@@ -138,6 +138,36 @@ Total        = (intrinsic×50 + SPC×30 + threat×20) / 100 × 100
 - **修后**：`OT-008` 的 `confidence = 0.05`（期望值），优先级链 **80/80 不变**、`point` 不变；
 - 回归：`internal/config/confidence_floor_test.go`（先红后绿：修前 `want 0.05, got 0.01`）。
 
+## 2.5 `beta_bayes` 聚合（2026-10-26 实现）
+
+**定义**（保兼容的 Beta 收缩）：把每条观测的可信度视为对"该扣分成立"这一伯努利事件的**分数次观测**，
+先验取 κ 个"完全可信"伪观测（κ = `prior_strength`），后验均值
+
+```
+c̃ = (κ·1 + c) / (κ + 1) = 1 − (1−c)/(κ+1)
+```
+
+再以 c̃ 代入 §2.1 的 E/U 公式。两条不变量：`c=1 ⇒ c̃=1`（与历史逐位一致）、`κ→0 ⇒ c̃=c`
+（`weighted_evidence` 是它的退化情形）。**方向**：收缩把低可信观测抬向 1 ⇒ 扣分更多（分数更低）、
+方差更小（区间更窄）；不会压低高可信观测。
+
+**实测**（VM 910，同一批 80 条检查、同一份规则表，只改 `algorithm`）：
+
+| 口径 | point | lower95 | upper95 | evidence_confidence |
+|---|---|---|---|---|
+| `weighted_evidence` | **77.12** | 71.652 | 82.588 | 0.502 |
+| **`beta_bayes` κ=2** | **69.32** | 64.932 | 73.708 | **0.834** |
+
+逐条 `effective_confidence` 与公式逐一核对（`(2+c)/3`）：
+`OT-008` 0.11→**0.7033**、`OT-009` 0.22→**0.7400**、`RS-016` 0.66→**0.8867**、`AS-003` 0.55→**0.8500**。
+
+**可观测性**：`CheckResult` 新增 additive 字段 `effective_confidence`（实际生效权重）——
+`confidence` 是规则解析值（含 floor 夹取），`effective_confidence` 是引擎真正消费的值；
+在 `beta_bayes` 下两者不同，报告里两个数并存，避免再次出现"显示值 ≠ 计算值"。
+
+**未做**：可插拔算法注册表（`RegisterAlgorithm`/`Aggregator`）仍不存在；`prior_strength` 的**标定**
+（κ=2 是先验默认，不是实测最优值）。
+
 ## 3. 修复与回归（本次提交）
 
 - `internal/engine/assessor.go`：`legacyCheckInputs` 在映射前调用 `a.cfg.ResolveChecks(result.Checks)`，
@@ -163,7 +193,7 @@ Total        = (intrinsic×50 + SPC×30 + threat×20) / 100 × 100
 
 | 项 | 状态 |
 |---|---|
-| `[confidence.algorithm]` / `prior_strength`（beta_bayes） | **未实现**（配置里是 reserved，写别的取值会加载失败）；当前只有 `weighted_evidence` |
+| `[confidence.algorithm]` / `prior_strength`（beta_bayes） | ✅ **已实现（2026-10-26）**：`c̃ = (κ + c)/(κ + 1)` 后再代入同一组 E/U；`c=1 ⇒ c̃=1`（历史恒等）、`κ→0 ⇒ c̃=c`。实测同一批数据、同一规则表：`weighted_evidence` 77.12 / CI[71.65,82.59] / ev 0.502 → **`beta_bayes` κ=2：69.32 / CI[64.93,73.71] / ev 0.834**；逐条 `effective_confidence` 全部命中 `(2+c)/3`（如 `OT-008` 0.11→0.7033、`AS-003` 0.55→0.85）。**可插拔注册表仍不存在**（只有这两个取值） |
 | `[confidence.checkrx]`（正则选择器） | ✅ **已端到端实测**（见 §2.1：`^ot-0 = 0.22` 命中 80 条中的 OT 组，且被精确 ID 规则正确压过） |
 | 适配器来源置信度 | 依赖 adapter 侧 findings 携带 `Source`/`Confidence`（`internal/adapter`）；本机 80 条里大部分是**内置检查**，所以实际控制手段是 `[confidence.check]` + `default` |
 | `[user_check.*]` 在 legacy 路径 | ✅ **已修（2026-10-26）**：`asscor` 此前只空白导入 checks、从不装配 `[user_check.*]`；现补 `registerUserChecks`（与 kernel 组合根同一步）。修前 80 条 → 修后 **83 条**（`CU-*` 三条 `source=user`、`confidence=0.33`）|

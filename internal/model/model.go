@@ -199,6 +199,13 @@ type CheckResult struct {
 	// before scoring. 0/unspecified means the scorer's default applies (1.0
 	// under the disabled policy — legacy behavior).
 	Confidence float64 `json:"confidence,omitempty"`
+	// EffectiveConfidence is the weight the scorer actually used after
+	// normalization (floor / default) and — when [confidence] algorithm is
+	// beta_bayes — the Beta shrinkage c̃ = (κ+c)/(κ+1). It equals Confidence
+	// under weighted_evidence (or when the policy is disabled), and differs
+	// exactly where an operator would otherwise have to guess. Additive:
+	// omitted when zero, so existing artifacts/consumers are unaffected.
+	EffectiveConfidence float64 `json:"effective_confidence,omitempty"`
 }
 
 type DomainScores struct {

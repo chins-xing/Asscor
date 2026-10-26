@@ -481,6 +481,8 @@ func ConfidencePolicyFromConfig(cfg *config.Config) ssamlib.ConfidencePolicy {
 		Default:       cc.Default,
 		Floor:         cc.Floor,
 		PriorStrength: cc.PriorStrength,
+		// 聚合算法：""（未设）与 weighted_evidence 等价；beta_bayes 走 Beta 收缩。
+		Algorithm: cc.Algorithm,
 	}
 }
 
@@ -498,8 +500,14 @@ func (a *Assessor) legacyCheckInputs(result *model.AssessmentResult) []ssamlib.C
 	// `ssam.ResolveCheckConfidence` 本身只是 `(*config.Config).ResolveChecks` 的薄包装
 	// （其注释即"两条路径消费同一份规则表"），这里直接调用共享实现，避免新增
 	// `internal/engine → internal/engine/ssam` 的依赖。
+	policy := ConfidencePolicyFromConfig(a.cfg)
 	if a.cfg != nil {
 		a.cfg.ResolveChecks(result.Checks)
+	}
+	// 记录**实际生效权重**（beta_bayes 下与规则解析值不同）：报告里两个数并存，
+	// 避免"显示值 ≠ 计算值"（floor 曾出现过同类问题）。
+	for i := range result.Checks {
+		result.Checks[i].EffectiveConfidence = ssamlib.EffectiveConfidence(result.Checks[i].Confidence, policy)
 	}
 	inputs := make([]ssamlib.CheckInput, 0, len(result.Checks))
 	for _, c := range result.Checks {

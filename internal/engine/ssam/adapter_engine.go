@@ -58,6 +58,11 @@ func (a *EngineAdapter) ComputeScore(ctx context.Context, result *model.Assessme
 	// table before mapping into the library input (design §3). Results that
 	// already carry an explicit upstream confidence are preserved.
 	ResolveCheckConfidence(a.confCfgPtr(), result)
+	// 记录实际生效权重（beta_bayes 下是收缩后的 c̃），与 legacy 路径同口径。
+	policy := ConfigToConfidencePolicy(a.confCfgPtr())
+	for i := range result.Checks {
+		result.Checks[i].EffectiveConfidence = EffectiveConfidence(result.Checks[i].Confidence, policy)
+	}
 
 	input := &AssessmentInput{
 		HostID:      result.HostID,

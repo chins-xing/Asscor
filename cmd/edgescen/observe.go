@@ -707,7 +707,7 @@ func checkObservations(cfg *config.Config, result *model.AssessmentResult, injec
 			Domain:     c.Domain,
 			Passed:     c.Passed,
 			Delta:      c.Delta,
-			Confidence: enginessam.NormalizeConfidence(c.Confidence, policy),
+			Confidence: enginessam.EffectiveConfidence(c.Confidence, policy),
 			TS:         ts,
 		})
 	}

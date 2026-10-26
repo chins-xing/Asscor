@@ -139,26 +139,29 @@ SRD `ExternalCheckResult` 增加 `Confidence`，`pipeline` 装配 `CheckFailure`
 ## 3. 可信度规则引擎（config 内可配置）
 
 初始可信度**不硬编码单一值**：由 `[confidence]` 段按**规则表**计算。**规则表这一层已实现**
-（5 层优先级 + 精确/正则/来源/域/default）。**聚合算法替换未实现**：设计初稿曾规划
-“算法注册表 + config 引用”，实际只有 `weighted_evidence` 一种聚合（见 §3.3）。
+（5 层优先级 + 精确/正则/来源/域/default）。**聚合实现两种、运行时可选**：
+`weighted_evidence`（缺省）与 **`beta_bayes`**（Beta 收缩，2026-10-26 实现，见 §3.3）。
+设计初稿规划的**可插拔算法注册表**（`RegisterAlgorithm`/`Aggregator`）**仍不存在** ——
+只有这两个取值，其它值在加载时 fail-fast。
 
 ### 3.1 config.ini 语法（实现现状）
 
-> **实现与本节早期的设计稿有两处收敛**（审计 I-10）：
-> 1. `[confidence.algorithm]` 段**完全不解析**；`floor` / `prior_strength` 只有写在
+> **实现与本节早期的设计稿的收敛**（审计 I-10，2026-10-26 更新）：
+> 1. `[confidence.algorithm]` 段**完全不解析**；`algorithm` / `prior_strength` 只有写在
 >    `[confidence]` 下才生效。独立段已删除。
-> 2. `algorithm` / `prior_strength` 标为 **reserved（无消费）**：唯一实现的聚合是
->    `weighted_evidence`；写其它 `algorithm` 值在**加载时即报错**（不再静默同分）。
+> 2. `algorithm` 接受 **两个**取值：`weighted_evidence`（缺省）与 **`beta_bayes`**
+>    （2026-10-26 实现）；写其它值在**加载时即报错**（不再静默同分）。
+>    `prior_strength` 是 beta_bayes 的先验强度 κ（缺省 2.0），weighted_evidence 忽略它。
 >    字段级 DSL（`[confidence.check.<ID>]`）**不存在**，仅为“未实现（保留设计）”。
 
 ```ini
 [confidence]
 enabled = false                        ; 默认禁用 → 与历史评分逐位一致
-algorithm = weighted_evidence          ; reserved；仅接受这一个值，其它值加载失败
+algorithm = weighted_evidence          ; weighted_evidence | beta_bayes；其它值加载失败
 accept_by_lower_bound = false          ; true=可接受性按 95% 区间下界判定
 default = 1.0                          ; 规则未匹配时的兜底可信度
 floor = 0.05                           ; 可信度下限（必须 < 1；0 视为未指定）
-; prior_strength = 2.0                 ; reserved（无消费）：beta_bayes 未实现
+; prior_strength = 2.0                 ; beta_bayes 的先验强度 κ（缺省 2.0；weighted_evidence 忽略）
 
 ; ---- 规则优先级: 精确检查ID > 正则 > 来源 > 域 > default ----
 [confidence.check]                     ; 精确 check_id（小写；Resolve 用小写比对）
@@ -210,16 +213,26 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 ### 3.3 规则 DSL 与“算法写进 config”（未实现，保留设计）
 
 设计意图是“更精细规则 + 算法直接写在 config 内、供使用者自行替换”。
-**截至 2026-10-22，以下两项均未实现**（审计 I-10），本节只保留设计意图：
+**规则 DSL 未实现；聚合有两条且运行时可选**（审计 I-10，2026-10-26 更新）：
 
 - **规则 DSL**（`[confidence.rules]`）**不存在**：没有 `severity:` / `age_days:` 选择器，
   没有 `&` 组合，也没有表达式求值器。实际能力只有 §3.2 的 5 层查表 + 正则。
-- **算法替换不存在**：没有 `RegisterAlgorithm` / `Aggregator` 注册表，`beta_bayes`
-  没有实现（Go 代码 0 命中）。唯一聚合是 `weighted_evidence`（§2.1–§2.3 公式）；
-  `algorithm` / `prior_strength` 是 **reserved**，未知 `algorithm` 在加载时 fail-fast。
+- **可插拔算法注册表仍不存在**（没有 `RegisterAlgorithm` / `Aggregator`），但**两种聚合已实现**：
 
-> 因此**不得**对外声称“两种聚合器可替换”或“规则 DSL 可配置”。
-> 若未来实现，入口仍是 `[confidence] algorithm = <id>` + 库注册点，但当前两者都不存在。
+  | `algorithm` | 公式 | 性质 |
+  |---|---|---|
+  | `weighted_evidence`（缺省） | `E = Σ\|δ\|·c`、`U = Σ\|δ\|²·c·(1−c)` | 历史口径 |
+  | `beta_bayes` | 先 `c̃ = (κ + c)/(κ + 1)`（κ = `prior_strength`），再代入同一组 E/U | 先验 = κ 个"完全可信"伪观测 |
+
+  **两条不变量**：`c = 1 ⇒ c̃ = 1`（完全可信的观测不受先验影响，与历史逐位一致）；
+  `κ → 0 ⇒ c̃ → c`（`weighted_evidence` 是它的退化情形）。
+  **方向**：收缩把低可信观测**抬向 1** ⇒ 期望扣分变大（**分数更低**）、方差变小（**区间更窄**）；
+  它不会压低高可信观测，也不会越过 1。
+  `prior_strength` 只在 `beta_bayes` 下被消费（缺省 2.0；`0` 视为未设置），
+  未知 `algorithm` 仍在加载时 fail-fast。
+
+> 因此**不得**声称"算法可任意插拔"（注册表不存在）；可以说"两种聚合可选"。
+> 规则 DSL 仍不存在的说法继续成立。
 
 ### 3.4 默认值策略（已落地先验表；仍未标定）
 
@@ -405,7 +418,7 @@ Source 映射为 `builtin`。因此 `[confidence.source] nuclei = 0.7` 可以对
 | Important | I-7 | `NodeState.Confidence` 未用于传播/塌缩/推断（见 §7.1） |
 | Important | I-8 | SRD 侧只透传、不查来源表（见 §7.1） |
 | Important | I-9 | 坏数值**静默**（只有坏正则 fail-fast） |
-| Important | I-10 | `algorithm` / `prior_strength` / `beta_bayes` 是**死配置**（Go 代码 `beta_bayes` 0 命中）；`[confidence.algorithm]` 段不解析 |
+| Important | I-10 | `algorithm` / `prior_strength` / `beta_bayes` 是**死配置**（Go 代码 `beta_bayes` 0 命中）；`[confidence.algorithm]` 段不解析（**2026-10-26 更新**：`beta_bayes` 已实现并被消费；本行保留为历史审计记录） |
 | Important | I-11 | 本节初版「11/11」误导 + `ast.go` 引用错误（已按 7.1 纠正） |
 | Important | I-12 | σ 传播与 `SSAMV20Formula` 三层聚合不一致（见 §7.4） |
 

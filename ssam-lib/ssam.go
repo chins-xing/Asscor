@@ -230,7 +230,7 @@ func ApplyEdgeFactorsToChecksPolicy(edgeFactors []EdgeFactorConfig, checks []Che
 		if check.Passed {
 			continue
 		}
-		c := NormalizeConfidence(check.Confidence, policy)
+		c := EffectiveConfidence(check.Confidence, policy)
 		for id, cfg := range efMap {
 			if cfg.TriggerCheck == check.CheckID {
 				// Multiple failed checks may reference the same trigger
