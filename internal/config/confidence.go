@@ -351,10 +351,22 @@ func parseConfidenceBool(v string) (bool, error) {
 
 // Resolve applies the configured rule table to one check identified by
 // (checkID, sourceKey, domain).
+//
+// 返回的是**生效值**（不是原始规则值）：规则命中后立即按 floor 抬升、按 1 封顶。
+// 为什么：`NormalizeConfidence` 在评分时也会做同样的夹取，但报告的 `confidence`
+// 字段取自本函数的返回值 —— 若不在这里夹，报告里会出现 `0.01`（低于 floor）而评分
+// 实际按 `0.05` 计算，同一字段出现"显示值 ≠ 计算值"的两种含义（实测：floor=0.05、
+// 规则 0.01 ⇒ 报告仍写 0.01，分数却按 0.05 走）。
 func (cc ConfidenceConfig) Resolve(checkID, sourceKey, domain string) float64 {
 	if !cc.Enabled {
 		return 1.0
 	}
+	v := cc.resolveRaw(checkID, sourceKey, domain)
+	return cc.clampConfidence(v)
+}
+
+// resolveRaw 只做规则表匹配（优先级：精确检查 ID > 正则 > 来源 > 域 > default）。
+func (cc ConfidenceConfig) resolveRaw(checkID, sourceKey, domain string) float64 {
 	foldID := strings.ToLower(checkID)
 	if v, ok := cc.ByCheckID[foldID]; ok {
 		return v
@@ -375,6 +387,22 @@ func (cc ConfidenceConfig) Resolve(checkID, sourceKey, domain string) float64 {
 		d = 1.0
 	}
 	return d
+}
+
+// clampConfidence 把任意解析结果夹到 `[floor, 1]`；floor 非法时退回 0.05（与
+// ssam-lib 的 NormalizeConfidence 同一套默认）。
+func (cc ConfidenceConfig) clampConfidence(v float64) float64 {
+	floor := cc.Floor
+	if floor <= 0 || floor >= 1 {
+		floor = 0.05
+	}
+	if v < floor {
+		v = floor
+	}
+	if v > 1 {
+		v = 1
+	}
+	return v
 }
 
 // ResolveChecks fills Checks[].Confidence from the rule table (design §3).
