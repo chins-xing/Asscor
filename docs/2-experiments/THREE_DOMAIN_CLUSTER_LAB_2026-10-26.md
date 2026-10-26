@@ -61,10 +61,32 @@ nft:  filter forward   policy drop
 1. **kernel 重启后 agent 不重新注册**：日志 `loaded identity bindings count=7` 后，agent 只发心跳；
    `topology list` 与 `agent list` 会显示 0 节点 / 全部 inactive，直到 `systemctl restart asscor-agent`
    让 agent 重新走注册路径。⇒ 需要"心跳即可重建拓扑/存活"的修复，或 kernel 启动后触发 re-register。
-2. **多主机评估结果的落库路径未在日志中观测到**：`comms/services.go` 在心跳里对
-   `req.Result.Checks` 调 `EvaluateFromResults`，但 kernel 日志里没有 `assessment result` 行；
-   需确认 agent 是否在心跳里带了 `result`（以及 kernel 侧条件）。这是"跨域多主机评估"能否自动化的关键。
-   **不要据此声称"多主机评估已跑通"**。
+2. **~~多主机评估结果的落库路径未在日志中观测到~~（2026-10-27 查清：**是我看错了日志文件**，评估一直在跑、也在落库）**
+
+   真因：`internal/cli/module.go:608` 在 CLI 启动后把 logger **重定向到相对路径
+   `ASSCOR-kernel.log`**；systemd 的 cwd 是 `/` ⇒ 真实日志在 **`/ASSCOR-kernel.log`**，
+   而单元里 `StandardOutput=append:/var/log/asscor-kernel.log` 只留下了启动段。
+   这解释了"日志里一条评估都没有"的假象。
+
+   实测（2026-10-27 01:2x，7 个真实 agent、三域）：
+
+   | 证据 | 数值 |
+   |---|---|
+   | `/ASSCOR-kernel.log` 里 `msg="assessment result"` | **340 条** |
+   | `/ASSCOR-kernel.log` 里 `heartbeat received` | 3250 条 |
+   | `/var/lib/asscor/assessments-20261026.jsonl` | **7.6 MB**（持续追加） |
+   | `/var/lib/asscor/latest-assessment.json` | 22477 字节 |
+   | 逐主机分数样本 | `domC-mon` 40.42/40.53（80 检查）· `asc-agent-ct`/`ct2`/`ct3`/`domA-web`/`domA-db`/`domB-web` **均 46.75**（81 检查） |
+
+   ⇒ **多主机评估是跑通的**（agent 心跳携带 81 条检查结果 → `EvaluateFromResults` → JSONL 落盘）。
+   同时暴露两个**真缺陷**（与"没落库"无关）：
+   - **日志重定向用相对路径**：把管理员的日志路径搞乱，且覆盖了单元的 `append:` 与 `--log-output`；
+   - **gRPC 传输层丢字段**：`grpcKernelHandler.Heartbeat` 只转 `HostId/SessionId/Result/Packages`，
+     **丢掉 `NetworkInfo`**（`Register` 同样丢）⇒ 若将来用 gRPC agent，拓扑永远不会被记录
+     （当前 agent 走 **JSONRPC over TLS**，整包结构体直传，所以拓扑正常）。
+
+   **本次复现到的现象**：6 台 CT agent 分数**完全相同（46.75）**，只有 `domC-mon` 不同（40.4x）——
+   正是 2026-08-16 审计里"同质主机同分"的结论，在真实三域多主机上再次出现。
 
 ## 6. 复用步骤
 
