@@ -488,6 +488,19 @@ func ConfidencePolicyFromConfig(cfg *config.Config) ssamlib.ConfidencePolicy {
 // the same effective delta the legacy path has always used: an explicit
 // [checks] per-check delta override wins over the value carried by the check.
 func (a *Assessor) legacyCheckInputs(result *model.AssessmentResult) []ssamlib.CheckInput {
+	// 置信度原生变量（方向①）：先把 `[confidence.check]` / `[confidence.source]`
+	// 规则表落到 `result.Checks[].Confidence`，再映射进库输入。
+	//
+	// 为什么必须在这里做：插件路径（`internal/engine/ssam` 的
+	// `EngineAdapter.ComputeScore`）在映射前调用了 `ssam.ResolveCheckConfidence`，
+	// 而 legacy 动态评分路径此前**没有调用点** ⇒ 同一份 `[confidence.check]` 在
+	// `asscor`（本路径）上完全不生效、在插件路径上生效，两条路径的分数口径分叉。
+	// `ssam.ResolveCheckConfidence` 本身只是 `(*config.Config).ResolveChecks` 的薄包装
+	// （其注释即"两条路径消费同一份规则表"），这里直接调用共享实现，避免新增
+	// `internal/engine → internal/engine/ssam` 的依赖。
+	if a.cfg != nil {
+		a.cfg.ResolveChecks(result.Checks)
+	}
 	inputs := make([]ssamlib.CheckInput, 0, len(result.Checks))
 	for _, c := range result.Checks {
 		delta := c.Delta
