@@ -374,7 +374,8 @@ func TestCLIDefaultGroupByIsScenario(t *testing.T) {
 
 // TestCLIFitRequiresBaseParams：拟合必须有基准参数（-config + -factors），
 // 缺一不可 —— 凭空造一份基准会让拟合结果与任何真实部署都没有关系。
-func TestCLIFitRequiresBaseParams(t *testing.T) {	records := writeRecordsJSONL(t, "syn.jsonl", syntheticRecords(t, 0.4, 7))
+func TestCLIFitRequiresBaseParams(t *testing.T) {
+	records := writeRecordsJSONL(t, "syn.jsonl", syntheticRecords(t, 0.4, 7))
 	for _, args := range [][]string{
 		{"-records", records, "-fit"},
 		{"-records", records, "-fit", "-config", writeConfig(t, "base.ini", "[edge_factors.model]\nmodel = graph\np_floor = 0.5\nlambda.attack_surface = 1\nvector.A = 1,0,0,0,0\n")},
