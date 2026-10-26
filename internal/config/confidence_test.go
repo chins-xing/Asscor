@@ -373,7 +373,8 @@ attack_surface = 0
 // beta_bayes). An operator who writes algorithm=beta_bayes must get a load
 // error, never a silently different-but-identical score.
 func TestConfidenceUnknownAlgorithmFailsParse(t *testing.T) {
-	for _, algo := range []string{"beta_bayes", "no_such_algorithm"} {
+	// `beta_bayes` 现在是**已实现**的取值（2026-10-26），不能再当未知样例。
+	for _, algo := range []string{"no_such_algorithm", "bayes", "betabayes"} {
 		ini := "[confidence]\nenabled = true\nalgorithm = " + algo + "\n"
 		_, err := Parse(ini)
 		if err == nil {
@@ -386,17 +387,18 @@ func TestConfidenceUnknownAlgorithmFailsParse(t *testing.T) {
 		}
 	}
 
-	// The one implemented value (and an explicit empty value = unset) loads.
-	for _, ini := range []string{
-		"[confidence]\nenabled = true\nalgorithm = weighted_evidence\n",
-		"[confidence]\nenabled = true\nalgorithm =\n",
+	// 两个支持取值（以及显式空值 = 未设置）都必须能加载。
+	for _, tc := range []struct{ ini, want string }{
+		{"[confidence]\nenabled = true\nalgorithm = weighted_evidence\n", "weighted_evidence"},
+		{"[confidence]\nenabled = true\nalgorithm = beta_bayes\nprior_strength = 3\n", "beta_bayes"},
+		{"[confidence]\nenabled = true\nalgorithm =\n", "weighted_evidence"},
 	} {
-		cfg, err := Parse(ini)
+		cfg, err := Parse(tc.ini)
 		if err != nil {
-			t.Fatalf("Parse(%q) failed: %v", ini, err)
+			t.Fatalf("Parse(%q) failed: %v", tc.ini, err)
 		}
-		if cfg.Confidence.Algorithm != "weighted_evidence" {
-			t.Errorf("algorithm = %q, want weighted_evidence", cfg.Confidence.Algorithm)
+		if cfg.Confidence.Algorithm != tc.want {
+			t.Errorf("algorithm = %q, want %q", cfg.Confidence.Algorithm, tc.want)
 		}
 	}
 }

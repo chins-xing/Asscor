@@ -5,6 +5,28 @@ import (
 	"sort"
 )
 
+// 置信度聚合算法（[confidence] algorithm）。
+//
+// weighted_evidence（缺省）：直接以 `c` 作为证据权重 —— E = Σ|δ|·c、U = Σ|δ|²·c·(1−c)。
+// beta_bayes：把每条观测的可信度视为对"该扣分成立"这一伯努利事件的**分数次观测**，
+// 先验取 κ 个"完全可信"的伪观测（κ = PriorStrength），后验均值
+//
+//	c̃ = (κ·1 + c) / (κ + 1) = 1 − (1−c)/(κ+1)
+//
+// 再以 c̃ 代入同一组 E/U 公式。两条不变量：
+//   - c = 1 ⇒ c̃ = 1（**完全可信的观测不受先验影响**，与 legacy 逐位一致）；
+//   - κ → 0 ⇒ c̃ → c（weighted_evidence 是 beta_bayes 的退化情形）。
+//
+// 方向要说清：先验是"κ 个完全可信的伪观测"，所以收缩只会把低可信观测**往 1 抬**
+// ⇒ 期望扣分 E 变大（**多扣分、分数更低**）、方差 U 变小（区间更窄）；对 c=1 的观测无影响。
+// 它不会压低高可信观测，也不会把任何观测推到 1 以上。
+const (
+	// AlgorithmWeightedEvidence 是缺省聚合（历史口径）。
+	AlgorithmWeightedEvidence = "weighted_evidence"
+	// AlgorithmBetaBayes 见上方公式；κ 由 ConfidencePolicy.PriorStrength 给出。
+	AlgorithmBetaBayes = "beta_bayes"
+)
+
 // ConfidencePolicy controls how per-check intelligence confidence is treated
 // by the scoring formulas. It is the library-side default used when no policy
 // is supplied; the kernel injects its config-derived policy via
@@ -29,10 +51,12 @@ type ConfidencePolicy struct {
 	// observation (which would make variance maximal and the point estimate
 	// meaningless). Must be in (0,1).
 	Floor float64
-	// PriorStrength is the Beta-prior equivalent sample size used by the
-	// strict beta_bayes aggregator (reserved; weighted_evidence ignores it
-	// except as documentation). Must be > 0.
+	// PriorStrength 是 beta_bayes 的先验强度（κ，等价伪观测数）；weighted_evidence 忽略它。
+	// 0 表示未设置 ⇒ 由 EffectiveConfidence 取 2.0（与配置出厂值一致）。
 	PriorStrength float64
+	// Algorithm 选择聚合算法："" 与 AlgorithmWeightedEvidence 等价（历史口径），
+	// AlgorithmBetaBayes 走 Beta 收缩（见文件头常量注释）。
+	Algorithm string
 }
 
 // DefaultConfidencePolicy returns the identity policy: confidence-aware
@@ -44,6 +68,38 @@ func DefaultConfidencePolicy() ConfidencePolicy {
 		Floor:         0.05,
 		PriorStrength: 2.0,
 	}
+}
+
+// IsBetaBayes reports whether the policy selects the beta_bayes aggregation.
+func (p ConfidencePolicy) IsBetaBayes() bool { return p.Algorithm == AlgorithmBetaBayes }
+
+// BetaShrinkConfidence 是 beta_bayes 的收缩公式（导出以便测试与文档引用）：
+//
+//	c̃ = (κ + c) / (κ + 1)
+//
+// κ ≤ 0 ⇒ 原样返回 c（退化为 weighted_evidence）；κ 越大，低可信观测被拉得越靠近 1。
+func BetaShrinkConfidence(c, priorStrength float64) float64 {
+	if priorStrength <= 0 {
+		return c
+	}
+	return (priorStrength + c) / (priorStrength + 1)
+}
+
+// EffectiveConfidence 是**引擎实际消费**的可信度：先按 NormalizeConfidence 归一
+// （0 ⇒ Default、floor 夹取、≤1），再在 algorithm=beta_bayes 时做 Beta 收缩。
+//
+// 两条路径（插件 / legacy）与边因子触发衰减都必须用它，否则同一份配置在不同
+// 消费点会得到不同权重。`NormalizeConfidence` 保留为纯归一化原语（不改语义）。
+func EffectiveConfidence(raw float64, policy ConfidencePolicy) float64 {
+	c := NormalizeConfidence(raw, policy)
+	if !policy.Enabled || !policy.IsBetaBayes() {
+		return c
+	}
+	k := policy.PriorStrength
+	if k <= 0 {
+		k = 2.0 // 与配置出厂值一致：写了 beta_bayes 但没给 prior_strength 时用 2.0
+	}
+	return BetaShrinkConfidence(c, k)
 }
 
 // NormalizeConfidence maps a raw per-check confidence into the policy's
@@ -100,7 +156,7 @@ func DomainBayes(domain string, checks []CheckInput, policy ConfidencePolicy) (s
 			continue
 		}
 		s := math.Abs(c.Delta)
-		conf := NormalizeConfidence(c.Confidence, policy)
+		conf := EffectiveConfidence(c.Confidence, policy)
 		eSum += s * conf
 		varSum += s * s * conf * (1.0 - conf)
 		absDeltaSum += s

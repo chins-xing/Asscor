@@ -49,6 +49,8 @@ var (
 var (
 	DefaultConfidencePolicy  = ssam.DefaultConfidencePolicy
 	NormalizeConfidence      = ssam.NormalizeConfidence
+	EffectiveConfidence      = ssam.EffectiveConfidence
+	BetaShrinkConfidence     = ssam.BetaShrinkConfidence
 	ComputeDomainScoresBayes = ssam.ComputeDomainScoresBayes
 	FinalBayesStats          = ssam.FinalBayesStats
 	ConfidenceInterval       = ssam.ConfidenceInterval

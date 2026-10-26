@@ -11,12 +11,18 @@ import (
 	"github.com/chins-xing/asscor/internal/model"
 )
 
-// ConfidenceAlgorithmWeightedEvidence is the ONLY implemented confidence
-// aggregation algorithm. The design §3.3 promise of an algorithm registry
-// (RegisterAlgorithm/Aggregator) and a beta_bayes aggregator was never
-// implemented; see audit I-10. Any other value in [confidence] algorithm is
-// rejected at parse time.
-const ConfidenceAlgorithmWeightedEvidence = "weighted_evidence"
+// ConfidenceAlgorithmWeightedEvidence is the default confidence aggregation:
+// E = Σ|δ|·c, U = Σ|δ|²·c·(1−c) — the historical formula.
+//
+// ConfidenceAlgorithmBetaBayes applies the Beta shrinkage c̃ = (κ + c)/(κ+1)
+// (κ = PriorStrength; prior = κ pseudo-observations at full credibility) before
+// the same E/U formulas. Invariants: c=1 ⇒ c̃=1（legacy 恒等）、κ→0 ⇒ c̃→c。
+// 设计 §3.3 的**可插拔算法注册表**（RegisterAlgorithm/Aggregator）仍不存在：
+// 只支持这两个取值，其它值在解析期 fail-fast。
+const (
+	ConfidenceAlgorithmWeightedEvidence = "weighted_evidence"
+	ConfidenceAlgorithmBetaBayes        = "beta_bayes"
+)
 
 // ConfidenceConfig is the kernel-side configuration of the intelligence
 // confidence model (design CONFIDENCE_MODEL_DESIGN_2026-09-08 §3). It is
@@ -156,15 +162,16 @@ func (cfg *Config) parseConfidenceSections(sections map[string]map[string]string
 			switch {
 			case a == "":
 				// Explicit empty = unset → keep the factory weighted_evidence.
-			case a == ConfidenceAlgorithmWeightedEvidence:
+			case a == ConfidenceAlgorithmWeightedEvidence, a == ConfidenceAlgorithmBetaBayes:
 				cc.Algorithm = a
 			default:
 				// Fail-fast: a wrong id must never look like a switched
 				// algorithm (beta_bayes and the registration API are not
 				// implemented — audit I-10).
 				return confidenceValueError("confidence", "algorithm", v,
-					fmt.Errorf("unsupported algorithm %q: only %q is implemented (beta_bayes and the registration API do not exist)",
-						a, ConfidenceAlgorithmWeightedEvidence))
+					fmt.Errorf("unsupported algorithm %q: supported values are %q and %q "+
+						"(there is still no pluggable RegisterAlgorithm/Aggregator API)",
+						a, ConfidenceAlgorithmWeightedEvidence, ConfidenceAlgorithmBetaBayes))
 			}
 		}
 		if v, ok := sec["accept_by_lower_bound"]; ok {
