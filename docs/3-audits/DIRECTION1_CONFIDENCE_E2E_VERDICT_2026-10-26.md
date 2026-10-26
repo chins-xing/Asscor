@@ -51,6 +51,82 @@ sudo ./bin/asscor --config etc/config-def05.ini -json > out/c-def05.json
 2. **规则表也真的进入评分**（修复后）：B 只给 6 条失败检查打 0.50，分数 63.79 → **65.03**、CI 由退化区间变成 **[63.24, 66.82]**、`evidence_confidence` = **0.959**（其余 74 条按 default=1.0）。
 3. **关闭时与历史逐位一致**：A 的 CI 退化为点值、`evidence_confidence = 1` —— "不开 = 老行为"这条兼容承诺成立。
 
+## 2.1 规则优先级端到端（五级同时给不同值）
+
+配置（VM 上 `etc/config-chain.ini`，同一批 80 条检查）：
+
+```ini
+[confidence]
+enabled = true
+default = 0.55
+floor = 0.05
+
+[confidence.check]
+OT-008 = 0.11          ; 精确检查 ID
+
+[confidence.checkrx]
+^ot-0 = 0.22           ; 正则（小写匹配）
+
+[confidence.source]
+nuclei = 0.33          ; 来源（builtin 没有规则 ⇒ 落到域）
+
+[confidence.domain]
+operation_trust = 0.44
+resilience = 0.66
+```
+
+实测 **80/80 条全部落在预期的层级**（`check > checkrx > source > domain > default`）：
+
+| 检查 | 域 | 实际拿到的 confidence | 命中层级 |
+|---|---|---|---|
+| `OT-008` | operation_trust | **0.11** | `[confidence.check]` |
+| `OT-007/009/011/012/…` | operation_trust | **0.22** | `[confidence.checkrx]` |
+| `RS-016` 等 | resilience | **0.66** | `[confidence.domain]`（source 无规则） |
+| `AS-*` 等 | attack_surface | **0.55** | `default` |
+
+## 2.2 总分公式逐项复核（证明"真的进了评分模型"，不是只写进报告）
+
+反算链路（与 `internal/engine/assessor.go` 的 `computeDynamicFinalScore` 一致）：
+
+```
+域分 score_d = 100 − Σ|delta|·c        （只算失败且 delta<0 的检查）
+intrinsic    = (Σ w_d·score_d / Σ w_d) / 100 × Π(活跃边因子)
+Total        = (intrinsic×50 + SPC×30 + threat×20) / 100 × 100
+```
+
+实测（`config-chain.ini`）：
+
+- **逐域分 5/5 完全一致**（`attack_surface` 79.10、`business_continuity` 78.00、
+  `kernel_security` 74.70、`operation_trust` 79.65、`resilience` 0.00 —— 与报告的 `domain_scores` 逐项相等）；
+- `Σ w·score/Σw = 67.7886`，活跃边因子 `two_factor_failure = 0.82`（其余为 1）
+  ⇒ `intrinsicCoeff = 0.555867`；
+- 三层反算 **77.7933**，报告 **77.7900**，差 **0.0033**（四舍五入量级）。
+
+⇒ 置信度确实参与了每一个域分的计算，而不只是被写进输出字段。
+
+## 2.3 `accept_by_lower_bound` 的端到端效果
+
+同一份数据、同一阈值（`[acceptability] threshold = 75.0`，介于 CI 下界 72.35 与点估计 77.79 之间）：
+
+| `accept_by_lower_bound` | point | lower95 | threshold | acceptable |
+|---|---|---|---|---|
+| `false`（默认，点估计判定） | 77.79 | 72.35 | 75.0 | **true** |
+| `true`（保守：用 95% 下界判定） | 77.79 | 72.35 | 75.0 | **false** |
+
+⇒ 这个开关是**真的**改变接受性结论的（不是只解析不消费）。
+
+## 2.4 `floor` 夹取：发现一处"显示值 ≠ 计算值"（已修）
+
+配置 `[confidence.check] OT-008 = 0.01` + `floor = 0.05`：
+
+- **修前**：报告里 `OT-008` 的 `confidence` 仍是 **0.01**，而评分时 `NormalizeConfidence` 按 **0.05** 计算
+  ⇒ 同一字段两种含义（报告值低于 floor，与"floor = 下限"的语义矛盾）；
+- **根因**：`(*ConfidenceConfig).Resolve` 只做规则匹配、**不应用 floor/上限**；
+- **修法**：`Resolve` 返回**生效值**（`resolveRaw` 匹配 → `clampConfidence` 夹到 `[floor,1]`），
+  与 `NormalizeConfidence` 同一套默认（floor 非法 ⇒ 0.05）；
+- **修后**：`OT-008` 的 `confidence = 0.05`（期望值），优先级链 **80/80 不变**、`point` 不变；
+- 回归：`internal/config/confidence_floor_test.go`（先红后绿：修前 `want 0.05, got 0.01`）。
+
 ## 3. 修复与回归（本次提交）
 
 - `internal/engine/assessor.go`：`legacyCheckInputs` 在映射前调用 `a.cfg.ResolveChecks(result.Checks)`，
@@ -77,9 +153,10 @@ sudo ./bin/asscor --config etc/config-def05.ini -json > out/c-def05.json
 | 项 | 状态 |
 |---|---|
 | `[confidence.algorithm]` / `prior_strength`（beta_bayes） | **未实现**（配置里是 reserved，写别的取值会加载失败）；当前只有 `weighted_evidence` |
-| `[confidence.checkrx]`（正则选择器） | 已实现，但**未做按正则的端到端实测**（规则表命中顺序在单测里覆盖） |
+| `[confidence.checkrx]`（正则选择器） | ✅ **已端到端实测**（见 §2.1：`^ot-0 = 0.22` 命中 80 条中的 OT 组，且被精确 ID 规则正确压过） |
 | 适配器来源置信度 | 依赖 adapter 侧 findings 携带 `Source`/`Confidence`（`internal/adapter`）；本机 80 条里大部分是**内置检查**，所以实际控制手段是 `[confidence.check]` + `default` |
 | 标定 | **从未标定**。`user=0.90` / `adapter=0.80` 是**先验**，不是实测标定值 —— 任何"已标定"的说法都不成立 |
+| 报告的 `confidence` 字段口径 | 已统一为**生效值**（`Resolve` 内夹 floor/上限）；`NormalizeConfidence` 在评分时再夹一次（幂等） |
 
 ## 6. 复跑步骤（可重复）
 
