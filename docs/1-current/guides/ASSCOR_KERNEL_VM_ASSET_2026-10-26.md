@@ -31,24 +31,53 @@
 
 服务管理：`sudo systemctl {start|stop|restart|status} asscor-kernel`；开机自启用 `systemctl enable`（当前已 `enabled`）。
 
-## 3. 配套 AGENT（可由本资产派生的"客户端"）
+## 3. 配套 AGENT（**一个 CT 一个 agent**，按需拆 CT）
 
-| 项 | 值 |
-|---|---|
-| CT | **911 / `asc-agent-ct`**（`RAID-Mirror:8`，1 GiB / **8 核**（`cpuunits=4096`），`192.168.30.51`，`onboot=1`） |
-| agent | `/opt/asc-agent`；证书在 `/etc/asscor/certs/{ca.crt,agent.crt,agent.key}` |
-| 启动 | **systemd 单实例 `asscor-agent.service`**（`Restart=always`）：`systemctl {start|stop|restart|status} asscor-agent` |
-| 已验证 | kernel 日志 `msg=registered session_id=sess-asc-agent-ct-…`；`ss` 一条 ESTAB（单实例） |
+> **资源规则（2026-10-26 定，经两次纠正）**：**一个 CT 只跑一个 agent 进程**；需要更多 agent 就**拆 CT**。
+> **N 个 agent 进程 ⇒ N 核**（不是每 CT 固定 8 核）。内存 48 GiB、使用率约 10% ⇒ **放心多开 CT/VM**。
 
-> **CPU 规则（2026-10-26 定）**：agent 侧**默认给 8 核**（至少 6），`cpuunits=4096`。
-> 背景：911 曾出现 CPU PSI `some avg10=91%` —— 根因是**4 个重复 agent 进程**（每次手工
-> `setsid nohup` 启动都留下一个）叠在 2 核上，而不是"核数不够"。改成 systemd 单实例 + 8 核后
-> **PSI 0.00 / 单进程 CPU 0%**。
-> 另：agent 每 30s 心跳会重算 `collectPackages`/`collectCPEs`（日志 `generated CPEs from packages`），
-> 这是常态开销；**不要再手工 `setsid nohup` 起 agent**，一律用 systemd 单元，避免进程堆积。
+| CT | host-id | IP | 核 / 内存 | agent |
+|---|---|---|---|---|
+| **911 `asc-agent-ct`** | `asc-agent-ct` | `192.168.30.51` | **1 核** / 1024 MB | `/opt/asc-agent` + systemd `asscor-agent.service` |
+| **912 `asc-agent-ct2`** | `ct2` | `192.168.30.52` | **1 核** / 512 MB | 同上 |
+| **913 `asc-agent-ct3`** | `ct3` | `192.168.30.53` | **1 核** / 512 MB | 同上 |
 
-> ⚠️ CT 的 agent **需要** `kernel.ini` 里 `[comms] require_mtls=true` 与证书配对；
-> 若要临时免 TLS（仅隔离环境），只能改 `require_mtls=false` 并给 kernel 加 `--no-mtls` —— **不要**在生产沿用。
+**启动方式**：一律 `systemctl {start|stop|restart|status} asscor-agent`；
+**禁止** `setsid nohup` 手工起 —— 911 曾因历次手工启动留下 **4 个重复进程**，把 2 核压到 CPU PSI 91%。
+
+### 3.1 多 agent 的前提：**每个 agent 一张客户端证书**
+
+kernel 把 host-id 与 mTLS 证书指纹**绑定**（`heartbeat.BindAgentCert`）。所有 agent 共用同一张
+`agent.crt` 时，第二个 agent 注册会被拒：
+
+```
+register: rpc error: certificate identity conflict: host "ct2" is bound to a different certificate
+```
+
+签发（在 VM 910 上，用现有 CA，**不影响运行中的 kernel**）：
+
+```bash
+sudo ./bin/kernel --cert-dir /home/asc/asscor/certs --issue-agent-cert ct2 --issue-out /tmp/agent-certs
+sudo ./bin/kernel --cert-dir /home/asc/asscor/certs --issue-agent-cert ct3 --issue-out /tmp/agent-certs
+# 产物: /tmp/agent-certs/ct2.crt, ct2.key, ct3.crt, ct3.key（key 为 0600 root）
+```
+
+分发到目标 CT（**ca.crt + agent.crt + agent.key 三件**）：
+
+```bash
+pct push 912 /tmp/agent-certs/ct2.crt /etc/asscor/certs/agent.crt --perms 644
+pct push 912 /tmp/agent-certs/ct2.key /etc/asscor/certs/agent.key --perms 600
+pct push 912 /tmp/ca-certs/ca.crt       /etc/asscor/certs/ca.crt    --perms 644
+pct exec 912 -- systemctl restart asscor-agent
+```
+
+**验收**：kernel 侧 `ss -tn | grep -c 50051` = agent 数；每个 agent 的
+`journalctl -u asscor-agent | grep registered` 都有 `msg=registered`。
+
+### 3.2 agent 的常态开销
+
+每 30 s 心跳会重算 `collectPackages` / `collectCPEs`（日志 `generated CPEs from packages`）。
+单实例下可忽略；**多实例叠加**曾把 2 核打满 —— 这也是一 CT 一 agent 的理由。
 
 ## 4. 重建 / 刷新步骤（新代码要上资产时）
 
@@ -93,7 +122,7 @@ sudo ./bin/asscor --config etc/config-def05.ini  -json > /tmp/c.json
 
 - **改配置**：改 `/home/asc/asscor/etc/kernel.ini` 后 `sudo systemctl restart asscor-kernel`；
   改 `[confidence]` 无需重启（配置热加载会生效，但为确定性建议重启）。
-- **agent 侧**：`pct set <vmid> --cores 8 --cpuunits 4096`（新建 agent CT 就按这个给），且**只允许**通过 `asscor-agent.service` 启动，禁止 `setsid nohup` 手工起（会堆进程）。
+- **agent 侧**：**一 CT 一 agent**；**N 个 agent 进程 ⇒ N 核**（如 1 个 agent 给 1 核）。新建 agent CT 时同时用 `--issue-agent-cert` 签**独立证书**（共用证书会被 host↔指纹绑定拒绝），且**只允许**通过 `asscor-agent.service` 启动（禁止 `setsid nohup`，会堆进程）。
 - **不要**用 `pkill -f 'bin/kernel'` —— 会把**执行命令的 SSH shell 自己也匹配杀掉**（本项目实测踩过两次）。
   用 `systemctl` 或 `pkill -x kernel`（进程名精确匹配）。
 - **快照是回滚点**：破坏性试验前先 `qm snapshot 910 before-<事由>`；回滚 `qm rollback 910 <name>`。
