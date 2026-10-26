@@ -34,9 +34,9 @@
 # ============================================================================
 
 # ---- 研究接线（底座文件被研究线改动过，按规则④留在 ARC）----
-e8008f54a81956f8fbaf8b8e85032830f7db7896  80f1fd71fadeb6ba4c9443d79c28eff7679eaf66  internal/model/model.go  # EdgeFactors / EdgeFactorObservation 的线上契约（研究线新增）；main 侧已随 Task 39 带入方向① 的 FinalSigma 注释
-bb8a456a67b2a248c8cb5581a2cab35f4bfb0b48  f4434358a2a9b685368331cee2d1421894f3d9f6  internal/engine/assessor.go  # legacy 评分路径回填观测链（evaluateEdgeFactorChain）；main 侧已随 Task 39 带入方向① 的共享贝叶斯域分（ConfidencePolicyFromConfig/legacyCheckInputs）
-de3d7595b0ade14f862ba126ffca7dffccdcb79d  e4e50b92d256b7a4488703d1eb1289f46bc55f7e  internal/engine/ssam/adapter_engine.go  # 插件路径的合成策略钩子回填观测链；main 侧已随 Task 39 带入 SetAcceptByLowerBound（ARC 版只多观测链）
+3c46e4534c59ca6b0cd748f86a6ccf90efc81f43  e558f32dde5fae8e9a741220a037c22f7d5a62a7  internal/model/model.go  # EdgeFactors / EdgeFactorObservation 的线上契约（研究线新增）；main 侧已随 Task 39 带入方向① 的 FinalSigma 注释
+b0d739232bb14863c6ec62e943a42d2ec81b6795  f009525e5118e059f4eb3b4a93be0019106b912b  internal/engine/assessor.go  # legacy 评分路径回填观测链（evaluateEdgeFactorChain）；main 侧已随 Task 39 带入方向① 的共享贝叶斯域分（ConfidencePolicyFromConfig/legacyCheckInputs）
+0f157c806835eb8d632a271367034896d99e3a71  31f3db0e10161f1f39ef646823c5ddbfb10fd9fe  internal/engine/ssam/adapter_engine.go  # 插件路径的合成策略钩子回填观测链；main 侧已随 Task 39 带入 SetAcceptByLowerBound（ARC 版只多观测链）
 ca50557000643e66a46d1cbfdf31cac742b08808  ffeb423620cb8f24fa3a6de0a59d28b5ad745403  internal/engine/ssam/edgefactor.go  # ARC-only（有意差异）：`activationsFromResults` 返回前调 `edgefactor.CollapseToFactors`（Task 18 合成层双条目折叠）；这是研究线 V/G/C 装配钩子，main 的产品路径不装载 V/G/C ⇒ 不移植
 5f1375889f899a3dd1bbd5ffadd56f2409c980e4  fd0a385660b1e5c5140d7160ffa7d0f2b50b567b  internal/kernel/persistence_types.go  # 落盘结构增 additive 字段 EdgeFactorChain
 77cc2f961e3a46f2bff6276268a8bddde676fede  b842a11b9cd76672b24b0bbcd0a7dfcf57e6ed50  internal/persistence/persistence.go  # 落盘时透出观测链
@@ -81,7 +81,7 @@ bc39ebcf4568f1c223c3922a148d756672a992d3  6b499f759e53a0a5c63bca724770be20b1f5b5
 # 这些路径在 main 上**不成立**（main 没有分代目录）⇒ 不能同步：同步会把 main 的引用指向不存在的路径。
 # 故登记为有意差异：**只差引用路径，不含任何行为差异**。
 3aad68a0847df4f427d4068385b51ce3e91aab33  736947e97747ea385a020b7d32fa033814723f1d  CONTRIBUTING.md  # 审计报告目录按布局写作 `docs/3-audits/`（main 为 `docs/audits/…`）；同处分叉还含首行 BOM 去除，属纯文档面
-3d4afb55bfecbacb3daee2e25ed8de3641f198db  5b5f4d48c44ffeb3809ab47132cf12f2436d592c  config.ini  # 仅注释与文档引用差异：`[confidence]` 段的设计文档路径（ARC `docs/1-current/design/…` / main `docs/…`）；键、值与各段内容两侧一致（2026-10-23 死键标注/段改名后的新 blob）
+0c576972356b1b613ae879af9063685ef5844222  0445a6acc509e2a34de788c18209e13126e0015a  config.ini  # 仅注释与文档引用差异：`[confidence]` 段的设计文档路径（ARC `docs/1-current/design/…` / main `docs/…`）；键、值与各段内容两侧一致（2026-10-23 死键标注/段改名后的新 blob）
 f4a18bf5bc659eee92fca9ef3a179a933ccd20df  ac185e715e91ba60f9c7c2bc28ea9cf0bb4e21ba  internal/config/config.go  # 仅 adapterSecretEnv 注释里的文档引用（ARC `docs/1-current/reference/…` / main `docs/…`）
 ff9a03140b435877c307e1abe14d0df63701a4fe  cbee0f0a80e96dbb79ef00a776a28aa1464c89db  internal/srdwrapper/srd_wrapper.go  # 仅模块 tag 依赖矩阵的注释引用（ARC `docs/4-archive/plans/…` / main `docs/…`）
 
