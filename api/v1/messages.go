@@ -26,7 +26,14 @@ type PBHeartbeatRequest struct {
 	HostId    string              `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
 	SessionId string              `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	Result    *PBAssessmentResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
-	Packages  []string            `protobuf:"bytes,5,rep,name=packages,proto3" json:"packages,omitempty"`
+	// Packages / InstalledCPEs / NetworkInfo / SecureMode 必须与内部
+	// HeartbeatRequest 对齐：gRPC 传输层曾经只转 host/session/result/packages，
+	// 导致 **NetworkInfo 被静默丢弃**（拓扑注册只能走 JSONRPC 的整包直传）。
+	// 这里补齐字段，并由 grpc_server.go 的转换函数逐字段搬运。
+	Packages      []string          `protobuf:"bytes,5,rep,name=packages,proto3" json:"packages,omitempty"`
+	InstalledCPEs []string          `protobuf:"bytes,6,rep,name=installed_cpes,json=installedCpes,proto3" json:"installed_cpes,omitempty"`
+	NetworkInfo   *NetworkInfo      `protobuf:"bytes,7,opt,name=network_info,json=networkInfo,proto3" json:"network_info,omitempty"`
+	SecureMode    *SecureModeReport `protobuf:"bytes,8,opt,name=secure_mode,json=secureMode,proto3" json:"secure_mode,omitempty"`
 }
 
 func (m *PBHeartbeatRequest) Reset()         { *m = PBHeartbeatRequest{} }

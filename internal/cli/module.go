@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -596,6 +597,72 @@ func (m *CLIModule) Init(ctx context.Context, kc kernel.KernelContext) error {
 	return nil
 }
 
+// cliLogFile 决定 CLI 是否要把日志重定向到文件，以及**绝对**路径。
+//
+// 两条硬约束（2026-10-27 修，来源是一次真实事故）：
+//
+//  1. **只有在交互式终端下才重定向**。CLI 的交互终端会占住 stdout，日志若也写
+//     stdout 会互相污染，所以交互时才搬走日志。反过来，systemd 下 stdout/stderr
+//     已被单元重定向（`StandardOutput=append:/var/log/...`，或 journald），此时
+//     再重定向会把管理员可见的日志悄悄搬到别处 —— 事故就是这样发生的：日志落在
+//     进程 cwd 下的 `ASSCOR-kernel.log`（cwd=/ ⇒ `/ASSCOR-kernel.log`），
+//     而 `/var/log/asscor-kernel.log` 只剩启动段。
+//
+//  2. **路径必须是绝对路径**。旧实现用相对路径 `ASSCOR-kernel.log`，位置取决于
+//     进程 cwd，重启/换单元就换地方，审计与排障都无法预期。
+//
+// 覆盖顺序：`ASSCOR_LOG_FILE`（完整文件路径）> `ASSCOR_LOG_DIR`（目录）>
+// root 用户 `/var/log` > 非 root 用户缓存目录 > 临时目录。
+func cliLogFile(stdout *os.File) (string, bool) {
+	if !isInteractiveTerminal(stdout) {
+		return "", false
+	}
+	return cliLogPath(), true
+}
+
+// isInteractiveTerminal 判断 f 是否为终端（字符设备）。
+// 管道与普通文件（systemd、journald、CI、shell 重定向）都不算。
+func isInteractiveTerminal(f *os.File) bool {
+	if f == nil {
+		return false
+	}
+	st, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return st.Mode()&os.ModeCharDevice != 0
+}
+
+// cliLogPath 返回 CLI 日志的**绝对**路径（覆盖顺序见 cliLogFile 注释）。
+func cliLogPath() string {
+	if p := strings.TrimSpace(os.Getenv("ASSCOR_LOG_FILE")); p != "" {
+		if abs, err := filepath.Abs(p); err == nil {
+			return abs
+		}
+	}
+
+	dir := strings.TrimSpace(os.Getenv("ASSCOR_LOG_DIR"))
+	if dir == "" {
+		switch {
+		case os.Geteuid() == 0:
+			dir = "/var/log"
+		default:
+			if cache, err := os.UserCacheDir(); err == nil {
+				dir = filepath.Join(cache, "asscor")
+			} else {
+				dir = os.TempDir()
+			}
+		}
+	}
+
+	abs, err := filepath.Abs(filepath.Join(dir, "ASSCOR-kernel.log"))
+	if err != nil {
+		// filepath.Abs 只在拿不到 cwd 时失败；退回一个确定的绝对路径。
+		return filepath.Join(os.TempDir(), "ASSCOR-kernel.log")
+	}
+	return abs
+}
+
 func (m *CLIModule) Start(ctx context.Context) error {
 	m.state = kernel.PluginStarted
 
@@ -604,8 +671,7 @@ func (m *CLIModule) Start(ctx context.Context) error {
 		return nil
 	}
 
-	if logger.CurrentOutput() == "stderr" || logger.CurrentOutput() == "stdout" {
-		logPath := "ASSCOR-kernel.log"
+	if logPath, ok := cliLogFile(os.Stdout); ok {
 		if err := logger.RedirectToFile(logPath); err != nil {
 			logger.WithComponent("cli").Warn("failed to redirect logs to file, CLI output may be interleaved", "path", logPath, "error", err)
 		} else {
