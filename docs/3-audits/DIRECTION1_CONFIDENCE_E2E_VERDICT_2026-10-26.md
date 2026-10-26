@@ -84,6 +84,13 @@ resilience = 0.66
 | `RS-016` 等 | resilience | **0.66** | `[confidence.domain]`（source 无规则） |
 | `AS-*` 等 | attack_surface | **0.55** | `default` |
 
+> **source 层级的端到端限制**：链里 `[confidence.source] nuclei = 0.33` 没有命中任何检查 ——
+> 因为本次 80 条全是**内置检查**（source 为空 ⇒ `builtin`），而 `asscor`（legacy 路径）
+> **不消费 `[user_check.*]`**（实测：加两条 `user_check` 后仍是 80 条、`probe_*` 一条都没出现）。
+> 因此 source 层级改由**引擎级单测**正面覆盖：
+> `internal/engine/confidence_rules_test.go` 用 `Source: CheckSourceUser` 的检查断言拿到 `0.80`，
+> 五级（check/checkrx/source/domain/default）逐级断言。
+
 ## 2.2 总分公式逐项复核（证明"真的进了评分模型"，不是只写进报告）
 
 反算链路（与 `internal/engine/assessor.go` 的 `computeDynamicFinalScore` 一致）：
@@ -155,6 +162,7 @@ Total        = (intrinsic×50 + SPC×30 + threat×20) / 100 × 100
 | `[confidence.algorithm]` / `prior_strength`（beta_bayes） | **未实现**（配置里是 reserved，写别的取值会加载失败）；当前只有 `weighted_evidence` |
 | `[confidence.checkrx]`（正则选择器） | ✅ **已端到端实测**（见 §2.1：`^ot-0 = 0.22` 命中 80 条中的 OT 组，且被精确 ID 规则正确压过） |
 | 适配器来源置信度 | 依赖 adapter 侧 findings 携带 `Source`/`Confidence`（`internal/adapter`）；本机 80 条里大部分是**内置检查**，所以实际控制手段是 `[confidence.check]` + `default` |
+| `[user_check.*]` 在 legacy 路径 | **不被消费**（实测：加两条后 `asscor` 仍是 80 条检查、`probe_*` 未出现）⇒ 想用自定义检查造 `source=user` 的端到端样本，目前只能走 agent/插件路径；这是**另一模块的缺口**，与置信度本身无关 |
 | 标定 | **从未标定**。`user=0.90` / `adapter=0.80` 是**先验**，不是实测标定值 —— 任何"已标定"的说法都不成立 |
 | 报告的 `confidence` 字段口径 | 已统一为**生效值**（`Resolve` 内夹 floor/上限）；`NormalizeConfidence` 在评分时再夹一次（幂等） |
 
