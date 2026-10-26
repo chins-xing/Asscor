@@ -69,6 +69,9 @@ func (s *GRPCServer) Start() error {
 
 	opts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(s.cfg.MaxRecvSize),
+		// PB* 是手写结构体（没有 ProtoReflect），默认 proto codec 无法编解码；
+		// 显式用 JSON codec，gRPC 通道才真正可用（见 grpc_codec.go）。
+		grpc.ForceServerCodec(jsonCodec{}),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             s.cfg.KeepaliveMin,
 			PermitWithoutStream: true,
@@ -190,12 +193,7 @@ func (h *grpcKernelHandler) Register(ctx context.Context, req *apiv1.PBRegisterR
 }
 
 func (h *grpcKernelHandler) Heartbeat(ctx context.Context, req *apiv1.PBHeartbeatRequest) (*apiv1.PBHeartbeatResponse, error) {
-	jsonReq := &apiv1.HeartbeatRequest{
-		HostId:    req.HostId,
-		SessionId: req.SessionId,
-		Result:    apiv1.ConvertPBToAssessmentResult(req.Result),
-		Packages:  req.Packages,
-	}
+	jsonReq := pbToHeartbeatRequest(req)
 
 	resp, err := h.svc.Heartbeat(ctx, jsonReq)
 	if err != nil {
@@ -302,7 +300,10 @@ func NewGRPCClient(cfg GRPCClientConfig) *GRPCClient {
 
 func (c *GRPCClient) Connect() error {
 	opts := []grpc.DialOption{
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(4 * 1024 * 1024)),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(4*1024*1024),
+			grpc.ForceCodec(jsonCodec{}),
+		),
 	}
 
 	if c.cfg.TLSEnabled {
@@ -366,12 +367,60 @@ func (c *GRPCClient) Heartbeat(ctx context.Context, hostId, sessionId string, re
 		return nil, fmt.Errorf("not connected")
 	}
 
-	return kernel.Heartbeat(ctx, &apiv1.PBHeartbeatRequest{
+	return kernel.Heartbeat(ctx, heartbeatRequestToPB(&apiv1.HeartbeatRequest{
 		HostId:    hostId,
 		SessionId: sessionId,
-		Result:    apiv1.ConvertAssessmentResultToPB(result),
+		Result:    result,
 		Packages:  packages,
-	})
+	}))
+}
+
+// HeartbeatFull 发送**完整**心跳（含 Packages / InstalledCPEs / NetworkInfo /
+// SecureMode）。旧 Heartbeat 只带前四个字段，会丢 NetworkInfo —— 拓扑因此
+// 永远不会被记录。新调用方应使用本方法。
+func (c *GRPCClient) HeartbeatFull(ctx context.Context, req *apiv1.HeartbeatRequest) (*apiv1.PBHeartbeatResponse, error) {
+	c.mu.RLock()
+	kernel := c.kc
+	c.mu.RUnlock()
+
+	if kernel == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	return kernel.Heartbeat(ctx, heartbeatRequestToPB(req))
+}
+
+// pbToHeartbeatRequest 把 gRPC 的 PB 请求**逐字段**还原成内部请求。
+// 新增字段时必须同步这里与 heartbeatRequestToPB，否则 gRPC 通道又会静默丢字段。
+func pbToHeartbeatRequest(req *apiv1.PBHeartbeatRequest) *apiv1.HeartbeatRequest {
+	if req == nil {
+		return &apiv1.HeartbeatRequest{}
+	}
+	return &apiv1.HeartbeatRequest{
+		HostId:        req.HostId,
+		SessionId:     req.SessionId,
+		Result:        apiv1.ConvertPBToAssessmentResult(req.Result),
+		Packages:      req.Packages,
+		InstalledCPEs: req.InstalledCPEs,
+		NetworkInfo:   req.NetworkInfo,
+		SecureMode:    req.SecureMode,
+	}
+}
+
+// heartbeatRequestToPB 是 pbToHeartbeatRequest 的逆变换（客户端发送用）。
+func heartbeatRequestToPB(req *apiv1.HeartbeatRequest) *apiv1.PBHeartbeatRequest {
+	if req == nil {
+		return &apiv1.PBHeartbeatRequest{}
+	}
+	return &apiv1.PBHeartbeatRequest{
+		HostId:        req.HostId,
+		SessionId:     req.SessionId,
+		Result:        apiv1.ConvertAssessmentResultToPB(req.Result),
+		Packages:      req.Packages,
+		InstalledCPEs: req.InstalledCPEs,
+		NetworkInfo:   req.NetworkInfo,
+		SecureMode:    req.SecureMode,
+	}
 }
 
 func (c *GRPCClient) loadTLSCredentials() (credentials.TransportCredentials, error) {
