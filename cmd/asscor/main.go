@@ -30,6 +30,10 @@ func main() {
 		cfg = config.Default()
 	}
 
+	// `[user_check.*]` 的装配必须在评估之前：kernel 侧在组合根显式注册
+	// （cmd/kernel/main.go），standalone 路径此前漏了这一步 ⇒ 自定义检查被解析但从不执行。
+	registerUserChecks(cfg)
+
 	assessor := engine.NewAssessor(cfg)
 
 	attachSPC(cfg, assessor)
