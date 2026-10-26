@@ -44,10 +44,27 @@ func main() {
 	logFormat := flag.String("log-format", "json", "log format: json, text")
 	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
 	logOutput := flag.String("log-output", "stderr", "log output: stderr, stdout, or file path")
+	// 多 agent（一 CT 一 agent、按需拆 CT）需要**每个 agent 一张客户端证书**：
+	// kernel 把 host-id 与 mTLS 证书指纹绑定（BindAgentCert），共用同一张 agent.crt
+	// 会让第二个 agent 注册时报 `certificate identity conflict`。
+	// 这两个开关只做一件事：用现有 CA（--cert-dir 下的 ca.crt/ca.key）为指定 host-id
+	// 签一张客户端证书并退出 —— 不影响正在运行的 kernel。
+	issueAgentCert := flag.String("issue-agent-cert", "",
+		"issue a per-agent client certificate for the given host id (uses ca.crt/ca.key in --cert-dir) and exit")
+	issueOutDir := flag.String("issue-out", "",
+		"output directory for --issue-agent-cert (default: --cert-dir)")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Printf("ASSCOR Kernel %s (SSAM %s)\n", version.ASSCORVersion, version.SSAMVersion)
+		os.Exit(0)
+	}
+
+	if *issueAgentCert != "" {
+		if err := issueAgentCertificate(*certDir, *issueAgentCert, *issueOutDir); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: issue agent certificate: %v\n", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 
@@ -807,4 +824,40 @@ func grpcEnabled(ac map[string]string) bool {
 func grpcTLSEnabled(ac map[string]string) bool {
 	v := ac["grpc.tls_enabled"]
 	return v == "on" || v == "true" || v == "1"
+}
+
+// issueAgentCertificate 用 --cert-dir 里现有的 CA（ca.crt/ca.key）为 hostID 签一张
+// 客户端证书，写成 `<out>/<hostID>.crt` 与 `<out>/<hostID>.key`。
+//
+// 为什么需要它：多 agent 部署（一 CT 一 agent、按需拆 CT）时，所有 agent 共用同一张
+// agent.crt 会让 kernel 的 host-id↔证书指纹绑定直接拒绝第二个 agent
+// （`certificate identity conflict`）。本命令只签证书、不碰运行中的 kernel。
+func issueAgentCertificate(certDir, hostID, outDir string) error {
+	if hostID == "" {
+		return fmt.Errorf("host id must not be empty")
+	}
+	caPair, err := kernel.LoadCertPair(filepath.Join(certDir, "ca.crt"), filepath.Join(certDir, "ca.key"))
+	if err != nil {
+		return fmt.Errorf("load CA from %s: %w", certDir, err)
+	}
+	pair, err := kernel.IssueAgentCert(caPair, kernel.DefaultAgentConfig(hostID), hostID)
+	if err != nil {
+		return err
+	}
+	if outDir == "" {
+		outDir = certDir
+	}
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
+		return err
+	}
+	certPath := filepath.Join(outDir, hostID+".crt")
+	keyPath := filepath.Join(outDir, hostID+".key")
+	if err := os.WriteFile(certPath, pair.CertPEM, 0o640); err != nil {
+		return err
+	}
+	if err := os.WriteFile(keyPath, pair.KeyPEM, 0o600); err != nil {
+		return err
+	}
+	fmt.Printf("issued agent certificate for host %q\n  cert: %s\n  key:  %s\n", hostID, certPath, keyPath)
+	return nil
 }
