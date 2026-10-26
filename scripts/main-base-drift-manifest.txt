@@ -35,7 +35,7 @@
 
 # ---- 研究接线（底座文件被研究线改动过，按规则④留在 ARC）----
 e8008f54a81956f8fbaf8b8e85032830f7db7896  80f1fd71fadeb6ba4c9443d79c28eff7679eaf66  internal/model/model.go  # EdgeFactors / EdgeFactorObservation 的线上契约（研究线新增）；main 侧已随 Task 39 带入方向① 的 FinalSigma 注释
-3697ffa39ad0c40dce22be006cdb945656e93983  83670c3f083dfb7f4d09ca3d3d35d2c140d605a6  internal/engine/assessor.go  # legacy 评分路径回填观测链（evaluateEdgeFactorChain）；main 侧已随 Task 39 带入方向① 的共享贝叶斯域分（ConfidencePolicyFromConfig/legacyCheckInputs）
+bb8a456a67b2a248c8cb5581a2cab35f4bfb0b48  f4434358a2a9b685368331cee2d1421894f3d9f6  internal/engine/assessor.go  # legacy 评分路径回填观测链（evaluateEdgeFactorChain）；main 侧已随 Task 39 带入方向① 的共享贝叶斯域分（ConfidencePolicyFromConfig/legacyCheckInputs）
 de3d7595b0ade14f862ba126ffca7dffccdcb79d  e4e50b92d256b7a4488703d1eb1289f46bc55f7e  internal/engine/ssam/adapter_engine.go  # 插件路径的合成策略钩子回填观测链；main 侧已随 Task 39 带入 SetAcceptByLowerBound（ARC 版只多观测链）
 ca50557000643e66a46d1cbfdf31cac742b08808  ffeb423620cb8f24fa3a6de0a59d28b5ad745403  internal/engine/ssam/edgefactor.go  # ARC-only（有意差异）：`activationsFromResults` 返回前调 `edgefactor.CollapseToFactors`（Task 18 合成层双条目折叠）；这是研究线 V/G/C 装配钩子，main 的产品路径不装载 V/G/C ⇒ 不移植
 5f1375889f899a3dd1bbd5ffadd56f2409c980e4  fd0a385660b1e5c5140d7160ffa7d0f2b50b567b  internal/kernel/persistence_types.go  # 落盘结构增 additive 字段 EdgeFactorChain
