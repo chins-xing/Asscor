@@ -35,10 +35,17 @@
 
 | 项 | 值 |
 |---|---|
-| CT | **911 / `asc-agent-ct`**（`RAID-Mirror:8`，1 GiB / 2 核，`192.168.30.51`，`onboot=1`） |
+| CT | **911 / `asc-agent-ct`**（`RAID-Mirror:8`，1 GiB / **8 核**（`cpuunits=4096`），`192.168.30.51`，`onboot=1`） |
 | agent | `/opt/asc-agent`；证书在 `/etc/asscor/certs/{ca.crt,agent.crt,agent.key}` |
-| 启动 | `setsid nohup /opt/asc-agent --kernel 192.168.30.50:50051 --host-id asc-agent-ct --tls --cert-dir /etc/asscor/certs --tls-server-name asc-kernel-vm …` |
-| 已验证 | kernel 日志 `msg=registered session_id=sess-asc-agent-ct-…`；`ss` 两条 ESTAB |
+| 启动 | **systemd 单实例 `asscor-agent.service`**（`Restart=always`）：`systemctl {start|stop|restart|status} asscor-agent` |
+| 已验证 | kernel 日志 `msg=registered session_id=sess-asc-agent-ct-…`；`ss` 一条 ESTAB（单实例） |
+
+> **CPU 规则（2026-10-26 定）**：agent 侧**默认给 8 核**（至少 6），`cpuunits=4096`。
+> 背景：911 曾出现 CPU PSI `some avg10=91%` —— 根因是**4 个重复 agent 进程**（每次手工
+> `setsid nohup` 启动都留下一个）叠在 2 核上，而不是"核数不够"。改成 systemd 单实例 + 8 核后
+> **PSI 0.00 / 单进程 CPU 0%**。
+> 另：agent 每 30s 心跳会重算 `collectPackages`/`collectCPEs`（日志 `generated CPEs from packages`），
+> 这是常态开销；**不要再手工 `setsid nohup` 起 agent**，一律用 systemd 单元，避免进程堆积。
 
 > ⚠️ CT 的 agent **需要** `kernel.ini` 里 `[comms] require_mtls=true` 与证书配对；
 > 若要临时免 TLS（仅隔离环境），只能改 `require_mtls=false` 并给 kernel 加 `--no-mtls` —— **不要**在生产沿用。
@@ -86,6 +93,7 @@ sudo ./bin/asscor --config etc/config-def05.ini  -json > /tmp/c.json
 
 - **改配置**：改 `/home/asc/asscor/etc/kernel.ini` 后 `sudo systemctl restart asscor-kernel`；
   改 `[confidence]` 无需重启（配置热加载会生效，但为确定性建议重启）。
+- **agent 侧**：`pct set <vmid> --cores 8 --cpuunits 4096`（新建 agent CT 就按这个给），且**只允许**通过 `asscor-agent.service` 启动，禁止 `setsid nohup` 手工起（会堆进程）。
 - **不要**用 `pkill -f 'bin/kernel'` —— 会把**执行命令的 SSH shell 自己也匹配杀掉**（本项目实测踩过两次）。
   用 `systemctl` 或 `pkill -x kernel`（进程名精确匹配）。
 - **快照是回滚点**：破坏性试验前先 `qm snapshot 910 before-<事由>`；回滚 `qm rollback 910 <name>`。
