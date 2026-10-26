@@ -79,11 +79,18 @@ nft:  filter forward   policy drop
    | 逐主机分数样本 | `domC-mon` 40.42/40.53（80 检查）· `asc-agent-ct`/`ct2`/`ct3`/`domA-web`/`domA-db`/`domB-web` **均 46.75**（81 检查） |
 
    ⇒ **多主机评估是跑通的**（agent 心跳携带 81 条检查结果 → `EvaluateFromResults` → JSONL 落盘）。
-   同时暴露两个**真缺陷**（与"没落库"无关）：
-   - **日志重定向用相对路径**：把管理员的日志路径搞乱，且覆盖了单元的 `append:` 与 `--log-output`；
-   - **gRPC 传输层丢字段**：`grpcKernelHandler.Heartbeat` 只转 `HostId/SessionId/Result/Packages`，
-     **丢掉 `NetworkInfo`**（`Register` 同样丢）⇒ 若将来用 gRPC agent，拓扑永远不会被记录
-     （当前 agent 走 **JSONRPC over TLS**，整包结构体直传，所以拓扑正常）。
+   两个**真缺陷**（与"没落库"无关）已于 **2026-10-27 修复并部署验证**（提交 `e0e2819`）：
+   - ~~日志重定向用相对路径~~ **已修**：只在 stdout 是终端时才重定向，路径一律绝对
+     （`ASSCOR_LOG_FILE` > `ASSCOR_LOG_DIR` > `/var/log`）。
+     部署验证：新 kernel 启动后 `/ASSCOR-kernel.log` **不再产生**；
+     `/var/log/asscor-kernel.log` 内 `heartbeat received` 17 条、`processing check results` 7 条、
+     `assessment result` 7 条（同一批 agent 重连后一分钟内）。
+   - ~~gRPC 传输层丢字段~~ **已修**：`PBHeartbeatRequest` 补齐
+     `InstalledCPEs`/`NetworkInfo`/`SecureMode`，并加 JSON codec
+     （`grpc.ForceServerCodec`/`ForceCodec`；PB 类型是手写结构体、没有 `ProtoReflect`，
+     默认 proto codec 编不了）。新增 `pbToHeartbeatRequest`/`heartbeatRequestToPB` 逐字段搬运，
+     测试钉住往返一致。**注**：`[grpc]` 与 JSONRPC 仍同占 `.50051`（gRPC 启动报
+     `address already in use`，`grpc=false`），这是**另一个**待办：给 gRPC 单独端口或默认关闭。
 
    **本次复现到的现象**：6 台 CT agent 分数**完全相同（46.75）**，只有 `domC-mon` 不同（40.4x）——
    正是 2026-08-16 审计里"同质主机同分"的结论，在真实三域多主机上再次出现。
