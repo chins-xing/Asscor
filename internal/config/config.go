@@ -800,6 +800,8 @@ func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 		"resilience": true,
 		"user_check": true, "adapter_script": true,
 		"grpc": true, "log": true, "comms": true, "commands": true,
+		// v2.2.1：SRD 段必须进 AdapterConfig，否则 srd.loadConfig 读不到任何 [srd] 键。
+		"srd": true,
 	}
 
 	for sectionName, kv := range sections {
