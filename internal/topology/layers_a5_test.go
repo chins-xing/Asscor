@@ -2,22 +2,23 @@ package topology
 
 import "testing"
 
-// A-5：inbound 规则带 To（目标子网）时，只有"送到该子网"的流量受影响。
+// A-5：inbound 规则带 To（目标子网）时，只影响"送到该子网"的流量。
 func TestInboundRuleScopedByTargetSubnet(t *testing.T) {
 	hosts := []HostFacts{
 		{HostID: "A", Subnets: []string{"10.0.0.0/24"}},
-		{HostID: "B", Subnets: []string{"10.0.0.0/24"}, Inbound: []PolicyRule{{To: "10.0.0.0/24", Allow: false}}},
-		{HostID: "C", Subnets: []string{"10.9.0.0/24"}},
+		{HostID: "A2", Subnets: []string{"10.9.0.0/24"}},
+		{HostID: "B", Subnets: []string{"10.0.0.0/24", "10.9.0.0/24"},
+			Inbound: []PolicyRule{{To: "10.0.0.0/24", Allow: false}}},
 	}
 	g := BuildLayeredGraph(hosts, nil, true, true)
 
-	// B 拒绝"送到 10.0.0.0/24"的入向 ⇒ A→B 与 B→A 都 blocked（会话双向）
+	// B 拒绝"送到 10.0.0.0/24"的入向 ⇒ A→B 被阻断
 	if ok, why := g.Adjacent("A", "B"); ok {
 		t.Fatalf("A→B 应被 daddr 规则阻断（reason=%s）", why)
 	}
-	// C 在别的子网：共享子网为 10.9.0.0/24，不在 B 的 daddr 范围内 ⇒ 不受影响
-	if ok, why := g.Adjacent("C", "A"); !ok {
-		t.Fatalf("C→A 不应受 B 的 daddr 规则影响（reason=%s）", why)
+	// A2 与 B 共享 10.9.0.0/24，不在 B 的 daddr 范围内 ⇒ 不受影响
+	if ok, why := g.Adjacent("A2", "B"); !ok {
+		t.Fatalf("A2→B（10.9 段）不应受 daddr 规则影响（reason=%s）", why)
 	}
 }
 

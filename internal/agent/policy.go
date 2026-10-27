@@ -360,7 +360,8 @@ func collectVLANs() []string {
 	}
 	entries, err := os.ReadDir("/proc/net/vlan")
 	if err != nil {
-		return nil
+		// 容器内没有 VLAN procfs：**不能丢已经收集到的 env 覆盖**（A-3 实测踩到）。
+		return vlans
 	}
 	for _, e := range entries {
 		if e.Name() == "config" {
