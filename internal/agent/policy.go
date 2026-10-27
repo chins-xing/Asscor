@@ -155,10 +155,16 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 		}
 		inbound := strings.EqualFold(rule.Chain, "input")
 		if inbound {
-			// 入向规则通常只有 saddr（没有 daddr）：表达"来自该源的入向流量被拒/放行"。
-			if from != "" {
+			// 入向规则三种形态（"不猜"边界）：
+			//   saddr → 拒绝/放行来自该源的入向；
+			//   daddr → 拒绝/放行到该目标子网的入向（A-5：此前被丢弃）；
+			//   iifname → 用接口→子网映射展开成来源子网。
+			switch {
+			case from != "":
 				rules = append(rules, apiv1.PolicyRule{From: from, Allow: *verdict, Direction: "inbound"})
-			} else if inIface != "" {
+			case to != "":
+				rules = append(rules, apiv1.PolicyRule{To: to, Allow: *verdict, Direction: "inbound"})
+			case inIface != "":
 				for _, fs := range ifaces[inIface] {
 					rules = append(rules, apiv1.PolicyRule{From: fs, Allow: *verdict, Direction: "inbound"})
 				}
@@ -255,9 +261,12 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 			continue
 		}
 		if inbound {
-			if from != "" {
+			switch {
+			case from != "":
 				rules = append(rules, apiv1.PolicyRule{From: from, Allow: allow, Direction: "inbound"})
-			} else if inIface != "" {
+			case to != "":
+				rules = append(rules, apiv1.PolicyRule{To: to, Allow: allow, Direction: "inbound"})
+			case inIface != "":
 				for _, fs := range ifaces[inIface] {
 					rules = append(rules, apiv1.PolicyRule{From: fs, Allow: allow, Direction: "inbound"})
 				}

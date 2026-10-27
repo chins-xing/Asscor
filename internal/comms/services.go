@@ -418,6 +418,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 					"subnets", len(subnets),
 					"policies", len(req.NetworkInfo.Policies),
 					"links", len(req.NetworkInfo.Links),
+					"vlans", len(req.NetworkInfo.VLANs),
 					"forwards", req.NetworkInfo.Forwards)
 			}
 		}
