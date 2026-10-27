@@ -239,6 +239,26 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 			pv.Unknowns = appendUnique(pv.Unknowns, "policy")
 		}
 	}
+	// A-4：入向策略在**路径端点**也按会话语义生效（跨子网同样适用）。
+	// 请求被目标 INPUT 拒 ⇒ blocked；反向会话的回程包撞上源端 INPUT ⇒ 同样 blocked。
+	if len(steps) >= 2 && len(path) >= 2 {
+		srcHost := path[0]
+		dstHost := path[len(path)-1]
+		srcSub := steps[0].Subnet
+		dstSub := steps[len(steps)-1].Subnet
+		if !g.inboundAllowed(dstHost, srcSub) {
+			pv.Verdict = VerdictBlocked
+			pv.BlockedAt = dstHost
+			pv.Reason = "inbound policy denies " + srcSub + " -> " + dstHost
+			return pv
+		}
+		if !g.inboundAllowed(srcHost, dstSub) {
+			pv.Verdict = VerdictBlocked
+			pv.BlockedAt = srcHost
+			pv.Reason = "inbound policy denies return path " + dstSub + " -> " + srcHost
+			return pv
+		}
+	}
 	return pv
 }
 
