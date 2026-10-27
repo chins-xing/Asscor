@@ -12,6 +12,14 @@ func TestVersionConstants(t *testing.T) {
 	if SSAMVersion == "" {
 		t.Error("SSAMVersion must not be empty")
 	}
+	if SRDVersion == "" {
+		t.Error("SRDVersion must not be empty")
+	}
+	for _, r := range SRDVersion {
+		if !(r >= '0' && r <= '9' || r == '.') {
+			t.Errorf("SRDVersion %q must be numeric dotted", SRDVersion)
+		}
+	}
 	// ASSCOR uses semver-ish "vX.Y.Z".
 	if ASSCORVersion[0] != 'v' {
 		t.Errorf("ASSCORVersion %q should start with 'v'", ASSCORVersion)

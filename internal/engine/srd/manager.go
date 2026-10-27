@@ -13,6 +13,7 @@ import (
 	kernelconfig "github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/logger"
 	"github.com/chins-xing/asscor/internal/topology"
+	"github.com/chins-xing/asscor/internal/version"
 )
 
 // TopicSRDResult is the Bus topic published when an external tool report is processed.
@@ -92,7 +93,7 @@ func NewManager() *Manager {
 func (m *Manager) Info() PluginInfo {
 	return PluginInfo{
 		Name:        "srd_adapters",
-		Version:     "1.0.0",
+		Version:     version.SRDVersion,
 		Description: "SRD external adapters — normalizes OpenSCAP, Lynis and generic JSON reports into Prism/SRD input",
 		Author:      "ASSCOR Core Team",
 	}
