@@ -81,9 +81,9 @@ bc39ebcf4568f1c223c3922a148d756672a992d3  6b499f759e53a0a5c63bca724770be20b1f5b5
 # 这些路径在 main 上**不成立**（main 没有分代目录）⇒ 不能同步：同步会把 main 的引用指向不存在的路径。
 # 故登记为有意差异：**只差引用路径，不含任何行为差异**。
 3aad68a0847df4f427d4068385b51ce3e91aab33  736947e97747ea385a020b7d32fa033814723f1d  CONTRIBUTING.md  # 审计报告目录按布局写作 `docs/3-audits/`（main 为 `docs/audits/…`）；同处分叉还含首行 BOM 去除，属纯文档面
-878ee95630bab368f6feb66ad4b1bd91bb6f2e0f  5c04a8f9ae8e61e67bef5ac8eaeab12198649989  config.ini  # 仅注释与文档引用差异：`[confidence]` 段的设计文档路径（ARC `docs/1-current/design/…` / main `docs/…`）；键、值与各段内容两侧一致（2026-10-23 死键标注/段改名后的新 blob）
+e3e536ca9eefa19aa8266725468d07a306957786  ed8c11bf73533400e4ead04af1215b8776142080  config.ini  # 仅注释与文档引用差异：`[confidence]` 段的设计文档路径（ARC `docs/1-current/design/…` / main `docs/…`）；键、值与各段内容两侧一致（2026-10-23 死键标注/段改名后的新 blob）
 f4a18bf5bc659eee92fca9ef3a179a933ccd20df  ac185e715e91ba60f9c7c2bc28ea9cf0bb4e21ba  internal/config/config.go  # 仅 adapterSecretEnv 注释里的文档引用（ARC `docs/1-current/reference/…` / main `docs/…`）
-ff9a03140b435877c307e1abe14d0df63701a4fe  cbee0f0a80e96dbb79ef00a776a28aa1464c89db  internal/srdwrapper/srd_wrapper.go  # 仅模块 tag 依赖矩阵的注释引用（ARC `docs/4-archive/plans/…` / main `docs/…`）
+0dc96e0696348444603f5754c08c44a2d32b097b  8082541bc2be8932eb906a88ce5d5fcd74294036  internal/srdwrapper/srd_wrapper.go  # 仅模块 tag 依赖矩阵的注释引用（ARC `docs/4-archive/plans/…` / main `docs/…`）
 
 # ---- ARC-only 工具与文档（Task 39 登记）----
 # `scripts/check-doc-refs.sh`：检查 `docs/1-current/**` 的引用完整性（含 --selftest），
