@@ -191,3 +191,46 @@ TMOUT、/etc/shadow 000、sudoers 0440），其余 CT 46.81，domC-mon 40.42，d
 | c3 A-web→C-mon | reachable | reachable |
 | c4 A-web→shadow-2 | reachable | reachable |
 | c5 A-web→shadow-1（无 agent） | 静默缺失 | **probable** |
+
+## 8. 重跑：纯接口级 ACL 配置下的真值与 ROC（2026-10-27）
+
+### 8.1 做了什么
+
+撤掉 920 上手工加的**地址级** drop，只保留真实配置里的**接口级**规则：
+
+```
+chain forward {
+    type filter hook forward priority filter; policy drop;
+    ct state established,related accept
+    iifname "eth0" oifname "eth1" drop     # 域A ↔ 域B
+    iifname "eth1" oifname "eth0" drop
+    accept
+}
+```
+
+新 agent（含接口→子网映射）已部署到 920 并重新注册（`sess-domC-router-…`）。
+随后用同一套测量脚本重测 7 台 × 12 目标的连通矩阵。
+
+### 8.2 结果
+
+- 84 条有向对，**忽略 RTT 后与上一轮差异 0 条** ⇒ 纯接口级配置与地址级配置
+  在网络行为上等价（这正是"真实配置无需改造即可被理解"的前提）；
+- 可达性分布不变：920/924/927 全通（12/12），921/922/923/925 各 10/12；
+- ROC 重跑：**flat AUC 0.419、layered AUC 0.876**，与上一轮完全一致。
+
+### 8.3 为什么 AUC 不变（重要，别误读）
+
+ROC 变的是**采集来源**（地址级手工规则 → 接口级真实规则），不是**模型输入**：
+`cmd/srdroc` 的分层模型读取的策略仍是"子网对 allow/deny"，
+而接口映射的产物正是这同一组子网对。所以：
+
+- 若接口解析没有生效，分层模型会**看不到** A↔B 阻断 ⇒ layered 会退化成 flat（AUC≈0.42）；
+- 重跑得到 0.876，说明接口级规则**确实被解析并进入了模型**（否则分数会塌）；
+- AUC 数值本身不变，是因为真值也没变（策略行为等价）。
+
+### 8.4 当前 ROC 的局限（下一轮要解决）
+
+- 负样本仅 6 个（A↔B 六对），阈值点只有 4 个 ⇒ AUC 置信区间很宽；
+- 分数离散（layered 只有 {1, 0.8, 0.5, 0}）；
+- 真值是 ICMP 可达性，不是"攻击是否成功"；
+- 同一主机多 IP 折叠后样本数减少。
