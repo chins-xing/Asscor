@@ -11,5 +11,8 @@ const (
 	//       区域（Zone）→ 资产关键性接线、分层图规模统计（可观测性）。
 	// v2.2：把 v2.1 的未覆盖项做完 —— L1 链路事实、域内/主机级入向 ACL、
 	//       容器内 VLAN 运维覆盖、L5 业务角色（角色优先于区域）。
-	SRDVersion = "2.2"
+	// v2.2.1：修复配置接线 —— Config.Get 补上（此前 [srd] 配置被静默忽略），
+	//         transmission/max_path_depth/path_decay/prop_cap/aggregation/horizon_days
+	//         全部接入并可调；启动日志输出 "SRD effective config"。
+	SRDVersion = "2.2.1"
 )

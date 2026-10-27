@@ -192,6 +192,18 @@ func Default() *Config {
 	}
 }
 
+// Get 返回 adapter/扩展段配置值（键形如 "srd.layered_graph"、"prism.horizon_days"）。
+//
+// v2.2 修：SRD 的 loadConfig 用 `interface{ Get(string) string }` 读配置，
+// 但 Config 此前**没有 Get 方法** ⇒ 所有 [srd] 配置（layered_graph / roles /
+// sync_interval_sec / transmission …）都被静默忽略。本方法补上这个读取面。
+func (c *Config) Get(key string) string {
+	if c == nil {
+		return ""
+	}
+	return c.AdapterConfig[key]
+}
+
 func (c *Config) GetPrismDefaultTransmission() float64 {
 	if c.PrismDefaultTransmission <= 0 {
 		return 0.3

@@ -4,6 +4,34 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## v2.2.1（2026-10-27）—— 参数接线修复（[srd] 配置此前被静默忽略）
+
+**问题**：`srd.Manager.loadConfig` 通过 `interface{ Get(string) string }` 读配置，
+但 `config.Config` **没有 `Get` 方法** ⇒ 类型断言失败，`[srd] layered_graph` /
+`roles` / `sync_interval_sec` 全部被静默忽略（配置里写了也不生效）。
+
+**修复与补齐**：
+
+1. `config.Config.Get(key)`：暴露 adapter/section 配置（键形如 `srd.layered_graph`）。
+2. 新增可调参数（全部从 `[srd]` 读取，非法值忽略、保持默认）：
+   | 键 | 默认 | 作用 |
+   |---|---|---|
+   | `transmission` | 0.1（或 `[prism] default_transmission`） | 基础风险传输率 |
+   | `max_path_depth` | 5 | 路径枚举深度（影响多跳召回） |
+   | `path_decay` | 0.80 | 路径风险衰减 |
+   | `prop_cap` | 0.25 | 传播惩罚上限 |
+   | `aggregation` | rss | 传播聚合模式（rss/max/linear） |
+   | `horizon_days` | 7 | 推理层预测窗口 |
+   | `sync_interval_sec` | 3600 | 拓扑同步周期 |
+   | `layered_graph` | true | 分层图开关 |
+   | `roles` | 空 | L5 业务角色映射 |
+3. 这些参数经 `PrismConfigFrom()` 注入 prism 引擎（此前 prism 永远用库默认值）。
+4. 启动日志新增 **`SRD effective config`**，逐项打印生效值——配置是否被接受，
+   不再靠猜。
+
+**测试**：`TestGetExposesSectionKeys`（config）、`TestLoadConfigParsesAllAdjustableParams`、
+`TestLoadConfigIgnoresInvalidValues`、`TestPrismConfigFromMapsParams`（srd）。
+
 ## v2.2（2026-10-27）—— 补齐四项：L1 链路 / 域内入向 ACL / VLAN 覆盖 / L5 角色
 
 v2.1 遗留了四项"采集了但模型不用/用不了"的语义；v2.2 全部接上：
