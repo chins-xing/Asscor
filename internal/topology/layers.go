@@ -48,6 +48,7 @@ type HostFacts struct {
 	Gateways []string // L3：默认网关 IP（可为空）
 	VLANs    []string // L2：所属广播域（VLAN/tag）；空 = 未知
 	Role     string   // L5：资产角色（web/db/mon/shadow…）
+	Zone     string   // L5：安全区域（internal/dmz/public/wan/cloud），由 agent 上报
 	// Forwards 表示这台主机**真的会转发**（ip_forward=1 / 路由角色）。
 	// 双网卡 ≠ 路由器：实测中 pivot-1 也是双宿主，但它不转发，
 	// 若仅凭"≥2 个子网"就允许它中转，模型会凭空造出绕行路径。
@@ -170,8 +171,8 @@ func (g *LayeredGraph) HostReachable(from, to string, maxHops int) []PathVerdict
 		}
 		for _, sub := range g.hostSubs[cur] {
 			for _, next := range g.subnetTo[sub] {
-				if visited[next] {
-					continue
+				if visited[next] || !g.broadcastCompatible(cur, next) {
+					continue // L2 闸门：不同广播域不连通
 				}
 				visited[next] = true
 				stepsNext := append(append([]PathStep(nil), steps...), PathStep{Host: next, Subnet: sub, Verdict: VerdictReachable})
@@ -183,8 +184,8 @@ func (g *LayeredGraph) HostReachable(from, to string, maxHops int) []PathVerdict
 	// 起点：从 from 的每个子网出发
 	for _, sub := range g.hostSubs[from] {
 		for _, next := range g.subnetTo[sub] {
-			if visited[next] {
-				continue
+			if visited[next] || !g.broadcastCompatible(from, next) {
+				continue // L2 闸门：起始跳也不能跨广播域
 			}
 			visited[next] = true
 			dfs(next, []string{from, next}, []PathStep{{Host: next, Subnet: sub, Verdict: VerdictReachable}}, []string{sub}, sub)
@@ -250,8 +251,45 @@ func (g *LayeredGraph) policyVerdict(from, to string) (Verdict, string) {
 	return VerdictReachable, "policy allow (default)"
 }
 
-// SharedSubnets 返回两台主机共同所属的子网（同广播域的直接邻接依据）。
-func (g *LayeredGraph) SharedSubnets(a, b string) []string {
+// broadcastCompatible 判断两台主机能否在二层直接通信（L2 闸门）。
+//
+// 语义（本层只表达这一件事）：
+//   - 双方都上报了 VLAN 且没有交集 ⇒ **不同广播域**，即使 IP 同子网也不可直连
+//     （这正是"重叠地址 + VLAN 隔离"场景）；
+//   - 任一方 VLAN 未知 ⇒ 不阻断（未知 ≠ 拒绝），但由调用方自行标注不确定；
+//   - 双方都没有 VLAN 信息 ⇒ 视为兼容（保持既有行为）。
+func (g *LayeredGraph) broadcastCompatible(a, b string) bool {
+	ha, hb := g.hosts[a], g.hosts[b]
+	if ha == nil || hb == nil {
+		return true
+	}
+	if len(ha.VLANs) == 0 || len(hb.VLANs) == 0 {
+		return true
+	}
+	for _, va := range ha.VLANs {
+		for _, vb := range hb.VLANs {
+			if va == vb {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Adjacent 判断两台主机是否存在"可直接通信"的邻接（L3 共享子网 + L2 广播域兼容）。
+// 返回 (adjacent, reason)，reason 用于解释阻断原因（便于审计与测试）。
+func (g *LayeredGraph) Adjacent(a, b string) (bool, string) {
+	if len(g.SharedSubnetsRaw(a, b)) == 0 {
+		return false, "no shared subnet"
+	}
+	if !g.broadcastCompatible(a, b) {
+		return false, "l2 isolated (VLAN mismatch)"
+	}
+	return true, "adjacent"
+}
+
+// SharedSubnetsRaw 返回共同子网，不做 L2 闸门（仅供 Adjacent 内部与诊断用）。
+func (g *LayeredGraph) SharedSubnetsRaw(a, b string) []string {
 	var out []string
 	for _, sa := range g.hostSubs[a] {
 		for _, sb := range g.hostSubs[b] {
@@ -261,6 +299,65 @@ func (g *LayeredGraph) SharedSubnets(a, b string) []string {
 		}
 	}
 	return out
+}
+
+// Stats 返回分层图的规模统计（用于可观测性与测试）。
+func (g *LayeredGraph) Stats() map[string]int {
+	subnets := map[string]bool{}
+	vlans := map[string]bool{}
+	for _, subs := range g.hostSubs {
+		for _, s := range subs {
+			subnets[s] = true
+		}
+	}
+	for _, h := range g.hosts {
+		for _, v := range h.VLANs {
+			vlans[v] = true
+		}
+	}
+	return map[string]int{
+		"hosts":        len(g.hosts),
+		"subnets":      len(subnets),
+		"vlans":        len(vlans),
+		"policies":     len(g.policies),
+		"forwarding":   len(g.gateways),
+		"policy_known": boolInt(g.policyKnown),
+		"link_known":   boolInt(g.linkKnown),
+	}
+}
+
+// CriticalityForZone 是 L5（区域语义）到资产关键性的映射。
+// 只用于把"位置语义"接进风险计算，不代表真实业务重要性；可在配置/规则层再校正。
+func CriticalityForZone(zone string) float64 {
+	switch zone {
+	case "internal":
+		return 0.80
+	case "dmz":
+		return 0.60
+	case "cloud":
+		return 0.60
+	case "public":
+		return 0.40
+	case "wan":
+		return 0.30
+	default:
+		return 0.50
+	}
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// SharedSubnets 返回两台主机共同所属的子网（同广播域的直接邻接依据）。
+func (g *LayeredGraph) SharedSubnets(a, b string) []string {
+	if !g.broadcastCompatible(a, b) {
+		return nil // L2 隔离：即使同子网也不算邻接
+	}
+	return g.SharedSubnetsRaw(a, b)
 }
 
 // Forwards 判断主机是否真的转发（允许作为中继）。

@@ -79,6 +79,17 @@ func (p *Pipeline) Process(ctx context.Context, report *ExternalAssessmentReport
 	}
 
 	node := p.reportToNodeState(report)
+	// L5（区域语义）接线：agent 上报的 NetworkZone → 资产关键性。
+	// 这是"分层图位置语义"进入风险计算的入口；未知区域保持 0（prism 默认）。
+	p.mu.RLock()
+	zone := ""
+	if ti, ok := p.topology[report.HostID]; ok {
+		zone = ti.Zone
+	}
+	p.mu.RUnlock()
+	if zone != "" {
+		node.Criticality = topology.CriticalityForZone(zone)
+	}
 	nowUnix := time.Now().Unix()
 
 	p.mu.Lock()

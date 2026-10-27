@@ -266,6 +266,7 @@ func BuildLayeredFromRegistry() *LayeredGraph {
 			HostID:   n.HostID,
 			Subnets:  append([]string(nil), n.Subnets...),
 			VLANs:    append([]string(nil), n.VLANs...),
+			Zone:     n.Zone,
 			Forwards: n.Forwards,
 		})
 		for _, p := range n.Policies {
