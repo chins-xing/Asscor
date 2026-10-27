@@ -4,6 +4,29 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## v2.2.6（2026-10-27）—— A-5 入向规则语义补齐；A-3 VLAN 数据链路验证
+
+### A-5（已关闭）
+
+- **daddr-only 入向规则**：`nft` 的 `ip daddr X drop` 与 `iptables -A INPUT -d X -j DROP`
+  此前被丢弃（只认 saddr）；现在解析为 `Direction=inbound, To=X`。
+- **目标子网维度**：`inboundAllowed(target, sourceSubnet, targetSubnet)` 同时匹配
+  From（来源）与 To（目标），`To` 为空表示任意目标。
+- **顺序语义**：首条匹配即生效（解析侧保持规则顺序）。
+- 测试：`TestNftInputDaddrRuleParsed`、`TestIptablesInputDaddrRuleParsed`、
+  `TestInboundRuleScopedByTargetSubnet`、`TestInboundRuleOrderFirstMatch`。
+- 数据集复算（A-5 改动后）：8 轮均值仍 **0.959**，无回归。
+
+### A-3（数据链路已验证；真实 L2 隔离场景受环境限制）
+
+- 新增 `ASSCOR_AGENT_VLANS="eth0=101"` 的端到端验证：在 921/922 注入不同 VLAN 后，
+  kernel 日志出现 `vlans=1`（`topology facts recorded`）⇒ **agent → comms → 拓扑注册表**
+  的 L2 事实链路已打通，模型侧 L2 闸门由单测覆盖。
+- 同时修掉一个真 bug：`collectVLANs` 在容器内 `/proc/net/vlan` 不存在时
+  `return nil`，把 env 覆盖也丢了（vlans 恒为 0）。改为 `return vlans`。
+- **限制**：本实验的容器共享同一 bridge，无法造出"同子网 + 不同 VLAN"的真实隔离，
+  因此只验证数据链路与模型单测，不做"真值 vs 预测"的 L2 端到端评测。
+
 ## v2.2.5（2026-10-27）—— A-4 修复：入向 ACL 会话语义（双向）
 
 **问题**：v2.2.x 的入向策略只在**同子网直连**时检查，跨子网目标的最后一跳完全不受影响；
