@@ -314,8 +314,14 @@ func (m *Manager) loadConfig(cfgObj interface{}) {
 	if cfg, ok := cfgObj.(interface {
 		Get(string) string
 	}); ok {
-		if v := cfg.Get("srd.layered_graph"); v == "on" || v == "true" || v == "1" {
-			m.cfg.LayeredGraph = true
+		if v := cfg.Get("srd.layered_graph"); v != "" {
+			switch strings.ToLower(strings.TrimSpace(v)) {
+			case "on", "true", "1", "yes":
+				m.cfg.LayeredGraph = true
+			case "off", "false", "0", "no":
+				// 默认已是 true，必须支持显式关闭（v2.2.1 修）。
+				m.cfg.LayeredGraph = false
+			}
 		}
 		if v := cfg.Get("srd.roles"); v != "" {
 			roles := map[string]string{}
