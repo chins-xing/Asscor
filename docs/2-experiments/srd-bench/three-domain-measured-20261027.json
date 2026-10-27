@@ -1,0 +1,51 @@
+{
+  "_comment": "2026-10-27 实测拓扑（路由器/pivot 已装 agent；shadow-1 故意无 agent）。分数来自 kernel 日志最新 assessment result。ground truth 区分『拓扑可达』与『策略可达』两种真值。",
+  "transmission": 0.1,
+  "hosts": [
+    {"id": "domA-web", "subnets": ["172.22.10.0/24"], "score": 47.34, "visible": true, "criticality": 0.7},
+    {"id": "domA-db", "subnets": ["172.22.10.0/24"], "score": 46.81, "visible": true, "criticality": 0.9},
+    {"id": "domB-web", "subnets": ["172.23.10.0/24"], "score": 46.81, "visible": true, "criticality": 0.7},
+    {"id": "domC-mon", "subnets": ["100.64.0.0/24"], "score": 40.42, "visible": true, "criticality": 0.5},
+    {"id": "domC-router", "subnets": ["172.22.10.0/24", "172.23.10.0/24", "100.64.0.0/24", "192.168.30.0/24", "172.26.0.0/24"], "score": 42.67, "visible": true, "criticality": 1.0},
+    {"id": "pivot-1", "subnets": ["172.23.10.0/24", "172.26.0.0/24"], "score": 46.81, "visible": true, "criticality": 0.6},
+    {"id": "shadow-2", "subnets": ["172.26.0.0/24"], "score": 46.81, "visible": true, "criticality": 0.5},
+    {"id": "shadow-1", "subnets": ["172.26.0.0/24"], "score": 46.81, "visible": false, "criticality": 0.5}
+  ],
+  "chains": [
+    {
+      "id": "c1-A内部1跳",
+      "src": "domA-web",
+      "dst": "domA-db",
+      "truth_paths": [["domA-web", "domA-db"]],
+      "truth_reachable": ["domA-db"]
+    },
+    {
+      "id": "c2-A到B(策略阻断)",
+      "src": "domA-web",
+      "dst": "domB-web",
+      "truth_paths": [],
+      "truth_reachable": []
+    },
+    {
+      "id": "c3-A到C(经路由器2跳)",
+      "src": "domA-web",
+      "dst": "domC-mon",
+      "truth_paths": [["domA-web", "domC-router", "domC-mon"]],
+      "truth_reachable": ["domC-router", "domC-mon"]
+    },
+    {
+      "id": "c4-A到shadow-2(3跳可见)",
+      "src": "domA-web",
+      "dst": "shadow-2",
+      "truth_paths": [["domA-web", "domC-router", "shadow-2"]],
+      "truth_reachable": ["domC-router", "shadow-2"]
+    },
+    {
+      "id": "c5-A到shadow-1(不可见,应漏报)",
+      "src": "domA-web",
+      "dst": "shadow-1",
+      "truth_paths": [["domA-web", "domC-router", "shadow-1"]],
+      "truth_reachable": ["domC-router", "shadow-1"]
+    }
+  ]
+}
