@@ -4,6 +4,37 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## v2.2.4（2026-10-27）—— A-7c：CGNAT/保留网段不再算公网（zone 误判真正根因）
+
+**A-7b 诊断实证**（新增 `topology facts recorded` 日志）：
+
+```
+host_id=domC-router zone=dmz    subnets=5 ...
+host_id=domC-mon    zone=public subnets=1 ...
+```
+
+**根因**：实验网 domC 使用 `100.64.0.0/24`（CGNAT / RFC 6598 共享地址空间）。
+Go 的 `net.IP.IsPrivate()` **不包含** 100.64/10，而 `IsGlobalUnicast()` 对其返回 true
+⇒ 被判成公网地址 ⇒ 纯内网主机被推断为 `dmz`/`public`。
+
+**修复**：`nonPublicV4` 显式排除
+`100.64.0.0/10`、`198.18.0.0/15`、`192.0.0.0/24`、TEST-NET-1/2/3、`240.0.0.0/4`。
+
+**现场验证**（v2.2.4 agent 分发 7 台后）：
+
+```
+topology list
+  domC-router          internal   ... 172.22.10.1/24, 172.23.10.1/24, 100.64.0.1/24, ...
+  domC-mon             internal   ... 100.64.0.11/24
+```
+
+**测试**：`isPublicAddress` 增加 CGNAT/保留网段用例；`inferZone` 增加
+"私网 + CGNAT ⇒ internal" 断言；新增 **A-9 集成测试**
+`TestManagerInitAppliesConfig` / `TestManagerInitWithoutConfig`（KernelContext → Init →
+loadConfig → cfg + pipeline 全链路）。
+
+**A-7b 状态**：关闭（A-7b 的诊断结论是"注册表更新侧无问题，是输入数据被判成公网"）。
+
 ## v2.2.3（2026-10-27）—— 审计收口：A-7 / A-8 修复，A-4 / A-5 用例补齐
 
 1. **A-7（zone 误判，已修）**：`inferZone` 旧实现用 `!ip.IsPrivate()` 判公网，
