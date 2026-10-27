@@ -4,6 +4,7 @@ package srd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -116,9 +117,21 @@ func (m *Manager) Init(ctx context.Context, kc KernelContext) error {
 	m.state = PluginInitialized
 
 	// Load config from kernel config object.
-	if cfgObj := kc.GetConfigObj(); cfgObj != nil {
+	cfgObj := kc.GetConfigObj()
+	if cfgObj != nil {
 		m.loadConfig(cfgObj)
 	}
+	// A-1 诊断：配置对象类型 + srd.layered_graph 读值（一次定位"配置为何不生效"）。
+	readBack := ""
+	if g, ok := cfgObj.(interface{ Get(string) string }); ok {
+		readBack = g.Get("srd.layered_graph")
+	}
+	logger.WithComponent("srd").Info("SRD config source",
+		"cfg_nil", cfgObj == nil,
+		"cfg_type", fmt.Sprintf("%T", cfgObj),
+		"get_supported", readBack != "" || func() bool { _, ok := cfgObj.(interface{ Get(string) string }); return ok }(),
+		"srd.layered_graph", readBack,
+		"effective_layered_graph", m.cfg.LayeredGraph)
 
 	// Create pipeline（prism 参数来自配置，v2.2 起可调）。
 	m.pipeline = NewPipelineWithEngine(m.cfg, ascorprism.NewEngineWithConfig(PrismConfigFrom(m.cfg)))
