@@ -42,13 +42,24 @@ type TopoNode struct {
 	Forwards    bool // 是否真的转发（ip_forward=1）
 	Policies    []TopoPolicyRule
 	PolicyKnown bool
+	Links       []TopoLink // L1：接口状态与所属子网
+}
+
+// TopoLink 是一条链路事实（L1）。
+type TopoLink struct {
+	Name    string
+	Up      bool
+	Subnets []string
+	VLANs   []string
 }
 
 // TopoPolicyRule 是一条 L4 策略结论（按源/目的 CIDR）。
+// Direction=="inbound" 表示主机入向策略（域内/主机级 ACL），空或 "forward" 表示转发策略。
 type TopoPolicyRule struct {
-	From  string
-	To    string
-	Allow bool
+	From      string
+	To        string
+	Allow     bool
+	Direction string
 }
 
 // TopoEdge 是拓扑图中的边模型（链路）。M0 仅定义类型；边的实际构建
@@ -228,12 +239,12 @@ func SetTopologyListener(cb func(hostID string, subnets []string)) {
 // RecordNetworkFacts 记录一台主机的**完整网络事实**（L2/L3/L4），
 // 供 SRD 分层图使用。缺失的层保持零值 = 未知（不是"放行"）。
 func RecordNetworkFacts(hostID string, subnets []string, zone string,
-	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool) {
-	globalTopology.recordNetworkFacts(hostID, subnets, zone, vlans, forwards, policies, policyKnown)
+	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink) {
+	globalTopology.recordNetworkFacts(hostID, subnets, zone, vlans, forwards, policies, policyKnown, links)
 }
 
 func (r *Registry) recordNetworkFacts(hostID string, subnets []string, zone string,
-	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool) {
+	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink) {
 	r.record(hostID, subnets, zone)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -245,6 +256,7 @@ func (r *Registry) recordNetworkFacts(hostID string, subnets []string, zone stri
 	n.Forwards = forwards
 	n.Policies = append([]TopoPolicyRule(nil), policies...)
 	n.PolicyKnown = policyKnown
+	n.Links = append([]TopoLink(nil), links...)
 }
 
 // BuildLayeredFromRegistry 用当前注册表构造 SRD 分层图：
@@ -262,16 +274,28 @@ func BuildLayeredFromRegistry() *LayeredGraph {
 	var policies []PolicyRule
 	policyKnown := false
 	for _, n := range globalTopology.nodes {
-		hosts = append(hosts, HostFacts{
+		hf := HostFacts{
 			HostID:   n.HostID,
 			Subnets:  append([]string(nil), n.Subnets...),
 			VLANs:    append([]string(nil), n.VLANs...),
 			Zone:     n.Zone,
 			Forwards: n.Forwards,
-		})
+			Links:    map[string]bool{},
+		}
+		for _, l := range n.Links {
+			for _, s := range l.Subnets {
+				// 同一子网多个接口时：任一条 up 即视为该子网链路可用
+				hf.Links[s] = hf.Links[s] || l.Up
+			}
+		}
 		for _, p := range n.Policies {
+			if p.Direction == "inbound" {
+				hf.Inbound = append(hf.Inbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
+				continue
+			}
 			policies = append(policies, PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
 		}
+		hosts = append(hosts, hf)
 		if n.PolicyKnown {
 			policyKnown = true
 		}

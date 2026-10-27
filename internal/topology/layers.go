@@ -49,6 +49,10 @@ type HostFacts struct {
 	VLANs    []string // L2：所属广播域（VLAN/tag）；空 = 未知
 	Role     string   // L5：资产角色（web/db/mon/shadow…）
 	Zone     string   // L5：安全区域（internal/dmz/public/wan/cloud），由 agent 上报
+	// Links 是 L1 事实：子网 → 该子网上的链路是否 up（缺省视为 up）。
+	Links map[string]bool
+	// Inbound 是主机入向策略（域内/主机级 ACL）：From 为来源 CIDR。
+	Inbound []PolicyRule
 	// Forwards 表示这台主机**真的会转发**（ip_forward=1 / 路由角色）。
 	// 双网卡 ≠ 路由器：实测中 pivot-1 也是双宿主，但它不转发，
 	// 若仅凭"≥2 个子网"就允许它中转，模型会凭空造出绕行路径。
@@ -69,6 +73,7 @@ type LayeredGraph struct {
 	hostSubs map[string][]string // host -> subnets
 	gateways map[string][]string // gateway host -> subnets
 	policies []PolicyRule
+	inbound  map[string][]PolicyRule // host -> 入向规则（域内 ACL）
 	// 已知性：false 表示该层完全没有采集数据（必须当 unknown，而不是 assume allow）
 	policyKnown bool
 	linkKnown   bool
@@ -88,6 +93,7 @@ func BuildLayeredGraph(hosts []HostFacts, policies []PolicyRule, policyKnown, li
 		hostSubs:    map[string][]string{},
 		gateways:    map[string][]string{},
 		policies:    append([]PolicyRule(nil), policies...),
+		inbound:     map[string][]PolicyRule{},
 		policyKnown: policyKnown,
 		linkKnown:   linkKnown,
 	}
@@ -107,6 +113,9 @@ func BuildLayeredGraph(hosts []HostFacts, policies []PolicyRule, policyKnown, li
 			if !containsHost(g.subnetTo[c], h.HostID) {
 				g.subnetTo[c] = append(g.subnetTo[c], h.HostID)
 			}
+		}
+		if len(h.Inbound) > 0 {
+			g.inbound[h.HostID] = append([]PolicyRule(nil), h.Inbound...)
 		}
 		if len(g.hostSubs[h.HostID]) >= 2 {
 			g.gateways[h.HostID] = g.hostSubs[h.HostID]
@@ -171,7 +180,7 @@ func (g *LayeredGraph) HostReachable(from, to string, maxHops int) []PathVerdict
 		}
 		for _, sub := range g.hostSubs[cur] {
 			for _, next := range g.subnetTo[sub] {
-				if visited[next] || !g.broadcastCompatible(cur, next) {
+				if visited[next] || !g.adjacentNoVisit(cur, next) {
 					continue // L2 闸门：不同广播域不连通
 				}
 				visited[next] = true
@@ -184,7 +193,7 @@ func (g *LayeredGraph) HostReachable(from, to string, maxHops int) []PathVerdict
 	// 起点：从 from 的每个子网出发
 	for _, sub := range g.hostSubs[from] {
 		for _, next := range g.subnetTo[sub] {
-			if visited[next] || !g.broadcastCompatible(from, next) {
+			if visited[next] || !g.adjacentNoVisit(from, next) {
 				continue // L2 闸门：起始跳也不能跨广播域
 			}
 			visited[next] = true
@@ -276,6 +285,36 @@ func (g *LayeredGraph) broadcastCompatible(a, b string) bool {
 	return false
 }
 
+// linkUp 判断 host 在 subnet 上的链路是否可用（无链路数据视为可用）。
+func (g *LayeredGraph) linkUp(host, subnet string) bool {
+	h := g.hosts[host]
+	if h == nil || len(h.Links) == 0 {
+		return true
+	}
+	up, ok := h.Links[subnet]
+	if !ok {
+		return true
+	}
+	return up
+}
+
+// inboundAllowed 判断 target 的主机入向策略是否允许来自 sourceSubnet 的流量。
+// 无规则/无数据 ⇒ 允许（未知 ≠ 拒绝）。
+func (g *LayeredGraph) inboundAllowed(target, sourceSubnet string) bool {
+	for _, r := range g.inbound[target] {
+		if subnetMatch(r.From, sourceSubnet) {
+			return r.Allow
+		}
+	}
+	return true
+}
+
+// adjacentNoVisit 是 Adjacent 的轻量版本（避免重复计算 SharedSubnetsRaw）。
+func (g *LayeredGraph) adjacentNoVisit(a, b string) bool {
+	ok, _ := g.Adjacent(a, b)
+	return ok
+}
+
 // Adjacent 判断两台主机是否存在"可直接通信"的邻接（L3 共享子网 + L2 广播域兼容）。
 // 返回 (adjacent, reason)，reason 用于解释阻断原因（便于审计与测试）。
 func (g *LayeredGraph) Adjacent(a, b string) (bool, string) {
@@ -284,6 +323,18 @@ func (g *LayeredGraph) Adjacent(a, b string) (bool, string) {
 	}
 	if !g.broadcastCompatible(a, b) {
 		return false, "l2 isolated (VLAN mismatch)"
+	}
+	subs := g.SharedSubnetsRaw(a, b)
+	for _, s := range subs {
+		if !g.linkUp(a, s) {
+			return false, "link down on " + s + " (" + a + ")"
+		}
+		if !g.linkUp(b, s) {
+			return false, "link down on " + s + " (" + b + ")"
+		}
+		if !g.inboundAllowed(b, s) {
+			return false, "inbound policy denies " + s + " -> " + b
+		}
 	}
 	return true, "adjacent"
 }
@@ -326,6 +377,25 @@ func (g *LayeredGraph) Stats() map[string]int {
 	}
 }
 
+// CriticalityForRole 是 L5（业务角色语义）到资产关键性的映射。
+// 角色来自运维配置（[srd] roles），优先级高于区域推断。
+func CriticalityForRole(role string) float64 {
+	switch role {
+	case "db", "database", "core":
+		return 0.95
+	case "router", "gateway", "fw":
+		return 0.90
+	case "web", "app":
+		return 0.70
+	case "monitor", "mon", "siem":
+		return 0.60
+	case "shadow", "decoy", "honeypot":
+		return 0.30
+	default:
+		return 0.50
+	}
+}
+
 // CriticalityForZone 是 L5（区域语义）到资产关键性的映射。
 // 只用于把"位置语义"接进风险计算，不代表真实业务重要性；可在配置/规则层再校正。
 func CriticalityForZone(zone string) float64 {
@@ -354,8 +424,8 @@ func boolInt(b bool) int {
 
 // SharedSubnets 返回两台主机共同所属的子网（同广播域的直接邻接依据）。
 func (g *LayeredGraph) SharedSubnets(a, b string) []string {
-	if !g.broadcastCompatible(a, b) {
-		return nil // L2 隔离：即使同子网也不算邻接
+	if ok, _ := g.Adjacent(a, b); !ok {
+		return nil // L2/L1/入向策略任一不满足 ⇒ 不算邻接
 	}
 	return g.SharedSubnetsRaw(a, b)
 }

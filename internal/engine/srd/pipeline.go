@@ -87,7 +87,11 @@ func (p *Pipeline) Process(ctx context.Context, report *ExternalAssessmentReport
 		zone = ti.Zone
 	}
 	p.mu.RUnlock()
-	if zone != "" {
+	switch {
+	case p.cfg.Roles[report.HostID] != "":
+		// L5 业务角色优先于区域（角色更贴近资产重要性）
+		node.Criticality = topology.CriticalityForRole(p.cfg.Roles[report.HostID])
+	case zone != "":
 		node.Criticality = topology.CriticalityForZone(zone)
 	}
 	nowUnix := time.Now().Unix()
