@@ -1210,6 +1210,8 @@ func (a *Agent) collectNetworkInfo() *apiv1.NetworkInfo {
 		}
 	}
 	info.NetworkZone = a.inferZone(info.LocalIPs)
+	// L1 事实：接口名/状态/子网/VLAN，让"链路 down"成为显式数据。
+	info.Links = collectLinks()
 	// L2/L3/L4 事实（SRD 分层图）：VLAN/广播域、是否转发、策略结论。
 	// 采集不到就保持空/false（SRD 会判 probable，不会当作"放行"）。
 	info.VLANs = collectVLANs()

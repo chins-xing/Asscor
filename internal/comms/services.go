@@ -238,6 +238,30 @@ func truncateFingerprint(fp string) string {
 	return fp[:16] + "..."
 }
 
+// toTopoPolicies 把 API 层的策略事实转成拓扑层的策略记录。
+func toTopoPolicies(in []apiv1.PolicyRule) []topology.TopoPolicyRule {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]topology.TopoPolicyRule, 0, len(in))
+	for _, r := range in {
+		out = append(out, topology.TopoPolicyRule{From: r.From, To: r.To, Allow: r.Allow, Direction: r.Direction})
+	}
+	return out
+}
+
+// toTopoLinks 把 API 层的链路事实转成拓扑层的链路记录。
+func toTopoLinks(in []apiv1.LinkInfo) []topology.TopoLink {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]topology.TopoLink, 0, len(in))
+	for _, l := range in {
+		out = append(out, topology.TopoLink{Name: l.Name, Up: l.Up, Subnets: l.Subnets, VLANs: l.VLANs})
+	}
+	return out
+}
+
 func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatRequest) (*apiv1.HeartbeatResponse, error) {
 	logger.WithComponent("kernel").Info("heartbeat received", "host_id", req.HostId, "has_result", req.Result != nil, "has_assessor", s.assessor != nil)
 
@@ -381,7 +405,12 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 				// 非 kernel SPI 模块 —— comms 直调与 kernel 消费方式一致
 				// (耦合审计 F4); TopologyInterface 契约(kernel/topo_types.go)
 				// 落地前不引入 SPI 包装层。
-				topology.RecordTopology(req.HostId, subnets)
+				// v2.2 数据接线：agent 上报的 VLAN/转发/策略/链路全部落库，
+				// 供 SRD 分层图（BuildLayeredFromRegistry）使用。
+				topology.RecordNetworkFacts(req.HostId, subnets, req.NetworkInfo.NetworkZone,
+					req.NetworkInfo.VLANs, req.NetworkInfo.Forwards,
+					toTopoPolicies(req.NetworkInfo.Policies), req.NetworkInfo.PolicyKnown,
+					toTopoLinks(req.NetworkInfo.Links))
 			}
 		}
 		logger.WithComponent("kernel").Debug("network info received", "host_id", req.HostId,

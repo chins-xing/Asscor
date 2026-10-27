@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	apiv1 "github.com/chins-xing/asscor/api/v1"
@@ -85,7 +86,8 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 			continue
 		}
 		var rule struct {
-			Expr []map[string]json.RawMessage `json:"expr"`
+			Chain string                      `json:"chain"`
+			Expr  []map[string]json.RawMessage `json:"expr"`
 		}
 		if err := json.Unmarshal(ruleRaw, &rule); err != nil {
 			continue
@@ -151,6 +153,18 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 		if verdict == nil {
 			continue
 		}
+		inbound := strings.EqualFold(rule.Chain, "input")
+		if inbound {
+			// 入向规则通常只有 saddr（没有 daddr）：表达"来自该源的入向流量被拒/放行"。
+			if from != "" {
+				rules = append(rules, apiv1.PolicyRule{From: from, Allow: *verdict, Direction: "inbound"})
+			} else if inIface != "" {
+				for _, fs := range ifaces[inIface] {
+					rules = append(rules, apiv1.PolicyRule{From: fs, Allow: *verdict, Direction: "inbound"})
+				}
+			}
+			continue
+		}
 		if from != "" && to != "" {
 			rules = append(rules, apiv1.PolicyRule{From: from, To: to, Allow: *verdict})
 			continue
@@ -208,7 +222,8 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 	var rules []apiv1.PolicyRule
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "-A FORWARD") {
+		inbound := strings.HasPrefix(line, "-A INPUT")
+		if !strings.HasPrefix(line, "-A FORWARD") && !inbound {
 			continue
 		}
 		if strings.Contains(line, "! ") || strings.Contains(line, "-m ") {
@@ -239,6 +254,16 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 		default:
 			continue
 		}
+		if inbound {
+			if from != "" {
+				rules = append(rules, apiv1.PolicyRule{From: from, Allow: allow, Direction: "inbound"})
+			} else if inIface != "" {
+				for _, fs := range ifaces[inIface] {
+					rules = append(rules, apiv1.PolicyRule{From: fs, Allow: allow, Direction: "inbound"})
+				}
+			}
+			continue
+		}
 		if from != "" && to != "" {
 			rules = append(rules, apiv1.PolicyRule{From: from, To: to, Allow: allow})
 			continue
@@ -254,9 +279,76 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 	return rules, true
 }
 
+// collectLinks 采集 L1 链路事实：每个非回环接口的 up/down、子网、VLAN。
+//
+// PVE SDN 的 VLAN tag 配在**宿主 OVS 端口**上，容器内看不到；为让 L2 语义在
+// 容器环境也可用，支持运维用 `ASSCOR_AGENT_VLANS="eth0=101,eth1=102"` 显式覆盖。
+func collectLinks() []apiv1.LinkInfo {
+	overrides := vlanOverrides()
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	out := make([]apiv1.LinkInfo, 0, len(ifaces))
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		li := apiv1.LinkInfo{Name: iface.Name, Up: iface.Flags&net.FlagUp != 0}
+		if addrs, err := iface.Addrs(); err == nil {
+			for _, addr := range addrs {
+				if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
+					li.Subnets = append(li.Subnets, ipNet.String())
+				}
+			}
+		}
+		if v, ok := overrides[iface.Name]; ok {
+			li.VLANs = append(li.VLANs, v)
+		} else {
+			li.VLANs = vlanForInterface(iface.Name)
+		}
+		out = append(out, li)
+	}
+	return out
+}
+
+// vlanOverrides 解析 ASSCOR_AGENT_VLANS（"eth0=101,eth1=102"）。
+func vlanOverrides() map[string]string {
+	out := map[string]string{}
+	raw := strings.TrimSpace(os.Getenv("ASSCOR_AGENT_VLANS"))
+	if raw == "" {
+		return out
+	}
+	for _, kv := range strings.Split(raw, ",") {
+		parts := strings.SplitN(strings.TrimSpace(kv), "=", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			continue
+		}
+		out[parts[0]] = parts[1]
+	}
+	return out
+}
+
+// vlanForInterface 返回接口的 VLAN 标识：优先 /proc/net/vlan/<iface>，
+// 其次接口名后缀（eth0.101 这种 802.1Q 命名）。
+func vlanForInterface(name string) []string {
+	if _, err := os.Stat("/proc/net/vlan/" + name); err == nil {
+		return []string{name}
+	}
+	if idx := strings.LastIndex(name, "."); idx > 0 && idx < len(name)-1 {
+		if _, err := strconv.Atoi(name[idx+1:]); err == nil {
+			return []string{name}
+		}
+	}
+	return nil
+}
+
 // collectVLANs 采集本机可见的 VLAN 标识（通常容器内为空 ⇒ 未知）。
 func collectVLANs() []string {
 	var vlans []string
+	for _, v := range vlanOverrides() {
+		vlans = append(vlans, v)
+	}
 	entries, err := os.ReadDir("/proc/net/vlan")
 	if err != nil {
 		return nil

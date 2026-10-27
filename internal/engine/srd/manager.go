@@ -3,6 +3,7 @@
 package srd
 
 import (
+	"strings"
 	"context"
 	"os"
 	"path/filepath"
@@ -281,6 +282,18 @@ func (m *Manager) loadConfig(cfgObj interface{}) {
 	}); ok {
 		if v := cfg.Get("srd.layered_graph"); v == "on" || v == "true" || v == "1" {
 			m.cfg.LayeredGraph = true
+		}
+		if v := cfg.Get("srd.roles"); v != "" {
+			roles := map[string]string{}
+			for _, kv := range strings.Split(v, ",") {
+				parts := strings.SplitN(strings.TrimSpace(kv), "=", 2)
+				if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
+					roles[parts[0]] = parts[1]
+				}
+			}
+			if len(roles) > 0 {
+				m.cfg.Roles = roles
+			}
 		}
 		if v := cfg.Get("srd.sync_interval_sec"); v != "" {
 			if n, err := parseInt(v); err == nil && n > 0 {

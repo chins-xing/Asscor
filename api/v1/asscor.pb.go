@@ -70,6 +70,9 @@ type NetworkInfo struct {
 	// L3 事实：本机是否真的转发（/proc/sys/net/ipv4/ip_forward=1 或路由角色）。
 	// 双网卡 ≠ 路由器；SRD 只允许 Forwards=true 的主机作为中继。
 	Forwards bool `json:"forwards,omitempty"`
+	// L1 事实（SRD 分层图的 link 层）：接口名、状态、所属子网与 VLAN。
+	// 让"链路 down"成为显式事实，而不是靠"不上报该子网"隐式表达。
+	Links []LinkInfo `json:"links,omitempty"`
 	// L4 事实（SRD 分层图的 policy 层）：本机防火墙的显式 allow/deny 结论。
 	Policies []PolicyRule `json:"policies,omitempty"`
 	// PolicyKnown 表示**是否成功采集到策略**。false 时 SRD 必须判 probable，
@@ -85,6 +88,18 @@ type PolicyRule struct {
 	From  string `json:"from"`
 	To    string `json:"to"`
 	Allow bool   `json:"allow"`
+	// Direction 区分转发表与主机入向表：
+	//   "" / "forward" = 跨子网转发策略（默认，v2.0 行为）
+	//   "inbound"      = 主机 INPUT/入向策略（域内 ACL / 主机级 ACL，v2.2）
+	Direction string `json:"direction,omitempty"`
+}
+
+// LinkInfo 是一条链路事实（L1）。
+type LinkInfo struct {
+	Name    string   `json:"name"`
+	Up      bool     `json:"up"`
+	Subnets []string `json:"subnets,omitempty"`
+	VLANs   []string `json:"vlans,omitempty"`
 }
 
 type HeartbeatResponse struct {

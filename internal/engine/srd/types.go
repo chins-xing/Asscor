@@ -144,6 +144,9 @@ type Config struct {
 	// 每轮实测真值）分层模型 AUC 0.888±0.039，单层模型 0.474±0.035。
 	// 需要回退到单层模型时在 config.ini 设 `[srd] layered_graph = false`。
 	LayeredGraph bool
+	// Roles 是运维配置的业务角色（host -> role），用于 L5 资产语义：
+	// 有角色时覆盖区域映射得到的关键性。
+	Roles map[string]string
 
 	// Confidence is the kernel's [confidence] rule table (same
 	// config.ConfidenceConfig the SSAM/legacy paths use). nil means "not

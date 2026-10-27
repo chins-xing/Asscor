@@ -4,6 +4,44 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## v2.2（2026-10-27）—— 补齐四项：L1 链路 / 域内入向 ACL / VLAN 覆盖 / L5 角色
+
+v2.1 遗留了四项"采集了但模型不用/用不了"的语义；v2.2 全部接上：
+
+1. **L1 链路事实显式化**
+   - agent 上报 `Links[]`（接口名、up/down、所属子网、VLAN）；
+   - 分层图的邻接判定要求**双方在该子网的链路均 up**；链路 down 判 `blocked`，
+     不再依赖"不上报该子网"的隐式表达。
+2. **域内/主机级 ACL（入向策略）**
+   - agent 解析 `nft` 的 `input` 链与 `iptables -A INPUT`，产出 `Direction="inbound"` 规则；
+   - 模型对"同子网"也查目标主机的入向策略：来源子网被拒 ⇒ 不邻接（`blocked`）；
+   - 无入向数据 ⇒ 不阻断（未知 ≠ 拒绝）。
+3. **容器内 VLAN 采集的运维覆盖**
+   - PVE SDN 的 tag 在宿主 OVS 端口上，容器内看不到；
+   - 支持 `ASSCOR_AGENT_VLANS="eth0=101,eth1=102"` 显式覆盖，也识别 802.1Q 命名
+     （`eth0.101`）与 `/proc/net/vlan/*`。
+4. **L5 业务角色语义**
+   - 新增 `[srd] roles = host=role,...`（如 `domA-db=db,domC-router=router`）；
+   - `CriticalityForRole`：db/core 0.95、router/fw 0.90、web/app 0.70、
+     monitor/siem 0.60、shadow/decoy 0.30、未知 0.50；
+   - **角色优先于区域**（角色更贴近资产重要性）。
+
+### 同时修复的接线缺陷
+
+- `RecordNetworkFacts` 此前**从未被 comms 调用**（agent 上报的 VLAN/策略/转发
+  实际没有进注册表）；v2.2 起心跳会把 `vlans/forwards/policies(direction)/policyKnown/links`
+  全部落库，`BuildLayeredFromRegistry` 才能看到真实事实。
+
+### 测试
+
+新增 6 例：链路 down 阻断、入向策略拒绝同子网、入向规则按来源生效、入向未知不阻断、
+角色映射、注册表 links+inbound 全链路接线。
+
+### 仍受环境限制
+
+- 容器内 `iptables`/`auditd` 等能力受非特权限制（不影响本版语义，只影响可加固项）；
+- 宿主 OVS 端口的 VLAN tag 仍需运维用环境变量覆盖。
+
 ## v2.1（2026-10-27）—— 语义补完 + 数据接线
 
 v2.0 定义了五层语义，但 **L2（广播域）与 L5（资产）只是采集、模型没用**；v2.1 把它接上：
