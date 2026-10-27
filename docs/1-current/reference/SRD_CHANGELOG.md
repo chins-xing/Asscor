@@ -29,6 +29,11 @@
 4. 启动日志新增 **`SRD effective config`**，逐项打印生效值——配置是否被接受，
    不再靠猜。
 
+> ⚠️ **已知问题（2026-10-27 审计 A-1，未修）**：本版把参数**定义、解析、注入 prism、可观测**
+> 都接好了，但**启动时 `[srd]` 配置仍未生效**（kernel.ini 写 `layered_graph=false`，
+> 运行时日志仍是 `true`）。在 A-1 修好前**不能声称参数已可在生产调整**。
+> 详见 `docs/3-audits/SRD_V22_AUDIT_2026-10-27.md`。
+
 **测试**：`TestGetExposesSectionKeys`（config）、`TestLoadConfigParsesAllAdjustableParams`、
 `TestLoadConfigIgnoresInvalidValues`、`TestPrismConfigFromMapsParams`（srd）。
 
