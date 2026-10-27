@@ -1,0 +1,9 @@
+﻿round,scenario,negatives,flat_auc,layered_auc
+1,forward-acl,6,0.422,0.872
+2,inbound-B-denies-A,7,0.419,0.775
+3,inbound-A-denies-C,3,0.426,0.681
+4,linkdown-domA-db,18,0.450,0.979
+5,linkdown-domC-mon+inbound,22,0.487,0.956
+6,forward-acl-x3,11,0.489,0.889
+7,linkdown-shadow2+inbound,20,0.445,0.955
+8,forward+inbound,6,0.558,0.969
