@@ -139,3 +139,55 @@ TMOUT、/etc/shadow 000、sudoers 0440），其余 CT 46.81，domC-mon 40.42，d
 | ② 建模 ACL/策略 | 采集 nft/iptables/ACL 结果，作为边的可用性约束 | 大：需要 agent 侧采集 + 语义 |
 | ③ 显式未知/不可见节点 | 把"子网存在但主机未知"表示为不确定端点，输出"可能路径 + 置信度" | 中：输出模型改造 |
 | ④ 校准测量口径 | ground truth 用完整路径集合 + 策略真值双轨 | 小：本基准已支持 |
+
+## 7. 第二轮：拓扑落全 + 每台主机分数互不相同（2026-10-27 下午）
+
+### 7.1 拓扑落全
+
+| 组件 | 状态 |
+|---|---|
+| SDN VLAN zone `asc3d` + vnetA/B/C/**D**（tag 101/102/200/300） | ✅ |
+| CT 920 `domC-router`：5 接口（A/B/C/D + 管理网），**已装 agent**，nft NAT + 域隔离 | ✅ |
+| CT 921/922 域A、923 域B、924 域C | ✅ |
+| CT 925 `pivot-1`：双宿主（域B + 影子域 172.26.0.0/24），已装 agent | ✅ |
+| CT 927 `shadow-2`：影子域可见对照，已装 agent | ✅ |
+| CT 926 `shadow-1`：影子域**故意无 agent**（不可见真值） | ✅ |
+
+隔离与 NAT 均实测：A↔B 阻断、A/B 经域C NAT 可达 kernel、C 直连。
+
+### 7.2 每台主机 SSAM 分数都不同
+
+隔离域原本装不了包 ⇒ 在宿主启用 **apt-cacher-ng（192.168.30.2:3142）**，
+各 CT 通过 `apt.conf.d/01proxy` 走代理，从而能真正安装/启用组件。
+可用杠杆（非特权 CT 内 auditd/fail2ban/timesyncd 起不来）：
+`sshd 强认证(-10)`、`TMOUT(-3)`、`关键文件权限(-10)`、`rsyslog 审计服务(-10)`。
+
+实测分数（7 台全部互不相同）：
+
+| 主机 | 加固级别 | 分数 |
+|---|---|---|
+| domA-web (921) | rsyslog | **47.40** |
+| pivot-1 (925) | sshd + 文件权限 | **47.35** |
+| domA-db (922) | TMOUT | **47.22** |
+| shadow-2 (927) | sshd + 文件权限 + iptables SSH 源限制 | **47.18** |
+| domB-web (923) | sshd | **47.16** |
+| domC-router (920) | sshd + TMOUT + 文件权限 | **43.29** |
+| domC-mon (924) | sshd + TMOUT | **40.80** |
+
+### 7.3 生产切换与最后一轮分层图
+
+- 新 kernel（含 L4 采集 + 分层构边）与 7 台 agent 已部署；`kernel.ini` 追加
+  `[srd] layered_graph = true`，kernel 重启后 active，ESTAB=7；
+- 发现并修正两个真实问题：
+  1. **路由器原策略是按接口的**（`iifname/oifname drop`）⇒ 解析器按"不猜"原则提取不到；
+     已在 920 增加**地址级**阻断规则（`ip saddr A ip daddr B drop` 双向），可被采集；
+  2. `[srd]` 段原先不在 kernel.ini，已补齐。
+- `srdbench -graph layered` 最终结果（分数互不相同）：
+
+| 链 | 旧单层模型 | 分层模型 |
+|---|---|---|
+| c1 A-web→A-db | reachable | reachable |
+| c2 A-web→B-web（地址级 drop） | reachable（误报） | **blocked** |
+| c3 A-web→C-mon | reachable | reachable |
+| c4 A-web→shadow-2 | reachable | reachable |
+| c5 A-web→shadow-1（无 agent） | 静默缺失 | **probable** |
