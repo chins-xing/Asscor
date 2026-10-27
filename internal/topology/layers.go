@@ -215,7 +215,7 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 			continue // 同子网内移动
 		}
 		// 跨子网：发生在 steps[i].Host（它是两子网的共同成员=网关）
-		verdict, reason := g.policyVerdict(prevSub, nextSub)
+		verdict, reason := g.sessionVerdict(prevSub, nextSub)
 		steps[i].Verdict = verdict
 		steps[i].Reason = reason
 		if verdict == VerdictBlocked {
@@ -285,7 +285,7 @@ func (g *LayeredGraph) CrossingPermitted(router, toSubnet string) bool {
 			continue
 		}
 		found = true
-		if v, _ := g.policyVerdict(s2, toSubnet); v != VerdictBlocked {
+		if v, _ := g.sessionVerdict(s2, toSubnet); v != VerdictBlocked {
 			return true
 		}
 	}
@@ -297,6 +297,32 @@ func (g *LayeredGraph) CrossingPermitted(router, toSubnet string) bool {
 
 // PolicyKnown 表示是否采集到过策略事实。
 func (g *LayeredGraph) PolicyKnown() bool { return g.policyKnown }
+
+// sessionVerdict 是**会话语义**下的跨子网判定：一次会话要成立，
+// 去程与回程必须同时被放行。
+//
+// 为什么必须双向：真实防火墙里 `ct state established,related accept` 往往排在
+// drop 规则之后 —— 单向 deny 会让**回程包**也被丢弃，于是会话两个方向都不通。
+// 实测中 `iifname eth0 oifname eth4 drop`（A→D）导致 D→A 也不可达，就是这个原因；
+// 只按单方向判定会把这类对误报成"可达"（非对称误报）。
+//
+// 判定合并：任一方向 blocked ⇒ blocked；否则任一方向 probable ⇒ probable；
+// 都 reachable ⇒ reachable。
+func (g *LayeredGraph) sessionVerdict(from, to string) (Verdict, string) {
+	fwdV, fwdWhy := g.policyVerdict(from, to)
+	revV, revWhy := g.policyVerdict(to, from)
+	switch {
+	case fwdV == VerdictBlocked || revV == VerdictBlocked:
+		if fwdV == VerdictBlocked {
+			return VerdictBlocked, fwdWhy
+		}
+		return VerdictBlocked, "return path blocked: " + revWhy
+	case fwdV == VerdictProbable || revV == VerdictProbable:
+		return VerdictProbable, "policy partially unknown"
+	default:
+		return VerdictReachable, fwdWhy
+	}
+}
 
 // Summary 把多条路径汇总成一个结论（只要有 reachable 就 reachable；
 // 否则 blocked 优先于 probable）。

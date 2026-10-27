@@ -286,3 +286,40 @@ score = 1 - exp(-Σ_p 0.9^(hops-1) × (1 if reachable else 0.4 if probable))
 1. 状态化策略：把 `ct state` 与规则顺序纳入模型（可消掉非对称误报）；
 2. 多轮随机 ACL + 实测真值 ⇒ 跨轮 ROC 与 AUC 置信区间；
 3. 让 srdroc 直接读 agent 上报的策略事实（当前策略来自 JSON 注入）。
+
+## 10. 状态化策略建模：会话语义（2026-10-27）
+
+### 10.1 问题
+
+第 9 节的 layered 模型把非对称方向误判为可达（如 D→A）：模型只知道 `A→D` 的 deny，
+不知道真实防火墙里 `ct state established,related accept` 排在 drop 之后 ⇒ 回程包被丢
+⇒ 会话两个方向都不通。
+
+### 10.2 模型改动
+
+新增 `sessionVerdict(from, to)`：一次会话成立要求**去程与回程同时放行**。
+
+- 任一方向 blocked ⇒ `blocked`
+- 否则任一方向 probable ⇒ `probable`
+- 都 reachable ⇒ `reachable`
+
+`HostReachable` 的跨子网判定与 SRD 构边的 `CrossingPermitted` 都改用它。
+回归测试：`TestLayeredGraphOneWayDenyBlocksBothDirections`。
+
+### 10.3 结果
+
+| 模型 | AUC（§9 会话语义前） | AUC（会话语义后） |
+|---|---|---|
+| flat | 0.500 | 0.500 |
+| **layered** | 0.895 | **0.990** |
+
+- 负样本 21 个中，绝大部分在 FPR=0 处被正确判 blocked；
+- 残差：FPR=0.143 出现在阈值 0.33（`probable` 档）—— 目标主机未知导致的"可能"，
+  不是策略误判；
+- ROC 曲线刷新：`docs/2-experiments/srd-bench/roc-multi-acl-20261027.svg`。
+
+### 10.4 局限与下一步
+
+- 会话模型的假设是"面向连接的协议"；对无状态（UDP 单向）场景会偏保守；
+- 下一步：多轮随机 ACL + 实测真值，报跨轮 AUC 与置信区间；
+- 再下一步：让 srdroc 直接读取 agent 上报的策略事实（当前策略来自 JSON 注入）。
