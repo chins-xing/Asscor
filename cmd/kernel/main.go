@@ -457,7 +457,7 @@ func main() {
 	}
 
 	fmt.Fprintf(os.Stderr, "\nASSCOR \u00b5Kernel\n")
-	fmt.Fprintf(os.Stderr, "  Framework: %s   SSAM: %s\n", version.ASSCORVersion, version.SSAMVersion)
+	fmt.Fprintf(os.Stderr, "  Framework: %s   SSAM: %s   SRD: %s\n", version.ASSCORVersion, version.SSAMVersion, version.SRDVersion)
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "  Listen:   %s (mTLS: %v)\n", *listenAddr, !*noMTLS)
 	fmt.Fprintf(os.Stderr, "  Log:      %s (%s) -> %s\n", *logFormat, *logLevel, logger.CurrentOutput())
