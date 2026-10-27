@@ -4,6 +4,29 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## v2.2.2（2026-10-27）—— 修复 A-1：`[srd]` 参数在启动时真正生效
+
+**根因（诊断日志实证）**：`srd.Manager.Init` 里 `kc.GetConfigObj()` 返回的是
+**适配器**（`*srdwrapper.srdConfigAdapter`），不是 `*config.Config`；直接交给
+`loadConfig` 后类型断言（`*config.Config` / `Get(string) string`）全部落空
+⇒ `[srd]` 全部配置被静默忽略（v2.2.1 的"可调"因此在生产不成立）。
+
+**修复**：新增 `unwrapConfig()`，沿 `GetConfigObj()` 适配器链解包（最多 4 层防环），
+再交给 `loadConfig`。启动诊断日志现在会打印解包后的配置类型。
+
+**现场验证（VM 910，kernel.ini 写入验证值）**：
+
+```
+SRD config source       cfg_type=*config.Config  get_supported=true  srd.layered_graph=false
+SRD effective config    layered_graph=false transmission=0.42 max_path_depth=7
+                        path_decay=0.65 prop_cap=0.25 aggregation=max horizon_days=7
+```
+
+与配置文件逐项一致 ⇒ **参数可调已在生产成立**（此前 A-1 的"不能声称"限制解除）。
+
+**测试**：`TestUnwrapConfigReachesRealConfig`（嵌套适配器 → 解包 → loadConfig 生效）、
+`TestUnwrapConfigPassthrough`。
+
 ## v2.2.1（2026-10-27）—— 参数接线修复（[srd] 配置此前被静默忽略）
 
 **问题**：`srd.Manager.loadConfig` 通过 `interface{ Get(string) string }` 读配置，
@@ -29,10 +52,8 @@
 4. 启动日志新增 **`SRD effective config`**，逐项打印生效值——配置是否被接受，
    不再靠猜。
 
-> ⚠️ **已知问题（2026-10-27 审计 A-1，未修）**：本版把参数**定义、解析、注入 prism、可观测**
-> 都接好了，但**启动时 `[srd]` 配置仍未生效**（kernel.ini 写 `layered_graph=false`，
-> 运行时日志仍是 `true`）。在 A-1 修好前**不能声称参数已可在生产调整**。
-> 详见 `docs/3-audits/SRD_V22_AUDIT_2026-10-27.md`。
+> ✅ **A-1 已修复（v2.2.2）**：v2.2.1 时 `[srd]` 配置在启动时未生效（适配器未解包）；
+> v2.2.2 修复并现场验证通过。详见 `docs/3-audits/SRD_V22_AUDIT_2026-10-27.md`。
 
 **测试**：`TestGetExposesSectionKeys`（config）、`TestLoadConfigParsesAllAdjustableParams`、
 `TestLoadConfigIgnoresInvalidValues`、`TestPrismConfigFromMapsParams`（srd）。
