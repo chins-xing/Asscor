@@ -332,8 +332,14 @@ func (g *LayeredGraph) Adjacent(a, b string) (bool, string) {
 		if !g.linkUp(b, s) {
 			return false, "link down on " + s + " (" + b + ")"
 		}
+		// A-4：入向策略按**会话语义**双向生效。
+		// 请求被目标 B 的 INPUT 拒绝 ⇒ 会话失败；反向会话（B→A）的回程包
+		// 同样会撞上 B 的 INPUT 而被丢弃 ⇒ 两个方向都必须放行。
 		if !g.inboundAllowed(b, s) {
 			return false, "inbound policy denies " + s + " -> " + b
+		}
+		if !g.inboundAllowed(a, s) {
+			return false, "inbound policy denies return path " + s + " -> " + a
 		}
 	}
 	return true, "adjacent"
