@@ -2,13 +2,12 @@ package topology
 
 import "testing"
 
-// A-4：INPUT 是**单向**语义。B 拒绝来自 A 子网的入向流量时：
-//   - A→B 应 blocked（目标 B 的入向策略拒绝）；
-//   - B→A 的目标 A 没有对应规则，模型不应凭空阻断（现实里回程包会被 B 自己的
-//     INPUT 丢掉，但那是**有状态**行为，本模型只表达单向入向规则，需在文档里说明）。
+// A-4：入向策略按**会话语义**生效。B 拒绝来自 A 子网的入向流量时：
+//   - A→B：请求被 B 的 INPUT 丢弃 ⇒ blocked；
+//   - B→A：反向会话的回程包（A→B 方向）同样撞上 B 的 INPUT 被丢 ⇒ 也 blocked。
 //
-// 本用例先钉住"方向性"本身：A→B blocked、B→A reachable。
-func TestInboundPolicyIsDirectional(t *testing.T) {
+// 这修掉了旧模型"只校验目标侧"导致的非对称误报（v2.2.4 数据集 R2/R3 的 0.68–0.78）。
+func TestInboundPolicySessionSemantics(t *testing.T) {
 	hosts := []HostFacts{
 		{HostID: "A", Subnets: []string{"10.0.0.0/24"}},
 		{HostID: "B", Subnets: []string{"10.0.0.0/24"}, Inbound: []PolicyRule{{From: "10.0.0.0/24", Allow: false}}},
@@ -18,10 +17,10 @@ func TestInboundPolicyIsDirectional(t *testing.T) {
 	if ok, why := g.Adjacent("A", "B"); ok {
 		t.Fatalf("A→B 应被 B 的入向策略阻断（reason=%s）", why)
 	}
-	if got := Summary(g.HostReachable("A", "B", 2)); got != VerdictBlocked {
-		t.Fatalf("A→B 应 blocked，got %v", got)
+	if ok, why := g.Adjacent("B", "A"); ok {
+		t.Fatalf("B→A 的回程包也会被 B 的 INPUT 丢，应 blocked（reason=%s）", why)
 	}
-	if ok, why := g.Adjacent("B", "A"); !ok {
-		t.Fatalf("B→A 目标 A 无入向规则，不应阻断（reason=%s）", why)
+	if got := Summary(g.HostReachable("B", "A", 2)); got != VerdictBlocked {
+		t.Fatalf("B→A 应 blocked（会话双向），got %v", got)
 	}
 }

@@ -239,6 +239,26 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 			pv.Unknowns = appendUnique(pv.Unknowns, "policy")
 		}
 	}
+	// A-4：入向策略在**路径端点**也按会话语义生效（跨子网同样适用）。
+	// 请求被目标 INPUT 拒 ⇒ blocked；反向会话的回程包撞上源端 INPUT ⇒ 同样 blocked。
+	if len(steps) >= 2 && len(path) >= 2 {
+		srcHost := path[0]
+		dstHost := path[len(path)-1]
+		srcSub := steps[0].Subnet
+		dstSub := steps[len(steps)-1].Subnet
+		if !g.inboundAllowed(dstHost, srcSub) {
+			pv.Verdict = VerdictBlocked
+			pv.BlockedAt = dstHost
+			pv.Reason = "inbound policy denies " + srcSub + " -> " + dstHost
+			return pv
+		}
+		if !g.inboundAllowed(srcHost, dstSub) {
+			pv.Verdict = VerdictBlocked
+			pv.BlockedAt = srcHost
+			pv.Reason = "inbound policy denies return path " + dstSub + " -> " + srcHost
+			return pv
+		}
+	}
 	return pv
 }
 
@@ -332,8 +352,14 @@ func (g *LayeredGraph) Adjacent(a, b string) (bool, string) {
 		if !g.linkUp(b, s) {
 			return false, "link down on " + s + " (" + b + ")"
 		}
+		// A-4：入向策略按**会话语义**双向生效。
+		// 请求被目标 B 的 INPUT 拒绝 ⇒ 会话失败；反向会话（B→A）的回程包
+		// 同样会撞上 B 的 INPUT 而被丢弃 ⇒ 两个方向都必须放行。
 		if !g.inboundAllowed(b, s) {
 			return false, "inbound policy denies " + s + " -> " + b
+		}
+		if !g.inboundAllowed(a, s) {
+			return false, "inbound policy denies return path " + s + " -> " + a
 		}
 	}
 	return true, "adjacent"
