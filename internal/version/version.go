@@ -16,5 +16,7 @@ const (
 	//         全部接入并可调；启动日志输出 "SRD effective config"。
 	// v2.2.2：修复 A-1 —— Init 解包配置适配器（kc.GetConfigObj() 返回的是适配器），
 	//         [srd] 参数在启动时真正生效（现场验证：false/0.42/7/0.65/max 全对）。
-	SRDVersion = "2.2.2"
+	// v2.2.3：审计收口 —— A-7 zone 推断（IPv6 链路本地/ULA 不再算公网）、
+	//         A-8 SIGTERM 后立即退出、A-4/A-5 补方向性与 ct state 用例。
+	SRDVersion = "2.2.3"
 )

@@ -4,6 +4,25 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## v2.2.3（2026-10-27）—— 审计收口：A-7 / A-8 修复，A-4 / A-5 用例补齐
+
+1. **A-7（zone 误判，已修）**：`inferZone` 旧实现用 `!ip.IsPrivate()` 判公网，
+   把 **IPv6 链路本地（fe80::/10）/ ULA（fc00::/7）** 当成公网 ⇒ 纯私网主机被判
+   `dmz`（实测 `domC-router` 显示 dmz，污染 L5 关键性）。新增 `isPublicAddress()`
+   显式排除回环/私网/链路本地/未指定/ULA，只认全局单播。
+   测试：`TestIsPublicAddress`、`TestInferZonePrivateWithLinkLocalIsInternal`。
+2. **A-8（agent 退出卡死，已修）**：收到 SIGTERM 只 `cancel()`，但主循环只看
+   `running` 且继续重连重试 ⇒ systemd 一直 deactivating，必须 `kill -9`。
+   现在信号处理器同时置 `running=false`，循环每轮检查 `ctx.Err()` 立即返回。
+3. **A-4（方向性，已用例化）**：新增 `TestInboundPolicyIsDirectional` 钉住
+   "入向规则只作用于目标方向"（A→B 被 B 的 INPUT 拒 ⇒ blocked；B→A 不受影响）。
+   有状态回程包语义仍不建模，已在审计报告写明。
+4. **A-5（ct state 边界，已用例化）**：新增 `TestNftInputCtStateRuleIgnored`：
+   `ct state established accept` 这类无 saddr 规则必须被忽略，只有带 saddr 的
+   drop 才转成入向策略（"不猜"边界）。
+
+A-6（ROC 按 v2.2 语义复验）见审计报告 §7 的复验结果。
+
 ## v2.2.2（2026-10-27）—— 修复 A-1：`[srd]` 参数在启动时真正生效
 
 **根因（诊断日志实证）**：`srd.Manager.Init` 里 `kc.GetConfigObj()` 返回的是
