@@ -485,6 +485,28 @@ kernel_security = 10        # 内核安全扩展权重
 
 ---
 
+### SRD（`[srd]`）
+
+SRD v2.2 起默认启用五层拓扑图（L1 链路 / L2 广播域 / L3 路由 / L4 策略 / L5 资产）。
+配置项与默认值：
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `layered_graph` | `true` | `false` 回退 v1.x 单层"同子网即邻接" |
+| `transmission` | `0.1`（或回落 `[prism] default_transmission`） | 基础风险传输率 |
+| `max_path_depth` | `5` | 路径枚举深度 |
+| `path_decay` | `0.80` | 路径风险衰减 |
+| `prop_cap` | `0.25` | 传播惩罚上限 |
+| `aggregation` | `rss` | `rss`/`max`/`linear` |
+| `horizon_days` | `7` | 推理预测窗口 |
+| `sync_interval_sec` | `3600` | 拓扑同步周期 |
+| `roles` | 空 | `host=role,…`（db/router/web/monitor/shadow） |
+
+配置是否生效，看启动日志里的 `SRD effective config`（逐项打印实际值）与
+启动横幅 `SRD: <版本>`。完整说明见
+[SRD 配置参考](../reference/SRD_CONFIGURATION.md)；升级与自检见
+[SRD v2.2 发布说明](../reference/SRD_v2.2_RELEASE_NOTES.md)。
+
 ## 8. SPC 安全态势模块
 
 SPC 模块通过 NVD/EPSS/CISA KEV/CNNVD/CNVD 等外部漏洞数据源与本地资产比对，输出个体化修正因子 P_score（0.60–1.00）。

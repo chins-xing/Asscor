@@ -75,6 +75,7 @@ docs/
 | [MITRE_ENGAGE_LIGHTWEIGHT_DESIGN.md](1-current/design/MITRE_ENGAGE_LIGHTWEIGHT_DESIGN.md) | MITRE Engage 轻量化扩展包设计 |
 | [2026-06-09-prism-ir-design.md](1-current/design/2026-06-09-prism-ir-design.md) | Prism IR 设计（已实现） |
 | [2026-08-21-secure-mode-design.md](1-current/design/2026-08-21-secure-mode-design.md) | Secure Mode 模块设计（已实现） |
+| [SRD_V2.3_PLAN_2026-10-27.md](1-current/design/SRD_V2.3_PLAN_2026-10-27.md) | SRD v2.3 计划：域内 ACL / 状态化建模 / CLI 查询 / 跨环境 ROC |
 
 ### 白皮书（`1-current/whitepapers/`）
 
@@ -108,6 +109,8 @@ docs/
 | [ASSET_OWNERSHIP.md](1-current/reference/ASSET_OWNERSHIP.md) | `main` vs `ASSCOR-Research-Core` 资产归属 |
 | [ROADMAP_v0.2.0_to_v1.0.0.md](1-current/reference/ROADMAP_v0.2.0_to_v1.0.0.md) | v0.2.3 → v1.0.0 路线图 |
 | [TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md](1-current/reference/TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md) | 拓扑与传播层基础设施蓝图 |
+| [SRD_CONFIGURATION.md](1-current/reference/SRD_CONFIGURATION.md) | SRD `[srd]` 配置参考（参数/默认值/验证/回退） |
+| [SRD_v2.2_RELEASE_NOTES.md](1-current/reference/SRD_v2.2_RELEASE_NOTES.md) | SRD v2.2 发布说明（能力/证据/升级/限制） |
 | [asscor-architecture-review/](1-current/reference/asscor-architecture-review/) | 20 章英文架构审查（现行结论） |
 | [asscor-architecture-review-zh/](1-current/reference/asscor-architecture-review-zh/) | 20 章中文架构审查（同上） |
 
@@ -121,6 +124,7 @@ docs/
 | [variance-report.md](2-experiments/variance-report.md) | 重复性与方差报告 |
 | [CONFIDENCE_SENSITIVITY_2026-10-22.md](2-experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md) | 方向① 先验敏感性（非标定） |
 | [clab-lab/](2-experiments/clab-lab/) | 实验脚手架数据（`data/*.jsonl`） |
+| [srd-bench/v22-facts-dataset-20261027.md](2-experiments/srd-bench/v22-facts-dataset-20261027.md) | SRD v2.2 事实数据集（L1/入向，layered 0.959 vs flat 0.462） |
 
 ## 四、审计（`3-audits/`）
 

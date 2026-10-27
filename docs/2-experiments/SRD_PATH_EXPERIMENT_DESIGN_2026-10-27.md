@@ -371,3 +371,13 @@ score = 1 - exp(-Σ_p 0.9^(hops-1) × (1 if reachable else 0.4 if probable))
 - 每轮汇总：`docs/2-experiments/srd-bench/multi-round-summary-20261027.csv`
 - 每轮 ACL 计划：`docs/2-experiments/srd-bench/multi-round-plan-20261027.json`
 - 单轮曲线示例：`roc-multi-acl-20261027.svg`
+
+## 12. v2.2 事实数据集（2026-10-27）
+
+本文 §7–§11 的数据集只含**转发策略**事实。为测 v2.2 新增语义（L1 链路 / 主机入向 ACL），
+另建 8 轮混合数据集，并已用它完成 A-6 复验：
+
+- 协议与逐轮结果：`docs/2-experiments/srd-bench/v22-facts-dataset-20261027.md`
+- 汇总：`docs/2-experiments/srd-bench/v22-facts-dataset-summary-20261027.csv`
+- 结论：layered **0.959 ± 0.034**（v2.2.6），flat **0.462 ± 0.033**；
+  链路 down 轮 0.955–0.979、入向 ACL 轮 0.977–1.000（A-4 修复后）。

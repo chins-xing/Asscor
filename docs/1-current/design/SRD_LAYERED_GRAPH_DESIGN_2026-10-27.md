@@ -78,3 +78,23 @@ c5 不再是"漏报"，而是 `probable`（目标主机不在 L3 层，但其子
 - c3/c4（经路由器）分层模型 `reachable`；
 - **c5（目标主机不可见但其子网已知）分层模型必须 `probable`**（旧模型漏报）；
 - 参数扫描：`max_depth` 只影响路径枚举深度，`policy` 层的 deny 不受任何参数影响。
+
+## 7. v2.2.6 实现对照（2026-10-27）
+
+| 语义 | 代码位置 | 测试 |
+|---|---|---|
+| 五层图构建 / 邻接 | `internal/topology/layers.go`（`BuildLayeredGraph`、`Adjacent`） | `layers_test.go`、`layers_relay_test.go` |
+| 会话语义（转发） | `layers.go`（`sessionVerdict`） | `layers_session_test.go` |
+| 主机入向策略（含 daddr / 顺序） | `layers.go`（`inboundAllowed`）、`internal/agent/policy.go`（解析） | `layers_a4a5_test.go`、`layers_a5_test.go`、`policy_daddr_test.go` |
+| L1 链路 | `layers.go`（`linkUp`）、`agent` 上报 `Links` | `layers_v22_test.go`（`TestLinkDownBlocksAdjacency`） |
+| L2 广播域 | `layers.go`（`broadcastCompatible`） | `layers_semantics_test.go` |
+| L5 区域/角色 | `layers.go`（`CriticalityForZone`/`CriticalityForRole`）、`srd/pipeline.go` | `layers_semantics_test.go` |
+| 配置 | `srd/manager.go`（`unwrapConfig`+`loadConfig`）、`types.go` | `config_params_test.go`、`config_unwrap_test.go`、`config_init_test.go` |
+| 数据落库 | `internal/comms/services.go`（`RecordNetworkFacts`） | 现场日志 `topology facts recorded` |
+
+**可调参数**：见 [SRD 配置参考](../reference/SRD_CONFIGURATION.md)。
+**量化证据**：8 轮混合数据集 layered **0.959 ± 0.034**（flat 0.462），
+见 [v2.2 事实数据集](../../2-experiments/srd-bench/v22-facts-dataset-20261027.md)。
+
+**当前限制**：`ct state` 类规则按"不猜"忽略；容器内 VLAN 需 env 覆盖；
+域内主机对 ACL 未建模（v2.3 计划见 [SRD v2.3 计划](SRD_V2.3_PLAN_2026-10-27.md)）。
