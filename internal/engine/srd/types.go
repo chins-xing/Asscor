@@ -148,6 +148,13 @@ type Config struct {
 	// 有角色时覆盖区域映射得到的关键性。
 	Roles map[string]string
 
+	// 以下参数来自 config.ini [srd] / [prism]，v2.2 起可运维调整：
+	MaxPathDepth    int     // 路径枚举最大深度（prism.MaxPathDepth）
+	PathDecay       float64 // 路径风险衰减（prism.PathDecay）
+	PropCap         float64 // 传播惩罚上限（prism.PropCap）
+	AggregationMode string  // 传播聚合模式 rss/max/linear
+	HorizonDays     int     // 推理层预测窗口（prism.HorizonDays）
+
 	// Confidence is the kernel's [confidence] rule table (same
 	// config.ConfidenceConfig the SSAM/legacy paths use). nil means "not
 	// wired" → legacy passthrough. When non-nil AND Enabled, a failed external
@@ -162,6 +169,11 @@ func DefaultConfig() Config {
 	return Config{
 		SyncIntervalSec: 3600,
 		LayeredGraph:    true,
+		MaxPathDepth:    5,
+		PathDecay:       0.80,
+		PropCap:         0.25,
+		AggregationMode: "rss",
+		HorizonDays:     7,
 		Profiles: map[string]SeverityProfile{
 			"cvss":    CVSSProfile,
 			"lynis":   LynisProfile,

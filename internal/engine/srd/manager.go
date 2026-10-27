@@ -3,18 +3,21 @@
 package srd
 
 import (
-	"strings"
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/chins-xing/asscor/internal/common"
 	kernelconfig "github.com/chins-xing/asscor/internal/config"
+	ascorprism "github.com/chins-xing/asscor/internal/engine/prism"
 	"github.com/chins-xing/asscor/internal/logger"
 	"github.com/chins-xing/asscor/internal/topology"
 	"github.com/chins-xing/asscor/internal/version"
+	prismlib "github.com/chins-xing/prism"
 )
 
 // TopicSRDResult is the Bus topic published when an external tool report is processed.
@@ -117,8 +120,18 @@ func (m *Manager) Init(ctx context.Context, kc KernelContext) error {
 		m.loadConfig(cfgObj)
 	}
 
-	// Create pipeline.
-	m.pipeline = NewPipeline(m.cfg)
+	// Create pipeline（prism 参数来自配置，v2.2 起可调）。
+	m.pipeline = NewPipelineWithEngine(m.cfg, ascorprism.NewEngineWithConfig(PrismConfigFrom(m.cfg)))
+	logger.WithComponent("srd").Info("SRD effective config",
+		"layered_graph", m.cfg.LayeredGraph,
+		"transmission", m.cfg.DefaultTransmission,
+		"max_path_depth", m.cfg.MaxPathDepth,
+		"path_decay", m.cfg.PathDecay,
+		"prop_cap", m.cfg.PropCap,
+		"aggregation", m.cfg.AggregationMode,
+		"horizon_days", m.cfg.HorizonDays,
+		"roles", len(m.cfg.Roles),
+		"sync_interval_sec", m.cfg.SyncIntervalSec)
 
 	// Register all built-in adapters.
 	m.registerAdapters()
@@ -182,6 +195,27 @@ func (m *Manager) ProcessReport(ctx context.Context, toolID string, data []byte)
 
 // SetTopology records a host's network position (subnets/zone) for real-edge
 // construction in the SRD pipeline.
+// PrismConfigFrom 把 SRD 配置映射成 prism 引擎配置（供运维调参）。
+func PrismConfigFrom(cfg Config) prismlib.PrismConfig {
+    c := prismlib.DefaultConfig()
+    if cfg.MaxPathDepth > 0 {
+        c.MaxPathDepth = cfg.MaxPathDepth
+    }
+    if cfg.PathDecay > 0 && cfg.PathDecay <= 1 {
+        c.PathDecay = cfg.PathDecay
+    }
+    if cfg.PropCap >= 0 && cfg.PropCap <= 1 {
+        c.PropCap = cfg.PropCap
+    }
+    if cfg.AggregationMode != "" {
+        c.AggregationMode = cfg.AggregationMode
+    }
+    if cfg.HorizonDays > 0 {
+        c.HorizonDays = cfg.HorizonDays
+    }
+    return c
+}
+
 // SetLayeredGraph 注入分层图（L1/L2/L3/L4/L5），构边走分层规则。
 // 传 nil 表示回退到单层模型。
 func (m *Manager) SetLayeredGraph(lg *topology.LayeredGraph) {
@@ -293,6 +327,41 @@ func (m *Manager) loadConfig(cfgObj interface{}) {
 			}
 			if len(roles) > 0 {
 				m.cfg.Roles = roles
+			}
+		}
+		if v := cfg.Get("srd.transmission"); v != "" {
+			if f, err := parseFloat(v); err == nil && f > 0 {
+				m.cfg.DefaultTransmission = f
+			}
+		} else if v := cfg.Get("prism.default_transmission"); v != "" {
+			if f, err := parseFloat(v); err == nil && f > 0 {
+				m.cfg.DefaultTransmission = f
+			}
+		}
+		if v := cfg.Get("srd.max_path_depth"); v != "" {
+			if n, err := parseInt(v); err == nil && n > 0 {
+				m.cfg.MaxPathDepth = n
+			}
+		}
+		if v := cfg.Get("srd.path_decay"); v != "" {
+			if f, err := parseFloat(v); err == nil && f > 0 && f <= 1 {
+				m.cfg.PathDecay = f
+			}
+		}
+		if v := cfg.Get("srd.prop_cap"); v != "" {
+			if f, err := parseFloat(v); err == nil && f >= 0 && f <= 1 {
+				m.cfg.PropCap = f
+			}
+		}
+		if v := cfg.Get("srd.aggregation"); v != "" {
+			switch v {
+			case "rss", "max", "linear":
+				m.cfg.AggregationMode = v
+			}
+		}
+		if v := cfg.Get("srd.horizon_days"); v != "" {
+			if n, err := parseInt(v); err == nil && n > 0 {
+				m.cfg.HorizonDays = n
 			}
 		}
 		if v := cfg.Get("srd.sync_interval_sec"); v != "" {
@@ -462,3 +531,5 @@ type SRDManagerInterface interface {
 // --- config helper ---
 
 func parseInt(s string) (int, error) { return common.ParseInt(s) }
+
+func parseFloat(s string) (float64, error) { return strconv.ParseFloat(strings.TrimSpace(s), 64) }
