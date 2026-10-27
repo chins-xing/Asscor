@@ -250,6 +250,54 @@ func (g *LayeredGraph) policyVerdict(from, to string) (Verdict, string) {
 	return VerdictReachable, "policy allow (default)"
 }
 
+// SharedSubnets 返回两台主机共同所属的子网（同广播域的直接邻接依据）。
+func (g *LayeredGraph) SharedSubnets(a, b string) []string {
+	var out []string
+	for _, sa := range g.hostSubs[a] {
+		for _, sb := range g.hostSubs[b] {
+			if sa == sb {
+				out = append(out, sa)
+			}
+		}
+	}
+	return out
+}
+
+// Forwards 判断主机是否真的转发（允许作为中继）。
+func (g *LayeredGraph) Forwards(host string) bool {
+	h, ok := g.hosts[host]
+	return ok && h.Forwards
+}
+
+// CrossingPermitted 判断路由器 router 是否允许把风险从它的**其它子网**
+// 跨到 toSubnet（用于 SRD 构边时过滤"策略阻断的跨域边"）。
+//
+// 语义：只要存在一个来源子网 s2（s2≠toSubnet）的策略判定不是 deny，就放行；
+// 全部 deny 则阻断。未知策略按放行处理（保守地保留边，由上层用 probable 表达不确定）。
+func (g *LayeredGraph) CrossingPermitted(router, toSubnet string) bool {
+	subs := g.hostSubs[router]
+	if len(subs) == 0 {
+		return true
+	}
+	found := false
+	for _, s2 := range subs {
+		if s2 == toSubnet {
+			continue
+		}
+		found = true
+		if v, _ := g.policyVerdict(s2, toSubnet); v != VerdictBlocked {
+			return true
+		}
+	}
+	if !found {
+		return true // 只有这一个子网，不涉及跨域
+	}
+	return false
+}
+
+// PolicyKnown 表示是否采集到过策略事实。
+func (g *LayeredGraph) PolicyKnown() bool { return g.policyKnown }
+
 // Summary 把多条路径汇总成一个结论（只要有 reachable 就 reachable；
 // 否则 blocked 优先于 probable）。
 func Summary(verdicts []PathVerdict) Verdict {

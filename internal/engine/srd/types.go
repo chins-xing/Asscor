@@ -139,6 +139,10 @@ type Config struct {
 	ScanPaths           map[string]string
 	DefaultProfile      string
 	EnabledAdapters     map[string]bool
+	// LayeredGraph 打开 SRD 的**分层图**边构造（L1 链路 / L2 广播域 / L3 路由 /
+	// L4 策略 / L5 资产）。默认 false 保持历史单层行为，便于 A/B 对照。
+	LayeredGraph bool
+
 	// Confidence is the kernel's [confidence] rule table (same
 	// config.ConfidenceConfig the SSAM/legacy paths use). nil means "not
 	// wired" → legacy passthrough. When non-nil AND Enabled, a failed external

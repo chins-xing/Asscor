@@ -25,6 +25,7 @@ import (
 // Module wraps srd.Manager to implement kernel.Plugin.
 // Bridges the gap between srd's local shadow types and kernel types.
 type Module struct {
+	unsub   func()
 	manager *srd.Manager
 }
 
@@ -65,12 +66,27 @@ func (s *Module) Start(ctx context.Context) error {
 	})
 	// Seed with any topology already recorded before Start.
 	s.syncTopology()
+	// 分层图：每次拓扑事件后重建（L1/L2/L3 事实来自 agent 心跳，L4 策略同理）。
+	// 只有 [srd] layered_graph = true 时才真正注入，否则保持单层历史行为。
+	s.unsub = topology.Subscribe(func(ev topology.TopoEvent) { s.rebuildLayeredGraph() })
+	s.rebuildLayeredGraph()
 	return s.manager.Start(ctx)
 }
 
 func (s *Module) Stop(ctx context.Context) error {
 	topology.SetTopologyListener(nil)
+	if s.unsub != nil {
+		s.unsub()
+		s.unsub = nil
+	}
 	return s.manager.Stop(ctx)
+}
+
+// rebuildLayeredGraph 从 kernel 拓扑注册表重建分层图并注入 SRD pipeline。
+// 策略/转发等事实缺失时分层图内部会把它们标记为未知，SRD 判 probable 而不是放行。
+func (s *Module) rebuildLayeredGraph() {
+	lg := topology.BuildLayeredFromRegistry()
+	s.manager.SetLayeredGraph(lg)
 }
 
 func (s *Module) State() kernel.PluginState {
