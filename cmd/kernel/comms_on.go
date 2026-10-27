@@ -39,7 +39,7 @@ func newCommsRuntime(
 	spc kernel.SPCInterface,
 	logCollector kernel.LogCollectorInterface,
 	sourceManager kernel.SourceManagerInterface,
-) *commsRuntime {
+) (*commsRuntime, error) {
 	log := logger.WithComponent("kernel")
 
 	kernelSvc := comms.NewKernelServiceImpl(heartbeat, commander, cti, assessor, persistence, spc)
@@ -86,6 +86,16 @@ func newCommsRuntime(
 	if v := cfg.AdapterConfig["grpc.listen_addr"]; v != "" {
 		grpcCfg.ListenAddr = v
 	}
+	// 与主监听地址抢端口是**配置错误**，必须启动即失败（而不是静默 grpc=false）。
+	// 2026-10-27 的真实故障：kernel.ini 里 `[grpc] listen_addr = :50051` 与
+	// `--listen :50051` 撞车，gRPC 每次都 bind 失败、只留一行 WARN，
+	// 结果"gRPC 通道从来没起来过"没人发现。
+	if grpcCfg.Enabled && comms.AddrConflicts(listenAddr, grpcCfg.ListenAddr) {
+		return nil, fmt.Errorf(
+			"gRPC listen address %q conflicts with the primary (JSONRPC) listen address %q; "+
+				"set [grpc] listen_addr to a distinct port (e.g. :50052) or [grpc] enabled = false",
+			grpcCfg.ListenAddr, listenAddr)
+	}
 	if v := cfg.AdapterConfig["grpc.tls_enabled"]; v == "on" || v == "true" || v == "1" {
 		grpcCfg.TLSEnabled = true
 		grpcCfg.CertFile = filepath.Join(certDir, "server.crt")
@@ -96,7 +106,7 @@ func newCommsRuntime(
 	return &commsRuntime{
 		server:     server,
 		grpcServer: comms.NewGRPCServer(grpcCfg, kernelSvc, agentSvc),
-	}
+	}, nil
 }
 
 // Start launches both servers. Returns the started flags for each.

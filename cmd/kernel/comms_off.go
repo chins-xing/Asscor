@@ -26,8 +26,8 @@ func newCommsRuntime(
 	spc kernel.SPCInterface,
 	logCollector kernel.LogCollectorInterface,
 	sourceManager kernel.SourceManagerInterface,
-) *commsRuntime {
-	return &commsRuntime{}
+) (*commsRuntime, error) {
+	return &commsRuntime{}, nil
 }
 
 func (r *commsRuntime) Start() (serverStarted, grpcStarted bool) {

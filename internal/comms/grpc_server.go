@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +45,47 @@ func DefaultGRPCServerConfig() GRPCServerConfig {
 	}
 }
 
+// AddrConflicts 判断两个监听地址是否**会抢同一个端口**。
+//
+// 这是 2026-10-27 的真实故障：`[grpc] listen_addr` 与主 `--listen` 都写 `:50051`，
+// gRPC 每次启动都 `bind: address already in use`，只在启动日志里留一行 WARN，
+// 然后 `grpc=false` 静默降级 —— 谁也不会注意到 gRPC 通道其实从来没起来过。
+//
+// 规则：端口相同，且主机部分相同、任一方为通配（空串 / 0.0.0.0 / ::）即视为冲突。
+// 不同主机绑定同一端口（如 127.0.0.1:50051 与 192.168.30.50:50051）不算冲突。
+func AddrConflicts(primary, grpcAddr string) bool {
+	ph, pp := splitHostPort(primary)
+	gh, gp := splitHostPort(grpcAddr)
+	if pp == "" || gp == "" || pp != gp {
+		return false
+	}
+	if ph == gh {
+		return true
+	}
+	return isWildcardHost(ph) || isWildcardHost(gh)
+}
+
+func splitHostPort(addr string) (host, port string) {
+	if addr == "" {
+		return "", ""
+	}
+	// 没有冒号 ⇒ 视为纯端口（":50051" 的简写不常见，这里按空主机处理）
+	idx := strings.LastIndex(addr, ":")
+	if idx < 0 {
+		return "", addr
+	}
+	host = strings.Trim(addr[:idx], "[]")
+	return host, addr[idx+1:]
+}
+
+func isWildcardHost(h string) bool {
+	switch h {
+	case "", "0.0.0.0", "::", "[::]":
+		return true
+	}
+	return false
+}
+
 type GRPCServer struct {
 	cfg       GRPCServerConfig
 	kernelSvc *KernelServiceImpl
@@ -66,6 +108,7 @@ func (s *GRPCServer) Start() error {
 		logger.WithComponent("grpc_server").Info("gRPC server disabled")
 		return nil
 	}
+	logger.WithComponent("grpc_server").Info("gRPC server listening", "addr", s.cfg.ListenAddr, "mtls", s.cfg.TLSEnabled)
 
 	opts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(s.cfg.MaxRecvSize),
