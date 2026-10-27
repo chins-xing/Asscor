@@ -246,13 +246,13 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 		dstHost := path[len(path)-1]
 		srcSub := steps[0].Subnet
 		dstSub := steps[len(steps)-1].Subnet
-		if !g.inboundAllowed(dstHost, srcSub) {
+		if !g.inboundAllowed(dstHost, srcSub, dstSub) {
 			pv.Verdict = VerdictBlocked
 			pv.BlockedAt = dstHost
 			pv.Reason = "inbound policy denies " + srcSub + " -> " + dstHost
 			return pv
 		}
-		if !g.inboundAllowed(srcHost, dstSub) {
+		if !g.inboundAllowed(srcHost, dstSub, srcSub) {
 			pv.Verdict = VerdictBlocked
 			pv.BlockedAt = srcHost
 			pv.Reason = "inbound policy denies return path " + dstSub + " -> " + srcHost
@@ -320,9 +320,17 @@ func (g *LayeredGraph) linkUp(host, subnet string) bool {
 
 // inboundAllowed 判断 target 的主机入向策略是否允许来自 sourceSubnet 的流量。
 // 无规则/无数据 ⇒ 允许（未知 ≠ 拒绝）。
-func (g *LayeredGraph) inboundAllowed(target, sourceSubnet string) bool {
+// inboundAllowed 判断 target 的入向策略是否允许来自 sourceSubnet、送到 targetSubnet 的流量。
+//
+// 支持三种规则（与 agent 的解析一一对应）：
+//   - From 限定来源子网（From 为空 = 任意来源）；
+//   - To 限定目标子网（A-5：`ip daddr … drop` 这类规则，To 为空 = 任意目标）；
+//   - 首条匹配即生效（规则顺序由解析侧保持）。
+func (g *LayeredGraph) inboundAllowed(target, sourceSubnet, targetSubnet string) bool {
 	for _, r := range g.inbound[target] {
-		if subnetMatch(r.From, sourceSubnet) {
+		fromOK := r.From == "" || subnetMatch(r.From, sourceSubnet)
+		toOK := r.To == "" || subnetMatch(r.To, targetSubnet)
+		if fromOK && toOK {
 			return r.Allow
 		}
 	}
@@ -355,10 +363,10 @@ func (g *LayeredGraph) Adjacent(a, b string) (bool, string) {
 		// A-4：入向策略按**会话语义**双向生效。
 		// 请求被目标 B 的 INPUT 拒绝 ⇒ 会话失败；反向会话（B→A）的回程包
 		// 同样会撞上 B 的 INPUT 而被丢弃 ⇒ 两个方向都必须放行。
-		if !g.inboundAllowed(b, s) {
+		if !g.inboundAllowed(b, s, s) {
 			return false, "inbound policy denies " + s + " -> " + b
 		}
-		if !g.inboundAllowed(a, s) {
+		if !g.inboundAllowed(a, s, s) {
 			return false, "inbound policy denies return path " + s + " -> " + a
 		}
 	}
