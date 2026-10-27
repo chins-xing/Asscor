@@ -411,6 +411,14 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 					req.NetworkInfo.VLANs, req.NetworkInfo.Forwards,
 					toTopoPolicies(req.NetworkInfo.Policies), req.NetworkInfo.PolicyKnown,
 					toTopoLinks(req.NetworkInfo.Links))
+				// A-7b 诊断：记录落库的 zone 与规模，确认 agent 上报是否到达注册表。
+				logger.WithComponent("comms").Info("topology facts recorded",
+					"host_id", req.HostId,
+					"zone", req.NetworkInfo.NetworkZone,
+					"subnets", len(subnets),
+					"policies", len(req.NetworkInfo.Policies),
+					"links", len(req.NetworkInfo.Links),
+					"forwards", req.NetworkInfo.Forwards)
 			}
 		}
 		logger.WithComponent("kernel").Debug("network info received", "host_id", req.HostId,
