@@ -117,7 +117,12 @@ func (m *Manager) Init(ctx context.Context, kc KernelContext) error {
 	m.state = PluginInitialized
 
 	// Load config from kernel config object.
-	cfgObj := kc.GetConfigObj()
+	//
+	// A-1 修复：`kc.GetConfigObj()` 返回的是**适配器**（如 srdwrapper.srdConfigAdapter），
+	// 真正的 *config.Config 还要再取一层 GetConfigObj()。此前直接把适配器交给
+	// loadConfig，类型断言（*config.Config / Get(string) string）全部落空 ⇒
+	// [srd] 所有配置被静默忽略（v2.2.1 审计 A-1）。
+	cfgObj := unwrapConfig(kc.GetConfigObj())
 	if cfgObj != nil {
 		m.loadConfig(cfgObj)
 	}
@@ -315,6 +320,23 @@ func (m *Manager) registerAdapters() {
 	Register(newLynisAdapter())
 	Register(newGenericAdapter())
 	Register(newAtomicRedAdapter())
+}
+
+// unwrapConfig 解开适配器链，拿到真正的配置对象。
+// 适配器只要实现 `GetConfigObj() interface{}` 就会被继续解包（最多 4 层，防环）。
+func unwrapConfig(v interface{}) interface{} {
+	for i := 0; i < 4 && v != nil; i++ {
+		g, ok := v.(interface{ GetConfigObj() interface{} })
+		if !ok {
+			return v
+		}
+		next := g.GetConfigObj()
+		if next == nil || next == v {
+			return v
+		}
+		v = next
+	}
+	return v
 }
 
 func (m *Manager) loadConfig(cfgObj interface{}) {
