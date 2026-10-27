@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -167,26 +168,26 @@ func main() {
 			}
 		}
 		// layered：reachable=1、probable=0.5、blocked=0（连续化：按最短跳数衰减）
-		layScore := 0.0
+		// 连续分数：对所有非 blocked 路径求和"跳数衰减 × 允许性"，
+		// 再映射到 (0,1)：score = 1 - exp(-sum)。路径越多/越短 ⇒ 分数越高；
+		// probable（未知层）按 0.4 降权；blocked 恒为 0。
 		pvs := lg.HostReachable(p.Src, p.Dst, 5)
-		switch topology.Summary(pvs) {
-		case topology.VerdictReachable:
-			shortest := 99
-			for _, v := range pvs {
-				if v.Verdict == topology.VerdictReachable && len(v.Path) < shortest {
-					shortest = len(v.Path)
-				}
+		sum := 0.0
+		for _, v := range pvs {
+			if v.Verdict == topology.VerdictBlocked {
+				continue
 			}
-			layScore = 1.0
-			if shortest > 2 {
-				layScore = 0.9 - 0.1*float64(shortest-2)
-				if layScore < 0.6 {
-					layScore = 0.6
-				}
+			hops := len(v.Path) - 1
+			if hops < 1 {
+				continue
 			}
-		case topology.VerdictProbable:
-			layScore = 0.5
+			base := math.Pow(0.9, float64(hops-1))
+			if v.Verdict == topology.VerdictProbable {
+				base *= 0.4
+			}
+			sum += base
 		}
+		layScore := 1 - math.Exp(-sum)
 		items = append(items, scored{p: p, flat: flatScore, layered: layScore})
 	}
 
