@@ -242,10 +242,16 @@ func (a *Agent) Run() error {
 		}()
 		<-sigCh
 		logger.WithComponent("agent").Info("received shutdown signal")
+		// A-8 修复：只 cancel 不够 —— 旧循环条件只看 running，收到信号后会继续
+		// 重连重试（systemd 一直 deactivating，必须 kill -9）。这里同时清 running。
 		cancel()
+		a.running.Store(false)
 	}()
 
 	for a.running.Load() {
+		if ctx.Err() != nil {
+			return nil // 收到 SIGTERM/SIGINT：立即正常退出（不等待下一次重试）
+		}
 		if err := a.runOnce(ctx); err != nil {
 			if errors.Is(err, ErrKernelUnreachable) {
 				logger.WithComponent("agent").Info("kernel unreachable after max retries, shutting down")
@@ -1232,10 +1238,10 @@ func (a *Agent) inferZone(ips []string) string {
 		if ip == nil {
 			continue
 		}
-		if ip.IsPrivate() || ip.IsLoopback() {
-			hasPrivate = true
-		} else {
+		if isPublicAddress(ip) {
 			hasPublic = true
+		} else {
+			hasPrivate = true
 		}
 	}
 	switch {
@@ -1246,6 +1252,25 @@ func (a *Agent) inferZone(ips []string) string {
 	default:
 		return "internal"
 	}
+}
+
+// isPublicAddress 判断一个地址是否真的"公网可达"。
+//
+// A-7 审计修复：旧实现用 `!ip.IsPrivate()` 判公网，导致 IPv6 链路本地（fe80::/10）
+// 或 ULA（fc00::/7）被当成公网 ⇒ 纯私网主机被误判为 dmz（实测 router 判成 dmz，
+// 进而污染 L5 关键性）。这里显式排除：回环、私网、链路本地、未指定、IPv6 ULA。
+func isPublicAddress(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return false
+	}
+	if ip.To4() == nil && len(ip) == net.IPv6len && (ip[0]&0xfe) == 0xfc {
+		return false // IPv6 ULA fc00::/7
+	}
+	return ip.IsGlobalUnicast()
 }
 
 func generateCPEsFromPackages(packages []string) []string {
