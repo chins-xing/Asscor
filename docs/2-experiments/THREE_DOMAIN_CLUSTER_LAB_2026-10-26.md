@@ -89,8 +89,14 @@ nft:  filter forward   policy drop
      `InstalledCPEs`/`NetworkInfo`/`SecureMode`，并加 JSON codec
      （`grpc.ForceServerCodec`/`ForceCodec`；PB 类型是手写结构体、没有 `ProtoReflect`，
      默认 proto codec 编不了）。新增 `pbToHeartbeatRequest`/`heartbeatRequestToPB` 逐字段搬运，
-     测试钉住往返一致。**注**：`[grpc]` 与 JSONRPC 仍同占 `.50051`（gRPC 启动报
-     `address already in use`，`grpc=false`），这是**另一个**待办：给 gRPC 单独端口或默认关闭。
+     测试钉住往返一致。
+   - **端口冲突已修（2026-10-27，提交 `portfix`）**：`[grpc] listen_addr` 与主 `--listen`
+     同端口时，kernel **启动即失败**并给出可执行的修复提示（实测 rc=1）；
+     分开后 `:50051`（JSONRPC）+ `:50052`（gRPC mTLS）同时监听，
+     日志出现 `gRPC server listening addr=:50052 mtls=true`。
+     真实 gRPC 客户端探针（mTLS + JSON codec）注册成功、心跳 `ok`，
+     且其 `NetworkInfo`（`10.99.0.0/24`）**出现在 kernel 拓扑里** ——
+     证明修复前会丢的字段现在真的过线了。
 
    **本次复现到的现象**：6 台 CT agent 分数**完全相同（46.75）**，只有 `domC-mon` 不同（40.4x）——
    正是 2026-08-16 审计里"同质主机同分"的结论，在真实三域多主机上再次出现。

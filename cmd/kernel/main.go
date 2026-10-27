@@ -422,7 +422,12 @@ func main() {
 		log.Warn("comms enabled but resilience build tag is OFF — handler execution is not fault-isolated (add -tags resilience for a hardened build)")
 	}
 
-	kernelSvcRuntime := newCommsRuntime(k, cfg, *listenAddr, tlsCfgForServer, *certDir, heartbeat, commander, cti, assessor, persistence, spc, logCollector, sourceManager)
+	kernelSvcRuntime, err := newCommsRuntime(k, cfg, *listenAddr, tlsCfgForServer, *certDir, heartbeat, commander, cti, assessor, persistence, spc, logCollector, sourceManager)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "FATAL: comms runtime configuration error: %v\n", err)
+		log.Error("comms runtime configuration error", "error", err)
+		os.Exit(1)
+	}
 
 	if err := k.Bootstrap(); err != nil {
 		fmt.Fprintf(os.Stderr, "FATAL: kernel bootstrap failed: %v\n", err)
