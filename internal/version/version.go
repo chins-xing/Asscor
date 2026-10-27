@@ -14,5 +14,7 @@ const (
 	// v2.2.1：修复配置接线 —— Config.Get 补上（此前 [srd] 配置被静默忽略），
 	//         transmission/max_path_depth/path_decay/prop_cap/aggregation/horizon_days
 	//         全部接入并可调；启动日志输出 "SRD effective config"。
-	SRDVersion = "2.2.1"
+	// v2.2.2：修复 A-1 —— Init 解包配置适配器（kc.GetConfigObj() 返回的是适配器），
+	//         [srd] 参数在启动时真正生效（现场验证：false/0.42/7/0.65/max 全对）。
+	SRDVersion = "2.2.2"
 )

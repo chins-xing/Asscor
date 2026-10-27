@@ -4,6 +4,7 @@ package srd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -116,9 +117,26 @@ func (m *Manager) Init(ctx context.Context, kc KernelContext) error {
 	m.state = PluginInitialized
 
 	// Load config from kernel config object.
-	if cfgObj := kc.GetConfigObj(); cfgObj != nil {
+	//
+	// A-1 修复：`kc.GetConfigObj()` 返回的是**适配器**（如 srdwrapper.srdConfigAdapter），
+	// 真正的 *config.Config 还要再取一层 GetConfigObj()。此前直接把适配器交给
+	// loadConfig，类型断言（*config.Config / Get(string) string）全部落空 ⇒
+	// [srd] 所有配置被静默忽略（v2.2.1 审计 A-1）。
+	cfgObj := unwrapConfig(kc.GetConfigObj())
+	if cfgObj != nil {
 		m.loadConfig(cfgObj)
 	}
+	// A-1 诊断：配置对象类型 + srd.layered_graph 读值（一次定位"配置为何不生效"）。
+	readBack := ""
+	if g, ok := cfgObj.(interface{ Get(string) string }); ok {
+		readBack = g.Get("srd.layered_graph")
+	}
+	logger.WithComponent("srd").Info("SRD config source",
+		"cfg_nil", cfgObj == nil,
+		"cfg_type", fmt.Sprintf("%T", cfgObj),
+		"get_supported", readBack != "" || func() bool { _, ok := cfgObj.(interface{ Get(string) string }); return ok }(),
+		"srd.layered_graph", readBack,
+		"effective_layered_graph", m.cfg.LayeredGraph)
 
 	// Create pipeline（prism 参数来自配置，v2.2 起可调）。
 	m.pipeline = NewPipelineWithEngine(m.cfg, ascorprism.NewEngineWithConfig(PrismConfigFrom(m.cfg)))
@@ -302,6 +320,23 @@ func (m *Manager) registerAdapters() {
 	Register(newLynisAdapter())
 	Register(newGenericAdapter())
 	Register(newAtomicRedAdapter())
+}
+
+// unwrapConfig 解开适配器链，拿到真正的配置对象。
+// 适配器只要实现 `GetConfigObj() interface{}` 就会被继续解包（最多 4 层，防环）。
+func unwrapConfig(v interface{}) interface{} {
+	for i := 0; i < 4 && v != nil; i++ {
+		g, ok := v.(interface{ GetConfigObj() interface{} })
+		if !ok {
+			return v
+		}
+		next := g.GetConfigObj()
+		if next == nil || next == v {
+			return v
+		}
+		v = next
+	}
+	return v
 }
 
 func (m *Manager) loadConfig(cfgObj interface{}) {
