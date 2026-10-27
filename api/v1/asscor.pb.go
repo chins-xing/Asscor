@@ -64,6 +64,27 @@ type NetworkInfo struct {
 	Gateways    []string `json:"gateways,omitempty"`     // 默认网关 IP
 	Neighbors   []string `json:"neighbors,omitempty"`    // ARP 邻居表 (同子网主机 IP)
 	NetworkZone string   `json:"network_zone,omitempty"` // 区域: internal/dmz/public/wan/cloud
+	// L2 事实（SRD 分层图的 broadcast 层）：本机所在的 VLAN/广播域标识。
+	// 容器内通常采集不到（tag 在宿主 OVS 端口上），为空表示**未知**，不得当作"同域"。
+	VLANs []string `json:"vlans,omitempty"`
+	// L3 事实：本机是否真的转发（/proc/sys/net/ipv4/ip_forward=1 或路由角色）。
+	// 双网卡 ≠ 路由器；SRD 只允许 Forwards=true 的主机作为中继。
+	Forwards bool `json:"forwards,omitempty"`
+	// L4 事实（SRD 分层图的 policy 层）：本机防火墙的显式 allow/deny 结论。
+	Policies []PolicyRule `json:"policies,omitempty"`
+	// PolicyKnown 表示**是否成功采集到策略**。false 时 SRD 必须判 probable，
+	// 绝不能当作"全放行"。
+	PolicyKnown bool `json:"policy_known,omitempty"`
+}
+
+// PolicyRule 是一条 L4 策略结论（按源/目的 CIDR 表达）。
+//
+// 语义：From→To 这条跨子网流量是否被放行。agent 侧从 nft/iptables 的显式
+// drop/reject/accept 规则推导；推导不出的（复杂匹配、用户链、动态集合）不猜。
+type PolicyRule struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Allow bool   `json:"allow"`
 }
 
 type HeartbeatResponse struct {

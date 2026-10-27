@@ -11,6 +11,7 @@ import (
 
 	ascorprism "github.com/chins-xing/asscor/internal/engine/prism"
 	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/topology"
 	prismlib "github.com/chins-xing/prism"
 )
 
@@ -31,6 +32,8 @@ type Pipeline struct {
 	mu        sync.RWMutex
 	snapshots map[string]*prismlib.NodeState
 	topology  map[string]*TopologyInfo
+	// layered 非 nil 且 cfg.LayeredGraph 为真时，构边走分层图（含 L4 策略过滤）。
+	layered *topology.LayeredGraph
 }
 
 // TopologyInfo carries a host's network position for real-edge construction.

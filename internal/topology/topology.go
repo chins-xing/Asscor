@@ -35,6 +35,20 @@ type TopoNode struct {
 	Subnets []string
 	Zone    string
 	Status  string // active | inactive | removed
+
+	// 以下是 SRD 分层图所需的事实（来自 agent 心跳的 NetworkInfo）。
+	// VLANs 为空 = L2 未知；Policies 为空且 PolicyKnown=false = L4 未知。
+	VLANs       []string
+	Forwards    bool // 是否真的转发（ip_forward=1）
+	Policies    []TopoPolicyRule
+	PolicyKnown bool
+}
+
+// TopoPolicyRule 是一条 L4 策略结论（按源/目的 CIDR）。
+type TopoPolicyRule struct {
+	From  string
+	To    string
+	Allow bool
 }
 
 // TopoEdge 是拓扑图中的边模型（链路）。M0 仅定义类型；边的实际构建
@@ -211,7 +225,60 @@ func SetTopologyListener(cb func(hostID string, subnets []string)) {
 
 // --- M0 地基层 API ---
 
-// RecordTopologyDetailed records a node with zone. Publishes node_added (new)
+// RecordNetworkFacts 记录一台主机的**完整网络事实**（L2/L3/L4），
+// 供 SRD 分层图使用。缺失的层保持零值 = 未知（不是"放行"）。
+func RecordNetworkFacts(hostID string, subnets []string, zone string,
+	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool) {
+	globalTopology.recordNetworkFacts(hostID, subnets, zone, vlans, forwards, policies, policyKnown)
+}
+
+func (r *Registry) recordNetworkFacts(hostID string, subnets []string, zone string,
+	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool) {
+	r.record(hostID, subnets, zone)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n, ok := r.nodes[hostID]
+	if !ok {
+		return
+	}
+	n.VLANs = append([]string(nil), vlans...)
+	n.Forwards = forwards
+	n.Policies = append([]TopoPolicyRule(nil), policies...)
+	n.PolicyKnown = policyKnown
+}
+
+// BuildLayeredFromRegistry 用当前注册表构造 SRD 分层图：
+//   - 主机事实：子网（L3）、VLAN（L2，可为空）、是否转发（L3）；
+//   - 策略：所有主机上报的 L4 规则合并；任一主机采集到即视为"策略已知"。
+//
+// 返回 nil 表示注册表为空（调用方应回退到旧模型）。
+func BuildLayeredFromRegistry() *LayeredGraph {
+	globalTopology.mu.RLock()
+	defer globalTopology.mu.RUnlock()
+	if len(globalTopology.nodes) == 0 {
+		return nil
+	}
+	hosts := make([]HostFacts, 0, len(globalTopology.nodes))
+	var policies []PolicyRule
+	policyKnown := false
+	for _, n := range globalTopology.nodes {
+		hosts = append(hosts, HostFacts{
+			HostID:   n.HostID,
+			Subnets:  append([]string(nil), n.Subnets...),
+			VLANs:    append([]string(nil), n.VLANs...),
+			Forwards: n.Forwards,
+		})
+		for _, p := range n.Policies {
+			policies = append(policies, PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
+		}
+		if n.PolicyKnown {
+			policyKnown = true
+		}
+	}
+	return BuildLayeredGraph(hosts, policies, policyKnown, true)
+}
+
+// RecordTopologyDetailed// RecordTopologyDetailed records a node with zone. Publishes node_added (new)
 // or node_updated (existing).
 func RecordTopologyDetailed(hostID string, subnets []string, zone string) {
 	globalTopology.record(hostID, subnets, zone)

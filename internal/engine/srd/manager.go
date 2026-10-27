@@ -12,6 +12,7 @@ import (
 	"github.com/chins-xing/asscor/internal/common"
 	kernelconfig "github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/logger"
+	"github.com/chins-xing/asscor/internal/topology"
 )
 
 // TopicSRDResult is the Bus topic published when an external tool report is processed.
@@ -179,6 +180,15 @@ func (m *Manager) ProcessReport(ctx context.Context, toolID string, data []byte)
 
 // SetTopology records a host's network position (subnets/zone) for real-edge
 // construction in the SRD pipeline.
+// SetLayeredGraph 注入分层图（L1/L2/L3/L4/L5），构边走分层规则。
+// 传 nil 表示回退到单层模型。
+func (m *Manager) SetLayeredGraph(lg *topology.LayeredGraph) {
+	if m.pipeline == nil {
+		return
+	}
+	m.pipeline.SetLayeredGraph(lg)
+}
+
 func (m *Manager) SetTopology(hostID string, subnets []string, zone string) {
 	m.pipeline.SetTopology(hostID, subnets, zone)
 }
@@ -268,6 +278,9 @@ func (m *Manager) loadConfig(cfgObj interface{}) {
 	if cfg, ok := cfgObj.(interface {
 		Get(string) string
 	}); ok {
+		if v := cfg.Get("srd.layered_graph"); v == "on" || v == "true" || v == "1" {
+			m.cfg.LayeredGraph = true
+		}
 		if v := cfg.Get("srd.sync_interval_sec"); v != "" {
 			if n, err := parseInt(v); err == nil && n > 0 {
 				m.cfg.SyncIntervalSec = n
