@@ -1259,6 +1259,19 @@ func (a *Agent) inferZone(ips []string) string {
 // A-7 审计修复：旧实现用 `!ip.IsPrivate()` 判公网，导致 IPv6 链路本地（fe80::/10）
 // 或 ULA（fc00::/7）被当成公网 ⇒ 纯私网主机被误判为 dmz（实测 router 判成 dmz，
 // 进而污染 L5 关键性）。这里显式排除：回环、私网、链路本地、未指定、IPv6 ULA。
+// nonPublicV4 网段：Go 的 IsPrivate() 不覆盖，但不可路由到公网。
+// 100.64.0.0/10 是 CGNAT/共享地址空间 —— 实验网 domC 用的就是 100.64.0.0/24，
+// 旧实现把它当公网 ⇒ 纯内网主机被误判 dmz/public（A-7c 实测：domC-mon=public）。
+var nonPublicV4 = []string{
+	"100.64.0.0/10",  // CGNAT / shared address space (RFC 6598)
+	"198.18.0.0/15",  // benchmarking (RFC 2544)
+	"192.0.0.0/24",   // IETF protocol assignments
+	"192.0.2.0/24",   // TEST-NET-1
+	"198.51.100.0/24", // TEST-NET-2
+	"203.0.113.0/24", // TEST-NET-3
+	"240.0.0.0/4",    // reserved
+}
+
 func isPublicAddress(ip net.IP) bool {
 	if ip == nil {
 		return false
@@ -1269,6 +1282,13 @@ func isPublicAddress(ip net.IP) bool {
 	}
 	if ip.To4() == nil && len(ip) == net.IPv6len && (ip[0]&0xfe) == 0xfc {
 		return false // IPv6 ULA fc00::/7
+	}
+	if ip4 := ip.To4(); ip4 != nil {
+		for _, cidr := range nonPublicV4 {
+			if _, n, err := net.ParseCIDR(cidr); err == nil && n.Contains(ip4) {
+				return false
+			}
+		}
 	}
 	return ip.IsGlobalUnicast()
 }
