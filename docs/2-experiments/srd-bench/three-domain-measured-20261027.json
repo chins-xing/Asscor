@@ -1,12 +1,22 @@
 {
   "_comment": "2026-10-27 实测拓扑（路由器/pivot 已装 agent；shadow-1 故意无 agent）。分数来自 kernel 日志最新 assessment result。ground truth 区分『拓扑可达』与『策略可达』两种真值。",
   "transmission": 0.1,
+  "policy_known": true,
+  "policies": [
+    {"from": "172.22.10.0/24", "to": "172.23.10.0/24", "allow": false},
+    {"from": "172.23.10.0/24", "to": "172.22.10.0/24", "allow": false},
+    {"from": "172.22.10.0/24", "to": "100.64.0.0/24", "allow": true},
+    {"from": "172.22.10.0/24", "to": "172.26.0.0/24", "allow": true},
+    {"from": "172.23.10.0/24", "to": "100.64.0.0/24", "allow": true},
+    {"from": "172.23.10.0/24", "to": "172.26.0.0/24", "allow": true},
+    {"from": "100.64.0.0/24", "to": "172.26.0.0/24", "allow": true}
+  ],
   "hosts": [
     {"id": "domA-web", "subnets": ["172.22.10.0/24"], "score": 47.34, "visible": true, "criticality": 0.7},
     {"id": "domA-db", "subnets": ["172.22.10.0/24"], "score": 46.81, "visible": true, "criticality": 0.9},
     {"id": "domB-web", "subnets": ["172.23.10.0/24"], "score": 46.81, "visible": true, "criticality": 0.7},
     {"id": "domC-mon", "subnets": ["100.64.0.0/24"], "score": 40.42, "visible": true, "criticality": 0.5},
-    {"id": "domC-router", "subnets": ["172.22.10.0/24", "172.23.10.0/24", "100.64.0.0/24", "192.168.30.0/24", "172.26.0.0/24"], "score": 42.67, "visible": true, "criticality": 1.0},
+    {"id": "domC-router", "forwards": true, "subnets": ["172.22.10.0/24", "172.23.10.0/24", "100.64.0.0/24", "192.168.30.0/24", "172.26.0.0/24"], "score": 42.67, "visible": true, "criticality": 1.0},
     {"id": "pivot-1", "subnets": ["172.23.10.0/24", "172.26.0.0/24"], "score": 46.81, "visible": true, "criticality": 0.6},
     {"id": "shadow-2", "subnets": ["172.26.0.0/24"], "score": 46.81, "visible": true, "criticality": 0.5},
     {"id": "shadow-1", "subnets": ["172.26.0.0/24"], "score": 46.81, "visible": false, "criticality": 0.5}

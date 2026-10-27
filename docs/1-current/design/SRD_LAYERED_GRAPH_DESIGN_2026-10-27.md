@@ -1,0 +1,78 @@
+# SRD 分层拓扑图模型（quasi-3D multi-layer graph）2026-10-27
+
+> 用户裁定（2026-10-27）：SRD 要"真正理解拓扑图"，而不是节点之间的路径；
+> 不用单层图，用**多重互相重叠混合的图**构建"类三维"结构。
+> **不同层在语义上必须不重复**；节点**可以重复**（甚至大范围重复）——
+> 一个节点同时存在于多张不同层的图中，表达多种位置语义。
+
+## 1. 为什么要分层（第一轮实验的直接教训）
+
+第一轮实测（`docs/2-experiments/SRD_PATH_EXPERIMENT_DESIGN_2026-10-27.md` §6）暴露：
+
+- c2：真实网络里 **nft 策略阻断** A→B，SRD 却报告路径 ⇒ 误报；
+- c5：无 agent 的主机不可见 ⇒ 真实攻击链必然漏报；
+- 调 `max_depth`/`path_decay` 无法修正任何一条 ⇒ **模型缺层，不是参数缺值**。
+
+根因：单层图把"能不能到"压成一个"子网是否重叠"的布尔值，
+把 VLAN 隔离、路由、策略、资产语义**全揉进一条边**。分层才能把这些语义分开表达。
+
+## 2. 层的定义（语义互不重复）
+
+| 层 | 语义（只表达这一件事） | 节点 | 边 | 数据来源 |
+|---|---|---|---|---|
+| **L1 `link`** | 链路/端口是否存在（物理或虚拟直连） | 接口 / 网桥端口 | `attached_to` | agent 接口列表、OVS/bridge 端口（当前缺失 ⇒ unknown） |
+| **L2 `broadcast`** | 同一个二层广播域（VLAN）能否直接通信 | 广播域（VLAN/tag） | `member_of`（主机∈广播域） | agent 上报 `VLAN/tag`（新增采集） |
+| **L3 `routed`** | 三层地址与路由：主机属于哪个子网、谁是网关 | 主机 / 子网 / 网关 | `addressed_in`、`routes_via` | agent 上报 `LocalIPs/Subnets`、网关 |
+| **L4 `policy`** | 策略是否放行（ACL/NAT 边界） | 策略边界（源子网→目的子网） | `allow` / `deny` | agent 上报 nft/iptables 结论（新增采集） |
+| **L5 `asset`** | 资产角色与关键性（web/db/mon/shadow） | 主机 | `has_role` | 配置 + 资产清单 |
+
+**节点重复规则**：同一主机 ID 在 L2/L3/L5 各有一个"位置节点"（`layer:id`），
+它们通过 **`same_identity`** 边互指 —— 这就是"一个节点存在多张图中表达多种位置语义"。
+层内边**不得**跨语义复用：L2 的 `member_of` 不能当路由用，L3 的 `addressed_in`
+不能当策略放行用。
+
+## 3. 可达性的合成规则（跨层）
+
+对主机 h1 → h2：
+
+```
+exists path ⟺ 在 L3 存在 h1 ⇒ subnet(s1) ⇒ [gateway g: g∈s1 ∧ g∈s2] ⇒ subnet(s2) ⇒ h2
+              且 每一步跨子网跳都被 L4 判定为 allow
+              且 L2/L1 若明确为 down/deny，则该跳不可用
+```
+
+- **同广播域直连**（L2 同域）时不需要 L4 跨域判定（域内放行，若有域内 ACL 则按 L4 细化）；
+- **跨域**必须经 L3 网关，且 L4 必须 allow；
+- **数据缺失**（无 L2/L4 数据）≠ allow：必须显式标 `unknown`，
+  可达性输出 `probable`（可能）而不是 `yes` —— 这正是 c5/c2 类问题的正确表达。
+
+## 4. 输出模型（把"误报/漏报"变成可解释的量）
+
+对每条候选路径输出：
+
+| 字段 | 含义 |
+|---|---|
+| `verdict` | `reachable` / `blocked` / `probable`（未知层导致不确定） |
+| `crossings` | 每一跳经过的层与判定（L3 子网、L4 策略、L2 域） |
+| `unknowns` | 缺数据的层（如"无策略采集"） |
+| `confidence` | 由未知层数量与证据强度折算 |
+
+这样 c2 不再是"误报"，而是 `blocked`（L4 deny）；
+c5 不再是"漏报"，而是 `probable`（目标主机不在 L3 层，但其子网已知）。
+
+## 5. 迁移路径（不破坏现有行为）
+
+1. **新增** `internal/topology/layers.go`：分层图构建 + 合成可达性（纯函数、可测）。
+2. **SRD 构边**改为可切换：默认仍用现有"同子网"规则（保证历史可比）；
+   配置 `[srd] layered_graph = true` 时用分层合成（L3+L4）。
+3. 采集侧补字段：agent 上报 `VLAN/tag`（L2）与 `nft/iptables` 结论（L4）；
+   缺失时标 `unknown`，不默认 allow。
+4. `srdbench` 增加 `-graph layered|flat`，对同一 ground truth 对比两种模型。
+
+## 6. 验收
+
+- c1（同域）两种模型都应 `reachable`；
+- **c2（策略阻断）分层模型必须 `blocked`**（旧模型误报）；
+- c3/c4（经路由器）分层模型 `reachable`；
+- **c5（目标主机不可见但其子网已知）分层模型必须 `probable`**（旧模型漏报）；
+- 参数扫描：`max_depth` 只影响路径枚举深度，`policy` 层的 deny 不受任何参数影响。

@@ -28,6 +28,7 @@ import (
 	prismlib "github.com/chins-xing/prism"
 
 	"github.com/chins-xing/asscor/internal/engine/srd"
+	"github.com/chins-xing/asscor/internal/topology"
 )
 
 // ---------------------------------------------------------------- 输入模型
@@ -38,6 +39,7 @@ type hostSpec struct {
 	Score       float64  `json:"score"`       // SSAM 分数 [0,100]
 	Visible     bool     `json:"visible"`     // false = 真实存在但 SRD 看不到（无 agent）
 	Criticality float64  `json:"criticality"` // 0..1，缺省 0.5
+	Forwards    bool     `json:"forwards"`    // 是否真的会转发（路由器）；双网卡≠路由
 }
 
 type chainSpec struct {
@@ -52,10 +54,20 @@ type chainSpec struct {
 	TruthReachable []string `json:"truth_reachable,omitempty"`
 }
 
+// policySpec 是 L4 的一条策略判定（按源/目的子网表达）。
+type policySpec struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Allow bool   `json:"allow"`
+}
+
 type topologyFile struct {
-	Transmission float64     `json:"transmission"`
-	Hosts        []hostSpec  `json:"hosts"`
-	Chains       []chainSpec `json:"chains"`
+	Transmission float64 `json:"transmission"`
+	// 分层图模式用：策略事实与"策略是否已采集"。
+	Policies    []policySpec `json:"policies,omitempty"`
+	PolicyKnown bool         `json:"policy_known"`
+	Hosts       []hostSpec   `json:"hosts"`
+	Chains      []chainSpec  `json:"chains"`
 }
 
 // ---------------------------------------------------------------- 参数
@@ -277,6 +289,7 @@ type sweepSpec struct {
 func main() {
 	topoPath := flag.String("topology", "", "拓扑与 ground truth 的 JSON 文件")
 	jsonOut := flag.Bool("json", false, "以 JSON 输出结果")
+	graphMode := flag.String("graph", "flat", "flat=现有同子网边模型；layered=分层图模型（L3 子网 + L4 策略 + 未知语义）")
 	sweepFlags := multiFlag{}
 	flag.Var(&sweepFlags, "sweep", "参数扫描，形如 max_depth=1,2,3；可重复")
 	flag.Parse()
@@ -299,6 +312,11 @@ func main() {
 	base := defaultParams()
 	if tf.Transmission > 0 {
 		base.Transmission = tf.Transmission
+	}
+
+	if *graphMode == "layered" {
+		runLayered(&tf, base)
+		return
 	}
 
 	combos := expandSweep(base, sweepFlags)
@@ -332,6 +350,81 @@ func main() {
 				p.String(), r.ChainID, r.PathPrec, r.PathRec, r.ReachPrec, r.ReachRec, rank)
 		}
 	}
+}
+
+// runLayered 用分层图模型（L3 子网 + L4 策略 + 未知语义）评估每条攻击链。
+//
+// 与 flat 模式的差别：
+//   - flat：边=同子网重叠，路径=prism DFS，**策略与不可见主机都不建模**；
+//   - layered：跨子网跳必须 L4 allow；无策略数据 ⇒ probable；目标主机不在图里 ⇒ probable。
+func runLayered(tf *topologyFile, p params) {
+	hosts := make([]topology.HostFacts, 0, len(tf.Hosts))
+	for _, h := range tf.Hosts {
+		if !h.Visible {
+			continue // 不可见主机不进入 L3 事实集
+		}
+		hosts = append(hosts, topology.HostFacts{
+			HostID:   h.ID,
+			Subnets:  h.Subnets,
+			Role:     "",
+			VLANs:    nil,
+			Gateways: nil,
+			Forwards: h.Forwards,
+		})
+	}
+	policies := make([]topology.PolicyRule, 0, len(tf.Policies))
+	for _, r := range tf.Policies {
+		policies = append(policies, topology.PolicyRule{From: r.From, To: r.To, Allow: r.Allow})
+	}
+	g := topology.BuildLayeredGraph(hosts, policies, tf.PolicyKnown, true)
+
+	fmt.Printf("# SRD 分层图基准（%s）\n\n", tf.Hosts[0].ID)
+	fmt.Printf("可见主机 %d / 总主机 %d；策略已知=%v；网关=%v\n\n",
+		len(hosts), len(tf.Hosts), tf.PolicyKnown, g.Gateways())
+	fmt.Println("| chain | 旧模型(flat) | 分层模型 | 路径/未知 |")
+	fmt.Println("|---|---|---|---|")
+
+	for _, ch := range tf.Chains {
+		flatVerdict := flatVerdictOf(tf, ch, p)
+		pvs := g.HostReachable(ch.Src, ch.DstNode, p.MaxDepth)
+		layered := topology.Summary(pvs)
+		detail := ""
+		if len(pvs) > 0 {
+			detail = strings.Join(pvs[0].Path, "→")
+			if len(pvs[0].Unknowns) > 0 {
+				detail += "  (unknown: " + strings.Join(pvs[0].Unknowns, ",") + ")"
+			}
+			if pvs[0].BlockedAt != "" {
+				detail += "  (blocked at " + pvs[0].BlockedAt + ")"
+			}
+		}
+		fmt.Printf("| %s | %s | %s | %s |\n", ch.ID, flatVerdict, layered, detail)
+	}
+}
+
+// flatVerdictOf 用旧的"同子网边 + prism 路径枚举"给出一个可比较的结论。
+func flatVerdictOf(tf *topologyFile, ch chainSpec, p params) string {
+	nodes := map[string]*prismlib.NodeState{}
+	topo := map[string]*srd.TopologyInfo{}
+	for _, h := range tf.Hosts {
+		topo[h.ID] = &srd.TopologyInfo{Subnets: h.Subnets}
+		if !h.Visible {
+			continue
+		}
+		nodes[h.ID] = &prismlib.NodeState{HostID: h.ID, SSAMScore: h.Score, Criticality: 0.5}
+	}
+	edges := srd.BuildEdgesWithTopology(topo, nodes, p.Transmission)
+	if _, ok := nodes[ch.Src]; !ok {
+		return "probable"
+	}
+	if _, ok := nodes[ch.DstNode]; !ok {
+		return "probable"
+	}
+	paths := prismlib.FindPropagationPaths(ch.Src, ch.DstNode, nodes, edges, p.prismConfig(), 0, p.MaxDepth, p.Limit)
+	if len(paths) > 0 {
+		return "reachable"
+	}
+	return "blocked"
 }
 
 func countVisible(tf *topologyFile) int {
