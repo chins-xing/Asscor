@@ -16,6 +16,9 @@ func TestIsPublicAddress(t *testing.T) {
 		"fe80::1":         false, // IPv6 链路本地（旧实现会误判为公网 → dmz）
 		"fd00::1":         false, // ULA
 		"::1":             false,
+		"100.64.0.1":      false, // CGNAT：旧实现会误判为公网（A-7c）
+		"100.127.255.254": false,
+		"198.18.0.1":      false,
 		"8.8.8.8":         true,
 		"2606:4700::1111": true,
 	}
@@ -38,6 +41,12 @@ func TestInferZonePrivateWithLinkLocalIsInternal(t *testing.T) {
 	}
 	if got := a.inferZone([]string{"172.22.10.1", "8.8.8.8"}); got != "dmz" {
 		t.Fatalf("私网 + 公网应判 dmz，got %q", got)
+	}
+	if got := a.inferZone([]string{"100.64.0.15"}); got != "internal" {
+		t.Fatalf("CGNAT 应判 internal，got %q", got)
+	}
+	if got := a.inferZone([]string{"172.22.10.1", "100.64.0.1"}); got != "internal" {
+		t.Fatalf("私网+CGNAT 应判 internal（不是 dmz），got %q", got)
 	}
 	if got := a.inferZone([]string{"8.8.8.8"}); got != "public" {
 		t.Fatalf("纯公网应判 public，got %q", got)

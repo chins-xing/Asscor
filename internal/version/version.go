@@ -18,5 +18,6 @@ const (
 	//         [srd] 参数在启动时真正生效（现场验证：false/0.42/7/0.65/max 全对）。
 	// v2.2.3：审计收口 —— A-7 zone 推断（IPv6 链路本地/ULA 不再算公网）、
 	//         A-8 SIGTERM 后立即退出、A-4/A-5 补方向性与 ct state 用例。
-	SRDVersion = "2.2.3"
+	// v2.2.4：A-7c —— CGNAT(100.64/10) 等保留网段不再算公网（实验网 domC 就在 100.64 段）。
+	SRDVersion = "2.2.4"
 )
