@@ -4,6 +4,25 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## v2.3.2 ~ v2.3.5（2026-10-28）—— T3 可观测：`srd check <src> <dst>`
+
+**能力**：
+- `srd check <src> <dst> [--json]`：输出 verdict（reachable/probable/blocked）、
+  路径、逐跳步骤、阻断点、原因、未知项、分层统计；
+- 实现：`srd.Manager.CheckReachability` + CLI 内置命令 `srd` + kernel Bootstrap 后注入；
+- 图来源：优先 `BuildLayeredFromRegistry()` 现场重建（注入快照仅兜底）。
+
+**过程中修掉的三个真实缺陷**：
+1. v2.3.3：直连快捷路径的 blocked 只有泛化原因，补调 `Adjacent` 给出具体原因与阻断点；
+2. v2.3.4：socket 会话不渲染 `Err` ⇒ 命令"静默无输出"；错误同时写 `Output`。
+   同时兼容 `srd check A B` 位置参数（Params 未映射时回退 `ctx.Args`）；
+3. v2.3.5：注入图滞后（启动早期只有 1 个 host ⇒ 误报 source/target unknown），
+   改为现场重建。
+
+**测试**：`TestCheckReachabilityBlocked` / `TestCheckReachabilityReachable` /
+`TestCheckReachabilityWithoutGraph` / `TestCheckReachReturnsSame`。
+报告：`docs/2-experiments/srd-bench/v23-t3-srd-check-20261028.md`。
+
 ## v2.3.1（2026-10-28）—— T2 状态化建模（ct established 放行回程）
 
 **问题**：v2.2.5 的会话语义把 `ct state established,related accept` 的情况也判成

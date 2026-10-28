@@ -35,7 +35,7 @@
 - 判定：显式 deny + 有状态 accept ⇒ 新连接 blocked、已建立会话 reachable（需要会话状态输入）；
 - 验收：构造"drop 在 ct accept 之后"的场景，模型预测与实测一致；单测覆盖顺序敏感性。
 
-### T3 CLI 可观测（P1）
+### T3 CLI 可观测（P1）—— ✅ 已完成（v2.3.5，2026-10-28）
 
 - 新增 `srd check <src> <dst>`：输出 tier（reachable/probable/blocked）、路径、阻断点、未知项；
 - 数据来源：kernel 内存中的 `LayeredGraph`（SRD 插件暴露查询接口）；
@@ -78,3 +78,9 @@
 - 2026-10-28：**T2 完成**（v2.3.1）。实测报告
   [v2.3 T2 状态化](../2-experiments/srd-bench/v23-t2-stateful-20261028.md)：
   单向可达（A→B 断、B→A 通）被正确判定，layered AUC 1.000。
+
+## 9. 进展（T3）
+
+- 2026-10-28：**T3 完成**（v2.3.5）。报告
+  [v2.3 T3 srd check](../2-experiments/srd-bench/v23-t3-srd-check-20261028.md)：
+  CLI 输出 verdict/路径/步骤/JSON；过程中修复"错误静默、位置参数、图滞后"三个缺陷。
