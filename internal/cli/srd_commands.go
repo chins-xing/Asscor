@@ -35,23 +35,35 @@ var srdCmdInfo = CommandInfo{
 }
 
 func srdCmdHandler(ctx *CommandContext) *CommandResult {
+	// 兼容两种写法：`srd check <src> <dst>` 与 `srd check --src A --dst B`。
+	// socket 会话里位置参数可能不落到 Params，因此回退到 ctx.Args。
+	args := ctx.Args
 	action := ctx.Params["action"]
+	if action == "" && len(args) > 0 {
+		action = args[0]
+	}
 	if action == "" {
 		action = "check"
 	}
+	fail := func(code ExitCode, msg string) *CommandResult {
+		return &CommandResult{ExitCode: code, Err: fmt.Errorf("%s", msg), Output: "error: " + msg + "\n"}
+	}
 	if action != "check" {
-		return &CommandResult{ExitCode: ExitUsage, Err: fmt.Errorf("unsupported action: %s", action)}
+		return fail(ExitUsage, "unsupported action: "+action)
 	}
 	src, dst := ctx.Params["src"], ctx.Params["dst"]
+	if (src == "" || dst == "") && len(args) >= 3 {
+		src, dst = args[1], args[2]
+	}
 	if src == "" || dst == "" {
-		return &CommandResult{ExitCode: ExitUsage, Err: fmt.Errorf("usage: srd check <src> <dst>")}
+		return fail(ExitUsage, "usage: srd check <src> <dst>")
 	}
 	if reachChecker == nil {
-		return &CommandResult{ExitCode: ExitError, Err: fmt.Errorf("SRD 插件未加载（构建需 -tags srdwrapper,engine）")}
+		return fail(ExitError, "SRD 插件未加载（构建需 -tags srdwrapper,engine）")
 	}
 	res, err := reachChecker.CheckReach(src, dst)
 	if err != nil {
-		return &CommandResult{ExitCode: ExitError, Err: err}
+		return fail(ExitError, err.Error())
 	}
 	if ctx.JSON {
 		b, _ := json.MarshalIndent(res, "", "  ")

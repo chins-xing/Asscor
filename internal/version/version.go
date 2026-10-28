@@ -25,5 +25,6 @@ const (
 	// v2.3.1：T2 状态化建模 —— ct state established,related accept 放行回程，双向不对称。
 	// v2.3.2：T3 可观测 —— `srd check <src> <dst>` CLI（verdict/路径/阻断点/未知项）。
 	// v2.3.3：T3 修正 —— 直连快捷路径的 blocked 补出具体原因与阻断点。
-	SRDVersion = "2.3.3"
+	// v2.3.4：T3 收尾 —— CLI 错误落到 Output、兼容位置参数；blocked 原因无条件补齐。
+	SRDVersion = "2.3.4"
 )
