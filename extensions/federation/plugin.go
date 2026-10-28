@@ -85,7 +85,10 @@ func (p *Plugin) Info() kernel.PluginInfo {
 }
 
 // Dependencies implements kernel.Plugin.
-func (p *Plugin) Dependencies() []kernel.PluginDependency { return nil }
+// 联邦主端读取 assessor 结果/拓扑摘要，assessor 必须先启动。
+func (p *Plugin) Dependencies() []kernel.PluginDependency {
+	return []kernel.PluginDependency{{Name: "assessor"}}
+}
 
 // Priority runs the module after topology-producing plugins (heartbeat P=?) and
 // before the CLI (P=90) so `federation status` sees a started plugin.

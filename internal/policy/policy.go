@@ -42,7 +42,8 @@ func (m *Module) Info() kernel.PluginInfo {
 }
 
 func (m *Module) Dependencies() []kernel.PluginDependency {
-	return nil
+	// policy 订阅 assessor.result，assessor 必须先完成注册（同名依赖参与启动排序）。
+	return []kernel.PluginDependency{{Name: "assessor"}}
 }
 
 func (m *Module) Priority() int {

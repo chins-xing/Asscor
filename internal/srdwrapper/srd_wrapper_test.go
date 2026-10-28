@@ -29,8 +29,9 @@ func TestNewSRDPluginConstruction(t *testing.T) {
 func TestSRDPluginDependencies(t *testing.T) {
 	p := New()
 	deps := p.Dependencies()
-	if len(deps) != 0 {
-		t.Errorf("expected 0 dependencies, got %d", len(deps))
+	// SRD 影子图订阅 topology 事件；拓扑事实来自 heartbeat/agent 上报。
+	if len(deps) != 1 || deps[0].Name != "heartbeat" {
+		t.Fatalf("expected [heartbeat] dependency, got %+v", deps)
 	}
 }
 

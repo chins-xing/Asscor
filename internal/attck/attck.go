@@ -263,7 +263,8 @@ func (m *Module) Info() kernel.PluginInfo {
 }
 
 func (m *Module) Dependencies() []kernel.PluginDependency {
-	return nil
+	// ATT&CK APT 增强会通过 DI 读取 SPC 的 CVE/资产数据。
+	return []kernel.PluginDependency{{Name: "spc"}}
 }
 
 func (m *Module) Priority() int {

@@ -68,7 +68,8 @@ func (m *Module) Info() kernel.PluginInfo {
 }
 
 func (m *Module) Dependencies() []kernel.PluginDependency {
-	return nil
+	// commander 订阅 policy.action，policy 必须先启动。
+	return []kernel.PluginDependency{{Name: "policy"}}
 }
 
 func (m *Module) Priority() int {

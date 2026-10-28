@@ -81,21 +81,15 @@ type MessageProtocol struct {
 }
 
 const (
-	TopicAssessorResult        = "assessor.result"
-	TopicAssessorSelfCheck     = "assessor.self_check"
-	TopicPolicyAction          = "policy.action"
-	TopicAgentRegistered       = "agent.registered"
-	TopicAgentTimeout          = "agent.timeout"
-	TopicConfigChanged         = "config.changed"
-	TopicSPCUpdated            = "spc.updated"
-	TopicCTIUpdated            = "cti.updated"
-	TopicCommandEnqueued       = "command.enqueued"
-	TopicCommandResult         = "command.result"
-	TopicAgentHeartbeat        = "agent.heartbeat"
-	TopicConfigReloaded        = "config.reloaded"
-	TopicCTIThreatDetected     = "cti.threat_detected"
-	TopicAdapterFindings       = "adapter.findings"
-	TopicSourceManagerDeployed = "source_manager.deployed"
+	TopicAssessorResult    = "assessor.result"
+	TopicAssessorSelfCheck = "assessor.self_check"
+	TopicPolicyAction      = "policy.action"
+	TopicAgentRegistered   = "agent.registered"
+	TopicAgentTimeout      = "agent.timeout"
+	TopicAgentHeartbeat    = "agent.heartbeat"
+	TopicConfigReloaded    = "config.reloaded"
+	TopicCTIThreatDetected = "cti.threat_detected"
+	TopicAdapterFindings   = "adapter.findings"
 
 	MessageProtocolVersion = "1.0"
 )
