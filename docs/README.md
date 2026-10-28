@@ -109,6 +109,7 @@ docs/
 | [ASSET_OWNERSHIP.md](1-current/reference/ASSET_OWNERSHIP.md) | `main` vs `ASSCOR-Research-Core` 资产归属 |
 | [ROADMAP_v0.2.0_to_v1.0.0.md](1-current/reference/ROADMAP_v0.2.0_to_v1.0.0.md) | v0.2.3 → v1.0.0 路线图 |
 | [TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md](1-current/reference/TOPO_INFRASTRUCTURE_BLUEPRINT_2026-08-16.md) | 拓扑与传播层基础设施蓝图 |
+| [CONFIG_PARAMETERS.md](1-current/reference/CONFIG_PARAMETERS.md) | 全项目可调参数总览（含已接线/未暴露清单） |
 | [SRD_CONFIGURATION.md](1-current/reference/SRD_CONFIGURATION.md) | SRD `[srd]` 配置参考（参数/默认值/验证/回退） |
 | [SRD_v2.2_RELEASE_NOTES.md](1-current/reference/SRD_v2.2_RELEASE_NOTES.md) | SRD v2.2 发布说明（能力/证据/升级/限制） |
 | [asscor-architecture-review/](1-current/reference/asscor-architecture-review/) | 20 章英文架构审查（现行结论） |

@@ -155,6 +155,16 @@ type Config struct {
 	AggregationMode string  // 传播聚合模式 rss/max/linear
 	HorizonDays     int     // 推理层预测窗口（prism.HorizonDays）
 
+	// v2.3.6：补齐 prism 的其余可调参数（[prism] 段，srd.* 亦可覆盖）。
+	DebtAlpha          float64 // 安全债务超线性指数（默认 1.2）
+	DebtCap            float64 // 债务惩罚上限（默认 0.30）
+	DebtNormDays       float64 // 债务归一化分母（天，默认 1500）
+	ScoreFloor         float64 // 下界稳定项（默认 0.15）
+	CollapseBeta       float64 // 塌缩超线性指数（默认 1.5）
+	StableThreshold    float64 // Stable 隶属度上界（默认 0.90）
+	DegradedThreshold  float64 // Degraded 隶属度上界（默认 0.70）
+	UntrustedThreshold float64 // Untrusted 隶属度上界（默认 0.50）
+
 	// Confidence is the kernel's [confidence] rule table (same
 	// config.ConfidenceConfig the SSAM/legacy paths use). nil means "not
 	// wired" → legacy passthrough. When non-nil AND Enabled, a failed external
@@ -174,6 +184,14 @@ func DefaultConfig() Config {
 		PropCap:         0.25,
 		AggregationMode: "rss",
 		HorizonDays:     7,
+		DebtAlpha:       1.2,
+		DebtCap:         0.30,
+		DebtNormDays:    1500,
+		ScoreFloor:      0.15,
+		CollapseBeta:    1.5,
+		StableThreshold:    0.90,
+		DegradedThreshold:  0.70,
+		UntrustedThreshold: 0.50,
 		Profiles: map[string]SeverityProfile{
 			"cvss":    CVSSProfile,
 			"lynis":   LynisProfile,

@@ -149,6 +149,10 @@ func (m *Manager) Init(ctx context.Context, kc KernelContext) error {
 		"prop_cap", m.cfg.PropCap,
 		"aggregation", m.cfg.AggregationMode,
 		"horizon_days", m.cfg.HorizonDays,
+		"debt_alpha", m.cfg.DebtAlpha,
+		"debt_cap", m.cfg.DebtCap,
+		"score_floor", m.cfg.ScoreFloor,
+		"collapse_beta", m.cfg.CollapseBeta,
 		"roles", len(m.cfg.Roles),
 		"sync_interval_sec", m.cfg.SyncIntervalSec)
 
@@ -408,6 +412,30 @@ func (m *Manager) loadConfig(cfgObj interface{}) {
 				m.cfg.HorizonDays = n
 			}
 		}
+		if f, ok := cfgFloat(cfg, "debt_alpha"); ok {
+			m.cfg.DebtAlpha = f
+		}
+		if f, ok := cfgFloat(cfg, "debt_cap"); ok {
+			m.cfg.DebtCap = f
+		}
+		if f, ok := cfgFloat(cfg, "debt_norm_days"); ok {
+			m.cfg.DebtNormDays = f
+		}
+		if f, ok := cfgFloat(cfg, "score_floor"); ok {
+			m.cfg.ScoreFloor = f
+		}
+		if f, ok := cfgFloat(cfg, "collapse_beta"); ok {
+			m.cfg.CollapseBeta = f
+		}
+		if f, ok := cfgFloat(cfg, "stable_threshold"); ok {
+			m.cfg.StableThreshold = f
+		}
+		if f, ok := cfgFloat(cfg, "degraded_threshold"); ok {
+			m.cfg.DegradedThreshold = f
+		}
+		if f, ok := cfgFloat(cfg, "untrusted_threshold"); ok {
+			m.cfg.UntrustedThreshold = f
+		}
 		if v := cfg.Get("srd.sync_interval_sec"); v != "" {
 			if n, err := parseInt(v); err == nil && n > 0 {
 				m.cfg.SyncIntervalSec = n
@@ -577,3 +605,16 @@ type SRDManagerInterface interface {
 func parseInt(s string) (int, error) { return common.ParseInt(s) }
 
 func parseFloat(s string) (float64, error) { return strconv.ParseFloat(strings.TrimSpace(s), 64) }
+
+
+// cfgFloat 读取 float 参数（prism.<key> 优先，srd.<key> 兼容）。
+func cfgFloat(g interface{ Get(string) string }, key string) (float64, bool) {
+	for _, k := range []string{"prism." + key, "srd." + key} {
+		if v := g.Get(k); v != "" {
+			if f, err := parseFloat(v); err == nil {
+				return f, true
+			}
+		}
+	}
+	return 0, false
+}

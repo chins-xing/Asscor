@@ -4,6 +4,23 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## v2.3.6（2026-10-28）—— 可调参数补齐：主评分引擎接入 [prism]
+
+**缺口**：`config.ini` 的 `[prism]` 段早已写全 13 个参数，但 kernel 主评分引擎固定
+`prism.NewEngine()`（库默认值）⇒ 所有 `[prism]` 参数**从未生效**；SRD 侧也只暴露了 5 个。
+
+**修复**：
+- 新增 `internal/engine/prism.ConfigFromMap` / `NewEngineFromMap`：统一解析
+  `prism.*`（兼容 `srd.*`）13 个参数，非法值忽略、保留默认；
+- `cmd/kernel/engine_on.go`：`newPrismEngine(cfg)` 用配置构造引擎，并输出
+  `prism effective config` 启动日志；
+- `srd.Config` 增加 8 个 prism 参数（debt_alpha / debt_cap / debt_norm_days /
+  score_floor / collapse_beta / stable/degraded/untrusted_threshold），
+  `PrismConfigFrom` 全量映射，`SRD effective config` 同步输出；
+- 新增参数总览文档 `docs/1-current/reference/CONFIG_PARAMETERS.md`。
+
+**测试**：prism `ConfigFromMap` 全参数/非法值/前缀兼容三例；srd 配置解析与映射。
+
 ## v2.3.2 ~ v2.3.5（2026-10-28）—— T3 可观测：`srd check <src> <dst>`
 
 **能力**：
