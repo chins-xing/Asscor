@@ -249,6 +249,13 @@ execution policy (with command allowlists, SHA-256 checksums, timeouts, and
 path protections). Extension *packages* (pkgmgr) can be distributed and
 installed as self-contained bundles with a `package.json` manifest.
 
+**Federation extension (`extensions/federation`, v0.3.0)** — one network, many
+configuration profiles: a master kernel aggregates graph facts reported by node
+kernels, each node kernel evaluates its own agents with its own model parameters
+(independent CA per node). The CLI command is self-registered by the extension
+(`federation status|check|export|report-now`); the kernel only exposes the generic
+`newExtensionPlugins()` hook. Build with `-tags federation`.
+
 ## 10. Secure Mode (experimental, build-tag: securemode)
 
 > An **optional** module (`internal/securemode/`, build-tag `securemode`;
