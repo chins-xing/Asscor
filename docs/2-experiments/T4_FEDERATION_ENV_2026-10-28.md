@@ -414,6 +414,8 @@ done
     建议重建 agent 时用与 `scripts/build.sh` 一致的 tags（`cmd/agent` 仅 `checks`，不带
     `securemode`），并在节点/主 kernel 侧配置 HMAC（或明确接受该告警）。截至 2026-10-28
     13:2x，940-959 已就绪的 agent 为 secure-mode 加密配置。
+    **换配置必须用** `/root/t4/scripts/push-agent-config.sh <vmid> <new.ini>`：直接 push
+    明文 `agent.ini` 而 `.enc` 仍在，agent 启动会报 `crash residue` 拒绝运行。
 
 ## 9. 相关文件
 
@@ -424,4 +426,7 @@ done
 | `scripts/gen-agent-configs.sh` | 生成 30 个 `agent.ini` 到 `/root/t4/agent-configs/` |
 | `scripts/federation-verify.sh` | 联邦验收（PASS/FAIL 汇总，rc≠0 即失败） |
 | `docs/2-experiments/T4_FEDERATION_DESIGN_2026-10-28.md` | 联邦总体设计（架构/协议/安全边界） |
-| `/root/t4/inventory.tsv` | 基建侧唯一事实来源（vmid/hostname/vnet/mgmt IP/节点/证书指纹） |
+| `/root/t4/inventory.tsv` | 基建侧唯一事实来源，33 行（3 节点 + 30 agent），列：vmid / hostname / role / template / vnet / mgmt_ip / data_ip / node_kernel / kernel_addr / tls_server_name / cert_fp_sha256 / ca_fp_sha256 |
+| `/root/t4/README-INFRA.md` | 基建交付说明（三模板、节点 kernel、30 agent、证书、端口、清单、已知事项） |
+| `/root/t4/scripts/push-agent-config.sh` | secure-mode 下安全替换 agent 配置（`<vmid> <new.ini>`），不要直接 push 明文 |
+| `/root/t4/logs/federation-verify-PASS-*.log` | 实测验收输出存档 |
