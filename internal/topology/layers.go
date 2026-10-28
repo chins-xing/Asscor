@@ -271,6 +271,12 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 			pv.Reason = "inbound policy denies " + srcSub + " -> " + dstHost
 			return pv
 		}
+		if !g.outboundAllowed(dstHost, srcSub, srcHost) {
+			pv.Verdict = VerdictBlocked
+			pv.BlockedAt = dstHost
+			pv.Reason = "outbound policy denies reply " + dstHost + " -> " + srcHost
+			return pv
+		}
 		if !g.replyAllowed(srcHost, dstHost, dstSub, srcSub) {
 			pv.Verdict = VerdictBlocked
 			pv.BlockedAt = srcHost
@@ -441,6 +447,10 @@ func (g *LayeredGraph) Adjacent(a, b string) (bool, string) {
 		}
 		if !g.inboundAllowed(b, a, s, s) {
 			return false, "inbound policy denies " + s + " -> " + b
+		}
+		// 回程由 b 发出：先过 b 的 OUTPUT，再到达 a 的 INPUT（a 有状态则放行）。
+		if !g.outboundAllowed(b, s, a) {
+			return false, "outbound policy denies reply " + b + " -> " + a
 		}
 		if !g.replyAllowed(a, b, s, s) {
 			return false, "inbound policy denies reply " + s + " -> " + a
