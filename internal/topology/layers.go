@@ -57,6 +57,9 @@ type HostFacts struct {
 	Inbound []PolicyRule
 	// Outbound 是主机出向策略（OUTPUT 链）：To 为目的 CIDR（v2.3 T1）。
 	Outbound []PolicyRule
+	// StatefulInput 表示 INPUT 链存在 `ct state established,related accept`
+	// （v2.3 T2）：回程包按已建立连接放行，无需再看静态规则。
+	StatefulInput bool
 	// Forwards 表示这台主机**真的会转发**（ip_forward=1 / 路由角色）。
 	// 双网卡 ≠ 路由器：实测中 pivot-1 也是双宿主，但它不转发，
 	// 若仅凭"≥2 个子网"就允许它中转，模型会凭空造出绕行路径。
@@ -255,29 +258,23 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 		dstHost := path[len(path)-1]
 		srcSub := steps[0].Subnet
 		dstSub := steps[len(steps)-1].Subnet
-		if !g.inboundAllowed(dstHost, srcHost, srcSub, dstSub) {
-			pv.Verdict = VerdictBlocked
-			pv.BlockedAt = dstHost
-			pv.Reason = "inbound policy denies " + srcSub + " -> " + dstHost
-			return pv
-		}
-		if !g.inboundAllowed(srcHost, dstHost, dstSub, srcSub) {
-			pv.Verdict = VerdictBlocked
-			pv.BlockedAt = srcHost
-			pv.Reason = "inbound policy denies return path " + dstSub + " -> " + srcHost
-			return pv
-		}
-		// v2.3 T1：端点出向策略（OUTPUT）。
+		// v2.3 T1/T2：端点按方向性会话判定（src → dst）。
 		if !g.outboundAllowed(srcHost, dstSub, dstHost) {
 			pv.Verdict = VerdictBlocked
 			pv.BlockedAt = srcHost
 			pv.Reason = "outbound policy denies " + srcHost + " -> " + dstHost
 			return pv
 		}
-		if !g.outboundAllowed(dstHost, srcSub, srcHost) {
+		if !g.inboundAllowed(dstHost, srcHost, srcSub, dstSub) {
 			pv.Verdict = VerdictBlocked
 			pv.BlockedAt = dstHost
-			pv.Reason = "outbound policy denies return path " + dstHost + " -> " + srcHost
+			pv.Reason = "inbound policy denies " + srcSub + " -> " + dstHost
+			return pv
+		}
+		if !g.replyAllowed(srcHost, dstHost, dstSub, srcSub) {
+			pv.Verdict = VerdictBlocked
+			pv.BlockedAt = srcHost
+			pv.Reason = "inbound policy denies reply " + dstSub + " -> " + srcHost
 			return pv
 		}
 	}
@@ -342,6 +339,16 @@ func (g *LayeredGraph) linkUp(host, subnet string) bool {
 
 // inboundAllowed 判断 target 的主机入向策略是否允许来自 sourceSubnet 的流量。
 // 无规则/无数据 ⇒ 允许（未知 ≠ 拒绝）。
+// replyAllowed 判断发往 host 的回程包是否会被放行（v2.3 T2）。
+// 有状态防火墙（ct established accept）⇒ 已建立连接的回程直接放行；
+// 否则按静态 INPUT 规则判断（可能被 deny 丢弃）。
+func (g *LayeredGraph) replyAllowed(host, peer, peerSubnet, ownSubnet string) bool {
+	if h := g.hosts[host]; h != nil && h.StatefulInput {
+		return true
+	}
+	return g.inboundAllowed(host, peer, peerSubnet, ownSubnet)
+}
+
 // hostInCIDR 判断主机的任一 IP 是否落在 cidr 内（用于 /32 主机级 ACL，v2.3 T1）。
 func (g *LayeredGraph) hostInCIDR(host, cidr string) bool {
 	h := g.hosts[host]
@@ -417,18 +424,18 @@ func (g *LayeredGraph) Adjacent(a, b string) (bool, string) {
 		// A-4：入向策略按**会话语义**双向生效。
 		// 请求被目标 B 的 INPUT 拒绝 ⇒ 会话失败；反向会话（B→A）的回程包
 		// 同样会撞上 B 的 INPUT 而被丢弃 ⇒ 两个方向都必须放行。
-		if !g.inboundAllowed(b, a, s, s) {
-			return false, "inbound policy denies " + s + " -> " + b
-		}
-		if !g.inboundAllowed(a, b, s, s) {
-			return false, "inbound policy denies return path " + s + " -> " + a
-		}
-		// v2.3 T1：域内 ACL 还包含**出向**（OUTPUT 链）：源主机主动发出的流量被拒 ⇒ 会话失败。
+		// v2.3 T1/T2：方向性会话判定（只回答 a→b）。
+		//   1) a 的 OUTPUT 允许发往 b；
+		//   2) b 的 INPUT 允许来自 a 的**新连接**；
+		//   3) 回程（b→a）到了 a 的 INPUT：有状态则放行，否则按静态规则。
 		if !g.outboundAllowed(a, s, b) {
 			return false, "outbound policy denies " + a + " -> " + b
 		}
-		if !g.outboundAllowed(b, s, a) {
-			return false, "outbound policy denies return path " + b + " -> " + a
+		if !g.inboundAllowed(b, a, s, s) {
+			return false, "inbound policy denies " + s + " -> " + b
+		}
+		if !g.replyAllowed(a, b, s, s) {
+			return false, "inbound policy denies reply " + s + " -> " + a
 		}
 	}
 	return true, "adjacent"

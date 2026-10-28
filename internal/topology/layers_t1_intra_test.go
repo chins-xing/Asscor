@@ -71,9 +71,9 @@ func TestRegistryWiresOutboundAndIPs(t *testing.T) {
 	defer ResetForTesting()
 	RecordNetworkFacts("A", []string{"10.0.0.0/24"}, "internal", nil, false,
 		[]TopoPolicyRule{{To: "10.0.0.20/32", Allow: false, Direction: "outbound"}}, true,
-		nil, []string{"10.0.0.11"})
+		nil, []string{"10.0.0.11"}, false, false)
 	RecordNetworkFacts("B", []string{"10.0.0.0/24"}, "internal", nil, false, nil, false,
-		nil, []string{"10.0.0.20"})
+		nil, []string{"10.0.0.20"}, false, false)
 
 	g := BuildLayeredFromRegistry()
 	if g == nil {

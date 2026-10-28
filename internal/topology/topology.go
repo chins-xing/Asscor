@@ -44,6 +44,9 @@ type TopoNode struct {
 	PolicyKnown bool
 	Links       []TopoLink // L1：接口状态与所属子网
 	IPs         []string   // v2.3 T1：主机地址（/32 主机级 ACL 匹配用）
+	// v2.3 T2：链内存在 ct state established,related accept。
+	StatefulInput  bool
+	StatefulOutput bool
 }
 
 // TopoLink 是一条链路事实（L1）。
@@ -241,12 +244,13 @@ func SetTopologyListener(cb func(hostID string, subnets []string)) {
 // 供 SRD 分层图使用。缺失的层保持零值 = 未知（不是"放行"）。
 func RecordNetworkFacts(hostID string, subnets []string, zone string,
 	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink,
-	ips []string) {
-	globalTopology.recordNetworkFacts(hostID, subnets, zone, vlans, forwards, policies, policyKnown, links, ips)
+	ips []string, statefulInput, statefulOutput bool) {
+	globalTopology.recordNetworkFacts(hostID, subnets, zone, vlans, forwards, policies, policyKnown, links, ips, statefulInput, statefulOutput)
 }
 
 func (r *Registry) recordNetworkFacts(hostID string, subnets []string, zone string,
-	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink, ips []string) {
+	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink, ips []string,
+	statefulInput, statefulOutput bool) {
 	r.record(hostID, subnets, zone)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -260,6 +264,8 @@ func (r *Registry) recordNetworkFacts(hostID string, subnets []string, zone stri
 	n.PolicyKnown = policyKnown
 	n.Links = append([]TopoLink(nil), links...)
 	n.IPs = append([]string(nil), ips...)
+	n.StatefulInput = statefulInput
+	n.StatefulOutput = statefulOutput
 }
 
 // BuildLayeredFromRegistry 用当前注册表构造 SRD 分层图：
@@ -285,6 +291,7 @@ func BuildLayeredFromRegistry() *LayeredGraph {
 			Forwards: n.Forwards,
 			Links:    map[string]bool{},
 			IPs:      append([]string(nil), n.IPs...),
+			StatefulInput: n.StatefulInput,
 		}
 		for _, l := range n.Links {
 			for _, s := range l.Subnets {

@@ -70,6 +70,10 @@ type NetworkInfo struct {
 	// L3 事实：本机是否真的转发（/proc/sys/net/ipv4/ip_forward=1 或路由角色）。
 	// 双网卡 ≠ 路由器；SRD 只允许 Forwards=true 的主机作为中继。
 	Forwards bool `json:"forwards,omitempty"`
+	// 状态化防火墙标记（v2.3 T2）：链内存在 ct state established,related accept。
+	// StatefulInput 影响"回程包是否被放行"，StatefulOutput 供诊断用。
+	StatefulInput  bool `json:"stateful_input,omitempty"`
+	StatefulOutput bool `json:"stateful_output,omitempty"`
 	// L1 事实（SRD 分层图的 link 层）：接口名、状态、所属子网与 VLAN。
 	// 让"链路 down"成为显式事实，而不是靠"不上报该子网"隐式表达。
 	Links []LinkInfo `json:"links,omitempty"`

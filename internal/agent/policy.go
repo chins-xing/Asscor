@@ -21,21 +21,23 @@ import (
 
 // collectPolicyFacts 采集本机防火墙的显式 allow/deny 结论。
 // 返回 (rules, known)。known=false 表示"没采集到"，不是"没有策略"。
-func collectPolicyFacts() ([]apiv1.PolicyRule, bool) {
+func collectPolicyFacts() ([]apiv1.PolicyRule, bool, bool, bool) {
 	ifaces := interfaceSubnets()
 	if out, ok := runQuiet("nft", "-j", "list", "ruleset"); ok {
 		rules, parsed := parseNftRuleset(out, ifaces)
 		if parsed {
-			return rules, true
+			si, so := parseNftStateful(out)
+			return rules, true, si, so
 		}
 	}
 	if out, ok := runQuiet("iptables-save"); ok {
 		rules, parsed := parseIptablesSave(out, ifaces)
 		if parsed {
-			return rules, true
+			si := strings.Contains(out, "state RELATED,ESTABLISHED -j ACCEPT") || strings.Contains(out, "state ESTABLISHED,RELATED -j ACCEPT")
+			return rules, true, si, si
 		}
 	}
-	return nil, false
+	return nil, false, false, false
 }
 
 // interfaceSubnets 采集"接口名 → 该接口上的子网"映射。
@@ -411,4 +413,45 @@ func collectForwards() bool {
 // 两者都视为 known=false 的素材）。
 func runQuiet(name string, args ...string) (string, bool) {
 	return common.RunCmdQuiet(name, args...)
+}
+
+
+// parseNftStateful 检测 input/output 链里是否存在
+// `ct state established,related accept`（v2.3 T2）。
+func parseNftStateful(raw string) (input, output bool) {
+	var rs struct {
+		Nftables []struct {
+			Rule struct {
+				Chain string                       `json:"chain"`
+				Expr  []map[string]json.RawMessage `json:"expr"`
+			} `json:"rule"`
+		} `json:"nftables"`
+	}
+	if err := json.Unmarshal([]byte(raw), &rs); err != nil {
+		return false, false
+	}
+	for _, r := range rs.Nftables {
+		chain := strings.ToLower(r.Rule.Chain)
+		if chain != "input" && chain != "output" {
+			continue
+		}
+		hasCT, hasAccept := false, false
+		for _, e := range r.Rule.Expr {
+			if _, ok := e["accept"]; ok {
+				hasAccept = true
+			}
+			if m, ok := e["match"]; ok && strings.Contains(string(m), "\"ct\"") &&
+				strings.Contains(strings.ToLower(string(m)), "established") {
+				hasCT = true
+			}
+		}
+		if hasCT && hasAccept {
+			if chain == "input" {
+				input = true
+			} else {
+				output = true
+			}
+		}
+	}
+	return input, output
 }
