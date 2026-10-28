@@ -17,6 +17,10 @@ agent 只连接所属节点 kernel。
 - 节点隔离：每个节点 kernel 独立 CA，agent 证书只被所属节点接受（mTLS 强制）；
 - 安全边界（demo 级）：共享 token + 明文 HTTP；生产需 mTLS + 独立凭证。
 
+**v0.2（同日）**：节点上报图事实（host_facts/policy_facts），主端 `BuildMergedGraph`
+合并成跨节点分层图；新增 `federation check <src> <dst>` 与
+`GET /federation/check`；插件版本 0.2.0（demo 级）。
+
 **实测**：主 kernel 收到 3 个节点，`config_hash` 互不相同（79afc807…/b46db6c8…/15270025…），
 证明"单网络多套配置"；master 监听失败会降级（不拖垮 kernel）。
 

@@ -284,3 +284,29 @@ Build tag 组合：`federation_on.go`（`//go:build federation`）与 `federatio
 3. 报告版本与能力协商；选择性聚合（按 zone/角色订阅）；
 4. 从 HTTP 收集改为 gRPC 流（复用现有 comms 栈），主端可实时下发"请重报"；
 5. 让 `[federation]` 支持热加载（配置变更后重建上报循环/监听）。
+
+## 10. v0.2：图事实上报 + 主端合并推理（2026-10-28）
+
+**问题**：v0.1 只上报聚合摘要，主端无法回答跨节点可达性——"联邦"只剩看板。
+
+**v0.2 协议扩展**（`NodeReport`）：
+- `host_facts[]`：id / IPs / subnets / zone / ssam / forwards / stateful_input /
+  inbound[] / outbound[] / links{};
+- `policy_facts[]`：转发策略（from/to/allow）；
+- `policy_known`：是否采集到策略；
+- 体积上限：2000 主机 / 5000 策略（demo 级防滥用，超出截断）。
+
+**主端合并规则**（`BuildMergedGraph`）：
+- 同一 host id：子网/IP 取并集；Zone/SSAM/Forwards/StatefulInput 以后上报者为准；
+- 策略按 `(from,to,allow)` 去重取并集；
+- 主 kernel 本地拓扑（老实验域）自动并入合并图；
+- 排序后构建，保证同一输入产生同一图。
+
+**新接口**：
+- HTTP：`GET /federation/check?src=&dst=`（带 token），返回 verdict/路径/阻断点/原因/统计；
+- CLI：`federation check <src> <dst> [--json]`（仅 master 角色可用）。
+
+**版本**：插件 `0.2.0`（仍是 demo 级 0.x，不并入 SRD/ASSCOR 版本号）。
+
+**已知限制**：合并是"全量重建"（每次查询从节点上报重建图，无增量）；
+冲突用"后到优先"；不传原始 check 明细；跨节点路径语义仍受各节点采集能力限制。

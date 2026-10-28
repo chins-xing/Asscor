@@ -107,6 +107,7 @@ func (m *MasterServer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc(ReportPath, m.handleReport)
 	mux.HandleFunc(NodesPath, m.handleNodes)
+	mux.HandleFunc("/federation/check", m.handleCheck)
 	return mux
 }
 
@@ -177,4 +178,31 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeJSONError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+
+// handleCheck 在合并图上回答跨节点可达性：GET /federation/check?src=&dst=。
+func (m *MasterServer) handleCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !m.authorized(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	src := r.URL.Query().Get("src")
+	dst := r.URL.Query().Get("dst")
+	if src == "" || dst == "" {
+		http.Error(w, "missing src/dst", http.StatusBadRequest)
+		return
+	}
+	var reports []NodeReport
+	if m.collector != nil {
+		reports = m.collector.Nodes()
+	}
+	res := CheckMerged(BuildMergedGraph(reports), src, dst, 5)
+	res.Nodes = len(reports)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
 }

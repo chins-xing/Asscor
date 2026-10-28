@@ -103,7 +103,8 @@ agent 的数据面 IP 从各 vnet 的 `/24` 未占用段分配（基建子代理
 
 - demo 级共享 **token**（`asscor-t4-demo`）+ 明文 HTTP（管理网内）；
   生产应改为 mTLS + 独立 token/短期凭证；
-- 联邦只上报**聚合摘要**，不传原始主机数据；主 kernel 无节点数据面访问权；
+- v0.2 起节点上报**图事实**（主机/策略/链路），主端可合并回答跨节点可达性
+  （`federation check`）；仍不传原始 check 明细，主 kernel 无节点数据面访问权；
 - 节点 kernel 的 SRD 图数据仍留在本地，联邦层不做跨节点路径合并（这是 v2.4 话题）；
 - 30 个 agent 的评估并发会占用节点 kernel CPU，`report_interval_sec` 建议 ≥30s。
 

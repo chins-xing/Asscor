@@ -16,6 +16,8 @@ import (
 // needs no build tag and stays usable in builds without the federation plugin.
 type FederationProvider interface {
 	FederationStatus() federation.Status
+	// MergedCheck 在主端合并图上回答 src→dst（v0.2 联邦图合并）。
+	MergedCheck(src, dst string) (any, error)
 }
 
 var federationProvider FederationProvider
@@ -31,15 +33,18 @@ var federationCmdInfo = CommandInfo{
 	Name:         "federation",
 	Short:        "Show federation master/node status (T4 demo)",
 	Description:  "Master: list node kernels that reported aggregate summaries (config hash, hosts, avg SSAM). Node: show this kernel's federation config and last report state.",
-	Usage:        "federation status [--json]",
+	Usage:        "federation status [--json] | federation check <src> <dst>",
 	Category:     CategorySystem,
 	RequiredPerm: PermRead,
 	Params: []CommandParam{
-		{Name: "action", Description: "Action: status", Required: false, EnumValues: []string{"status"}},
+		{Name: "action", Description: "Action: status | check", Required: false, EnumValues: []string{"status", "check"}},
+		{Name: "src", Description: "check: source host id", Required: false},
+		{Name: "dst", Description: "check: destination host id", Required: false},
 	},
 	Examples: []string{
 		"federation status",
 		"federation status --json",
+		"federation check domA-web domB-web",
 	},
 }
 
@@ -57,8 +62,36 @@ func federationCmdHandler(ctx *CommandContext) *CommandResult {
 	if action == "" {
 		action = "status"
 	}
-	if action != "status" {
-		return fail(ExitUsage, "unsupported action: "+action+" (usage: federation status [--json])")
+	if action != "status" && action != "check" {
+		return fail(ExitUsage, "unsupported action: "+action+" (usage: federation status [--json] | federation check <src> <dst>)")
+	}
+	if action == "check" {
+		src, dst := ctx.Params["src"], ctx.Params["dst"]
+		if (src == "" || dst == "") && len(ctx.Args) >= 3 {
+			src, dst = ctx.Args[1], ctx.Args[2]
+		}
+		if src == "" || dst == "" {
+			return fail(ExitUsage, "usage: federation check <src> <dst>")
+		}
+		if federationProvider == nil {
+			return fail(ExitError, "federation 插件未加载（构建需 -tags federation）")
+		}
+		res, err := federationProvider.MergedCheck(src, dst)
+		if err != nil {
+			return fail(ExitError, err.Error())
+		}
+		if ctx.JSON {
+			data, err := json.MarshalIndent(res, "", "  ")
+			if err != nil {
+				return fail(ExitError, "marshal federation check: "+err.Error())
+			}
+			return &CommandResult{ExitCode: ExitOK, Output: string(data) + "\n"}
+		}
+		if f, ok := res.(interface{ String() string }); ok {
+			return &CommandResult{ExitCode: ExitOK, Output: f.String()}
+		}
+		data, _ := json.MarshalIndent(res, "", "  ")
+		return &CommandResult{ExitCode: ExitOK, Output: string(data) + "\n"}
 	}
 	if len(ctx.Args) > 1 {
 		return fail(ExitUsage, "unexpected argument: "+ctx.Args[1]+" (usage: federation status [--json])")
