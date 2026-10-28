@@ -103,7 +103,6 @@ func TestParseIptablesSaveNegationIgnored(t *testing.T) {
 	}
 }
 
-
 // TestParseNftRulesetMapsInterfaceACLToSubnets 钉住"接口级 ACL 无需改造即可被理解"：
 // 真实配置写的是 `iifname "eth0" oifname "eth1" drop`，agent 用接口→子网映射
 // 展开成 172.22.10.0/24 → 172.23.10.0/24 阻断。

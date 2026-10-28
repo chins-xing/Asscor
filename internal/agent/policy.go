@@ -88,7 +88,7 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 			continue
 		}
 		var rule struct {
-			Chain string                      `json:"chain"`
+			Chain string                       `json:"chain"`
 			Expr  []map[string]json.RawMessage `json:"expr"`
 		}
 		if err := json.Unmarshal(ruleRaw, &rule); err != nil {
@@ -414,7 +414,6 @@ func collectForwards() bool {
 func runQuiet(name string, args ...string) (string, bool) {
 	return common.RunCmdQuiet(name, args...)
 }
-
 
 // parseNftStateful 检测 input/output 链里是否存在
 // `ct state established,related accept`（v2.3 T2）。

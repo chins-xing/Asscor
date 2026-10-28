@@ -114,7 +114,6 @@ func (m *Manager) CheckReach(src, dst string) (any, error) {
 	return m.CheckReachability(src, dst)
 }
 
-
 // String 渲染成人类可读的解释（CLI 文本模式）。
 func (c *ReachCheck) String() string {
 	var b strings.Builder

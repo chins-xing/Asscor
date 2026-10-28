@@ -441,7 +441,9 @@ func main() {
 
 	// v2.3 T3：把 SRD 可达性查询注入 CLI（须在 Bootstrap 之后，插件已 Init）。
 	if srdPlugin != nil {
-		if rc, ok := srdPlugin.(interface{ CheckReach(src, dst string) (any, error) }); ok {
+		if rc, ok := srdPlugin.(interface {
+			CheckReach(src, dst string) (any, error)
+		}); ok {
 			cli.SetReachChecker(rc)
 		}
 	}

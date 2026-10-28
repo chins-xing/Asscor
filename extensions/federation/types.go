@@ -36,10 +36,10 @@ type NodeReport struct {
 	// shows it directly and the per-zone breakdown explains it.
 	AvgSSAM float64 `json:"avg_ssam"`
 	// v0.2：图事实上报（主端可合并成一张跨节点分层图）。
-	HostFacts   []HostFact  `json:"host_facts,omitempty"`
+	HostFacts   []HostFact   `json:"host_facts,omitempty"`
 	PolicyFacts []PolicyFact `json:"policy_facts,omitempty"`
-	PolicyKnown bool        `json:"policy_known,omitempty"`
-	ReportedAt time.Time `json:"reported_at"`
+	PolicyKnown bool         `json:"policy_known,omitempty"`
+	ReportedAt  time.Time    `json:"reported_at"`
 	// ReceivedAt is stamped by the master collector; it is zero on the node
 	// side and after JSON round-trips through /federation/nodes it is the
 	// authoritative "last heard from" timestamp.

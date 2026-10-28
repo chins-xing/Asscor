@@ -181,7 +181,6 @@ func writeJSONError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-
 // handleCheck 在合并图上回答跨节点可达性：GET /federation/check?src=&dst=。
 func (m *MasterServer) handleCheck(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -207,7 +206,6 @@ func (m *MasterServer) handleCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(res)
 }
-
 
 // handleExport 导出主端合并图（供离线评分/可视化）：GET /federation/export。
 func (m *MasterServer) handleExport(w http.ResponseWriter, r *http.Request) {

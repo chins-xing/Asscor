@@ -58,11 +58,11 @@ type Manager struct {
 	pipeline *Pipeline
 	state    PluginState
 
-	mu       sync.RWMutex
-	checkLayered *topology.LayeredGraph // v2.3 T3：CLI 查询用（与 pipeline 同步注入）
-	history  map[string][]*SRDResult // hostID -> results
-	scanDirs []string
-	stopCh   chan struct{}
+	mu           sync.RWMutex
+	checkLayered *topology.LayeredGraph  // v2.3 T3：CLI 查询用（与 pipeline 同步注入）
+	history      map[string][]*SRDResult // hostID -> results
+	scanDirs     []string
+	stopCh       chan struct{}
 }
 
 type KernelContext interface {
@@ -220,23 +220,23 @@ func (m *Manager) ProcessReport(ctx context.Context, toolID string, data []byte)
 // construction in the SRD pipeline.
 // PrismConfigFrom 把 SRD 配置映射成 prism 引擎配置（供运维调参）。
 func PrismConfigFrom(cfg Config) prismlib.PrismConfig {
-    c := prismlib.DefaultConfig()
-    if cfg.MaxPathDepth > 0 {
-        c.MaxPathDepth = cfg.MaxPathDepth
-    }
-    if cfg.PathDecay > 0 && cfg.PathDecay <= 1 {
-        c.PathDecay = cfg.PathDecay
-    }
-    if cfg.PropCap >= 0 && cfg.PropCap <= 1 {
-        c.PropCap = cfg.PropCap
-    }
-    if cfg.AggregationMode != "" {
-        c.AggregationMode = cfg.AggregationMode
-    }
-    if cfg.HorizonDays > 0 {
-        c.HorizonDays = cfg.HorizonDays
-    }
-    return c
+	c := prismlib.DefaultConfig()
+	if cfg.MaxPathDepth > 0 {
+		c.MaxPathDepth = cfg.MaxPathDepth
+	}
+	if cfg.PathDecay > 0 && cfg.PathDecay <= 1 {
+		c.PathDecay = cfg.PathDecay
+	}
+	if cfg.PropCap >= 0 && cfg.PropCap <= 1 {
+		c.PropCap = cfg.PropCap
+	}
+	if cfg.AggregationMode != "" {
+		c.AggregationMode = cfg.AggregationMode
+	}
+	if cfg.HorizonDays > 0 {
+		c.HorizonDays = cfg.HorizonDays
+	}
+	return c
 }
 
 // SetLayeredGraph 注入分层图（L1/L2/L3/L4/L5），构边走分层规则。
@@ -605,7 +605,6 @@ type SRDManagerInterface interface {
 func parseInt(s string) (int, error) { return common.ParseInt(s) }
 
 func parseFloat(s string) (float64, error) { return strconv.ParseFloat(strings.TrimSpace(s), 64) }
-
 
 // cfgFloat 读取 float 参数（prism.<key> 优先，srd.<key> 兼容）。
 func cfgFloat(g interface{ Get(string) string }, key string) (float64, bool) {
