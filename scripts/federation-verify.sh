@@ -159,6 +159,8 @@ ct_agent_bundle() {
     echo "@@@INI@@@"
     if [ -f /etc/asscor/agent.ini ]; then
       cat /etc/asscor/agent.ini
+    elif [ -f /etc/asscor/agent.ini.enc ]; then
+      echo "@@@ENCINI@@@"
     else
       echo "@@@NOINI@@@"
     fi
@@ -187,7 +189,7 @@ ct_agent_bundle() {
 #   HB=<heartbeat received 条数>
 #   EVAL=<assessment result 条数>
 #   @@@IDS@@@ 之后：去重后的 host_id 列表
-#   @@@PRISM@@@ 之后：第一条 "prism effective config" 行
+#   @@@PRISM@@@ 之后：**最后一条** "prism effective config" 行（kernel 重启过时取生效配置）
 node_log_scan() {
   local vmid="$1"
   pct exec "$vmid" -- sh -c '
@@ -199,14 +201,15 @@ node_log_scan() {
       HB=$(grep -c "heartbeat received" "$SRC" 2>/dev/null)
       EVAL=$(grep -c "assessment result" "$SRC" 2>/dev/null)
       IDS=$(grep -oE "host_id\"?[:=]\"?[A-Za-z0-9._-]+" "$SRC" 2>/dev/null | sed -E "s/^host_id\"?[:=]\"?//" | sort -u)
-      PRISM=$(grep -m1 "prism effective config" "$SRC" 2>/dev/null)
+      # 取**最后一条**：kernel 重启后日志里会保留旧配置的 prism 行，首条可能是旧配置
+      PRISM=$(grep "prism effective config" "$SRC" 2>/dev/null | tail -n1)
     else
       SRC=journal
-      DATA=$(journalctl -u asscor-kernel --no-pager -n 4000 2>/dev/null)
+      DATA=$(journalctl -u asscor-kernel --no-pager -n 200000 2>/dev/null)
       HB=$(printf "%s\n" "$DATA" | grep -c "heartbeat received")
       EVAL=$(printf "%s\n" "$DATA" | grep -c "assessment result")
       IDS=$(printf "%s\n" "$DATA" | grep -oE "host_id\"?[:=]\"?[A-Za-z0-9._-]+" | sed -E "s/^host_id\"?[:=]\"?//" | sort -u)
-      PRISM=$(printf "%s\n" "$DATA" | grep -m1 "prism effective config")
+      PRISM=$(printf "%s\n" "$DATA" | grep "prism effective config" | tail -n1)
     fi
     echo "SRC=$SRC"
     echo "HB=${HB:-0}"
@@ -364,6 +367,7 @@ done
 # ---- 3) 30 个 agent.ini 都指向所属节点 -------------------------------------
 agent_total=0
 agent_bad=0
+secure_agent_ok=0
 bad_reasons=""
 declare -A AGENT_HOSTNAME_OF=()
 declare -A AGENT_MGMT_IP_OF=()
@@ -399,6 +403,42 @@ for i in $(seq 0 $((NODE_COUNT - 1))); do
     CT $vmid ($ct_hostname): 缺 $AGENT_INI（用 scripts/gen-agent-configs.sh 生成后 pct push）"
         continue ;;
     esac
+    want_ka="$node_ip:50051"
+    # secure mode 构建的 agent 首次心跳后会把 agent.ini 加密成 agent.ini.enc（见风险 13）：
+    # 此时明文不可解析，只能以运行中的 cmdline 为准（--kernel/--cert-dir/--host-id）。
+    secure_ini=0
+    case "$ini" in
+      *@@@ENCINI@@@*) secure_ini=1; ini="" ;;
+    esac
+    if [ "$secure_ini" -eq 1 ]; then
+      if [ -z "${agent_cmd:-}" ]; then
+        agent_bad=$((agent_bad + 1))
+        bad_reasons="$bad_reasons
+    CT $vmid ($ct_hostname): agent.ini 已被 secure mode 加密（agent.ini.enc）且未发现运行中的 agent 进程，无法校验"
+        continue
+      fi
+      errs=""
+      case "$agent_cmd" in
+        *"$want_ka"*) : ;;
+        *) errs="$errs 运行参数缺 --kernel $want_ka;" ;;
+      esac
+      case "$agent_cmd" in
+        *"$CERT_DIR"*) : ;;
+        *) errs="$errs 运行参数缺 --cert-dir $CERT_DIR;" ;;
+      esac
+      case "$agent_cmd" in
+        *"$ct_hostname"*) : ;;
+        *) errs="$errs 运行参数缺 --host-id $ct_hostname;" ;;
+      esac
+      if [ -n "$errs" ]; then
+        agent_bad=$((agent_bad + 1))
+        bad_reasons="$bad_reasons
+    CT $vmid ($ct_hostname): [secure-mode] $errs"
+      else
+        secure_agent_ok=$((secure_agent_ok + 1))
+      fi
+      continue
+    fi
     if [ -z "$ini" ]; then
       agent_bad=$((agent_bad + 1))
       bad_reasons="$bad_reasons
@@ -414,7 +454,6 @@ for i in $(seq 0 $((NODE_COUNT - 1))); do
     ci="$(printf '%s\n' "$ini" | ini_get agent check_interval_sec)"
     mr="$(printf '%s\n' "$ini" | ini_get agent max_retries)"
     rs="$(printf '%s\n' "$ini" | ini_get agent reconnect_sec)"
-    want_ka="$node_ip:50051"
 
     errs=""
     [ "$ka" = "$want_ka" ] || errs="$errs kernel_addr='$ka'(want $want_ka);"
@@ -447,7 +486,9 @@ for i in $(seq 0 $((NODE_COUNT - 1))); do
   done
 done
 if [ "$agent_bad" -eq 0 ]; then
-  mark_pass "3) $agent_total 个 agent.ini（及运行参数 --kernel/--cert-dir）均指向所属节点 kernel（940-949→nk1 .71 / 950-959→nk2 .72 / 960-969→nk3 .73），TLS/cert_dir/心跳参数正确"
+  msg="3) $agent_total 个 agent.ini（及运行参数 --kernel/--cert-dir）均指向所属节点 kernel（940-949→nk1 .71 / 950-959→nk2 .72 / 960-969→nk3 .73），TLS/cert_dir/心跳参数正确"
+  [ "$secure_agent_ok" -gt 0 ] && msg="$msg；其中 $secure_agent_ok 份因 secure mode 已加密为 agent.ini.enc（以 --kernel/--cert-dir/--host-id 运行参数校验）"
+  mark_pass "$msg"
 else
   mark_fail "3) $agent_bad/$agent_total 个 agent.ini 不符合要求：$bad_reasons"
 fi

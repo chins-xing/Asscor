@@ -312,6 +312,13 @@ SUMMARY: PASS=18 FAIL=0 WARN=0 INFO=0
 RESULT: PASS（rc=0）
 ```
 
+> **实测记录（2026-10-28 13:29，33 台 CT 全部就绪后）**：
+> `bash /root/t4/scripts/federation-verify.sh` → `SUMMARY: PASS=18 FAIL=0 WARN=0 INFO=0`、`rc=0`
+> （输出存档 `/root/t4/logs/federation-verify-PASS-20261028-1329.log`）。
+> 主 kernel `GET /federation/nodes` 返回 `count=3`，三节点 `config_hash` 互不相同：
+> `nk1 79afc807…` / `nk2 b46db6c8…` / `nk3 1beaaad1…`，每节点 `hosts=10`、
+> `avg_ssam≈58.26`（zones=internal）—— 同网络、三套配置、三套模型参数，上报摘要可区分。
+
 脚本内部检查项（输出 PASS/FAIL，rc=1 表示失败；WARN/INFO 不影响 rc）：
 
 1. 33 台 CT running（930-932、940-969）；
@@ -319,7 +326,9 @@ RESULT: PASS（rc=0）
    服务 `active`，并检查 `[topology] exclude_cidrs`（缺失只 WARN）；
 3. 解析 30 个 `agent.ini`：`kernel_addr` 必须等于所属节点 IP、`host_id` 等于 CT 实际 hostname、
    `tls_enabled=true`、`cert_dir=/etc/asscor/certs`、`tls_server_name=asc-nk<g>`、
-   心跳/评估/重连参数正确；
+   心跳/评估/重连参数正确；**若 agent 是 secure-mode 构建**，首次心跳后配置会被加密成
+   `agent.ini.enc`（明文消失）——脚本此时回退为校验运行中 cmdline 的
+   `--kernel/--cert-dir/--host-id`（不再要求能读明文）；
 4. 每个节点 `:50051` 会话数 ≥10；
 5. 每个节点 kernel 日志有本组 10 个 agent 的 `heartbeat received` 与至少 1 条 `assessment result`；
 6. 主 kernel `:50051` 上**没有** 30 个 agent 的 mgmt IP 会话，且主日志无这些 `host_id`；
@@ -396,6 +405,15 @@ done
 12. **节点 kernel 日志位置**：infra 目前用 journald（CT 内无 `/var/log/asscor-kernel.log`），
     验收脚本会自动回退到 `journalctl -u asscor-kernel`；若改回文件日志（
     `StandardOutput=append:/var/log/asscor-kernel.log`）脚本同样支持，两条路径都可。
+13. **agent 的 secure mode（实测已触发）**：基建当前部署的 agent 二进制带 securemode 构建，
+    首次心跳后会把 `/etc/asscor/agent.ini` 加密成 `agent.ini.enc`（明文消失，重启后可能进入
+    "awaiting kernel-issued password" 锁定态）。影响：
+    - 验收脚本已兼容（第 3 项回退到以运行 cmdline 的 `--kernel/--cert-dir/--host-id` 校验）；
+    - 但对"配置可审计/可复现"不利，且 HMAC 未配置时 agent 会持续拒绝内核命令
+      （日志 `command rejected: HMAC verification failed`）。
+    建议重建 agent 时用与 `scripts/build.sh` 一致的 tags（`cmd/agent` 仅 `checks`，不带
+    `securemode`），并在节点/主 kernel 侧配置 HMAC（或明确接受该告警）。截至 2026-10-28
+    13:2x，940-959 已就绪的 agent 为 secure-mode 加密配置。
 
 ## 9. 相关文件
 
