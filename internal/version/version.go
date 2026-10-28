@@ -23,5 +23,6 @@ const (
 	// v2.2.6：A-5 —— 入向规则支持 daddr-only 与首条匹配顺序；A-3 可观测性（facts 日志含 VLAN 数）。
 	// v2.3.0：T1 域内 ACL —— 主机 IP 参与匹配（/32 规则）、OUTPUT 出向策略建模。
 	// v2.3.1：T2 状态化建模 —— ct state established,related accept 放行回程，双向不对称。
-	SRDVersion = "2.3.1"
+	// v2.3.2：T3 可观测 —— `srd check <src> <dst>` CLI（verdict/路径/阻断点/未知项）。
+	SRDVersion = "2.3.2"
 )

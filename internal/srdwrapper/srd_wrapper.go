@@ -93,6 +93,11 @@ func (s *Module) State() kernel.PluginState {
 	return kernel.PluginState(s.manager.State())
 }
 
+// CheckReach 是 `srd check` CLI 的实现入口（v2.3 T3）。
+func (s *Module) CheckReach(src, dst string) (any, error) {
+	return s.manager.CheckReach(src, dst)
+}
+
 // SetTopology records a host's network position for SRD real-edge construction.
 func (s *Module) SetTopology(hostID string, subnets []string, zone string) {
 	s.manager.SetTopology(hostID, subnets, zone)
