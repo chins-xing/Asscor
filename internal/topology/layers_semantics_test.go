@@ -78,9 +78,9 @@ func TestBuildLayeredFromRegistryWiresFacts(t *testing.T) {
 
 	RecordNetworkFacts("A", []string{"10.0.0.0/24"}, "internal", []string{"101"}, false,
 		[]TopoPolicyRule{{From: "10.0.0.0/24", To: "10.0.0.0/24", Allow: false}}, true,
-		[]TopoLink{{Name: "eth0", Up: true, Subnets: []string{"10.0.0.0/24"}}})
+		[]TopoLink{{Name: "eth0", Up: true, Subnets: []string{"10.0.0.0/24"}}}, nil)
 	RecordNetworkFacts("B", []string{"10.0.0.0/24"}, "dmz", []string{"102"}, false, nil, false,
-		[]TopoLink{{Name: "eth0", Up: true, Subnets: []string{"10.0.0.0/24"}}})
+		[]TopoLink{{Name: "eth0", Up: true, Subnets: []string{"10.0.0.0/24"}}}, nil)
 
 	g := BuildLayeredFromRegistry()
 	if g == nil {

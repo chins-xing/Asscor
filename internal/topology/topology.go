@@ -43,6 +43,7 @@ type TopoNode struct {
 	Policies    []TopoPolicyRule
 	PolicyKnown bool
 	Links       []TopoLink // L1：接口状态与所属子网
+	IPs         []string   // v2.3 T1：主机地址（/32 主机级 ACL 匹配用）
 }
 
 // TopoLink 是一条链路事实（L1）。
@@ -239,12 +240,13 @@ func SetTopologyListener(cb func(hostID string, subnets []string)) {
 // RecordNetworkFacts 记录一台主机的**完整网络事实**（L2/L3/L4），
 // 供 SRD 分层图使用。缺失的层保持零值 = 未知（不是"放行"）。
 func RecordNetworkFacts(hostID string, subnets []string, zone string,
-	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink) {
-	globalTopology.recordNetworkFacts(hostID, subnets, zone, vlans, forwards, policies, policyKnown, links)
+	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink,
+	ips []string) {
+	globalTopology.recordNetworkFacts(hostID, subnets, zone, vlans, forwards, policies, policyKnown, links, ips)
 }
 
 func (r *Registry) recordNetworkFacts(hostID string, subnets []string, zone string,
-	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink) {
+	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink, ips []string) {
 	r.record(hostID, subnets, zone)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -257,6 +259,7 @@ func (r *Registry) recordNetworkFacts(hostID string, subnets []string, zone stri
 	n.Policies = append([]TopoPolicyRule(nil), policies...)
 	n.PolicyKnown = policyKnown
 	n.Links = append([]TopoLink(nil), links...)
+	n.IPs = append([]string(nil), ips...)
 }
 
 // BuildLayeredFromRegistry 用当前注册表构造 SRD 分层图：
@@ -281,6 +284,7 @@ func BuildLayeredFromRegistry() *LayeredGraph {
 			Zone:     n.Zone,
 			Forwards: n.Forwards,
 			Links:    map[string]bool{},
+			IPs:      append([]string(nil), n.IPs...),
 		}
 		for _, l := range n.Links {
 			for _, s := range l.Subnets {
@@ -289,11 +293,14 @@ func BuildLayeredFromRegistry() *LayeredGraph {
 			}
 		}
 		for _, p := range n.Policies {
-			if p.Direction == "inbound" {
+			switch p.Direction {
+			case "inbound":
 				hf.Inbound = append(hf.Inbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
-				continue
+			case "outbound":
+				hf.Outbound = append(hf.Outbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
+			default:
+				policies = append(policies, PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
 			}
-			policies = append(policies, PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
 		}
 		hosts = append(hosts, hf)
 		if n.PolicyKnown {
