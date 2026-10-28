@@ -125,6 +125,8 @@ docs/
 | [variance-report.md](2-experiments/variance-report.md) | 重复性与方差报告 |
 | [CONFIDENCE_SENSITIVITY_2026-10-22.md](2-experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md) | 方向① 先验敏感性（非标定） |
 | [clab-lab/](2-experiments/clab-lab/) | 实验脚手架数据（`data/*.jsonl`） |
+| [T4_FEDERATION_DESIGN_2026-10-28.md](2-experiments/T4_FEDERATION_DESIGN_2026-10-28.md) | T4 联邦架构总体设计（主/节点 kernel + 30 agent，单网络多配置） |
+| [T4_FEDERATION_ENV_2026-10-28.md](2-experiments/T4_FEDERATION_ENV_2026-10-28.md) | T4 联邦实验环境与验收 |
 | [srd-bench/v23-t3-srd-check-20261028.md](2-experiments/srd-bench/v23-t3-srd-check-20261028.md) | SRD v2.3 T3 `srd check` 可达性查询 |
 | [srd-bench/v23-t2-stateful-20261028.md](2-experiments/srd-bench/v23-t2-stateful-20261028.md) | SRD v2.3 T2 状态化（单向可达，layered AUC 1.000） |
 | [srd-bench/v23-t1-intra-subnet-20261028.md](2-experiments/srd-bench/v23-t1-intra-subnet-20261028.md) | SRD v2.3 T1 域内主机级 ACL（layered AUC 1.000） |

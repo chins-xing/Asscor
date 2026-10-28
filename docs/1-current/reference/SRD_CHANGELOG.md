@@ -4,6 +4,25 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## 附加模块：T4 联邦 demo（2026-10-28，插件 v0.1.0）
+
+**目的**：在**同一网络**里跑**多套配置/多套模型参数**——主 kernel 聚合、节点 kernel 各自评估、
+agent 只连接所属节点 kernel。
+
+**形态**：
+- `internal/federation`：`[federation] role=master|node|off`；node 周期（默认 30s）
+  向 master 上报 `NodeReport`（node_id、config_hash、生效参数、hosts 数、zone 平均 SSAM）；
+  master 提供 `POST /federation/report`、`GET /federation/nodes`（token 校验）；
+- CLI：`federation status [--json]`；
+- 节点隔离：每个节点 kernel 独立 CA，agent 证书只被所属节点接受（mTLS 强制）；
+- 安全边界（demo 级）：共享 token + 明文 HTTP；生产需 mTLS + 独立凭证。
+
+**实测**：主 kernel 收到 3 个节点，`config_hash` 互不相同（79afc807…/b46db6c8…/15270025…），
+证明"单网络多套配置"；master 监听失败会降级（不拖垮 kernel）。
+
+文档：`docs/2-experiments/T4_FEDERATION_DESIGN_2026-10-28.md`、
+`docs/2-experiments/T4_FEDERATION_ENV_2026-10-28.md`、`docs/1-current/design/FEDERATION_DEMO_DESIGN_2026-10-28.md`。
+
 ## v2.3.6（2026-10-28）—— 可调参数补齐：主评分引擎接入 [prism]
 
 **缺口**：`config.ini` 的 `[prism]` 段早已写全 13 个参数，但 kernel 主评分引擎固定
