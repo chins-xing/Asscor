@@ -48,7 +48,13 @@ type MergedCheck struct {
 //
 // 该函数不返回 nil：没有事实时返回空图，调用方据此给出错误。
 func BuildMergedGraph(reports []NodeReport) *topology.LayeredGraph {
-	hosts, policies, policyKnown := mergedFacts(reports)
+	lh, lp, lk := localFactsFromTopology()
+	return BuildMergedGraphWithLocal(reports, lh, lp, lk)
+}
+
+// BuildMergedGraphWithLocal 用调用方提供的本地事实建图（进程隔离模式）。
+func BuildMergedGraphWithLocal(reports []NodeReport, localHosts []HostFact, localPolicies []PolicyFact, localKnown bool) *topology.LayeredGraph {
+	hosts, policies, policyKnown := mergedFactsFrom(reports, localHosts, localPolicies, localKnown)
 
 	ids := make([]string, 0, len(hosts))
 	for id := range hosts {

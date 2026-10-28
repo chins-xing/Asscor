@@ -72,6 +72,16 @@ agent 只连接所属节点 kernel。
 - 插件版本 0.3.0（demo 级 0.x）；42 个扩展测试 + 内核带/不带 tag 构建均通过。
 文档：`docs/1-current/design/FEDERATION_EXTENSION_2026-10-28.md`。
 
+
+## 附加模块：联邦进程隔离（v0.4，2026-10-29）
+
+- 新增 `federation-mod` 子进程与内核 `Proxy`（JSON-Lines RPC），
+  用 `-tags "federation,federation_proc"` 启用；默认仍为进程内模式；
+- 本地事实通过 RPC 推送，合并用 `BuildMergedGraphWithLocal`；
+- 线上验证：杀子进程内核存活；分数与进程内一致（3 节点各 10 主机、avg SSAM 58.3，
+  样例单机 55.93 NOT ACCEPTABLE）；性能：status/check ~15ms、export 16–25ms，
+  子进程 RSS 5.7–11MB。报告 `docs/2-experiments/T4_FEDERATION_PROCESS_2026-10-29.md`。
+
 ## v2.3.6（2026-10-28）—— 可调参数补齐：主评分引擎接入 [prism]
 
 **缺口**：`config.ini` 的 `[prism]` 段早已写全 13 个参数，但 kernel 主评分引擎固定

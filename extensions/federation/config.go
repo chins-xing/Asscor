@@ -5,7 +5,8 @@
 //
 // The package is deliberately dependency-light (stdlib + kernel/topology) so
 // that it builds with and without the `federation` build tag; the kernel
-// wiring (cmd/kernel/federation_on.go) is the only tag-gated piece.
+// wiring (cmd/kernel/extensions_on.go) is the only tag-gated piece; the CLI
+// command is self-registered by this package (see command.go).
 package federation
 
 import (
@@ -56,7 +57,7 @@ const (
 	TokenHeader = "X-Federation-Token"
 
 	// PluginVersion is the kernel plugin version advertised via Info().
-	PluginVersion = "0.3.0"
+	PluginVersion = "0.4.0"
 
 	// ReportPath is the master POST collection endpoint.
 	ReportPath = "/federation/report"
