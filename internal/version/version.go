@@ -24,5 +24,6 @@ const (
 	// v2.3.0：T1 域内 ACL —— 主机 IP 参与匹配（/32 规则）、OUTPUT 出向策略建模。
 	// v2.3.1：T2 状态化建模 —— ct state established,related accept 放行回程，双向不对称。
 	// v2.3.2：T3 可观测 —— `srd check <src> <dst>` CLI（verdict/路径/阻断点/未知项）。
-	SRDVersion = "2.3.2"
+	// v2.3.3：T3 修正 —— 直连快捷路径的 blocked 补出具体原因与阻断点。
+	SRDVersion = "2.3.3"
 )

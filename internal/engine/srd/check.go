@@ -84,6 +84,13 @@ func (m *Manager) CheckReachability(src, dst string) (*ReachCheck, error) {
 		}
 	}
 	if best != nil {
+		// 直连快捷路径可能给不出具体原因（steps 为空）：补一次 Adjacent 解释。
+		if best.Verdict == topology.VerdictBlocked && len(best.Steps) == 0 && best.Reason == "" {
+			if ok, why := lg.Adjacent(src, dst); !ok {
+				best.Reason = why
+				best.BlockedAt = dst
+			}
+		}
 		rp := &ReachPath{
 			Nodes:     append([]string(nil), best.Path...),
 			Verdict:   string(best.Verdict),
