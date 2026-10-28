@@ -49,10 +49,14 @@ type HostFacts struct {
 	VLANs    []string // L2：所属广播域（VLAN/tag）；空 = 未知
 	Role     string   // L5：资产角色（web/db/mon/shadow…）
 	Zone     string   // L5：安全区域（internal/dmz/public/wan/cloud），由 agent 上报
+	// IPs 是主机地址（用于匹配 /32 主机级 ACL，v2.3 T1）。
+	IPs []string
 	// Links 是 L1 事实：子网 → 该子网上的链路是否 up（缺省视为 up）。
 	Links map[string]bool
 	// Inbound 是主机入向策略（域内/主机级 ACL）：From 为来源 CIDR。
 	Inbound []PolicyRule
+	// Outbound 是主机出向策略（OUTPUT 链）：To 为目的 CIDR（v2.3 T1）。
+	Outbound []PolicyRule
 	// Forwards 表示这台主机**真的会转发**（ip_forward=1 / 路由角色）。
 	// 双网卡 ≠ 路由器：实测中 pivot-1 也是双宿主，但它不转发，
 	// 若仅凭"≥2 个子网"就允许它中转，模型会凭空造出绕行路径。
@@ -74,6 +78,7 @@ type LayeredGraph struct {
 	gateways map[string][]string // gateway host -> subnets
 	policies []PolicyRule
 	inbound  map[string][]PolicyRule // host -> 入向规则（域内 ACL）
+	outbound map[string][]PolicyRule // host -> 出向规则（v2.3 T1）
 	// 已知性：false 表示该层完全没有采集数据（必须当 unknown，而不是 assume allow）
 	policyKnown bool
 	linkKnown   bool
@@ -94,6 +99,7 @@ func BuildLayeredGraph(hosts []HostFacts, policies []PolicyRule, policyKnown, li
 		gateways:    map[string][]string{},
 		policies:    append([]PolicyRule(nil), policies...),
 		inbound:     map[string][]PolicyRule{},
+		outbound:    map[string][]PolicyRule{},
 		policyKnown: policyKnown,
 		linkKnown:   linkKnown,
 	}
@@ -116,6 +122,9 @@ func BuildLayeredGraph(hosts []HostFacts, policies []PolicyRule, policyKnown, li
 		}
 		if len(h.Inbound) > 0 {
 			g.inbound[h.HostID] = append([]PolicyRule(nil), h.Inbound...)
+		}
+		if len(h.Outbound) > 0 {
+			g.outbound[h.HostID] = append([]PolicyRule(nil), h.Outbound...)
 		}
 		if len(g.hostSubs[h.HostID]) >= 2 {
 			g.gateways[h.HostID] = g.hostSubs[h.HostID]
@@ -246,16 +255,29 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 		dstHost := path[len(path)-1]
 		srcSub := steps[0].Subnet
 		dstSub := steps[len(steps)-1].Subnet
-		if !g.inboundAllowed(dstHost, srcSub, dstSub) {
+		if !g.inboundAllowed(dstHost, srcHost, srcSub, dstSub) {
 			pv.Verdict = VerdictBlocked
 			pv.BlockedAt = dstHost
 			pv.Reason = "inbound policy denies " + srcSub + " -> " + dstHost
 			return pv
 		}
-		if !g.inboundAllowed(srcHost, dstSub, srcSub) {
+		if !g.inboundAllowed(srcHost, dstHost, dstSub, srcSub) {
 			pv.Verdict = VerdictBlocked
 			pv.BlockedAt = srcHost
 			pv.Reason = "inbound policy denies return path " + dstSub + " -> " + srcHost
+			return pv
+		}
+		// v2.3 T1：端点出向策略（OUTPUT）。
+		if !g.outboundAllowed(srcHost, dstSub, dstHost) {
+			pv.Verdict = VerdictBlocked
+			pv.BlockedAt = srcHost
+			pv.Reason = "outbound policy denies " + srcHost + " -> " + dstHost
+			return pv
+		}
+		if !g.outboundAllowed(dstHost, srcSub, srcHost) {
+			pv.Verdict = VerdictBlocked
+			pv.BlockedAt = dstHost
+			pv.Reason = "outbound policy denies return path " + dstHost + " -> " + srcHost
 			return pv
 		}
 	}
@@ -320,16 +342,48 @@ func (g *LayeredGraph) linkUp(host, subnet string) bool {
 
 // inboundAllowed 判断 target 的主机入向策略是否允许来自 sourceSubnet 的流量。
 // 无规则/无数据 ⇒ 允许（未知 ≠ 拒绝）。
+// hostInCIDR 判断主机的任一 IP 是否落在 cidr 内（用于 /32 主机级 ACL，v2.3 T1）。
+func (g *LayeredGraph) hostInCIDR(host, cidr string) bool {
+	h := g.hosts[host]
+	if h == nil || cidr == "" {
+		return false
+	}
+	for _, ipStr := range h.IPs {
+		ip := net.ParseIP(strings.TrimSuffix(ipStr, "/32"))
+		if ip == nil {
+			continue
+		}
+		if _, n, err := net.ParseCIDR(cidr); err == nil && n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// outboundAllowed 判断 source 的出向策略是否允许发往 destSubnet / destHost 的流量。
+// 规则 To 命中目标子网或目标主机 IP 即算匹配；无数据 ⇒ 允许（未知 ≠ 拒绝）。
+func (g *LayeredGraph) outboundAllowed(source, destSubnet, destHost string) bool {
+	for _, r := range g.outbound[source] {
+		if r.To == "" {
+			return r.Allow
+		}
+		if subnetMatch(r.To, destSubnet) || g.hostInCIDR(destHost, r.To) {
+			return r.Allow
+		}
+	}
+	return true
+}
+
 // inboundAllowed 判断 target 的入向策略是否允许来自 sourceSubnet、送到 targetSubnet 的流量。
 //
 // 支持三种规则（与 agent 的解析一一对应）：
 //   - From 限定来源子网（From 为空 = 任意来源）；
 //   - To 限定目标子网（A-5：`ip daddr … drop` 这类规则，To 为空 = 任意目标）；
 //   - 首条匹配即生效（规则顺序由解析侧保持）。
-func (g *LayeredGraph) inboundAllowed(target, sourceSubnet, targetSubnet string) bool {
+func (g *LayeredGraph) inboundAllowed(target, sourceHost, sourceSubnet, targetSubnet string) bool {
 	for _, r := range g.inbound[target] {
-		fromOK := r.From == "" || subnetMatch(r.From, sourceSubnet)
-		toOK := r.To == "" || subnetMatch(r.To, targetSubnet)
+		fromOK := r.From == "" || subnetMatch(r.From, sourceSubnet) || g.hostInCIDR(sourceHost, r.From)
+		toOK := r.To == "" || subnetMatch(r.To, targetSubnet) || g.hostInCIDR(target, r.To)
 		if fromOK && toOK {
 			return r.Allow
 		}
@@ -363,11 +417,18 @@ func (g *LayeredGraph) Adjacent(a, b string) (bool, string) {
 		// A-4：入向策略按**会话语义**双向生效。
 		// 请求被目标 B 的 INPUT 拒绝 ⇒ 会话失败；反向会话（B→A）的回程包
 		// 同样会撞上 B 的 INPUT 而被丢弃 ⇒ 两个方向都必须放行。
-		if !g.inboundAllowed(b, s, s) {
+		if !g.inboundAllowed(b, a, s, s) {
 			return false, "inbound policy denies " + s + " -> " + b
 		}
-		if !g.inboundAllowed(a, s, s) {
+		if !g.inboundAllowed(a, b, s, s) {
 			return false, "inbound policy denies return path " + s + " -> " + a
+		}
+		// v2.3 T1：域内 ACL 还包含**出向**（OUTPUT 链）：源主机主动发出的流量被拒 ⇒ 会话失败。
+		if !g.outboundAllowed(a, s, b) {
+			return false, "outbound policy denies " + a + " -> " + b
+		}
+		if !g.outboundAllowed(b, s, a) {
+			return false, "outbound policy denies return path " + b + " -> " + a
 		}
 	}
 	return true, "adjacent"

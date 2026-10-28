@@ -37,8 +37,13 @@ type hostSpec struct {
 	// v2.2 语义输入：主机入向策略（域内/主机级 ACL）与链路状态。
 	Inbound []struct {
 		From  string `json:"from"`
+		To    string `json:"to"`
 		Allow bool   `json:"allow"`
 	} `json:"inbound,omitempty"`
+	Outbound []struct {
+		To    string `json:"to"`
+		Allow bool   `json:"allow"`
+	} `json:"outbound,omitempty"`
 	Links map[string]bool `json:"links,omitempty"` // 子网 -> 链路是否 up
 }
 type policySpec struct {
@@ -144,11 +149,17 @@ func main() {
 		}
 			inb := make([]topology.PolicyRule, 0, len(h.Inbound))
 		for _, r := range h.Inbound {
-			inb = append(inb, topology.PolicyRule{From: r.From, Allow: r.Allow})
+			inb = append(inb, topology.PolicyRule{From: r.From, To: r.To, Allow: r.Allow})
+		}
+		outb := make([]topology.PolicyRule, 0, len(h.Outbound))
+		for _, r := range h.Outbound {
+			outb = append(outb, topology.PolicyRule{To: r.To, Allow: r.Allow})
 		}
 		hostFacts = append(hostFacts, topology.HostFacts{
 			HostID: h.ID, Subnets: h.Subnets, Forwards: h.Forwards,
 			Inbound: inb,
+		Outbound: outb,
+		IPs:      h.IPs,
 		Links:   h.Links,
 	})
 	}

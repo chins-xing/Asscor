@@ -154,6 +154,20 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 			continue
 		}
 		inbound := strings.EqualFold(rule.Chain, "input")
+		outbound := strings.EqualFold(rule.Chain, "output")
+		if outbound {
+			// v2.3 T1：出向策略（OUTPUT 链）——源主机主动发出的流量被拒，
+			// 会话同样失败。daddr 优先；只有 oifname 时用接口→子网映射展开。
+			switch {
+			case to != "":
+				rules = append(rules, apiv1.PolicyRule{To: to, Allow: *verdict, Direction: "outbound"})
+			case outIface != "":
+				for _, ds := range ifaces[outIface] {
+					rules = append(rules, apiv1.PolicyRule{To: ds, Allow: *verdict, Direction: "outbound"})
+				}
+			}
+			continue
+		}
 		if inbound {
 			// 入向规则三种形态（"不猜"边界）：
 			//   saddr → 拒绝/放行来自该源的入向；
@@ -229,7 +243,8 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
 		inbound := strings.HasPrefix(line, "-A INPUT")
-		if !strings.HasPrefix(line, "-A FORWARD") && !inbound {
+		outbound := strings.HasPrefix(line, "-A OUTPUT")
+		if !strings.HasPrefix(line, "-A FORWARD") && !inbound && !outbound {
 			continue
 		}
 		if strings.Contains(line, "! ") || strings.Contains(line, "-m ") {
@@ -258,6 +273,17 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 		case "ACCEPT":
 			allow = true
 		default:
+			continue
+		}
+		if outbound {
+			switch {
+			case to != "":
+				rules = append(rules, apiv1.PolicyRule{To: to, Allow: allow, Direction: "outbound"})
+			case outIface != "":
+				for _, ds := range ifaces[outIface] {
+					rules = append(rules, apiv1.PolicyRule{To: ds, Allow: allow, Direction: "outbound"})
+				}
+			}
 			continue
 		}
 		if inbound {
