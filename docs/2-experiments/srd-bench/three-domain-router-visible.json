@@ -1,0 +1,41 @@
+{
+  "_comment": "三域实验 SRD 路径基准 —— 2026-10-27 现状。真实可达：域A 内部直达、跨域经 920 路由器。SRD 只能看到带 agent 的主机；此变体假设 920 路由器也注册了 agent（四子网可见）⇒ 跨域多跳路径应出现。",
+  "transmission": 0.1,
+  "hosts": [
+    {"id": "domA-web", "subnets": ["172.22.10.0/24"], "score": 46.78, "visible": true, "criticality": 0.7},
+    {"id": "domA-db", "subnets": ["172.22.10.0/24"], "score": 46.78, "visible": true, "criticality": 0.9},
+    {"id": "domB-web", "subnets": ["172.23.10.0/24"], "score": 46.78, "visible": true, "criticality": 0.7},
+    {"id": "domC-mon", "subnets": ["100.64.0.0/24"], "score": 40.42, "visible": true, "criticality": 0.5},
+    {"id": "domC-router", "subnets": ["172.22.10.0/24", "172.23.10.0/24", "100.64.0.0/24", "192.168.30.0/24"], "score": 46.78, "visible": true, "criticality": 1.0}
+  ],
+  "chains": [
+    {
+      "id": "c1-A内部",
+      "src": "domA-web",
+      "dst": "domA-db",
+      "truth_paths": [["domA-web", "domA-db"]],
+      "truth_reachable": ["domA-db"]
+    },
+    {
+      "id": "c2-A到B跨域",
+      "src": "domA-web",
+      "dst": "domB-web",
+      "truth_paths": [["domA-web", "domC-router", "domB-web"]],
+      "truth_reachable": ["domA-db", "domC-router", "domB-web"]
+    },
+    {
+      "id": "c3-A到C跨域",
+      "src": "domA-web",
+      "dst": "domC-mon",
+      "truth_paths": [["domA-web", "domC-router", "domC-mon"]],
+      "truth_reachable": ["domA-db", "domC-router", "domC-mon"]
+    },
+    {
+      "id": "c4-B到C跨域",
+      "src": "domB-web",
+      "dst": "domC-mon",
+      "truth_paths": [["domB-web", "domC-router", "domC-mon"]],
+      "truth_reachable": ["domC-router", "domC-mon"]
+    }
+  ]
+}
