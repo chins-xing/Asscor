@@ -59,7 +59,7 @@ a3663a4de25389daf6e9d6b028bd8c98220f112e  6cd6894cfdfbc8b539005a90572b9c47102058
 
 # ---- 构建面（研究线目标只在 ARC 上构建/测试）----
 bc39ebcf4568f1c223c3922a148d756672a992d3  6b499f759e53a0a5c63bca724770be20b1f5b5ae  scripts/build.sh  # ARC 的 BINARIES 多 cmd/edgescen / cmd/edgecompare 交叉编译目标
-4368c57908784344363c7a4d6c684f14c88da098  4368c57908784344363c7a4d6c684f14c88da098  .github/workflows/ci.yml  # 双侧同步
+e45ebf3e04e0b6a07f423015faaae9a06dde7612  e45ebf3e04e0b6a07f423015faaae9a06dde7612  .github/workflows/ci.yml  # 双侧同步
 
 # ---- 忽略规则 ----
 # 为何两侧不同：ARC 用 `lunwen/*` 白名单（可跟踪 lunwen/paper、lunwen/clab-lab 的研究数据与文档），
