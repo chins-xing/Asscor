@@ -57,7 +57,7 @@ const (
 	TokenHeader = "X-Federation-Token"
 
 	// PluginVersion is the kernel plugin version advertised via Info().
-	PluginVersion = "0.3.0"
+	PluginVersion = "0.4.0"
 
 	// ReportPath is the master POST collection endpoint.
 	ReportPath = "/federation/report"

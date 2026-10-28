@@ -339,14 +339,14 @@ func TestPluginPriorityAndInfo(t *testing.T) {
 	if info.Name != "federation" {
 		t.Errorf("plugin name = %q", info.Name)
 	}
-	if info.Version != PluginVersion || PluginVersion != "0.3.0" {
+	if info.Version != PluginVersion || PluginVersion != "0.4.0" {
 		t.Errorf("plugin version = %q, want 0.1.0", info.Version)
 	}
 	if p.Priority() <= 0 {
 		t.Errorf("priority = %d, want > 0", p.Priority())
 	}
-	if len(p.Dependencies()) != 0 {
-		t.Errorf("unexpected dependencies: %v", p.Dependencies())
+	if len(p.Dependencies()) != 1 || p.Dependencies()[0].Name != "assessor" {
+		t.Errorf("dependencies = %v, want [assessor]", p.Dependencies())
 	}
 }
 

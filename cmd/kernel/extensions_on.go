@@ -1,4 +1,4 @@
-//go:build federation
+//go:build federation && !federation_proc
 
 package main
 

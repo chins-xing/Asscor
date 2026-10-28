@@ -380,66 +380,8 @@ func (p *Plugin) Snapshot() NodeReport {
 	p.mu.Lock()
 	kc := p.kc
 	cfg := p.cfg
-	cfgObj := p.cfgObj
 	p.mu.Unlock()
-
-	params := effectiveParams(cfgObj)
-	report := NodeReport{
-		NodeID:     cfg.NodeID,
-		ConfigHash: ConfigHash(params),
-		Params:     params,
-		ReportedAt: time.Now().UTC(),
-	}
-
-	nodes := topology.ListNodes()
-	report.Hosts = len(nodes)
-	// v0.2：把图事实（主机/策略/链路）一并上报，供主端合并。
-	report.HostFacts, report.PolicyFacts, report.PolicyKnown = collectFacts(nodes)
-	if len(nodes) == 0 {
-		return report
-	}
-
-	assessor := resolveAssessor(kc)
-	zoneCfg := configZones(cfgObj)
-
-	type acc struct {
-		hosts  int
-		scored int
-		sum    float64
-	}
-	perZone := make(map[string]*acc)
-	for _, n := range nodes {
-		zone := n.Zone
-		if zone == "" && zoneCfg != nil {
-			zone = zoneCfg[n.HostID]
-		}
-		if zone == "" {
-			zone = "unknown"
-		}
-		a := perZone[zone]
-		if a == nil {
-			a = &acc{}
-			perZone[zone] = a
-		}
-		a.hosts++
-		if assessor != nil {
-			if res := assessor.GetResult(n.HostID); res != nil {
-				a.scored++
-				a.sum += res.FinalScore
-			}
-		}
-	}
-
-	report.Zones = make(map[string]ZoneSummary, len(perZone))
-	for zone, a := range perZone {
-		zs := ZoneSummary{Hosts: a.hosts, Scored: a.scored}
-		if a.scored > 0 {
-			zs.AvgSSAM = a.sum / float64(a.scored)
-		}
-		report.Zones[zone] = zs
-	}
-	report.AvgSSAM = report.OverallAvgSSAM()
-	return report
+	return BuildNodeReport(kc, cfg)
 }
 
 // resolveAssessor returns the kernel assessor when the build includes one.
@@ -649,4 +591,11 @@ func (p *Plugin) ReportNow(ctx context.Context) error {
 		return fmt.Errorf("reporter 未启动")
 	}
 	return rep.Report(ctx, p.Snapshot())
+}
+
+// FederationRole 返回当前角色（CLI/代理共用接口）。
+func (p *Plugin) FederationRole() Role {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.cfg.Role
 }

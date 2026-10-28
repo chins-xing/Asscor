@@ -30,6 +30,31 @@ type TopologyExport struct {
 
 // mergedFacts 把节点上报 + 主端本地拓扑合并成事实集合（供建图与导出共用）。
 func mergedFacts(reports []NodeReport) (map[string]*HostFact, map[string]PolicyFact, bool) {
+	lh, lp, lk := localFactsFromTopology()
+	return mergedFactsFrom(reports, lh, lp, lk)
+}
+
+// localFactsFromTopology 把主 kernel 本地拓扑转成事实（进程内模式）。
+func localFactsFromTopology() ([]HostFact, []PolicyFact, bool) {
+	hosts := make([]HostFact, 0)
+	policies := make([]PolicyFact, 0)
+	known := false
+	for _, n := range topology.ListNodes() {
+		hosts = append(hosts, hostFactFromTopo(n))
+		if n.PolicyKnown {
+			known = true
+		}
+		for _, p := range n.Policies {
+			if p.Direction == "" || p.Direction == "forward" {
+				policies = append(policies, PolicyFact{From: p.From, To: p.To, Allow: p.Allow})
+			}
+		}
+	}
+	return hosts, policies, known
+}
+
+// mergedFactsFrom 是 merge 的核心：节点上报 + 调用方提供的本地事实。
+func mergedFactsFrom(reports []NodeReport, localHosts []HostFact, localPolicies []PolicyFact, localKnown bool) (map[string]*HostFact, map[string]PolicyFact, bool) {
 	hosts := map[string]*HostFact{}
 	policies := map[string]PolicyFact{}
 	policyKnown := false
@@ -83,17 +108,17 @@ func mergedFacts(reports []NodeReport) (map[string]*HostFact, map[string]PolicyF
 			policies[key] = p
 		}
 	}
-	for _, n := range topology.ListNodes() {
-		mergeHost(hostFactFromTopo(n))
-		for _, p := range n.Policies {
-			if p.Direction == "" || p.Direction == "forward" {
-				key := p.From + "|" + p.To + "|" + boolKey(p.Allow)
-				policies[key] = PolicyFact{From: p.From, To: p.To, Allow: p.Allow}
-			}
-		}
-		if n.PolicyKnown {
-			policyKnown = true
-		}
+	for _, h := range localHosts {
+		mergeHost(h)
+	}
+	for _, p := range localPolicies {
+		p.From = normalizeFactSubnet(p.From)
+		p.To = normalizeFactSubnet(p.To)
+		key := p.From + "|" + p.To + "|" + boolKey(p.Allow)
+		policies[key] = p
+	}
+	if localKnown {
+		policyKnown = true
 	}
 	return hosts, policies, policyKnown
 }
@@ -101,7 +126,10 @@ func mergedFacts(reports []NodeReport) (map[string]*HostFact, map[string]PolicyF
 // MergedTopology 导出合并事实（主端 /federation/export 与离线 AUC 实验共用）。
 func MergedTopology(reports []NodeReport) TopologyExport {
 	hosts, policies, known := mergedFacts(reports)
+	return exportFromFacts(hosts, policies, known)
+}
 
+func exportFromFacts(hosts map[string]*HostFact, policies map[string]PolicyFact, known bool) TopologyExport {
 	ids := make([]string, 0, len(hosts))
 	for id := range hosts {
 		ids = append(ids, id)
@@ -163,4 +191,11 @@ func normalizeFactSubnets(in []string) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+// MergedTopologyWithLocal 导出"节点上报 + 指定本地事实"的合并拓扑。
+// 进程隔离模式下，主 kernel 把本地事实通过 RPC 推给联邦子进程，由子进程调用它。
+func MergedTopologyWithLocal(reports []NodeReport, localHosts []HostFact, localPolicies []PolicyFact, localKnown bool) TopologyExport {
+	hosts, policies, known := mergedFactsFrom(reports, localHosts, localPolicies, localKnown)
+	return exportFromFacts(hosts, policies, known)
 }

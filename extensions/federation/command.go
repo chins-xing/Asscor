@@ -10,9 +10,19 @@ import (
 	"github.com/chins-xing/asscor/internal/cli"
 )
 
-var currentPlugin *Plugin
+// commandAPI 是内核内插件与进程代理共同实现的 CLI 能力集。
+type commandAPI interface {
+	FederationRole() Role
+	FederationStatus() Status
+	MergedCheck(src, dst string) (any, error)
+	ExportMerged() (any, error)
+	ReportNow(ctx context.Context) error
+}
 
-func setCurrent(p *Plugin) { currentPlugin = p }
+var currentAPI commandAPI
+
+func setCurrent(p *Plugin)       { currentAPI = p }
+func setCurrentAPI(a commandAPI) { currentAPI = a }
 
 func init() {
 	cli.RegisterExtensionCommand(federationCmdInfo, federationCmdHandler)
@@ -53,14 +63,14 @@ func federationCmdHandler(ctx *cli.CommandContext) *cli.CommandResult {
 		action = "status"
 	}
 
-	p := currentPlugin
+	p := currentAPI
 	if p == nil {
 		return fail(cli.ExitError, "federation 扩展未加载（构建需 -tags federation）")
 	}
 
 	switch action {
 	case "status":
-		if p.cfg.Role == RoleOff {
+		if p.FederationRole() == RoleOff {
 			return &cli.CommandResult{ExitCode: cli.ExitOK, Output: "federation 未启用（[federation] role = off）\n"}
 		}
 		st := p.FederationStatus()
