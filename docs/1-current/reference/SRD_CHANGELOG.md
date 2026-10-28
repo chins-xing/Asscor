@@ -29,6 +29,22 @@ agent 只连接所属节点 kernel。
 文档：`docs/2-experiments/T4_FEDERATION_DESIGN_2026-10-28.md`、
 `docs/2-experiments/T4_FEDERATION_ENV_2026-10-28.md`、`docs/1-current/design/FEDERATION_DEMO_DESIGN_2026-10-28.md`。
 
+
+## 附加实验：T4 联邦 AUC 对照（2026-10-28）
+
+同一批实测真值（870 对：30 源 × 29 目标，941 INPUT 拒 940）：
+
+| 模型 | AUC |
+|---|---|
+| **V2 主端合并图（40 主机）** | **0.992** |
+| **V1 单节点视角（每节点 10 主机）** | **0.873** |
+| 差值 | **+0.119** |
+
+结论：联邦合并的增益来自**可见性**——单节点看不到跨节点目标、也不含共享路由器，
+跨节点对被判 0 分；主端合并图把策略事实与全部主机合起来后接近满分。
+报告：`docs/2-experiments/T4_FEDERATION_AUC_2026-10-28.md`；
+工具：`cmd/fevauc`（ARC）；数据：`docs/2-experiments/srd-bench/t4-auc-*-20261028.csv`。
+
 ## v2.3.6（2026-10-28）—— 可调参数补齐：主评分引擎接入 [prism]
 
 **缺口**：`config.ini` 的 `[prism]` 段早已写全 13 个参数，但 kernel 主评分引擎固定
