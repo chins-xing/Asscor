@@ -78,6 +78,11 @@ func main() {
 	truthPath := flag.String("truth", "", "实测连通矩阵 CSV")
 	srcmap := flag.String("srcmap", "", "vmid=hostID，逗号分隔")
 	svgPath := flag.String("svg", "", "输出 ROC SVG 路径（可选）")
+	// T4 联邦实验：用节点 profile 的参数给 layered 连续分加权（默认沿用历史 0.9/5/linear）
+	decay := flag.Float64("decay", 0.9, "路径衰减因子（对应 [prism] path_decay）")
+	maxDepth := flag.Int("max-depth", 5, "路径枚举深度（对应 [prism] max_path_depth）")
+	aggregation := flag.String("aggregation", "linear", "多路径聚合：linear/max/rss")
+	dumpPath := flag.String("dump", "", "输出逐对分数 CSV（src,dst,truth,flat,layered）")
 	flag.Parse()
 
 	tf := topoFile{}
@@ -180,6 +185,16 @@ func main() {
 	}
 	flatEdges := srd.BuildEdgesWithTopology(topoInfo, nodes, 0.1)
 	prismCfg := prismlib.DefaultConfig()
+	if *maxDepth > 0 {
+		prismCfg.MaxPathDepth = *maxDepth
+	}
+	if *decay > 0 && *decay <= 1 {
+		prismCfg.PathDecay = *decay
+	}
+	switch *aggregation {
+	case "max", "rss", "linear":
+		prismCfg.AggregationMode = *aggregation
+	}
 
 	items := make([]scored, 0, len(pairs))
 	for _, p := range pairs {
@@ -187,7 +202,7 @@ func main() {
 		flatScore := 0.0
 		if _, ok := nodes[p.Src]; ok {
 			if _, ok2 := nodes[p.Dst]; ok2 {
-				if paths := prismlib.FindPropagationPaths(p.Src, p.Dst, nodes, flatEdges, prismCfg, 0, 5, 50); len(paths) > 0 {
+				if paths := prismlib.FindPropagationPaths(p.Src, p.Dst, nodes, flatEdges, prismCfg, 0, *maxDepth, 50); len(paths) > 0 {
 					flatScore = 1
 				}
 			}
@@ -196,8 +211,8 @@ func main() {
 		// 连续分数：对所有非 blocked 路径求和"跳数衰减 × 允许性"，
 		// 再映射到 (0,1)：score = 1 - exp(-sum)。路径越多/越短 ⇒ 分数越高；
 		// probable（未知层）按 0.4 降权；blocked 恒为 0。
-		pvs := lg.HostReachable(p.Src, p.Dst, 5)
-		sum := 0.0
+		pvs := lg.HostReachable(p.Src, p.Dst, *maxDepth)
+		var maxBase, sumSq float64
 		for _, v := range pvs {
 			if v.Verdict == topology.VerdictBlocked {
 				continue
@@ -206,18 +221,61 @@ func main() {
 			if hops < 1 {
 				continue
 			}
-			base := math.Pow(0.9, float64(hops-1))
+			base := math.Pow(*decay, float64(hops-1))
 			if v.Verdict == topology.VerdictProbable {
 				base *= 0.4
 			}
-			sum += base
+			if base > maxBase {
+				maxBase = base
+			}
+			sumSq += base * base
+			if *aggregation == "linear" || *aggregation == "" {
+				// 线性累加在下方沿用 sum 语义
+			}
 		}
-		layScore := 1 - math.Exp(-sum)
+		var agg float64
+		switch *aggregation {
+		case "max":
+			agg = maxBase
+		case "rss":
+			agg = math.Sqrt(sumSq)
+		default: // linear
+			agg = 0
+			for _, v := range pvs {
+				if v.Verdict == topology.VerdictBlocked {
+					continue
+				}
+				hops := len(v.Path) - 1
+				if hops < 1 {
+					continue
+				}
+				base := math.Pow(*decay, float64(hops-1))
+				if v.Verdict == topology.VerdictProbable {
+					base *= 0.4
+				}
+				agg += base
+			}
+		}
+		layScore := 1 - math.Exp(-agg)
 		items = append(items, scored{p: p, flat: flatScore, layered: layScore})
 	}
 
 	report("flat", items, func(s scored) float64 { return s.flat })
 	report("layered", items, func(s scored) float64 { return s.layered })
+	if *dumpPath != "" {
+		var b strings.Builder
+		b.WriteString("src,dst,truth,flat,layered\n")
+		for _, it := range items {
+			tr := 0
+			if it.p.Truth {
+				tr = 1
+			}
+			fmt.Fprintf(&b, "%s,%s,%d,%.6f,%.6f\n", it.p.Src, it.p.Dst, tr, it.flat, it.layered)
+		}
+		if err := os.WriteFile(*dumpPath, []byte(b.String()), 0o644); err == nil {
+			fmt.Printf("DUMP → %s\n", *dumpPath)
+		}
+	}
 	if *svgPath != "" {
 		writeSVG(*svgPath, items)
 	}
