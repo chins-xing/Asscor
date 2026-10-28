@@ -62,6 +62,16 @@ agent 只连接所属节点 kernel。
 期间修复"策略地址带主机位"（`172.22.10.1/24`）导致 deny 永不匹配的 bug（0.65→0.91）。
 报告：`docs/2-experiments/T4_FEDERATION_AUC_LARGE_2026-10-28.md`。
 
+
+## 附加模块：联邦解耦为扩展包（v0.3，2026-10-28）
+
+- `internal/federation` → **`extensions/federation`**（实现 + CLI 命令自包含）；
+- `internal/cli` 新增通用钩子 `RegisterExtensionCommand`，不再 import 联邦包；
+- `cmd/kernel` 只剩 `newExtensionPlugins()`（tag 文件），main 无 federation 字样；
+- 新命令：`federation export`（主端合并拓扑）、`federation report-now`（节点立即上报）；
+- 插件版本 0.3.0（demo 级 0.x）；42 个扩展测试 + 内核带/不带 tag 构建均通过。
+文档：`docs/1-current/design/FEDERATION_EXTENSION_2026-10-28.md`。
+
 ## v2.3.6（2026-10-28）—— 可调参数补齐：主评分引擎接入 [prism]
 
 **缺口**：`config.ini` 的 `[prism]` 段早已写全 13 个参数，但 kernel 主评分引擎固定

@@ -1,6 +1,6 @@
 # SRD 联邦 demo 设计（一个网络，多套配置）· T4 · 2026-10-28
 
-> 状态：草稿（demo 级）。代码：`internal/federation`（模块 0.1.0）+ `internal/cli/federation_commands.go` +
+> 状态：草稿（demo 级）。代码：`extensions/federation`（模块 0.1.0）+ `internal/cli/federation_commands.go` +
 > `cmd/kernel/federation_on.go`（`-tags federation`）。
 > 目标：证明同一张物理网络里可以并存 **主 kernel + N 个节点 kernel**，每个节点 kernel
 > 使用**自己的配置与模型参数**（独立 CA 强制 agent 归属），主 kernel 只收**聚合摘要**，
@@ -237,7 +237,7 @@ curl -s -H "X-Federation-Token: $TOKEN" http://192.168.30.50:5099/federation/nod
 
 Build tag 组合：`federation_on.go`（`//go:build federation`）与 `federation_off.go`
 （`//go:build !federation`）成对，`-tags "engine,srdwrapper,comms"`（无 federation）与
-无任何 tag 的构建均已验证可编译；`internal/federation` 本身不带 tag，CLI 包始终可引用
+无任何 tag 的构建均已验证可编译；`extensions/federation` 本身不带 tag，CLI 包始终可引用
 其状态类型，只有插件装配是 tag 门控的。
 
 ---
@@ -262,18 +262,18 @@ Build tag 组合：`federation_on.go`（`//go:build federation`）与 `federatio
 
 | 关注点 | 代码位置 |
 |---|---|
-| `[federation]` 解析/角色校验 | `internal/federation/config.go`（`ParseRole`/`ParseConfig`） |
-| 摘要模型与配置指纹 | `internal/federation/types.go`（`NodeReport`/`ZoneSummary`/`ConfigHash`） |
-| master 内存收集器（去重/线程安全） | `internal/federation/collector.go` |
-| master HTTP 端点 | `internal/federation/master.go` |
-| node 上报客户端（重试/超时/优雅停止） | `internal/federation/reporter.go` |
-| kernel 插件（Init/Start/Stop/State/HealthCheck + Snapshot） | `internal/federation/plugin.go` |
+| `[federation]` 解析/角色校验 | `extensions/federation/config.go`（`ParseRole`/`ParseConfig`） |
+| 摘要模型与配置指纹 | `extensions/federation/types.go`（`NodeReport`/`ZoneSummary`/`ConfigHash`） |
+| master 内存收集器（去重/线程安全） | `extensions/federation/collector.go` |
+| master HTTP 端点 | `extensions/federation/master.go` |
+| node 上报客户端（重试/超时/优雅停止） | `extensions/federation/reporter.go` |
+| kernel 插件（Init/Start/Stop/State/HealthCheck + Snapshot） | `extensions/federation/plugin.go` |
 | CLI 命令与渲染 | `internal/cli/federation_commands.go` |
 | 注册进 CLI 内建命令表 | `internal/cli/engine.go`（builtins） |
 | 装配（tag 开/关） | `cmd/kernel/federation_on.go` / `federation_off.go` |
 | Bootstrap 后注入 CLI | `cmd/kernel/main.go`（`cli.SetFederationProvider`） |
 | 配置段白名单 | `internal/config/config.go`（`adapterSections["federation"]`） |
-| 单元测试 | `internal/federation/*_test.go`、`internal/cli/federation_commands_test.go` |
+| 单元测试 | `extensions/federation/*_test.go`、`internal/cli/federation_commands_test.go` |
 
 ---
 
@@ -332,3 +332,12 @@ reason  : inbound policy denies 172.22.10.0/24 -> asc-agt-nk1-02
    `TestIntraSubnetOutboundRule` 抓出后补齐 `outboundAllowed(reply)`。
 
 插件版本：**0.2.0**（demo 级 0.x，不并入 SRD/ASSCOR 版本号）。
+
+## 11. v0.3：解耦为扩展包（2026-10-28）
+
+代码从 `internal/federation` 迁到 `extensions/federation`，CLI 命令由扩展包
+`init()` 自注册（`cli.RegisterExtensionCommand`），`internal/cli` 与
+`cmd/kernel/main.go` 不再包含 federation 专有代码；内核只保留
+`newExtensionPlugins()`（tag 文件）+ 通用 CLI 钩子。
+新增 `federation export`（合并拓扑导出）与 `federation report-now`（node 立即上报）。
+详见 `docs/1-current/design/FEDERATION_EXTENSION_2026-10-28.md`。
