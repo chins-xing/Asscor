@@ -2,10 +2,9 @@ package topology
 
 import (
 	"net"
+	"strings"
 	"sync"
 	"time"
-	"strings"
-
 )
 
 // 拓扑与传播层基础设施 — 地基层（M0）
@@ -287,13 +286,13 @@ func BuildLayeredFromRegistry() *LayeredGraph {
 	policyKnown := false
 	for _, n := range globalTopology.nodes {
 		hf := HostFacts{
-			HostID:   n.HostID,
-			Subnets:  append([]string(nil), n.Subnets...),
-			VLANs:    append([]string(nil), n.VLANs...),
-			Zone:     n.Zone,
-			Forwards: n.Forwards,
-			Links:    map[string]bool{},
-			IPs:      append([]string(nil), n.IPs...),
+			HostID:        n.HostID,
+			Subnets:       append([]string(nil), n.Subnets...),
+			VLANs:         append([]string(nil), n.VLANs...),
+			Zone:          n.Zone,
+			Forwards:      n.Forwards,
+			Links:         map[string]bool{},
+			IPs:           append([]string(nil), n.IPs...),
 			StatefulInput: n.StatefulInput,
 		}
 		for _, l := range n.Links {
@@ -435,7 +434,6 @@ func FilterExcludedSubnets(subnets, excludes []string) []string {
 func subnetOverlapCIDR(a, b *net.IPNet) bool {
 	return a.Contains(b.IP) || b.Contains(a.IP)
 }
-
 
 // normalizeSubnets 把子网统一成网络地址形式（v2.3.7 / T4 修复）。
 //

@@ -132,7 +132,6 @@ func MergedTopology(reports []NodeReport) TopologyExport {
 	return out
 }
 
-
 // normalizeFactSubnet 归一单个子网/策略地址（带主机位时取网络地址）。
 func normalizeFactSubnet(s string) string {
 	s = strings.TrimSpace(s)

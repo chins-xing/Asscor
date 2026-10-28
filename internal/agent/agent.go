@@ -1265,13 +1265,13 @@ func (a *Agent) inferZone(ips []string) string {
 // 100.64.0.0/10 是 CGNAT/共享地址空间 —— 实验网 domC 用的就是 100.64.0.0/24，
 // 旧实现把它当公网 ⇒ 纯内网主机被误判 dmz/public（A-7c 实测：domC-mon=public）。
 var nonPublicV4 = []string{
-	"100.64.0.0/10",  // CGNAT / shared address space (RFC 6598)
-	"198.18.0.0/15",  // benchmarking (RFC 2544)
-	"192.0.0.0/24",   // IETF protocol assignments
-	"192.0.2.0/24",   // TEST-NET-1
+	"100.64.0.0/10",   // CGNAT / shared address space (RFC 6598)
+	"198.18.0.0/15",   // benchmarking (RFC 2544)
+	"192.0.0.0/24",    // IETF protocol assignments
+	"192.0.2.0/24",    // TEST-NET-1
 	"198.51.100.0/24", // TEST-NET-2
-	"203.0.113.0/24", // TEST-NET-3
-	"240.0.0.0/4",    // reserved
+	"203.0.113.0/24",  // TEST-NET-3
+	"240.0.0.0/4",     // reserved
 }
 
 func isPublicAddress(ip net.IP) bool {

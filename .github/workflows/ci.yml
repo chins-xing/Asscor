@@ -22,7 +22,7 @@ jobs:
 
       - name: Format check (gofmt)
         run: |
-          unformatted=$(gofmt -l internal cmd optional pluginsdk api)
+          unformatted=$(gofmt -l internal cmd extensions optional pluginsdk api)
           if [ -n "$unformatted" ]; then
             echo "::error::gofmt needed on the following files:"
             echo "$unformatted"
@@ -56,6 +56,11 @@ jobs:
           go test -tags "$MODULE_TAGS" ./internal/...
           go test -tags "$MODULE_TAGS" ./cmd/edgecompare/
           go test -tags "$MODULE_TAGS" ./cmd/edgescen/
+
+      - name: Extensions (federation)
+        run: |
+          go build -tags "federation,$MODULE_TAGS" ./cmd/kernel/
+          go test -tags "federation,$MODULE_TAGS" ./extensions/...
 
       - name: Plugin SDK (independent module)
         working-directory: pluginsdk

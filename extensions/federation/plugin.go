@@ -553,7 +553,6 @@ func errString(err error) string {
 	return err.Error()
 }
 
-
 // collectFacts 把拓扑注册表转成联邦上报事实（v0.2）。
 // 与 merge.go 的 hostFactFromTopo 配对：节点上报、主端合并。
 func collectFacts(nodes []*topology.TopoNode) ([]HostFact, []PolicyFact, bool) {
@@ -617,7 +616,6 @@ func (p *Plugin) MergedCheck(src, dst string) (any, error) {
 	}
 	return res, nil
 }
-
 
 // ExportMerged 导出主端合并图（CLI `federation export`）。
 func (p *Plugin) ExportMerged() (any, error) {

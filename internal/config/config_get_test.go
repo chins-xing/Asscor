@@ -20,14 +20,14 @@ roles = domA-db=db,domC-router=router
 		t.Fatalf("parse: %v", err)
 	}
 	cases := map[string]string{
-		"srd.layered_graph": "false",
-		"srd.transmission":  "0.42",
+		"srd.layered_graph":  "false",
+		"srd.transmission":   "0.42",
 		"srd.max_path_depth": "7",
-		"srd.path_decay":    "0.6",
-		"srd.prop_cap":      "0.4",
-		"srd.aggregation":   "max",
-		"srd.horizon_days":  "14",
-		"srd.roles":         "domA-db=db,domC-router=router",
+		"srd.path_decay":     "0.6",
+		"srd.prop_cap":       "0.4",
+		"srd.aggregation":    "max",
+		"srd.horizon_days":   "14",
+		"srd.roles":          "domA-db=db,domC-router=router",
 	}
 	for k, want := range cases {
 		if got := cfg.Get(k); got != want {

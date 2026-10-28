@@ -33,11 +33,11 @@ func TestConfigFromMapAllParams(t *testing.T) {
 // 非法值忽略；srd.* 作为兼容前缀也可读。
 func TestConfigFromMapInvalidAndFallback(t *testing.T) {
 	m := map[string]string{
-		"prism.debt_alpha":   "-1",   // 越界 ⇒ 忽略
-		"prism.path_decay":   "2",    // 越界 ⇒ 忽略
-		"prism.aggregation":  "bogus",// 非法枚举 ⇒ 忽略
-		"prism.max_path_depth": "x",  // 非数字 ⇒ 忽略
-		"srd.prop_cap":       "0.31", // srd 前缀兼容
+		"prism.debt_alpha":     "-1",    // 越界 ⇒ 忽略
+		"prism.path_decay":     "2",     // 越界 ⇒ 忽略
+		"prism.aggregation":    "bogus", // 非法枚举 ⇒ 忽略
+		"prism.max_path_depth": "x",     // 非数字 ⇒ 忽略
+		"srd.prop_cap":         "0.31",  // srd 前缀兼容
 	}
 	def := ConfigFromMap(map[string]string{})
 	c := ConfigFromMap(m)

@@ -12,15 +12,15 @@ import (
 // config.ini [srd] 的每个参数都要能落进 Manager.cfg 并影响 prism。
 func TestLoadConfigParsesAllAdjustableParams(t *testing.T) {
 	cfg := &kernelconfig.Config{AdapterConfig: map[string]string{
-		"srd.layered_graph":   "false",
-		"srd.transmission":    "0.42",
-		"srd.max_path_depth":  "7",
-		"srd.path_decay":      "0.6",
-		"srd.prop_cap":        "0.4",
-		"srd.aggregation":     "max",
-		"srd.horizon_days":    "14",
+		"srd.layered_graph":     "false",
+		"srd.transmission":      "0.42",
+		"srd.max_path_depth":    "7",
+		"srd.path_decay":        "0.6",
+		"srd.prop_cap":          "0.4",
+		"srd.aggregation":       "max",
+		"srd.horizon_days":      "14",
 		"srd.sync_interval_sec": "120",
-		"srd.roles":           "domA-db=db,domC-router=router",
+		"srd.roles":             "domA-db=db,domC-router=router",
 	}}
 	m := NewManager()
 	m.loadConfig(cfg)
@@ -57,13 +57,13 @@ func TestLoadConfigParsesAllAdjustableParams(t *testing.T) {
 // 非法值应被忽略（保持默认），不 panic、不写入垃圾。
 func TestLoadConfigIgnoresInvalidValues(t *testing.T) {
 	cfg := &kernelconfig.Config{AdapterConfig: map[string]string{
-		"srd.transmission":    "-5",
-		"srd.max_path_depth":  "abc",
-		"srd.path_decay":      "2",
-		"srd.prop_cap":        "-1",
-		"srd.aggregation":     "bogus",
-		"srd.horizon_days":    "0",
-		"srd.layered_graph":   "true",
+		"srd.transmission":   "-5",
+		"srd.max_path_depth": "abc",
+		"srd.path_decay":     "2",
+		"srd.prop_cap":       "-1",
+		"srd.aggregation":    "bogus",
+		"srd.horizon_days":   "0",
+		"srd.layered_graph":  "true",
 	}}
 	m := NewManager()
 	before := m.cfg

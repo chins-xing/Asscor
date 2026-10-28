@@ -44,8 +44,8 @@ type hostSpec struct {
 		To    string `json:"to"`
 		Allow bool   `json:"allow"`
 	} `json:"outbound,omitempty"`
-	StatefulInput bool `json:"stateful_input,omitempty"`
-	Links map[string]bool `json:"links,omitempty"` // 子网 -> 链路是否 up
+	StatefulInput bool            `json:"stateful_input,omitempty"`
+	Links         map[string]bool `json:"links,omitempty"` // 子网 -> 链路是否 up
 }
 type policySpec struct {
 	From  string `json:"from"`
@@ -166,7 +166,7 @@ func main() {
 		if !h.Visible {
 			continue
 		}
-			inb := make([]topology.PolicyRule, 0, len(h.Inbound))
+		inb := make([]topology.PolicyRule, 0, len(h.Inbound))
 		for _, r := range h.Inbound {
 			inb = append(inb, topology.PolicyRule{From: r.From, To: r.To, Allow: r.Allow})
 		}
@@ -176,12 +176,12 @@ func main() {
 		}
 		hostFacts = append(hostFacts, topology.HostFacts{
 			HostID: h.ID, Subnets: h.Subnets, Forwards: h.Forwards,
-			Inbound: inb,
-		Outbound: outb,
-		IPs:      h.IPs,
-		StatefulInput: h.StatefulInput,
-		Links:   h.Links,
-	})
+			Inbound:       inb,
+			Outbound:      outb,
+			IPs:           h.IPs,
+			StatefulInput: h.StatefulInput,
+			Links:         h.Links,
+		})
 	}
 	for _, p := range tf.Policies {
 		policies = append(policies, topology.PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
