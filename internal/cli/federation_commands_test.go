@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,13 @@ import (
 
 type fakeFederationProvider struct {
 	status federation.Status
+}
+
+func (f *fakeFederationProvider) MergedCheck(src, dst string) (any, error) {
+	if f.status.Role != federation.RoleMaster {
+		return nil, fmt.Errorf("not master")
+	}
+	return &federation.MergedCheck{Src: src, Dst: dst, Verdict: "reachable", Paths: 1, Hosts: 2}, nil
 }
 
 func (f *fakeFederationProvider) FederationStatus() federation.Status { return f.status }

@@ -271,6 +271,12 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 			pv.Reason = "inbound policy denies " + srcSub + " -> " + dstHost
 			return pv
 		}
+		if !g.outboundAllowed(dstHost, srcSub, srcHost) {
+			pv.Verdict = VerdictBlocked
+			pv.BlockedAt = dstHost
+			pv.Reason = "outbound policy denies reply " + dstHost + " -> " + srcHost
+			return pv
+		}
 		if !g.replyAllowed(srcHost, dstHost, dstSub, srcSub) {
 			pv.Verdict = VerdictBlocked
 			pv.BlockedAt = srcHost
@@ -360,6 +366,14 @@ func (g *LayeredGraph) hostInCIDR(host, cidr string) bool {
 		if ip == nil {
 			continue
 		}
+		// agent 上报的 nft `ip saddr 1.2.3.4/32` 常被规范化为裸 IP（无 /32），
+		// 这里必须同时支持：裸 IP 精确相等，或 CIDR 包含。
+		if bare := net.ParseIP(strings.TrimSpace(cidr)); bare != nil {
+			if bare.Equal(ip) {
+				return true
+			}
+			continue
+		}
 		if _, n, err := net.ParseCIDR(cidr); err == nil && n.Contains(ip) {
 			return true
 		}
@@ -433,6 +447,10 @@ func (g *LayeredGraph) Adjacent(a, b string) (bool, string) {
 		}
 		if !g.inboundAllowed(b, a, s, s) {
 			return false, "inbound policy denies " + s + " -> " + b
+		}
+		// 回程由 b 发出：先过 b 的 OUTPUT，再到达 a 的 INPUT（a 有状态则放行）。
+		if !g.outboundAllowed(b, s, a) {
+			return false, "outbound policy denies reply " + b + " -> " + a
 		}
 		if !g.replyAllowed(a, b, s, s) {
 			return false, "inbound policy denies reply " + s + " -> " + a
@@ -651,6 +669,16 @@ func normalizeSubnet(s string) string {
 func subnetMatch(pattern, sub string) bool {
 	if pattern == sub {
 		return true
+	}
+	// 裸 IP 模式（agent 上报 /32 时的常见形态）：与子网/主机地址直接比较。
+	if bare := net.ParseIP(strings.TrimSpace(pattern)); bare != nil {
+		if ip := net.ParseIP(strings.TrimSuffix(strings.TrimSpace(sub), "/32")); ip != nil {
+			return bare.Equal(ip)
+		}
+		if _, n, err := net.ParseCIDR(sub); err == nil {
+			return n.Contains(bare)
+		}
+		return false
 	}
 	if _, n, err := net.ParseCIDR(pattern); err == nil {
 		if ip := net.ParseIP(strings.TrimSuffix(sub, "/32")); ip != nil {

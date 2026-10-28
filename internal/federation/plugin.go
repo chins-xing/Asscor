@@ -387,6 +387,8 @@ func (p *Plugin) Snapshot() NodeReport {
 
 	nodes := topology.ListNodes()
 	report.Hosts = len(nodes)
+	// v0.2：把图事实（主机/策略/链路）一并上报，供主端合并。
+	report.HostFacts, report.PolicyFacts, report.PolicyKnown = collectFacts(nodes)
 	if len(nodes) == 0 {
 		return report
 	}
@@ -546,4 +548,69 @@ func errString(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+
+// collectFacts 把拓扑注册表转成联邦上报事实（v0.2）。
+// 与 merge.go 的 hostFactFromTopo 配对：节点上报、主端合并。
+func collectFacts(nodes []*topology.TopoNode) ([]HostFact, []PolicyFact, bool) {
+	hosts := make([]HostFact, 0, len(nodes))
+	policies := make([]PolicyFact, 0)
+	seen := map[string]bool{}
+	known := false
+	for _, n := range nodes {
+		h := hostFactFromTopo(n)
+		hosts = append(hosts, h)
+		if n.PolicyKnown {
+			known = true
+		}
+		for _, p := range n.Policies {
+			if p.Direction != "" && p.Direction != "forward" {
+				continue
+			}
+			key := p.From + "|" + p.To + "|" + boolKey(p.Allow)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			policies = append(policies, PolicyFact{From: p.From, To: p.To, Allow: p.Allow})
+		}
+	}
+	if len(hosts) > MaxHostFacts {
+		hosts = hosts[:MaxHostFacts]
+	}
+	if len(policies) > MaxPolicyFacts {
+		policies = policies[:MaxPolicyFacts]
+	}
+	return hosts, policies, known
+}
+
+func boolKey(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
+}
+
+// MergedCheck 在主端合并图上回答 src→dst（v0.2）。
+// 非 master 角色返回错误；主端自身拓扑也参与合并（见 BuildMergedGraph）。
+func (p *Plugin) MergedCheck(src, dst string) (any, error) {
+	p.mu.Lock()
+	role := p.cfg.Role
+	collector := p.collector
+	p.mu.Unlock()
+	if role != RoleMaster {
+		return nil, fmt.Errorf("federation check 只在 master 角色可用（当前 role=%s）", role)
+	}
+	var reports []NodeReport
+	if collector != nil {
+		reports = collector.Nodes()
+	}
+	g := BuildMergedGraph(reports)
+	res := CheckMerged(g, src, dst, 5)
+	res.Nodes = len(reports)
+	if res.Paths == 0 && res.Hosts == 0 {
+		return nil, fmt.Errorf("合并图为空：还没有节点上报图事实")
+	}
+	return res, nil
 }
