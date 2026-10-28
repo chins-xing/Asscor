@@ -1,0 +1,9 @@
+round  neg   V2-nk1  V2-nk2  V2-nk3  ENS   V1
+R1     100   0.930   0.929   0.930   0.930  0.546
+R2     164   0.914   0.914   0.914   0.914  0.542
+R3     244   0.879   0.879   0.879   0.879  0.548
+POOLED neg=244 pairs=1332
+  V2-nk1=0.879  V2-ENS=0.879  V1=0.548  delta(V2-V1)=+0.331
+written pooled-summary.csv
+POOLED(3 rounds union) neg=508 pairs=3996
+  V2-nk1=0.912  V2-ENS=0.912  V1=0.545  delta(ENS-V1)=+0.367
