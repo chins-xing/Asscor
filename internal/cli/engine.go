@@ -504,6 +504,7 @@ func (e *Engine) RegisterBuiltinCommands() {
 		{historyCmdInfo, historyCmdHandler, historyCompletions},
 		{agentCmdInfo, agentCmdHandler, agentCompletions},
 		{topologyCmdInfo, topologyCmdHandler, nil},
+		{srdCmdInfo, srdCmdHandler, nil},
 		{logCmdInfo, logCmdHandler, logCompletions},
 		{sourceCmdInfo, sourceCmdHandler, sourceCompletions},
 		{diagCmdInfo, diagCmdHandler, nil},

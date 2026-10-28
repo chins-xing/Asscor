@@ -59,6 +59,7 @@ type Manager struct {
 	state    PluginState
 
 	mu       sync.RWMutex
+	checkLayered *topology.LayeredGraph // v2.3 T3：CLI 查询用（与 pipeline 同步注入）
 	history  map[string][]*SRDResult // hostID -> results
 	scanDirs []string
 	stopCh   chan struct{}
@@ -237,10 +238,12 @@ func PrismConfigFrom(cfg Config) prismlib.PrismConfig {
 // SetLayeredGraph 注入分层图（L1/L2/L3/L4/L5），构边走分层规则。
 // 传 nil 表示回退到单层模型。
 func (m *Manager) SetLayeredGraph(lg *topology.LayeredGraph) {
-	if m.pipeline == nil {
-		return
+	m.mu.Lock()
+	m.checkLayered = lg
+	m.mu.Unlock()
+	if m.pipeline != nil {
+		m.pipeline.SetLayeredGraph(lg)
 	}
-	m.pipeline.SetLayeredGraph(lg)
 }
 
 func (m *Manager) SetTopology(hostID string, subnets []string, zone string) {
