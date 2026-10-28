@@ -59,6 +59,8 @@ func (m *Module) Info() kernel.PluginInfo {
 func (m *Module) Dependencies() []kernel.PluginDependency {
 	return []kernel.PluginDependency{
 		{Name: "config"},
+		{Name: "spc"},
+		{Name: "cti"},
 		{Interface: (*kernel.ScoringEngineProvider)(nil)},
 	}
 }

@@ -46,7 +46,8 @@ func (s *Module) Info() kernel.PluginInfo {
 }
 
 func (s *Module) Dependencies() []kernel.PluginDependency {
-	return nil
+	// 拓扑事实由心跳/agent 上报产生，SRD 影子图订阅 topology 事件。
+	return []kernel.PluginDependency{{Name: "heartbeat"}}
 }
 
 func (s *Module) Priority() int {

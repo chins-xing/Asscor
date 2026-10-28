@@ -142,3 +142,53 @@
   sourcemanager/srdwrapper/cli 共 10 个包 + `extensions/federation`）。
 - 注意：本轮审计在环境停机状态下完成，只有静态证据 + 单测；端到端联动证据见
   `docs/2-experiments/T4_FEDERATION_AUC_LARGE_2026-10-28.md` 与联邦验收日志。
+
+## 7. 补齐记录（2026-10-29，同日实施）
+
+针对 §4/§5，已落地的修复：
+
+### 7.1 依赖声明现在真的参与启动排序
+
+- `internal/kernel/kernel_lifecycle.go` 新增 `orderPlugins()`：按 `Dependencies().Name`
+  做**拓扑排序**，Priority（升序）与名称作为同级键；环/缺失依赖回退纯 Priority 并告警。
+- `Kernel.startupOrder` 记录最终顺序，`Shutdown` **严格反序**停止（不再按 Priority 反排）。
+- 新增测试：`internal/kernel/dep_order_test.go`（依赖覆盖 Priority / 无依赖回退 / 环安全回退）。
+
+### 7.2 补齐的 Dependencies
+
+| 模块 | 新增依赖 | 依据 |
+|---|---|---|
+| assessor | `spc`、`cti` | DI 解析 SPC/CTI |
+| policy | `assessor` | 订阅 `assessor.result` |
+| commander | `policy` | 订阅 `policy.action` |
+| persistence | `heartbeat` | 订阅 `agent.registered/timeout` |
+| spc | `persistence` | `ResolveNamed("persistence")` 缓存 |
+| srdwrapper | `heartbeat` | 订阅 topology 事件（事实来自心跳） |
+| attck | `spc` | APT 增强读取 SPC |
+| federation（扩展） | `assessor` | Resolve assessor + 读评估结果 |
+
+`sourcemanager → adapter_integration` 原已存在，保持不变。
+
+### 7.3 总线主题清理与命名
+
+- 删除零使用常量：`TopicConfigChanged`、`TopicSPCUpdated`、`TopicCTIUpdated`、
+  `TopicCommandEnqueued`、`TopicCommandResult`、`TopicSourceManagerDeployed`。
+- `internal/adapterhub/manager.go` 改用 `kernel.TopicAdapterFindings`（此前是
+  `"adapterhub.findings"` 字面量，与常量不一致）。
+- **保留但明确为"观测/扩展用"**：`agent.heartbeat`、`assessor.self_check`、
+  `config.reloaded`、`cti.threat_detected` —— 当前无内核订阅者，但发布点保留，
+  供外部扩展或后续消费者订阅；SPC/CTI 是 **pull 模型**（assessor 每次评估直接 Resolve），
+  不存在需要失效的缓存，所以不补 `spc.updated/cti.updated`。
+
+### 7.4 仍未补齐（明确记录）
+
+- `internal/adapterhub` 仍未被 kernel import（整包孤儿）；本轮只修了主题命名，
+  是否接入 kernel 需要单独设计（adapterhub 的 manager/builder 生命周期与 extmgr 重叠）。
+- `internal/attck` 在 kernel 中仍走 optional pack → `assessor.SetATTACKProvider`；
+  它的 bus/DI 形态只用于 `cmd/asscor`。
+- `comms_on.go` 仍是手工装配点（9 个构造器参数）；改 DI 化属于结构性重构，未在本轮做。
+
+### 7.5 验证
+
+`go vet`、`go build -tags "federation,$MODULE_TAGS" ./cmd/kernel/` 通过；
+kernel/assessor/policy/commander/persistence/spc/srdwrapper/attck 8 个包测试全绿。

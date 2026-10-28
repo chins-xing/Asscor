@@ -102,7 +102,8 @@ func (m *Module) Info() kernel.PluginInfo {
 }
 
 func (m *Module) Dependencies() []kernel.PluginDependency {
-	return nil
+	// spc 通过 DI 的 named binding 使用 persistence 缓存；必须在 persistence 之后启动。
+	return []kernel.PluginDependency{{Name: "persistence"}}
 }
 
 func (m *Module) Priority() int {

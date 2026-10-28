@@ -148,7 +148,8 @@ func (m *Module) Info() kernel.PluginInfo {
 }
 
 func (m *Module) Dependencies() []kernel.PluginDependency {
-	return nil
+	// persistence 订阅 heartbeat 发布的 agent.registered/agent.timeout。
+	return []kernel.PluginDependency{{Name: "heartbeat"}}
 }
 
 func (m *Module) Priority() int {

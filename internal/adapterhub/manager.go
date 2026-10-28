@@ -5,6 +5,7 @@ package adapterhub
 import (
 	"context"
 	"fmt"
+	"github.com/chins-xing/asscor/internal/kernel"
 	"sort"
 	"sync"
 	"time"
@@ -501,7 +502,7 @@ func (m *Manager) runSync(ctx context.Context) {
 		}
 
 		if m.bus != nil && len(output.Findings) > 0 {
-			m.bus.Publish(ctx, "adapterhub.findings", map[string]interface{}{
+			m.bus.Publish(ctx, kernel.TopicAdapterFindings, map[string]interface{}{
 				"adapter_id": entry.Metadata.ID,
 				"findings":   output.Findings,
 				"timestamp":  time.Now(),

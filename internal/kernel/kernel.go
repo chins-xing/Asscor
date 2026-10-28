@@ -24,6 +24,9 @@ type Kernel struct {
 	cancel    context.CancelFunc
 	done      chan struct{}
 	closeOnce sync.Once
+
+	// startupOrder 记录 Bootstrap 的最终启动顺序（插件名），Shutdown 反序停止。
+	startupOrder []string
 }
 
 type pluginRecord struct {
