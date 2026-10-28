@@ -125,6 +125,7 @@ docs/
 | [variance-report.md](2-experiments/variance-report.md) | 重复性与方差报告 |
 | [CONFIDENCE_SENSITIVITY_2026-10-22.md](2-experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md) | 方向① 先验敏感性（非标定） |
 | [clab-lab/](2-experiments/clab-lab/) | 实验脚手架数据（`data/*.jsonl`） |
+| [T4_FEDERATION_PROCESS_2026-10-29.md](2-experiments/T4_FEDERATION_PROCESS_2026-10-29.md) | T4 联邦进程隔离（v0.4）运行与性能记录 |
 | [T4_FEDERATION_AUC_LARGE_2026-10-28.md](2-experiments/T4_FEDERATION_AUC_LARGE_2026-10-28.md) | T4 联邦 AUC 大规模（37 主机 × 3 轮：0.912 vs 0.545） |
 | [T4_FEDERATION_AUC_2026-10-28.md](2-experiments/T4_FEDERATION_AUC_2026-10-28.md) | T4 联邦 AUC 对照（V2 0.992 vs V1 0.873） |
 | [T4_FEDERATION_DESIGN_2026-10-28.md](2-experiments/T4_FEDERATION_DESIGN_2026-10-28.md) | T4 联邦架构总体设计（主/节点 kernel + 30 agent，单网络多配置） |

@@ -92,3 +92,22 @@ func newExtensionPlugins() []kernel.Plugin { return nil }
 - 仍是**编译期**扩展（非动态加载）；动态化需要先给 kernel 定义 facts RPC（v2.4 话题）。
 - `export`/`check` 每次全量重建合并图（demo 规模 40 主机毫秒级）。
 - 安全边界未变：共享 token + 明文 HTTP（管理网内），生产需 mTLS。
+
+## 12. v0.4：进程隔离（2026-10-29）
+
+联邦新增**可选的进程隔离模式**（`-tags "federation,federation_proc"`）：
+
+- 内核内只保留 `Proxy`（`kernel.Plugin`）：负责启动 `federation-mod` 子进程、周期性
+  推送"本地拓扑事实 + 节点摘要"、代理 CLI 查询与健康检查；
+- 子进程 `cmd/federation-mod` 不 import `internal/kernel`，只复用扩展包里的
+  collector/master/reporter/merge 纯逻辑，通过 stdin/stdout 的 JSON-Lines RPC 通信；
+- 合并使用新增的 `BuildMergedGraphWithLocal` / `MergedTopologyWithLocal`
+  （本地事实由内核推送，不再读进程内 topology 全局注册表）；
+- CLI 命令抽成 `commandAPI` 接口，进程内 `Plugin` 与进程外 `Proxy` 双实现；
+- 运行验证：`kill -9` 子进程后内核存活（联邦能力降级为 broken pipe），重启内核即恢复。
+
+实测（2026-10-29，37 主机 / 30 T4 agent）：`federation status` ~15 ms、
+`check` ~15 ms、`export` 16–25 ms/11 KB；子进程 RSS 5.7–11 MB。
+详见 `docs/2-experiments/T4_FEDERATION_PROCESS_2026-10-29.md`。
+
+**仍未做**：子进程自动重启、RPC 并发化、把纯逻辑拆成独立 module（二进制减重）。
