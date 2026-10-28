@@ -4,6 +4,30 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## v2.3.1（2026-10-28）—— T2 状态化建模（ct established 放行回程）
+
+**问题**：v2.2.5 的会话语义把 `ct state established,related accept` 的情况也判成
+"双向全断"，而真实环境中"目标机自己发起"的反向会话是通的 ⇒ 单向可达被误判。
+
+**实现**：
+- `NetworkInfo/TopoNode/HostFacts` 增加 `StatefulInput`；agent 检测 nft/iptables 的
+  `ct state established,related accept`；
+- 邻接与端点改为**方向性会话三查**：源端 OUTPUT → 目标 INPUT（新连接）→
+  回程（源端有状态则放行，否则静态 INPUT 判定）；
+- srdroc 支持 `stateful_input` 输入。
+
+**实测（domA-db 的 INPUT：ct accept 在前、`ip saddr 172.22.10.11/32 drop` 在后）**：
+
+| 方向 | 实测 | 模型 |
+|---|---|---|
+| domA-web → domA-db | 不通 | blocked |
+| domA-db → domA-web | **通** | reachable |
+
+79 条实测真值下 **layered AUC = 1.000**（flat 0.427）。
+报告：`docs/2-experiments/srd-bench/v23-t2-stateful-20261028.md`。
+**测试**：`TestStatefulFirewallAsymmetricReachability`、`TestStatelessFirewallBlocksBothDirections`、
+`TestStatefulDoesNotBypassOutbound`、`TestRegistryWiresStateful`、`TestParseNftStatefulDetectsCTAccept`。
+
 ## v2.3.0（2026-10-28）—— T1 域内 ACL：主机级 /32 规则 + OUTPUT 出向
 
 **能力**：

@@ -29,7 +29,7 @@
   - 数据集：新增 4 轮"域内 deny"场景，layered AUC ≥ 0.95 且负样本覆盖；
 - 风险：容器内 INPUT 规则只看本机，跨主机域内 ACL 可能采不到 ⇒ 允许"未知"降级。
 
-### T2 状态化建模（P1）
+### T2 状态化建模（P1）—— ✅ 已完成（v2.3.1，2026-10-28）
 
 - 表达：规则带 `Stateful bool`（`ct state established,related accept` 存在时为真）；
 - 判定：显式 deny + 有状态 accept ⇒ 新连接 blocked、已建立会话 reachable（需要会话状态输入）；
@@ -72,3 +72,9 @@
 - 2026-10-28：**T1 完成**（v2.3.0）。实测报告
   [v2.3 T1 域内 ACL](../../2-experiments/srd-bench/v23-t1-intra-subnet-20261028.md)。
   R1/R2 各 2 个负样本、layered AUC 1.000，控制组全通。
+
+## 8. 进展（续）
+
+- 2026-10-28：**T2 完成**（v2.3.1）。实测报告
+  [v2.3 T2 状态化](../2-experiments/srd-bench/v23-t2-stateful-20261028.md)：
+  单向可达（A→B 断、B→A 通）被正确判定，layered AUC 1.000。
