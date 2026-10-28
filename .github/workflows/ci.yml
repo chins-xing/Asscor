@@ -40,13 +40,12 @@ jobs:
           go build -tags "$MODULE_TAGS" ./cmd/kernel/
           go build -tags "checks" ./cmd/agent/
           go build -tags "engine,checks,adapter,spc,attck_ext" ./cmd/asscor/
-          # Offline comparison tool (cmd/edgecompare): all of its files sit behind the edgeexp
-          # tag, so without this line it is neither compiled nor vetted/tested - the ./cmd/...
-          # wildcard skips packages whose files are all excluded by build constraints.
-          go build -tags "$MODULE_TAGS" ./cmd/edgecompare/
-          # Scenario collector (cmd/edgescen): same situation - every file is behind the
-          # expr,engine,checks tag set (all three are in MODULE_TAGS), so the wildcard skips it.
-          go build -tags "$MODULE_TAGS" ./cmd/edgescen/
+          # Offline comparison tool (cmd/edgecompare) / scenario collector (cmd/edgescen)
+          # are ARC-only research tools: not present on main, so build them only when the
+          # directory exists (keeps the workflow valid on both branches; each is behind
+          # tags so the ./cmd/... wildcard would otherwise skip it).
+          if [ -d cmd/edgecompare ]; then go build -tags "$MODULE_TAGS" ./cmd/edgecompare/; fi
+          if [ -d cmd/edgescen ]; then go build -tags "$MODULE_TAGS" ./cmd/edgescen/; fi
 
       - name: Test (no tags — kernel + always-compiled packages)
         run: go test ./internal/...
@@ -54,8 +53,8 @@ jobs:
       - name: Test (full tags — all optional modules)
         run: |
           go test -tags "$MODULE_TAGS" ./internal/...
-          go test -tags "$MODULE_TAGS" ./cmd/edgecompare/
-          go test -tags "$MODULE_TAGS" ./cmd/edgescen/
+          if [ -d cmd/edgecompare ]; then go test -tags "$MODULE_TAGS" ./cmd/edgecompare/; fi
+          if [ -d cmd/edgescen ]; then go test -tags "$MODULE_TAGS" ./cmd/edgescen/; fi
 
       - name: Extensions (federation)
         run: |
