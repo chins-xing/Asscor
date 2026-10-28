@@ -4,6 +4,8 @@ import (
 	"net"
 	"sync"
 	"time"
+	"strings"
+
 )
 
 // 拓扑与传播层基础设施 — 地基层（M0）
@@ -111,6 +113,7 @@ var globalTopology = &Registry{
 
 // record stores/updates a node and publishes the appropriate event.
 func (r *Registry) record(hostID string, subnets []string, zone string) {
+	subnets = normalizeSubnets(subnets)
 	now := time.Now()
 	evType := TopoNodeAdded
 
@@ -431,4 +434,29 @@ func FilterExcludedSubnets(subnets, excludes []string) []string {
 // subnetOverlapCIDR reports whether two parsed networks overlap.
 func subnetOverlapCIDR(a, b *net.IPNet) bool {
 	return a.Contains(b.IP) || b.Contains(a.IP)
+}
+
+
+// normalizeSubnets 把子网统一成网络地址形式（v2.3.7 / T4 修复）。
+//
+// 真实 agent 可能上报 "172.23.10.101/24"（带主机位）或裸 IP；路由器侧是
+// "172.23.10.0/24"。不规范化会导致同一子网被当成两个不同子网，路径被判 probable。
+func normalizeSubnets(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, n, err := net.ParseCIDR(s); err == nil {
+			s = n.String()
+		}
+		if seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
 }

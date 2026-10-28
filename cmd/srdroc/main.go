@@ -77,6 +77,9 @@ func main() {
 	topoPath := flag.String("topology", "", "拓扑 JSON（hosts[].ips 用于 IP→主机映射）")
 	truthPath := flag.String("truth", "", "实测连通矩阵 CSV")
 	srcmap := flag.String("srcmap", "", "vmid=hostID，逗号分隔")
+	// T4 联邦 V1/V2 实验：模型拓扑可能不认识部分目标主机；hostmap 提供完整
+	// ip→host 映射，让这些"不可见"目标仍以 0 分计入 ROC（而不是被丢弃）。
+	hostmapPath := flag.String("hostmap", "", "JSON 文件 {\"ip\": \"hostid\"}（可选，仅用于真值折叠）")
 	svgPath := flag.String("svg", "", "输出 ROC SVG 路径（可选）")
 	// T4 联邦实验：用节点 profile 的参数给 layered 连续分加权（默认沿用历史 0.9/5/linear）
 	decay := flag.Float64("decay", 0.9, "路径衰减因子（对应 [prism] path_decay）")
@@ -93,6 +96,16 @@ func main() {
 		os.Exit(1)
 	}
 	ipToHost := map[string]string{}
+	if *hostmapPath != "" {
+		if b, err := os.ReadFile(*hostmapPath); err == nil {
+			var extra map[string]string
+			if json.Unmarshal(b, &extra) == nil {
+				for ip, host := range extra {
+					ipToHost[ip] = host
+				}
+			}
+		}
+	}
 	for _, h := range tf.Hosts {
 		for _, ip := range h.IPs {
 			ipToHost[ip] = h.ID

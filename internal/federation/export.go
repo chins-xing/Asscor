@@ -1,7 +1,9 @@
 package federation
 
 import (
+	"net"
 	"sort"
+	"strings"
 
 	"github.com/chins-xing/asscor/internal/topology"
 )
@@ -33,6 +35,7 @@ func mergedFacts(reports []NodeReport) (map[string]*HostFact, map[string]PolicyF
 	policyKnown := false
 
 	mergeHost := func(h HostFact) {
+		h.Subnets = normalizeFactSubnets(h.Subnets)
 		cur, ok := hosts[h.ID]
 		if !ok {
 			cp := h
@@ -123,6 +126,28 @@ func MergedTopology(reports []NodeReport) TopologyExport {
 	sort.Strings(keys)
 	for _, k := range keys {
 		out.Policies = append(out.Policies, policies[k])
+	}
+	return out
+}
+
+
+// normalizeFactSubnets 把子网归一到网络地址（与 topology.normalizeSubnets 同规则）。
+func normalizeFactSubnets(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, n, err := net.ParseCIDR(s); err == nil {
+			s = n.String()
+		}
+		if seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
 	}
 	return out
 }
