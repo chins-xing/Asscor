@@ -68,7 +68,10 @@ type Plugin struct {
 // New builds a fresh federation plugin (registered by cmd/kernel when the
 // `federation` build tag is enabled).
 func New() *Plugin {
-	return &Plugin{state: kernel.PluginUnregistered, cfg: Defaults()}
+	p := &Plugin{state: kernel.PluginUnregistered, cfg: Defaults()}
+	// CLI 命令自注册；命令 handler 通过 currentPlugin 找到当前实例。
+	setCurrent(p)
+	return p
 }
 
 // Info implements kernel.Plugin.
@@ -613,4 +616,36 @@ func (p *Plugin) MergedCheck(src, dst string) (any, error) {
 		return nil, fmt.Errorf("合并图为空：还没有节点上报图事实")
 	}
 	return res, nil
+}
+
+
+// ExportMerged 导出主端合并图（CLI `federation export`）。
+func (p *Plugin) ExportMerged() (any, error) {
+	p.mu.Lock()
+	role := p.cfg.Role
+	collector := p.collector
+	p.mu.Unlock()
+	if role != RoleMaster {
+		return nil, fmt.Errorf("federation export 只在 master 角色可用（当前 role=%s）", role)
+	}
+	var reports []NodeReport
+	if collector != nil {
+		reports = collector.Nodes()
+	}
+	return MergedTopology(reports), nil
+}
+
+// ReportNow 立即上报一次（CLI `federation report-now`，node 角色）。
+func (p *Plugin) ReportNow(ctx context.Context) error {
+	p.mu.Lock()
+	role := p.cfg.Role
+	rep := p.reporter
+	p.mu.Unlock()
+	if role != RoleNode {
+		return fmt.Errorf("report-now 只在 node 角色可用（当前 role=%s）", role)
+	}
+	if rep == nil {
+		return fmt.Errorf("reporter 未启动")
+	}
+	return rep.Report(ctx, p.Snapshot())
 }

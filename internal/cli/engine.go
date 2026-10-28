@@ -505,7 +505,6 @@ func (e *Engine) RegisterBuiltinCommands() {
 		{agentCmdInfo, agentCmdHandler, agentCompletions},
 		{topologyCmdInfo, topologyCmdHandler, nil},
 		{srdCmdInfo, srdCmdHandler, nil},
-		{federationCmdInfo, federationCmdHandler, nil},
 		{logCmdInfo, logCmdHandler, logCompletions},
 		{sourceCmdInfo, sourceCmdHandler, sourceCompletions},
 		{diagCmdInfo, diagCmdHandler, nil},
@@ -516,6 +515,13 @@ func (e *Engine) RegisterBuiltinCommands() {
 	for _, b := range builtins {
 		if err := e.registry.RegisterFrom(b.info, b.handler, b.completions, "builtin"); err != nil {
 			logger.WithComponent("cli").Error("failed to register builtin command", "name", b.info.Name, "error", err)
+		}
+	}
+
+	// 扩展包注册的命令（init 阶段通过 RegisterExtensionCommand 登记）。
+	for _, ext := range extensionCommands() {
+		if err := e.registry.RegisterFrom(ext.Info, ext.Handler, ext.Completions, "extension"); err != nil {
+			logger.WithComponent("cli").Error("failed to register extension command", "name", ext.Info.Name, "error", err)
 		}
 	}
 

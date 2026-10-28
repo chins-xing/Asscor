@@ -339,7 +339,7 @@ func TestPluginPriorityAndInfo(t *testing.T) {
 	if info.Name != "federation" {
 		t.Errorf("plugin name = %q", info.Name)
 	}
-	if info.Version != PluginVersion || PluginVersion != "0.2.0" {
+	if info.Version != PluginVersion || PluginVersion != "0.3.0" {
 		t.Errorf("plugin version = %q, want 0.1.0", info.Version)
 	}
 	if p.Priority() <= 0 {
