@@ -124,6 +124,7 @@ docs/
 | [variance-report.md](2-experiments/variance-report.md) | 重复性与方差报告 |
 | [CONFIDENCE_SENSITIVITY_2026-10-22.md](2-experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md) | 方向① 先验敏感性（非标定） |
 | [clab-lab/](2-experiments/clab-lab/) | 实验脚手架数据（`data/*.jsonl`） |
+| [srd-bench/v23-t1-intra-subnet-20261028.md](2-experiments/srd-bench/v23-t1-intra-subnet-20261028.md) | SRD v2.3 T1 域内主机级 ACL（layered AUC 1.000） |
 | [srd-bench/v22-facts-dataset-20261027.md](2-experiments/srd-bench/v22-facts-dataset-20261027.md) | SRD v2.2 事实数据集（L1/入向，layered 0.959 vs flat 0.462） |
 
 ## 四、审计（`3-audits/`）

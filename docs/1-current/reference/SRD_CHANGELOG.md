@@ -4,6 +4,29 @@
 > 版本号随内核/Agent 启动横幅与插件清单一起输出（`kernel` 启动横幅里的 `SRD:` 字段、
 > 插件 `srd_adapters` 的 `version`）。
 
+## v2.3.0（2026-10-28）—— T1 域内 ACL：主机级 /32 规则 + OUTPUT 出向
+
+**能力**：
+1. **主机级匹配**：`HostFacts` 增加 `IPs`，入向规则支持 `/32`（`hostInCIDR`），
+   不再只按子网串匹配——`nft input ip saddr 172.22.10.11/32 drop` 这类规则此前会被忽略；
+2. **出向策略（OUTPUT）**：新增 `outboundAllowed`；agent 解析 `nft output` 与
+   `iptables OUTPUT` → `Direction=outbound`；源主机出向被拒 ⇒ 会话失败（双向）；
+3. **数据接线**：`RecordNetworkFacts` 增加 `ips`；comms 传 `LocalIPs`；srdroc 支持
+   `inbound.to` / `outbound` / `ips` 输入。
+
+**实测（域 A 同子网，3 轮）**：
+
+| 轮 | 规则 | 负样本 | layered AUC |
+|---|---|---|---|
+| R0 | 无（控制） | 0 | — |
+| R1 | `domA-db` INPUT `saddr 172.22.10.11/32 drop` | 2 | **1.000** |
+| R2 | `domA-web` OUTPUT `daddr 172.22.10.12/32 drop` | 2 | **1.000** |
+
+报告：`docs/2-experiments/srd-bench/v23-t1-intra-subnet-20261028.md`。
+**测试**：`TestIntraSubnetHostInboundRule`、`TestIntraSubnetOutboundRule`、
+`TestOutboundRuleScopedBySubnet`、`TestOutboundUnknownDoesNotBlock`、
+`TestRegistryWiresOutboundAndIPs`、`TestNftOutputDaddrRuleParsed`、`TestIptablesOutputRuleParsed`。
+
 ## v2.2.6（2026-10-27）—— A-5 入向规则语义补齐；A-3 VLAN 数据链路验证
 
 ### A-5（已关闭）

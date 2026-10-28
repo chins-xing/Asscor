@@ -20,7 +20,7 @@
 
 ## 3. 任务与验收
 
-### T1 域内 ACL（P0）
+### T1 域内 ACL（P0）—— ✅ 已完成（v2.3.0，2026-10-28）
 
 - 采集：agent 解析 `nft`/`iptables` 中**同子网**的 host-to-host 规则（saddr/daddr + /32 或子网）；
 - 模型：`LayeredGraph` 增加 `IntraSubnet` 规则集；同子网邻接除 L2/入向外，再判域内策略；
@@ -66,3 +66,9 @@
 - v2.2 发布：[SRD v2.2 发布说明](../reference/SRD_v2.2_RELEASE_NOTES.md)
 - 当前设计：[SRD 分层图设计](SRD_LAYERED_GRAPH_DESIGN_2026-10-27.md)
 - 审计：[SRD v2.2 审计报告](../../3-audits/SRD_V22_AUDIT_2026-10-27.md)
+
+## 7. 进展
+
+- 2026-10-28：**T1 完成**（v2.3.0）。实测报告
+  [v2.3 T1 域内 ACL](../../2-experiments/srd-bench/v23-t1-intra-subnet-20261028.md)。
+  R1/R2 各 2 个负样本、layered AUC 1.000，控制组全通。
