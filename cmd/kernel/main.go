@@ -342,9 +342,14 @@ func main() {
 
 	plugins := []kernel.Plugin{concurrency, configWatcher, adapterIntegration, cliModule, lifecycle}
 	var srdPlugin kernel.Plugin
+	var federationPlugin kernel.Plugin
 	if srp := newSRDPlugin(); srp != nil {
 		plugins = append(plugins, srp)
 		srdPlugin = srp
+	}
+	if fp := newFederationPlugin(); fp != nil {
+		plugins = append(plugins, fp)
+		federationPlugin = fp
 	}
 	if p, ok := persistence.(kernel.Plugin); ok {
 		plugins = append(plugins, p)
@@ -441,6 +446,15 @@ func main() {
 	if srdPlugin != nil {
 		if rc, ok := srdPlugin.(interface{ CheckReach(src, dst string) (any, error) }); ok {
 			cli.SetReachChecker(rc)
+		}
+	}
+
+	// T4 联邦 demo：把联邦状态查询注入 CLI（同样须在 Bootstrap 之后，插件已
+	// Init/Start；未带 federation tag 时 federationPlugin 为 nil，CLI 命令会
+	// 明确报"插件未加载"而不是静默）。
+	if federationPlugin != nil {
+		if fp, ok := federationPlugin.(cli.FederationProvider); ok {
+			cli.SetFederationProvider(fp)
 		}
 	}
 

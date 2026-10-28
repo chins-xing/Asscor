@@ -802,6 +802,10 @@ func (cfg *Config) buildAdapterConfig(sections map[string]map[string]string) {
 		"grpc": true, "log": true, "comms": true, "commands": true,
 		// v2.2.1：SRD 段必须进 AdapterConfig，否则 srd.loadConfig 读不到任何 [srd] 键。
 		"srd": true,
+		// T4 联邦 demo：节点/主 kernel 的 [federation] 段（role/node_id/
+		// master_url/listen_addr/report_interval_sec/token）必须能通过
+		// cfg.Get("federation.role") 读到；白名单之外的分段会被整段丢弃。
+		"federation": true,
 	}
 
 	for sectionName, kv := range sections {
