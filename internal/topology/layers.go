@@ -680,9 +680,14 @@ func subnetMatch(pattern, sub string) bool {
 		}
 		return false
 	}
-	if _, n, err := net.ParseCIDR(pattern); err == nil {
+	if _, pn, err := net.ParseCIDR(pattern); err == nil {
+		// 两侧都可能是"带主机位"的地址形式（agent 上报 172.22.10.1/24），
+		// 归一成网络地址再比较；否则策略事实永远匹配不上子网。
+		if _, sn, err2 := net.ParseCIDR(sub); err2 == nil {
+			return pn.String() == sn.String()
+		}
 		if ip := net.ParseIP(strings.TrimSuffix(sub, "/32")); ip != nil {
-			return n.Contains(ip)
+			return pn.Contains(ip)
 		}
 	}
 	return false

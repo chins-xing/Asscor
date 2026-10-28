@@ -77,6 +77,8 @@ func mergedFacts(reports []NodeReport) (map[string]*HostFact, map[string]PolicyF
 			mergeHost(h)
 		}
 		for _, p := range r.PolicyFacts {
+			p.From = normalizeFactSubnet(p.From)
+			p.To = normalizeFactSubnet(p.To)
 			key := p.From + "|" + p.To + "|" + boolKey(p.Allow)
 			policies[key] = p
 		}
@@ -130,6 +132,18 @@ func MergedTopology(reports []NodeReport) TopologyExport {
 	return out
 }
 
+
+// normalizeFactSubnet 归一单个子网/策略地址（带主机位时取网络地址）。
+func normalizeFactSubnet(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+	if _, n, err := net.ParseCIDR(s); err == nil {
+		return n.String()
+	}
+	return s
+}
 
 // normalizeFactSubnets 把子网归一到网络地址（与 topology.normalizeSubnets 同规则）。
 func normalizeFactSubnets(in []string) []string {
