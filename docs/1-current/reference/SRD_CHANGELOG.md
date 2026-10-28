@@ -20,6 +20,8 @@ agent 只连接所属节点 kernel。
 **v0.2（同日）**：节点上报图事实（host_facts/policy_facts），主端 `BuildMergedGraph`
 合并成跨节点分层图；新增 `federation check <src> <dst>` 与
 `GET /federation/check`；插件版本 0.2.0（demo 级）。
+端到端验证：合并图 40 主机，节点入向 ACL 判 `blocked` 且与实测一致；
+期间修复"裸 IP 策略匹配"与"回程出向检查"两个缺陷。
 
 **实测**：主 kernel 收到 3 个节点，`config_hash` 互不相同（79afc807…/b46db6c8…/15270025…），
 证明"单网络多套配置"；master 监听失败会降级（不拖垮 kernel）。

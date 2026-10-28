@@ -310,3 +310,25 @@ Build tag 组合：`federation_on.go`（`//go:build federation`）与 `federatio
 
 **已知限制**：合并是"全量重建"（每次查询从节点上报重建图，无增量）；
 冲突用"后到优先"；不传原始 check 明细；跨节点路径语义仍受各节点采集能力限制。
+
+### 10.1 端到端验证（2026-10-28）
+
+环境：主 kernel（VM 910）+ 3 节点 kernel（930-932）+ 30 agent。
+`federation check asc-agt-nk1-01 asc-agt-nk1-02`：
+
+```
+verdict : blocked   (paths=1, merged hosts=40)
+path    : asc-agt-nk1-01 -> domC-router -> asc-agt-nk1-02
+blocked : asc-agt-nk1-02
+reason  : inbound policy denies 172.22.10.0/24 -> asc-agt-nk1-02
+```
+
+真值：`940 -> 941` ping 失败（941 的 INPUT 拒绝 940）。模型与真值一致。
+
+过程中修复两个真实缺陷：
+1. **裸 IP 策略匹配**：真实 nft 会把 `ip saddr X/32` 上报为裸 IP（无 `/32`），
+   旧 `hostInCIDR/subnetMatch` 只认 CIDR ⇒ 规则永远不匹配；
+2. **回程出向检查**：方向性会话判定漏了"回程由目标机 OUTPUT 发出"——
+   `TestIntraSubnetOutboundRule` 抓出后补齐 `outboundAllowed(reply)`。
+
+插件版本：**0.2.0**（demo 级 0.x，不并入 SRD/ASSCOR 版本号）。
