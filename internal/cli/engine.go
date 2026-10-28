@@ -505,6 +505,7 @@ func (e *Engine) RegisterBuiltinCommands() {
 		{agentCmdInfo, agentCmdHandler, agentCompletions},
 		{topologyCmdInfo, topologyCmdHandler, nil},
 		{srdCmdInfo, srdCmdHandler, nil},
+		{federationCmdInfo, federationCmdHandler, nil},
 		{logCmdInfo, logCmdHandler, logCompletions},
 		{sourceCmdInfo, sourceCmdHandler, sourceCompletions},
 		{diagCmdInfo, diagCmdHandler, nil},
