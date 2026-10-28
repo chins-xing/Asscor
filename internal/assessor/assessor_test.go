@@ -171,6 +171,15 @@ func TestFilterAssessmentResult(t *testing.T) {
 
 func TestModelCoverage(t *testing.T) {
 	// Register a controlled check universe, then restore.
+	// 使用 checks tag 构建时，真实 check 已在 init 注册；modelCoverage 的分母是
+	// GetAll()，因此必须先清空 registry，否则断言会随 tag 组合漂移。
+	existing := checks.GetAll()
+	ids := make([]string, 0, len(existing))
+	for _, c := range existing {
+		ids = append(ids, c.ID)
+	}
+	checks.Unregister(ids...)
+	defer checks.Register(existing...)
 	checks.Register(
 		model.CheckItem{ID: "MC-A", Domain: "attack_surface"},
 		model.CheckItem{ID: "MC-B", Domain: "operation_trust"},
