@@ -101,3 +101,5 @@ d12675a81bb0539b43ccee7b627883c92c248038  702542f300be119544a38bdbf2f130104cabaa
 # 该提交 95% 是 docs/ 白皮书，唯一代码改动就是这一行注释，**不在方向① 的 15 个提交里**。
 # 现登记为 ARC-only 差异；如需 main 的注释也正确，可单条 cherry-pick 该文件的这一 hunk。
 108da55b3e6e01bb4a03eae46ab0542c2bf06573  9e75eec42347b016c58610a6fa12c2f8152603ae  prism-lib/types.go  # 仅 ScoreFloor 注释 0.40 → 0.15（70c65cc）；行为两侧一致（config.go 均 0.15）
+c71576d5d6c0ed03883dea093f090426c8201b08  MISSING  scripts/federation-verify.sh  # T4 联邦验收/配置生成脚本：仅 ARC（依赖 configs/federation 与 30 agent 环境）
+41bae341097bb35a8f9614a5db9ce01d3a8e86a3  MISSING  scripts/gen-agent-configs.sh  # T4 联邦验收/配置生成脚本：仅 ARC（依赖 configs/federation 与 30 agent 环境）
