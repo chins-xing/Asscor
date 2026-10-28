@@ -44,6 +44,7 @@ type hostSpec struct {
 		To    string `json:"to"`
 		Allow bool   `json:"allow"`
 	} `json:"outbound,omitempty"`
+	StatefulInput bool `json:"stateful_input,omitempty"`
 	Links map[string]bool `json:"links,omitempty"` // 子网 -> 链路是否 up
 }
 type policySpec struct {
@@ -160,6 +161,7 @@ func main() {
 			Inbound: inb,
 		Outbound: outb,
 		IPs:      h.IPs,
+		StatefulInput: h.StatefulInput,
 		Links:   h.Links,
 	})
 	}

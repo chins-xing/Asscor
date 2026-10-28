@@ -1222,9 +1222,11 @@ func (a *Agent) collectNetworkInfo() *apiv1.NetworkInfo {
 	// 采集不到就保持空/false（SRD 会判 probable，不会当作"放行"）。
 	info.VLANs = collectVLANs()
 	info.Forwards = collectForwards()
-	if rules, known := collectPolicyFacts(); known {
+	if rules, known, statefulIn, statefulOut := collectPolicyFacts(); known {
 		info.Policies = rules
 		info.PolicyKnown = true
+		info.StatefulInput = statefulIn
+		info.StatefulOutput = statefulOut
 	}
 	return info
 }

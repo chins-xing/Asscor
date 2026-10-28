@@ -84,10 +84,10 @@ func TestRegistryWiresLinksAndInbound(t *testing.T) {
 	ResetForTesting()
 	defer ResetForTesting()
 	RecordNetworkFacts("A", []string{"10.0.0.0/24"}, "internal", nil, false, nil, false,
-		[]TopoLink{{Name: "eth0", Up: true, Subnets: []string{"10.0.0.0/24"}}}, nil)
+		[]TopoLink{{Name: "eth0", Up: true, Subnets: []string{"10.0.0.0/24"}}}, nil, false, false)
 	RecordNetworkFacts("B", []string{"10.0.0.0/24"}, "internal", nil, false,
 		[]TopoPolicyRule{{From: "10.0.0.0/24", Allow: false, Direction: "inbound"}}, true,
-		[]TopoLink{{Name: "eth0", Up: false, Subnets: []string{"10.0.0.0/24"}}}, nil)
+		[]TopoLink{{Name: "eth0", Up: false, Subnets: []string{"10.0.0.0/24"}}}, nil, false, false)
 
 	g := BuildLayeredFromRegistry()
 	if g == nil {
