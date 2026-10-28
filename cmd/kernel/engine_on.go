@@ -31,8 +31,17 @@ func newSSAMEngineAdapter(cfg *config.Config) kernel.AssessorEngine {
 
 // newPrismEngine returns the Prism risk-dynamics engine, or nil when the
 // engine build tag is disabled.
-func newPrismEngine() kernel.PrismEngineProvider {
-	return ascorprism.NewEngine()
+func newPrismEngine(cfg *config.Config) kernel.PrismEngineProvider {
+	// v2.3.6：主评分引擎也吃配置（此前固定 NewEngine() = 库默认值，[prism] 全被忽略）。
+	pc := ascorprism.ConfigFromMap(cfg.AdapterConfig)
+	logger.WithComponent("kernel").Info("prism effective config",
+		"debt_alpha", pc.DebtAlpha, "prop_cap", pc.PropCap, "debt_cap", pc.DebtCap,
+		"debt_norm_days", pc.DebtNormDays, "path_decay", pc.PathDecay,
+		"max_path_depth", pc.MaxPathDepth, "score_floor", pc.ScoreFloor,
+		"collapse_beta", pc.CollapseBeta, "aggregation", pc.AggregationMode,
+		"stable_threshold", pc.StableThreshold, "degraded_threshold", pc.DegradedThreshold,
+		"untrusted_threshold", pc.UntrustedThreshold, "horizon_days", pc.HorizonDays)
+	return ascorprism.NewEngineWithConfig(pc)
 }
 
 // newEngineScorer returns the concrete scoring engine implementation injected

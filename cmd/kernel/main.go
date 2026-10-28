@@ -271,7 +271,7 @@ func main() {
 		k.Container().Bind((*kernel.ScoringEngineProvider)(nil), scoringEngine)
 	}
 
-	if prismEngine := newPrismEngine(); prismEngine != nil {
+	if prismEngine := newPrismEngine(cfg); prismEngine != nil {
 		k.Container().Bind((*kernel.PrismEngineProvider)(nil), prismEngine)
 	}
 
