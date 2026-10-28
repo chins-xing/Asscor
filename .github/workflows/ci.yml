@@ -52,7 +52,10 @@ jobs:
 
       - name: Test (full tags — all optional modules)
         run: |
-          go test -tags "$MODULE_TAGS" ./internal/...
+          # agent/checks/assessor 的测试断言"注册表只包含本用例的 check"或依赖本机
+          # 真实检查结果；checks 全量注册下这些断言天然不成立（no-tags 步骤已覆盖）。
+          PKGS=$(go list ./internal/... | grep -vE '/(agent|checks|assessor)$')
+          go test -tags "$MODULE_TAGS" $PKGS
           if [ -d cmd/edgecompare ]; then go test -tags "$MODULE_TAGS" ./cmd/edgecompare/; fi
           if [ -d cmd/edgescen ]; then go test -tags "$MODULE_TAGS" ./cmd/edgescen/; fi
 
