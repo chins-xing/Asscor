@@ -264,6 +264,13 @@ ASSCOR 项目评估结果可与等保测评报告交叉验证：若等保三级�
 
 ## 9. 动态扩展与社区驱动
 
+**联邦扩展包（`extensions/federation`，v0.3.0）**：单网络多套配置的联邦评估——
+主 kernel 聚合、节点 kernel 各自评估、agent 只连接所属节点 kernel（每节点独立 CA）。
+CLI 命令由扩展包自注册（`federation status|check|export|report-now`），内核只保留
+`newExtensionPlugins()` 通用装配点。构建：`-tags federation`。
+详见 [扩展包设计](docs/1-current/design/FEDERATION_EXTENSION_2026-10-28.md)。
+
+
 ASSCOR 内置攻击向量插件槽（AVD），每个 AVD 定义为 {ID, 域, 检测逻辑, 分值, 紧急标记}。管理员或社区可编写 AVD 注册到引擎，使模型随威胁演进持续扩展。
 
 ## 10. 配置与管理员自定义
@@ -331,6 +338,7 @@ go build -tags securemode ./cmd/kernel ./cmd/agent
 
 ```
 ASSCOR/
+├── extensions/        # 可选扩展包（当前：federation 联邦评估）
 ├── cmd/
 │   ├── kernel/        # 微内核服务端入口（gRPC + JSONRPC 双协议栈）
 │   ├── agent/         # Agent 客户端入口（gRPC + JSONRPC）

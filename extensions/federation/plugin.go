@@ -305,8 +305,8 @@ func (p *Plugin) onReport(err error, attempts int) {
 		"attempts", attempts, "error", err)
 }
 
-// FederationStatus implements the CLI provider contract
-// (cli.FederationProvider). It is a snapshot: safe while the reporter loop
+// FederationStatus is consumed by this extension's CLI command
+// (command.go). It is a snapshot: safe while the reporter loop
 // and HTTP handlers run concurrently.
 func (p *Plugin) FederationStatus() Status {
 	p.mu.Lock()

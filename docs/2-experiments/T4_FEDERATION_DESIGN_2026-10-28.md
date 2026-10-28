@@ -2,7 +2,7 @@
 
 > 目标：在**同一网络**里跑**多套配置/多套模型参数**的 SRD 评估；
 > 用"主 kernel + 多个节点 kernel + 各自 agent"的联邦形态演示。
-> 本文是总体设计；代码见 `internal/federation/`，配置见 `configs/federation/`。
+> 本文是总体设计；代码见 `extensions/federation/`，配置见 `configs/federation/`。
 
 ## 1. 架构
 
@@ -112,4 +112,4 @@ agent 的数据面 IP 从各 vnet 的 `/24` 未占用段分配（基建子代理
 
 - 环境与验收细节：`docs/2-experiments/T4_FEDERATION_ENV_2026-10-28.md`
 - 配置：`configs/federation/nk1.ini` / `nk2.ini` / `nk3.ini` / `master.ini`
-- 代码：`internal/federation/`（插件、收集器、上报客户端）
+- 代码：`extensions/federation/`（插件、收集器、上报客户端）

@@ -71,15 +71,30 @@
 |---|---|
 | `exclude_cidrs` | 拓扑采集排除网段（管理网/虚拟网） |
 
-## 7. 已知未暴露（明确记录，不是遗漏）
+## 7. 联邦扩展（`[federation]`，选装扩展包）
+
+由 `extensions/federation` 消费（需 `-tags federation` 构建）；`role=off` 时整段忽略。
+
+| 键 | 默认 | 说明 |
+|:---|:---|:---|
+| `role` | `off` | `master`（收集节点事实）/ `node`（周期上报）/ `off` |
+| `node_id` | 空 | node 身份；master 按此去重 |
+| `master_url` | 空 | node 上报地址，如 `http://192.168.30.50:5099` |
+| `listen_addr` | `:5099` | master 收集端点监听地址 |
+| `report_interval_sec` | `30` | node 上报周期（秒） |
+| `token` | 空 | master/节点共享 token（`X-Federation-Token`；空则只允许回环） |
+| `tls_*` | — | 预留（当前 demo 为明文 HTTP，生产需 mTLS） |
+
+## 8. 已知未暴露（明确记录，不是遗漏）
 
 - **SSAM 评分公式内部常数**：属于算法完整性基线（`[integrity]` 校验对象），
   **故意不可配**，改动会被算法防护检测。
 - **Prism 语义层 Collapse 阈值**：由 `untrusted_threshold` 隐含推导，无独立键。
 - **CLI 历史条数**：目前写死（默认 500），如需可配列入下一版。
 
-## 8. 相关文档
+## 9. 相关文档
 
 - 配置参考：[SRD 配置参考](SRD_CONFIGURATION.md)
 - 变更记录：[SRD_CHANGELOG](SRD_CHANGELOG.md)
+- 联邦参考：[FEDERATION_REFERENCE](FEDERATION_REFERENCE.md)
 - 参数验证：启动日志 `prism effective config` / `SRD effective config` / `topology facts recorded`

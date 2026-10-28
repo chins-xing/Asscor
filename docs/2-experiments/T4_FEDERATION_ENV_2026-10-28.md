@@ -3,7 +3,7 @@
 > **状态（2026-10-28 13:xx）**：本文是**配置与验收资产**的落地说明；仓库内新增
 > `configs/federation/`、`scripts/gen-agent-configs.sh`、`scripts/federation-verify.sh`。
 > PVE 侧 CT 创建/证书签发由基建子代理执行（CT 930/931/932 已 running，agent CT 940-969 待建）。
-> 联邦代码 `internal/federation` 由 federation-dev 并行实现，本文中标 **TODO(federation-dev)**
+> 联邦代码 `extensions/federation` 由 federation-dev 并行实现，本文中标 **TODO(federation-dev)**
 > 的端点/命令名以最终实现为准。
 >
 > 目标：**同一张网络**里跑**三套不同模型参数**的 SRD 评估，用"主 kernel 汇总 + 3 个节点
@@ -372,7 +372,7 @@ done
    `GET /federation/nodes`（收集结果，**必须带 `X-Federation-Token` 头**）、
    CLI `federation status [--json]`。验收脚本优先用 CLI，CLI 不可用时回退到带 token 的
    curl；两者都不可用时报 FAIL 并打印差值 rc 与排查提示（不会静默通过）。
-   若后续实现改动路径/命令名，以 `internal/federation/master.go` 与
+   若后续实现改动路径/命令名，以 `extensions/federation/master.go` 与
    `internal/cli/federation_commands.go` 为准，并同步 `scripts/federation-verify.sh` 顶部变量。
 2. **配置段白名单已补齐**：`internal/config/config.go` 的 `buildAdapterConfig` 已把
    `federation` 段加入白名单，插件通过 `cfg.Get("federation.*")` 读取 role/listen_addr/token
@@ -430,3 +430,10 @@ done
 | `/root/t4/README-INFRA.md` | 基建交付说明（三模板、节点 kernel、30 agent、证书、端口、清单、已知事项） |
 | `/root/t4/scripts/push-agent-config.sh` | secure-mode 下安全替换 agent 配置（`<vmid> <new.ini>`），不要直接 push 明文 |
 | `/root/t4/logs/federation-verify-PASS-*.log` | 实测验收输出存档 |
+
+## 10. v0.3 扩展包变更（2026-10-28）
+
+联邦代码迁到 `extensions/federation`；CLI 命令由扩展包自注册。
+新增：`federation export`（master 合并拓扑 JSON）、`federation report-now`（node 立即上报）。
+构建仍使用 `-tags federation`；不带该 tag 时命令不存在。
+详见 `docs/1-current/design/FEDERATION_EXTENSION_2026-10-28.md`。

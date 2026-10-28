@@ -1,7 +1,13 @@
 # SRD 联邦 demo 设计（一个网络，多套配置）· T4 · 2026-10-28
 
+
+> **文档状态（2026-10-28）**：本文记录 v0.1/v0.2 的设计与实现；v0.3 已把代码迁到
+> `extensions/federation`，CLI 命令由扩展包自注册，内核装配点为
+> `cmd/kernel/extensions_on.go`。下文出现的旧路径/旧接口仅作历史参考，
+> 当前实现见 [FEDERATION_EXTENSION_2026-10-28.md](FEDERATION_EXTENSION_2026-10-28.md)。
+
 > 状态：草稿（demo 级）。代码：`extensions/federation`（模块 0.1.0）+ `internal/cli/federation_commands.go` +
-> `cmd/kernel/federation_on.go`（`-tags federation`）。
+> `cmd/kernel/extensions_on.go`（`-tags federation`；v0.3 起）。
 > 目标：证明同一张物理网络里可以并存 **主 kernel + N 个节点 kernel**，每个节点 kernel
 > 使用**自己的配置与模型参数**（独立 CA 强制 agent 归属），主 kernel 只收**聚合摘要**，
 > 不接管节点内的 agent 会话。
@@ -211,7 +217,7 @@ federation status [--json]
   远程会话里会"静默失败"。
 
 注入方式与 `cli.SetReachChecker` 同型：`cmd/kernel/main.go` 在 `k.Bootstrap()` **之后**
-断言插件实现并调用 `cli.SetFederationProvider(fp)`；未编译联邦时 `federationPlugin==nil`。
+断言插件实现并调用 （v0.3 已删除该注入方式）；未编译联邦时扩展命令不存在。
 
 ---
 
@@ -235,7 +241,7 @@ asscor-kernel --cli /opt/asscor/asscor-cli.sock   # 交互式
 curl -s -H "X-Federation-Token: $TOKEN" http://192.168.30.50:5099/federation/nodes | jq .
 ```
 
-Build tag 组合：`federation_on.go`（`//go:build federation`）与 `federation_off.go`
+Build tag 组合：`extensions_on.go`（`//go:build federation`）与 `extensions_off.go`
 （`//go:build !federation`）成对，`-tags "engine,srdwrapper,comms"`（无 federation）与
 无任何 tag 的构建均已验证可编译；`extensions/federation` 本身不带 tag，CLI 包始终可引用
 其状态类型，只有插件装配是 tag 门控的。
@@ -270,8 +276,8 @@ Build tag 组合：`federation_on.go`（`//go:build federation`）与 `federatio
 | kernel 插件（Init/Start/Stop/State/HealthCheck + Snapshot） | `extensions/federation/plugin.go` |
 | CLI 命令与渲染 | `internal/cli/federation_commands.go` |
 | 注册进 CLI 内建命令表 | `internal/cli/engine.go`（builtins） |
-| 装配（tag 开/关） | `cmd/kernel/federation_on.go` / `federation_off.go` |
-| Bootstrap 后注入 CLI | `cmd/kernel/main.go`（`cli.SetFederationProvider`） |
+| 装配（tag 开/关） | `cmd/kernel/extensions_on.go` / `extensions_off.go` |
+| CLI 注册 | `extensions/federation/command.go`（自注册，v0.3） |
 | 配置段白名单 | `internal/config/config.go`（`adapterSections["federation"]`） |
 | 单元测试 | `extensions/federation/*_test.go`、`internal/cli/federation_commands_test.go` |
 
