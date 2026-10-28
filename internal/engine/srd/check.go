@@ -42,13 +42,15 @@ type ReachCheck struct {
 // checkGraph 是 CheckReachability 使用的图（优先 pipeline 的分层图，
 // 否则回落到注册表构建）。
 func (m *Manager) checkGraph() *topology.LayeredGraph {
+	// 优先用**注册表现场重建**：srdwrapper 注入的快照可能滞后于最近的心跳
+	// （实测踩到：CLI 查到 hosts=1 的旧图）。注册表是权威来源。
+	if lg := topology.BuildLayeredFromRegistry(); lg != nil {
+		return lg
+	}
 	m.mu.RLock()
 	lg := m.checkLayered
 	m.mu.RUnlock()
-	if lg != nil {
-		return lg
-	}
-	return topology.BuildLayeredFromRegistry()
+	return lg
 }
 
 // CheckReachability 回答"src 能否到达 dst，为什么"。

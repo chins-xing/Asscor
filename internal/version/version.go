@@ -26,5 +26,6 @@ const (
 	// v2.3.2：T3 可观测 —— `srd check <src> <dst>` CLI（verdict/路径/阻断点/未知项）。
 	// v2.3.3：T3 修正 —— 直连快捷路径的 blocked 补出具体原因与阻断点。
 	// v2.3.4：T3 收尾 —— CLI 错误落到 Output、兼容位置参数；blocked 原因无条件补齐。
-	SRDVersion = "2.3.4"
+	// v2.3.5：T3 修正 —— `srd check` 优先用注册表现场重建，避免注入快照滞后。
+	SRDVersion = "2.3.5"
 )
