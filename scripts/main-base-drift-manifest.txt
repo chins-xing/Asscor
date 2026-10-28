@@ -69,8 +69,8 @@ bc39ebcf4568f1c223c3922a148d756672a992d3  6b499f759e53a0a5c63bca724770be20b1f5b5
 1bd1a34d861acd73968433b7d8975ab687be63ad  e5f12282dbf31166fe8d963f0eb3682d1c404380  .gitignore  # 见本段上方说明（ARC 白名单 vs main 整目录忽略；两侧永不一致，属有意差异）
 
 # ---- 对外文档（按分支表述；除横幅与结构树外逐字相同）----
-2adc1483ec0996dc50623ad34160f5e37af58b80  35aa596ddff072e51720da40f041fe53c3af3550  README.md  # 仅横幅与结构树按分支表述（ARC 列研究线资产，main 列产品线）；其余逐字相同
-1c382623e068d3e478db038e1726c28916701827  f841e1c1c7a48c2be05ea6a5b7f3e9c7cc77639f  README_EN.md  # 同上（英文版）
+c226d514a27c202a3a5aa0f42e9831bdb1a11fe7  6240a762713a683d53a8b7405c7f4315d50f5df2  README.md  # 仅横幅与结构树按分支表述（ARC 列研究线资产，main 列产品线）；其余逐字相同
+a5319cf104befe69024687512a7d90cddf67b68b  f49538a5efb9cc7a11ca7beb9344b95beb2cd4ab  README_EN.md  # 同上（英文版）
 
 # ---- 文档布局引用差异（Task 39 登记；理由：两分支的 docs 目录布局不同）----
 # 实测（Task 39，2026-10-22）：
