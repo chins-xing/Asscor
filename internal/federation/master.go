@@ -108,6 +108,7 @@ func (m *MasterServer) Handler() http.Handler {
 	mux.HandleFunc(ReportPath, m.handleReport)
 	mux.HandleFunc(NodesPath, m.handleNodes)
 	mux.HandleFunc("/federation/check", m.handleCheck)
+	mux.HandleFunc("/federation/export", m.handleExport)
 	return mux
 }
 
@@ -205,4 +206,23 @@ func (m *MasterServer) handleCheck(w http.ResponseWriter, r *http.Request) {
 	res.Nodes = len(reports)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(res)
+}
+
+
+// handleExport 导出主端合并图（供离线评分/可视化）：GET /federation/export。
+func (m *MasterServer) handleExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !m.authorized(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var reports []NodeReport
+	if m.collector != nil {
+		reports = m.collector.Nodes()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(MergedTopology(reports))
 }

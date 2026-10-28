@@ -48,66 +48,8 @@ type MergedCheck struct {
 //
 // 该函数不返回 nil：没有事实时返回空图，调用方据此给出错误。
 func BuildMergedGraph(reports []NodeReport) *topology.LayeredGraph {
-	hosts := map[string]*HostFact{}
-	policies := map[string]topology.PolicyRule{}
-	policyKnown := false
+	hosts, policies, policyKnown := mergedFacts(reports)
 
-	mergeHost := func(h HostFact) {
-		cur, ok := hosts[h.ID]
-		if !ok {
-			cp := h
-			hosts[h.ID] = &cp
-			return
-		}
-		cur.Subnets = unionStrings(cur.Subnets, h.Subnets)
-		cur.IPs = unionStrings(cur.IPs, h.IPs)
-		if h.Zone != "" {
-			cur.Zone = h.Zone
-		}
-		if h.SSAM != 0 {
-			cur.SSAM = h.SSAM
-		}
-		cur.Forwards = cur.Forwards || h.Forwards
-		cur.StatefulInput = cur.StatefulInput || h.StatefulInput
-		cur.Inbound = append(cur.Inbound, h.Inbound...)
-		cur.Outbound = append(cur.Outbound, h.Outbound...)
-		if len(h.Links) > 0 {
-			if cur.Links == nil {
-				cur.Links = map[string]bool{}
-			}
-			for k, v := range h.Links {
-				cur.Links[k] = v
-			}
-		}
-	}
-
-	for _, r := range reports {
-		policyKnown = policyKnown || r.PolicyKnown
-		for _, h := range r.HostFacts {
-			mergeHost(h)
-		}
-		for _, p := range r.PolicyFacts {
-			key := fmt.Sprintf("%s|%s|%t", p.From, p.To, p.Allow)
-			policies[key] = topology.PolicyRule{From: p.From, To: p.To, Allow: p.Allow}
-		}
-	}
-
-	// 主 kernel 本地拓扑（老实验域）也参与合并。
-	for _, n := range topology.ListNodes() {
-		h := hostFactFromTopo(n)
-		mergeHost(h)
-		for _, p := range n.Policies {
-			if p.Direction == "" || p.Direction == "forward" {
-				key := fmt.Sprintf("%s|%s|%t", p.From, p.To, p.Allow)
-				policies[key] = topology.PolicyRule{From: p.From, To: p.To, Allow: p.Allow}
-			}
-		}
-		if n.PolicyKnown {
-			policyKnown = true
-		}
-	}
-
-	// 稳定排序，保证同一输入产生同一图。
 	ids := make([]string, 0, len(hosts))
 	for id := range hosts {
 		ids = append(ids, id)
@@ -129,9 +71,15 @@ func BuildMergedGraph(reports []NodeReport) *topology.LayeredGraph {
 			Links:         h.Links,
 		})
 	}
-	ps := make([]topology.PolicyRule, 0, len(policies))
-	for _, p := range policies {
-		ps = append(ps, p)
+	keys := make([]string, 0, len(policies))
+	for k := range policies {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	ps := make([]topology.PolicyRule, 0, len(keys))
+	for _, k := range keys {
+		p := policies[k]
+		ps = append(ps, topology.PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
 	}
 	return topology.BuildLayeredGraph(facts, ps, policyKnown, true)
 }
