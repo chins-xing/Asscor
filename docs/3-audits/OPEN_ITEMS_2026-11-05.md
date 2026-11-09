@@ -32,7 +32,7 @@
 
 | ID | 事项 | 状态 | 依据 / 下一步 |
 |---|---|---|---|
-| C1 | main 文档 **18 处悬空链接**（legacy 文档指向 `docs/clab-lab/`、`docs/superpowers/plans/...`、`docs/v0.3.0/...` 等已移动/未跟踪文件） | [待修] | 用 `scripts/check-doc-refs.sh` 在 main 复现；逐条改指新路径或归档 |
+| C1 | main 文档 **18 处悬空链接**（legacy 文档指向 旧 clab-lab 数据目录（未跟踪）、`docs/superpowers/plans/...`、`docs/v0.3.0/...` 等已移动/未跟踪文件） | [待修] | 用 `scripts/check-doc-refs.sh` 在 main 复现；逐条改指新路径或归档 |
 | C2 | `WHITEPAPER_GAP_ANALYSIS` 三条已过时：CTI 已真实拉取 OTX/MISP（`internal/cti/cti.go:181/276`）、delegation 已有 39 条规则、SPC 已含 `1+0.1n` 乘数（`internal/spc/spc.go:539`） | [文档待更新] | 关闭这三条 gap 并注明验证位置 |
 | C3 | `TECHNICAL_DEBT_BACKLOG_2026-09-08` 仍列 M-4/M-6/L-1/L-2/L-6/RC-M4（2026-09 基线） | [待复核] | 逐条对照当前代码：关闭/降级/更新 |
 | C4 | 扩展点执行清单：89 个点里实际被 `Execute` 的约 16 个（assessor 15 + srd 1），其余仅注册 | [未开始] | 产出"点 × 执行者"清单，删除/标注纯预留 |
