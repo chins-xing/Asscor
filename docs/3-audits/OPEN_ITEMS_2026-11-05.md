@@ -15,7 +15,15 @@
 | A6 | 联动审计 §7.4 三项：`adapterhub` 整包孤儿、`internal/attck` kernel 内不启动（provider 注入形态）、`comms_on.go` 手工装配 9 模块 | [待决策] | `docs/3-audits/MODULE_LINKAGE_AUDIT_2026-10-29.md` §7.4 |
 | A7 | 内核瘦身：拆可选模块二进制、动态插件、单协议（gRPC/JSONRPC 二选一） | [未开始] | 内核体积审计结论（minimal 9.3MB → full 22.2MB；业务符号仅 4.1%） |
 | A8 | **打包/CI 未覆盖进程隔离**：`scripts/build.sh` 无 `federation`/`federation_proc`/`cmd/federation-mod`；CI 只构建/测试进程内 federation | [未开始] | `scripts/build.sh:11`；`.github/workflows/ci.yml:62-65` |
-| A11 | **模型参数变量化**：Prism 13 + SRD + 内核评分已落实；`level4_override` 覆盖 bug、legacy 边因子、ACI 死配置、研究引擎常量待处理 | [进行中] | `docs/3-audits/MODEL_PARAMETERIZATION_AUDIT_2026-11-12.md` |
+| A11 | `[edge_factors] two_factor_failure` 被 `[edge_factors.level4_override]` **无条件覆盖**（配 0.85 实际永远 0.70） | [未开始] | `config/config.go:275-307`；按等级 gate 或删/改名 + 回归测试；审计 `MODEL_PARAMETERIZATION_AUDIT_2026-11-12.md` |
+| A12 | **legacy 评分路径** 5 个边因子硬编码（0.75/0.80/0.82/0.90/0.88），不读 `[edge_factors]` | [未开始] | `internal/engine/assessor.go:562-570`；决定废弃 legacy 或改为读 cfg |
+| A13 | `[resilience] aci_*` 7 个权重被解析但**全仓无消费点**（死配置） | [未开始] | `internal/config/config.go:38-44,326-346`；接入 SPC/assessor 或删除 |
+| A14 | SSAM 路径 `EF-3FA` 因子硬编码 **0.82**（含 CascadeValue） | [未开始] | `internal/engine/ssam/adapter.go:69`；参数化或标为模型常量 |
+| A15 | ATT&CK **15 技术转移矩阵**硬编码（专家先验），无配置入口 | [未开始] | `internal/attck/attck.go:987+`；实验注入或文档标常量 |
+| A16 | SPC 影响权重硬编码：`0.20*cvss+0.50*epss+0.30*kev`、APT `×1.2`、子技术 `×1.1`、PoC `0.3` | [未开始] | `internal/spc/spc.go:535-544` |
+| A17 | CTI 系数 `1.0`、更新间隔 `15m` 硬编码（仅 OTX/MISP 凭据可配） | [未开始] | `internal/cti/cti.go:70-71` |
+| A18 | 研究引擎默认参数硬编码：predictor 动作收益、engagement `1.0/0.8/0.6/1.2`、attackerstate `0.1/0.15`（RC-M4） | [未开始] | `predictor.go:71`、`engagement.go:62`、`attackerstate/state.go:106,132` |
+| A19 | `[resilience.circuit]` 未解析；熔断默认 5 次/5 分钟/1 分钟硬编码 | [未开始] | `internal/resilience/circuit.go:71` |
 | A10 | **govulncheck 审计：26 个可达漏洞**（Go 1.26.3 stdlib 22 + grpc 4）；修复需 Go ≥1.26.10、grpc ≥v1.83.1、x/net ≥v0.60.0 | [未开始] | `docs/3-audits/VULNCHECK_AUDIT_2026-11-09.md`；升级后复扫目标 0 可达 |
 | A9 | 扩展点数量文档核对 | **已验证** | 实际 89 = 83 平台（`platform_extensions.go`）+ 6 内核生命周期（`kernel.go:49-78`），README 无需改 |
 
