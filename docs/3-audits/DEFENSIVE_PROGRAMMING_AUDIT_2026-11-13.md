@@ -103,6 +103,18 @@ srv := &http.Server{ Handler: ..., ReadHeaderTimeout: 5 * time.Second }
 - **D-10**：错误吞掉是防御性编程的反面：`ReadAll` 失败被当作空响应、`MkdirAll` 失败继续、`rand.Read` 失败静默；其中 session 后缀回退是 `byte(i)` 可预测。
 - **D-11**：gRPC/HTTP 没有按连接或证书的速率限制；注册表靠超时清理，突发注册可短时膨胀。
 
+## 2.1 修复记录（2026-11-13，`aeb1ccc`）
+
+| ID | 状态 | 修复内容 |
+|---|---|---|
+| D-01 | ✅ 已修 | `ParseConfig` 对 role=master：非 loopback 且 token 空直接报错；新增 `config_test.go` 覆盖 loopback/token/`0.0.0.0`/`[::]` |
+| D-02 | ✅ 已修 | `validateRanges` 对 weights/threshold/threat/ACI/edge/delta/confidence/SPC/ATT&CK 全部拒绝 NaN/Inf；`ranges_test.go` 新增 NaN 回归 |
+| D-03 | ✅ 已修（Agent 侧） | 新增 `VerifyAgentCertStrict`（无 first-contact 放行）；Agent 证书调用 `GetSnapshot/ExecuteCommand/StreamLogs` 必须指纹绑定到目标 host；运维证书保留跨主机（角色分离留后续） |
+| D-04 | ✅ 已验证 | 既有 `BindAgentCert` 已保证一证书一 host；未新增代码，文档标注 provisioning 仍靠人工签发 |
+| D-05 | ✅ 已修 | CTI 响应 `io.LimitReader(..., 32 MiB)` |
+| D-06 | ✅ 已修 | 联邦 HTTP `ReadTimeout=15s / WriteTimeout=30s / IdleTimeout=60s` |
+| D-07～D-11 | ⏳ 未做 | 仍在未完成清单 P2/P3 |
+
 ## 3. 建议优先级
 
 - **P0（本周）**：D-01（fail-closed + 默认 loopback）、D-02（NaN 校验 + 回归测试）、D-03（gRPC 角色/服务授权）。

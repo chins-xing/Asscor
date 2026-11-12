@@ -8,9 +8,6 @@
 
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
-| **P0** | D-01 | 安全 | 联邦 master `token==""` 时放行全部请求；默认 token 空、监听全接口、明文 HTTP | [未开始] | `extensions/federation/master.go:115-121`、`config.go:82-88,150`；非 loopback 强制 token / 默认 127.0.0.1 / 显式 allow_insecure |
-| **P0** | D-02 | 安全 | 配置校验不拒绝 NaN：threshold/weights/edge 可为 NaN 并污染全部评分 | [未开始] | `internal/config/ranges.go:11-101`；所有 float 加 `math.IsNaN/IsInf`；加回归测试 |
-| **P0** | D-03 | 安全 | gRPC 同端口无角色隔离：任意 Agent 证书可调 `GetSnapshot(任意 host)` / `StreamLogs` | [未开始] | `internal/comms/grpc_server.go:117-131`、`services.go:635-706`；证书角色/服务级授权或拆分运维监听 |
 | **P0** | A10 | 依赖漏洞 | govulncheck 26 个可达漏洞（Go 1.26.3 stdlib 22 + grpc 4） | [未开始] | `docs/3-audits/VULNCHECK_AUDIT_2026-11-09.md`；升级 Go ≥1.26.10、grpc ≥v1.83.1、x/net ≥v0.60.0，复扫目标 0 |
 | **P0** | A11 | 配置正确性 | `[edge_factors] two_factor_failure` 被 `[edge_factors.level4_override]` 无条件覆盖（0.85 永远不生效） | [未开始] | `internal/config/config.go:275-307`；按等级 gate 或删/改名 + 回归测试 |
 
@@ -18,9 +15,6 @@
 
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
-| P1 | D-04 | 安全 | 注册允许任意未占用 `host_id`（无 provisioning），可注入假主机 | [未开始] | `internal/comms/services.go:170-229`；主机清单/注册令牌/CN=host_id 校验 |
-| P1 | D-05 | 安全 | CTI 响应体无上限 `io.ReadAll`，可内存耗尽 | [未开始] | `internal/cti/cti.go:218-229`；统一 `LimitReader` |
-| P1 | D-06 | 安全 | 联邦 HTTP 缺 Read/Write/Idle 超时 | [未开始] | `extensions/federation/master.go:61-64`；补齐三个超时 |
 | P1 | A2 | 可用性 | `federation-mod` 崩溃不会自动重启（需重启 kernel） | [未开始] | Proxy 加 supervisor（指数退避 + 事件上报） |
 | P1 | A8 | 发布 | 打包/CI 未覆盖进程隔离：`build.sh` 无 federation_proc/federation-mod，CI 只测进程内 | [未开始] | `scripts/build.sh:11`、`.github/workflows/ci.yml:62-65` |
 | P1 | A12 | 正确性 | legacy 评分路径 5 个边因子硬编码（0.75/0.80/0.82/0.90/0.88），不读 `[edge_factors]` | [未开始] | `internal/engine/assessor.go:562-570`；废弃 legacy 或改为读 cfg |
@@ -70,6 +64,12 @@
 |---|---|---|
 | A9 | 扩展点数量文档核对 | **已验证**：89 = 83 平台（`platform_extensions.go`）+ 6 内核生命周期（`kernel.go:49-78`），README 无需改 |
 | D1 | 拓扑停机 + asc 池 46 资源 `onboot=0` | 已完成（进程隔离 v0.4 仅在快照中） |
+| D-01 | 联邦鉴权 fail-open | **已完成**（`aeb1ccc`）：master 非 loopback 且 token 空时拒绝启动；`config_test.go` 覆盖 |
+| D-02 | NaN 配置绕过 | **已完成**（`aeb1ccc`）：`validateRanges` 对 weights/threshold/threat/ACI/edge/delta/confidence/SPC/ATT&CK 全部拒绝 NaN/Inf；回归测试 |
+| D-03 | gRPC 无角色隔离 | **已完成（Agent 侧）**（`aeb1ccc`）：Agent 证书按指纹绑定只允许访问自身 host；运维证书仍跨主机（角色分离留后续） |
+| D-04 | 注册任意 host_id | **已验证**：`BindAgentCert` 已保证一证书一 host；新增 host 仍依赖人工签发（provisioning 可再加） |
+| D-05 | CTI 无上限读取 | **已完成**（`aeb1ccc`）：`LimitReader(32 MiB)` |
+| D-06 | 联邦 HTTP 缺超时 | **已完成**（`aeb1ccc`）：Read 15s / Write 30s / Idle 60s |
 
 ## 排序说明
 
