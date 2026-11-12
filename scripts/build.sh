@@ -11,6 +11,9 @@ BUILD_DIR="build"
 MODULE_TAGS="heartbeat,commander,policy,cti,assessor,attck_ext,spc,collector,sourcemanager,persistence,srdwrapper,integrity,resilience,comms,checks,adapter,engine,oscal,expr,edgeexp"
 BINARIES=(
     "cmd/kernel:ASSCOR-kernel-linux-amd64"
+    # Process-isolated federation build: kernel Proxy + separate child binary.
+    "cmd/kernel:ASSCOR-kernel-proc-linux-amd64"
+    "cmd/federation-mod:federation-mod-linux-amd64"
     "cmd/agent:ASSCOR-agent-linux-amd64"
     "cmd/asscor:ASSCOR-linux-amd64"
     # 实验场景采集器（cmd/edgescen）：实验矩阵要在目标机上跑它，故与主二进制一起交叉编译。
@@ -36,7 +39,14 @@ for entry in "${BINARIES[@]}"; do
     echo "Building ${name}..."
     TAGS=""
     case "${src}" in
-        cmd/kernel) TAGS="${MODULE_TAGS}" ;;
+        cmd/kernel)
+            if [[ "${name}" == *-proc-* ]]; then
+                TAGS="federation,federation_proc,${MODULE_TAGS}"
+            else
+                TAGS="${MODULE_TAGS}"
+            fi
+            ;;
+        cmd/federation-mod) TAGS="" ;;
         cmd/agent) TAGS="checks" ;;
         cmd/asscor) TAGS="engine,checks,adapter,spc,attck_ext" ;;
         cmd/edgescen) TAGS="${MODULE_TAGS}" ;;
