@@ -15,6 +15,7 @@
 | A6 | 联动审计 §7.4 三项：`adapterhub` 整包孤儿、`internal/attck` kernel 内不启动（provider 注入形态）、`comms_on.go` 手工装配 9 模块 | [待决策] | `docs/3-audits/MODULE_LINKAGE_AUDIT_2026-10-29.md` §7.4 |
 | A7 | 内核瘦身：拆可选模块二进制、动态插件、单协议（gRPC/JSONRPC 二选一） | [未开始] | 内核体积审计结论（minimal 9.3MB → full 22.2MB；业务符号仅 4.1%） |
 | A8 | **打包/CI 未覆盖进程隔离**：`scripts/build.sh` 无 `federation`/`federation_proc`/`cmd/federation-mod`；CI 只构建/测试进程内 federation | [未开始] | `scripts/build.sh:11`；`.github/workflows/ci.yml:62-65` |
+| A11 | **模型参数变量化**：Prism 13 + SRD + 内核评分已落实；`level4_override` 覆盖 bug、legacy 边因子、ACI 死配置、研究引擎常量待处理 | [进行中] | `docs/3-audits/MODEL_PARAMETERIZATION_AUDIT_2026-11-12.md` |
 | A10 | **govulncheck 审计：26 个可达漏洞**（Go 1.26.3 stdlib 22 + grpc 4）；修复需 Go ≥1.26.10、grpc ≥v1.83.1、x/net ≥v0.60.0 | [未开始] | `docs/3-audits/VULNCHECK_AUDIT_2026-11-09.md`；升级后复扫目标 0 可达 |
 | A9 | 扩展点数量文档核对 | **已验证** | 实际 89 = 83 平台（`platform_extensions.go`）+ 6 内核生命周期（`kernel.go:49-78`），README 无需改 |
 
@@ -32,7 +33,7 @@
 
 | ID | 事项 | 状态 | 依据 / 下一步 |
 |---|---|---|---|
-| C1 | main 文档 **18 处悬空链接**（legacy 文档指向 `docs/clab-lab/`、`docs/superpowers/plans/...`、`docs/v0.3.0/...` 等已移动/未跟踪文件） | [待修] | 用 `scripts/check-doc-refs.sh` 在 main 复现；逐条改指新路径或归档 |
+| C1 | main 文档 **18 处悬空链接**（legacy 文档指向 旧 clab-lab 数据目录（未跟踪）、`docs/superpowers/plans/...`、`docs/v0.3.0/...` 等已移动/未跟踪文件） | [待修] | 用 `scripts/check-doc-refs.sh` 在 main 复现；逐条改指新路径或归档 |
 | C2 | `WHITEPAPER_GAP_ANALYSIS` 三条已过时：CTI 已真实拉取 OTX/MISP（`internal/cti/cti.go:181/276`）、delegation 已有 39 条规则、SPC 已含 `1+0.1n` 乘数（`internal/spc/spc.go:539`） | [文档待更新] | 关闭这三条 gap 并注明验证位置 |
 | C3 | `TECHNICAL_DEBT_BACKLOG_2026-09-08` 仍列 M-4/M-6/L-1/L-2/L-6/RC-M4（2026-09 基线） | [待复核] | 逐条对照当前代码：关闭/降级/更新 |
 | C4 | 扩展点执行清单：89 个点里实际被 `Execute` 的约 16 个（assessor 15 + srd 1），其余仅注册 | [未开始] | 产出"点 × 执行者"清单，删除/标注纯预留 |
