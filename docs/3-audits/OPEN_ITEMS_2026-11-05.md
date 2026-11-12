@@ -54,8 +54,28 @@
 | D2 | GitHub CI 最新 run 未确认 | [待验证] | 本地等价 CI（gofmt/vet/build/test/pluginsdk）已 `CI_ALL_OK`；GitHub 侧需看 push 结果 |
 | D3 | 内核/子进程部署脚本仍是一次性命令 | [未开始] | 可纳入 `scripts/` 做可重复部署（含 federation-mod 分发） |
 
+## F. 防御性编程（2026-11-13 审计）
+
+> 来源：`docs/3-audits/DEFENSIVE_PROGRAMMING_AUDIT_2026-11-13.md`
+
+| ID | 事项 | 状态 | 修复方向 |
+|---|---|---|---|
+| D-01 | 联邦 master `token==""` 时放行全部请求；默认 token 空、监听全接口、明文 HTTP | [未开始] | 非 loopback 强制 token / 默认 127.0.0.1 / 显式 allow_insecure |
+| D-02 | 配置范围校验不拒绝 NaN：threshold/weights/edge 可为 NaN 并污染评分 | [未开始] | 所有 float 加 `math.IsNaN/IsInf`；加回归测试 |
+| D-03 | gRPC 同端口无角色隔离：Agent 证书可调 `GetSnapshot(任意 host)` / `StreamLogs` | [未开始] | 证书角色/服务级授权，或拆分运维监听 |
+| D-04 | 注册允许任意未占用 host_id（无 provisioning），可注入假主机 | [未开始] | 主机清单/注册令牌/CN=host_id 校验 |
+| D-05 | CTI 响应体无上限 `io.ReadAll`，可内存耗尽 | [未开始] | `LimitReader` 统一上限 |
+| D-06 | 联邦 HTTP 缺 Read/Write/Idle 超时 | [未开始] | 补齐三个超时 |
+| D-07 | gRPC 客户端 TLS 关闭时静默退回明文 | [未开始] | 显式 dev 开关 / fail-closed |
+| D-08 | 命令时间戳未来值可通过、无 nonce 去重 | [未开始] | 未来时间窗 + nonce 缓存 |
+| D-09 | 扩展 git clone URL 未加 `--`；解压无总量上限 | [未开始] | 参数分隔 + 解压配额 |
+| D-10 | 多处忽略错误（SPC ReadAll、解压 MkdirAll、trace rand、session 回退） | [未开始] | 错误返回/记录，关键路径不静默 |
+| D-11 | gRPC/联邦缺速率与连接配额 | [未开始] | 按证书/连接限速 |
+
 ## E. 建议优先级
 
 - **P0**：A8（打包/CI 覆盖 proc 模式）→ 否则进程隔离不可发布；A2（auto-restart）→ 可用性；C1（main 悬空链接）
 - **P1**：A1（迁移第二个模块）、A6（adapterhub/attck/comms 决策）、A5（拆 module 减重）、B1（T4 跨环境 ROC）
 - **P2**：A3/A4（RPC 并发/快照周期）、B2（风险真值）、B3/B4/B5（安全边界）、C2/C3/C4（文档/清单）
+
+> 防御性编程审计优先级：**P0 = D-01/D-02/D-03**；**P1 = D-04/D-05/D-06**；**P2 = D-07…D-11**。
