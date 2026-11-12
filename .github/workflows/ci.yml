@@ -63,6 +63,10 @@ jobs:
         run: |
           go build -tags "federation,$MODULE_TAGS" ./cmd/kernel/
           go test -tags "federation,$MODULE_TAGS" ./extensions/...
+          # Process-isolated mode (v0.4): kernel Proxy + federation-mod child.
+          go build -tags "federation,federation_proc,$MODULE_TAGS" ./cmd/kernel/
+          go build ./cmd/federation-mod/
+          go test -tags "federation,federation_proc,$MODULE_TAGS" ./extensions/federation/
 
       - name: Plugin SDK (independent module)
         working-directory: pluginsdk

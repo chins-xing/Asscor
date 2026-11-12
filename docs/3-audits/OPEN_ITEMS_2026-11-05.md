@@ -17,7 +17,6 @@
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
 | P1 | A2 | 可用性 | `federation-mod` 崩溃不会自动重启（需重启 kernel） | [未开始] | Proxy 加 supervisor（指数退避 + 事件上报） |
-| P1 | A8 | 发布 | 打包/CI 未覆盖进程隔离：`build.sh` 无 federation_proc/federation-mod，CI 只测进程内 | [未开始] | `scripts/build.sh:11`、`.github/workflows/ci.yml:62-65` |
 | P1 | A12 | 正确性 | legacy 评分路径 5 个边因子硬编码（0.75/0.80/0.82/0.90/0.88），不读 `[edge_factors]` | [未开始] | `internal/engine/assessor.go:562-570`；废弃 legacy 或改为读 cfg |
 | P1 | A13 | 正确性 | `[resilience] aci_*` 7 个权重被解析但全仓无消费点（死配置） | [未开始] | `internal/config/config.go:38-44,326-346`；接入评分或删除 |
 
@@ -73,6 +72,7 @@
 | D-06 | 联邦 HTTP 缺超时 | **已完成**（`aeb1ccc`）：Read 15s / Write 30s / Idle 60s |
 | A11 | `level4_override` 无条件覆盖 | **已完成**（`d635197`）：仅 `compliance_framework` 含 Level 4/等保四级时应用；Level 3 默认用 `[edge_factors]` 值；新增回归测试 |
 | A10 | 依赖漏洞（govulncheck 26 可达） | **已完成**（`a980344`）：Go 1.26.11 + grpc v1.83.2 + x/net v0.60.0；默认/全 tag 复扫均 0 可达 |
+| A8 | proc 模式未进打包/CI | **已完成**（`TBD`）：`scripts/build.sh` 增加 `ASSCOR-kernel-proc` + `federation-mod`；CI 增加 proc kernel/child 构建与测试 |
 
 ## 排序说明
 
