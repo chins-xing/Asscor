@@ -15,6 +15,7 @@
 | A6 | 联动审计 §7.4 三项：`adapterhub` 整包孤儿、`internal/attck` kernel 内不启动（provider 注入形态）、`comms_on.go` 手工装配 9 模块 | [待决策] | `docs/3-audits/MODULE_LINKAGE_AUDIT_2026-10-29.md` §7.4 |
 | A7 | 内核瘦身：拆可选模块二进制、动态插件、单协议（gRPC/JSONRPC 二选一） | [未开始] | 内核体积审计结论（minimal 9.3MB → full 22.2MB；业务符号仅 4.1%） |
 | A8 | **打包/CI 未覆盖进程隔离**：`scripts/build.sh` 无 `federation`/`federation_proc`/`cmd/federation-mod`；CI 只构建/测试进程内 federation | [未开始] | `scripts/build.sh:11`；`.github/workflows/ci.yml:62-65` |
+| A11 | **模型参数变量化**：Prism 13 + SRD + 内核评分已落实；`level4_override` 覆盖 bug、legacy 边因子、ACI 死配置、研究引擎常量待处理 | [进行中] | `docs/3-audits/MODEL_PARAMETERIZATION_AUDIT_2026-11-12.md` |
 | A10 | **govulncheck 审计：26 个可达漏洞**（Go 1.26.3 stdlib 22 + grpc 4）；修复需 Go ≥1.26.10、grpc ≥v1.83.1、x/net ≥v0.60.0 | [未开始] | `docs/3-audits/VULNCHECK_AUDIT_2026-11-09.md`；升级后复扫目标 0 可达 |
 | A9 | 扩展点数量文档核对 | **已验证** | 实际 89 = 83 平台（`platform_extensions.go`）+ 6 内核生命周期（`kernel.go:49-78`），README 无需改 |
 
