@@ -80,6 +80,12 @@ ef-002fa     0.850    ← [edge_factors.custom] 的同名小写项，作为额�
 
 "level4" 只存在于键名/文案里，**解析与评分时没有任何合规等级判定**，所以它实际上是"永远覆盖"。要么按 `compliance_framework`/等级 gate，要么把该键改成普通覆盖项并在文档里删掉 `[edge_factors]` 的同名写法。
 
+
+**修复（2026-11-13，`d635197`）**：`[edge_factors.level4_override]` 现在只在
+`[acceptability] compliance_framework` 判定为 Level 4（含 "Level 4"/"等保四级"）时应用；
+默认 Level 3 下 `[edge_factors] two_factor_failure = 0.85` 生效。回归测试
+`TestEdgeFactorLevel4OverrideOnlyForLevel4` 锁定 Level 3/Level 4/空值三种行为。
+
 ## 4. 建议
 
 **P0（配置正确性）**

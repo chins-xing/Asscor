@@ -61,6 +61,11 @@ func (m *MasterServer) Start() error {
 	srv := &http.Server{
 		Handler:           m.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
+		// Audit D-06: bound the whole exchange, not just headers. Without
+		// these a slow/idle client can pin a connection (slowloris).
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	m.mu.Lock()

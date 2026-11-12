@@ -21,6 +21,8 @@ import (
 	"github.com/chins-xing/asscor/internal/logger"
 	"github.com/chins-xing/asscor/internal/model"
 	"github.com/chins-xing/asscor/internal/resilience"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -615,9 +617,44 @@ func convertATTACKPredictedRisk(src *model.ATTACKPredictedRiskInfo) *apiv1.ATTAC
 }
 
 type AgentServiceImpl struct {
+	// verifyHost binds a caller certificate fingerprint to a host_id. It is
+	// wired from the heartbeat identity registry; nil/null means no mTLS
+	// (development) and host scoping is skipped.
+	verifyHost func(hostID, fingerprint string) bool
+
 	assessor   kernel.AssessorInterface
 	commander  kernel.CommanderInterface
 	logCollect kernel.LogCollectorInterface
+}
+
+// SetHostVerifier wires certificate→host binding checks for AgentService RPCs
+// (audit D-03). The heartbeat module owns the binding registry.
+func (s *AgentServiceImpl) SetHostVerifier(fn func(hostID, fingerprint string) bool) {
+	s.verifyHost = fn
+}
+
+// authorizeHost rejects a caller certificate that is not bound to hostID.
+// Empty fingerprints (mTLS disabled, development) are left to the existing
+// identity checks — there is no certificate to scope.
+func (s *AgentServiceImpl) authorizeHost(ctx context.Context, hostID string) error {
+	if s.verifyHost == nil {
+		return nil
+	}
+	fp := kernel.PeerCertFingerprintFromContext(ctx)
+	if fp == "" {
+		return nil // mTLS disabled (development)
+	}
+	// Only agent certificates are host-scoped. Operator/other certificates
+	// (no "ASSCOR Agent " CN) keep the legacy cross-host access; a proper
+	// role-separated listener is future work.
+	cn := strings.TrimSpace(kernel.PeerCertCommonNameFromContext(ctx))
+	if !strings.HasPrefix(cn, "ASSCOR Agent ") {
+		return nil
+	}
+	if !s.verifyHost(hostID, fp) {
+		return status.Errorf(codes.PermissionDenied, "certificate is not bound to host %q", hostID)
+	}
+	return nil
 }
 
 func NewAgentServiceImpl(
@@ -633,6 +670,9 @@ func NewAgentServiceImpl(
 }
 
 func (s *AgentServiceImpl) GetSnapshot(ctx context.Context, req *apiv1.SnapshotRequest) (*apiv1.SnapshotResponse, error) {
+	if err := s.authorizeHost(ctx, req.HostId); err != nil {
+		return &apiv1.SnapshotResponse{HostId: req.HostId}, err
+	}
 	var result *apiv1.AssessmentResult
 	if s.assessor != nil {
 		ar := s.assessor.Evaluate(req.HostId)
@@ -685,6 +725,9 @@ func (s *AgentServiceImpl) ExecuteCommand(ctx context.Context, req *apiv1.Comman
 			Success:   false,
 		}, fmt.Errorf("command_id and host_id are required")
 	}
+	if err := s.authorizeHost(ctx, req.HostId); err != nil {
+		return &apiv1.CommandResponse{CommandId: req.CommandId, Success: false}, err
+	}
 
 	// Identity event (audit I-02): command confirmation attributed to the
 	// connecting agent's certificate identity.
@@ -709,6 +752,14 @@ func (s *AgentServiceImpl) StreamLogs(ctx context.Context, req *apiv1.StreamLogs
 
 	if len(req.Entries) == 0 {
 		return &apiv1.Ack{Ok: true}, nil
+	}
+	for _, entry := range req.Entries {
+		if entry == nil {
+			continue
+		}
+		if err := s.authorizeHost(ctx, entry.HostId); err != nil {
+			return &apiv1.Ack{Ok: false}, err
+		}
 	}
 
 	if err := s.logCollect.AppendBatch(req.Entries); err != nil {

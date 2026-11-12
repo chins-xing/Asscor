@@ -227,6 +227,22 @@ func Load(path string) (*Config, error) {
 	return Parse(string(data))
 }
 
+// isLevel4Framework reports whether the configured compliance framework is
+// Level 4. The [edge_factors.level4_override] multiplier is only valid there;
+// applying it unconditionally made [edge_factors] two_factor_failure dead
+// (audit A11: default config is Level 3 but effective factor was 0.70).
+func isLevel4Framework(framework string) bool {
+	s := strings.ToLower(strings.TrimSpace(framework))
+	if s == "" {
+		return false
+	}
+	return strings.Contains(s, "level 4") ||
+		strings.Contains(s, "level4") ||
+		strings.Contains(s, "level-4") ||
+		strings.Contains(s, "等保四级") ||
+		strings.Contains(s, "第四级")
+}
+
 func Parse(content string) (*Config, error) {
 	cfg := Default()
 	sections := parseSections(content)
@@ -300,7 +316,7 @@ func Parse(content string) (*Config, error) {
 		}
 	}
 
-	if sec, ok := sections["edge_factors.level4_override"]; ok {
+	if sec, ok := sections["edge_factors.level4_override"]; ok && isLevel4Framework(cfg.ComplianceFramework) {
 		if f, ok := getFloat(sec, "two_factor_failure"); ok {
 			cfg.EdgeFactors.TwoFactorFailure = f
 		}

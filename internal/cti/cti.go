@@ -21,6 +21,11 @@ import (
 // Module fetches OTX pulses and MISP events and computes the global threat
 // coefficient μ. It is a build-tag optional plugin (//go:build cti); the kernel
 // keeps only the CTIInterface contract.
+// maxCTIResponseBody bounds one OTX/MISP response. The feed is remote
+// input; without a cap a malicious or compromised endpoint can exhaust the
+// kernel's memory (audit D-05).
+const maxCTIResponseBody = 32 << 20 // 32 MiB
+
 type Module struct {
 	kc kernel.KernelContext
 
@@ -223,7 +228,7 @@ func (m *Module) fetchOTXPulses() int {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxCTIResponseBody))
 	if err != nil {
 		return 0
 	}

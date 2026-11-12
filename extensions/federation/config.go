@@ -11,6 +11,7 @@ package federation
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -112,6 +113,22 @@ func ParseRole(raw string) (Role, error) {
 	}
 }
 
+// isLoopbackListen reports whether addr binds only a loopback interface.
+// "" / ":5099" / "0.0.0.0:5099" / "[::]:5099" are not loopback: they expose
+// the master to the network.
+func isLoopbackListen(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 // ParseConfig reads the [federation] section through a key getter shaped like
 // the kernel config adapter (`cfg.Get("federation.role")`). A nil getter
 // yields the defaults (role=off).
@@ -161,8 +178,16 @@ func ParseConfig(get func(string) string) (Config, error) {
 			}
 		}
 	}
-	if cfg.Role == RoleMaster && cfg.ListenAddr == "" {
-		cfg.ListenAddr = DefaultListenAddr
+	if cfg.Role == RoleMaster {
+		if cfg.ListenAddr == "" {
+			cfg.ListenAddr = DefaultListenAddr
+		}
+		// Audit D-01: never expose an unauthenticated master. Without this
+		// check an omitted token silently authorized every request, and the
+		// default listen address is all interfaces.
+		if strings.TrimSpace(cfg.Token) == "" && !isLoopbackListen(cfg.ListenAddr) {
+			return cfg, fmt.Errorf("[federation] role=master with empty token requires a loopback listen_addr (got %q); set [federation] token or bind 127.0.0.1", cfg.ListenAddr)
+		}
 	}
 	return cfg, nil
 }

@@ -44,6 +44,11 @@ type HeartbeatInterface interface {
 	// yet (first contact) or the fingerprints match. Always returns false
 	// for a revoked fingerprint.
 	VerifyAgentCert(hostID, fingerprint string) bool
+	// VerifyAgentCertStrict is VerifyAgentCert without the "first contact"
+	// allowance: it returns true only when hostID already has a binding and
+	// the fingerprint matches. Used for authorization (audit D-03), where an
+	// unbound host must not be readable by an arbitrary agent certificate.
+	VerifyAgentCertStrict(hostID, fingerprint string) bool
 	// IsCertRevoked reports whether the certificate fingerprint has been
 	// revoked. An empty fingerprint (mTLS disabled) is never revoked.
 	IsCertRevoked(fingerprint string) bool
