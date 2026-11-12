@@ -1,81 +1,80 @@
-# 未完成项总览（2026-11-05）
+# 未完成项总览（2026-11-05，2026-11-13 按优先级重排）
 
-> 汇总当前**仍未完成/待决策/待验证**的条目。每条给出来源与下一步动作。
-> 图例：`[未开始]` `[进行中]` `[待决策]` `[待验证]` `[文档待更新]`
+> 汇总当前**仍未完成 / 待决策 / 待验证**的条目；本版按 **P0 → P3** 重新排序，不再按模块分组。
+> 图例：`[未开始]` `[进行中]` `[待决策]` `[待验证]` `[文档待更新]` `[环境约束]` `[demo 级]` `[可选]`
+> 排序依据：安全可利用性 > 正确性/发布阻断 > 可用性/实验缺口 > 文档/清理。
 
-## A. 微内核与架构
+## P0 — 立即处理（安全或会静默出错）
 
-| ID | 事项 | 状态 | 依据 / 下一步 |
-|---|---|---|---|
-| A1 | 进程隔离仅覆盖 **federation** 一个模块；assessor/topology/SPC/CTI 等仍在进程内 | [进行中] | `docs/2-experiments/T4_FEDERATION_PROCESS_2026-10-29.md`；按风险低→高迁下一个模块（CTI/SPC/collector） |
-| A2 | `federation-mod` 崩溃**不会自动重启**（需重启 kernel） | [未开始] | 同上 §5；Proxy 加 supervisor（指数退避 + 事件上报） |
-| A3 | 内核↔子进程 RPC **单飞**（一次一请求） | [未开始] | `proc_proxy.go` procClient 串行；改多路复用/并发池 |
-| A4 | 快照推送间隔 = `report_interval_sec`（30s），分数最多滞后一个周期 | [待决策] | 推送与上报周期解耦（增量快照/5s） |
-| A5 | 内核二进制**未因进程隔离减重**（纯逻辑仍与 Proxy 同包） | [未开始] | 把 federation 纯逻辑拆独立 module，Proxy 只依赖协议 |
-| A6 | 联动审计 §7.4 三项：`adapterhub` 整包孤儿、`internal/attck` kernel 内不启动（provider 注入形态）、`comms_on.go` 手工装配 9 模块 | [待决策] | `docs/3-audits/MODULE_LINKAGE_AUDIT_2026-10-29.md` §7.4 |
-| A7 | 内核瘦身：拆可选模块二进制、动态插件、单协议（gRPC/JSONRPC 二选一） | [未开始] | 内核体积审计结论（minimal 9.3MB → full 22.2MB；业务符号仅 4.1%） |
-| A8 | **打包/CI 未覆盖进程隔离**：`scripts/build.sh` 无 `federation`/`federation_proc`/`cmd/federation-mod`；CI 只构建/测试进程内 federation | [未开始] | `scripts/build.sh:11`；`.github/workflows/ci.yml:62-65` |
-| A11 | `[edge_factors] two_factor_failure` 被 `[edge_factors.level4_override]` **无条件覆盖**（配 0.85 实际永远 0.70） | [未开始] | `config/config.go:275-307`；按等级 gate 或删/改名 + 回归测试；审计 `MODEL_PARAMETERIZATION_AUDIT_2026-11-12.md` |
-| A12 | **legacy 评分路径** 5 个边因子硬编码（0.75/0.80/0.82/0.90/0.88），不读 `[edge_factors]` | [未开始] | `internal/engine/assessor.go:562-570`；决定废弃 legacy 或改为读 cfg |
-| A13 | `[resilience] aci_*` 7 个权重被解析但**全仓无消费点**（死配置） | [未开始] | `internal/config/config.go:38-44,326-346`；接入 SPC/assessor 或删除 |
-| A14 | SSAM 路径 `EF-3FA` 因子硬编码 **0.82**（含 CascadeValue） | [未开始] | `internal/engine/ssam/adapter.go:69`；参数化或标为模型常量 |
-| A15 | ATT&CK **15 技术转移矩阵**硬编码（专家先验），无配置入口 | [未开始] | `internal/attck/attck.go:987+`；实验注入或文档标常量 |
-| A16 | SPC 影响权重硬编码：`0.20*cvss+0.50*epss+0.30*kev`、APT `×1.2`、子技术 `×1.1`、PoC `0.3` | [未开始] | `internal/spc/spc.go:535-544` |
-| A17 | CTI 系数 `1.0`、更新间隔 `15m` 硬编码（仅 OTX/MISP 凭据可配） | [未开始] | `internal/cti/cti.go:70-71` |
-| A18 | 研究引擎默认参数硬编码：predictor 动作收益、engagement `1.0/0.8/0.6/1.2`、attackerstate `0.1/0.15`（RC-M4） | [未开始] | `predictor.go:71`、`engagement.go:62`、`attackerstate/state.go:106,132` |
-| A19 | `[resilience.circuit]` 未解析；熔断默认 5 次/5 分钟/1 分钟硬编码 | [未开始] | `internal/resilience/circuit.go:71` |
-| A10 | **govulncheck 审计：26 个可达漏洞**（Go 1.26.3 stdlib 22 + grpc 4）；修复需 Go ≥1.26.10、grpc ≥v1.83.1、x/net ≥v0.60.0 | [未开始] | `docs/3-audits/VULNCHECK_AUDIT_2026-11-09.md`；升级后复扫目标 0 可达 |
-| A9 | 扩展点数量文档核对 | **已验证** | 实际 89 = 83 平台（`platform_extensions.go`）+ 6 内核生命周期（`kernel.go:49-78`），README 无需改 |
+| 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
+|---|---|---|---|---|---|
+| **P0** | D-01 | 安全 | 联邦 master `token==""` 时放行全部请求；默认 token 空、监听全接口、明文 HTTP | [未开始] | `extensions/federation/master.go:115-121`、`config.go:82-88,150`；非 loopback 强制 token / 默认 127.0.0.1 / 显式 allow_insecure |
+| **P0** | D-02 | 安全 | 配置校验不拒绝 NaN：threshold/weights/edge 可为 NaN 并污染全部评分 | [未开始] | `internal/config/ranges.go:11-101`；所有 float 加 `math.IsNaN/IsInf`；加回归测试 |
+| **P0** | D-03 | 安全 | gRPC 同端口无角色隔离：任意 Agent 证书可调 `GetSnapshot(任意 host)` / `StreamLogs` | [未开始] | `internal/comms/grpc_server.go:117-131`、`services.go:635-706`；证书角色/服务级授权或拆分运维监听 |
+| **P0** | A10 | 依赖漏洞 | govulncheck 26 个可达漏洞（Go 1.26.3 stdlib 22 + grpc 4） | [未开始] | `docs/3-audits/VULNCHECK_AUDIT_2026-11-09.md`；升级 Go ≥1.26.10、grpc ≥v1.83.1、x/net ≥v0.60.0，复扫目标 0 |
+| **P0** | A11 | 配置正确性 | `[edge_factors] two_factor_failure` 被 `[edge_factors.level4_override]` 无条件覆盖（0.85 永远不生效） | [未开始] | `internal/config/config.go:275-307`；按等级 gate 或删/改名 + 回归测试 |
 
-## B. 实验与研究
+## P1 — 近期处理（高危或发布/可用性阻断）
 
-| ID | 事项 | 状态 | 依据 / 下一步 |
-|---|---|---|---|
-| B1 | **T4 跨环境 ROC**（SRD v2.3 P1）：第二拓扑（3–4 网段 + VLAN 隔离）、每环境 8 轮随机事实、95% CI、两环境 AUC 对比 | [未开始] | `docs/1-current/design/SRD_V2.3_PLAN_2026-10-27.md` §T4；需 VLAN-aware bridge 或 VM 网络 |
-| B2 | AUC 深化：多跳 ACL / 风险真值（攻击链成功）/ 三 profile 参数敏感性 | [未开始] | 现有二元可达性下三 profile AUC 完全一致（`T4_FEDERATION_AUC_LARGE`） |
-| B3 | 联邦安全边界：demo 为共享 token + 明文 HTTP | [demo 级] | 生产需 mTLS + 独立凭证 |
-| B4 | agent 未配置 HMAC key（commander 远程命令会被拒） | [环境约束] | `/root/t4` 时代遗留；要测命令下发需先下发 `agent-hmac.key` |
-| B5 | securemode 把 agent.ini 加密成 `.enc`，配置不可审计 | [可选] | 如需可审计，用不含 securemode tag 的 agent 重建 |
+| 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
+|---|---|---|---|---|---|
+| P1 | D-04 | 安全 | 注册允许任意未占用 `host_id`（无 provisioning），可注入假主机 | [未开始] | `internal/comms/services.go:170-229`；主机清单/注册令牌/CN=host_id 校验 |
+| P1 | D-05 | 安全 | CTI 响应体无上限 `io.ReadAll`，可内存耗尽 | [未开始] | `internal/cti/cti.go:218-229`；统一 `LimitReader` |
+| P1 | D-06 | 安全 | 联邦 HTTP 缺 Read/Write/Idle 超时 | [未开始] | `extensions/federation/master.go:61-64`；补齐三个超时 |
+| P1 | A2 | 可用性 | `federation-mod` 崩溃不会自动重启（需重启 kernel） | [未开始] | Proxy 加 supervisor（指数退避 + 事件上报） |
+| P1 | A8 | 发布 | 打包/CI 未覆盖进程隔离：`build.sh` 无 federation_proc/federation-mod，CI 只测进程内 | [未开始] | `scripts/build.sh:11`、`.github/workflows/ci.yml:62-65` |
+| P1 | A12 | 正确性 | legacy 评分路径 5 个边因子硬编码（0.75/0.80/0.82/0.90/0.88），不读 `[edge_factors]` | [未开始] | `internal/engine/assessor.go:562-570`；废弃 legacy 或改为读 cfg |
+| P1 | A13 | 正确性 | `[resilience] aci_*` 7 个权重被解析但全仓无消费点（死配置） | [未开始] | `internal/config/config.go:38-44,326-346`；接入评分或删除 |
 
-## C. 文档与仓库
+## P2 — 排期处理（研究缺口、加固、技术债）
 
-| ID | 事项 | 状态 | 依据 / 下一步 |
-|---|---|---|---|
-| C1 | main 文档 **18 处悬空链接**（legacy 文档指向 旧 clab-lab 数据目录（未跟踪）、`docs/superpowers/plans/...`、`docs/v0.3.0/...` 等已移动/未跟踪文件） | [待修] | 用 `scripts/check-doc-refs.sh` 在 main 复现；逐条改指新路径或归档 |
-| C2 | `WHITEPAPER_GAP_ANALYSIS` 三条已过时：CTI 已真实拉取 OTX/MISP（`internal/cti/cti.go:181/276`）、delegation 已有 39 条规则、SPC 已含 `1+0.1n` 乘数（`internal/spc/spc.go:539`） | [文档待更新] | 关闭这三条 gap 并注明验证位置 |
-| C3 | `TECHNICAL_DEBT_BACKLOG_2026-09-08` 仍列 M-4/M-6/L-1/L-2/L-6/RC-M4（2026-09 基线） | [待复核] | 逐条对照当前代码：关闭/降级/更新 |
-| C4 | 扩展点执行清单：89 个点里实际被 `Execute` 的约 16 个（assessor 15 + srd 1），其余仅注册 | [未开始] | 产出"点 × 执行者"清单，删除/标注纯预留 |
+| 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
+|---|---|---|---|---|---|
+| P2 | D-07 | 加固 | gRPC 客户端 TLS 关闭时静默退回明文 | [未开始] | `internal/comms/grpc_server.go:345-353`；显式 dev 开关 / fail-closed |
+| P2 | A1 | 微内核 | 进程隔离仅覆盖 federation；assessor/topology/SPC/CTI 仍在进程内 | [进行中] | 按风险低→高迁下一个模块（CTI/SPC/collector） |
+| P2 | A3 | 微内核 | 内核↔子进程 RPC 单飞（一次一请求） | [未开始] | 改多路复用/并发池 |
+| P2 | A4 | 微内核 | 快照推送间隔 = `report_interval_sec`（30s），分数最多滞后一个周期 | [待决策] | 推送与上报周期解耦（增量快照/5s） |
+| P2 | A5 | 微内核 | 内核二进制未因进程隔离减重（纯逻辑仍与 Proxy 同包） | [未开始] | 纯逻辑拆独立 module，Proxy 只依赖协议 |
+| P2 | A6 | 架构 | 联动审计 §7.4：adapterhub 孤儿、attck 双形态、comms_on 手工装配 9 模块 | [待决策] | `docs/3-audits/MODULE_LINKAGE_AUDIT_2026-10-29.md` §7.4 |
+| P2 | A7 | 内核 | 内核瘦身：拆可选模块二进制、动态插件、单协议 | [未开始] | 内核体积审计（minimal 9.3MB → full 22.2MB） |
+| P2 | A14 | 参数化 | SSAM 路径 `EF-3FA` 因子硬编码 0.82（含 CascadeValue） | [未开始] | `internal/engine/ssam/adapter.go:69`；参数化或标为常量 |
+| P2 | A15 | 参数化 | ATT&CK 15 技术转移矩阵硬编码，无配置入口 | [未开始] | `internal/attck/attck.go:987+`；实验注入或文档标常量 |
+| P2 | A16 | 参数化 | SPC 影响权重硬编码（0.20/0.50/0.30、APT×1.2、子技术×1.1） | [未开始] | `internal/spc/spc.go:535-544` |
+| P2 | A17 | 参数化 | CTI 系数 1.0、更新间隔 15m 硬编码 | [未开始] | `internal/cti/cti.go:70-71` |
+| P2 | A18 | 参数化 | 研究引擎默认参数硬编码（predictor/engagement/attackerstate，RC-M4） | [未开始] | `predictor.go:71`、`engagement.go:62`、`attackerstate/state.go:106,132` |
+| P2 | B1 | 研究 | T4 跨环境 ROC（第二拓扑/VLAN 隔离、8 轮、95% CI） | [未开始] | `docs/1-current/design/SRD_V2.3_PLAN_2026-10-27.md` §T4 |
+| P2 | B2 | 研究 | AUC 深化：多跳 ACL / 风险真值 / 参数敏感性 | [未开始] | 现有二元可达性下三 profile AUC 完全一致 |
+| P2 | B3 | 安全边界 | 联邦 demo 为共享 token + 明文 HTTP，生产需 mTLS + 独立凭证 | [demo 级] | 与 D-01 一并收口 |
+| P2 | B4 | 环境 | agent 未配置 HMAC key（commander 远程命令会被拒） | [环境约束] | `/root/t4` 遗留；需先下发 `agent-hmac.key` |
+| P2 | B5 | 可选 | securemode 把 agent.ini 加密成 `.enc`，配置不可审计 | [可选] | 需审计时用不含 securemode tag 的 agent 重建 |
+| P2 | C1 | 文档 | main 文档 18 处悬空链接（legacy 指向 clab-lab/superpowers/v0.3.0 等） | [待修] | `scripts/check-doc-refs.sh` 在 main 复现；逐条改路径或归档 |
+| P2 | C2 | 文档 | `WHITEPAPER_GAP_ANALYSIS` 三条已过时（CTI 实拉取、delegation 39 条、SPC 乘数已存在） | [文档待更新] | 关闭三条 gap 并注明验证位置 |
+| P2 | C3 | 文档 | `TECHNICAL_DEBT_BACKLOG_2026-09-08` 仍列 M-4/M-6/L-1/L-2/L-6/RC-M4 | [待复核] | 逐条对照当前代码关闭/降级/更新 |
+| P2 | C4 | 文档 | 扩展点执行清单：89 个点实际被 Execute 的约 16 个 | [未开始] | 产出"点 × 执行者"清单，删除/标注纯预留 |
+| P2 | D2 | 运维 | GitHub CI 最新 run 未确认 | [待验证] | 本地等价 CI 已 `CI_ALL_OK`；GitHub 侧确认 |
+| P2 | D3 | 运维 | 内核/子进程部署脚本仍是一次性命令 | [未开始] | 纳入 `scripts/` 做可重复部署（含 federation-mod 分发） |
 
-## D. 运维与环境（状态记录，非缺陷）
+## P3 — 低优先（加固/清理）
 
-| ID | 事项 | 状态 | 说明 |
-|---|---|---|---|
-| D1 | 拓扑已停机 + asc 池 46 资源 `onboot=0` | 已完成 | 进程隔离 v0.4 只在快照（`t4-fed-proc-*`）中，未长期部署运行 |
-| D2 | GitHub CI 最新 run 未确认 | [待验证] | 本地等价 CI（gofmt/vet/build/test/pluginsdk）已 `CI_ALL_OK`；GitHub 侧需看 push 结果 |
-| D3 | 内核/子进程部署脚本仍是一次性命令 | [未开始] | 可纳入 `scripts/` 做可重复部署（含 federation-mod 分发） |
+| 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
+|---|---|---|---|---|---|
+| P3 | D-08 | 加固 | 命令时间戳未来值可通过、无 nonce 去重（5 分钟窗口可重放） | [未开始] | `internal/agent/agent.go:1016-1024`；未来时间窗 + nonce 缓存 |
+| P3 | D-09 | 加固 | 扩展 git clone URL 未加 `--`；解压无总量上限（压缩炸弹） | [未开始] | `internal/extmgr/extension_installer.go:85-92,310-410` |
+| P3 | D-10 | 健壮性 | 多处忽略错误（SPC ReadAll、解压 MkdirAll、trace rand、session 回退） | [未开始] | `spc_fetch_cn.go:69,220`、`extension_installer.go:324/328/395`、`logger/observability.go:64`、`services.go:709-715` |
+| P3 | D-11 | 加固 | gRPC/联邦缺速率与连接配额 | [未开始] | 按证书/连接限速 |
+| P3 | A19 | 参数化 | `[resilience.circuit]` 未解析；熔断默认 5 次/5 分钟/1 分钟硬编码 | [未开始] | `internal/resilience/circuit.go:71` |
 
-## F. 防御性编程（2026-11-13 审计）
+## 已关闭 / 已验证（保留记录，不再计入未完成）
 
-> 来源：`docs/3-audits/DEFENSIVE_PROGRAMMING_AUDIT_2026-11-13.md`
+| ID | 事项 | 结论 |
+|---|---|---|
+| A9 | 扩展点数量文档核对 | **已验证**：89 = 83 平台（`platform_extensions.go`）+ 6 内核生命周期（`kernel.go:49-78`），README 无需改 |
+| D1 | 拓扑停机 + asc 池 46 资源 `onboot=0` | 已完成（进程隔离 v0.4 仅在快照中） |
 
-| ID | 事项 | 状态 | 修复方向 |
-|---|---|---|---|
-| D-01 | 联邦 master `token==""` 时放行全部请求；默认 token 空、监听全接口、明文 HTTP | [未开始] | 非 loopback 强制 token / 默认 127.0.0.1 / 显式 allow_insecure |
-| D-02 | 配置范围校验不拒绝 NaN：threshold/weights/edge 可为 NaN 并污染评分 | [未开始] | 所有 float 加 `math.IsNaN/IsInf`；加回归测试 |
-| D-03 | gRPC 同端口无角色隔离：Agent 证书可调 `GetSnapshot(任意 host)` / `StreamLogs` | [未开始] | 证书角色/服务级授权，或拆分运维监听 |
-| D-04 | 注册允许任意未占用 host_id（无 provisioning），可注入假主机 | [未开始] | 主机清单/注册令牌/CN=host_id 校验 |
-| D-05 | CTI 响应体无上限 `io.ReadAll`，可内存耗尽 | [未开始] | `LimitReader` 统一上限 |
-| D-06 | 联邦 HTTP 缺 Read/Write/Idle 超时 | [未开始] | 补齐三个超时 |
-| D-07 | gRPC 客户端 TLS 关闭时静默退回明文 | [未开始] | 显式 dev 开关 / fail-closed |
-| D-08 | 命令时间戳未来值可通过、无 nonce 去重 | [未开始] | 未来时间窗 + nonce 缓存 |
-| D-09 | 扩展 git clone URL 未加 `--`；解压无总量上限 | [未开始] | 参数分隔 + 解压配额 |
-| D-10 | 多处忽略错误（SPC ReadAll、解压 MkdirAll、trace rand、session 回退） | [未开始] | 错误返回/记录，关键路径不静默 |
-| D-11 | gRPC/联邦缺速率与连接配额 | [未开始] | 按证书/连接限速 |
+## 排序说明
 
-## E. 建议优先级
-
-- **P0**：A8（打包/CI 覆盖 proc 模式）→ 否则进程隔离不可发布；A2（auto-restart）→ 可用性；C1（main 悬空链接）
-- **P1**：A1（迁移第二个模块）、A6（adapterhub/attck/comms 决策）、A5（拆 module 减重）、B1（T4 跨环境 ROC）
-- **P2**：A3/A4（RPC 并发/快照周期）、B2（风险真值）、B3/B4/B5（安全边界）、C2/C3/C4（文档/清单）
-
-> 防御性编程审计优先级：**P0 = D-01/D-02/D-03**；**P1 = D-04/D-05/D-06**；**P2 = D-07…D-11**。
+- **P0 判据**：无需特殊条件即可远程/本地触发的鉴权缺陷；或会静默产生错误评分的配置缺陷；已有 26 个可达依赖漏洞。
+- **P1 判据**：需要有效证书/密钥或特定部署条件，但影响面大；发布阻断（proc 打包/CI）；配置静默无效。
+- **P2 判据**：需要更高权限/组合条件；研究缺口；技术债；文档一致性。
+- **P3 判据**：低概率/低影响加固，或仅在开发/实验路径触发。
+- 原 A/B/C/D/F 分组已拆散到此表；各条目的证据仍可在对应审计文档中查到。
