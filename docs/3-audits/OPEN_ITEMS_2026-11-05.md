@@ -6,9 +6,11 @@
 
 ## P0 — 立即处理（安全或会静默出错）
 
+> 当前 P0 已清空；A10/A11 见下方“已关闭”。
+
+
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
-| **P0** | A10 | 依赖漏洞 | govulncheck 26 个可达漏洞（Go 1.26.3 stdlib 22 + grpc 4） | [未开始] | `docs/3-audits/VULNCHECK_AUDIT_2026-11-09.md`；升级 Go ≥1.26.10、grpc ≥v1.83.1、x/net ≥v0.60.0，复扫目标 0 |
 
 ## P1 — 近期处理（高危或发布/可用性阻断）
 
@@ -70,6 +72,7 @@
 | D-05 | CTI 无上限读取 | **已完成**（`aeb1ccc`）：`LimitReader(32 MiB)` |
 | D-06 | 联邦 HTTP 缺超时 | **已完成**（`aeb1ccc`）：Read 15s / Write 30s / Idle 60s |
 | A11 | `level4_override` 无条件覆盖 | **已完成**（`d635197`）：仅 `compliance_framework` 含 Level 4/等保四级时应用；Level 3 默认用 `[edge_factors]` 值；新增回归测试 |
+| A10 | 依赖漏洞（govulncheck 26 可达） | **已完成**（`a980344`）：Go 1.26.11 + grpc v1.83.2 + x/net v0.60.0；默认/全 tag 复扫均 0 可达 |
 
 ## 排序说明
 

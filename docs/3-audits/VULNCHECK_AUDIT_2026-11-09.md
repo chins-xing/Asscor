@@ -111,3 +111,9 @@ govulncheck -json ./... > vuln.json
 
 > 原始输出：`build/vuln-default.txt`、`build/vuln-fulltags.txt`、`build/vuln-fulltags.json`（未入库，`build/` 为本地目录）。
 
+## 6. 修复记录（2026-11-13）
+
+- Go 工具链：**1.26.3 → 1.26.11**（`go.mod` 加 `toolchain`，Dockerfile 钉 `golang:1.26.11-alpine`，CI `go-version: '1.26.11'`）。
+- `google.golang.org/grpc`：**v1.68.0 → v1.83.2**；`golang.org/x/net`：**v0.57.0 → v0.60.0**。
+- 复扫结果：默认构建 **0 可达**；全 tag **0 可达**（仅剩 1/3 个 module-level 未调用条目）。
+- 验证：`go test -tags "<MODULE_TAGS>" ./internal/... ./api/... ./extensions/...` 全绿（Windows 上 checks/checks-linux 的测试二进制被 AV 拦一次，单跑通过）。
