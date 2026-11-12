@@ -55,6 +55,10 @@ func newCommsRuntime(
 		}
 	}
 	agentSvc := comms.NewAgentServiceImpl(assessor, commander, logCollector)
+	// Audit D-03: bind AgentService calls to the caller certificate identity.
+	if heartbeat != nil {
+		agentSvc.SetHostVerifier(heartbeat.VerifyAgentCertStrict)
+	}
 
 	serverCfg := comms.DefaultServerConfig()
 	serverCfg.ListenAddr = listenAddr

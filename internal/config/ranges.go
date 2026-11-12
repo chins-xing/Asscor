@@ -1,6 +1,17 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
+
+// floatInvalid reports NaN/Inf, which comparison-based range checks cannot
+// catch (every comparison with NaN is false). Audit D-02: a config with
+// threshold = NaN or weight = NaN used to pass validation and poison every
+// score downstream.
+func floatInvalid(v float64) bool {
+	return math.IsNaN(v) || math.IsInf(v, 0)
+}
 
 // validateRanges enforces value ranges on parsed numeric configuration so an
 // out-of-range value cannot silently poison the scoring formulas (audit M-6).
@@ -21,24 +32,24 @@ func (cfg *Config) validateRanges() error {
 		{"resilience", w.Resilience},
 		{"kernel_security", w.KernelSecurity},
 	} {
-		if val.value < 0 {
+		if floatInvalid(val.value) || val.value < 0 {
 			return fmt.Errorf("config: [weights] %s = %v must be >= 0", val.name, val.value)
 		}
 	}
 	for domain, weight := range cfg.ExtensionWeights {
-		if weight < 0 {
+		if floatInvalid(weight) || weight < 0 {
 			return fmt.Errorf("config: [extension_weights] %s = %v must be >= 0", domain, weight)
 		}
 	}
 
 	// Acceptability threshold ∈ (0, 100].
-	if cfg.Threshold <= 0 || cfg.Threshold > 100 {
+	if floatInvalid(cfg.Threshold) || cfg.Threshold <= 0 || cfg.Threshold > 100 {
 		return fmt.Errorf("config: [acceptability] threshold = %v must be in (0, 100]", cfg.Threshold)
 	}
 
 	// Threat coefficient ∈ (0, ...]: values above ~10 are extreme but legal;
 	// the meaningful guard is "positive". SPC exposure clamps internally.
-	if cfg.ThreatCoeff <= 0 {
+	if floatInvalid(cfg.ThreatCoeff) || cfg.ThreatCoeff <= 0 {
 		return fmt.Errorf("config: [threat] coefficient = %v must be > 0", cfg.ThreatCoeff)
 	}
 
@@ -55,7 +66,7 @@ func (cfg *Config) validateRanges() error {
 		{"aci_app_whitelist", cfg.ACIAppWhitelist},
 		{"aci_dlp_measures", cfg.ACIDLPMeasures},
 	} {
-		if val.value < -100 || val.value > 0 {
+		if floatInvalid(val.value) || val.value < -100 || val.value > 0 {
 			return fmt.Errorf("config: [resilience] %s = %v must be in [-100, 0] (a penalty)", val.name, val.value)
 		}
 	}
@@ -72,7 +83,7 @@ func (cfg *Config) validateRanges() error {
 		{"no_siem", cfg.EdgeFactors.NoSIEM},
 		{"no_ids", cfg.EdgeFactors.NoIDS},
 	} {
-		if val.value <= 0 || val.value > 1 {
+		if floatInvalid(val.value) || val.value <= 0 || val.value > 1 {
 			return fmt.Errorf("config: edge factor %s = %v must be in (0, 1] (1 = no penalty)", val.name, val.value)
 		}
 	}
@@ -80,20 +91,32 @@ func (cfg *Config) validateRanges() error {
 	// Per-check deltas are penalties: ∈ [-100, 0]; a positive delta would
 	// inflate scores on failure.
 	for id, d := range cfg.CheckDeltas {
-		if d > 0 {
+		if floatInvalid(d) || d > 0 {
 			return fmt.Errorf("config: [check_deltas] %s = %v must be <= 0 (a penalty)", id, d)
 		}
-		if d < -100 {
+		if floatInvalid(d) || d < -100 {
 			return fmt.Errorf("config: [check_deltas] %s = %v must be >= -100", id, d)
 		}
 	}
 
+	// SPC min_pscore and ATT&CK thresholds are model inputs too (D-02):
+	// reject NaN/Inf and out-of-range values before they reach scoring.
+	if floatInvalid(cfg.SPC.MinPScore) || cfg.SPC.MinPScore < 0 || cfg.SPC.MinPScore > 1 {
+		return fmt.Errorf("config: [spc] min_pscore = %v must be in [0, 1]", cfg.SPC.MinPScore)
+	}
+	if floatInvalid(cfg.ATTACK.BeaconThreshold) || cfg.ATTACK.BeaconThreshold < 0 || cfg.ATTACK.BeaconThreshold > 1 {
+		return fmt.Errorf("config: [attck] beacon_threshold = %v must be in [0, 1]", cfg.ATTACK.BeaconThreshold)
+	}
+	if floatInvalid(cfg.ATTACK.AttributionThreshold) || cfg.ATTACK.AttributionThreshold < 0 || cfg.ATTACK.AttributionThreshold > 1 {
+		return fmt.Errorf("config: [attck] attribution_threshold = %v must be in [0, 1]", cfg.ATTACK.AttributionThreshold)
+	}
+
 	// Confidence policy sanity (if enabled): default/floor ∈ (0,1].
 	if cfg.Confidence.Enabled {
-		if cfg.Confidence.Default <= 0 || cfg.Confidence.Default > 1 {
+		if floatInvalid(cfg.Confidence.Default) || cfg.Confidence.Default <= 0 || cfg.Confidence.Default > 1 {
 			return fmt.Errorf("config: [confidence] default = %v must be in (0, 1]", cfg.Confidence.Default)
 		}
-		if cfg.Confidence.Floor <= 0 || cfg.Confidence.Floor >= 1 {
+		if floatInvalid(cfg.Confidence.Floor) || cfg.Confidence.Floor <= 0 || cfg.Confidence.Floor >= 1 {
 			return fmt.Errorf("config: [confidence] floor = %v must be in (0, 1)", cfg.Confidence.Floor)
 		}
 	}

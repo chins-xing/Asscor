@@ -168,8 +168,10 @@ func (s *Server) handleConn(conn net.Conn) {
 		if err := tc.Handshake(); err == nil {
 			state := tc.ConnectionState()
 			if len(state.PeerCertificates) > 0 {
-				fp := sha256.Sum256(state.PeerCertificates[0].Raw)
+				leaf := state.PeerCertificates[0]
+				fp := sha256.Sum256(leaf.Raw)
 				ctx = context.WithValue(ctx, kernel.CtxPeerCertFingerprint, hex.EncodeToString(fp[:]))
+				ctx = context.WithValue(ctx, kernel.CtxPeerCertCommonName, leaf.Subject.CommonName)
 			}
 		}
 	}

@@ -21,6 +21,15 @@ func TestValidateRangesRejectsOutOfRange(t *testing.T) {
 		{"ACI positive (not a penalty)", "[resilience]\naci_edr_running = 10\n", "aci_edr_running"},
 		{"positive check delta", "[check_deltas]\nAS-001 = 5\n", "as-001"},
 		{"check delta too negative", "[check_deltas]\nAS-001 = -500\n", "as-001"},
+		// Audit D-02: NaN compares false against every bound, so it used to
+		// pass every range check and poison scoring downstream.
+		{"NaN weight", "[weights]\nattack_surface = NaN\n", "attack_surface"},
+		{"NaN threshold", "[acceptability]\nthreshold = NaN\n", "threshold"},
+		{"NaN threat", "[threat]\ncoefficient = NaN\n", "coefficient"},
+		{"NaN ACI", "[resilience]\naci_laps_enabled = NaN\n", "aci_laps_enabled"},
+		{"NaN edge factor", "[edge_factors]\ntwo_factor_failure = NaN\n", "two_factor_failure"},
+		{"NaN check delta", "[check_deltas]\nAS-001 = NaN\n", "as-001"},
+		{"NaN spc min_pscore", "[spc]\nmin_pscore = NaN\n", "min_pscore"},
 	}
 
 	for _, tc := range cases {

@@ -368,6 +368,22 @@ func shortFP(fp string) string {
 // contact, BindAgentCert will establish it) or the fingerprints match. An
 // empty fingerprint (no mTLS) always verifies. A revoked fingerprint never
 // verifies, regardless of binding (audit I-03).
+// VerifyAgentCertStrict requires an existing host→certificate binding (no
+// first-contact allowance). Audit D-03: authorization must not treat an
+// unbound host as "trusted".
+func (m *Module) VerifyAgentCertStrict(hostID, fingerprint string) bool {
+	if fingerprint == "" {
+		return true // mTLS disabled — no binding to check (development)
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, ok := m.revoked[fingerprint]; ok {
+		return false
+	}
+	rec := m.agents[hostID]
+	return rec != nil && rec.CertFingerprint != "" && rec.CertFingerprint == fingerprint
+}
+
 func (m *Module) VerifyAgentCert(hostID, fingerprint string) bool {
 	if fingerprint == "" {
 		return true // mTLS disabled — no verification (development mode)
