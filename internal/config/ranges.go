@@ -53,24 +53,6 @@ func (cfg *Config) validateRanges() error {
 		return fmt.Errorf("config: [threat] coefficient = %v must be > 0", cfg.ThreatCoeff)
 	}
 
-	// ACI / resilience penalties are score deductions: ∈ [-100, 0].
-	for _, val := range []struct {
-		name  string
-		value float64
-	}{
-		{"aci_network_segmentation", cfg.ACINetworkSegmentation},
-		{"aci_laps_enabled", cfg.ACILAPSEnabled},
-		{"aci_offline_backup", cfg.ACIOfflineBackup},
-		{"aci_edr_running", cfg.ACIEDRRunning},
-		{"aci_remote_logging", cfg.ACIRemoteLogging},
-		{"aci_app_whitelist", cfg.ACIAppWhitelist},
-		{"aci_dlp_measures", cfg.ACIDLPMeasures},
-	} {
-		if floatInvalid(val.value) || val.value < -100 || val.value > 0 {
-			return fmt.Errorf("config: [resilience] %s = %v must be in [-100, 0] (a penalty)", val.name, val.value)
-		}
-	}
-
 	// Edge factor penalties are multipliers ∈ (0, 1]; 1.0 = no penalty.
 	for _, val := range []struct {
 		name  string

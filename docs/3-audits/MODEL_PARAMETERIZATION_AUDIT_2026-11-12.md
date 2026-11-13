@@ -86,6 +86,11 @@ ef-002fa     0.850    ← [edge_factors.custom] 的同名小写项，作为额�
 默认 Level 3 下 `[edge_factors] two_factor_failure = 0.85` 生效。回归测试
 `TestEdgeFactorLevel4OverrideOnlyForLevel4` 锁定 Level 3/Level 4/空值三种行为。
 
+
+**修复（2026-11-13）**：`[resilience] aci_*` 七个权重确认从未被任何评分路径消费，已整体删除
+（`internal/config` 字段/默认值/解析/范围校验 + `config.ini` 段）；如未来要做 ACI 评分，
+需要重新设计并同时落地消费点，避免再次出现“配了不生效”。
+
 ## 4. 建议
 
 **P0（配置正确性）**
