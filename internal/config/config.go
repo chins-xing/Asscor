@@ -35,14 +35,6 @@ type Config struct {
 	// graph does not see every host as same-subnet reachable (audit P0-2/T4).
 	TopologyExcludeCIDRs []string
 
-	ACINetworkSegmentation float64
-	ACILAPSEnabled         float64
-	ACIOfflineBackup       float64
-	ACIEDRRunning          float64
-	ACIRemoteLogging       float64
-	ACIAppWhitelist        float64
-	ACIDLPMeasures         float64
-
 	CheckDeltas map[string]float64
 
 	SPC model.SPCConfig
@@ -108,17 +100,10 @@ func Default() *Config {
 			NoSIEM:            0.90,
 			NoIDS:             0.88,
 		},
-		ACINetworkSegmentation: -15,
-		ACILAPSEnabled:         -10,
-		ACIOfflineBackup:       -20,
-		ACIEDRRunning:          -10,
-		ACIRemoteLogging:       -10,
-		ACIAppWhitelist:        -10,
-		ACIDLPMeasures:         -5,
-		CheckDeltas:            make(map[string]float64),
-		Extensions:             make(map[string]bool),
-		ExtensionWeights:       make(map[string]float64),
-		AdapterConfig:          make(map[string]string),
+		CheckDeltas:      make(map[string]float64),
+		Extensions:       make(map[string]bool),
+		ExtensionWeights: make(map[string]float64),
+		AdapterConfig:    make(map[string]string),
 		SPC: model.SPCConfig{
 			Enabled:            false,
 			MinPScore:          0.60,
@@ -337,29 +322,6 @@ func Parse(content string) (*Config, error) {
 			cfg.ThreatCoeff = f
 		}
 		cfg.SPCEnabled = getBool(sec, "spc_enabled")
-	}
-
-	if sec, ok := sections["resilience"]; ok {
-		for k := range sec {
-			if f, ok := getFloat(sec, k); ok {
-				switch k {
-				case "aci_network_segmentation":
-					cfg.ACINetworkSegmentation = f
-				case "aci_laps_enabled":
-					cfg.ACILAPSEnabled = f
-				case "aci_offline_backup":
-					cfg.ACIOfflineBackup = f
-				case "aci_edr_running":
-					cfg.ACIEDRRunning = f
-				case "aci_remote_logging":
-					cfg.ACIRemoteLogging = f
-				case "aci_app_whitelist":
-					cfg.ACIAppWhitelist = f
-				case "aci_dlp_measures":
-					cfg.ACIDLPMeasures = f
-				}
-			}
-		}
 	}
 
 	// [prism] 段：`default_transmission` 是**跨主机风险传播的基数**
