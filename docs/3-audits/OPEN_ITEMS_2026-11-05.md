@@ -18,7 +18,7 @@
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
 | P1 | A13 | 正确性 | `[resilience] aci_*` 7 个权重被解析但全仓无消费点（死配置） | [未开始] | `internal/config/config.go:38-44,326-346`；接入评分或删除 |
-| A12 | legacy 路径边因子硬编码 | **已完成**（`TBD`）：`legacyDefaultCustomFactors` 改读 `cfg.EdgeFactors`，5 个字面量移除；engine/assessor/edgefactor 测试全绿 |
+| A12 | legacy 路径边因子硬编码 | **已完成**（`6cc0f3e`）：`legacyDefaultCustomFactors` 改读 `cfg.EdgeFactors`，5 个字面量移除；engine/assessor/edgefactor 测试全绿 |
 
 ## P2 — 排期处理（研究缺口、加固、技术债）
 
