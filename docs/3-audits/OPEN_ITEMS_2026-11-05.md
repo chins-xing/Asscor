@@ -17,7 +17,6 @@
 
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
-| P1 | A2 | 可用性 | `federation-mod` 崩溃不会自动重启（需重启 kernel） | [未开始] | Proxy 加 supervisor（指数退避 + 事件上报） |
 | P1 | A12 | 正确性 | legacy 评分路径 5 个边因子硬编码（0.75/0.80/0.82/0.90/0.88），不读 `[edge_factors]` | [未开始] | `internal/engine/assessor.go:562-570`；废弃 legacy 或改为读 cfg |
 | P1 | A13 | 正确性 | `[resilience] aci_*` 7 个权重被解析但全仓无消费点（死配置） | [未开始] | `internal/config/config.go:38-44,326-346`；接入评分或删除 |
 
@@ -74,6 +73,7 @@
 | A11 | `level4_override` 无条件覆盖 | **已完成**（`d635197`）：仅 `compliance_framework` 含 Level 4/等保四级时应用；Level 3 默认用 `[edge_factors]` 值；新增回归测试 |
 | A10 | 依赖漏洞（govulncheck 26 可达） | **已完成**（`a980344`）：Go 1.26.11 + grpc v1.83.2 + x/net v0.60.0；默认/全 tag 复扫均 0 可达 |
 | A8 | proc 模式未进打包/CI | **已完成**（`38a3fc8`）：`scripts/build.sh` 增加 `ASSCOR-kernel-proc` + `federation-mod`；CI 增加 proc kernel/child 构建与测试 |
+| A2 | federation-mod 无自动重启 | **已完成**（`TBD`）：Proxy supervisor 每 2s ping，失败后指数退避（1s→60s）重启并重配/重推快照；smoke 实测 kill 后 ~2s 拉起 |
 
 ## 排序说明
 
