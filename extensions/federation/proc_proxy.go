@@ -102,6 +102,12 @@ func (c *procClient) call(method string, params any, out any, timeout time.Durat
 	return nil
 }
 
+func (c *procClient) abort() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.killLocked()
+}
+
 func (c *procClient) killLocked() {
 	if c.cmd != nil {
 		_ = c.cmd.Process.Kill()
@@ -124,18 +130,20 @@ func (c *procClient) Close() {
 // Proxy 是进程隔离模式的 kernel.Plugin：内核只启动/喂数据/查询子进程，
 // 联邦的 master/node 逻辑与全部 HTTP 处理都在子进程里。
 type Proxy struct {
-	mu      sync.Mutex
-	state   kernel.PluginState
-	kc      kernel.KernelContext
-	cfg     Config
-	cfgErr  error
-	cfgObj  interface{}
-	client  *procClient
-	path    string
-	started time.Time
-	lastErr error
-	stopCh  chan struct{}
-	wg      sync.WaitGroup
+	mu         sync.Mutex
+	state      kernel.PluginState
+	kc         kernel.KernelContext
+	cfg        Config
+	cfgErr     error
+	cfgObj     interface{}
+	client     *procClient
+	path       string
+	started    time.Time
+	lastErr    error
+	stopCh     chan struct{}
+	stopClosed bool
+	restarts   int
+	wg         sync.WaitGroup
 }
 
 // NewProxy 构建进程隔离代理（进程模式由 -tags federation_proc 选择）。
@@ -203,19 +211,36 @@ func (p *Proxy) Init(ctx context.Context, kc kernel.KernelContext) error {
 func (p *Proxy) Start(ctx context.Context) error {
 	p.mu.Lock()
 	cfg := p.cfg
+	p.stopCh = make(chan struct{})
+	p.stopClosed = false
+	p.started = time.Now()
+	p.state = kernel.PluginStarted
 	p.mu.Unlock()
 	if cfg.Role == RoleOff {
-		p.setState(kernel.PluginStarted)
 		return nil
 	}
-	client, err := startProcClient(p.path)
-	if err != nil {
+
+	// First attempt is best-effort: the supervisor below retries with
+	// backoff, so a child that cannot start yet does not take the kernel down.
+	if client, err := startAndConfigure(p.path, cfg); err != nil {
 		p.setErr(err)
-		logger.WithComponent("federation").Warn("process mode: failed to start child", "path", p.path, "error", err)
-		p.setState(kernel.PluginStarted)
-		return nil
+		logger.WithComponent("federation").Warn("process mode: initial child start failed; supervisor will retry", "path", p.path, "error", err)
+	} else {
+		p.mu.Lock()
+		p.client = client
+		p.mu.Unlock()
+		logger.WithComponent("federation").Info("federation process started", "child", p.path, "role", cfg.Role, "pid", client.cmd.Process.Pid)
 	}
-	configure := ConfigureParams{
+
+	p.wg.Add(1)
+	go p.pushLoop(cfg)
+	p.wg.Add(1)
+	go p.supervise(cfg)
+	return nil
+}
+
+func configureParams(cfg Config) ConfigureParams {
+	return ConfigureParams{
 		Role:              string(cfg.Role),
 		NodeID:            cfg.NodeID,
 		MasterURL:         cfg.MasterURL,
@@ -223,25 +248,97 @@ func (p *Proxy) Start(ctx context.Context) error {
 		Token:             cfg.Token,
 		ReportIntervalSec: cfg.ReportIntervalSec(),
 	}
-	if err := client.call(methodConfigure, configure, nil, 5*time.Second); err != nil {
-		logger.WithComponent("federation").Warn("process mode: configure failed", "error", err)
-		client.Close()
-		p.setErr(err)
-		p.setState(kernel.PluginStarted)
-		return nil
+}
+
+func startAndConfigure(path string, cfg Config) (*procClient, error) {
+	client, err := startProcClient(path)
+	if err != nil {
+		return nil, err
 	}
+	if err := client.call(methodConfigure, configureParams(cfg), nil, 5*time.Second); err != nil {
+		client.abort()
+		return nil, fmt.Errorf("configure child: %w", err)
+	}
+	return client, nil
+}
 
+// supervise keeps the child alive. It probes with ping and restarts with
+// exponential backoff (1s → 60s). Stops when the plugin stops.
+func (p *Proxy) supervise(cfg Config) {
+	defer p.wg.Done()
+	backoff := time.Second
+	for {
+		select {
+		case <-p.stopCh:
+			return
+		case <-time.After(2 * time.Second):
+		}
+
+		p.mu.Lock()
+		client := p.client
+		p.mu.Unlock()
+		if client != nil {
+			if err := client.call(methodPing, nil, nil, 2*time.Second); err == nil {
+				backoff = time.Second
+				continue
+			} else {
+				p.setErr(err)
+				logger.WithComponent("federation").Warn("process mode: child unhealthy; restarting", "error", err)
+			}
+			p.mu.Lock()
+			if p.client == client {
+				p.client = nil
+			}
+			p.mu.Unlock()
+			client.abort()
+		}
+
+		for {
+			select {
+			case <-p.stopCh:
+				return
+			default:
+			}
+			newClient, err := startAndConfigure(p.path, cfg)
+			if err == nil {
+				select {
+				case <-p.stopCh:
+					newClient.abort()
+					return
+				default:
+				}
+				p.mu.Lock()
+				p.client = newClient
+				p.lastErr = nil
+				p.started = time.Now()
+				p.restarts++
+				p.mu.Unlock()
+				p.pushSnapshot()
+				logger.WithComponent("federation").Info("process mode: child restarted", "restarts", p.restartCount())
+				backoff = time.Second
+				break
+			}
+			p.setErr(fmt.Errorf("restart child: %w", err))
+			logger.WithComponent("federation").Warn("process mode: child restart failed", "backoff", backoff, "error", err)
+			select {
+			case <-p.stopCh:
+				return
+			case <-time.After(backoff):
+			}
+			if backoff < 60*time.Second {
+				backoff *= 2
+				if backoff > 60*time.Second {
+					backoff = 60 * time.Second
+				}
+			}
+		}
+	}
+}
+
+func (p *Proxy) restartCount() int {
 	p.mu.Lock()
-	p.client = client
-	p.started = time.Now()
-	p.stopCh = make(chan struct{})
-	p.state = kernel.PluginStarted
-	p.mu.Unlock()
-
-	p.wg.Add(1)
-	go p.pushLoop(cfg)
-	logger.WithComponent("federation").Info("federation process started", "child", p.path, "role", cfg.Role, "pid", client.cmd.Process.Pid)
-	return nil
+	defer p.mu.Unlock()
+	return p.restarts
 }
 
 // pushLoop 周期把内核快照推给子进程（进程隔离下这是唯一的数据入口）。
@@ -295,13 +392,17 @@ func (p *Proxy) Stop(ctx context.Context) error {
 	p.setState(kernel.PluginStopping)
 	p.mu.Lock()
 	ch := p.stopCh
+	if ch != nil && !p.stopClosed {
+		p.stopClosed = true
+		close(ch)
+	}
+	p.mu.Unlock()
+	p.wg.Wait()
+	// The supervisor may have installed a replacement while Stop was waiting.
+	p.mu.Lock()
 	client := p.client
 	p.client = nil
 	p.mu.Unlock()
-	if ch != nil {
-		close(ch)
-	}
-	p.wg.Wait()
 	if client != nil {
 		client.Close()
 	}
