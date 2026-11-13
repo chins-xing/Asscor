@@ -574,13 +574,16 @@ func (a *Assessor) computeDynamicDomainScores(result *model.AssessmentResult) *m
 // （判定用的是 config.ResolveEdgeFactorTriggerMap 派生的触发检查），它是这张默认表
 // 的**内容**——P4「默认逐位一致」约束的正是这份内容。
 func legacyDefaultCustomFactors(cfg *config.Config) map[string]config.CustomEdgeFactorConfig {
+	// Audit A12: the legacy path used to hardcode five of these multipliers,
+	// so [edge_factors] overrides were silently ignored there. The defaults
+	// are identical; configured values now win on both scoring paths.
 	return map[string]config.CustomEdgeFactorConfig{
 		"EF-002FA":     {Factor: cfg.EdgeFactors.TwoFactorFailure, TriggerCheck: "EF-001"},
-		"EF-SYNCOOKIE": {Factor: 0.75, TriggerCheck: "RS-005"},
-		"EF-SELINUX":   {Factor: 0.80, TriggerCheck: "OT-005"},
-		"EF-APPARMOR":  {Factor: 0.82, TriggerCheck: "OT-005"},
-		"EF-NO-SIEM":   {Factor: 0.90, TriggerCheck: "RS-007"},
-		"EF-NO-IDS":    {Factor: 0.88, TriggerCheck: "RS-006"},
+		"EF-SYNCOOKIE": {Factor: cfg.EdgeFactors.SYNCookieDisabled, TriggerCheck: "RS-005"},
+		"EF-SELINUX":   {Factor: cfg.EdgeFactors.SELinuxDisabled, TriggerCheck: "OT-005"},
+		"EF-APPARMOR":  {Factor: cfg.EdgeFactors.AppArmorDisabled, TriggerCheck: "OT-005"},
+		"EF-NO-SIEM":   {Factor: cfg.EdgeFactors.NoSIEM, TriggerCheck: "RS-007"},
+		"EF-NO-IDS":    {Factor: cfg.EdgeFactors.NoIDS, TriggerCheck: "RS-006"},
 	}
 }
 
