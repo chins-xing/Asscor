@@ -18,7 +18,7 @@
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
 | A12 | legacy 路径边因子硬编码 | **已完成**（`6cc0f3e`）：`legacyDefaultCustomFactors` 改读 `cfg.EdgeFactors`，5 个字面量移除；engine/assessor/edgefactor 测试全绿 |
-| A13 | `[resilience] aci_*` 死配置 | **已完成**（`TBD`）：删除 7 个从未被消费的字段/解析/校验与 config.ini 段；`[resilience.circuit]` 保留 |
+| A13 | `[resilience] aci_*` 死配置 | **已完成**（`6aa0069`）：删除 7 个从未被消费的字段/解析/校验与 config.ini 段；`[resilience.circuit]` 保留 |
 
 ## P2 — 排期处理（研究缺口、加固、技术债）
 
