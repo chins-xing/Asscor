@@ -17,8 +17,8 @@
 
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
-| P1 | A12 | 正确性 | legacy 评分路径 5 个边因子硬编码（0.75/0.80/0.82/0.90/0.88），不读 `[edge_factors]` | [未开始] | `internal/engine/assessor.go:562-570`；废弃 legacy 或改为读 cfg |
 | P1 | A13 | 正确性 | `[resilience] aci_*` 7 个权重被解析但全仓无消费点（死配置） | [未开始] | `internal/config/config.go:38-44,326-346`；接入评分或删除 |
+| A12 | legacy 路径边因子硬编码 | **已完成**（`TBD`）：`legacyDefaultCustomFactors` 改读 `cfg.EdgeFactors`，5 个字面量移除；engine/assessor/edgefactor 测试全绿 |
 
 ## P2 — 排期处理（研究缺口、加固、技术债）
 
