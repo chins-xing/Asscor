@@ -15,10 +15,11 @@
 
 ## P1 — 近期处理（高危或发布/可用性阻断）
 
+> 当前 P1 已清空（A2/A8/A12/A13 已完成，见“已关闭”）。
+
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
-| A12 | legacy 路径边因子硬编码 | **已完成**（`6cc0f3e`）：`legacyDefaultCustomFactors` 改读 `cfg.EdgeFactors`，5 个字面量移除；engine/assessor/edgefactor 测试全绿 |
-| A13 | `[resilience] aci_*` 死配置 | **已完成**（`6aa0069`）：删除 7 个从未被消费的字段/解析/校验与 config.ini 段；`[resilience.circuit]` 保留 |
+| — | — | — | **当前无 P1 项** | — | — |
 
 ## P2 — 排期处理（研究缺口、加固、技术债）
 
@@ -64,6 +65,8 @@
 |---|---|---|
 | A9 | 扩展点数量文档核对 | **已验证**：89 = 83 平台（`platform_extensions.go`）+ 6 内核生命周期（`kernel.go:49-78`），README 无需改 |
 | D1 | 拓扑停机 + asc 池 46 资源 `onboot=0` | 已完成（进程隔离 v0.4 仅在快照中） |
+| A12 | legacy 路径边因子硬编码 | **已完成**（`6cc0f3e`）：`legacyDefaultCustomFactors` 改读 `cfg.EdgeFactors`，5 个字面量移除；engine/assessor/edgefactor 测试全绿 |
+| A13 | `[resilience] aci_*` 死配置 | **已完成**（`6aa0069`）：删除 7 个从未被消费的字段/解析/校验与 config.ini 段；`[resilience.circuit]` 保留 |
 | D-01 | 联邦鉴权 fail-open | **已完成**（`aeb1ccc`）：master 非 loopback 且 token 空时拒绝启动；`config_test.go` 覆盖 |
 | D-02 | NaN 配置绕过 | **已完成**（`aeb1ccc`）：`validateRanges` 对 weights/threshold/threat/ACI/edge/delta/confidence/SPC/ATT&CK 全部拒绝 NaN/Inf；回归测试 |
 | D-03 | gRPC 无角色隔离 | **已完成（Agent 侧）**（`aeb1ccc`）：Agent 证书按指纹绑定只允许访问自身 host；运维证书仍跨主机（角色分离留后续） |
