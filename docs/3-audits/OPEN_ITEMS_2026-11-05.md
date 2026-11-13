@@ -73,7 +73,7 @@
 | A11 | `level4_override` 无条件覆盖 | **已完成**（`d635197`）：仅 `compliance_framework` 含 Level 4/等保四级时应用；Level 3 默认用 `[edge_factors]` 值；新增回归测试 |
 | A10 | 依赖漏洞（govulncheck 26 可达） | **已完成**（`a980344`）：Go 1.26.11 + grpc v1.83.2 + x/net v0.60.0；默认/全 tag 复扫均 0 可达 |
 | A8 | proc 模式未进打包/CI | **已完成**（`38a3fc8`）：`scripts/build.sh` 增加 `ASSCOR-kernel-proc` + `federation-mod`；CI 增加 proc kernel/child 构建与测试 |
-| A2 | federation-mod 无自动重启 | **已完成**（`TBD`）：Proxy supervisor 每 2s ping，失败后指数退避（1s→60s）重启并重配/重推快照；smoke 实测 kill 后 ~2s 拉起 |
+| A2 | federation-mod 无自动重启 | **已完成**（`324ae9c`）：Proxy supervisor 每 2s ping，失败后指数退避（1s→60s）重启并重配/重推快照；smoke 实测 kill 后 ~2s 拉起 |
 
 ## 排序说明
 
