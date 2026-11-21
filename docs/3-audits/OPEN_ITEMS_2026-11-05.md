@@ -32,7 +32,6 @@
 | P2 | A6 | 架构 | 联动审计 §7.4：adapterhub 孤儿、attck 双形态、comms_on 手工装配 9 模块 | [待决策] | `docs/3-audits/MODULE_LINKAGE_AUDIT_2026-10-29.md` §7.4 |
 | P2 | A7 | 内核 | 内核瘦身：拆可选模块二进制、动态插件、单协议 | [未开始] | 内核体积审计（minimal 9.3MB → full 22.2MB） |
 | P2 | A15 | 参数化 | ATT&CK 15 技术转移矩阵硬编码，无配置入口 | [未开始] | `internal/attck/attck.go:987+`；实验注入或文档标常量 |
-| P2 | A16 | 参数化 | SPC 影响权重硬编码（0.20/0.50/0.30、APT×1.2、子技术×1.1） | [未开始] | `internal/spc/spc.go:535-544` |
 | P2 | A18 | 参数化 | 研究引擎默认参数硬编码（predictor/engagement/attackerstate，RC-M4） | [未开始] | `predictor.go:71`、`engagement.go:62`、`attackerstate/state.go:106,132` |
 | P2 | B1 | 研究 | T4 跨环境 ROC（第二拓扑/VLAN 隔离、8 轮、95% CI） | [未开始] | `docs/1-current/design/SRD_V2.3_PLAN_2026-10-27.md` §T4 |
 | P2 | B2 | 研究 | AUC 深化：多跳 ACL / 风险真值 / 参数敏感性 | [未开始] | 现有二元可达性下三 profile AUC 完全一致 |
@@ -67,6 +66,7 @@
 | D-07 | gRPC 客户端明文回退 | **已完成**（`3175f5d`）：`AllowInsecure` 默认 false，TLS 关闭时拒绝明文；新增测试 |
 | A14 | EF-3FA 硬编码 0.82 | **已完成**（`3175f5d`）：`EdgeFactors.ThreeFactorFailure` + `[edge_factors] three_factor_failure`；SSAM/legacy 均读配置 |
 | A17 | CTI 系数/间隔硬编码 | **已完成**（`3175f5d`）：`[cti] coefficient` / `update_interval_min`，含校验；基础系数用于运行时扣减 |
+| A16 | SPC 影响权重硬编码 | **已完成**（`48438eb`）：`[spc] impact_cvss/epss/kev_weight、subtech_growth、apt_growth、poc_factor`；默认值不变 |
 | D-01 | 联邦鉴权 fail-open | **已完成**（`aeb1ccc`）：master 非 loopback 且 token 空时拒绝启动；`config_test.go` 覆盖 |
 | D-02 | NaN 配置绕过 | **已完成**（`aeb1ccc`）：`validateRanges` 对 weights/threshold/threat/ACI/edge/delta/confidence/SPC/ATT&CK 全部拒绝 NaN/Inf；回归测试 |
 | D-03 | gRPC 无角色隔离 | **已完成（Agent 侧）**（`aeb1ccc`）：Agent 证书按指纹绑定只允许访问自身 host；运维证书仍跨主机（角色分离留后续） |
