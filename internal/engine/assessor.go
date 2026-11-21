@@ -573,6 +573,13 @@ func (a *Assessor) computeDynamicDomainScores(result *model.AssessmentResult) *m
 // 测试锁定），但这里保留独立字面量而不是查表：该字段在 legacy 循环里不参与判定
 // （判定用的是 config.ResolveEdgeFactorTriggerMap 派生的触发检查），它是这张默认表
 // 的**内容**——P4「默认逐位一致」约束的正是这份内容。
+func (a *Assessor) edgeFactor3FA() float64 {
+	if a.cfg != nil && a.cfg.EdgeFactors.ThreeFactorFailure > 0 && a.cfg.EdgeFactors.ThreeFactorFailure <= 1 {
+		return a.cfg.EdgeFactors.ThreeFactorFailure
+	}
+	return 0.82
+}
+
 func legacyDefaultCustomFactors(cfg *config.Config) map[string]config.CustomEdgeFactorConfig {
 	// Audit A12: the legacy path used to hardcode five of these multipliers,
 	// so [edge_factors] overrides were silently ignored there. The defaults
@@ -716,7 +723,7 @@ func (a *Assessor) evaluateEdgeFactorChain(result *model.AssessmentResult) {
 			if v, ok := customFactors["EF-3FA"]; ok {
 				localFactors["EF-3FA"] = attenuate(v.Factor)
 			} else {
-				localFactors["EF-3FA"] = attenuate(0.82)
+				localFactors["EF-3FA"] = attenuate(a.edgeFactor3FA())
 			}
 			localConf["EF-3FA"] = conf
 			// EF-3FA cascades a FIXED config penalty onto EF-002FA; cascade

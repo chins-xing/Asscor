@@ -288,6 +288,10 @@ type EdgeFactors struct {
 	AppArmorDisabled  float64 `json:"apparmor_disabled"`
 	NoSIEM            float64 `json:"no_siem"`
 	NoIDS             float64 `json:"no_ids"`
+	// ThreeFactorFailure is the Level-4 3FA penalty. It cascades into
+	// two_factor_failure and has no standalone output slot, hence omitempty
+	// (audit A14: was hardcoded 0.82 in the ssam adapter and legacy path).
+	ThreeFactorFailure float64 `json:"three_factor_failure,omitempty"`
 
 	// Model / ParamsHash 记录本次边缘因子合成使用的模型与参数指纹
 	// （spec §4 规则 4），供实验报告与审计复现；零值表示 legacy 路径，不输出。

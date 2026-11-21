@@ -64,6 +64,7 @@ func (cfg *Config) validateRanges() error {
 		{"apparmor_disabled", cfg.EdgeFactors.AppArmorDisabled},
 		{"no_siem", cfg.EdgeFactors.NoSIEM},
 		{"no_ids", cfg.EdgeFactors.NoIDS},
+		{"three_factor_failure", cfg.EdgeFactors.ThreeFactorFailure},
 	} {
 		if floatInvalid(val.value) || val.value <= 0 || val.value > 1 {
 			return fmt.Errorf("config: edge factor %s = %v must be in (0, 1] (1 = no penalty)", val.name, val.value)

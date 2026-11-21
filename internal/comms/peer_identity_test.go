@@ -4,6 +4,7 @@ package comms
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/chins-xing/asscor/internal/kernel"
@@ -49,5 +50,16 @@ func TestAgentServiceAuthorizeHost(t *testing.T) {
 	legacy := &AgentServiceImpl{}
 	if err := legacy.authorizeHost(agent, "host-b"); err != nil {
 		t.Fatalf("nil verifier must not scope: %v", err)
+	}
+}
+
+func TestGRPCClientRefusesPlaintextByDefault(t *testing.T) {
+	c := NewGRPCClient(GRPCClientConfig{ServerAddr: "127.0.0.1:1"})
+	err := c.Connect()
+	if err == nil {
+		t.Fatal("plaintext client must be refused by default")
+	}
+	if !strings.Contains(err.Error(), "refusing plaintext") {
+		t.Errorf("error = %v, want plaintext refusal", err)
 	}
 }
