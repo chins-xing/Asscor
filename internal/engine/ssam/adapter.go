@@ -64,9 +64,13 @@ func ConfigToEdgeFactors(cfg *config.Config) []EdgeFactorConfig {
 		ID: "EF-NO-IDS", Name: "IDS/IPS Missing",
 		Factor: cfg.EdgeFactors.NoIDS, TriggerCheck: triggers["EF-NO-IDS"],
 	})
+	threeFA := cfg.EdgeFactors.ThreeFactorFailure
+	if threeFA <= 0 || threeFA > 1 {
+		threeFA = 0.82 // legacy default for callers with a zero-value config
+	}
 	result = append(result, EdgeFactorConfig{
 		ID: ef3FAFactorID, Name: "3FA Not Met",
-		Factor: 0.82, TriggerCheck: triggers[ef3FAFactorID], CascadeTo: "EF-002FA", CascadeValue: 0.82, CascadeOnly: true,
+		Factor: threeFA, TriggerCheck: triggers[ef3FAFactorID], CascadeTo: "EF-002FA", CascadeValue: threeFA, CascadeOnly: true,
 	})
 	// [edge_factors.custom] 的条目**原样产出**（ID 大小写保持解析结果，不去重、不跳过）：
 	// ssam-lib 以 ID 为 map 键（ssam.go 的 efMap），大写内置项与小写 custom 条目本是两个

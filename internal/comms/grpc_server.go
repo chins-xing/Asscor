@@ -313,10 +313,14 @@ func (h *grpcAgentHandler) StreamLogs(stream apiv1.AgentService_StreamLogsServer
 type GRPCClientConfig struct {
 	ServerAddr string
 	TLSEnabled bool
-	CertFile   string
-	KeyFile    string
-	CAFile     string
-	Timeout    time.Duration
+	// AllowInsecure permits a plaintext gRPC client when TLSEnabled is false.
+	// Audit D-07: default false so a misconfigured client fails closed instead
+	// of silently downgrading to plaintext.
+	AllowInsecure bool
+	CertFile      string
+	KeyFile       string
+	CAFile        string
+	Timeout       time.Duration
 }
 
 func DefaultGRPCClientConfig() GRPCClientConfig {
@@ -356,6 +360,9 @@ func (c *GRPCClient) Connect() error {
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	} else {
+		if !c.cfg.AllowInsecure {
+			return fmt.Errorf("gRPC client TLS is disabled: refusing plaintext (set AllowInsecure for isolated development only)")
+		}
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 

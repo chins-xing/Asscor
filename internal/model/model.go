@@ -88,7 +88,7 @@ type CheckItem struct {
 
 func (c CheckItem) Run() CheckResult {
 	if c.Privilege == PrivRoot && os.Geteuid() != 0 {
-		return c.skipResult("skipped — requires root privileges")
+		return c.skipResult(skipDetailPrefix)
 	}
 
 	var passed bool
@@ -109,7 +109,7 @@ func (c CheckItem) Run() CheckResult {
 	// "insufficient privilege" skip. Convert it so non-root agents do not get
 	// penalized for checks they cannot perform.
 	if !passed && IsPermissionDeniedDetail(detail) {
-		return c.skipResult("skipped — requires root privileges (" + detail + ")")
+		return c.skipResult(skipDetailPrefix + " (" + detail + ")")
 	}
 
 	return CheckResult{
@@ -137,6 +137,22 @@ func (c CheckItem) skipResult(detail string) CheckResult {
 		ComplianceRef: c.ComplianceRef,
 		Source:        c.Source,
 	}
+}
+
+// skipDetailPrefix 是**所有** skip 详情的公共前缀（唯一来源）。
+//
+// 为什么要写成常量：`skipResult` 有两个调用点（非 root 的兜底、以及"只因权限被拒而失败"的转换），
+// 而消费侧（`cmd/edgescen` 把被跳过的检查写进 `meta.skipped_checks`）**必须**能认出它们。
+// 两处各写一遍字符串字面量，改一处就会让"被跳过的检查"在记录里静默消失 —— 那正是本轮要堵的
+// 形态（记录里看不出"评估器变瞎"）。
+const skipDetailPrefix = "skipped — requires root privileges"
+
+// IsSkippedDetail reports whether a check detail string is one produced by
+// `skipResult`（即"这条检查没有给出结论"，而不是"它通过了"）。
+//
+// 它同时是**消费侧的唯一判据**：`meta.skipped_checks` 由它挑出来（见 cmd/edgescen）。
+func IsSkippedDetail(detail string) bool {
+	return strings.HasPrefix(strings.TrimSpace(detail), skipDetailPrefix)
 }
 
 // IsPermissionDeniedDetail reports whether a check detail string indicates the
@@ -272,6 +288,10 @@ type EdgeFactors struct {
 	AppArmorDisabled  float64 `json:"apparmor_disabled"`
 	NoSIEM            float64 `json:"no_siem"`
 	NoIDS             float64 `json:"no_ids"`
+	// ThreeFactorFailure is the Level-4 3FA penalty. It cascades into
+	// two_factor_failure and has no standalone output slot, hence omitempty
+	// (audit A14: was hardcoded 0.82 in the ssam adapter and legacy path).
+	ThreeFactorFailure float64 `json:"three_factor_failure,omitempty"`
 
 	// Model / ParamsHash 记录本次边缘因子合成使用的模型与参数指纹
 	// （spec §4 规则 4），供实验报告与审计复现；零值表示 legacy 路径，不输出。
@@ -300,6 +320,25 @@ func (e EdgeFactors) ActiveFactors() []float64 {
 		factors = append(factors, e.NoIDS)
 	}
 	return factors
+}
+
+// EdgeFactorObservation 是一次评分中**实际观测到**的边缘因子链条目
+// （spec §5.1 的 observed.edge_factor_chain[]）。
+//
+// 为什么必须在输出层承载它：实验记录要把"引擎这次到底用了哪些因子、各自被哪个检查
+// 触发、可信度多少、观测值多少"写进 JSONL，而离线重算（尤其 chain 模型）与审计复现
+// 都以此为唯一输入。此前这些信息只存在于评分过程的输出结构里
+// （ssam.AssessmentOutput.EdgeFactors），外层只把它折算成六个数值权重，采集器无从取得。
+//
+// 口径：EffectiveFactor 是**在线观测值**（内仓策略层已按可信度衰减一次的值，即
+// edgeFactorResult.Factor）；CTrigger 是触发检查的可信度；TS 是该条观测的时间戳
+// （空串合法，见 spec §5.1 必填表 —— chain 模型要求非零）。
+type EdgeFactorObservation struct {
+	Factor          string  `json:"factor"`
+	TriggerCheck    string  `json:"trigger_check"`
+	CTrigger        float64 `json:"c_trigger"`
+	EffectiveFactor float64 `json:"effective_factor"`
+	TS              string  `json:"ts"`
 }
 
 type AssessmentResult struct {
@@ -357,6 +396,20 @@ type AssessmentResult struct {
 	ScoreLower95       float64 `json:"score_lower95,omitempty"`
 	ScoreUpper95       float64 `json:"score_upper95,omitempty"`
 	EvidenceConfidence float64 `json:"evidence_confidence,omitempty"`
+	// EdgeFactorChain 是本次评分实际观测到的因子链；omitempty 只表示"引擎没产出链时不写该键"。
+	//
+	// **"键缺失"不等于"没有因子参与惩罚"**。三种情形必须分开读：
+	//   - **legacy 评分路径**（`[weights] scoring_engine = legacy`，或未带 `engine` tag 的
+	//     构建）**没有 [edge_factors.model] 段也会写出链**，那六个因子权重确实产生了惩罚；
+	//   - 插件路径只在**引擎装载了合成模型**时写出链（未配置 / 参数不可用 ⇒ 无链，但六个
+	//     权重照样按内仓默认乘性路径参与惩罚）；
+	//   - 链为空还可能只是"这次没有任何因子激活"。
+	// 因此"用了哪个模型、有没有因子惩罚"要看溯源戳（EdgeFactors.Model / ParamsHash）与
+	// EdgeFactors 的六个权重；空链/缺键只能读成"本条记录没有采集到链"。
+	//
+	// 见 EdgeFactorObservation 的注释。位置说明：它逻辑上属于 EdgeFactors 那一组，但为了不在
+	// 结构体中部插入注释、从而把 gofmt 的字段对齐组切断（会波及 9 行无关空白），放在末尾自成一组。
+	EdgeFactorChain []EdgeFactorObservation `json:"edge_factor_chain,omitempty"`
 }
 
 type Weights struct {

@@ -29,11 +29,14 @@ const maxCTIResponseBody = 32 << 20 // 32 MiB
 type Module struct {
 	kc kernel.KernelContext
 
-	mu            sync.RWMutex
-	coefficient   float64
-	lastUpdate    time.Time
-	activeThreats int
-	state         kernel.PluginState
+	mu          sync.RWMutex
+	coefficient float64
+	// baseCoefficient is the configured starting point; the effective
+	// coefficient is lowered by active threats at runtime (audit A17).
+	baseCoefficient float64
+	lastUpdate      time.Time
+	activeThreats   int
+	state           kernel.PluginState
 
 	updateInterval time.Duration
 	stopCh         chan struct{}
@@ -72,6 +75,7 @@ func (m *Module) Priority() int {
 
 func (m *Module) Init(ctx context.Context, kc kernel.KernelContext) error {
 	m.kc = kc
+	m.baseCoefficient = 1.0
 	m.coefficient = 1.0
 	m.updateInterval = 15 * time.Minute
 	m.stopCh = make(chan struct{})
@@ -345,7 +349,10 @@ func (m *Module) updateCoefficient() {
 
 	prevCoeff := m.coefficient
 
-	base := 1.0
+	base := m.baseCoefficient
+	if base <= 0 {
+		base = 1.0
+	}
 	threatPenalty := float64(m.activeThreats) * 0.02
 	m.coefficient = math.Max(0.60, base-threatPenalty)
 

@@ -93,12 +93,13 @@ func Default() *Config {
 		ThreatCoeff: 1.0,
 		SPCEnabled:  false,
 		EdgeFactors: model.EdgeFactors{
-			TwoFactorFailure:  1.0,
-			SYNCookieDisabled: 0.75,
-			SELinuxDisabled:   0.80,
-			AppArmorDisabled:  0.82,
-			NoSIEM:            0.90,
-			NoIDS:             0.88,
+			TwoFactorFailure:   1.0,
+			SYNCookieDisabled:  0.75,
+			SELinuxDisabled:    0.80,
+			AppArmorDisabled:   0.82,
+			NoSIEM:             0.90,
+			NoIDS:              0.88,
+			ThreeFactorFailure: 0.82,
 		},
 		CheckDeltas:      make(map[string]float64),
 		Extensions:       make(map[string]bool),
@@ -296,6 +297,8 @@ func Parse(content string) (*Config, error) {
 					cfg.EdgeFactors.NoSIEM = f
 				case "no_ids":
 					cfg.EdgeFactors.NoIDS = f
+				case "three_factor_failure":
+					cfg.EdgeFactors.ThreeFactorFailure = f
 				}
 			}
 		}

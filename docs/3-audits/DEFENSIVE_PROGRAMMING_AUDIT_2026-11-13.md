@@ -113,7 +113,8 @@ srv := &http.Server{ Handler: ..., ReadHeaderTimeout: 5 * time.Second }
 | D-04 | ✅ 已验证 | 既有 `BindAgentCert` 已保证一证书一 host；未新增代码，文档标注 provisioning 仍靠人工签发 |
 | D-05 | ✅ 已修 | CTI 响应 `io.LimitReader(..., 32 MiB)` |
 | D-06 | ✅ 已修 | 联邦 HTTP `ReadTimeout=15s / WriteTimeout=30s / IdleTimeout=60s` |
-| D-07～D-11 | ⏳ 未做 | 仍在未完成清单 P2/P3 |
+| D-07 | ✅ 已修 | `GRPCClientConfig.AllowInsecure` 默认 false；TLS 关闭时 Connect 直接报错，不再静默明文 |
+| D-08～D-11 | ⏳ 未做 | 仍在未完成清单 P3 |
 
 ## 3. 建议优先级
 
