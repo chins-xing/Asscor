@@ -108,6 +108,12 @@ func Default() *Config {
 		SPC: model.SPCConfig{
 			Enabled:            false,
 			MinPScore:          0.60,
+			ImpactCVSSWeight:   0.20,
+			ImpactEPSSWeight:   0.50,
+			ImpactKEVWeight:    0.30,
+			SubTechGrowth:      0.10,
+			APTGrowth:          0.20,
+			PoCFactor:          0.30,
 			CacheRetentionDays: 365,
 			FetchIntervalH:     1,
 			MaxCacheSize:       100000,
@@ -389,6 +395,30 @@ func Parse(content string) (*Config, error) {
 			case "min_pscore":
 				if f, err := strconv.ParseFloat(v, 64); err == nil {
 					cfg.SPC.MinPScore = f
+				}
+			case "impact_cvss_weight":
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					cfg.SPC.ImpactCVSSWeight = f
+				}
+			case "impact_epss_weight":
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					cfg.SPC.ImpactEPSSWeight = f
+				}
+			case "impact_kev_weight":
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					cfg.SPC.ImpactKEVWeight = f
+				}
+			case "subtech_growth":
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					cfg.SPC.SubTechGrowth = f
+				}
+			case "apt_growth":
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					cfg.SPC.APTGrowth = f
+				}
+			case "poc_factor":
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					cfg.SPC.PoCFactor = f
 				}
 			case "cache_retention_days":
 				if i, err := strconv.Atoi(v); err == nil {

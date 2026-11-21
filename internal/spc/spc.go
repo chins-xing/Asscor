@@ -47,6 +47,12 @@ type Module struct {
 	mispClient    *kernel.SPCMISPClient
 	enabled       bool
 	minPScore     float64
+	impactCVSS    float64
+	impactEPSS    float64
+	impactKEV     float64
+	subtechGrowth float64
+	aptGrowth     float64
+	pocFactor     float64
 	maxCacheSize  int
 	kevCatalog    map[string]bool
 	nvdLimiter    chan struct{}
@@ -63,6 +69,12 @@ func New() *Module {
 		kevCatalog:    make(map[string]bool),
 		fetchInterval: 1 * time.Hour,
 		minPScore:     0.60,
+		impactCVSS:    0.20,
+		impactEPSS:    0.50,
+		impactKEV:     0.30,
+		subtechGrowth: 0.10,
+		aptGrowth:     0.20,
+		pocFactor:     0.30,
 		maxCacheSize:  100000,
 		enabled:       false,
 		nvdLimiter:    make(chan struct{}, 1),
@@ -233,6 +245,24 @@ func (m *Module) ConfigureFromConfig(cfg *config.Config) {
 	m.minPScore = spcCfg.MinPScore
 	if m.minPScore == 0 {
 		m.minPScore = 0.60
+	}
+	m.impactCVSS = spcCfg.ImpactCVSSWeight
+	m.impactEPSS = spcCfg.ImpactEPSSWeight
+	m.impactKEV = spcCfg.ImpactKEVWeight
+	if m.impactCVSS == 0 && m.impactEPSS == 0 && m.impactKEV == 0 {
+		m.impactCVSS, m.impactEPSS, m.impactKEV = 0.20, 0.50, 0.30
+	}
+	m.subtechGrowth = spcCfg.SubTechGrowth
+	if m.subtechGrowth == 0 {
+		m.subtechGrowth = 0.10
+	}
+	m.aptGrowth = spcCfg.APTGrowth
+	if m.aptGrowth == 0 {
+		m.aptGrowth = 0.20
+	}
+	m.pocFactor = spcCfg.PoCFactor
+	if m.pocFactor == 0 {
+		m.pocFactor = 0.30
 	}
 	m.fetchInterval = time.Duration(spcCfg.FetchIntervalH) * time.Hour
 	if m.fetchInterval == 0 {
@@ -529,19 +559,19 @@ func (m *Module) Calculate(hostID string, assetPackages []string) kernel.SPCCorr
 			kevFactor = 1.0
 		}
 		if kevFactor == 0 && cve.HasPublicPoC {
-			kevFactor = 0.3
+			kevFactor = m.pocFactor
 		}
 
-		impact := 0.20*cvssFactor + 0.50*epssFactor + 0.30*kevFactor
+		impact := m.impactCVSS*cvssFactor + m.impactEPSS*epssFactor + m.impactKEV*kevFactor
 
 		nSubTech := len(cve.AttckTechniques)
 		if nSubTech > 0 {
-			impact = impact * (1.0 + 0.1*float64(nSubTech))
+			impact = impact * (1.0 + m.subtechGrowth*float64(nSubTech))
 		}
 
 		nAptGroups := len(cve.APTGroupAssoc)
 		if nAptGroups > 0 {
-			impact = impact * (1.0 + 0.2*float64(nAptGroups))
+			impact = impact * (1.0 + m.aptGrowth*float64(nAptGroups))
 		}
 
 		localFactor := matchType.Factor() * exposure.Factor() * controlLevel.Factor()
