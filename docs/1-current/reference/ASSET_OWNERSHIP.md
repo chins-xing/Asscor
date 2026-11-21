@@ -46,7 +46,7 @@
 | `cmd/edgecompare/` | **15** | 离线重算/对比/拟合工具（**全部**带 `//go:build edgeexp`） | 研究线工具（消费实验记录） |
 | `cmd/edgescen/` | **14** | 实验采集器（tag `expr,engine,checks`） | 研究线工具（产出实验记录） |
 | `configs/edgeexp/` | 4 | 四候选实验模板（`m0-baseline`/`vector`/`graph`/`chain`） | 研究线配置 |
-| `docs/2-experiments/clab-lab/` | 3 | 实验室文档 | 研究 |
+| `docs/2-experiments/` | 3 | 实验室文档 | 研究 |
 | `docs/4-archive/plans/2026-09-08-edge-factor-coupling.md`<br>`…/2026-09-08-entropy-pack.md`<br>`…/2026-09-12-edge-factor-coupling-milestone-b.md` | 3 | 方向② 里程碑 A/B 计划、方向③ 熵包计划 | 研究线过程文档（同目录的 `2026-08-21-secure-mode.md` 属**产品线**，两侧都有） |
 | `docs/1-current/reference/ASSCOR-Research-Core.md` | 1 | 研究线总览 | 研究 |
 | `docs/1-current/design/ENTROPY_EXTENSION_DESIGN_2026-09-08.md` | 1 | 方向③ 熵扩展包设计（已归档、未实现） | 研究（归档） |

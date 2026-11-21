@@ -350,7 +350,7 @@ sudo ./ASSCOR-agent-linux-amd64 --install             # install agent on a targe
 asscor-cli                                             # connect to the kernel CLI
 ```
 
-See the [User Manual](docs/ASSCOR%20%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
+See the [User Manual](<docs/1-current/guides/ASSCOR 使用手册.md>)
 (Chinese) for the full operational guide.
 
 ## 12. Repository structure
