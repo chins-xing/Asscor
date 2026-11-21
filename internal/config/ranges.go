@@ -87,6 +87,21 @@ func (cfg *Config) validateRanges() error {
 	if floatInvalid(cfg.SPC.MinPScore) || cfg.SPC.MinPScore < 0 || cfg.SPC.MinPScore > 1 {
 		return fmt.Errorf("config: [spc] min_pscore = %v must be in [0, 1]", cfg.SPC.MinPScore)
 	}
+	for _, v := range []struct {
+		name string
+		val  float64
+	}{
+		{"impact_cvss_weight", cfg.SPC.ImpactCVSSWeight},
+		{"impact_epss_weight", cfg.SPC.ImpactEPSSWeight},
+		{"impact_kev_weight", cfg.SPC.ImpactKEVWeight},
+		{"subtech_growth", cfg.SPC.SubTechGrowth},
+		{"apt_growth", cfg.SPC.APTGrowth},
+		{"poc_factor", cfg.SPC.PoCFactor},
+	} {
+		if floatInvalid(v.val) || v.val < 0 || v.val > 1 {
+			return fmt.Errorf("config: [spc] %s = %v must be in [0, 1]", v.name, v.val)
+		}
+	}
 	if floatInvalid(cfg.ATTACK.BeaconThreshold) || cfg.ATTACK.BeaconThreshold < 0 || cfg.ATTACK.BeaconThreshold > 1 {
 		return fmt.Errorf("config: [attck] beacon_threshold = %v must be in [0, 1]", cfg.ATTACK.BeaconThreshold)
 	}

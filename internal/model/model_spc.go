@@ -11,8 +11,17 @@ type SPCCVEInfo struct {
 }
 
 type SPCConfig struct {
-	Enabled            bool
-	MinPScore          float64
+	Enabled   bool
+	MinPScore float64
+	// Impact formula weights (audit A16; defaults 0.20/0.50/0.30).
+	ImpactCVSSWeight float64
+	ImpactEPSSWeight float64
+	ImpactKEVWeight  float64
+	// Amplifiers per sub-technique / APT association (defaults 0.1 / 0.2)
+	// and the KEV substitute factor for public PoC (default 0.3).
+	SubTechGrowth      float64
+	APTGrowth          float64
+	PoCFactor          float64
 	CacheRetentionDays int
 	FetchIntervalH     int
 	MaxCacheSize       int
