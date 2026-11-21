@@ -38,7 +38,6 @@
 | P2 | B3 | 安全边界 | 联邦 demo 为共享 token + 明文 HTTP，生产需 mTLS + 独立凭证 | [demo 级] | 与 D-01 一并收口 |
 | P2 | B4 | 环境 | agent 未配置 HMAC key（commander 远程命令会被拒） | [环境约束] | `/root/t4` 遗留；需先下发 `agent-hmac.key` |
 | P2 | B5 | 可选 | securemode 把 agent.ini 加密成 `.enc`，配置不可审计 | [可选] | 需审计时用不含 securemode tag 的 agent 重建 |
-| P2 | C1 | 文档 | main 文档 18 处悬空链接（legacy 指向 clab-lab/superpowers/v0.3.0 等） | [待修] | `scripts/check-doc-refs.sh` 在 main 复现；逐条改路径或归档 |
 | P2 | C2 | 文档 | `WHITEPAPER_GAP_ANALYSIS` 三条已过时（CTI 实拉取、delegation 39 条、SPC 乘数已存在） | [文档待更新] | 关闭三条 gap 并注明验证位置 |
 | P2 | C3 | 文档 | `TECHNICAL_DEBT_BACKLOG_2026-09-08` 仍列 M-4/M-6/L-1/L-2/L-6/RC-M4 | [待复核] | 逐条对照当前代码关闭/降级/更新 |
 | P2 | C4 | 文档 | 扩展点执行清单：89 个点实际被 Execute 的约 16 个 | [未开始] | 产出"点 × 执行者"清单，删除/标注纯预留 |
@@ -67,6 +66,7 @@
 | A14 | EF-3FA 硬编码 0.82 | **已完成**（`3175f5d`）：`EdgeFactors.ThreeFactorFailure` + `[edge_factors] three_factor_failure`；SSAM/legacy 均读配置 |
 | A17 | CTI 系数/间隔硬编码 | **已完成**（`3175f5d`）：`[cti] coefficient` / `update_interval_min`，含校验；基础系数用于运行时扣减 |
 | A16 | SPC 影响权重硬编码 | **已完成**（`48438eb`）：`[spc] impact_cvss/epss/kev_weight、subtech_growth、apt_growth、poc_factor`；默认值不变 |
+| C1 | main 文档 18 处悬空链接 | **已完成**（main `9475168`）：更新到现有文档/目录或标注历史数据未迁移；`check-doc-refs.sh` 在 main 为 0 |
 | D-01 | 联邦鉴权 fail-open | **已完成**（`aeb1ccc`）：master 非 loopback 且 token 空时拒绝启动；`config_test.go` 覆盖 |
 | D-02 | NaN 配置绕过 | **已完成**（`aeb1ccc`）：`validateRanges` 对 weights/threshold/threat/ACI/edge/delta/confidence/SPC/ATT&CK 全部拒绝 NaN/Inf；回归测试 |
 | D-03 | gRPC 无角色隔离 | **已完成（Agent 侧）**（`aeb1ccc`）：Agent 证书按指纹绑定只允许访问自身 host；运维证书仍跨主机（角色分离留后续） |
