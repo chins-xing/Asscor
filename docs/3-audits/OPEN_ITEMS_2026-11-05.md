@@ -25,17 +25,14 @@
 
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
-| P2 | D-07 | 加固 | gRPC 客户端 TLS 关闭时静默退回明文 | [未开始] | `internal/comms/grpc_server.go:345-353`；显式 dev 开关 / fail-closed |
 | P2 | A1 | 微内核 | 进程隔离仅覆盖 federation；assessor/topology/SPC/CTI 仍在进程内 | [进行中] | 按风险低→高迁下一个模块（CTI/SPC/collector） |
 | P2 | A3 | 微内核 | 内核↔子进程 RPC 单飞（一次一请求） | [未开始] | 改多路复用/并发池 |
 | P2 | A4 | 微内核 | 快照推送间隔 = `report_interval_sec`（30s），分数最多滞后一个周期 | [待决策] | 推送与上报周期解耦（增量快照/5s） |
 | P2 | A5 | 微内核 | 内核二进制未因进程隔离减重（纯逻辑仍与 Proxy 同包） | [未开始] | 纯逻辑拆独立 module，Proxy 只依赖协议 |
 | P2 | A6 | 架构 | 联动审计 §7.4：adapterhub 孤儿、attck 双形态、comms_on 手工装配 9 模块 | [待决策] | `docs/3-audits/MODULE_LINKAGE_AUDIT_2026-10-29.md` §7.4 |
 | P2 | A7 | 内核 | 内核瘦身：拆可选模块二进制、动态插件、单协议 | [未开始] | 内核体积审计（minimal 9.3MB → full 22.2MB） |
-| P2 | A14 | 参数化 | SSAM 路径 `EF-3FA` 因子硬编码 0.82（含 CascadeValue） | [未开始] | `internal/engine/ssam/adapter.go:69`；参数化或标为常量 |
 | P2 | A15 | 参数化 | ATT&CK 15 技术转移矩阵硬编码，无配置入口 | [未开始] | `internal/attck/attck.go:987+`；实验注入或文档标常量 |
 | P2 | A16 | 参数化 | SPC 影响权重硬编码（0.20/0.50/0.30、APT×1.2、子技术×1.1） | [未开始] | `internal/spc/spc.go:535-544` |
-| P2 | A17 | 参数化 | CTI 系数 1.0、更新间隔 15m 硬编码 | [未开始] | `internal/cti/cti.go:70-71` |
 | P2 | A18 | 参数化 | 研究引擎默认参数硬编码（predictor/engagement/attackerstate，RC-M4） | [未开始] | `predictor.go:71`、`engagement.go:62`、`attackerstate/state.go:106,132` |
 | P2 | B1 | 研究 | T4 跨环境 ROC（第二拓扑/VLAN 隔离、8 轮、95% CI） | [未开始] | `docs/1-current/design/SRD_V2.3_PLAN_2026-10-27.md` §T4 |
 | P2 | B2 | 研究 | AUC 深化：多跳 ACL / 风险真值 / 参数敏感性 | [未开始] | 现有二元可达性下三 profile AUC 完全一致 |
@@ -67,6 +64,9 @@
 | D1 | 拓扑停机 + asc 池 46 资源 `onboot=0` | 已完成（进程隔离 v0.4 仅在快照中） |
 | A12 | legacy 路径边因子硬编码 | **已完成**（`6cc0f3e`）：`legacyDefaultCustomFactors` 改读 `cfg.EdgeFactors`，5 个字面量移除；engine/assessor/edgefactor 测试全绿 |
 | A13 | `[resilience] aci_*` 死配置 | **已完成**（`6aa0069`）：删除 7 个从未被消费的字段/解析/校验与 config.ini 段；`[resilience.circuit]` 保留 |
+| D-07 | gRPC 客户端明文回退 | **已完成**（`3175f5d`）：`AllowInsecure` 默认 false，TLS 关闭时拒绝明文；新增测试 |
+| A14 | EF-3FA 硬编码 0.82 | **已完成**（`3175f5d`）：`EdgeFactors.ThreeFactorFailure` + `[edge_factors] three_factor_failure`；SSAM/legacy 均读配置 |
+| A17 | CTI 系数/间隔硬编码 | **已完成**（`3175f5d`）：`[cti] coefficient` / `update_interval_min`，含校验；基础系数用于运行时扣减 |
 | D-01 | 联邦鉴权 fail-open | **已完成**（`aeb1ccc`）：master 非 loopback 且 token 空时拒绝启动；`config_test.go` 覆盖 |
 | D-02 | NaN 配置绕过 | **已完成**（`aeb1ccc`）：`validateRanges` 对 weights/threshold/threat/ACI/edge/delta/confidence/SPC/ATT&CK 全部拒绝 NaN/Inf；回归测试 |
 | D-03 | gRPC 无角色隔离 | **已完成（Agent 侧）**（`aeb1ccc`）：Agent 证书按指纹绑定只允许访问自身 host；运维证书仍跨主机（角色分离留后续） |

@@ -91,6 +91,11 @@ ef-002fa     0.850    ← [edge_factors.custom] 的同名小写项，作为额�
 （`internal/config` 字段/默认值/解析/范围校验 + `config.ini` 段）；如未来要做 ACI 评分，
 需要重新设计并同时落地消费点，避免再次出现“配了不生效”。
 
+
+**修复（2026-11-13，`3175f5d`）**：
+- `EF-3FA` 从硬编码 0.82 改为 `[edge_factors] three_factor_failure`（`model.EdgeFactors.ThreeFactorFailure`，SSAM 与 legacy 两条路径共用）。
+- CTI 增加 `[cti] coefficient`（0,10] 与 `update_interval_min`（1–1440），运行时系数以配置为基数扣减。
+
 ## 4. 建议
 
 **P0（配置正确性）**
