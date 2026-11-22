@@ -38,8 +38,6 @@
 | P2 | B3 | 安全边界 | 联邦 demo 为共享 token + 明文 HTTP，生产需 mTLS + 独立凭证 | [demo 级] | 与 D-01 一并收口 |
 | P2 | B4 | 环境 | agent 未配置 HMAC key（commander 远程命令会被拒） | [环境约束] | `/root/t4` 遗留；需先下发 `agent-hmac.key` |
 | P2 | B5 | 可选 | securemode 把 agent.ini 加密成 `.enc`，配置不可审计 | [可选] | 需审计时用不含 securemode tag 的 agent 重建 |
-| P2 | C2 | 文档 | `WHITEPAPER_GAP_ANALYSIS` 三条已过时（CTI 实拉取、delegation 39 条、SPC 乘数已存在） | [文档待更新] | 关闭三条 gap 并注明验证位置 |
-| P2 | C3 | 文档 | `TECHNICAL_DEBT_BACKLOG_2026-09-08` 仍列 M-4/M-6/L-1/L-2/L-6/RC-M4 | [待复核] | 逐条对照当前代码关闭/降级/更新 |
 | P2 | C4 | 文档 | 扩展点执行清单：89 个点实际被 Execute 的约 16 个 | [未开始] | 产出"点 × 执行者"清单，删除/标注纯预留 |
 | P2 | D2 | 运维 | GitHub CI 最新 run 未确认 | [待验证] | 本地等价 CI 已 `CI_ALL_OK`；GitHub 侧确认 |
 | P2 | D3 | 运维 | 内核/子进程部署脚本仍是一次性命令 | [未开始] | 纳入 `scripts/` 做可重复部署（含 federation-mod 分发） |
@@ -54,6 +52,8 @@
 | P3 | D-11 | 加固 | gRPC/联邦缺速率与连接配额 | [未开始] | 按证书/连接限速 |
 | P3 | A19 | 参数化 | `[resilience.circuit]` 未解析；熔断默认 5 次/5 分钟/1 分钟硬编码 | [未开始] | `internal/resilience/circuit.go:71` |
 
+| P3 | L-2 | 架构 | 大包拆分（`internal/attck`/`kernel`/`engine`/`cli`/`adapter`） | [未开始] | 长期结构重构；见 TECHNICAL_DEBT 复核记录 |
+
 ## 已关闭 / 已验证（保留记录，不再计入未完成）
 
 | ID | 事项 | 结论 |
@@ -67,6 +67,8 @@
 | A17 | CTI 系数/间隔硬编码 | **已完成**（`3175f5d`）：`[cti] coefficient` / `update_interval_min`，含校验；基础系数用于运行时扣减 |
 | A16 | SPC 影响权重硬编码 | **已完成**（`48438eb`）：`[spc] impact_cvss/epss/kev_weight、subtech_growth、apt_growth、poc_factor`；默认值不变 |
 | C1 | main 文档 18 处悬空链接 | **已完成**（main `9475168`）：更新到现有文档/目录或标注历史数据未迁移；`check-doc-refs.sh` 在 main 为 0 |
+| C2 | WHITEPAPER_GAP_ANALYSIS 三条过时 | **已完成**（`09a1dc9`）：新增 2026-11-22 复核记录，CTI/delegation/ATT&CK 乘数三条关闭并附代码证据 |
+| C3 | TECHNICAL_DEBT_BACKLOG 遗留项 | **已完成（复核）**（`09a1dc9`）：M-4 缓解、M-6/L-6 关闭、L-1 部分关闭；L-2 与 RC-M4（A18）继续跟踪 |
 | D-01 | 联邦鉴权 fail-open | **已完成**（`aeb1ccc`）：master 非 loopback 且 token 空时拒绝启动；`config_test.go` 覆盖 |
 | D-02 | NaN 配置绕过 | **已完成**（`aeb1ccc`）：`validateRanges` 对 weights/threshold/threat/ACI/edge/delta/confidence/SPC/ATT&CK 全部拒绝 NaN/Inf；回归测试 |
 | D-03 | gRPC 无角色隔离 | **已完成（Agent 侧）**（`aeb1ccc`）：Agent 证书按指纹绑定只允许访问自身 host；运维证书仍跨主机（角色分离留后续） |

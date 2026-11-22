@@ -171,3 +171,8 @@
 | 白皮书 L2 SQLite → HistoricalStore | ✅ 已更正 |
 | 白皮书适配器超时 30s → 60s | ✅ 已更正 |
 | 白皮书 30x I/O 基准 | ✅ 已移除过时数据 |
+
+## 复核记录（2026-11-22）
+
+原三条 gap 已关闭：CTI 真实拉取、delegation 30 条规则、SPC 已含 `1+0.1n` 乘数。
+详见 `docs/3-audits/WHITEPAPER_GAP_ANALYSIS.md`。

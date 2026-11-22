@@ -167,3 +167,17 @@
 | D-10 | **`asscor`（standalone/legacy 路径）从不装配 `[user_check.*]`** —— 自定义检查被解析却从不执行 | `cmd/asscor` 只空白导入 `internal/checks`（触发内置注册）；kernel 侧在组合根显式 `config.ParseUserChecks(...)` → `checks.Register(...)`（`cmd/kernel/main.go`），这条路径漏了同一步。实测（合法 `user_check` 配置 + 修前/修后两个二进制）：**80 条 vs 83 条**，修前 `CU-*` 一条不出现 | ✅ **已修（2026-10-26）**：`cmd/asscor/checks_import_on.go` 新增 `registerUserChecks(cfg)` 并在 `main()` 评估前调用；`checks_import_off.go` 提供 `!checks` 构建的 no-op。新增 `cmd/asscor/checks_import_on_test.go`（合法配置 ⇒ 2 条进注册表、`Source=user`）。⚠️ 教训：首次验证用了缺 `id`/`domain` 的配置，`ParseUserChecks` 返回空，差点误判 |
 | D-11 | **`beta_bayes` 聚合长期是"死配置"**（`algorithm` / `prior_strength` 只解析不消费，审计 I-10） | `ssam-lib` 只有 `weighted_evidence`；配置写 `beta_bayes` 直接加载失败 | ✅ **已实现（2026-10-26）**：`c̃ = (κ+c)/(κ+1)`（κ=`prior_strength`，先验 = κ 个完全可信伪观测）后再代入同一组 E/U；`EffectiveConfidence` 统一两个消费点（域分 + 边因子触发衰减）。不变量 `c=1 ⇒ c̃=1`、`κ→0 ⇒ c̃=c`；实测同一批数据 77.12 → **69.32**、CI 变窄、逐条 `effective_confidence` 命中 `(2+c)/3`。**仍缺**：可插拔注册表（`RegisterAlgorithm`/`Aggregator`）与 κ 的**标定**（κ=2 是先验默认，非实测最优） |
 
+## 复核记录（2026-11-22）
+
+逐条复核 2026-09-08 基线的剩余项：
+
+| 编号 | 原事项 | 复核状态 | 依据 |
+|---|---|---|---|
+| M-4 | agent.ini 明文 hmac_key | **已缓解（兼容保留）**：`hmac_key_file`/`ASSCOR_HMAC_KEY` 优先，内联字段解析时告警 | `cmd/agent/main.go` M-4 分支 |
+| M-6 | 配置数值无范围校验 | **已关闭**：`validateRanges` 覆盖权重/阈值/边因子/SPC/ATT&CK 等；NaN/Inf 由 D-02 补强 | `internal/config/ranges.go` |
+| L-1 | 安全关键包零测试 | **部分关闭**：integrity/resilience/topology/version 已有测试；`api/v1` 仍无测试（记录为残余） | 各包 `*_test.go` |
+| L-2 | 大包拆包 | **未关闭**：属长期结构重构，仍跟踪 | — |
+| L-6 | 扩展安装权限未最小化 | **已关闭**：`sanitizeMode` 清理 setuid/组可写位 | `internal/extmgr/extension_installer.go` |
+| RC-M4 | 研究引擎权重全硬编码 | **未关闭**：由未完成清单 A18（predictor/engagement/attackerstate 参数注入）跟踪 | — |
+
+> 结论：C3 的“复核”任务完成；L-2 与 RC-M4（A18）继续作为独立未完成项跟踪。
