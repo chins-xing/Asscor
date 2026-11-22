@@ -51,7 +51,7 @@
 | P3 | D-11 | 加固 | gRPC/联邦缺速率与连接配额 | [未开始] | 按证书/连接限速 |
 
 | P3 | L-2 | 架构 | 大包拆分（`internal/attck`/`kernel`/`engine`/`cli`/`adapter`） | [未开始] | 长期结构重构；见 TECHNICAL_DEBT 复核记录 |
-| A19 | `[resilience.circuit]` 未解析 | **已完成**（`TBD`）：新增 `circuit_threshold/window_min/cooldown_min` 配置与校验；启动时 `resilience.Configure` 注入；`error_rate_limit` 仍为设计预留 |
+| A19 | `[resilience.circuit]` 未解析 | **已完成**（`4a92321`）：新增 `circuit_threshold/window_min/cooldown_min` 配置与校验；启动时 `resilience.Configure` 注入；`error_rate_limit` 仍为设计预留 |
 
 ## 已关闭 / 已验证（保留记录，不再计入未完成）
 
