@@ -62,11 +62,32 @@ type Evidence struct {
 
 // Engine 是状态更新引擎（规则 + 权重）。
 type Engine struct {
-	// 无内部状态（纯函数式更新），规则常量见 mapping.go。
+	Params Params // audit A18: injectable update increments
+}
+
+// Params holds the state-update increments.
+type Params struct {
+	TargetKnowledgeInc   float64
+	ExperienceSuccessInc float64
+	ExperienceFailureInc float64
+	BeliefInc            float64
+}
+
+// DefaultParams returns the reference increments.
+func DefaultParams() Params {
+	return Params{TargetKnowledgeInc: 0.10, ExperienceSuccessInc: 0.05, ExperienceFailureInc: 0.03, BeliefInc: 0.15}
 }
 
 // NewEngine creates a state engine with default rules.
-func NewEngine() *Engine { return &Engine{} }
+func NewEngine() *Engine { return NewEngineWithParams(DefaultParams()) }
+
+// NewEngineWithParams creates an engine with explicit update increments.
+func NewEngineWithParams(p Params) *Engine {
+	if p == (Params{}) {
+		p = DefaultParams()
+	}
+	return &Engine{Params: p}
+}
 
 // NewState creates an initial attacker state (all-zero belief, unknown intent).
 func NewState(id string) AttackerState {
@@ -103,15 +124,15 @@ func (e *Engine) Update(state AttackerState, evs []Evidence) AttackerState {
 		}
 		// 规则 2: 目标知识。
 		if ev.Target != "" {
-			inc := 0.1 * clamp01(ev.Confidence)
+			inc := e.Params.TargetKnowledgeInc * clamp01(ev.Confidence)
 			out.TargetKnowledge = clamp01(out.TargetKnowledge + inc)
 		}
 		// 规则 4: 经验。
 		switch ev.Outcome {
 		case "success":
-			out.Experience = clamp01(out.Experience + 0.05)
+			out.Experience = clamp01(out.Experience + e.Params.ExperienceSuccessInc)
 		case "failure":
-			out.Experience = clamp01(out.Experience - 0.03)
+			out.Experience = clamp01(out.Experience - e.Params.ExperienceFailureInc)
 		}
 		// 规则 1: 意图（显式优先，否则 TTP 映射；高置信覆盖）。
 		intent := ev.Intent
@@ -129,7 +150,7 @@ func (e *Engine) Update(state AttackerState, evs []Evidence) AttackerState {
 		// BeliefState: 对目标环境的观测认知（方面=target, 值=置信度加权）。
 		if ev.Target != "" {
 			cur := out.BeliefState[ev.Target]
-			out.BeliefState[ev.Target] = clamp01(cur + 0.15*clamp01(ev.Confidence))
+			out.BeliefState[ev.Target] = clamp01(cur + e.Params.BeliefInc*clamp01(ev.Confidence))
 		}
 	}
 

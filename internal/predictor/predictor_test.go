@@ -166,3 +166,17 @@ func TestPredictImmutability(t *testing.T) {
 		t.Error("Predict must not mutate input state")
 	}
 }
+
+func TestEngineParamsOverrideIntentBonus(t *testing.T) {
+	state := attackerstate.AttackerState{Intent: attackerstate.IntentRecon}
+	target := TargetState{SSAMScore: 50, Exposure: 0.5}
+	def := NewEngine().Predict(state, target).Probabilities[ActionRecon]
+	custom := NewEngineWithParams(Params{
+		Temperature: 1.0, IntentBonus: 0,
+		ExperienceWeight: 0.5, AIDependenceWeight: 0.5,
+		VulnerabilityWeight: 0.8,
+	}).Predict(state, target).Probabilities[ActionRecon]
+	if custom >= def {
+		t.Fatalf("intent bonus override should lower recon probability: custom=%v default=%v", custom, def)
+	}
+}
