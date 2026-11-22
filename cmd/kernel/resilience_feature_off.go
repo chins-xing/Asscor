@@ -2,6 +2,10 @@
 
 package main
 
+import "github.com/chins-xing/asscor/internal/config"
+
+func configureResilience(*config.Config) {}
+
 // resilienceFeatureEnabled reports whether the resilience module's real
 // implementation is compiled in. Without the tag the module degrades to
 // no-op pass-throughs.

@@ -82,6 +82,16 @@ func (cfg *Config) validateRanges() error {
 		}
 	}
 
+	if cfg.CircuitThreshold < 1 || cfg.CircuitThreshold > 10000 {
+		return fmt.Errorf("config: [resilience.circuit] circuit_threshold = %v must be in [1, 10000]", cfg.CircuitThreshold)
+	}
+	if cfg.CircuitWindowMin < 1 || cfg.CircuitWindowMin > 1440 {
+		return fmt.Errorf("config: [resilience.circuit] circuit_window_min = %v must be in [1, 1440]", cfg.CircuitWindowMin)
+	}
+	if cfg.CircuitCooldownMin < 1 || cfg.CircuitCooldownMin > 1440 {
+		return fmt.Errorf("config: [resilience.circuit] circuit_cooldown_min = %v must be in [1, 1440]", cfg.CircuitCooldownMin)
+	}
+
 	// SPC min_pscore and ATT&CK thresholds are model inputs too (D-02):
 	// reject NaN/Inf and out-of-range values before they reach scoring.
 	if floatInvalid(cfg.SPC.MinPScore) || cfg.SPC.MinPScore < 0 || cfg.SPC.MinPScore > 1 {
