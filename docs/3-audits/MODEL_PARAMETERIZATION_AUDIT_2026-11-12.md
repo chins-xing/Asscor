@@ -101,7 +101,7 @@ ef-002fa     0.850    ← [edge_factors.custom] 的同名小写项，作为额�
 公开 PoC 的 KEV 替代值均改为 `[spc]` 配置（默认 0.20/0.50/0.30、0.10/0.20、0.30），并做 [0,1] 校验。
 
 
-**修复（2026-11-22，`TBD`）**：研究引擎参数注入 API 落地——`predictor.Params`（温度/意图奖励/经验/AI/脆弱性/动作基权重）与
+**修复（2026-11-22，`31069e8`）**：研究引擎参数注入 API 落地——`predictor.Params`（温度/意图奖励/经验/AI/脆弱性/动作基权重）与
 `attackerstate.Params`（目标知识/经验增量和信念增量）+ `NewEngineWithParams`；engagement 的 `PlannerParams` 本就可注入。
 默认值集中到 `DefaultParams()`，覆盖测试见 `TestEngineParamsOverride*`。
 

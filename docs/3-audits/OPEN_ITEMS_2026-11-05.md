@@ -64,7 +64,7 @@
 | D-07 | gRPC 客户端明文回退 | **已完成**（`3175f5d`）：`AllowInsecure` 默认 false，TLS 关闭时拒绝明文；新增测试 |
 | A14 | EF-3FA 硬编码 0.82 | **已完成**（`3175f5d`）：`EdgeFactors.ThreeFactorFailure` + `[edge_factors] three_factor_failure`；SSAM/legacy 均读配置 |
 | A17 | CTI 系数/间隔硬编码 | **已完成**（`3175f5d`）：`[cti] coefficient` / `update_interval_min`，含校验；基础系数用于运行时扣减 |
-| A18 | 研究引擎默认参数硬编码 | **已完成**（`TBD`）：`predictor.Params`/`attackerstate.Params` + `NewEngineWithParams`；engagement 已有 `PlannerParams`；默认值集中在 `DefaultParams`，并有覆盖测试 |
+| A18 | 研究引擎默认参数硬编码 | **已完成**（`31069e8`）：`predictor.Params`/`attackerstate.Params` + `NewEngineWithParams`；engagement 已有 `PlannerParams`；默认值集中在 `DefaultParams`，并有覆盖测试 |
 | A16 | SPC 影响权重硬编码 | **已完成**（`48438eb`）：`[spc] impact_cvss/epss/kev_weight、subtech_growth、apt_growth、poc_factor`；默认值不变 |
 | C1 | main 文档 18 处悬空链接 | **已完成**（main `9475168`）：更新到现有文档/目录或标注历史数据未迁移；`check-doc-refs.sh` 在 main 为 0 |
 | C2 | WHITEPAPER_GAP_ANALYSIS 三条过时 | **已完成**（`09a1dc9`）：新增 2026-11-22 复核记录，CTI/delegation/ATT&CK 乘数三条关闭并附代码证据 |
