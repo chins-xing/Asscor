@@ -171,3 +171,15 @@
 | 白皮书 L2 SQLite → HistoricalStore | ✅ 已更正 |
 | 白皮书适配器超时 30s → 60s | ✅ 已更正 |
 | 白皮书 30x I/O 基准 | ✅ 已移除过时数据 |
+
+## 复核记录（2026-11-22）
+
+本文件是 2026-09 的白皮书差距快照；下列条目已随代码演进关闭（仅保留原始记录，勿再作为未完成项）：
+
+| # | 原差距 | 复核结论 | 代码证据 |
+|---|---|---|---|
+| 3 | CTI OTX/MISP 完全 stub、无实际拉取 | **已关闭**：OTX pulses 与 MISP events 均真实拉取并计算权重 | `internal/cti/cti.go` 的 `fetchOTXPulses` / `fetchMISPEvents` |
+| 17 | delegation 仅 9 条规则、缺管理适配器 | **已关闭**：当前 `delegationRules` 共 30 条规则，覆盖管理适配器 | `internal/adapter/delegation.go` |
+| 7 | ATT&CK technique association 的 `Impact × (1+0.1×n)` 未找到 | **已关闭**：SPC 影响公式已含该乘法器 | `internal/spc/spc.go`（`impact = impact * (1.0 + 0.1*float64(nSubTech))`） |
+
+> 若后续代码再次出现同名缺失，应以当前代码为准重新开项，而不是引用本快照。
