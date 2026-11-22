@@ -231,6 +231,8 @@ func main() {
 		logger.Init(logCfg)
 	}
 
+	configureResilience(cfg)
+
 	k := kernel.NewKernel()
 	k.SetConfigObj(cfg)
 

@@ -69,11 +69,37 @@ type breaker struct {
 }
 
 // Default config: 5 failures in 5 minutes → open for 1 minute.
-const (
-	defaultThreshold = 5
-	defaultWindow    = 5 * time.Minute
-	defaultCooldown  = 1 * time.Minute
+// Defaults; audit A19: runtime-configurable via Configure.
+var (
+	circuitCfgMu     sync.RWMutex
+	circuitThreshold = 5
+	circuitWindow    = 5 * time.Minute
+	circuitCooldown  = 1 * time.Minute
 )
+
+// Configure sets the defaults used by breakers created after this call.
+func Configure(threshold int, window, cooldown time.Duration) {
+	if threshold <= 0 {
+		threshold = 5
+	}
+	if window <= 0 {
+		window = 5 * time.Minute
+	}
+	if cooldown <= 0 {
+		cooldown = 1 * time.Minute
+	}
+	circuitCfgMu.Lock()
+	circuitThreshold = threshold
+	circuitWindow = window
+	circuitCooldown = cooldown
+	circuitCfgMu.Unlock()
+}
+
+func circuitDefaults() (int, time.Duration, time.Duration) {
+	circuitCfgMu.RLock()
+	defer circuitCfgMu.RUnlock()
+	return circuitThreshold, circuitWindow, circuitCooldown
+}
 
 var (
 	breakersMu sync.RWMutex
@@ -90,11 +116,12 @@ func getBreaker(module string) *breaker {
 
 	breakersMu.Lock()
 	defer breakersMu.Unlock()
+	threshold, window, cooldown := circuitDefaults()
 	b = &breaker{
 		state:     StateClosed,
-		threshold: defaultThreshold,
-		window:    defaultWindow,
-		cooldown:  defaultCooldown,
+		threshold: threshold,
+		window:    window,
+		cooldown:  cooldown,
 	}
 	breakers[module] = b
 	return b

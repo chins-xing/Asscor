@@ -39,6 +39,11 @@ type Config struct {
 
 	SPC model.SPCConfig
 
+	// Circuit breaker defaults ([resilience.circuit]); applied at startup.
+	CircuitThreshold   int
+	CircuitWindowMin   int
+	CircuitCooldownMin int
+
 	ATTACK model.ATTACKConfig
 
 	Extensions       map[string]bool
@@ -101,10 +106,13 @@ func Default() *Config {
 			NoIDS:              0.88,
 			ThreeFactorFailure: 0.82,
 		},
-		CheckDeltas:      make(map[string]float64),
-		Extensions:       make(map[string]bool),
-		ExtensionWeights: make(map[string]float64),
-		AdapterConfig:    make(map[string]string),
+		CheckDeltas:        make(map[string]float64),
+		Extensions:         make(map[string]bool),
+		ExtensionWeights:   make(map[string]float64),
+		AdapterConfig:      make(map[string]string),
+		CircuitThreshold:   5,
+		CircuitWindowMin:   5,
+		CircuitCooldownMin: 1,
 		SPC: model.SPCConfig{
 			Enabled:            false,
 			MinPScore:          0.60,
@@ -550,6 +558,18 @@ func Parse(content string) (*Config, error) {
 					cfg.SPC.CNVD.SyncIntervalH = i
 				}
 			}
+		}
+	}
+
+	if sec, ok := sections["resilience.circuit"]; ok {
+		if v, err := strconv.Atoi(sec["circuit_threshold"]); err == nil {
+			cfg.CircuitThreshold = v
+		}
+		if v, err := strconv.Atoi(sec["circuit_window_min"]); err == nil {
+			cfg.CircuitWindowMin = v
+		}
+		if v, err := strconv.Atoi(sec["circuit_cooldown_min"]); err == nil {
+			cfg.CircuitCooldownMin = v
 		}
 	}
 

@@ -104,3 +104,16 @@ func TestEdgeFactorLevel4OverrideOnlyForLevel4(t *testing.T) {
 		}
 	}
 }
+
+func TestParseResilienceCircuit(t *testing.T) {
+	cfg, err := Parse("[resilience.circuit]\ncircuit_threshold = 3\ncircuit_window_min = 7\ncircuit_cooldown_min = 2\n")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if cfg.CircuitThreshold != 3 || cfg.CircuitWindowMin != 7 || cfg.CircuitCooldownMin != 2 {
+		t.Fatalf("circuit config = %d/%d/%d", cfg.CircuitThreshold, cfg.CircuitWindowMin, cfg.CircuitCooldownMin)
+	}
+	if _, err := Parse("[resilience.circuit]\ncircuit_threshold = 0\n"); err == nil {
+		t.Fatal("threshold=0 must be rejected")
+	}
+}

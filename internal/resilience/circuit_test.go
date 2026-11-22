@@ -4,6 +4,7 @@ package resilience
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -283,5 +284,15 @@ func TestHealthTracking(t *testing.T) {
 	}
 	if !found {
 		t.Error("mod-c missing from health summary")
+	}
+}
+
+func TestConfigureCircuitDefaults(t *testing.T) {
+	Configure(1, time.Minute, time.Minute)
+	defer Configure(5, 5*time.Minute, time.Minute)
+	module := "audit-a19-config"
+	RecordFailure(module, fmt.Errorf("boom"))
+	if Allow(module) {
+		t.Fatal("threshold=1 must open the circuit after one failure")
 	}
 }
