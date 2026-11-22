@@ -58,18 +58,55 @@ type ActionDistribution struct {
 
 // Engine 是预测引擎（规则 + 权重 + softmax）。
 type Engine struct {
-	Temperature  float64            // softmax 温度 (低=尖锐, 高=平滑)
-	DangerWeight map[Action]float64 // 危险度权重 (MostDangerous)
+	Temperature  float64
+	DangerWeight map[Action]float64
+	Params       Params // audit A18: injectable tuning
+}
+
+// Params holds the tuning knobs of the prediction engine.
+type Params struct {
+	Temperature         float64
+	IntentBonus         float64
+	ExperienceWeight    float64
+	AIDependenceWeight  float64
+	VulnerabilityWeight float64
+	ActionBase          map[Action]float64
+}
+
+// DefaultParams returns the reference tuning.
+func DefaultParams() Params {
+	base := make(map[Action]float64, len(actionBase))
+	for k, v := range actionBase {
+		base[k] = v
+	}
+	return Params{
+		Temperature:         1.0,
+		IntentBonus:         3.0,
+		ExperienceWeight:    0.5,
+		AIDependenceWeight:  0.5,
+		VulnerabilityWeight: 0.8,
+		ActionBase:          base,
+	}
 }
 
 // NewEngine creates a prediction engine with default rules.
-func NewEngine() *Engine {
+func NewEngine() *Engine { return NewEngineWithParams(DefaultParams()) }
+
+// NewEngineWithParams creates an engine with explicit tuning parameters.
+func NewEngineWithParams(p Params) *Engine {
+	if p.Temperature <= 0 {
+		p.Temperature = 1.0
+	}
+	if p.ActionBase == nil {
+		p.ActionBase = DefaultParams().ActionBase
+	}
 	return &Engine{
-		Temperature: 1.0,
+		Temperature: p.Temperature,
 		DangerWeight: map[Action]float64{
 			ActionDataTheft: 1.0, ActionLateral: 0.8, ActionCredential: 0.6,
 			ActionWebAttack: 0.5, ActionRecon: 0.3, ActionMaintain: 0.2,
 		},
+		Params: p,
 	}
 }
 
@@ -113,17 +150,17 @@ func intentOfAction(a Action) attackerstate.Intent {
 func (e *Engine) Predict(state attackerstate.AttackerState, target TargetState) ActionDistribution {
 	scores := make(map[Action]float64, len(AllActions()))
 	for _, a := range AllActions() {
-		s := actionBase[a]
+		s := e.Params.ActionBase[a]
 		// 规则 2: 意图延续 (当前阶段目的是强信号, 权重显著)。
 		if intentOfAction(a) == state.Intent {
-			s += 3.0
+			s += e.Params.IntentBonus
 		}
 		// 规则 3: 经验。
 		switch a {
 		case ActionLateral, ActionDataTheft:
 			s += state.Experience
 		case ActionRecon:
-			s -= state.Experience * 0.5
+			s -= state.Experience * e.Params.ExperienceWeight
 		}
 		// 规则 4: 目标知识。
 		switch a {
@@ -135,13 +172,13 @@ func (e *Engine) Predict(state attackerstate.AttackerState, target TargetState) 
 		case ActionCredential, ActionWebAttack:
 			s += state.AIDependence
 		case ActionRecon:
-			s -= state.AIDependence * 0.5
+			s -= state.AIDependence * e.Params.AIDependenceWeight
 		}
 		// 规则 6: 目标脆弱性。
 		vuln := (100.0-target.SSAMScore)/100.0 + target.Exposure
 		switch a {
 		case ActionCredential, ActionLateral, ActionDataTheft, ActionWebAttack:
-			s += vuln * 0.8
+			s += vuln * e.Params.VulnerabilityWeight
 		}
 		if s < 0 {
 			s = 0

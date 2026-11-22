@@ -141,3 +141,19 @@ func TestUpdateImmutability(t *testing.T) {
 		t.Error("initial UpdatedAt must be set")
 	}
 }
+
+func TestEngineParamsOverrideIncrements(t *testing.T) {
+	e := NewEngineWithParams(Params{
+		TargetKnowledgeInc: 0.5, ExperienceSuccessInc: 0.1, ExperienceFailureInc: 0.01, BeliefInc: 0.2,
+	})
+	st := e.Update(NewState("a"), []Evidence{{Target: "t", Confidence: 1, Outcome: "success"}})
+	if st.TargetKnowledge != 0.5 {
+		t.Errorf("TargetKnowledge = %v, want 0.5", st.TargetKnowledge)
+	}
+	if st.Experience != 0.1 {
+		t.Errorf("Experience = %v, want 0.1", st.Experience)
+	}
+	if st.BeliefState["t"] != 0.2 {
+		t.Errorf("Belief = %v, want 0.2", st.BeliefState["t"])
+	}
+}
