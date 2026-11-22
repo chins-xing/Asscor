@@ -67,8 +67,8 @@
 | A17 | CTI 系数/间隔硬编码 | **已完成**（`3175f5d`）：`[cti] coefficient` / `update_interval_min`，含校验；基础系数用于运行时扣减 |
 | A16 | SPC 影响权重硬编码 | **已完成**（`48438eb`）：`[spc] impact_cvss/epss/kev_weight、subtech_growth、apt_growth、poc_factor`；默认值不变 |
 | C1 | main 文档 18 处悬空链接 | **已完成**（main `9475168`）：更新到现有文档/目录或标注历史数据未迁移；`check-doc-refs.sh` 在 main 为 0 |
-| C2 | WHITEPAPER_GAP_ANALYSIS 三条过时 | **已完成**（`TBD`）：新增 2026-11-22 复核记录，CTI/delegation/ATT&CK 乘数三条关闭并附代码证据 |
-| C3 | TECHNICAL_DEBT_BACKLOG 遗留项 | **已完成（复核）**（`TBD`）：M-4 缓解、M-6/L-6 关闭、L-1 部分关闭；L-2 与 RC-M4（A18）继续跟踪 |
+| C2 | WHITEPAPER_GAP_ANALYSIS 三条过时 | **已完成**（`09a1dc9`）：新增 2026-11-22 复核记录，CTI/delegation/ATT&CK 乘数三条关闭并附代码证据 |
+| C3 | TECHNICAL_DEBT_BACKLOG 遗留项 | **已完成（复核）**（`09a1dc9`）：M-4 缓解、M-6/L-6 关闭、L-1 部分关闭；L-2 与 RC-M4（A18）继续跟踪 |
 | D-01 | 联邦鉴权 fail-open | **已完成**（`aeb1ccc`）：master 非 loopback 且 token 空时拒绝启动；`config_test.go` 覆盖 |
 | D-02 | NaN 配置绕过 | **已完成**（`aeb1ccc`）：`validateRanges` 对 weights/threshold/threat/ACI/edge/delta/confidence/SPC/ATT&CK 全部拒绝 NaN/Inf；回归测试 |
 | D-03 | gRPC 无角色隔离 | **已完成（Agent 侧）**（`aeb1ccc`）：Agent 证书按指纹绑定只允许访问自身 host；运维证书仍跨主机（角色分离留后续） |
