@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/chins-xing/asscor/internal/kernel"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -387,7 +386,7 @@ func (m *Module) fetchNVDWindow(client *http.Client, baseURL, apiKey string, sta
 		)
 
 		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(io.LimitReader(resp.Body, kernel.MaxHTTPBodySize))
+			body := readLimitedBody(resp.Body, kernel.MaxHTTPBodySize)
 			logger.WithComponent("spc").Error("NVD API non-200 response",
 				"status", resp.StatusCode,
 				"body_preview", truncateString(string(body), 500),

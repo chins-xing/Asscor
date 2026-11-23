@@ -127,12 +127,16 @@ type Agent struct {
 	lastCheckTime     time.Time
 	hmacKeyConfigured bool
 	hmacKeyWarned     atomic.Bool
-	cachedPackages    []string
-	pkgHash           [32]byte
-	cpeHash           [32]byte
-	pkgSent           bool // true after first full packages send
-	cpeSent           bool // true after first full CPE send
-	privClient        *PrivilegedClient
+	// Command replay guard (audit D-08): a signed command ID is accepted at
+	// most once within commandReplayWindow.
+	replayMu       sync.Mutex
+	replaySeen     map[string]time.Time
+	cachedPackages []string
+	pkgHash        [32]byte
+	cpeHash        [32]byte
+	pkgSent        bool // true after first full packages send
+	cpeSent        bool // true after first full CPE send
+	privClient     *PrivilegedClient
 	// syncedChecks holds checks pushed from the kernel via heartbeat
 	// (config.ini [user_check.*]). syncedCfgVersion fingerprints the last
 	// applied sync so unchanged config is skipped. cfgMu guards checkers
@@ -1017,14 +1021,50 @@ func (a *Agent) verifyCommandSignature(cmd *apiv1.Command) bool {
 
 	if ts, ok := cmd.Params["_timestamp"]; ok {
 		t, err := time.Parse(time.RFC3339, ts)
-		if err != nil || time.Since(t) > 5*time.Minute {
-			logger.WithComponent("agent").Warn("command rejected: expired or invalid timestamp", "command_id", cmd.CommandId, "age", time.Since(t))
+		now := time.Now()
+		if err != nil || now.Sub(t) > 5*time.Minute {
+			logger.WithComponent("agent").Warn("command rejected: expired or invalid timestamp", "command_id", cmd.CommandId, "age", now.Sub(t))
+			return false
+		}
+		// Audit D-08: reject timestamps far in the future. time.Since is
+		// negative there, so the age check alone would accept them.
+		if t.After(now.Add(time.Minute)) {
+			logger.WithComponent("agent").Warn("command rejected: timestamp in the future", "command_id", cmd.CommandId, "ts", t)
 			return false
 		}
 	} else if len(cmd.Signature) > 0 {
 		return false
 	}
 
+	if !a.acceptCommandID(cmd.CommandId) {
+		logger.WithComponent("agent").Warn("command rejected: replay detected", "command_id", cmd.CommandId)
+		return false
+	}
+	return true
+}
+
+// commandReplayWindow is how long a signed command ID is remembered.
+const commandReplayWindow = 10 * time.Minute
+
+func (a *Agent) acceptCommandID(id string) bool {
+	if id == "" {
+		return false
+	}
+	now := time.Now()
+	a.replayMu.Lock()
+	defer a.replayMu.Unlock()
+	if a.replaySeen == nil {
+		a.replaySeen = make(map[string]time.Time)
+	}
+	for k, t := range a.replaySeen {
+		if now.Sub(t) > commandReplayWindow {
+			delete(a.replaySeen, k)
+		}
+	}
+	if _, ok := a.replaySeen[id]; ok {
+		return false
+	}
+	a.replaySeen[id] = now
 	return true
 }
 

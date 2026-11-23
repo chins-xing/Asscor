@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/chins-xing/asscor/internal/logger"
 )
 
 // ReporterConfig configures the node→master reporter. Zero values fall back to
@@ -160,7 +162,10 @@ func (r *Reporter) postOnce(ctx context.Context, payload []byte) error {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+	if readErr != nil {
+		logger.WithComponent("federation").Warn("failed to read error response body", "error", readErr)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("master returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}

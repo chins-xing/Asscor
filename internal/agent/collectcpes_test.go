@@ -54,7 +54,7 @@ func TestCollectCPEsEmptyCache(t *testing.T) {
 // upper-bound future offset is a design decision, not changed here.
 // ---------------------------------------------------------------------------
 
-func TestVerifyCommandSignatureFutureTimestampAccepted(t *testing.T) {
+func TestVerifyCommandSignatureFutureTimestampRejected(t *testing.T) {
 	cmd := &apiv1.Command{
 		CommandId: "cmd-future",
 		Command:   "go version",
@@ -64,7 +64,7 @@ func TestVerifyCommandSignatureFutureTimestampAccepted(t *testing.T) {
 	}
 	signCommand(cmd, "secret")
 	a := &Agent{cfg: AgentConfig{HMACKey: "secret"}}
-	if !a.verifyCommandSignature(cmd) {
-		t.Error("future timestamp currently passes (no upper-bound check); behavior pinned — see gap report §4.1")
+	if a.verifyCommandSignature(cmd) {
+		t.Error("future timestamp must be rejected (audit D-08)")
 	}
 }

@@ -86,7 +86,7 @@ func (d *gitDownloader) Fetch(spec ExtensionSpec, dest string) (string, error) {
 	if spec.Source.Branch != "" {
 		args = append(args, "--branch", spec.Source.Branch)
 	}
-	args = append(args, spec.Source.URL, cloneTarget)
+	args = append(args, "--", spec.Source.URL, cloneTarget)
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command("git", args...)
@@ -307,6 +307,10 @@ func sanitizeMode(m os.FileMode, isExec bool) os.FileMode {
 	return 0o644
 }
 
+// maxExtractBytes caps the total uncompressed size of an extension archive
+// (audit D-09: per-archive download limit alone does not stop zip bombs).
+const maxExtractBytes int64 = 512 << 20
+
 func (i *ExtensionInstaller) extractZip(src, dest string) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
@@ -314,6 +318,7 @@ func (i *ExtensionInstaller) extractZip(src, dest string) error {
 	}
 	defer r.Close()
 
+	var total int64
 	for _, f := range r.File {
 		targetPath := filepath.Join(dest, f.Name)
 		if !strings.HasPrefix(filepath.Clean(targetPath), filepath.Clean(dest)+string(os.PathSeparator)) {
@@ -321,11 +326,17 @@ func (i *ExtensionInstaller) extractZip(src, dest string) error {
 		}
 
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(targetPath, 0755)
+			if err := os.MkdirAll(targetPath, 0755); err != nil {
+				return err
+			}
 			continue
 		}
-
-		os.MkdirAll(filepath.Dir(targetPath), 0755)
+		if total+int64(f.UncompressedSize64) > maxExtractBytes {
+			return fmt.Errorf("extension archive exceeds %d bytes when extracted", maxExtractBytes)
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			return err
+		}
 
 		rc, err := f.Open()
 		if err != nil {
@@ -339,9 +350,10 @@ func (i *ExtensionInstaller) extractZip(src, dest string) error {
 			return err
 		}
 
-		_, err = io.Copy(outFile, rc)
+		n, err := io.Copy(outFile, rc)
 		rc.Close()
 		outFile.Close()
+		total += n
 		if err != nil {
 			return err
 		}
@@ -376,6 +388,7 @@ func (i *ExtensionInstaller) extractTar(src, dest string) error {
 }
 
 func (i *ExtensionInstaller) extractTarReader(tr *tar.Reader, dest string) error {
+	var total int64
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
@@ -392,9 +405,16 @@ func (i *ExtensionInstaller) extractTarReader(tr *tar.Reader, dest string) error
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			os.MkdirAll(targetPath, 0755)
+			if err := os.MkdirAll(targetPath, 0755); err != nil {
+				return err
+			}
 		case tar.TypeReg:
-			os.MkdirAll(filepath.Dir(targetPath), 0755)
+			if header.Size < 0 || total+header.Size > maxExtractBytes {
+				return fmt.Errorf("extension archive exceeds %d bytes when extracted", maxExtractBytes)
+			}
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return err
+			}
 			// Audit L-6: never honour setuid/setgid/sticky or group/world
 			// write bits from the archive header.
 			mode := sanitizeMode(os.FileMode(header.Mode), header.Mode&0o111 != 0)
@@ -402,8 +422,9 @@ func (i *ExtensionInstaller) extractTarReader(tr *tar.Reader, dest string) error
 			if err != nil {
 				return err
 			}
-			_, err = io.Copy(outFile, tr)
+			n, err := io.Copy(outFile, tr)
 			outFile.Close()
+			total += n
 			if err != nil {
 				return err
 			}

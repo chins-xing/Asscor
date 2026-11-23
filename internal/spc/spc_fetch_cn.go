@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/chins-xing/asscor/internal/kernel"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -66,7 +65,7 @@ func (m *Module) FetchFromCNNVD() kernel.SPCFetchResult {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, kernel.MaxHTTPBodySize))
+		body := readLimitedBody(resp.Body, kernel.MaxHTTPBodySize)
 		result.Error = fmt.Sprintf("CNNVD API returned HTTP %d: %s", resp.StatusCode, truncateString(string(body), 500))
 		result.Duration = time.Since(start)
 		logger.WithComponent("spc").Warn("CNNVD non-200 response", "status", resp.StatusCode)
@@ -217,7 +216,7 @@ func (m *Module) FetchFromCNVD() kernel.SPCFetchResult {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, kernel.MaxHTTPBodySize))
+		body := readLimitedBody(resp.Body, kernel.MaxHTTPBodySize)
 		result.Error = fmt.Sprintf("CNVD API returned HTTP %d: %s", resp.StatusCode, truncateString(string(body), 500))
 		result.Duration = time.Since(start)
 		logger.WithComponent("spc").Warn("CNVD non-200 response", "status", resp.StatusCode)
