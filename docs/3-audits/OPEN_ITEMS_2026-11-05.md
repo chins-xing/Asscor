@@ -49,9 +49,9 @@
 
 | P3 | L-2 | 架构 | 大包拆分（`internal/attck`/`kernel`/`engine`/`cli`/`adapter`） | [未开始] | 长期结构重构；见 TECHNICAL_DEBT 复核记录 |
 | A19 | `[resilience.circuit]` 未解析 | **已完成**（`4a92321`）：新增 `circuit_threshold/window_min/cooldown_min` 配置与校验；启动时 `resilience.Configure` 注入；`error_rate_limit` 仍为设计预留 |
-| D-08 | 命令未来时间戳/重放 | **已完成**（`TBD`）：拒绝未来 >1min；命令 ID 10 分钟重放缓存；新增测试 |
-| D-09 | git 参数注入/解压炸弹 | **已完成**（`TBD`）：`git clone --` 分隔；zip/tar 解压总量上限 512MiB；MkdirAll 错误返回 |
-| D-10 | 多处忽略错误 | **已完成**（`TBD`）：SPC 响应读取告警、trace/session 回退、federation 诊断读取、解压 mkdir |
+| D-08 | 命令未来时间戳/重放 | **已完成**（`8d46197`）：拒绝未来 >1min；命令 ID 10 分钟重放缓存；新增测试 |
+| D-09 | git 参数注入/解压炸弹 | **已完成**（`8d46197`）：`git clone --` 分隔；zip/tar 解压总量上限 512MiB；MkdirAll 错误返回 |
+| D-10 | 多处忽略错误 | **已完成**（`8d46197`）：SPC 响应读取告警、trace/session 回退、federation 诊断读取、解压 mkdir |
 
 ## 已关闭 / 已验证（保留记录，不再计入未完成）
 
