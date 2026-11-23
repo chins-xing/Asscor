@@ -724,3 +724,25 @@ func TestRunCheckWithTimeoutCompletes(t *testing.T) {
 		t.Errorf("fast check should complete normally: %+v", r)
 	}
 }
+
+func TestVerifyCommandSignatureRejectsReplay(t *testing.T) {
+	cmd := newSignedCommand("secret")
+	signCommand(cmd, "secret")
+	a := &Agent{cfg: AgentConfig{HMACKey: "secret"}}
+	if !a.verifyCommandSignature(cmd) {
+		t.Fatal("first delivery must be accepted")
+	}
+	if a.verifyCommandSignature(cmd) {
+		t.Fatal("replayed command ID must be rejected")
+	}
+}
+
+func TestVerifyCommandSignatureRejectsFutureTimestamp(t *testing.T) {
+	cmd := newSignedCommand("secret")
+	cmd.Params["_timestamp"] = time.Now().Add(10 * time.Minute).UTC().Format(time.RFC3339)
+	signCommand(cmd, "secret")
+	a := &Agent{cfg: AgentConfig{HMACKey: "secret"}}
+	if a.verifyCommandSignature(cmd) {
+		t.Fatal("timestamp far in the future must be rejected")
+	}
+}

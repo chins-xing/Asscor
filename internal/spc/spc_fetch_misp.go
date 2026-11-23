@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/chins-xing/asscor/internal/kernel"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -196,7 +195,7 @@ func (m *Module) fetchMISPEvents(client *kernel.SPCMISPClient) []kernel.SPCCVESc
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			body := readLimitedBody(resp.Body, 4096)
 			resp.Body.Close()
 			lastErr = fmt.Errorf("MISP API returned status %d: %s", resp.StatusCode, string(body))
 			continue

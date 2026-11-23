@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/chins-xing/asscor/internal/config"
 	"github.com/chins-xing/asscor/internal/kernel"
@@ -773,9 +774,7 @@ func randomSessionSuffix() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		logger.WithComponent("kernel").Error("crypto/rand read failed for session suffix", "error", err)
-		for i := range b {
-			b[i] = byte(i)
-		}
+		return fmt.Sprintf("fallback%x", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b)
 }
