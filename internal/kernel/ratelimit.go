@@ -105,6 +105,15 @@ func (r *RateLimiter) allow(clientAddr string) bool {
 	return false
 }
 
+// Allow is the exported token-bucket check used by transports that are not
+// the kernel HandlerFunc chain (gRPC, HTTP).
+func (r *RateLimiter) Allow(clientAddr string) bool {
+	if r == nil {
+		return true
+	}
+	return r.allow(clientAddr)
+}
+
 func (r *RateLimiter) CleanupStale(maxAge time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
