@@ -45,9 +45,9 @@
 
 | 优先级 | ID | 类别 | 事项 | 状态 | 关键位置 / 下一步 |
 |---|---|---|---|---|---|
-| P3 | D-11 | 加固 | gRPC/联邦缺速率与连接配额 | [未开始] | 按证书/连接限速 |
 
 | P3 | L-2 | 架构 | 大包拆分（`internal/attck`/`kernel`/`engine`/`cli`/`adapter`） | [未开始] | 长期结构重构；见 TECHNICAL_DEBT 复核记录 |
+| D-11 | gRPC/联邦缺速率/连接配额 | **已完成**（`TBD`）：gRPC 每对端 200 req/s（burst 400）+ 并发流 256；联邦 master 每 IP 50 req/s（burst 100），超限 429 |
 | A19 | `[resilience.circuit]` 未解析 | **已完成**（`4a92321`）：新增 `circuit_threshold/window_min/cooldown_min` 配置与校验；启动时 `resilience.Configure` 注入；`error_rate_limit` 仍为设计预留 |
 | D-08 | 命令未来时间戳/重放 | **已完成**（`8d46197`）：拒绝未来 >1min；命令 ID 10 分钟重放缓存；新增测试 |
 | D-09 | git 参数注入/解压炸弹 | **已完成**（`8d46197`）：`git clone --` 分隔；zip/tar 解压总量上限 512MiB；MkdirAll 错误返回 |
