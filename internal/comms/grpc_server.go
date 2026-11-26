@@ -14,11 +14,15 @@ import (
 	"time"
 
 	apiv1 "github.com/chins-xing/asscor/api/v1"
+	"github.com/chins-xing/asscor/internal/kernel"
 	"github.com/chins-xing/asscor/internal/logger"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
 
 type GRPCServerConfig struct {
@@ -30,18 +34,25 @@ type GRPCServerConfig struct {
 	CAFile       string
 	MaxRecvSize  int
 	KeepaliveMin time.Duration
+	// Audit D-11: per-peer rate limit + concurrent stream cap.
+	RateLimitPerSec      float64
+	RateLimitBurst       int
+	MaxConcurrentStreams uint32
 }
 
 func DefaultGRPCServerConfig() GRPCServerConfig {
 	return GRPCServerConfig{
-		Enabled:      false,
-		ListenAddr:   ":50052",
-		TLSEnabled:   false,
-		CertFile:     "certs/server.crt",
-		KeyFile:      "certs/server.key",
-		CAFile:       "certs/ca.crt",
-		MaxRecvSize:  4 * 1024 * 1024,
-		KeepaliveMin: 30 * time.Second,
+		Enabled:              false,
+		ListenAddr:           ":50052",
+		TLSEnabled:           false,
+		CertFile:             "certs/server.crt",
+		KeyFile:              "certs/server.key",
+		CAFile:               "certs/ca.crt",
+		MaxRecvSize:          4 * 1024 * 1024,
+		KeepaliveMin:         30 * time.Second,
+		RateLimitPerSec:      200,
+		RateLimitBurst:       400,
+		MaxConcurrentStreams: 256,
 	}
 }
 
@@ -91,6 +102,7 @@ type GRPCServer struct {
 	kernelSvc *KernelServiceImpl
 	agentSvc  *AgentServiceImpl
 	server    *grpc.Server
+	limiter   *kernel.RateLimiter
 	mu        sync.RWMutex
 	running   bool
 }
@@ -120,6 +132,18 @@ func (s *GRPCServer) Start() error {
 			PermitWithoutStream: true,
 		}),
 	}
+	if s.cfg.MaxConcurrentStreams > 0 {
+		opts = append(opts, grpc.MaxConcurrentStreams(s.cfg.MaxConcurrentStreams))
+	}
+	rate, burst := s.cfg.RateLimitPerSec, s.cfg.RateLimitBurst
+	if rate <= 0 {
+		rate, burst = 200, 400
+	}
+	s.limiter = kernel.NewRateLimiter(rate, burst, nil)
+	opts = append(opts,
+		grpc.UnaryInterceptor(s.rateLimitUnary),
+		grpc.StreamInterceptor(s.rateLimitStream),
+	)
 
 	if s.cfg.TLSEnabled {
 		creds, err := s.loadTLSCredentials()
@@ -176,6 +200,30 @@ func (s *GRPCServer) Stop() {
 		s.running = false
 		logger.WithComponent("grpc_server").Info("gRPC server stopped gracefully")
 	}
+	if s.limiter != nil {
+		s.limiter.Stop()
+	}
+}
+
+func peerAddr(ctx context.Context) string {
+	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
+		return p.Addr.String()
+	}
+	return "unknown"
+}
+
+func (s *GRPCServer) rateLimitUnary(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	if s.limiter != nil && !s.limiter.Allow(peerAddr(ctx)) {
+		return nil, status.Errorf(codes.ResourceExhausted, "rate limit exceeded: %s", info.FullMethod)
+	}
+	return handler(ctx, req)
+}
+
+func (s *GRPCServer) rateLimitStream(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	if s.limiter != nil && !s.limiter.Allow(peerAddr(ss.Context())) {
+		return status.Errorf(codes.ResourceExhausted, "rate limit exceeded: %s", info.FullMethod)
+	}
+	return handler(srv, ss)
 }
 
 func (s *GRPCServer) loadTLSCredentials() (credentials.TransportCredentials, error) {

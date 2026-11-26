@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/chins-xing/asscor/internal/kernel"
 )
 
 // maxReportBody caps the POST body (aggregate summary only — a few KiB is
@@ -31,6 +33,8 @@ type MasterServer struct {
 	listenAddr string
 	token      string
 
+	limiter *kernel.RateLimiter
+
 	mu  sync.Mutex
 	ln  net.Listener
 	srv *http.Server
@@ -45,7 +49,13 @@ func NewMasterServer(collector *Collector, listenAddr, token string) *MasterServ
 	if listenAddr == "" {
 		listenAddr = DefaultListenAddr
 	}
-	return &MasterServer{collector: collector, listenAddr: listenAddr, token: token}
+	return &MasterServer{
+		collector:  collector,
+		listenAddr: listenAddr,
+		token:      token,
+		// Audit D-11: conservative per-IP quota for the collection endpoint.
+		limiter: kernel.NewRateLimiter(50, 100, nil),
+	}
 }
 
 // Collector exposes the collector (the kernel plugin hands it to the CLI).
@@ -97,6 +107,9 @@ func (m *MasterServer) Stop(ctx context.Context) error {
 	srv := m.srv
 	m.srv = nil
 	m.mu.Unlock()
+	if m.limiter != nil {
+		m.limiter.Stop()
+	}
 	if srv == nil {
 		return nil
 	}
@@ -114,7 +127,22 @@ func (m *MasterServer) Handler() http.Handler {
 	mux.HandleFunc(NodesPath, m.handleNodes)
 	mux.HandleFunc("/federation/check", m.handleCheck)
 	mux.HandleFunc("/federation/export", m.handleExport)
-	return mux
+	return m.rateLimited(mux)
+}
+
+// rateLimited applies a per-IP token bucket to every federation endpoint.
+func (m *MasterServer) rateLimited(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			ip = host
+		}
+		if m.limiter != nil && !m.limiter.Allow(ip) {
+			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (m *MasterServer) authorized(r *http.Request) bool {

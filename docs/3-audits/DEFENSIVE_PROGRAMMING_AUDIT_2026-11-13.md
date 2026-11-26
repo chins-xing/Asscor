@@ -117,7 +117,7 @@ srv := &http.Server{ Handler: ..., ReadHeaderTimeout: 5 * time.Second }
 | D-08 | ✅ 已修 | 未来时间戳拒绝 + 命令 ID 重放缓存（10 分钟） |
 | D-09 | ✅ 已修 | `git clone --`；zip/tar 解压总量 512MiB 上限 |
 | D-10 | ✅ 已修 | SPC 读取错误告警、trace/session 回退、解压 mkdir 错误返回、federation 诊断读取 |
-| D-11 | ⏳ 未做 | 速率/连接配额仍在 P3 |
+| D-11 | ✅ 已修 | gRPC 每对端限速+并发流上限；联邦 master 每 IP 限速（429） |
 
 ## 3. 建议优先级
 
