@@ -67,6 +67,10 @@ jobs:
           go build -tags "federation,federation_proc,$MODULE_TAGS" ./cmd/kernel/
           go build ./cmd/federation-mod/
           go test -tags "federation,federation_proc,$MODULE_TAGS" ./extensions/federation/
+          # Process-isolated log collector (A1 pilot).
+          go build -tags "collector,collector_proc,$MODULE_TAGS" ./cmd/kernel/
+          go build ./cmd/logcollector-mod/
+          go test -tags "collector,collector_proc" ./extensions/logcollector/
 
       - name: Plugin SDK (independent module)
         working-directory: pluginsdk

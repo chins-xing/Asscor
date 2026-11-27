@@ -1,4 +1,4 @@
-//go:build collector
+//go:build collector && !collector_proc
 
 package main
 
