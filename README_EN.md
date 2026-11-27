@@ -392,13 +392,13 @@ See the [User Manual](docs/1-current/guides/ASSCOR%20使用手册.md)
 |----------|----------|---------|
 | [README_EN.md](README_EN.md) | English | this overview |
 | [README.md](README.md) | Chinese | full Chinese overview |
-| [docs/en/README.md](docs/en/README.md) | English | documentation index |
+| [docs/README.md](docs/README.md) | English | documentation index |
 | [docs/README.md](docs/README.md) | Chinese | documentation index |
-| [docs/en/1-current/whitepapers/engineering-whitepaper.md](docs/en/1-current/whitepapers/engineering-whitepaper.md) | English | engineering implementation whitepaper |
-| [docs/en/1-current/guides/user-manual.md](docs/en/1-current/guides/user-manual.md) | English | user manual |
-| [docs/en/1-current/reference/ssam-interface-spec.md](docs/en/1-current/reference/ssam-interface-spec.md) | English | SSAM interface specification |
-| [docs/en/1-current/whitepapers/srd-whitepaper.md](docs/en/1-current/whitepapers/srd-whitepaper.md) | English | SRD risk-dynamics whitepaper |
-| [docs/en/1-current/whitepapers/secure-mode-whitepaper.md](docs/en/1-current/whitepapers/secure-mode-whitepaper.md) | English | Secure Mode whitepaper |
+| [docs/en/engineering-whitepaper.md](docs/en/engineering-whitepaper.md) | English | engineering implementation whitepaper |
+| [docs/en/user-manual.md](docs/en/user-manual.md) | English | user manual |
+| [docs/en/ssam-interface-spec.md](docs/en/ssam-interface-spec.md) | English | SSAM interface specification |
+| [docs/en/srd-whitepaper.md](docs/en/srd-whitepaper.md) | English | SRD risk-dynamics whitepaper |
+| [docs/en/secure-mode-whitepaper.md](docs/en/secure-mode-whitepaper.md) | English | Secure Mode whitepaper |
 | Secure Mode design spec (`docs/1-current/design/2026-08-21-secure-mode-design.md`) | Chinese | module design & security model |
 
 Chinese remains the primary documentation language for the in-depth
