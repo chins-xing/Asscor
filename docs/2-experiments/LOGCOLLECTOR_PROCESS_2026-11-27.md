@@ -44,7 +44,7 @@ kernel 进程
 1. **扩展点**：child 不执行内核扩展点；proxy 在写入成功后补发 `log.entry_received`（每批逐条）。
 2. **无自动重启**：本试点未复用 federation 的 supervisor；child 崩溃后 Append 返回错误，需重启 kernel。
 3. **RPC 串行**：与 federation 相同的单飞模型，日志写入量极大时可能成为瓶颈；批量接口缓解。
-4. **同步刷盘**：child 每 30s？当前没有后台 flush loop；仅在 `Stop`/`sync` 显式刷盘，后续按 in-process 行为补齐。
+4. **同步刷盘**：child 当前没有后台 flush loop；仅在 `Stop`/`sync` 显式刷盘，后续按 in-process 的 30s 周期补齐。
 
 ## 4. 下一步
 

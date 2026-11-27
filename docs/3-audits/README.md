@@ -7,6 +7,18 @@
 > ⚠️ **本目录里的 `file:///f:/...` 绝对路径是历史记录的原样，不是现行位置**（那些报告写在旧工作目录下）。
 > 需要现行代码位置时一律以 `docs/1-current/` 与仓库实际路径为准；本目录**不再**更新这类链接。
 
+
+## 近期审计与清单（2026-11）
+
+| 文件 | 说明 |
+|---|---|
+| [OPEN_ITEMS_2026-11-05.md](OPEN_ITEMS_2026-11-05.md) | 未完成项结案表（open 0；延后项带触发条件） |
+| [EXTENSION_POINT_USAGE_2026-11-27.md](EXTENSION_POINT_USAGE_2026-11-27.md) | 扩展点全量执行清单（96 点 / 90 有执行者） |
+| [DEFENSIVE_PROGRAMMING_AUDIT_2026-11-13.md](DEFENSIVE_PROGRAMMING_AUDIT_2026-11-13.md) | D-01~D-11 防御性编程审计 |
+| [VULNCHECK_AUDIT_2026-11-09.md](VULNCHECK_AUDIT_2026-11-09.md) | 依赖漏洞复扫记录 |
+| [MODEL_PARAMETERIZATION_AUDIT_2026-11-12.md](MODEL_PARAMETERIZATION_AUDIT_2026-11-12.md) | 模型参数化审计 |
+| [WHITEPAPER_GAP_ANALYSIS.md](WHITEPAPER_GAP_ANALYSIS.md) | 白皮书差距复核 |
+
 ## 活跃报告 (Active)
 
 | 文件 | 日期 | 说明 |

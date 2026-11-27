@@ -75,6 +75,7 @@ docs/
 | [MITRE_ENGAGE_LIGHTWEIGHT_DESIGN.md](1-current/design/MITRE_ENGAGE_LIGHTWEIGHT_DESIGN.md) | MITRE Engage 轻量化扩展包设计 |
 | [2026-06-09-prism-ir-design.md](1-current/design/2026-06-09-prism-ir-design.md) | Prism IR 设计（已实现） |
 | [2026-08-21-secure-mode-design.md](1-current/design/2026-08-21-secure-mode-design.md) | Secure Mode 模块设计（已实现） |
+| [ARCH_DECISIONS_2026-11-27.md](1-current/design/ARCH_DECISIONS_2026-11-27.md) | A6 架构决策：adapterhub 冻结 / ATT&CK 双形态 / comms 装配 |
 | [SRD_V2.3_PLAN_2026-10-27.md](1-current/design/SRD_V2.3_PLAN_2026-10-27.md) | SRD v2.3 计划：域内 ACL / 状态化建模 / CLI 查询 / 跨环境 ROC |
 
 ### 白皮书（`1-current/whitepapers/`）
@@ -125,6 +126,7 @@ docs/
 | [variance-report.md](2-experiments/variance-report.md) | 重复性与方差报告 |
 | [CONFIDENCE_SENSITIVITY_2026-10-22.md](2-experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md) | 方向① 先验敏感性（非标定） |
 | [clab-lab/](2-experiments/clab-lab/) | 实验脚手架数据（`data/*.jsonl`） |
+| [LOGCOLLECTOR_PROCESS_2026-11-27.md](2-experiments/LOGCOLLECTOR_PROCESS_2026-11-27.md) | A1 第二步：log collector 进程隔离试点 |
 | [T4_FEDERATION_PROCESS_2026-10-29.md](2-experiments/T4_FEDERATION_PROCESS_2026-10-29.md) | T4 联邦进程隔离（v0.4）运行与性能记录 |
 | [T4_FEDERATION_AUC_LARGE_2026-10-28.md](2-experiments/T4_FEDERATION_AUC_LARGE_2026-10-28.md) | T4 联邦 AUC 大规模（37 主机 × 3 轮：0.912 vs 0.545） |
 | [T4_FEDERATION_AUC_2026-10-28.md](2-experiments/T4_FEDERATION_AUC_2026-10-28.md) | T4 联邦 AUC 对照（V2 0.992 vs V1 0.873） |
