@@ -4,8 +4,12 @@ package attck
 
 import (
 	"context"
-	"github.com/chins-xing/asscor/internal/kernel"
+	"encoding/json"
+	"fmt"
 	"math"
+	"os"
+
+	"github.com/chins-xing/asscor/internal/kernel"
 	"sort"
 	"strings"
 	"sync"
@@ -127,6 +131,7 @@ type Module struct {
 	tactics              []ATTACKTactic
 	aptGroups            map[string]*APTGroupProfile
 	transMatrix          TransitionMatrix
+	transitionMatrixFile string
 	state                kernel.PluginState
 	attckVersion         string
 	beaconThreshold      float64
@@ -233,6 +238,7 @@ func (m *Module) ConfigureFromConfig(cfg *config.Config) {
 	m.attributionThreshold = cfg.ATTACK.AttributionThreshold
 	m.autoHunt = cfg.ATTACK.AutoHunt
 	m.safeEmulation = cfg.ATTACK.SafeEmulation
+	m.transitionMatrixFile = cfg.ATTACK.TransitionMatrixFile
 	m.enabled = cfg.ATTACK.Enabled
 	if m.attckVersion == "" {
 		m.attckVersion = "v19"
@@ -985,7 +991,7 @@ func (m *Module) loadDefaultAPTProfiles() {
 }
 
 func (m *Module) buildTransitionMatrix() {
-	m.transMatrix = TransitionMatrix{
+	defaults := TransitionMatrix{
 		"T1190": {"T1059": 0.7, "T1003": 0.5, "T1082": 0.4, "T1021": 0.3},
 		"T1566": {"T1059": 0.6, "T1547": 0.4, "T1082": 0.3},
 		"T1133": {"T1059": 0.5, "T1547": 0.5, "T1003": 0.3},
@@ -1002,8 +1008,56 @@ func (m *Module) buildTransitionMatrix() {
 		"T1041": {"T1560": 0.5, "T1486": 0.2},
 		"T1071": {"T1041": 0.3, "T1003": 0.2},
 	}
+	if m.transitionMatrixFile != "" {
+		override, err := loadTransitionMatrix(m.transitionMatrixFile)
+		if err != nil {
+			logger.WithComponent("attck").Warn("transition matrix override rejected; using built-in matrix",
+				"file", m.transitionMatrixFile, "error", err)
+		} else {
+			// Merge: the file may override only the techniques it lists.
+			for from, row := range override {
+				if defaults[from] == nil {
+					defaults[from] = make(map[string]float64, len(row))
+				}
+				for to, p := range row {
+					defaults[from][to] = p
+				}
+			}
+			logger.WithComponent("attck").Info("transition matrix overridden from file",
+				"file", m.transitionMatrixFile, "sources", len(override))
+		}
+	}
+	m.transMatrix = defaults
 }
 
+// loadTransitionMatrix reads and validates a JSON transition-matrix override.
+func loadTransitionMatrix(path string) (TransitionMatrix, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var matrix TransitionMatrix
+	if err := json.Unmarshal(raw, &matrix); err != nil {
+		return nil, fmt.Errorf("parse JSON: %w", err)
+	}
+	if len(matrix) == 0 {
+		return nil, fmt.Errorf("matrix is empty")
+	}
+	for from, row := range matrix {
+		if strings.TrimSpace(from) == "" {
+			return nil, fmt.Errorf("empty source technique")
+		}
+		for to, p := range row {
+			if strings.TrimSpace(to) == "" {
+				return nil, fmt.Errorf("%s: empty destination technique", from)
+			}
+			if p < 0 || p > 1 {
+				return nil, fmt.Errorf("%s -> %s: probability %v outside [0,1]", from, to, p)
+			}
+		}
+	}
+	return matrix, nil
+}
 func (m *Module) GetAllTactics() []ATTACKTactic {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
