@@ -90,6 +90,7 @@ docs/
 | [ASSCOR 扩展白皮书：内核安全域.md](1-current/whitepapers/ASSCOR%20扩展白皮书：内核安全域.md) | kernel_security 域的设计与实现 |
 | [SSAM与SRD算法可移植性白皮书.md](1-current/whitepapers/SSAM与SRD算法可移植性白皮书.md) | 算法跨项目可移植性论述 |
 | [Systemic Risk Dynamics（SRD）白皮书.md](1-current/whitepapers/Systemic%20Risk%20Dynamics（SRD）白皮书.md) | Prism/SRD 风险传播模型 |
+| [SRD-DYN.md](1-current/whitepapers/SRD-DYN.md) | 风险动力学分叉规范 v0.0.1（原 SRD v0.2.3 冻结为对照） |
 | [Secure Mode 安全模式白皮书.md](1-current/whitepapers/Secure%20Mode%20安全模式白皮书.md) | Secure Mode 设计与实现 |
 
 ### 指南（`1-current/guides/`）
