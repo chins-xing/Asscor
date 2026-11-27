@@ -69,23 +69,25 @@ const (
 
 // Config is the parsed [federation] section.
 type Config struct {
-	Role           Role
-	NodeID         string
-	MasterURL      string
-	ListenAddr     string
-	ReportInterval time.Duration
-	RequestTimeout time.Duration
-	Token          string
+	Role             Role
+	NodeID           string
+	MasterURL        string
+	ListenAddr       string
+	ReportInterval   time.Duration
+	SnapshotInterval time.Duration // kernel→child snapshot cadence (audit A4)
+	RequestTimeout   time.Duration
+	Token            string
 }
 
 // Defaults returns the effective defaults used when the section is absent or
 // a key is omitted.
 func Defaults() Config {
 	return Config{
-		Role:           RoleOff,
-		ListenAddr:     DefaultListenAddr,
-		ReportInterval: time.Duration(DefaultReportIntervalSec) * time.Second,
-		RequestTimeout: DefaultRequestTimeout,
+		Role:             RoleOff,
+		ListenAddr:       DefaultListenAddr,
+		ReportInterval:   time.Duration(DefaultReportIntervalSec) * time.Second,
+		SnapshotInterval: time.Duration(DefaultReportIntervalSec) * time.Second,
+		RequestTimeout:   DefaultRequestTimeout,
 	}
 }
 
@@ -165,6 +167,13 @@ func ParseConfig(get func(string) string) (Config, error) {
 		cfg.ReportInterval = time.Duration(n) * time.Second
 	}
 	cfg.Token = get("federation.token")
+	if v := strings.TrimSpace(get("federation.snapshot_interval_sec")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return cfg, fmt.Errorf("invalid [federation] snapshot_interval_sec %q: must be a positive integer", v)
+		}
+		cfg.SnapshotInterval = time.Duration(n) * time.Second
+	}
 
 	if cfg.Role == RoleNode {
 		if cfg.MasterURL == "" {
@@ -195,4 +204,12 @@ func ParseConfig(get func(string) string) (Config, error) {
 // ReportIntervalSec returns the interval in whole seconds (CLI/JSON display).
 func (c Config) ReportIntervalSec() int {
 	return int(c.ReportInterval / time.Second)
+}
+
+// SnapshotIntervalSec returns the effective snapshot cadence in seconds.
+func (c Config) SnapshotIntervalSec() int {
+	if c.SnapshotInterval > 0 {
+		return int(c.SnapshotInterval / time.Second)
+	}
+	return c.ReportIntervalSec()
 }

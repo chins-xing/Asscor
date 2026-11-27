@@ -27,7 +27,7 @@
 |---|---|---|---|---|---|
 | P2 | A1 | 微内核 | 进程隔离仅覆盖 federation；assessor/topology/SPC/CTI 仍在进程内 | [进行中] | 按风险低→高迁下一个模块（CTI/SPC/collector） |
 | P2 | A3 | 微内核 | 内核↔子进程 RPC 单飞（一次一请求） | [未开始] | 改多路复用/并发池 |
-| P2 | A4 | 微内核 | 快照推送间隔 = `report_interval_sec`（30s），分数最多滞后一个周期 | [待决策] | 推送与上报周期解耦（增量快照/5s） |
+| A4 | 快照间隔=上报周期 | **已完成**（`4c25520`）：新增 `[federation] snapshot_interval_sec`，默认仍等于 report_interval；pushLoop 使用独立间隔 |
 | P2 | A5 | 微内核 | 内核二进制未因进程隔离减重（纯逻辑仍与 Proxy 同包） | [未开始] | 纯逻辑拆独立 module，Proxy 只依赖协议 |
 | P2 | A6 | 架构 | 联动审计 §7.4：adapterhub 孤儿、attck 双形态、comms_on 手工装配 9 模块 | [待决策] | `docs/3-audits/MODULE_LINKAGE_AUDIT_2026-10-29.md` §7.4 |
 | P2 | A7 | 内核 | 内核瘦身：拆可选模块二进制、动态插件、单协议 | [未开始] | 内核体积审计（minimal 9.3MB → full 22.2MB） |

@@ -344,7 +344,10 @@ func (p *Proxy) restartCount() int {
 // pushLoop 周期把内核快照推给子进程（进程隔离下这是唯一的数据入口）。
 func (p *Proxy) pushLoop(cfg Config) {
 	defer p.wg.Done()
-	interval := cfg.ReportInterval
+	interval := cfg.SnapshotInterval
+	if interval <= 0 {
+		interval = cfg.ReportInterval
+	}
 	if interval <= 0 {
 		interval = time.Duration(DefaultReportIntervalSec) * time.Second
 	}
