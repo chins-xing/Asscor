@@ -106,7 +106,7 @@ ef-002fa     0.850    ← [edge_factors.custom] 的同名小写项，作为额�
 默认值集中到 `DefaultParams()`，覆盖测试见 `TestEngineParamsOverride*`。
 
 
-**修复（2026-11-27，`TBD`）**：ATT&CK 转移矩阵支持 `[attck] transition_matrix_file` 指定 JSON
+**修复（2026-11-27，`bf1e0df`）**：ATT&CK 转移矩阵支持 `[attck] transition_matrix_file` 指定 JSON
 （`{"T1190":{"T1059":0.9}}`），加载时校验技术 ID 非空、概率 ∈ [0,1]；未列出的转移保留内置默认，
 非法文件告警并回退。测试见 `TestTransitionMatrixOverride`。
 
