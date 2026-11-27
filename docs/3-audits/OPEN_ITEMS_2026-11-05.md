@@ -31,7 +31,6 @@
 | P2 | A5 | 微内核 | 内核二进制未因进程隔离减重（纯逻辑仍与 Proxy 同包） | [未开始] | 纯逻辑拆独立 module，Proxy 只依赖协议 |
 | P2 | A6 | 架构 | 联动审计 §7.4：adapterhub 孤儿、attck 双形态、comms_on 手工装配 9 模块 | [待决策] | `docs/3-audits/MODULE_LINKAGE_AUDIT_2026-10-29.md` §7.4 |
 | P2 | A7 | 内核 | 内核瘦身：拆可选模块二进制、动态插件、单协议 | [未开始] | 内核体积审计（minimal 9.3MB → full 22.2MB） |
-| P2 | A15 | 参数化 | ATT&CK 15 技术转移矩阵硬编码，无配置入口 | [未开始] | `internal/attck/attck.go:987+`；实验注入或文档标常量 |
 | P2 | B1 | 研究 | T4 跨环境 ROC（第二拓扑/VLAN 隔离、8 轮、95% CI） | [未开始] | `docs/1-current/design/SRD_V2.3_PLAN_2026-10-27.md` §T4 |
 | P2 | B2 | 研究 | AUC 深化：多跳 ACL / 风险真值 / 参数敏感性 | [未开始] | 现有二元可达性下三 profile AUC 完全一致 |
 | P2 | B3 | 安全边界 | 联邦 demo 为共享 token + 明文 HTTP，生产需 mTLS + 独立凭证 | [demo 级] | 与 D-01 一并收口 |
@@ -65,6 +64,7 @@
 | A14 | EF-3FA 硬编码 0.82 | **已完成**（`3175f5d`）：`EdgeFactors.ThreeFactorFailure` + `[edge_factors] three_factor_failure`；SSAM/legacy 均读配置 |
 | A17 | CTI 系数/间隔硬编码 | **已完成**（`3175f5d`）：`[cti] coefficient` / `update_interval_min`，含校验；基础系数用于运行时扣减 |
 | A18 | 研究引擎默认参数硬编码 | **已完成**（`31069e8`）：`predictor.Params`/`attackerstate.Params` + `NewEngineWithParams`；engagement 已有 `PlannerParams`；默认值集中在 `DefaultParams`，并有覆盖测试 |
+| A15 | ATT&CK 15 技术转移矩阵硬编码 | **已完成**（`TBD`）：支持 `[attck] transition_matrix_file` JSON 覆盖，校验后合并；非法文件回退默认并告警 |
 | A16 | SPC 影响权重硬编码 | **已完成**（`48438eb`）：`[spc] impact_cvss/epss/kev_weight、subtech_growth、apt_growth、poc_factor`；默认值不变 |
 | C1 | main 文档 18 处悬空链接 | **已完成**（main `9475168`）：更新到现有文档/目录或标注历史数据未迁移；`check-doc-refs.sh` 在 main 为 0 |
 | C2 | WHITEPAPER_GAP_ANALYSIS 三条过时 | **已完成**（`09a1dc9`）：新增 2026-11-22 复核记录，CTI/delegation/ATT&CK 乘数三条关闭并附代码证据 |
