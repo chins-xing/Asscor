@@ -47,4 +47,7 @@ type ATTACKConfig struct {
 	BeaconThreshold      float64
 	AttributionThreshold float64
 	SafeEmulation        bool
+	// TransitionMatrixFile optionally overrides the built-in ATT&CK
+	// technique transition matrix (audit A15).
+	TransitionMatrixFile string
 }

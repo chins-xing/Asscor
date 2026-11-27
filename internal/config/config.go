@@ -592,6 +592,8 @@ func Parse(content string) (*Config, error) {
 				}
 			case "safe_emulation":
 				cfg.ATTACK.SafeEmulation = strings.EqualFold(v, "true") || v == "1"
+			case "transition_matrix_file":
+				cfg.ATTACK.TransitionMatrixFile = strings.TrimSpace(v)
 			}
 		}
 	}
