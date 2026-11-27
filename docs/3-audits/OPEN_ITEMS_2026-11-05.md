@@ -29,7 +29,7 @@
 | P2 | A3 | 微内核 | 内核↔子进程 RPC 单飞（一次一请求） | [未开始] | 改多路复用/并发池 |
 | A4 | 快照间隔=上报周期 | **已完成**（`4c25520`）：新增 `[federation] snapshot_interval_sec`，默认仍等于 report_interval；pushLoop 使用独立间隔 |
 | P2 | A5 | 微内核 | 内核二进制未因进程隔离减重（纯逻辑仍与 Proxy 同包） | [未开始] | 纯逻辑拆独立 module，Proxy 只依赖协议 |
-| P2 | A6 | 架构 | 联动审计 §7.4：adapterhub 孤儿、attck 双形态、comms_on 手工装配 9 模块 | [待决策] | `docs/3-audits/MODULE_LINKAGE_AUDIT_2026-10-29.md` §7.4 |
+| A6 | adapterhub/attck/comms 架构决策 | **已完成**（`e26cc19`）：ADR-001 adapterhub 冻结不接入、ADR-002 attck 主形态/嵌入形态、ADR-003 comms 装配延后 A1；新增包级冻结说明 |
 | P2 | A7 | 内核 | 内核瘦身：拆可选模块二进制、动态插件、单协议 | [未开始] | 内核体积审计（minimal 9.3MB → full 22.2MB） |
 | P2 | B1 | 研究 | T4 跨环境 ROC（第二拓扑/VLAN 隔离、8 轮、95% CI） | [未开始] | `docs/1-current/design/SRD_V2.3_PLAN_2026-10-27.md` §T4 |
 | P2 | B2 | 研究 | AUC 深化：多跳 ACL / 风险真值 / 参数敏感性 | [未开始] | 现有二元可达性下三 profile AUC 完全一致 |
