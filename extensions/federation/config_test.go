@@ -76,3 +76,27 @@ func TestIsLoopbackListen(t *testing.T) {
 		}
 	}
 }
+
+func TestParseConfigSnapshotInterval(t *testing.T) {
+	cfg, err := ParseConfig(cfgGetter(map[string]string{
+		"federation.role":                  "node",
+		"federation.master_url":            "http://127.0.0.1:5099",
+		"federation.report_interval_sec":   "30",
+		"federation.snapshot_interval_sec": "5",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SnapshotIntervalSec() != 5 {
+		t.Errorf("snapshot interval = %d, want 5", cfg.SnapshotIntervalSec())
+	}
+	if cfg.ReportIntervalSec() != 30 {
+		t.Errorf("report interval = %d, want 30", cfg.ReportIntervalSec())
+	}
+	if _, err := ParseConfig(cfgGetter(map[string]string{
+		"federation.role": "node", "federation.master_url": "http://127.0.0.1:5099",
+		"federation.snapshot_interval_sec": "0",
+	})); err == nil {
+		t.Fatal("snapshot_interval_sec=0 must be rejected")
+	}
+}
