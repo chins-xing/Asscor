@@ -14,6 +14,7 @@ BINARIES=(
     # Process-isolated federation build: kernel Proxy + separate child binary.
     "cmd/kernel:ASSCOR-kernel-proc-linux-amd64"
     "cmd/federation-mod:federation-mod-linux-amd64"
+    "cmd/logcollector-mod:logcollector-mod-linux-amd64"
     "cmd/agent:ASSCOR-agent-linux-amd64"
     "cmd/asscor:ASSCOR-linux-amd64"
     # 实验场景采集器（cmd/edgescen）：实验矩阵要在目标机上跑它，故与主二进制一起交叉编译。
