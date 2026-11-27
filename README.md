@@ -1,12 +1,14 @@
 # ASSCOR — 安全可接受性评估运行时
 
-> 🧪 **分支：`main`（产品线与发布分支）**
+> 🧪 **分支：`ASSCOR-Research-Core`（研究线；与 `main` 正式分叉，永不整体同步）**
 >
-> 本分支是**可构建、可测试、可发布**的产品线：研究内容（论文、实验工具与实验数据、研究计划）
-> **不在本分支**，它们位于 `ASSCOR-Research-Core` 分支。
+> 本分支在 `main` 产品线之上承载研究内容：
+> - **方向② 边缘因子耦合与变量化**：实验工具与资产（`cmd/edgescen/`、`cmd/edgecompare/`、`configs/edgeexp/`、`lunwen/clab-lab/`），设计见 [docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md](docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md)
+> - **拓扑/传播层研究**：M0–M2 里程碑（图模型地基 → 生命周期 → 语义传播），见 [docs/1-current/reference/ASSCOR-Research-Core.md](docs/1-current/reference/ASSCOR-Research-Core.md) 与 `lunwen/research-core/`
+> - **论文与实验数据**：`lunwen/paper/`、`lunwen/clab-lab/data/`
 >
-> **分支规则与资产归属**见 [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)：两分支正式分叉、永不整体同步；
-> 债务清偿／漏洞／审计修复**第一时间进 main**；两分支的**底座保持一致**；研究接线类底座改动留 ARC 并登记为**有意差异**。
+> **分支规则与资产归属**见 [docs/1-current/reference/ASSET_OWNERSHIP.md](docs/1-current/reference/ASSET_OWNERSHIP.md)：两分支正式分叉、永不整体同步；
+> 债务清偿／漏洞／审计修复**第一时间进 main**；两分支的**底座保持一致**；研究接线类底座改动留本分支并登记为**有意差异**。
 
 > **ASSCOR**（**ASS**ess + **COR**e）是一个开源的、面向生产的安全可接受性评估平台。
 > 它不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系统的**"安全可接受性"聚合判断层**，
@@ -77,7 +79,7 @@ ASSCOR 不替代漏洞扫描器、SIEM 或渗透测试，而是作为上述系�
 
 ## 1. ASSCOR 平台架构
 
-ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** 通信，支持 mTLS 加密。Kernel 负责评估协调和指令分发，Agent 负责本地检查执行与状态上报。核心能力见下表，完整细节见 [使用手册](docs/ASSCOR%20使用手册.md)。
+ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** 通信，支持 mTLS 加密。Kernel 负责评估协调和指令分发，Agent 负责本地检查执行与状态上报。核心能力见下表，完整细节见 [使用手册](docs/1-current/guides/ASSCOR%20使用手册.md)。
 
 | 组件 | 功能 |
 |------|------|
@@ -86,7 +88,7 @@ ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** �
 | **Agent** | 80 检查项并发执行，CPE 自动生成，HMAC 签名命令执行 |
 | **21 个适配器** | Trivy/Nuclei/Lynis/Suricata 等 Fetch→Parse→Map→Validate 管线 |
 | **Prism/SRD** | 三层风险引擎：Core(动态评分)→Semantic(四态模糊)→Inference(马尔可夫预测) |
-| **扩展体系** | 89 个内核扩展点 (83 平台 + 6 生命周期) + 9 种 extmgr 类型 + 可选扩展包体系 (pkgmgr + package.json) |
+| **扩展体系** | 96 个内核扩展点 (90 平台 + 6 生命周期) + 9 种 extmgr 类型 + 可选扩展包体系 (pkgmgr + package.json) |
 | **微内核剥离** | 内核仅保留扩展框架+生命周期+接口契约；全部功能模块剥离为 build-tag 可选插件 (零膨胀默认构建) |
 | **安全防护** | HMAC 评估签名 + 算法自校准完整性校验 + SHA-256 二进制校验 + mTLS |
 | **CLI** | 交互式终端 + Unix socket 远程连接 + 15 运维命令 |
@@ -238,7 +240,7 @@ $$
 
 $P_{score}$ 下限为 0.60，防止 SPC 单方面"杀死"主机评分。多 CVE 罚分叠加采用平方和开方（√∑Penalty²）替代线性求和，防止大量低危 CVE 过早触底。
 
-详细计算示例请参阅 [SPC 安全态势计算模块技术白皮书](docs/SPC安全态势计算模块技术白皮书.md)。
+详细计算示例请参阅 [SPC 安全态势计算模块技术白皮书](docs/1-current/whitepapers/SPC安全态势计算模块技术白皮书.md)。
 
 ## 8. 等级保护制度接入
 
@@ -262,10 +264,12 @@ ASSCOR 项目评估结果可与等保测评报告交叉验证：若等保三级�
 
 ## 9. 动态扩展与社区驱动
 
-**联邦扩展包（`extensions/federation`，v0.3.0）**：单网络多套配置的联邦评估——主 kernel 聚合、
-节点 kernel 各自评估、agent 只连接所属节点 kernel（每节点独立 CA）。CLI 命令由扩展包自注册
-（`federation status|check|export|report-now`），内核只保留 `newExtensionPlugins()` 通用装配点。
-构建：`-tags federation`。
+**联邦扩展包（`extensions/federation`，v0.3.0）**：单网络多套配置的联邦评估——
+主 kernel 聚合、节点 kernel 各自评估、agent 只连接所属节点 kernel（每节点独立 CA）。
+CLI 命令由扩展包自注册（`federation status|check|export|report-now`），内核只保留
+`newExtensionPlugins()` 通用装配点。构建：`-tags federation`。
+详见 [扩展包设计](docs/1-current/design/FEDERATION_EXTENSION_2026-10-28.md)。
+
 
 ASSCOR 内置攻击向量插件槽（AVD），每个 AVD 定义为 {ID, 域, 检测逻辑, 分值, 紧急标记}。管理员或社区可编写 AVD 注册到引擎，使模型随威胁演进持续扩展。
 
@@ -287,7 +291,7 @@ compliance_framework = GB/T 22239-2019 Level 3
 
 ## Secure Mode（实验性，build-tag：securemode）
 
-> 可选模块（`internal/securemode/`，build-tag `securemode`；**默认构建不含**）。保护 `config.ini` 与 `agent.ini` 的静态安全。设计与实现记录见 [docs/superpowers/specs/2026-08-21-secure-mode-design.md](docs/superpowers/specs/2026-08-21-secure-mode-design.md)；以下为总览。
+> 可选模块（`internal/securemode/`，build-tag `securemode`；**默认构建不含**）。保护 `config.ini` 与 `agent.ini` 的静态安全。设计与实现记录见 [docs/1-current/design/2026-08-21-secure-mode-design.md](docs/1-current/design/2026-08-21-secure-mode-design.md)；以下为总览。
 
 ### 功能
 
@@ -328,7 +332,7 @@ go build -tags securemode ./cmd/kernel ./cmd/agent
 ### 与其他分支的关系
 
 - 模块代码（`internal/securemode/`）在两条分支上**都在**；差别只在**默认构建是否启用该 build-tag**（默认不含）。
-- 两分支的分工、资产归属与「有意差异」清单见 [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)。
+- 两分支的分工、资产归属与「有意差异」清单见 [docs/1-current/reference/ASSET_OWNERSHIP.md](docs/1-current/reference/ASSET_OWNERSHIP.md)。
 
 ## 11. 项目结构
 
@@ -338,7 +342,9 @@ ASSCOR/
 ├── cmd/
 │   ├── kernel/        # 微内核服务端入口（gRPC + JSONRPC 双协议栈）
 │   ├── agent/         # Agent 客户端入口（gRPC + JSONRPC）
-│   └── asscor/        # 独立评估工具入口
+│   ├── asscor/        # 独立评估工具入口
+│   ├── edgescen/      # 实验采集器（研究线；tags: expr,engine,checks）
+│   └── edgecompare/   # 离线重算/对比/拟合工具（研究线；tag: edgeexp）
 ├── ssam-lib/          # SSAM V2.0 纯函数式引擎（独立 Go module: github.com/chins-xing/ssam）
 │   ├── types.go       #   V1.x 数据类型 (AssessmentInput/Output)
 │   ├── types_v2.go    #   V2.0 数据类型 (RiskContext, RiskLayers, AssessmentInputV2/OutputV2)
@@ -400,6 +406,7 @@ ASSCOR/
 │   ├── securemode/    # 安全模式（build-tag: securemode）— 默认/运行双模式配置保护、登记表持久化
 │   ├── model/         # 数据模型定义（含边缘因子观测链字段）
 │   ├── edgefactor/    # 边缘因子向量/图/链框架与参数模型（tag `engine` 线；两分支共有）
+│   ├── edgeexp/       # 实验记录 JSONL 契约（研究线：Record/Validate/MarshalRecord）
 │   ├── config/        # 配置解析器（INI 格式，支持行业模板覆盖）
 │   └── version/       # 版本信息
 ├── optional/           # 可选扩展模块与扩展包 (v0.2.3)
@@ -409,8 +416,10 @@ ASSCOR/
 ├── pluginsdk/          # Plugin SDK — JSON-RPC 独立进程插件运行时 (RPCPlugin 接口)
 ├── api/v1/            # gRPC 服务接口定义与消息类型
 ├── configs/           # 行业专用配置文件（政府、金融、医疗、教育等）
+│   └── edgeexp/       #   四候选实验模板（研究线：m0-baseline/vector/graph/chain）
 ├── certs/             # TLS/mTLS 证书目录（已排除于版本控制）
 ├── docs/              # 技术文档与白皮书
+├── lunwen/            # 论文与实验资产（研究线；归属见 docs/1-current/reference/ASSET_OWNERSHIP.md）
 ├── build/             # 编译产物（Linux/Windows，已排除于版本控制）
 ├── config.ini         # 内核默认配置文件
 └── agent.ini          # Agent 默认配置文件
@@ -517,7 +526,7 @@ SSAM 2.0 提供了一套严谨且可进化的安全可接受性度量标准。�
 - **SSAM IR**：`AssessmentOutputV2.ToIR()` 输出机器可读的 JSON 中间表示（SSAMIR），便于下游工具链消费
 - **Formula DSL / AST**：`formulas_ast.go` 提供 `ParseFormula(expression string) (FormulaAST, error)` 及 `EvaluateFormula`，支持运行时动态构造评分公式
 
-详细接口规范与接入指南请参阅 [docs/SSAM接口规范与接入指南.md](docs/SSAM接口规范与接入指南.md)。
+详细接口规范与接入指南请参阅 [docs/1-current/reference/SSAM接口规范与接入指南.md](docs/1-current/reference/SSAM接口规范与接入指南.md)。
 
 Prism 项目拆分已整合入 [§4 Prism/SRD](#4-prism--srd-风险动力学引擎)。
 
@@ -836,4 +845,4 @@ ASSCOR 采用 **[Apache License 2.0](LICENSE)** —— 宽松许可证，允许�
 | **独立开发者** | 直接 Fork 后自由分支发展，可独立分发/商业化，无需等待上游合入 |
 | **维护者** | 保持 `main` 分支稳定，控制上游演进节奏 |
 
-`main` 分支始终为可构建、可测试、可发布状态（CI 全绿）；研究线内容（论文、实验工具与数据、研究计划）留在 `ASSCOR-Research-Core` 分支。两分支**正式分叉、永不整体同步**：只有维护者点名的改动才逐个 cherry-pick／移植上 `main`（**不要** `git merge` 研究分支——那会把研究线资产一次性带回）。资产归属、底座一致性与「有意差异」清单见 [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)。
+`main` 分支始终为可构建、可测试、可发布状态（CI 全绿）；研究线内容（论文、实验工具与数据、研究计划）留在 `ASSCOR-Research-Core` 分支。两分支**正式分叉、永不整体同步**：只有维护者点名的改动才逐个 cherry-pick／移植上 `main`（**不要** `git merge` 研究分支——那会把研究线资产一次性带回）。资产归属、底座一致性与「有意差异」清单见 [docs/1-current/reference/ASSET_OWNERSHIP.md](docs/1-current/reference/ASSET_OWNERSHIP.md)。

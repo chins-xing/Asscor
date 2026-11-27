@@ -1,16 +1,24 @@
 # ASSCOR — Security Acceptability Assessment Runtime
 
-> **Branch:** `main` (product & release line).
+> **Branch:** `ASSCOR-Research-Core` (research line; formally forked from
+> `main`, never fully synced).
 >
-> This branch is the **buildable, testable, releasable** product line.
-> Research content (the paper, experiment tooling and data, research plans) is
-> **not** here — it lives on the `ASSCOR-Research-Core` branch.
+> This branch carries research content on top of the `main` product line:
+> - **Direction ② — edge-factor coupling & vectorisation:** experiment tooling
+>   and assets (`cmd/edgescen/`, `cmd/edgecompare/`, `configs/edgeexp/`,
+>   `lunwen/clab-lab/`); design in
+>   [docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md](docs/1-current/design/EDGE_FACTOR_COUPLING_DESIGN_2026-09-08.md);
+> - **Topology / propagation research** — M0–M2 milestones (graph-model
+>   foundation → lifecycle → semantic propagation); see
+>   [docs/1-current/reference/ASSCOR-Research-Core.md](docs/1-current/reference/ASSCOR-Research-Core.md) and
+>   `lunwen/research-core/`;
+> - **Paper and experiment data:** `lunwen/paper/`, `lunwen/clab-lab/data/`.
 >
 > **Branch rules and asset ownership** live in
-> [docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md): the two branches are
-> formally forked and never fully synced; debt / vulnerability / audit fixes go
-> to `main` **first**; the shared **base (product foundation)** must stay
-> identical; research-driven edits to base files stay on ARC and are registered
+> [docs/1-current/reference/ASSET_OWNERSHIP.md](docs/1-current/reference/ASSET_OWNERSHIP.md): the two branches are
+> formally forked and never fully synced; debt / vulnerability / audit fixes
+> go to `main` **first**; the shared **base (product foundation)** must stay
+> identical; research-driven edits to base files stay here and are registered
 > as **intentional differences**.
 
 > **ASSCOR** (**ASS**ess + **COR**e) is an open-source, production-oriented
@@ -243,7 +251,7 @@ factors automatically. Eight industry configuration templates ship under
 
 ## 9. Dynamic extensions
 
-The kernel exposes 89 extension points (83 platform + 6 lifecycle). The
+The kernel exposes 96 extension points (90 platform + 6 lifecycle). The
 extension manager (`extmgr`) supports nine extension types under a four-tier
 execution policy (with command allowlists, SHA-256 checksums, timeouts, and
 path protections). Extension *packages* (pkgmgr) can be distributed and
@@ -255,13 +263,14 @@ kernels, each node kernel evaluates its own agents with its own model parameters
 (independent CA per node). The CLI command is self-registered by the extension
 (`federation status|check|export|report-now`); the kernel only exposes the generic
 `newExtensionPlugins()` hook. Build with `-tags federation`.
+Design: [FEDERATION_EXTENSION_2026-10-28.md](docs/1-current/design/FEDERATION_EXTENSION_2026-10-28.md).
 
 ## 10. Secure Mode (experimental, build-tag: securemode)
 
 > An **optional** module (`internal/securemode/`, build-tag `securemode`;
 > **not part of the default build**) that protects the static security of
 > `config.ini` and `agent.ini`. Design & implementation records:
-> [docs/superpowers/specs/2026-08-21-secure-mode-design.md](docs/superpowers/specs/2026-08-21-secure-mode-design.md);
+> [docs/1-current/design/2026-08-21-secure-mode-design.md](docs/1-current/design/2026-08-21-secure-mode-design.md);
 > summary below.
 
 ### Features
@@ -323,7 +332,7 @@ for Estimating, Predicting, and Engaging Adaptive Attackers"** (Jiahao Lai)
 and the Containerlab experiment campaign (E1–E9) with its reviewer attachment
 bundle live on the **`ASSCOR-Research-Core`** branch, under `lunwen/` — they
 are intentionally **not** part of `main` (see
-[docs/ASSET_OWNERSHIP.md](docs/ASSET_OWNERSHIP.md)). See the paper's own
+[docs/1-current/reference/ASSET_OWNERSHIP.md](docs/1-current/reference/ASSET_OWNERSHIP.md)). See the paper's own
 documentation for details.
 
 ## 11. Build & quick start
@@ -350,13 +359,14 @@ sudo ./ASSCOR-agent-linux-amd64 --install             # install agent on a targe
 asscor-cli                                             # connect to the kernel CLI
 ```
 
-See the [User Manual](<docs/1-current/guides/ASSCOR 使用手册.md>)
+See the [User Manual](docs/1-current/guides/ASSCOR%20使用手册.md)
 (Chinese) for the full operational guide.
 
 ## 12. Repository structure
 
 ```
 .
+├── cmd/                 # binaries: kernel, agent, asscor (tag-gated); plus edgescen / edgecompare (research line)
 ├── internal/            # kernel + core modules (build-tag gated)
 │   ├── kernel/          # microkernel core (DI, bus, lifecycle, contracts)
 │   ├── engine/          # SSAM + SRD adapters
@@ -369,8 +379,10 @@ See the [User Manual](<docs/1-current/guides/ASSCOR 使用手册.md>)
 ├── prism-lib/           # Prism / SRD standalone engine (zero external deps)
 ├── optional/            # build-tag plug-ins (adversary packages, pkgmgr)
 ├── api/v1/              # protocol messages (pure PB; gRPC bindings are tag-gated)
+├── configs/             # industry configuration templates (+ edgeexp/: research templates)
 ├── deploy/              # Makefile, docker compose, deployment scripts
 ├── docs/                # documentation (see §13)
+├── lunwen/              # paper + experiment assets (research line; see docs/1-current/reference/ASSET_OWNERSHIP.md)
 └── build/               # local build output (git-ignored)
 ```
 
@@ -380,14 +392,14 @@ See the [User Manual](<docs/1-current/guides/ASSCOR 使用手册.md>)
 |----------|----------|---------|
 | [README_EN.md](README_EN.md) | English | this overview |
 | [README.md](README.md) | Chinese | full Chinese overview |
-| [docs/README_EN.md](docs/README_EN.md) | English | documentation index |
+| [docs/en/README.md](docs/en/README.md) | English | documentation index |
 | [docs/README.md](docs/README.md) | Chinese | documentation index |
-| [docs/en/engineering-whitepaper.md](docs/en/engineering-whitepaper.md) | English | engineering implementation whitepaper |
-| [docs/en/user-manual.md](docs/en/user-manual.md) | English | user manual |
-| [docs/en/ssam-interface-spec.md](docs/en/ssam-interface-spec.md) | English | SSAM interface specification |
-| [docs/en/srd-whitepaper.md](docs/en/srd-whitepaper.md) | English | SRD risk-dynamics whitepaper |
-| [docs/en/secure-mode-whitepaper.md](docs/en/secure-mode-whitepaper.md) | English | Secure Mode whitepaper |
-| Secure Mode design spec (`docs/superpowers/specs/2026-08-21-secure-mode-design.md`) | Chinese | module design & security model |
+| [docs/en/1-current/whitepapers/engineering-whitepaper.md](docs/en/1-current/whitepapers/engineering-whitepaper.md) | English | engineering implementation whitepaper |
+| [docs/en/1-current/guides/user-manual.md](docs/en/1-current/guides/user-manual.md) | English | user manual |
+| [docs/en/1-current/reference/ssam-interface-spec.md](docs/en/1-current/reference/ssam-interface-spec.md) | English | SSAM interface specification |
+| [docs/en/1-current/whitepapers/srd-whitepaper.md](docs/en/1-current/whitepapers/srd-whitepaper.md) | English | SRD risk-dynamics whitepaper |
+| [docs/en/1-current/whitepapers/secure-mode-whitepaper.md](docs/en/1-current/whitepapers/secure-mode-whitepaper.md) | English | Secure Mode whitepaper |
+| Secure Mode design spec (`docs/1-current/design/2026-08-21-secure-mode-design.md`) | Chinese | module design & security model |
 
 Chinese remains the primary documentation language for the in-depth
 originals; English versions are maintained alongside.
