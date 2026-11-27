@@ -49,11 +49,6 @@ bf41147e84e06e3f26aa61c3de97323895125be7  8d0b76ab7f7eae14fb388569b8fac88a0bc262
 #   `TestOT001DetailIsDeterministic` / `TestOT001DetailFormatUnchanged` 各 `-count=20` 全 PASS。
 
 # ---- 研究线的测试（在底座路径内，但属研究接线的测试）----
-0f8a93ce7e6d79f3fc7032e7a9282845d9015263  ABSENT  internal/engine/assessor_chain_test.go  # 观测链在 legacy 路径的研究线新测试（main 上不存在）
-7adb8f52d67360a1ec93c1b77ad064163d04f290  ABSENT  internal/engine/ssam/edgefactor_chain_test.go  # 观测链在插件路径的研究线新测试（main 上不存在）
-e1f36206ad5873723040b343630c974bdc6355e1  ABSENT  internal/kernel/persistence_types_test.go  # 观测链在落盘层的研究线新测试（main 上不存在）
-b7bd641ed381329328137dd4f2422546f42ef22b  ABSENT  internal/model/edgefactor_chain_test.go  # 观测链在契约层的研究线新测试（main 上不存在）
-f7c9b2e156dd9a088957c97c9f8e1c34f37ad5c6  ABSENT  internal/engine/ssam/task18_collapse_test.go  # ARC-only（有意差异）：Task 18 合成层双条目折叠的研究线测试（main 上不存在）
 05630b7943f29c3aefeed7f54ca2403d1e1ce39d  56829bd2f8f3f00d3384574a1c4e275ebc028834  internal/persistence/persistence_test.go  # 观测链落盘的往返测试（ARC 版多研究线断言）
 a3663a4de25389daf6e9d6b028bd8c98220f112e  6cd6894cfdfbc8b539005a90572b9c471020581b  internal/config/configs_templates_test.go  # ARC 版多 4 条读研究线契约（configs/edgeexp/、lunwen/）的用例
 
