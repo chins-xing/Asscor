@@ -36,8 +36,8 @@
 | P2 | B3 | 安全边界 | 联邦 demo 为共享 token + 明文 HTTP，生产需 mTLS + 独立凭证 | [demo 级] | 与 D-01 一并收口 |
 | P2 | B4 | 环境 | agent 未配置 HMAC key（commander 远程命令会被拒） | [环境约束] | `/root/t4` 遗留；需先下发 `agent-hmac.key` |
 | P2 | B5 | 可选 | securemode 把 agent.ini 加密成 `.enc`，配置不可审计 | [可选] | 需审计时用不含 securemode tag 的 agent 重建 |
-| P2 | D2 | 运维 | GitHub CI 最新 run 未确认 | [待验证] | 本地等价 CI 已 `CI_ALL_OK`；GitHub 侧确认 |
 | P2 | D3 | 运维 | 内核/子进程部署脚本仍是一次性命令 | [未开始] | 纳入 `scripts/` 做可重复部署（含 federation-mod 分发） |
+| D2 | GitHub CI 最新 run 未确认 | **已完成**（2026-11-27）：main `b2f3413` 的 Actions run `45945338297` **success**；前序 `c4ea720` 亦 success |
 
 ## P3 — 低优先（加固/清理）
 
