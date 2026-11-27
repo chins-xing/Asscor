@@ -67,7 +67,7 @@
 | A16 | SPC 影响权重硬编码 | **已完成**（`48438eb`）：`[spc] impact_cvss/epss/kev_weight、subtech_growth、apt_growth、poc_factor`；默认值不变 |
 | C1 | main 文档 18 处悬空链接 | **已完成**（main `9475168`）：更新到现有文档/目录或标注历史数据未迁移；`check-doc-refs.sh` 在 main 为 0 |
 | C2 | WHITEPAPER_GAP_ANALYSIS 三条过时 | **已完成**（`09a1dc9`）：新增 2026-11-22 复核记录，CTI/delegation/ATT&CK 乘数三条关闭并附代码证据 |
-| C4 | 扩展点执行清单 | **已完成**（`TBD`）：生成全量清单；实际 **96** 点（90 平台+6 生命周期），**90** 有执行者、**6** 仅注册；README 计数已修正 |
+| C4 | 扩展点执行清单 | **已完成**（`e76a59f`）：生成全量清单；实际 **96** 点（90 平台+6 生命周期），**90** 有执行者、**6** 仅注册；README 计数已修正 |
 | C3 | TECHNICAL_DEBT_BACKLOG 遗留项 | **已完成（复核）**（`09a1dc9`）：M-4 缓解、M-6/L-6 关闭、L-1 部分关闭；L-2 与 RC-M4（A18）继续跟踪 |
 | D-01 | 联邦鉴权 fail-open | **已完成**（`aeb1ccc`）：master 非 loopback 且 token 空时拒绝启动；`config_test.go` 覆盖 |
 | D-02 | NaN 配置绕过 | **已完成**（`aeb1ccc`）：`validateRanges` 对 weights/threshold/threat/ACI/edge/delta/confidence/SPC/ATT&CK 全部拒绝 NaN/Inf；回归测试 |
