@@ -251,7 +251,7 @@ factors automatically. Eight industry configuration templates ship under
 
 ## 9. Dynamic extensions
 
-The kernel exposes 89 extension points (83 platform + 6 lifecycle). The
+The kernel exposes 96 extension points (90 platform + 6 lifecycle). The
 extension manager (`extmgr`) supports nine extension types under a four-tier
 execution policy (with command allowlists, SHA-256 checksums, timeouts, and
 path protections). Extension *packages* (pkgmgr) can be distributed and

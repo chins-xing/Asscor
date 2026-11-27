@@ -88,7 +88,7 @@ ASSCOR 采用微内核 + 插件架构，通过 **gRPC + JSONRPC 双协议栈** �
 | **Agent** | 80 检查项并发执行，CPE 自动生成，HMAC 签名命令执行 |
 | **21 个适配器** | Trivy/Nuclei/Lynis/Suricata 等 Fetch→Parse→Map→Validate 管线 |
 | **Prism/SRD** | 三层风险引擎：Core(动态评分)→Semantic(四态模糊)→Inference(马尔可夫预测) |
-| **扩展体系** | 89 个内核扩展点 (83 平台 + 6 生命周期) + 9 种 extmgr 类型 + 可选扩展包体系 (pkgmgr + package.json) |
+| **扩展体系** | 96 个内核扩展点 (90 平台 + 6 生命周期) + 9 种 extmgr 类型 + 可选扩展包体系 (pkgmgr + package.json) |
 | **微内核剥离** | 内核仅保留扩展框架+生命周期+接口契约；全部功能模块剥离为 build-tag 可选插件 (零膨胀默认构建) |
 | **安全防护** | HMAC 评估签名 + 算法自校准完整性校验 + SHA-256 二进制校验 + mTLS |
 | **CLI** | 交互式终端 + Unix socket 远程连接 + 15 运维命令 |
