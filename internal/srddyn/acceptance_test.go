@@ -78,3 +78,50 @@ func TestForecastBeatsPersistence(t *testing.T) {
 		t.Fatalf("forecast RMSE %v not better than persistence %v", forecastRMSE, persistRMSE)
 	}
 }
+
+func TestSobolBootstrapCI(t *testing.T) {
+	base := DefaultParams()
+	names := []string{"Alpha", "Delta"}
+	ranges := map[string][2]float64{"Alpha": {0, 1}, "Delta": {0, 1}}
+	eval := func(p Params) float64 { return p.Alpha + 2*p.Delta }
+	res, err := SobolIndicesCI(eval, base, names, ranges, 800, 7, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		ci := res.FirstCI[name]
+		if math.IsNaN(ci[0]) || math.IsNaN(ci[1]) || ci[0] > ci[1] {
+			t.Fatalf("%s first CI invalid: %v", name, ci)
+		}
+		tci := res.TotalCI[name]
+		if math.IsNaN(tci[0]) || math.IsNaN(tci[1]) || tci[0] > tci[1] {
+			t.Fatalf("%s total CI invalid: %v", name, tci)
+		}
+	}
+}
+
+func TestRecoverUnknownInitialSObserved(t *testing.T) {
+	truth := DefaultParams()
+	truth.Alpha = 0.20
+	truth.Delta = 0.05
+	truth.Lambda = 0.35
+	steps := profileSteps(truth)
+
+	guess := State{S: steps[0].X.S, D: 0.10, C: 0.05, H: 0.10}
+	initialParams := truth
+	initialParams.Alpha = 0.10
+	initialParams.Lambda = 0.15
+
+	before := objectiveS(steps, 0.1, guess, initialParams)
+	res, err := RecoverSObservedUnknownInitial(steps, 0.1, guess, initialParams, []string{"Alpha", "Lambda"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("unknown-initial fit SSE %.6g -> %.6g, x0=%+v", before, res.SSE, res.Initial)
+	if res.SSE >= before {
+		t.Fatalf("joint recovery did not improve SSE: %v -> %v", before, res.SSE)
+	}
+	if math.Abs(res.Initial.D-truth.Delta) > 0.25 {
+		t.Errorf("recovered D0=%v too far from %v", res.Initial.D, truth.Delta)
+	}
+}

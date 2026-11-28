@@ -4,12 +4,17 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 )
 
 // SobolIndices estimates first-order and total Sobol indices for the named
 // parameters of a scalar output function, using Saltelli A/B/AB sampling.
 // It is a validation prototype (finite N); no confidence intervals yet.
 func SobolIndices(eval func(Params) float64, base Params, names []string, ranges map[string][2]float64, n int, seed int64) (first, total map[string]float64, err error) {
+	return sobolOnce(eval, base, names, ranges, n, seed)
+}
+
+func sobolOnce(eval func(Params) float64, base Params, names []string, ranges map[string][2]float64, n int, seed int64) (first, total map[string]float64, err error) {
 	if n < 100 {
 		return nil, nil, fmt.Errorf("n must be >= 100")
 	}
@@ -103,4 +108,58 @@ func clampIndices(v float64) float64 {
 		return 0
 	}
 	return v
+}
+
+// SobolResult carries point estimates and percentile bootstrap intervals.
+type SobolResult struct {
+	First   map[string]float64
+	Total   map[string]float64
+	FirstCI map[string][2]float64
+	TotalCI map[string][2]float64
+}
+
+// SobolIndicesCI runs independent Saltelli replicates and returns 5/95
+// percentile bootstrap intervals (finite-sample prototype, not a proof).
+func SobolIndicesCI(eval func(Params) float64, base Params, names []string, ranges map[string][2]float64, n int, seed int64, replicates int) (SobolResult, error) {
+	if replicates < 5 {
+		replicates = 5
+	}
+	type sample struct {
+		first, total map[string]float64
+	}
+	samples := make([]sample, 0, replicates)
+	for r := 0; r < replicates; r++ {
+		f, t, err := sobolOnce(eval, base, names, ranges, n, seed+int64(r))
+		if err != nil {
+			return SobolResult{}, err
+		}
+		samples = append(samples, sample{first: f, total: t})
+	}
+	res := SobolResult{
+		First:   samples[0].first,
+		Total:   samples[0].total,
+		FirstCI: make(map[string][2]float64, len(names)),
+		TotalCI: make(map[string][2]float64, len(names)),
+	}
+	for _, name := range names {
+		fs := make([]float64, 0, len(samples))
+		ts := make([]float64, 0, len(samples))
+		for _, s := range samples {
+			fs = append(fs, s.first[name])
+			ts = append(ts, s.total[name])
+		}
+		res.FirstCI[name] = percentile95(fs)
+		res.TotalCI[name] = percentile95(ts)
+	}
+	return res, nil
+}
+
+func percentile95(xs []float64) [2]float64 {
+	if len(xs) == 0 {
+		return [2]float64{}
+	}
+	sort.Float64s(xs)
+	lo := xs[int(0.05*float64(len(xs)-1))]
+	hi := xs[int(0.95*float64(len(xs)-1))]
+	return [2]float64{lo, hi}
 }
