@@ -98,3 +98,26 @@ c5 不再是"漏报"，而是 `probable`（目标主机不在 L3 层，但其子
 
 **当前限制**：`ct state` 类规则按"不猜"忽略；容器内 VLAN 需 env 覆盖；
 域内主机对 ACL 未建模（v2.3 计划见 [SRD v2.3 计划](SRD_V2.3_PLAN_2026-10-27.md)）。
+
+
+## 模型边界（2026-11-28 复核）
+
+支持的语义：
+
+- L1 链路 up/down、L2 VLAN 广播域、L3 共享子网/网关；
+- L4 基础 `tcp/udp` 协议与单端口（`HostReachableFlow`）；
+- host 级 allow/deny、全局策略、部分策略 unknown、allow/deny 冲突；
+- 事实过期过滤、单条置信度降级；
+- DNAT 外部别名（External 作为主机别名子网）；
+- conntrack `invalid` 的查询语义（`StatefulInvalidDrop`）；
+- 最长前缀路由查询（`LookupRoute`，不改变 HostReachable）。
+
+**不支持/不代表**：
+
+- 完整 NAT（SNAT、双向、策略翻译）；
+- 完整 conntrack 生命周期（超时、related 状态机）；
+- 端口范围/集合、L7 应用层；
+- 路由聚合/黑洞/策略路由，LPM 未接入路径搜索；
+- 真实网络仿真或性能保证（仅有 1024/256 节点基准）。
+
+文档不得把上述原型能力表述为完整网络仿真。

@@ -474,3 +474,16 @@ PASS TestLookupRouteMetricTieBreak
 
 范围：查询辅助，不改变现有 ACL first-match 与 `HostReachable` 语义；agent/联邦尚未上报 Routes。
 
+
+## Stage 20：导出语义完整性
+
+- `TopologyExport` 增加 `conflicts`、`policy_unknown_subnets`、`stats`、`generated_at`；
+- 策略导出保留 L4/观测时间/置信度；
+- dl360gen9：
+
+```text
+PASS TestMergedTopologyCarriesSemantics
+```
+
+- 设计文档新增“模型边界”章节，明确支持的语义与不支持的完整 NAT/conntrack/LPM 集成。
+
