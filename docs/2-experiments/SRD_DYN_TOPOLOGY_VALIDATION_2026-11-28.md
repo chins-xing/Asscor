@@ -107,3 +107,47 @@ srd check domA-web domB-web
 - 深度耗尽可用更长的链式拓扑（≥5 跳）验证；
 - 部分 unknown/冲突可在联邦节点上报中注入（下一轮）。
 
+
+## Stage 3：dl360gen9 联邦注入（冲突 / 部分 unknown）
+
+> 关键发现：`federation check` 的合并逻辑在 **federation-mod 子进程**，只换 kernel 不够；本轮重新构建并替换了 `federation-mod`。
+
+### 3.1 allow/deny 冲突
+
+向 master `POST /federation/report` 注入两个节点（`p0-nk1` allow、`p0-nk2` deny），查询：
+
+```json
+{
+  "src": "p0-A", "dst": "p0-B",
+  "verdict": "probable",
+  "conflicts": [{
+    "from": "10.9.1.0/24", "to": "10.9.2.0/24",
+    "allow_sources": ["p0-nk1"], "deny_sources": ["p0-nk2"]
+  }],
+  "stats": {"policies": 2, "hosts": 3}
+}
+```
+
+- 冲突不再静默选边，判 `probable`；
+- `allow_sources/deny_sources` 可回溯；
+- 路径步骤 reason 当前显示 `policy partially unknown`（`sessionVerdict` 对 probable 的通用文案），不影响 verdict 与冲突字段。
+
+### 3.2 部分策略 unknown
+
+注入 `policy_known=false` 的 `p0-nk3`（`p0-U`/`p0-GW2`/`p0-V`），查询：
+
+```json
+{
+  "src": "p0-U", "dst": "p0-V",
+  "verdict": "probable",
+  "unknowns": ["policy"]
+}
+```
+
+- 仅该节点的子网被标 unknown，其它已知子网仍保持 known；
+- 跨 unknown 子网判 `probable`，符合 1.4 目标。
+
+### 3.3 环境清理
+
+注入报告只存在 master 内存；验证后重启 `asscor-kernel` 清空测试节点，agent 自动重连，T1/T3 原有拓扑恢复。
+
