@@ -98,6 +98,7 @@
 | 2.1 深度耗尽 | ✅ 已完成 | `HostReachable` 截断时返回 `probable` + `Unknowns=["max_hops_exhausted"]`；仅在前沿仍有未访问邻居时标记，真实无路径仍 `blocked`。测试：`layers_depth_test.go` |
 | 3.1 合并冲突（全局策略） | ✅ 已完成 | `topology.PolicyConflict` + `LayeredGraph.SetPolicyConflicts`；merge 保留 allow/deny 双方并记录 `allow_sources/deny_sources`；冲突对路径返回 `probable`；`CheckMerged.Conflicts` 暴露。测试：`merge_conflict_test.go` |
 | 3.4 来源溯源 | ✅ 已完成 | `HostFact/PolicyFact.SourceNodes`；合并与 `TopologyExport` 保留来源。测试：`TestMergeProvenanceIsPreserved` |
+| 1.2 L4 协议/端口 | ✅ 核心完成 | `PolicyRule/PolicyFact` 增加 `Protocol/SrcPort/DstPort`；`HostReachableFlow` 支持 flow 查询；federation 合并/冲突按 L4 区分。测试：`TestHostReachableFlowPorts` / `TestDifferentPortsDoNotConflict`；agent 上报映射仍待接 |
 | 1.4 全局 `policyKnown` | ✅ 已完成（按子网范围） | `BuildLayeredGraphWithPolicyScope` + `PolicyUnknownSubnets`；联邦按未知节点的主机子网标记 unknown，跨未知子网判 probable。测试：`TestPartialPolicyUnknownBySubnet` / `TestMergePartialPolicyUnknown` |
 | 3.1 host 级 inbound/outbound 冲突 | ✅ 已完成 | merge 按 `(host,direction,from,to)` 收集 allow/deny；`PolicyConflict.Host/Direction` 暴露；路径经过冲突主机判 `probable`。测试：`TestHostLevelPolicyConflict` |
 

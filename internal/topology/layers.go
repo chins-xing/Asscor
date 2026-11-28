@@ -68,10 +68,20 @@ type HostFacts struct {
 }
 
 // PolicyRule 是 L4 的一条策略判定（按源/目的子网表达）。
+// Flow narrows a reachability query to an L4 protocol/port tuple.
+type Flow struct {
+	Protocol string
+	SrcPort  int
+	DstPort  int
+}
+
 type PolicyRule struct {
-	From  string // 源子网 CIDR
-	To    string // 目的子网 CIDR
-	Allow bool
+	From     string
+	To       string
+	Allow    bool
+	Protocol string
+	SrcPort  int
+	DstPort  int
 }
 
 // LayeredGraph 是分层图：层内节点/边语义独立，层间靠 same_identity 关联。
@@ -82,6 +92,9 @@ type PolicyConflict struct {
 	Direction    string   `json:"direction,omitempty"`
 	From         string   `json:"from"`
 	To           string   `json:"to"`
+	Protocol     string   `json:"protocol,omitempty"`
+	SrcPort      int      `json:"src_port,omitempty"`
+	DstPort      int      `json:"dst_port,omitempty"`
 	AllowSources []string `json:"allow_sources,omitempty"`
 	DenySources  []string `json:"deny_sources,omitempty"`
 }
@@ -101,6 +114,8 @@ type LayeredGraph struct {
 	policyConflicts []PolicyConflict
 	// policyUnknown 是按子网的策略未知标记（部分策略已知场景）。
 	policyUnknown map[string]bool
+	// flow is the immutable query context used by HostReachableFlow.
+	flow Flow
 }
 
 // BuildLayeredGraph 从观测事实构建分层图。
@@ -192,6 +207,19 @@ type PathVerdict struct {
 // gw 处的 subnet 由 s1 变为 s2，这一跳要求 L4 对 (s1→s2) 明确 allow；
 // deny ⇒ blocked；无策略数据 ⇒ probable。
 func (g *LayeredGraph) HostReachable(from, to string, maxHops int) []PathVerdict {
+	return g.hostReachable(from, to, maxHops)
+}
+
+// HostReachableFlow narrows reachability to an L4 flow. It shallow-copies the
+// graph to carry the query flow; callers must not mutate the graph during the
+// query (same rule as the rest of the read-only API).
+func (g *LayeredGraph) HostReachableFlow(from, to string, maxHops int, flow Flow) []PathVerdict {
+	cp := *g
+	cp.flow = flow
+	return cp.hostReachable(from, to, maxHops)
+}
+
+func (g *LayeredGraph) hostReachable(from, to string, maxHops int) []PathVerdict {
 	if maxHops <= 0 {
 		maxHops = 5
 	}
@@ -297,7 +325,7 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 	// 审计 LayeredGraph P0：路径经过存在 host 级 allow/deny 冲突的主机时，
 	// 不得由“首条匹配”静默决定；标 probable 并暴露 conflict。
 	for _, h := range path {
-		if g.hasHostConflict(h, "inbound") || g.hasHostConflict(h, "outbound") {
+		if g.hasHostConflict(h, "inbound", g.flow) || g.hasHostConflict(h, "outbound", g.flow) {
 			pv.Verdict = VerdictProbable
 			pv.Unknowns = appendUnique(pv.Unknowns, "policy_conflict")
 			break
@@ -363,7 +391,7 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 
 // policyVerdict 查 L4：同子网默认放行；跨子网按策略规则；无数据 ⇒ probable。
 func (g *LayeredGraph) policyVerdict(from, to string) (Verdict, string) {
-	if g.hasPolicyConflict(from, to) {
+	if g.hasPolicyConflict(from, to, g.flow) {
 		return VerdictProbable, "conflicting allow/deny policies"
 	}
 	if g.policyUnknown[normalizeSubnet(from)] || g.policyUnknown[normalizeSubnet(to)] {
@@ -371,7 +399,7 @@ func (g *LayeredGraph) policyVerdict(from, to string) (Verdict, string) {
 	}
 	// 显式规则优先（先匹配先返回；与 nft 的 first-match 语义一致）
 	for _, r := range g.policies {
-		if !subnetMatch(r.From, from) || !subnetMatch(r.To, to) {
+		if !subnetMatch(r.From, from) || !subnetMatch(r.To, to) || !ruleMatchesFlow(r, g.flow) {
 			continue
 		}
 		if r.Allow {
@@ -465,6 +493,9 @@ func (g *LayeredGraph) hostInCIDR(host, cidr string) bool {
 // 规则 To 命中目标子网或目标主机 IP 即算匹配；无数据 ⇒ 允许（未知 ≠ 拒绝）。
 func (g *LayeredGraph) outboundAllowed(source, destSubnet, destHost string) bool {
 	for _, r := range g.outbound[source] {
+		if !ruleMatchesFlow(r, g.flow) {
+			continue
+		}
 		if r.To == "" {
 			return r.Allow
 		}
@@ -483,6 +514,9 @@ func (g *LayeredGraph) outboundAllowed(source, destSubnet, destHost string) bool
 //   - 首条匹配即生效（规则顺序由解析侧保持）。
 func (g *LayeredGraph) inboundAllowed(target, sourceHost, sourceSubnet, targetSubnet string) bool {
 	for _, r := range g.inbound[target] {
+		if !ruleMatchesFlow(r, g.flow) {
+			continue
+		}
 		fromOK := r.From == "" || subnetMatch(r.From, sourceSubnet) || g.hostInCIDR(sourceHost, r.From)
 		toOK := r.To == "" || subnetMatch(r.To, targetSubnet) || g.hostInCIDR(target, r.To)
 		if fromOK && toOK {
@@ -725,20 +759,52 @@ func (g *LayeredGraph) PolicyConflicts() []PolicyConflict {
 	return append([]PolicyConflict(nil), g.policyConflicts...)
 }
 
-func (g *LayeredGraph) hasPolicyConflict(from, to string) bool {
+func (g *LayeredGraph) hasPolicyConflict(from, to string, f Flow) bool {
 	for _, c := range g.policyConflicts {
-		if c.Host == "" && c.From == from && c.To == to {
+		if c.Host != "" || c.From != from || c.To != to {
+			continue
+		}
+		if c.Protocol == "" && c.SrcPort == 0 && c.DstPort == 0 {
 			return true
 		}
+		if f.Protocol == "" && f.SrcPort == 0 && f.DstPort == 0 {
+			return true
+		}
+		if c.Protocol != "" && !strings.EqualFold(c.Protocol, f.Protocol) {
+			continue
+		}
+		if c.SrcPort != 0 && c.SrcPort != f.SrcPort {
+			continue
+		}
+		if c.DstPort != 0 && c.DstPort != f.DstPort {
+			continue
+		}
+		return true
 	}
 	return false
 }
 
-func (g *LayeredGraph) hasHostConflict(host, direction string) bool {
+func (g *LayeredGraph) hasHostConflict(host, direction string, f Flow) bool {
 	for _, c := range g.policyConflicts {
-		if c.Host == host && c.Direction == direction {
+		if c.Host != host || c.Direction != direction {
+			continue
+		}
+		if c.Protocol == "" && c.SrcPort == 0 && c.DstPort == 0 {
 			return true
 		}
+		if f.Protocol == "" && f.SrcPort == 0 && f.DstPort == 0 {
+			return true
+		}
+		if c.Protocol != "" && !strings.EqualFold(c.Protocol, f.Protocol) {
+			continue
+		}
+		if c.SrcPort != 0 && c.SrcPort != f.SrcPort {
+			continue
+		}
+		if c.DstPort != 0 && c.DstPort != f.DstPort {
+			continue
+		}
+		return true
 	}
 	return false
 }
@@ -769,6 +835,22 @@ func (g *LayeredGraph) SubnetOf(host string) []string {
 }
 
 // ---------------------------------------------------------------- helpers
+
+func ruleMatchesFlow(r PolicyRule, f Flow) bool {
+	if f.Protocol == "" && f.SrcPort == 0 && f.DstPort == 0 {
+		return true
+	}
+	if r.Protocol != "" && (f.Protocol == "" || !strings.EqualFold(r.Protocol, f.Protocol)) {
+		return false
+	}
+	if r.SrcPort != 0 && r.SrcPort != f.SrcPort {
+		return false
+	}
+	if r.DstPort != 0 && r.DstPort != f.DstPort {
+		return false
+	}
+	return true
+}
 
 func normalizeSubnet(s string) string {
 	s = strings.TrimSpace(s)

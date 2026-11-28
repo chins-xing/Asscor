@@ -132,3 +132,26 @@ func TestHostLevelPolicyConflict(t *testing.T) {
 		t.Fatalf("host conflict path verdict = %s, want probable (best=%+v)", res.Verdict, res.Best)
 	}
 }
+
+func TestDifferentPortsDoNotConflict(t *testing.T) {
+	reports := []NodeReport{
+		{NodeID: "pk1", PolicyKnown: true, HostFacts: []HostFact{
+			{ID: "PA", Subnets: []string{"10.8.1.0/24"}},
+			{ID: "PB", Subnets: []string{"10.8.1.0/24"}, Inbound: []PolicyFact{
+				{From: "10.8.1.0/24", To: "10.8.1.0/24", Allow: true, Protocol: "tcp", DstPort: 80},
+			}},
+		}},
+		{NodeID: "pk2", PolicyKnown: true, HostFacts: []HostFact{
+			{ID: "PA", Subnets: []string{"10.8.1.0/24"}},
+			{ID: "PB", Subnets: []string{"10.8.1.0/24"}, Inbound: []PolicyFact{
+				{From: "10.8.1.0/24", To: "10.8.1.0/24", Allow: false, Protocol: "tcp", DstPort: 22},
+			}},
+		}},
+	}
+	g := BuildMergedGraphWithLocal(reports, nil, nil, false)
+	for _, c := range g.PolicyConflicts() {
+		if c.Host == "PB" && c.Direction == "inbound" {
+			t.Fatalf("different ports must not be a conflict: %+v", c)
+		}
+	}
+}

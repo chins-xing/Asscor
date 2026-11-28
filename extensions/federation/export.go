@@ -3,6 +3,7 @@ package federation
 import (
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/chins-xing/asscor/internal/topology"
@@ -74,7 +75,7 @@ func mergedFactsWithConflicts(reports []NodeReport, localHosts []HostFact, local
 	addHostRule := func(host, direction string, r PolicyFact, source string) {
 		from := normalizeFactSubnet(r.From)
 		to := normalizeFactSubnet(r.To)
-		key := host + "|" + direction + "|" + from + "|" + to
+		key := host + "|" + direction + "|" + from + "|" + to + "|" + l4Key(r)
 		if hostVotes[key] == nil {
 			hostVotes[key] = map[bool]map[string]bool{true: {}, false: {}}
 		}
@@ -131,11 +132,12 @@ func mergedFactsWithConflicts(reports []NodeReport, localHosts []HostFact, local
 		p.To = normalizeFactSubnet(p.To)
 		p.SourceNodes = unionStrings(p.SourceNodes, []string{source})
 		pair := p.From + "|" + p.To
-		if votes[pair] == nil {
-			votes[pair] = map[bool]map[string]bool{true: {}, false: {}}
+		voteKey := pair + "|" + l4Key(p)
+		if votes[voteKey] == nil {
+			votes[voteKey] = map[bool]map[string]bool{true: {}, false: {}}
 		}
-		votes[pair][p.Allow][source] = true
-		key := pair + "|" + boolKey(p.Allow)
+		votes[voteKey][p.Allow][source] = true
+		key := voteKey + "|" + boolKey(p.Allow)
 		if existing, ok := policies[key]; ok {
 			p.SourceNodes = unionStrings(existing.SourceNodes, p.SourceNodes)
 		}
@@ -176,10 +178,18 @@ func mergedFactsWithConflicts(reports []NodeReport, localHosts []HostFact, local
 		if len(byAllow[true]) == 0 || len(byAllow[false]) == 0 {
 			continue
 		}
-		parts := strings.SplitN(pair, "|", 2)
+		parts := strings.SplitN(pair, "|", 5)
+		if len(parts) != 5 {
+			continue
+		}
+		sport, _ := strconv.Atoi(parts[3])
+		dport, _ := strconv.Atoi(parts[4])
 		conflicts = append(conflicts, topology.PolicyConflict{
 			From:         parts[0],
 			To:           parts[1],
+			Protocol:     parts[2],
+			SrcPort:      sport,
+			DstPort:      dport,
 			AllowSources: sortedKeys(byAllow[true]),
 			DenySources:  sortedKeys(byAllow[false]),
 		})
@@ -195,20 +205,29 @@ func mergedFactsWithConflicts(reports []NodeReport, localHosts []HostFact, local
 		if len(byAllow[true]) == 0 || len(byAllow[false]) == 0 {
 			continue
 		}
-		parts := strings.SplitN(key, "|", 4)
-		if len(parts) != 4 {
+		parts := strings.SplitN(key, "|", 7)
+		if len(parts) != 7 {
 			continue
 		}
+		sport, _ := strconv.Atoi(parts[5])
+		dport, _ := strconv.Atoi(parts[6])
 		conflicts = append(conflicts, topology.PolicyConflict{
 			Host:         parts[0],
 			Direction:    parts[1],
 			From:         parts[2],
 			To:           parts[3],
+			Protocol:     parts[4],
+			SrcPort:      sport,
+			DstPort:      dport,
 			AllowSources: sortedKeys(byAllow[true]),
 			DenySources:  sortedKeys(byAllow[false]),
 		})
 	}
 	return hosts, policies, policyKnown, conflicts
+}
+
+func l4Key(p PolicyFact) string {
+	return strings.ToLower(p.Protocol) + "|" + strconv.Itoa(p.SrcPort) + "|" + strconv.Itoa(p.DstPort)
 }
 
 func sortedKeys(m map[string]bool) []string {
