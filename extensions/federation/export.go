@@ -118,7 +118,11 @@ func mergedFactsWithConflicts(reports []NodeReport, localHosts []HostFact, local
 			votes[pair] = map[bool]map[string]bool{true: {}, false: {}}
 		}
 		votes[pair][p.Allow][source] = true
-		policies[pair+"|"+boolKey(p.Allow)] = p
+		key := pair + "|" + boolKey(p.Allow)
+		if existing, ok := policies[key]; ok {
+			p.SourceNodes = unionStrings(existing.SourceNodes, p.SourceNodes)
+		}
+		policies[key] = p
 	}
 
 	for _, r := range reports {
