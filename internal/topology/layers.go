@@ -73,6 +73,8 @@ type HostFacts struct {
 	// StatefulInput 表示 INPUT 链存在 `ct state established,related accept`
 	// （v2.3 T2）：回程包按已建立连接放行，无需再看静态规则。
 	StatefulInput bool
+	// StatefulRelated 表示存在 `ct state related accept`。
+	StatefulRelated bool
 	// StatefulInvalidDrop 表示存在 `ct state invalid drop`。
 	StatefulInvalidDrop bool
 	// ObservedAt 是该事实的观测时间；零值表示未提供。
@@ -561,6 +563,11 @@ func (g *LayeredGraph) hostInCIDR(host, cidr string) bool {
 // outboundAllowed 判断 source 的出向策略是否允许发往 destSubnet / destHost 的流量。
 // 规则 To 命中目标子网或目标主机 IP 即算匹配；无数据 ⇒ 允许（未知 ≠ 拒绝）。
 func (g *LayeredGraph) outboundAllowed(source, destSubnet, destHost string) bool {
+	if strings.EqualFold(g.flow.State, "related") {
+		if h := g.hosts[source]; h != nil && h.StatefulRelated {
+			return true
+		}
+	}
 	if strings.EqualFold(g.flow.State, "invalid") {
 		if h := g.hosts[source]; h != nil && h.StatefulInvalidDrop {
 			return false
@@ -587,6 +594,11 @@ func (g *LayeredGraph) outboundAllowed(source, destSubnet, destHost string) bool
 //   - To 限定目标子网（A-5：`ip daddr … drop` 这类规则，To 为空 = 任意目标）；
 //   - 首条匹配即生效（规则顺序由解析侧保持）。
 func (g *LayeredGraph) inboundAllowed(target, sourceHost, sourceSubnet, targetSubnet string) bool {
+	if strings.EqualFold(g.flow.State, "related") {
+		if h := g.hosts[target]; h != nil && h.StatefulRelated {
+			return true
+		}
+	}
 	if strings.EqualFold(g.flow.State, "invalid") {
 		if h := g.hosts[target]; h != nil && h.StatefulInvalidDrop {
 			return false
