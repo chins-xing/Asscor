@@ -189,3 +189,18 @@ ok github.com/chins-xing/asscor/internal/srddyn
 
 限制：观测为**全状态 oracle**，只证明优化器与合成可辨识链路；仅观测 s 的部分可辨识性、Fisher/Sobol、时间外预测仍未做。
 
+
+## Stage 5：SRD-DYN Fisher 信息（s-only）
+
+- 新增 `FisherInformation`：s-only 观测、数值灵敏度、标量观测方差；
+- 检查矩阵对称、对角为正、有限；
+- dl360gen9：
+
+```text
+PASS TestFisherInformationSOnly
+PASS TestFisherUnknownParameter
+ok github.com/chins-xing/asscor/internal/srddyn
+```
+
+限制：仅证明 Fisher 计算链路，尚未做剖面似然/Sobol/仅 s 参数回收。
+
