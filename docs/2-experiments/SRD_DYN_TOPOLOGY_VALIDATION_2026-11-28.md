@@ -265,3 +265,26 @@ PASS TestProfileLikelihoodDeltaMinimum
 
 结论：在“初值隐状态已知 + 激励充分”的合成场景下，`Delta` 在真值处有明确全局最小；此前坐标下降失败是局部极小，不应写成“弱可辨识”。初值隐状态未知时的一般部分观测可辨识性仍未证明。
 
+
+## Stage 9：SRD-DYN 合成验收总跑
+
+新增并验证：
+
+| 能力 | 测试 |
+|---|---|
+| 事件跳变 | `TestApplyEventJump` |
+| Sobol 一阶/总指数 | `TestSobolIndicesAdditive` |
+| CRPS/Brier/AUC/RMSE | `TestProperScoringMetrics` |
+| 预测优于持久性基线 | `TestForecastBeatsPersistence` |
+
+dl360gen9：
+
+```text
+go test -v ./internal/srddyn
+19 tests PASS
+ok github.com/chins-xing/asscor/internal/srddyn
+```
+
+覆盖的验收子项：A1 独立状态、A2 演化、A3 记忆、A4 反馈、A5 耦合、A6 滞回、A7 滤波、A8 参数回收（合成）、A9 预测（合成）、A10 可复现。
+**未覆盖**：真实数据校准、初值隐状态未知的部分观测可辨识性、Sobol 置信区间。
+
