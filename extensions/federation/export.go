@@ -48,7 +48,7 @@ func localFactsFromTopology() ([]HostFact, []PolicyFact, bool) {
 		}
 		for _, p := range n.Policies {
 			if p.Direction == "" || p.Direction == "forward" {
-				policies = append(policies, PolicyFact{From: p.From, To: p.To, Allow: p.Allow})
+				policies = append(policies, PolicyFact{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort})
 			}
 		}
 	}

@@ -211,7 +211,7 @@ func hostFactFromTopo(n *topology.TopoNode) HostFact {
 		}
 	}
 	for _, p := range n.Policies {
-		pf := PolicyFact{From: p.From, To: p.To, Allow: p.Allow}
+		pf := PolicyFact{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort}
 		switch p.Direction {
 		case "inbound":
 			h.Inbound = append(h.Inbound, pf)
