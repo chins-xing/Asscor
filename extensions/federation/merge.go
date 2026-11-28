@@ -205,6 +205,9 @@ func hostFactFromTopo(n *topology.TopoNode) HostFact {
 		Forwards:      n.Forwards,
 		StatefulInput: n.StatefulInput,
 		Links:         map[string]bool{},
+		ObservedAt:    n.ObservedAt,
+		ValidUntil:    n.ValidUntil,
+		Confidence:    n.Confidence,
 	}
 	for _, l := range n.Links {
 		for _, s := range l.Subnets {

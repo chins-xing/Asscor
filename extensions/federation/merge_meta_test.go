@@ -2,6 +2,8 @@ package federation
 
 import (
 	"testing"
+
+	"github.com/chins-xing/asscor/internal/topology"
 	"time"
 )
 
@@ -27,5 +29,14 @@ func TestMergePreservesMetadata(t *testing.T) {
 	}
 	if !h.ObservedAt.Equal(t2) {
 		t.Fatalf("observed_at = %v, want latest %v", h.ObservedAt, t2)
+	}
+}
+
+func TestHostFactFromTopoMetadata(t *testing.T) {
+	now := time.Now()
+	n := &topology.TopoNode{HostID: "hm", ObservedAt: now, Confidence: 0.7}
+	h := hostFactFromTopo(n)
+	if !h.ObservedAt.Equal(now) || h.Confidence != 0.7 {
+		t.Fatalf("host metadata lost: %+v", h)
 	}
 }
