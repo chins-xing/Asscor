@@ -89,3 +89,15 @@
 - 这份缺陷文档可以作为整改输入，但**第 2.2 条应删除/改写**，否则会重复实现已有的多路径枚举。
 - 真正的硬缺口是 **L4 五元组缺失、部分策略未知、合并冲突、来源/时间/置信度**，优先级高于“多路径”。
 - 本文不改代码；若进入实现，建议按 P0→P1 顺序，每项先补失败用例再改行为。
+
+
+## 6. 整改进度（2026-11-28）
+
+| 项 | 状态 | 实现 / 说明 |
+|---|---|---|
+| 2.1 深度耗尽 | ✅ 已完成 | `HostReachable` 截断时返回 `probable` + `Unknowns=["max_hops_exhausted"]`；仅在前沿仍有未访问邻居时标记，真实无路径仍 `blocked`。测试：`layers_depth_test.go` |
+| 3.1 合并冲突（全局策略） | ✅ 已完成 | `topology.PolicyConflict` + `LayeredGraph.SetPolicyConflicts`；merge 保留 allow/deny 双方并记录 `allow_sources/deny_sources`；冲突对路径返回 `probable`；`CheckMerged.Conflicts` 暴露。测试：`merge_conflict_test.go` |
+| 3.4 来源溯源 | ✅ 已完成 | `HostFact/PolicyFact.SourceNodes`；合并与 `TopologyExport` 保留来源。测试：`TestMergeProvenanceIsPreserved` |
+| 1.4 全局 `policyKnown` | ⏳ 未开始 | 需按子网/来源三态化，改动 API 与所有构造点 |
+| 3.1 host 级 inbound/outbound 冲突 | ⏳ 未完成 | 当前只检测全局 `PolicyFacts`；Host `Inbound/Outbound` 的 allow/deny 冲突仍按首条匹配，下轮补齐 |
+

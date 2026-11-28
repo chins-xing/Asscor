@@ -28,15 +28,16 @@ type MergedPath struct {
 
 // MergedCheck 是 `federation check <src> <dst>` 的输出（v0.2）。
 type MergedCheck struct {
-	Src      string         `json:"src"`
-	Dst      string         `json:"dst"`
-	Verdict  string         `json:"verdict"`
-	Paths    int            `json:"paths"`
-	Nodes    int            `json:"nodes"` // 参与合并的上报节点数
-	Hosts    int            `json:"hosts"`
-	Best     *MergedPath    `json:"best,omitempty"`
-	Unknowns []string       `json:"unknowns,omitempty"`
-	Stats    map[string]int `json:"stats,omitempty"`
+	Src       string                    `json:"src"`
+	Dst       string                    `json:"dst"`
+	Verdict   string                    `json:"verdict"`
+	Paths     int                       `json:"paths"`
+	Nodes     int                       `json:"nodes"` // 参与合并的上报节点数
+	Hosts     int                       `json:"hosts"`
+	Best      *MergedPath               `json:"best,omitempty"`
+	Unknowns  []string                  `json:"unknowns,omitempty"`
+	Conflicts []topology.PolicyConflict `json:"conflicts,omitempty"`
+	Stats     map[string]int            `json:"stats,omitempty"`
 }
 
 // BuildMergedGraph 把多个节点上报的事实合并成一张分层图（v0.2）。
@@ -54,7 +55,7 @@ func BuildMergedGraph(reports []NodeReport) *topology.LayeredGraph {
 
 // BuildMergedGraphWithLocal 用调用方提供的本地事实建图（进程隔离模式）。
 func BuildMergedGraphWithLocal(reports []NodeReport, localHosts []HostFact, localPolicies []PolicyFact, localKnown bool) *topology.LayeredGraph {
-	hosts, policies, policyKnown := mergedFactsFrom(reports, localHosts, localPolicies, localKnown)
+	hosts, policies, policyKnown, conflicts := mergedFactsWithConflicts(reports, localHosts, localPolicies, localKnown)
 
 	ids := make([]string, 0, len(hosts))
 	for id := range hosts {
@@ -87,7 +88,9 @@ func BuildMergedGraphWithLocal(reports []NodeReport, localHosts []HostFact, loca
 		p := policies[k]
 		ps = append(ps, topology.PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
 	}
-	return topology.BuildLayeredGraph(facts, ps, policyKnown, true)
+	g := topology.BuildLayeredGraph(facts, ps, policyKnown, true)
+	g.SetPolicyConflicts(conflicts)
+	return g
 }
 
 // CheckMerged 在合并图上回答 src→dst 的可达性（深度上限由调用方给）。
@@ -95,7 +98,7 @@ func CheckMerged(g *topology.LayeredGraph, src, dst string, maxDepth int) *Merge
 	if maxDepth <= 0 {
 		maxDepth = 5
 	}
-	out := &MergedCheck{Src: src, Dst: dst, Stats: g.Stats()}
+	out := &MergedCheck{Src: src, Dst: dst, Stats: g.Stats(), Conflicts: g.PolicyConflicts()}
 	out.Hosts = out.Stats["hosts"]
 	verdicts := g.HostReachable(src, dst, maxDepth)
 	out.Paths = len(verdicts)
