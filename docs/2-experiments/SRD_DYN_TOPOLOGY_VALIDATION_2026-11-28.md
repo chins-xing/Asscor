@@ -365,3 +365,21 @@ PASS TestMergePreservesMetadata
 
 限制：置信度目前只做保留/展示，尚未参与 `reachable/probable` 判定；agent 也尚未填充这些元数据。
 
+
+## Stage 14：置信度接入判定
+
+- `LayeredGraph.confidenceThreshold`（默认 0.5，`SetConfidenceThreshold` 可调）；
+- `0 < Confidence < threshold` 的主机/策略降级为 `probable`：
+  - `low_confidence`（主机）
+  - `low_confidence_policy`（host inbound/outbound）
+  - `low confidence policy`（全局 PolicyRule）
+- 低置信 deny 不再直接 `blocked`。
+- dl360gen9：
+
+```text
+PASS TestLowConfidenceHostDowngrades
+PASS TestLowConfidencePolicyDoesNotBlock
+```
+
+限制：agent 仍未填充 `Confidence/ObservedAt/ValidUntil`；当前能力在数据模型/联邦合并/查询层。
+
