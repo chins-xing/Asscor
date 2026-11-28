@@ -19,6 +19,7 @@ type ExportedHost struct {
 	Inbound       []PolicyFact    `json:"inbound,omitempty"`
 	Outbound      []PolicyFact    `json:"outbound,omitempty"`
 	Links         map[string]bool `json:"links,omitempty"`
+	SourceNodes   []string        `json:"source_nodes,omitempty"`
 }
 
 // TopologyExport 是主端合并图的"可评分"导出（v0.2）。
@@ -54,12 +55,23 @@ func localFactsFromTopology() ([]HostFact, []PolicyFact, bool) {
 }
 
 // mergedFactsFrom 是 merge 的核心：节点上报 + 调用方提供的本地事实。
+// mergedFactsFrom 保留原有三返回值签名，供导出/兼容路径使用。
 func mergedFactsFrom(reports []NodeReport, localHosts []HostFact, localPolicies []PolicyFact, localKnown bool) (map[string]*HostFact, map[string]PolicyFact, bool) {
+	hosts, policies, known, _ := mergedFactsWithConflicts(reports, localHosts, localPolicies, localKnown)
+	return hosts, policies, known
+}
+
+// mergedFactsWithConflicts 是 merge 的核心：节点上报 + 调用方提供的本地事实。
+// 审计 LayeredGraph P0：同一 (from,to) 的 allow/deny 都保留，并记录来源冲突，
+// 不再让“先匹配到哪条”静默决定结果。
+func mergedFactsWithConflicts(reports []NodeReport, localHosts []HostFact, localPolicies []PolicyFact, localKnown bool) (map[string]*HostFact, map[string]PolicyFact, bool, []topology.PolicyConflict) {
 	hosts := map[string]*HostFact{}
 	policies := map[string]PolicyFact{}
+	votes := map[string]map[bool]map[string]bool{}
 	policyKnown := false
 
-	mergeHost := func(h HostFact) {
+	mergeHost := func(h HostFact, source string) {
+		h.SourceNodes = unionStrings(h.SourceNodes, []string{source})
 		h.Subnets = normalizeFactSubnets(h.Subnets)
 		cur, ok := hosts[h.ID]
 		if !ok {
@@ -79,6 +91,7 @@ func mergedFactsFrom(reports []NodeReport, localHosts []HostFact, localPolicies 
 		}
 		cur.Subnets = unionStrings(cur.Subnets, h.Subnets)
 		cur.IPs = unionStrings(cur.IPs, h.IPs)
+		cur.SourceNodes = unionStrings(cur.SourceNodes, h.SourceNodes)
 		if h.Zone != "" {
 			cur.Zone = h.Zone
 		}
@@ -96,34 +109,72 @@ func mergedFactsFrom(reports []NodeReport, localHosts []HostFact, localPolicies 
 		}
 	}
 
+	addPolicy := func(p PolicyFact, source string) {
+		p.From = normalizeFactSubnet(p.From)
+		p.To = normalizeFactSubnet(p.To)
+		p.SourceNodes = unionStrings(p.SourceNodes, []string{source})
+		pair := p.From + "|" + p.To
+		if votes[pair] == nil {
+			votes[pair] = map[bool]map[string]bool{true: {}, false: {}}
+		}
+		votes[pair][p.Allow][source] = true
+		policies[pair+"|"+boolKey(p.Allow)] = p
+	}
+
 	for _, r := range reports {
 		policyKnown = policyKnown || r.PolicyKnown
+		source := r.NodeID
+		if source == "" {
+			source = "unknown-node"
+		}
 		for _, h := range r.HostFacts {
-			mergeHost(h)
+			mergeHost(h, source)
 		}
 		for _, p := range r.PolicyFacts {
-			p.From = normalizeFactSubnet(p.From)
-			p.To = normalizeFactSubnet(p.To)
-			key := p.From + "|" + p.To + "|" + boolKey(p.Allow)
-			policies[key] = p
+			addPolicy(p, source)
 		}
 	}
 	for _, h := range localHosts {
-		mergeHost(h)
+		mergeHost(h, "master")
 	}
 	for _, p := range localPolicies {
-		p.From = normalizeFactSubnet(p.From)
-		p.To = normalizeFactSubnet(p.To)
-		key := p.From + "|" + p.To + "|" + boolKey(p.Allow)
-		policies[key] = p
+		addPolicy(p, "master")
 	}
 	if localKnown {
 		policyKnown = true
 	}
-	return hosts, policies, policyKnown
+
+	keys := make([]string, 0, len(votes))
+	for pair := range votes {
+		keys = append(keys, pair)
+	}
+	sort.Strings(keys)
+	conflicts := make([]topology.PolicyConflict, 0)
+	for _, pair := range keys {
+		byAllow := votes[pair]
+		if len(byAllow[true]) == 0 || len(byAllow[false]) == 0 {
+			continue
+		}
+		parts := strings.SplitN(pair, "|", 2)
+		conflicts = append(conflicts, topology.PolicyConflict{
+			From:         parts[0],
+			To:           parts[1],
+			AllowSources: sortedKeys(byAllow[true]),
+			DenySources:  sortedKeys(byAllow[false]),
+		})
+	}
+	return hosts, policies, policyKnown, conflicts
 }
 
-// MergedTopology 导出合并事实（主端 /federation/export 与离线 AUC 实验共用）。
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func MergedTopology(reports []NodeReport) TopologyExport {
 	hosts, policies, known := mergedFacts(reports)
 	return exportFromFacts(hosts, policies, known)
@@ -142,6 +193,7 @@ func exportFromFacts(hosts map[string]*HostFact, policies map[string]PolicyFact,
 			ID: h.ID, IPs: h.IPs, Subnets: h.Subnets, Zone: h.Zone,
 			Forwards: h.Forwards, StatefulInput: h.StatefulInput,
 			Inbound: h.Inbound, Outbound: h.Outbound, Links: h.Links,
+			SourceNodes: append([]string(nil), h.SourceNodes...),
 		}
 		if len(eh.IPs) == 0 {
 			eh.IPs = nil

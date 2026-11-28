@@ -16,13 +16,16 @@ type HostFact struct {
 	Inbound       []PolicyFact    `json:"inbound,omitempty"`
 	Outbound      []PolicyFact    `json:"outbound,omitempty"`
 	Links         map[string]bool `json:"links,omitempty"`
+	// SourceNodes 记录该合并事实来自哪些上报节点（审计 LayeredGraph P0）。
+	SourceNodes []string `json:"source_nodes,omitempty"`
 }
 
 // PolicyFact 是一条策略结论（转发或主机入/出向）。
 type PolicyFact struct {
-	From  string `json:"from,omitempty"`
-	To    string `json:"to,omitempty"`
-	Allow bool   `json:"allow"`
+	From        string   `json:"from,omitempty"`
+	To          string   `json:"to,omitempty"`
+	Allow       bool     `json:"allow"`
+	SourceNodes []string `json:"source_nodes,omitempty"`
 }
 
 // MAX_HOST_FACTS / MAX_POLICY_FACTS 限制单节点上报体积（demo 级防滥用）。

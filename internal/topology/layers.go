@@ -1,6 +1,7 @@
 package topology
 
 import (
+	"fmt"
 	"net"
 	"sort"
 	"strings"
@@ -74,6 +75,15 @@ type PolicyRule struct {
 }
 
 // LayeredGraph 是分层图：层内节点/边语义独立，层间靠 same_identity 关联。
+// PolicyConflict 表示同一 (from,to) 上同时存在 allow 与 deny 的来源冲突。
+// 审计 LayeredGraph P0：冲突不得被“先匹配到哪条算哪条”静默吞掉。
+type PolicyConflict struct {
+	From         string   `json:"from"`
+	To           string   `json:"to"`
+	AllowSources []string `json:"allow_sources,omitempty"`
+	DenySources  []string `json:"deny_sources,omitempty"`
+}
+
 type LayeredGraph struct {
 	hosts    map[string]*HostFacts
 	subnetTo map[string][]string // subnet -> hosts
@@ -85,6 +95,8 @@ type LayeredGraph struct {
 	// 已知性：false 表示该层完全没有采集数据（必须当 unknown，而不是 assume allow）
 	policyKnown bool
 	linkKnown   bool
+	// policyConflicts 是 merge 层注入的 allow/deny 冲突；普通 BuildLayeredGraph 为空。
+	policyConflicts []PolicyConflict
 }
 
 // BuildLayeredGraph 从观测事实构建分层图。
@@ -171,6 +183,7 @@ func (g *LayeredGraph) HostReachable(from, to string, maxHops int) []PathVerdict
 			Unknowns: []string{"source_unknown"}}}
 	}
 	var out []PathVerdict
+	truncated := false
 	visited := map[string]bool{from: true}
 	var dfs func(cur string, path []string, steps []PathStep, prevSubnets []string, fromSubnet string)
 	dfs = func(cur string, path []string, steps []PathStep, prevSubnets []string, fromSubnet string) {
@@ -180,6 +193,12 @@ func (g *LayeredGraph) HostReachable(from, to string, maxHops int) []PathVerdict
 			return
 		}
 		if len(path)-1 >= maxHops {
+			// Audit LayeredGraph P0: do not conflate "search depth exhausted"
+			// with a real policy/link deny. Mark truncation only if the
+			// frontier still has an unvisited adjacent host.
+			if g.hasUnvisitedNeighbor(cur, visited) {
+				truncated = true
+			}
 			return
 		}
 		// 关键语义：只有**显式转发**的主机（router 角色 / ip_forward=1）能中继；
@@ -218,12 +237,41 @@ func (g *LayeredGraph) HostReachable(from, to string, maxHops int) []PathVerdict
 		if _, ok := g.hosts[to]; !ok {
 			out = append(out, PathVerdict{Path: []string{from, to}, Verdict: VerdictProbable,
 				Unknowns: []string{"target_unknown"}})
+		} else if truncated {
+			out = append(out, PathVerdict{Path: []string{from, to}, Verdict: VerdictProbable,
+				Unknowns: []string{"max_hops_exhausted"},
+				Reason:   fmt.Sprintf("search depth exhausted at maxHops=%d; not a policy deny", maxHops)})
 		} else {
 			out = append(out, PathVerdict{Path: []string{from, to}, Verdict: VerdictBlocked,
 				Reason: "no shared subnet or denied"})
 		}
+	} else if truncated {
+		// Some paths were found/denied, but the frontier was cut off: an
+		// alternate path may still be reachable beyond the limit. Keep the
+		// definitive paths and add an explicit unknown so Summary() yields
+		// probable instead of blocked.
+		out = append(out, PathVerdict{Path: []string{from, to}, Verdict: VerdictProbable,
+			Unknowns: []string{"max_hops_exhausted"},
+			Reason:   fmt.Sprintf("search depth exhausted at maxHops=%d; not a policy deny", maxHops)})
 	}
 	return out
+}
+
+// hasUnvisitedNeighbor reports whether cur still has an adjacent host that the
+// DFS has not visited. Used to distinguish a genuine dead end from a depth
+// cutoff (audit LayeredGraph P0).
+func (g *LayeredGraph) hasUnvisitedNeighbor(cur string, visited map[string]bool) bool {
+	for _, sub := range g.hostSubs[cur] {
+		for _, next := range g.subnetTo[sub] {
+			if visited[next] {
+				continue
+			}
+			if g.adjacentNoVisit(cur, next) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // finalizePath 逐跳检查跨子网策略，给出整条路径的最终判定。
@@ -289,6 +337,9 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 
 // policyVerdict 查 L4：同子网默认放行；跨子网按策略规则；无数据 ⇒ probable。
 func (g *LayeredGraph) policyVerdict(from, to string) (Verdict, string) {
+	if g.hasPolicyConflict(from, to) {
+		return VerdictProbable, "conflicting allow/deny policies"
+	}
 	// 显式规则优先（先匹配先返回；与 nft 的 first-match 语义一致）
 	for _, r := range g.policies {
 		if !subnetMatch(r.From, from) || !subnetMatch(r.To, to) {
@@ -633,6 +684,25 @@ func Summary(verdicts []PathVerdict) Verdict {
 		return VerdictBlocked
 	}
 	return VerdictBlocked
+}
+
+// SetPolicyConflicts 注入合并阶段的策略冲突（federation merge 使用）。
+func (g *LayeredGraph) SetPolicyConflicts(conflicts []PolicyConflict) {
+	g.policyConflicts = append([]PolicyConflict(nil), conflicts...)
+}
+
+// PolicyConflicts 返回当前已知的 allow/deny 冲突。
+func (g *LayeredGraph) PolicyConflicts() []PolicyConflict {
+	return append([]PolicyConflict(nil), g.policyConflicts...)
+}
+
+func (g *LayeredGraph) hasPolicyConflict(from, to string) bool {
+	for _, c := range g.policyConflicts {
+		if c.From == from && c.To == to {
+			return true
+		}
+	}
+	return false
 }
 
 // Gateways 返回被识别为网关的主机（≥2 个子网）。
