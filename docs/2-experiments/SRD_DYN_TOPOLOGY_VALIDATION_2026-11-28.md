@@ -434,3 +434,16 @@ PASS TestRecordNetworkFactsMetadata
 PASS TestHostFactFromTopoMetadata
 ```
 
+
+## Stage 17：conntrack invalid 状态
+
+- `Flow.State` 支持 `new/established/related/invalid`；
+- `HostFacts.StatefulInvalidDrop` 时，invalid 流量在入/出向被阻断；
+- dl360gen9：
+
+```text
+PASS TestInvalidStateDropped
+```
+
+范围：查询模型原型。agent 尚未采集 `ct state invalid drop`；会话超时与 related 生命周期仍未建模。
+
