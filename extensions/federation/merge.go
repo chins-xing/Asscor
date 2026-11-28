@@ -76,6 +76,7 @@ func BuildMergedGraphWithLocal(reports []NodeReport, localHosts []HostFact, loca
 			Inbound:       toPolicyRules(h.Inbound),
 			Outbound:      toPolicyRules(h.Outbound),
 			Links:         h.Links,
+			NAT:           append([]topology.NATRule(nil), h.NAT...),
 		})
 	}
 	keys := make([]string, 0, len(policies))

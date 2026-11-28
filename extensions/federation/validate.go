@@ -31,6 +31,16 @@ func ValidateNodeReport(r NodeReport) error {
 		if h.Confidence < 0 || h.Confidence > 1 {
 			return fmt.Errorf("host %q: confidence %v outside [0,1]", h.ID, h.Confidence)
 		}
+		for i, nat := range h.NAT {
+			if err := validateCIDR(nat.External); err != nil {
+				return fmt.Errorf("host %q nat[%d] external: %w", h.ID, i, err)
+			}
+			if nat.Internal != "" {
+				if err := validateCIDR(nat.Internal); err != nil {
+					return fmt.Errorf("host %q nat[%d] internal: %w", h.ID, i, err)
+				}
+			}
+		}
 		for _, sn := range h.Subnets {
 			if err := validateCIDR(sn); err != nil {
 				return fmt.Errorf("host %q: %w", h.ID, err)

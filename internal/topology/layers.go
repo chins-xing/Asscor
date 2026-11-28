@@ -44,6 +44,11 @@ const (
 )
 
 // HostFacts 是一台主机的网络事实（来自 agent 上报/配置）。
+type NATRule struct {
+	External string `json:"external"`
+	Internal string `json:"internal"`
+}
+
 type HostFacts struct {
 	HostID   string
 	Subnets  []string // L3：主机所属子网（CIDR）
@@ -68,6 +73,8 @@ type HostFacts struct {
 	ValidUntil time.Time
 	// Confidence 是单条事实置信度（0..1）；0 表示未提供。
 	Confidence float64
+	// NAT is a DNAT exposure prototype (external alias -> internal subnet).
+	NAT []NATRule
 	// Forwards 表示这台主机**真的会转发**（ip_forward=1 / 路由角色）。
 	// 双网卡 ≠ 路由器：实测中 pivot-1 也是双宿主，但它不转发，
 	// 若仅凭"≥2 个子网"就允许它中转，模型会凭空造出绕行路径。
@@ -183,6 +190,14 @@ func buildLayeredGraphAt(hosts []HostFacts, policies []PolicyRule, policyKnown, 
 		}
 		if len(h.Outbound) > 0 {
 			g.outbound[h.HostID] = append([]PolicyRule(nil), h.Outbound...)
+		}
+		for _, nat := range h.NAT {
+			if ext := normalizeSubnet(nat.External); ext != "" {
+				g.hostSubs[h.HostID] = appendUnique(g.hostSubs[h.HostID], ext)
+				if !containsHost(g.subnetTo[ext], h.HostID) {
+					g.subnetTo[ext] = append(g.subnetTo[ext], h.HostID)
+				}
+			}
 		}
 		if len(g.hostSubs[h.HostID]) >= 2 {
 			g.gateways[h.HostID] = g.hostSubs[h.HostID]

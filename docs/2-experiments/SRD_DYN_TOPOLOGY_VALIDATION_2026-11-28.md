@@ -407,3 +407,17 @@ PASS TestCollectFactsTruncationVisible
 PASS TestCollectFactsPreservesL4AndMetadata
 ```
 
+
+## Stage 16：NAT 外部别名（DNAT 原型）
+
+- `topology.HostFacts.NAT`、federation `HostFact.NAT`；
+- 构建图时 `External` 作为主机别名子网，使外部地址可达；
+- dl360gen9：
+
+```text
+PASS TestNATExternalAliasReachable
+ok github.com/chins-xing/asscor/extensions/federation
+```
+
+范围：仅 DNAT 外部别名。SNAT、双向 NAT、地址转换后的策略重写未实现，不能据此声称完整 NAT。
+
