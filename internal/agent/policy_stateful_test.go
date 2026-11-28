@@ -13,7 +13,7 @@ func TestParseNftStatefulDetectsCTAccept(t *testing.T) {
 	   {"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"saddr"}},"right":"10.0.0.11/32"}},
 	   {"drop":null}]}}
 	]}`
-	in, out := parseNftStateful(raw)
+	in, out, _ := parseNftStateful(raw)
 	if !in || out {
 		t.Fatalf("应只识别 input 状态化：in=%v out=%v", in, out)
 	}
@@ -26,8 +26,20 @@ func TestParseNftStatefulWithoutCTRule(t *testing.T) {
 	   {"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"saddr"}},"right":"10.0.0.11/32"}},
 	   {"drop":null}]}}
 	]}`
-	in, out := parseNftStateful(raw)
+	in, out, _ := parseNftStateful(raw)
 	if in || out {
 		t.Fatalf("无 ct accept 不应判状态化：in=%v out=%v", in, out)
+	}
+}
+
+func TestParseNftStatefulDetectsInvalidDrop(t *testing.T) {
+	const raw = `{"nftables":[
+	 {"rule":{"family":"ip","table":"filter","chain":"input","expr":[
+	   {"match":{"op":"==","left":{"ct":{"key":"state"}},"right":["invalid"]}},
+	   {"drop":null}]}}
+	]}`
+	_, _, invalid := parseNftStateful(raw)
+	if !invalid {
+		t.Fatal("ct state invalid + drop must set invalidDrop")
 	}
 }

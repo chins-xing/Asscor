@@ -46,11 +46,12 @@ type TopoNode struct {
 	Links       []TopoLink // L1：接口状态与所属子网
 	IPs         []string   // v2.3 T1：主机地址（/32 主机级 ACL 匹配用）
 	// v2.3 T2：链内存在 ct state established,related accept。
-	StatefulInput  bool
-	StatefulOutput bool
-	ObservedAt     time.Time
-	ValidUntil     time.Time
-	Confidence     float64
+	StatefulInput       bool
+	StatefulOutput      bool
+	StatefulInvalidDrop bool
+	ObservedAt          time.Time
+	ValidUntil          time.Time
+	Confidence          float64
 }
 
 // TopoLink 是一条链路事实（L1）。
@@ -255,13 +256,17 @@ func SetTopologyListener(cb func(hostID string, subnets []string)) {
 // 供 SRD 分层图使用。缺失的层保持零值 = 未知（不是"放行"）。
 func RecordNetworkFacts(hostID string, subnets []string, zone string,
 	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink,
-	ips []string, statefulInput, statefulOutput bool) {
-	globalTopology.recordNetworkFacts(hostID, subnets, zone, vlans, forwards, policies, policyKnown, links, ips, statefulInput, statefulOutput)
+	ips []string, statefulInput, statefulOutput bool, invalidDrop ...bool) {
+	drop := false
+	if len(invalidDrop) > 0 {
+		drop = invalidDrop[0]
+	}
+	globalTopology.recordNetworkFacts(hostID, subnets, zone, vlans, forwards, policies, policyKnown, links, ips, statefulInput, statefulOutput, drop)
 }
 
 func (r *Registry) recordNetworkFacts(hostID string, subnets []string, zone string,
 	vlans []string, forwards bool, policies []TopoPolicyRule, policyKnown bool, links []TopoLink, ips []string,
-	statefulInput, statefulOutput bool) {
+	statefulInput, statefulOutput, statefulInvalidDrop bool) {
 	r.record(hostID, subnets, zone)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -281,6 +286,7 @@ func (r *Registry) recordNetworkFacts(hostID string, subnets []string, zone stri
 	n.IPs = append([]string(nil), ips...)
 	n.StatefulInput = statefulInput
 	n.StatefulOutput = statefulOutput
+	n.StatefulInvalidDrop = statefulInvalidDrop
 }
 
 // BuildLayeredFromRegistry 用当前注册表构造 SRD 分层图：

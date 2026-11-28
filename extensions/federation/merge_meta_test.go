@@ -40,3 +40,10 @@ func TestHostFactFromTopoMetadata(t *testing.T) {
 		t.Fatalf("host metadata lost: %+v", h)
 	}
 }
+
+func TestHostFactFromTopoInvalidDrop(t *testing.T) {
+	h := hostFactFromTopo(&topology.TopoNode{HostID: "id", StatefulInvalidDrop: true})
+	if !h.StatefulInvalidDrop {
+		t.Fatal("invalid drop lost")
+	}
+}

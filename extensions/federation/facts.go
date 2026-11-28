@@ -12,20 +12,21 @@ import (
 // 因此节点必须上报图事实（主机、子网、策略、链路），而不只是聚合摘要。
 // 为控制体积，只上报与可达性/关键性相关的最小字段。
 type HostFact struct {
-	ID            string             `json:"id"`
-	IPs           []string           `json:"ips,omitempty"`
-	Subnets       []string           `json:"subnets,omitempty"`
-	Zone          string             `json:"zone,omitempty"`
-	SSAM          float64            `json:"ssam,omitempty"`
-	Forwards      bool               `json:"forwards,omitempty"`
-	StatefulInput bool               `json:"stateful_input,omitempty"`
-	Inbound       []PolicyFact       `json:"inbound,omitempty"`
-	Outbound      []PolicyFact       `json:"outbound,omitempty"`
-	Links         map[string]bool    `json:"links,omitempty"`
-	ObservedAt    time.Time          `json:"observed_at,omitempty"`
-	ValidUntil    time.Time          `json:"valid_until,omitempty"`
-	Confidence    float64            `json:"confidence,omitempty"`
-	NAT           []topology.NATRule `json:"nat,omitempty"`
+	ID                  string             `json:"id"`
+	IPs                 []string           `json:"ips,omitempty"`
+	Subnets             []string           `json:"subnets,omitempty"`
+	Zone                string             `json:"zone,omitempty"`
+	SSAM                float64            `json:"ssam,omitempty"`
+	Forwards            bool               `json:"forwards,omitempty"`
+	StatefulInput       bool               `json:"stateful_input,omitempty"`
+	StatefulInvalidDrop bool               `json:"stateful_invalid_drop,omitempty"`
+	Inbound             []PolicyFact       `json:"inbound,omitempty"`
+	Outbound            []PolicyFact       `json:"outbound,omitempty"`
+	Links               map[string]bool    `json:"links,omitempty"`
+	ObservedAt          time.Time          `json:"observed_at,omitempty"`
+	ValidUntil          time.Time          `json:"valid_until,omitempty"`
+	Confidence          float64            `json:"confidence,omitempty"`
+	NAT                 []topology.NATRule `json:"nat,omitempty"`
 	// SourceNodes 记录该合并事实来自哪些上报节点（审计 LayeredGraph P0）。
 	SourceNodes []string `json:"source_nodes,omitempty"`
 }
