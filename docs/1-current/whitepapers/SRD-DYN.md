@@ -399,14 +399,15 @@ P_k&=(I-K_kH_k)P_k^-
 - 已实现参数回收原型：`RecoverParams`（坐标下降，合成 **全状态** 观测），测试 `recover_test.go`；这证明 A8 的优化链路，但**不是**仅观测 s 的部分可辨识性证明。
 - 已实现 Fisher 信息原型：`FisherInformation`（s-only 观测、数值灵敏度），测试 `fisher_test.go`。
 - 已实现剖面似然原型：`ProfileLikelihoodSObserved`（固定一个参数、重拟合其余参数），测试 `profile_test.go`。
-- 已实现 Sobol 敏感性：`SobolIndices`（Saltelli A/B/AB，有限样本），测试 `TestSobolIndicesAdditive`。
+- 已实现 Sobol 敏感性：`SobolIndices`（Saltelli A/B/AB）+ `SobolIndicesCI`（bootstrap 5/95%），测试 `TestSobolIndicesAdditive` / `TestSobolBootstrapCI`。
 - 已实现事件跳变：`ApplyEvent` / `SimulateEvents`，测试 `TestApplyEventJump`。
 - 已实现 proper scoring 与预测：`CRPSNormal` / `Brier` / `AUC` / `RMSE` + `Filter.Forecast`；`TestForecastBeatsPersistence` 验证合成场景优于持久性基线。
 - 已实现 s-only 参数回收：`RecoverParamsSObserved`（初值隐状态已知）；在激励充分时 `Alpha` 可精确回收、`Lambda` 偏差约 14%。坐标下降对 `Delta` 落入局部极小；剖面似然在真值处取得全局最小，说明是优化器问题而非弱可辨识。
+- 已实现初值隐状态未知的联合恢复：`RecoverSObservedUnknownInitial`（D0/C0/H0 + 参数），测试 `TestRecoverUnknownInitialSObserved`；H0 仍可能弱可辨识。
 - 尚未实现（因此 v0.0.1 仍不能宣称完整验收）：
-  - 初值隐状态未知时的部分观测可辨识性、真实数据校准、Sobol 置信区间；
+  - 真实数据校准；
   - 事件跳变与真实数据校准。
-- 测试：`go test ./internal/srddyn`（19 项：核心 7 + EKF 2 + 参数回收 3 + Fisher 2 + 剖面 1 + 事件/Sobol/评分/预测 4）。
+- 测试：`go test ./internal/srddyn`（21 项：核心 7 + EKF 2 + 参数回收 3 + Fisher 2 + 剖面 1 + 事件/Sobol/评分/预测 4 + Sobol CI 1 + 未知初值 1）。
 - 远端验证：dl360gen9 上同一测试通过（见 `docs/2-experiments/SRD_DYN_TOPOLOGY_VALIDATION_2026-11-28.md`）。
 
 
@@ -421,7 +422,7 @@ P_k&=(I-K_kH_k)P_k^-
 | A5 耦合 | ✅ 合成 | `TestNeighborCouplingChangesContagion` |
 | A6 滞回 | ✅ 合成 | `TestHysteresisStatePersistsAfterStress` |
 | A7 滤波置信 | ✅ 合成 | `TestFilterCovarianceShrinksAndTracksObservation` |
-| A8 参数回收 | ✅ 合成（全状态 + s-only 部分） | `TestRecoverParamsFromFullState`、`TestRecoverParamsSObserved`、`TestProfileLikelihoodDeltaMinimum` |
+| A8 参数回收 | ✅ 合成（全状态 + s-only + 未知初值） | `TestRecoverParamsFromFullState`、`TestRecoverParamsSObserved`、`TestProfileLikelihoodDeltaMinimum`、`TestRecoverUnknownInitialSObserved` |
 | A9 预测技能 | ✅ 合成基线对比 | `TestForecastBeatsPersistence` |
 | A10 可复现 | ✅ | `TestRK4TimestepConvergence` + 固定种子 Sobol |
 | A11 文档一致 | ✅ | 本节与代码/测试同步 |
@@ -429,7 +430,7 @@ P_k&=(I-K_kH_k)P_k^-
 **范围声明**：以上是“合成验收”，不是真实数据验收。未覆盖：
 
 - 真实事件序列的时间外校准；
-- 初值 `D/C/H` 未知时的部分观测可辨识性；
-- Sobol 置信区间。
+- 真实事件序列的时间外校准；
+- `H0` 弱可辨识时的先验/固定策略。
 
 因此对外只能表述为“SRD-DYN v0.0.1 合成验收通过”，不能表述为“真实系统动力学已验证”。

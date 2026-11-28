@@ -288,3 +288,16 @@ ok github.com/chins-xing/asscor/internal/srddyn
 覆盖的验收子项：A1 独立状态、A2 演化、A3 记忆、A4 反馈、A5 耦合、A6 滞回、A7 滤波、A8 参数回收（合成）、A9 预测（合成）、A10 可复现。
 **未覆盖**：真实数据校准、初值隐状态未知的部分观测可辨识性、Sobol 置信区间。
 
+
+## Stage 10：Sobol CI + 未知初值联合恢复
+
+```text
+PASS TestSobolBootstrapCI
+PASS TestRecoverUnknownInitialSObserved
+unknown-initial fit SSE 0.343753 -> 1.14023e-06
+```
+
+- Sobol 指数补 5/95% bootstrap 区间；
+- 初值 `D/C/H` 未知时联合估计，SSE 从 0.344 降到 1.1e-6；
+- `H0` 在该场景仍弱可辨识（恢复 0.1 vs 真值 0.2 但 SSE 近零），需先验/固定策略。
+
