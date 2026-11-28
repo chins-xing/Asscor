@@ -314,5 +314,21 @@ PASS TestHostReachableFlowPorts
 PASS TestDifferentPortsDoNotConflict
 ```
 
-限制：agent 的 nft/iptables 解析尚未把 proto/port 填入 PolicyFact；当前能力主要在 topology/federation 数据模型与查询层。
+
+### 11.1 Agent 上报链路
+
+- `apiv1.PolicyRule`、`TopoPolicyRule`、`PolicyFact` 全链路传递 L4；
+- agent nft：解析 `tcp/udp sport/dport`、`ip protocol`；
+- agent iptables：解析 `-p/--dport/--sport`，允许 `-m tcp/udp`，其它模块继续跳过（不猜）；
+- 本地测试：
+
+```text
+PASS TestParseNftL4Ports
+PASS TestParseIptablesL4Ports
+PASS TestParseIptablesSkipsComplexModules
+```
+
+- dl360gen9：topology/federation 远端通过；agent 包远端测试因缺 `x/sys/x/crypto` 模块且拉取超时未完成（已尝试上传本机模块缓存，SSH 通道随后失败）。本项以本地构建/测试为准，远端待网络恢复后补跑。
+
+
 

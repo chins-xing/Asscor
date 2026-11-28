@@ -96,6 +96,8 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 		}
 		var from, to string
 		var inIface, outIface string
+		var proto string
+		var sport, dport int
 		var verdict *bool
 		for _, e := range rule.Expr {
 			if m, ok := e["match"]; ok {
@@ -130,7 +132,20 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 					Protocol string `json:"protocol"`
 					Field    string `json:"field"`
 				}
-				if json.Unmarshal(payload, &pl) != nil || pl.Protocol != "ip" {
+				if json.Unmarshal(payload, &pl) != nil {
+					continue
+				}
+				if pl.Protocol == "tcp" || pl.Protocol == "udp" {
+					proto = pl.Protocol
+					switch pl.Field {
+					case "sport":
+						sport = nftInt(match.Right)
+					case "dport":
+						dport = nftInt(match.Right)
+					}
+					continue
+				}
+				if pl.Protocol != "ip" {
 					continue
 				}
 				switch pl.Field {
@@ -138,6 +153,11 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 					from = nftCIDR(match.Right)
 				case "daddr":
 					to = nftCIDR(match.Right)
+				case "protocol":
+					var s string
+					if json.Unmarshal(match.Right, &s) == nil {
+						proto = strings.ToLower(s)
+					}
 				}
 				continue
 			}
@@ -162,10 +182,10 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 			// 会话同样失败。daddr 优先；只有 oifname 时用接口→子网映射展开。
 			switch {
 			case to != "":
-				rules = append(rules, apiv1.PolicyRule{To: to, Allow: *verdict, Direction: "outbound"})
+				rules = append(rules, apiv1.PolicyRule{To: to, Allow: *verdict, Direction: "outbound", Protocol: proto, SrcPort: sport, DstPort: dport})
 			case outIface != "":
 				for _, ds := range ifaces[outIface] {
-					rules = append(rules, apiv1.PolicyRule{To: ds, Allow: *verdict, Direction: "outbound"})
+					rules = append(rules, apiv1.PolicyRule{To: ds, Allow: *verdict, Direction: "outbound", Protocol: proto, SrcPort: sport, DstPort: dport})
 				}
 			}
 			continue
@@ -177,18 +197,18 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 			//   iifname → 用接口→子网映射展开成来源子网。
 			switch {
 			case from != "":
-				rules = append(rules, apiv1.PolicyRule{From: from, Allow: *verdict, Direction: "inbound"})
+				rules = append(rules, apiv1.PolicyRule{From: from, Allow: *verdict, Direction: "inbound", Protocol: proto, SrcPort: sport, DstPort: dport})
 			case to != "":
-				rules = append(rules, apiv1.PolicyRule{To: to, Allow: *verdict, Direction: "inbound"})
+				rules = append(rules, apiv1.PolicyRule{To: to, Allow: *verdict, Direction: "inbound", Protocol: proto, SrcPort: sport, DstPort: dport})
 			case inIface != "":
 				for _, fs := range ifaces[inIface] {
-					rules = append(rules, apiv1.PolicyRule{From: fs, Allow: *verdict, Direction: "inbound"})
+					rules = append(rules, apiv1.PolicyRule{From: fs, Allow: *verdict, Direction: "inbound", Protocol: proto, SrcPort: sport, DstPort: dport})
 				}
 			}
 			continue
 		}
 		if from != "" && to != "" {
-			rules = append(rules, apiv1.PolicyRule{From: from, To: to, Allow: *verdict})
+			rules = append(rules, apiv1.PolicyRule{From: from, To: to, Allow: *verdict, Protocol: proto, SrcPort: sport, DstPort: dport})
 			continue
 		}
 		// 接口级规则：把接口映射到它所在子网，展开成子网对策略。
@@ -196,7 +216,7 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 		if inIface != "" && outIface != "" {
 			for _, fs := range ifaces[inIface] {
 				for _, ts := range ifaces[outIface] {
-					rules = append(rules, apiv1.PolicyRule{From: fs, To: ts, Allow: *verdict})
+					rules = append(rules, apiv1.PolicyRule{From: fs, To: ts, Allow: *verdict, Protocol: proto, SrcPort: sport, DstPort: dport})
 				}
 			}
 		}
@@ -221,6 +241,19 @@ func nftCIDR(raw json.RawMessage) string {
 		return p.Prefix.Addr + "/" + itoa(p.Prefix.Len)
 	}
 	return ""
+}
+
+func nftInt(raw json.RawMessage) int {
+	var n int
+	if json.Unmarshal(raw, &n) == nil {
+		return n
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		v, _ := strconv.Atoi(s)
+		return v
+	}
+	return 0
 }
 
 func itoa(n int) string {
@@ -249,13 +282,35 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 		if !strings.HasPrefix(line, "-A FORWARD") && !inbound && !outbound {
 			continue
 		}
-		if strings.Contains(line, "! ") || strings.Contains(line, "-m ") {
-			continue // 带取反/扩展匹配的规则不猜
+		if strings.Contains(line, "! ") {
+			continue
 		}
 		fields := strings.Fields(line)
-		var from, to, target, inIface, outIface string
+		var from, to, target, inIface, outIface, proto string
+		var sport, dport int
+		unsupported := false
 		for i := 0; i+1 < len(fields); i++ {
 			switch fields[i] {
+			case "-m":
+				if fields[i+1] != "tcp" && fields[i+1] != "udp" {
+					unsupported = true
+				}
+			case "-p", "--protocol":
+				proto = strings.ToLower(fields[i+1])
+			case "--sport", "--source-port":
+				n, err := strconv.Atoi(fields[i+1])
+				if err != nil {
+					unsupported = true
+				} else {
+					sport = n
+				}
+			case "--dport", "--destination-port":
+				n, err := strconv.Atoi(fields[i+1])
+				if err != nil {
+					unsupported = true
+				} else {
+					dport = n
+				}
 			case "-s", "--source":
 				from = fields[i+1]
 			case "-d", "--destination":
@@ -267,6 +322,9 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 			case "-o", "--out-interface":
 				outIface = fields[i+1]
 			}
+		}
+		if unsupported {
+			continue
 		}
 		var allow bool
 		switch target {
@@ -280,10 +338,10 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 		if outbound {
 			switch {
 			case to != "":
-				rules = append(rules, apiv1.PolicyRule{To: to, Allow: allow, Direction: "outbound"})
+				rules = append(rules, apiv1.PolicyRule{To: to, Allow: allow, Direction: "outbound", Protocol: proto, SrcPort: sport, DstPort: dport})
 			case outIface != "":
 				for _, ds := range ifaces[outIface] {
-					rules = append(rules, apiv1.PolicyRule{To: ds, Allow: allow, Direction: "outbound"})
+					rules = append(rules, apiv1.PolicyRule{To: ds, Allow: allow, Direction: "outbound", Protocol: proto, SrcPort: sport, DstPort: dport})
 				}
 			}
 			continue
@@ -291,24 +349,24 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 		if inbound {
 			switch {
 			case from != "":
-				rules = append(rules, apiv1.PolicyRule{From: from, Allow: allow, Direction: "inbound"})
+				rules = append(rules, apiv1.PolicyRule{From: from, Allow: allow, Direction: "inbound", Protocol: proto, SrcPort: sport, DstPort: dport})
 			case to != "":
-				rules = append(rules, apiv1.PolicyRule{To: to, Allow: allow, Direction: "inbound"})
+				rules = append(rules, apiv1.PolicyRule{To: to, Allow: allow, Direction: "inbound", Protocol: proto, SrcPort: sport, DstPort: dport})
 			case inIface != "":
 				for _, fs := range ifaces[inIface] {
-					rules = append(rules, apiv1.PolicyRule{From: fs, Allow: allow, Direction: "inbound"})
+					rules = append(rules, apiv1.PolicyRule{From: fs, Allow: allow, Direction: "inbound", Protocol: proto, SrcPort: sport, DstPort: dport})
 				}
 			}
 			continue
 		}
 		if from != "" && to != "" {
-			rules = append(rules, apiv1.PolicyRule{From: from, To: to, Allow: allow})
+			rules = append(rules, apiv1.PolicyRule{From: from, To: to, Allow: allow, Protocol: proto, SrcPort: sport, DstPort: dport})
 			continue
 		}
 		if inIface != "" && outIface != "" {
 			for _, fs := range ifaces[inIface] {
 				for _, ts := range ifaces[outIface] {
-					rules = append(rules, apiv1.PolicyRule{From: fs, To: ts, Allow: allow})
+					rules = append(rules, apiv1.PolicyRule{From: fs, To: ts, Allow: allow, Protocol: proto, SrcPort: sport, DstPort: dport})
 				}
 			}
 		}

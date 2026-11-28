@@ -65,6 +65,9 @@ type TopoPolicyRule struct {
 	To        string
 	Allow     bool
 	Direction string
+	Protocol  string
+	SrcPort   int
+	DstPort   int
 }
 
 // TopoEdge 是拓扑图中的边模型（链路）。M0 仅定义类型；边的实际构建
@@ -304,11 +307,11 @@ func BuildLayeredFromRegistry() *LayeredGraph {
 		for _, p := range n.Policies {
 			switch p.Direction {
 			case "inbound":
-				hf.Inbound = append(hf.Inbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
+				hf.Inbound = append(hf.Inbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort})
 			case "outbound":
-				hf.Outbound = append(hf.Outbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
+				hf.Outbound = append(hf.Outbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort})
 			default:
-				policies = append(policies, PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
+				policies = append(policies, PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort})
 			}
 		}
 		hosts = append(hosts, hf)
