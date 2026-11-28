@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 type RegisterRequest struct {
@@ -89,12 +90,15 @@ type NetworkInfo struct {
 // 语义：From→To 这条跨子网流量是否被放行。agent 侧从 nft/iptables 的显式
 // drop/reject/accept 规则推导；推导不出的（复杂匹配、用户链、动态集合）不猜。
 type PolicyRule struct {
-	From     string `json:"from"`
-	To       string `json:"to"`
-	Allow    bool   `json:"allow"`
-	Protocol string `json:"protocol,omitempty"`
-	SrcPort  int    `json:"src_port,omitempty"`
-	DstPort  int    `json:"dst_port,omitempty"`
+	From       string    `json:"from"`
+	To         string    `json:"to"`
+	Allow      bool      `json:"allow"`
+	Protocol   string    `json:"protocol,omitempty"`
+	SrcPort    int       `json:"src_port,omitempty"`
+	DstPort    int       `json:"dst_port,omitempty"`
+	ObservedAt time.Time `json:"observed_at,omitempty"`
+	ValidUntil time.Time `json:"valid_until,omitempty"`
+	Confidence float64   `json:"confidence,omitempty"`
 	// Direction 区分转发表与主机入向表：
 	//   "" / "forward" = 跨子网转发策略（默认，v2.0 行为）
 	//   "inbound"      = 主机 INPUT/入向策略（域内 ACL / 主机级 ACL，v2.2）

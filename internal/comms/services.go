@@ -248,7 +248,7 @@ func toTopoPolicies(in []apiv1.PolicyRule) []topology.TopoPolicyRule {
 	}
 	out := make([]topology.TopoPolicyRule, 0, len(in))
 	for _, r := range in {
-		out = append(out, topology.TopoPolicyRule{From: r.From, To: r.To, Allow: r.Allow, Direction: r.Direction, Protocol: r.Protocol, SrcPort: r.SrcPort, DstPort: r.DstPort})
+		out = append(out, topology.TopoPolicyRule{From: r.From, To: r.To, Allow: r.Allow, Direction: r.Direction, Protocol: r.Protocol, SrcPort: r.SrcPort, DstPort: r.DstPort, ObservedAt: r.ObservedAt, ValidUntil: r.ValidUntil, Confidence: r.Confidence})
 	}
 	return out
 }

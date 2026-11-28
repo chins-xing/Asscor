@@ -1,5 +1,7 @@
 package federation
 
+import "time"
+
 // HostFact 是节点上报的**单主机事实**（v0.2 起随 NodeReport 上报）。
 //
 // 设计取舍：demo 级联邦需要"主端合并图"才能回答跨节点可达性，
@@ -16,19 +18,25 @@ type HostFact struct {
 	Inbound       []PolicyFact    `json:"inbound,omitempty"`
 	Outbound      []PolicyFact    `json:"outbound,omitempty"`
 	Links         map[string]bool `json:"links,omitempty"`
+	ObservedAt    time.Time       `json:"observed_at,omitempty"`
+	ValidUntil    time.Time       `json:"valid_until,omitempty"`
+	Confidence    float64         `json:"confidence,omitempty"`
 	// SourceNodes 记录该合并事实来自哪些上报节点（审计 LayeredGraph P0）。
 	SourceNodes []string `json:"source_nodes,omitempty"`
 }
 
 // PolicyFact 是一条策略结论（转发或主机入/出向）。
 type PolicyFact struct {
-	From        string   `json:"from,omitempty"`
-	To          string   `json:"to,omitempty"`
-	Allow       bool     `json:"allow"`
-	Protocol    string   `json:"protocol,omitempty"`
-	SrcPort     int      `json:"src_port,omitempty"`
-	DstPort     int      `json:"dst_port,omitempty"`
-	SourceNodes []string `json:"source_nodes,omitempty"`
+	From        string    `json:"from,omitempty"`
+	To          string    `json:"to,omitempty"`
+	Allow       bool      `json:"allow"`
+	Protocol    string    `json:"protocol,omitempty"`
+	SrcPort     int       `json:"src_port,omitempty"`
+	DstPort     int       `json:"dst_port,omitempty"`
+	ObservedAt  time.Time `json:"observed_at,omitempty"`
+	ValidUntil  time.Time `json:"valid_until,omitempty"`
+	Confidence  float64   `json:"confidence,omitempty"`
+	SourceNodes []string  `json:"source_nodes,omitempty"`
 }
 
 // MAX_HOST_FACTS / MAX_POLICY_FACTS 限制单节点上报体积（demo 级防滥用）。

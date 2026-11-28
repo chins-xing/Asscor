@@ -28,6 +28,9 @@ func ValidateNodeReport(r NodeReport) error {
 				return fmt.Errorf("host %q: invalid ip %q", h.ID, ip)
 			}
 		}
+		if h.Confidence < 0 || h.Confidence > 1 {
+			return fmt.Errorf("host %q: confidence %v outside [0,1]", h.ID, h.Confidence)
+		}
 		for _, sn := range h.Subnets {
 			if err := validateCIDR(sn); err != nil {
 				return fmt.Errorf("host %q: %w", h.ID, err)
@@ -83,6 +86,9 @@ func validatePolicyFact(p PolicyFact) error {
 	}
 	if p.SrcPort < 0 || p.SrcPort > 65535 || p.DstPort < 0 || p.DstPort > 65535 {
 		return fmt.Errorf("port out of range: %d/%d", p.SrcPort, p.DstPort)
+	}
+	if p.Confidence < 0 || p.Confidence > 1 {
+		return fmt.Errorf("confidence %v outside [0,1]", p.Confidence)
 	}
 	return nil
 }

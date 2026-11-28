@@ -349,3 +349,19 @@ PASS TestValidateNodeReportRejectsMalformed
 
 覆盖：空 node_id、坏 IP、坏 CIDR、端口越界、未知协议、空 host id、超限主机数。
 
+
+## Stage 13：事实时间轴与置信度
+
+- `HostFacts/PolicyRule/HostFact/PolicyFact` 增加 `ObservedAt/ValidUntil/Confidence`；
+- `BuildLayeredGraphAt` 过滤过期主机/策略；
+- federation merge 保留最新观测时间、最早过期时间、最小正置信度；
+- dl360gen9：
+
+```text
+PASS TestExpiredHostAndPolicyAreFiltered
+PASS TestConfidencePreserved
+PASS TestMergePreservesMetadata
+```
+
+限制：置信度目前只做保留/展示，尚未参与 `reachable/probable` 判定；agent 也尚未填充这些元数据。
+
