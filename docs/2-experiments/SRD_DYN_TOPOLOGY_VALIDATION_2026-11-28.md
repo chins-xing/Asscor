@@ -421,3 +421,16 @@ ok github.com/chins-xing/asscor/extensions/federation
 
 范围：仅 DNAT 外部别名。SNAT、双向 NAT、地址转换后的策略重写未实现，不能据此声称完整 NAT。
 
+
+### 14.2 Host 级元数据
+
+- `TopoNode` 增加 `ObservedAt/ValidUntil/Confidence`；
+- `RecordNetworkFacts` 在心跳写入时打点 `ObservedAt=now`、基础 `Confidence=1.0`；
+- `hostFactFromTopo` 把元数据带到 federation `HostFact`；
+- dl360gen9：
+
+```text
+PASS TestRecordNetworkFactsMetadata
+PASS TestHostFactFromTopoMetadata
+```
+

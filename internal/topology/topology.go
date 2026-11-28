@@ -48,6 +48,9 @@ type TopoNode struct {
 	// v2.3 T2：链内存在 ct state established,related accept。
 	StatefulInput  bool
 	StatefulOutput bool
+	ObservedAt     time.Time
+	ValidUntil     time.Time
+	Confidence     float64
 }
 
 // TopoLink 是一条链路事实（L1）。
@@ -265,6 +268,10 @@ func (r *Registry) recordNetworkFacts(hostID string, subnets []string, zone stri
 	n, ok := r.nodes[hostID]
 	if !ok {
 		return
+	}
+	n.ObservedAt = time.Now().UTC()
+	if n.Confidence == 0 {
+		n.Confidence = 1.0
 	}
 	n.VLANs = append([]string(nil), vlans...)
 	n.Forwards = forwards
