@@ -148,17 +148,27 @@ srd check domA-web domB-web
 - 跨 unknown 子网判 `probable`，符合 1.4 目标。
 
 
-### 3.4 host 级 inbound/outbound 冲突
+### 3.4 host 级 inbound/outbound 冲突（真实注入）
 
-在 dl360gen9 源码级验证 `TestHostLevelPolicyConflict`：
+重新构建并部署含 host 级冲突的 `federation-mod`（sha256 `8fe847ec…1859`），注入两个报告：
+`hk1` 对 HA 的 inbound allow、`hk2` 对 HA 的 inbound deny。
 
-```text
-PASS TestHostLevelPolicyConflict
+```json
+{
+  "src": "HX", "dst": "HA",
+  "verdict": "probable",
+  "unknowns": ["policy_conflict"],
+  "conflicts": [{
+    "host": "HA", "direction": "inbound",
+    "from": "10.9.9.0/24", "to": "10.9.9.0/24",
+    "allow_sources": ["hk1"], "deny_sources": ["hk2"]
+  }]
+}
 ```
 
-- merge 按 `(host,direction,from,to)` 收集 allow/deny；
-- 冲突主机进入路径时判 `probable`，不再由首条匹配静默决定；
-- 本项尚未替换到实验环境中的 federation-mod（该二进制仍是 Stage 3.1 版本），属下一步部署项。
+- host 级冲突不再由首条匹配静默决定；
+- `PolicyConflict.Host/Direction` 在真实 API 输出中可见；
+- 验证后重启 kernel 清空注入报告，`/federation/nodes` 回到 `count=0`。
 
 ### 3.3 环境清理
 
