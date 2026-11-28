@@ -25,6 +25,9 @@ type PolicyFact struct {
 	From        string   `json:"from,omitempty"`
 	To          string   `json:"to,omitempty"`
 	Allow       bool     `json:"allow"`
+	Protocol    string   `json:"protocol,omitempty"`
+	SrcPort     int      `json:"src_port,omitempty"`
+	DstPort     int      `json:"dst_port,omitempty"`
 	SourceNodes []string `json:"source_nodes,omitempty"`
 }
 

@@ -301,3 +301,18 @@ unknown-initial fit SSE 0.343753 -> 1.14023e-06
 - 初值 `D/C/H` 未知时联合估计，SSE 从 0.344 降到 1.1e-6；
 - `H0` 在该场景仍弱可辨识（恢复 0.1 vs 真值 0.2 但 SSE 近零），需先验/固定策略。
 
+
+## Stage 11：L4 协议/端口
+
+- `PolicyRule/PolicyFact` 增加 `Protocol/SrcPort/DstPort`；
+- 新增 `HostReachableFlow(from,to,maxHops,flow)`，旧 `HostReachable` 保持 any-flow 兼容；
+- federation 合并/冲突键包含 L4，不同端口不再误报 allow/deny 冲突；
+- dl360gen9：
+
+```text
+PASS TestHostReachableFlowPorts
+PASS TestDifferentPortsDoNotConflict
+```
+
+限制：agent 的 nft/iptables 解析尚未把 proto/port 填入 PolicyFact；当前能力主要在 topology/federation 数据模型与查询层。
+

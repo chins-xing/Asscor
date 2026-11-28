@@ -86,7 +86,7 @@ func BuildMergedGraphWithLocal(reports []NodeReport, localHosts []HostFact, loca
 	ps := make([]topology.PolicyRule, 0, len(keys))
 	for _, k := range keys {
 		p := policies[k]
-		ps = append(ps, topology.PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
+		ps = append(ps, topology.PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort})
 	}
 	unknown := make([]string, 0)
 	for _, r := range reports {
