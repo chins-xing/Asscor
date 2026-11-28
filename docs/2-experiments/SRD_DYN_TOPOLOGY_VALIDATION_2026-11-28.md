@@ -502,5 +502,11 @@ PASS TestRecordNetworkFactsInvalidDrop
 PASS TestHostFactFromTopoInvalidDrop
 ```
 
-- dl360gen9 远端复跑因 SSH channel 失败未完成；待 SSH 恢复补跑。
+- dl360gen9 已复跑通过：
+
+```text
+PASS TestParseNftStatefulDetectsInvalidDrop
+PASS TestRecordNetworkFactsInvalidDrop
+PASS TestHostFactFromTopoInvalidDrop
+```
 
