@@ -88,7 +88,21 @@ func BuildMergedGraphWithLocal(reports []NodeReport, localHosts []HostFact, loca
 		p := policies[k]
 		ps = append(ps, topology.PolicyRule{From: p.From, To: p.To, Allow: p.Allow})
 	}
-	g := topology.BuildLayeredGraph(facts, ps, policyKnown, true)
+	unknown := make([]string, 0)
+	for _, r := range reports {
+		if r.PolicyKnown {
+			continue
+		}
+		for _, h := range r.HostFacts {
+			unknown = append(unknown, h.Subnets...)
+		}
+	}
+	if !localKnown {
+		for _, h := range localHosts {
+			unknown = append(unknown, h.Subnets...)
+		}
+	}
+	g := topology.BuildLayeredGraphWithPolicyScope(facts, ps, policyKnown, true, unknown)
 	g.SetPolicyConflicts(conflicts)
 	return g
 }

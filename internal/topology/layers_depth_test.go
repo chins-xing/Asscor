@@ -56,3 +56,22 @@ func TestNoPathStillBlocked(t *testing.T) {
 		}
 	}
 }
+
+func TestPartialPolicyUnknownBySubnet(t *testing.T) {
+	g := depthChain()
+	// chain: A(s1)-B(s1,s2)-C(s2,s3)-D(s3)
+	if got := Summary(g.HostReachable("A", "D", 3)); got != VerdictReachable {
+		t.Fatalf("known policy verdict = %s, want reachable", got)
+	}
+	g2 := BuildLayeredGraphWithPolicyScope([]HostFacts{
+		{HostID: "A", Subnets: []string{"10.0.1.0/24"}},
+		{HostID: "GW", Subnets: []string{"10.0.1.0/24", "10.0.2.0/24"}, Forwards: true},
+		{HostID: "B", Subnets: []string{"10.0.2.0/24"}},
+	}, nil, true, true, []string{"10.0.2.0/24"})
+	if got := Summary(g2.HostReachable("A", "B", 3)); got != VerdictProbable {
+		t.Fatalf("partial unknown verdict = %s, want probable", got)
+	}
+	if got := g2.PolicyUnknownSubnets(); len(got) != 1 || got[0] != "10.0.2.0/24" {
+		t.Fatalf("unknown subnets = %v", got)
+	}
+}
