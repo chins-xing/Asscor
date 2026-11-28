@@ -18,6 +18,9 @@ func TestParseNftL4Ports(t *testing.T) {
 	if r.Protocol != "tcp" || r.DstPort != 80 || !r.Allow {
 		t.Fatalf("rule = %+v", r)
 	}
+	if r.ObservedAt.IsZero() || r.Confidence != 1.0 {
+		t.Fatalf("metadata not stamped: %+v", r)
+	}
 }
 
 func TestParseIptablesL4Ports(t *testing.T) {
@@ -29,6 +32,9 @@ func TestParseIptablesL4Ports(t *testing.T) {
 	r := rules[0]
 	if r.Protocol != "tcp" || r.DstPort != 22 || r.Allow {
 		t.Fatalf("rule = %+v", r)
+	}
+	if r.ObservedAt.IsZero() || r.Confidence != 1.0 {
+		t.Fatalf("metadata not stamped: %+v", r)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	apiv1 "github.com/chins-xing/asscor/api/v1"
 	"github.com/chins-xing/asscor/internal/common"
@@ -221,7 +222,23 @@ func parseNftRuleset(raw string, ifaces map[string][]string) ([]apiv1.PolicyRule
 			}
 		}
 	}
+	stampRuleMetadata(rules)
 	return rules, true
+}
+
+// stampRuleMetadata attaches observation time and the parser's base
+// confidence. Parsed explicit allow/deny rules are treated as 1.0; missing
+// metadata still means "unknown" downstream when the field is zero.
+func stampRuleMetadata(rules []apiv1.PolicyRule) {
+	now := time.Now()
+	for i := range rules {
+		if rules[i].ObservedAt.IsZero() {
+			rules[i].ObservedAt = now
+		}
+		if rules[i].Confidence == 0 {
+			rules[i].Confidence = 1.0
+		}
+	}
 }
 
 // nftCIDR 从 nft JSON 的 match.right 取出 CIDR：
@@ -371,6 +388,7 @@ func parseIptablesSave(raw string, ifaces map[string][]string) ([]apiv1.PolicyRu
 			}
 		}
 	}
+	stampRuleMetadata(rules)
 	return rules, true
 }
 
