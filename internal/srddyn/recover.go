@@ -18,6 +18,21 @@ type ObserveStep struct {
 // observations are full-state (oracle) so identifiability is not hidden by
 // partial observation.
 func RecoverParams(steps []ObserveStep, dt float64, initial State, p0 Params, names []string) (Params, error) {
+	return recoverWith(steps, dt, initial, p0, names, func(steps []ObserveStep, dt float64, initial State, p Params) float64 {
+		return objective(steps, dt, initial, p)
+	})
+}
+
+// RecoverParamsSObserved fits using only s observations (the hidden initial
+// state is assumed known). It is the next step after full-state recovery, but
+// still not a general partial-observation proof: D/C/H at t0 are oracle inputs.
+func RecoverParamsSObserved(steps []ObserveStep, dt float64, initial State, p0 Params, names []string) (Params, error) {
+	return recoverWith(steps, dt, initial, p0, names, func(steps []ObserveStep, dt float64, initial State, p Params) float64 {
+		return objectiveS(steps, dt, initial, p)
+	})
+}
+
+func recoverWith(steps []ObserveStep, dt float64, initial State, p0 Params, names []string, objective func([]ObserveStep, float64, State, Params) float64) (Params, error) {
 	if len(steps) < 3 {
 		return p0, fmt.Errorf("need at least 3 observation steps")
 	}
@@ -59,6 +74,16 @@ func RecoverParams(steps []ObserveStep, dt float64, initial State, p0 Params, na
 		}
 	}
 	return p, nil
+}
+
+func objectiveS(steps []ObserveStep, dt float64, initial State, p Params) float64 {
+	x := project(initial)
+	var err float64
+	for i := 0; i < len(steps)-1; i++ {
+		x = RK4Step(x, steps[i].U, steps[i].Neighbors, p, dt)
+		err += sq(x.S - steps[i+1].X.S)
+	}
+	return err
 }
 
 func objective(steps []ObserveStep, dt float64, initial State, p Params) float64 {

@@ -235,3 +235,20 @@ CH11 probable    unknowns=['max_hops_exhausted'] paths=1
 
 重启 kernel 清空注入报告，`/federation/nodes` 回到 `count=0`；T1 复查 `reachable (paths=2)`。
 
+
+## Stage 7：SRD-DYN 仅 s 观测参数回收
+
+- 新增 `RecoverParamsSObserved`（初值 `S/D/C/H` 已知，之后只观测 `s`）；
+- 激励：失败脉冲 + 邻居态势切换；
+- dl360gen9：
+
+```text
+PASS TestRecoverParamsSObserved
+  Alpha s-only recovered 0.2 (truth 0.2)
+  Lambda s-only recovered 0.3 (truth 0.35)
+ok github.com/chins-xing/asscor/internal/srddyn
+```
+
+- `Alpha` 精确；`Lambda` 偏差约 14%；
+- `Delta=0.05` 在 s-only 下弱可辨识，测试中**不拟合**它（避免把不可辨识参数伪装成已回收）。
+
