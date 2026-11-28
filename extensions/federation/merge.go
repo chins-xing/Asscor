@@ -86,7 +86,7 @@ func BuildMergedGraphWithLocal(reports []NodeReport, localHosts []HostFact, loca
 	ps := make([]topology.PolicyRule, 0, len(keys))
 	for _, k := range keys {
 		p := policies[k]
-		ps = append(ps, topology.PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort})
+		ps = append(ps, topology.PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort, ObservedAt: p.ObservedAt, ValidUntil: p.ValidUntil, Confidence: p.Confidence})
 	}
 	unknown := make([]string, 0)
 	for _, r := range reports {
@@ -211,7 +211,7 @@ func hostFactFromTopo(n *topology.TopoNode) HostFact {
 		}
 	}
 	for _, p := range n.Policies {
-		pf := PolicyFact{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort}
+		pf := PolicyFact{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort, ObservedAt: p.ObservedAt, ValidUntil: p.ValidUntil, Confidence: p.Confidence}
 		switch p.Direction {
 		case "inbound":
 			h.Inbound = append(h.Inbound, pf)

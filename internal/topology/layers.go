@@ -5,6 +5,7 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"time"
 )
 
 // 本文件实现 SRD 的**分层拓扑图**（quasi-3D multi-layer graph，设计见
@@ -61,6 +62,12 @@ type HostFacts struct {
 	// StatefulInput 表示 INPUT 链存在 `ct state established,related accept`
 	// （v2.3 T2）：回程包按已建立连接放行，无需再看静态规则。
 	StatefulInput bool
+	// ObservedAt 是该事实的观测时间；零值表示未提供。
+	ObservedAt time.Time
+	// ValidUntil 是事实过期时间；零值表示不主动过期。
+	ValidUntil time.Time
+	// Confidence 是单条事实置信度（0..1）；0 表示未提供。
+	Confidence float64
 	// Forwards 表示这台主机**真的会转发**（ip_forward=1 / 路由角色）。
 	// 双网卡 ≠ 路由器：实测中 pivot-1 也是双宿主，但它不转发，
 	// 若仅凭"≥2 个子网"就允许它中转，模型会凭空造出绕行路径。
@@ -76,12 +83,15 @@ type Flow struct {
 }
 
 type PolicyRule struct {
-	From     string
-	To       string
-	Allow    bool
-	Protocol string
-	SrcPort  int
-	DstPort  int
+	From       string
+	To         string
+	Allow      bool
+	Protocol   string
+	SrcPort    int
+	DstPort    int
+	ObservedAt time.Time
+	ValidUntil time.Time
+	Confidence float64
 }
 
 // LayeredGraph 是分层图：层内节点/边语义独立，层间靠 same_identity 关联。
@@ -126,6 +136,15 @@ type LayeredGraph struct {
 //   - 策略只对**跨子网跳**生效（同子网直连不查跨域 ACL，域内 ACL 需 L4 细化规则，暂未建模）；
 //   - policies 为空且 policyKnown=true ⇒ 无策略数据 = unknown，判 probable 而不是 reachable。
 func BuildLayeredGraph(hosts []HostFacts, policies []PolicyRule, policyKnown, linkKnown bool) *LayeredGraph {
+	return buildLayeredGraphAt(hosts, policies, policyKnown, linkKnown, time.Now())
+}
+
+// BuildLayeredGraphAt is the deterministic variant for tests/time slices.
+func BuildLayeredGraphAt(hosts []HostFacts, policies []PolicyRule, policyKnown, linkKnown bool, now time.Time) *LayeredGraph {
+	return buildLayeredGraphAt(hosts, policies, policyKnown, linkKnown, now)
+}
+
+func buildLayeredGraphAt(hosts []HostFacts, policies []PolicyRule, policyKnown, linkKnown bool, now time.Time) *LayeredGraph {
 	g := &LayeredGraph{
 		hosts:         map[string]*HostFacts{},
 		subnetTo:      map[string][]string{},
@@ -140,7 +159,7 @@ func BuildLayeredGraph(hosts []HostFacts, policies []PolicyRule, policyKnown, li
 	}
 	for i := range hosts {
 		h := hosts[i]
-		if h.HostID == "" {
+		if h.HostID == "" || expired(h.ValidUntil, now) {
 			continue
 		}
 		cp := h
@@ -850,6 +869,21 @@ func ruleMatchesFlow(r PolicyRule, f Flow) bool {
 		return false
 	}
 	return true
+}
+
+func expired(validUntil, now time.Time) bool {
+	return !validUntil.IsZero() && validUntil.Before(now)
+}
+
+func filterValidPolicies(in []PolicyRule, now time.Time) []PolicyRule {
+	out := make([]PolicyRule, 0, len(in))
+	for _, p := range in {
+		if expired(p.ValidUntil, now) {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 func normalizeSubnet(s string) string {

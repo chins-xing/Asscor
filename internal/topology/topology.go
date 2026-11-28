@@ -61,13 +61,16 @@ type TopoLink struct {
 // TopoPolicyRule 是一条 L4 策略结论（按源/目的 CIDR）。
 // Direction=="inbound" 表示主机入向策略（域内/主机级 ACL），空或 "forward" 表示转发策略。
 type TopoPolicyRule struct {
-	From      string
-	To        string
-	Allow     bool
-	Direction string
-	Protocol  string
-	SrcPort   int
-	DstPort   int
+	From       string
+	To         string
+	Allow      bool
+	Direction  string
+	Protocol   string
+	SrcPort    int
+	DstPort    int
+	ObservedAt time.Time
+	ValidUntil time.Time
+	Confidence float64
 }
 
 // TopoEdge 是拓扑图中的边模型（链路）。M0 仅定义类型；边的实际构建
@@ -307,11 +310,11 @@ func BuildLayeredFromRegistry() *LayeredGraph {
 		for _, p := range n.Policies {
 			switch p.Direction {
 			case "inbound":
-				hf.Inbound = append(hf.Inbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort})
+				hf.Inbound = append(hf.Inbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort, ObservedAt: p.ObservedAt, ValidUntil: p.ValidUntil, Confidence: p.Confidence})
 			case "outbound":
-				hf.Outbound = append(hf.Outbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort})
+				hf.Outbound = append(hf.Outbound, PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort, ObservedAt: p.ObservedAt, ValidUntil: p.ValidUntil, Confidence: p.Confidence})
 			default:
-				policies = append(policies, PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort})
+				policies = append(policies, PolicyRule{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort, ObservedAt: p.ObservedAt, ValidUntil: p.ValidUntil, Confidence: p.Confidence})
 			}
 		}
 		hosts = append(hosts, hf)

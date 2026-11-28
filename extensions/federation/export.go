@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/chins-xing/asscor/internal/topology"
 )
@@ -21,6 +22,9 @@ type ExportedHost struct {
 	Outbound      []PolicyFact    `json:"outbound,omitempty"`
 	Links         map[string]bool `json:"links,omitempty"`
 	SourceNodes   []string        `json:"source_nodes,omitempty"`
+	ObservedAt    time.Time       `json:"observed_at,omitempty"`
+	ValidUntil    time.Time       `json:"valid_until,omitempty"`
+	Confidence    float64         `json:"confidence,omitempty"`
 }
 
 // TopologyExport 是主端合并图的"可评分"导出（v0.2）。
@@ -48,7 +52,7 @@ func localFactsFromTopology() ([]HostFact, []PolicyFact, bool) {
 		}
 		for _, p := range n.Policies {
 			if p.Direction == "" || p.Direction == "forward" {
-				policies = append(policies, PolicyFact{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort})
+				policies = append(policies, PolicyFact{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort, ObservedAt: p.ObservedAt, ValidUntil: p.ValidUntil, Confidence: p.Confidence})
 			}
 		}
 	}
@@ -110,6 +114,9 @@ func mergedFactsWithConflicts(reports []NodeReport, localHosts []HostFact, local
 		cur.Subnets = unionStrings(cur.Subnets, h.Subnets)
 		cur.IPs = unionStrings(cur.IPs, h.IPs)
 		cur.SourceNodes = unionStrings(cur.SourceNodes, h.SourceNodes)
+		cur.ObservedAt = laterTime(cur.ObservedAt, h.ObservedAt)
+		cur.ValidUntil = earlierNonZero(cur.ValidUntil, h.ValidUntil)
+		cur.Confidence = minPositive(cur.Confidence, h.Confidence)
 		if h.Zone != "" {
 			cur.Zone = h.Zone
 		}
@@ -140,6 +147,9 @@ func mergedFactsWithConflicts(reports []NodeReport, localHosts []HostFact, local
 		key := voteKey + "|" + boolKey(p.Allow)
 		if existing, ok := policies[key]; ok {
 			p.SourceNodes = unionStrings(existing.SourceNodes, p.SourceNodes)
+			p.ObservedAt = laterTime(existing.ObservedAt, p.ObservedAt)
+			p.ValidUntil = earlierNonZero(existing.ValidUntil, p.ValidUntil)
+			p.Confidence = minPositive(existing.Confidence, p.Confidence)
 		}
 		policies[key] = p
 	}
@@ -230,6 +240,39 @@ func l4Key(p PolicyFact) string {
 	return strings.ToLower(p.Protocol) + "|" + strconv.Itoa(p.SrcPort) + "|" + strconv.Itoa(p.DstPort)
 }
 
+func laterTime(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
+}
+
+func earlierNonZero(a, b time.Time) time.Time {
+	if a.IsZero() {
+		return b
+	}
+	if b.IsZero() {
+		return a
+	}
+	if b.Before(a) {
+		return b
+	}
+	return a
+}
+
+func minPositive(a, b float64) float64 {
+	if a <= 0 {
+		return b
+	}
+	if b <= 0 {
+		return a
+	}
+	if b < a {
+		return b
+	}
+	return a
+}
+
 func sortedKeys(m map[string]bool) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
@@ -258,6 +301,7 @@ func exportFromFacts(hosts map[string]*HostFact, policies map[string]PolicyFact,
 			Forwards: h.Forwards, StatefulInput: h.StatefulInput,
 			Inbound: h.Inbound, Outbound: h.Outbound, Links: h.Links,
 			SourceNodes: append([]string(nil), h.SourceNodes...),
+			ObservedAt:  h.ObservedAt, ValidUntil: h.ValidUntil, Confidence: h.Confidence,
 		}
 		if len(eh.IPs) == 0 {
 			eh.IPs = nil
