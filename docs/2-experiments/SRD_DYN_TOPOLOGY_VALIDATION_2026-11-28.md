@@ -510,3 +510,18 @@ PASS TestRecordNetworkFactsInvalidDrop
 PASS TestHostFactFromTopoInvalidDrop
 ```
 
+
+## Stage 21：conntrack related 查询
+
+- `HostFacts.StatefulRelated`；
+- `Flow.State=related` 时，若目标/来源 host 允许 related，则绕过静态 ACL；
+- dl360gen9：
+
+```text
+PASS TestRelatedFlowBypassesStaticInput
+  new     -> blocked
+  related -> reachable
+```
+
+范围：查询语义原型；agent 尚未采集 `ct state related accept`，超时/完整状态机未做。
+
