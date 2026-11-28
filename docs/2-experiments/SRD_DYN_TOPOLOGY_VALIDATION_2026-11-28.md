@@ -381,5 +381,18 @@ PASS TestLowConfidenceHostDowngrades
 PASS TestLowConfidencePolicyDoesNotBlock
 ```
 
-限制：agent 仍未填充 `Confidence/ObservedAt/ValidUntil`；当前能力在数据模型/联邦合并/查询层。
+
+### 14.1 Agent 元数据
+
+- nft/iptables 解析出的策略统一 `stampRuleMetadata`：
+  - `ObservedAt = now`（未提供时）；
+  - `Confidence = 1.0`（显式解析规则的基础置信度）。
+- dl360gen9：
+
+```text
+PASS TestParseNftL4Ports
+PASS TestParseIptablesL4Ports
+```
+
+
 
