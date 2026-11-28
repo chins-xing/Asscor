@@ -44,6 +44,12 @@ const (
 )
 
 // HostFacts 是一台主机的网络事实（来自 agent 上报/配置）。
+type Route struct {
+	Destination string `json:"destination"`
+	NextHop     string `json:"next_hop"`
+	Metric      int    `json:"metric,omitempty"`
+}
+
 type NATRule struct {
 	External string `json:"external"`
 	Internal string `json:"internal"`
@@ -77,6 +83,8 @@ type HostFacts struct {
 	Confidence float64
 	// NAT is a DNAT exposure prototype (external alias -> internal subnet).
 	NAT []NATRule
+	// Routes is the host's route table; used by LookupRoute (LPM).
+	Routes []Route
 	// Forwards 表示这台主机**真的会转发**（ip_forward=1 / 路由角色）。
 	// 双网卡 ≠ 路由器：实测中 pivot-1 也是双宿主，但它不转发，
 	// 若仅凭"≥2 个子网"就允许它中转，模型会凭空造出绕行路径。
@@ -141,6 +149,7 @@ type LayeredGraph struct {
 	// confidenceThreshold: facts with 0 < Confidence < threshold downgrade
 	// the verdict to probable.
 	confidenceThreshold float64
+	routes              map[string][]Route
 }
 
 // BuildLayeredGraph 从观测事实构建分层图。
@@ -172,6 +181,7 @@ func buildLayeredGraphAt(hosts []HostFacts, policies []PolicyRule, policyKnown, 
 		linkKnown:           linkKnown,
 		policyUnknown:       map[string]bool{},
 		confidenceThreshold: 0.5,
+		routes:              map[string][]Route{},
 	}
 	for i := range hosts {
 		h := hosts[i]
@@ -195,6 +205,9 @@ func buildLayeredGraphAt(hosts []HostFacts, policies []PolicyRule, policyKnown, 
 		}
 		if len(h.Outbound) > 0 {
 			g.outbound[h.HostID] = append([]PolicyRule(nil), h.Outbound...)
+		}
+		if len(h.Routes) > 0 {
+			g.routes[h.HostID] = append([]Route(nil), h.Routes...)
 		}
 		for _, nat := range h.NAT {
 			if ext := normalizeSubnet(nat.External); ext != "" {
@@ -896,6 +909,36 @@ func (g *LayeredGraph) hasHostConflict(host, direction string, f Flow) bool {
 		return true
 	}
 	return false
+}
+
+// LookupRoute returns the longest-prefix route for ip from host's route
+// table. It is a read-only query helper; existing ACL first-match and
+// HostReachable semantics are unchanged.
+func (g *LayeredGraph) LookupRoute(host, ip string) (Route, bool) {
+	target := net.ParseIP(strings.TrimSpace(ip))
+	if target == nil {
+		if ip2 := net.ParseIP(strings.TrimSuffix(strings.TrimSpace(ip), "/32")); ip2 != nil {
+			target = ip2
+		} else {
+			return Route{}, false
+		}
+	}
+	best := Route{}
+	bestBits := -1
+	found := false
+	for _, r := range g.routes[host] {
+		_, n, err := net.ParseCIDR(strings.TrimSpace(r.Destination))
+		if err != nil || !n.Contains(target) {
+			continue
+		}
+		bits, _ := n.Mask.Size()
+		if bits > bestBits || (bits == bestBits && (!found || r.Metric < best.Metric)) {
+			best = r
+			bestBits = bits
+			found = true
+		}
+	}
+	return best, found
 }
 
 // PolicyUnknownSubnets 返回按子网标记为策略未知的集合。

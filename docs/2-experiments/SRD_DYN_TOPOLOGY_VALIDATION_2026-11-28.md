@@ -460,3 +460,17 @@ BenchmarkHostReachableDense256    ~396 µs/op    (256 hosts 同广播域)
 
 本地（i5-14600KF）：约 1.10ms / 39µs / 83µs。基准只覆盖构建与两类查询，不代表所有拓扑形状。
 
+
+## Stage 19：最长前缀路由查询
+
+- `HostFacts.Routes` + `LayeredGraph.LookupRoute(host, ip)`；
+- 最长前缀优先，同前缀按 `Metric` 最小；
+- dl360gen9：
+
+```text
+PASS TestLookupRouteLongestPrefix
+PASS TestLookupRouteMetricTieBreak
+```
+
+范围：查询辅助，不改变现有 ACL first-match 与 `HostReachable` 语义；agent/联邦尚未上报 Routes。
+
