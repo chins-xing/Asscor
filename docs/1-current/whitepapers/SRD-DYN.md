@@ -395,8 +395,9 @@ P_k&=(I-K_kH_k)P_k^-
   - D4 反馈/耦合：`η`、邻居 `s_j` 改变轨迹；
   - D5 部分：滞回变量 `h` 在压力撤除后仍保留；
   - 数值：非负投影、`Δt` 收敛检查。
+- 已实现观测/EKF：`Filter`（数值 Jacobian + 协方差传播 + 标量 s 更新 + Confidence），测试 `filter_test.go`。
 - 尚未实现（因此 v0.0.1 仍不能宣称完整验收）：
-  - 观测模型/EKF（第 4 节）、参数辨识/Fisher/Sobol（第 7 节）、时间外预测与 proper scoring（第 8 节）；
+  - 参数辨识/Fisher/Sobol（第 7 节）、时间外预测与 proper scoring（第 8 节）；
   - 事件跳变与真实数据校准。
-- 测试：`go test ./internal/srddyn`。
+- 测试：`go test ./internal/srddyn`（核心 7 项 + EKF 2 项）。
 - 远端验证：dl360gen9 上同一测试通过（见 `docs/2-experiments/SRD_DYN_TOPOLOGY_VALIDATION_2026-11-28.md`）。
