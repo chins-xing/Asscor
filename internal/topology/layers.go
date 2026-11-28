@@ -97,6 +97,8 @@ type LayeredGraph struct {
 	linkKnown   bool
 	// policyConflicts 是 merge 层注入的 allow/deny 冲突；普通 BuildLayeredGraph 为空。
 	policyConflicts []PolicyConflict
+	// policyUnknown 是按子网的策略未知标记（部分策略已知场景）。
+	policyUnknown map[string]bool
 }
 
 // BuildLayeredGraph 从观测事实构建分层图。
@@ -108,15 +110,16 @@ type LayeredGraph struct {
 //   - policies 为空且 policyKnown=true ⇒ 无策略数据 = unknown，判 probable 而不是 reachable。
 func BuildLayeredGraph(hosts []HostFacts, policies []PolicyRule, policyKnown, linkKnown bool) *LayeredGraph {
 	g := &LayeredGraph{
-		hosts:       map[string]*HostFacts{},
-		subnetTo:    map[string][]string{},
-		hostSubs:    map[string][]string{},
-		gateways:    map[string][]string{},
-		policies:    append([]PolicyRule(nil), policies...),
-		inbound:     map[string][]PolicyRule{},
-		outbound:    map[string][]PolicyRule{},
-		policyKnown: policyKnown,
-		linkKnown:   linkKnown,
+		hosts:         map[string]*HostFacts{},
+		subnetTo:      map[string][]string{},
+		hostSubs:      map[string][]string{},
+		gateways:      map[string][]string{},
+		policies:      append([]PolicyRule(nil), policies...),
+		inbound:       map[string][]PolicyRule{},
+		outbound:      map[string][]PolicyRule{},
+		policyKnown:   policyKnown,
+		linkKnown:     linkKnown,
+		policyUnknown: map[string]bool{},
 	}
 	for i := range hosts {
 		h := hosts[i]
@@ -147,6 +150,18 @@ func BuildLayeredGraph(hosts []HostFacts, policies []PolicyRule, policyKnown, li
 	}
 	for k := range g.subnetTo {
 		sort.Strings(g.subnetTo[k])
+	}
+	return g
+}
+
+// BuildLayeredGraphWithPolicyScope 在全局 policyKnown 之外，按子网补充
+// “策略未知”范围（审计 LayeredGraph 1.4）。未知子网上的跨子网路径判 probable。
+func BuildLayeredGraphWithPolicyScope(hosts []HostFacts, policies []PolicyRule, policyKnown, linkKnown bool, unknownSubnets []string) *LayeredGraph {
+	g := BuildLayeredGraph(hosts, policies, policyKnown, linkKnown)
+	for _, s := range unknownSubnets {
+		if c := normalizeSubnet(s); c != "" {
+			g.policyUnknown[c] = true
+		}
 	}
 	return g
 }
@@ -339,6 +354,9 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 func (g *LayeredGraph) policyVerdict(from, to string) (Verdict, string) {
 	if g.hasPolicyConflict(from, to) {
 		return VerdictProbable, "conflicting allow/deny policies"
+	}
+	if g.policyUnknown[normalizeSubnet(from)] || g.policyUnknown[normalizeSubnet(to)] {
+		return VerdictProbable, "policy partially unknown"
 	}
 	// 显式规则优先（先匹配先返回；与 nft 的 first-match 语义一致）
 	for _, r := range g.policies {
@@ -703,6 +721,16 @@ func (g *LayeredGraph) hasPolicyConflict(from, to string) bool {
 		}
 	}
 	return false
+}
+
+// PolicyUnknownSubnets 返回按子网标记为策略未知的集合。
+func (g *LayeredGraph) PolicyUnknownSubnets() []string {
+	out := make([]string, 0, len(g.policyUnknown))
+	for s := range g.policyUnknown {
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Gateways 返回被识别为网关的主机（≥2 个子网）。

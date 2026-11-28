@@ -127,6 +127,7 @@ docs/
 | [variance-report.md](2-experiments/variance-report.md) | 重复性与方差报告 |
 | [CONFIDENCE_SENSITIVITY_2026-10-22.md](2-experiments/CONFIDENCE_SENSITIVITY_2026-10-22.md) | 方向① 先验敏感性（非标定） |
 | [clab-lab/](2-experiments/clab-lab/) | 实验脚手架数据（`data/*.jsonl`） |
+| [SRD_DYN_TOPOLOGY_VALIDATION_2026-11-28.md](2-experiments/SRD_DYN_TOPOLOGY_VALIDATION_2026-11-28.md) | SRD-DYN + LayeredGraph 本地/dl360 分层验证 |
 | [LOGCOLLECTOR_PROCESS_2026-11-27.md](2-experiments/LOGCOLLECTOR_PROCESS_2026-11-27.md) | A1 第二步：log collector 进程隔离试点 |
 | [T4_FEDERATION_PROCESS_2026-10-29.md](2-experiments/T4_FEDERATION_PROCESS_2026-10-29.md) | T4 联邦进程隔离（v0.4）运行与性能记录 |
 | [T4_FEDERATION_AUC_LARGE_2026-10-28.md](2-experiments/T4_FEDERATION_AUC_LARGE_2026-10-28.md) | T4 联邦 AUC 大规模（37 主机 × 3 轮：0.912 vs 0.545） |

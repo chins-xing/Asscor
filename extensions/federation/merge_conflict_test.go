@@ -79,3 +79,24 @@ func TestMergeProvenanceIsPreserved(t *testing.T) {
 		t.Fatal("conflict policy missing from export")
 	}
 }
+
+func TestMergePartialPolicyUnknown(t *testing.T) {
+	reports := []NodeReport{
+		{NodeID: "nk1", PolicyKnown: true, HostFacts: []HostFact{
+			{ID: "A", Subnets: []string{"10.0.1.0/24"}},
+			{ID: "GW", Subnets: []string{"10.0.1.0/24", "10.0.2.0/24"}, Forwards: true},
+			{ID: "B", Subnets: []string{"10.0.2.0/24"}},
+		}},
+		{NodeID: "nk2", PolicyKnown: false, HostFacts: []HostFact{
+			{ID: "C", Subnets: []string{"10.0.2.0/24"}},
+		}},
+	}
+	g := BuildMergedGraphWithLocal(reports, nil, nil, false)
+	unknown := g.PolicyUnknownSubnets()
+	if len(unknown) != 1 || unknown[0] != "10.0.2.0/24" {
+		t.Fatalf("unknown subnets = %v, want [10.0.2.0/24]", unknown)
+	}
+	if res := CheckMerged(g, "A", "B", 3); res.Verdict != string(topology.VerdictProbable) {
+		t.Fatalf("partial unknown verdict = %s, want probable", res.Verdict)
+	}
+}
