@@ -98,6 +98,7 @@
 | 2.1 深度耗尽 | ✅ 已完成 | `HostReachable` 截断时返回 `probable` + `Unknowns=["max_hops_exhausted"]`；仅在前沿仍有未访问邻居时标记，真实无路径仍 `blocked`。测试：`layers_depth_test.go` |
 | 3.1 合并冲突（全局策略） | ✅ 已完成 | `topology.PolicyConflict` + `LayeredGraph.SetPolicyConflicts`；merge 保留 allow/deny 双方并记录 `allow_sources/deny_sources`；冲突对路径返回 `probable`；`CheckMerged.Conflicts` 暴露。测试：`merge_conflict_test.go` |
 | 4.1/4.2 时间轴/单条置信度 | ✅ 完成（模型+判定） | `HostFacts/PolicyRule/HostFact/PolicyFact` 增加 `ObservedAt/ValidUntil/Confidence`；过期事实过滤；merge 保留最新观测/最早过期/最小正置信度；`Confidence < threshold` 的主机/策略判 `probable`。测试：`TestExpiredHostAndPolicyAreFiltered`、`TestLowConfidenceHostDowngrades`、`TestLowConfidencePolicyDoesNotBlock`、`TestMergePreservesMetadata`；agent 已为解析出的策略填充 `ObservedAt` 与基础 `Confidence=1.0` |
+| 3.3 上报截断静默 | ✅ 已完成 | `NodeReport` 增加 `Truncated/DroppedHosts/DroppedPolicies`；`collectFacts` 返回丢弃计数；测试：`TestCollectFactsTruncationVisible` |
 | 3.2 master 只合并不校验 | ✅ 已完成 | `ValidateNodeReport` 校验 node_id、主机 ID、IP/CIDR、端口、协议与上限；master POST 返回 400。测试：`TestValidateNodeReport*` |
 | 3.4 来源溯源 | ✅ 已完成 | `HostFact/PolicyFact.SourceNodes`；合并与 `TopologyExport` 保留来源。测试：`TestMergeProvenanceIsPreserved` |
 | 1.2 L4 协议/端口 | ✅ 完成（基础） | `PolicyRule/PolicyFact/TopoPolicyRule` 增加 L4 字段；`HostReachableFlow`；federation 合并/冲突按 L4 区分；agent nft/iptables 解析基础 tcp/udp 端口，复杂模块仍“不猜”。测试：`TestHostReachableFlowPorts`、`TestDifferentPortsDoNotConflict`、`TestParseNftL4Ports`、`TestParseIptablesL4Ports` |

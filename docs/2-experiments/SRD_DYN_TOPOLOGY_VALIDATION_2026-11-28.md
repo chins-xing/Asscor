@@ -395,4 +395,15 @@ PASS TestParseIptablesL4Ports
 ```
 
 
+## Stage 15：上报截断可见
+
+- `NodeReport` 增加 `truncated/dropped_hosts/dropped_policies`；
+- `collectFacts` 计算丢弃数量，不再静默切片；
+- 同时修复 local facts 丢失 L4/元数据的问题；
+- dl360gen9：
+
+```text
+PASS TestCollectFactsTruncationVisible
+PASS TestCollectFactsPreservesL4AndMetadata
+```
 
