@@ -97,6 +97,7 @@
 | 项 | 状态 | 实现 / 说明 |
 |---|---|---|
 | 2.1 深度耗尽 | ✅ 已完成 | `HostReachable` 截断时返回 `probable` + `Unknowns=["max_hops_exhausted"]`；仅在前沿仍有未访问邻居时标记，真实无路径仍 `blocked`。测试：`layers_depth_test.go` |
+| 2.5 最长前缀路由 | ◐ 查询辅助完成 | `HostFacts.Routes` + `LayeredGraph.LookupRoute`（最长前缀、同前缀按 metric）；尚未接入 `HostReachable`/ACL 首匹配。测试：`TestLookupRouteLongestPrefix` / `TestLookupRouteMetricTieBreak` |
 | 3.1 合并冲突（全局策略） | ✅ 已完成 | `topology.PolicyConflict` + `LayeredGraph.SetPolicyConflicts`；merge 保留 allow/deny 双方并记录 `allow_sources/deny_sources`；冲突对路径返回 `probable`；`CheckMerged.Conflicts` 暴露。测试：`merge_conflict_test.go` |
 | 4.1/4.2 时间轴/单条置信度 | ✅ 完成（模型+判定） | `HostFacts/PolicyRule/HostFact/PolicyFact` 增加 `ObservedAt/ValidUntil/Confidence`；过期事实过滤；merge 保留最新观测/最早过期/最小正置信度；`Confidence < threshold` 的主机/策略判 `probable`。测试：`TestExpiredHostAndPolicyAreFiltered`、`TestLowConfidenceHostDowngrades`、`TestLowConfidencePolicyDoesNotBlock`、`TestMergePreservesMetadata`；agent 策略规则与心跳 Host 事实均已填充 `ObservedAt/Confidence`，HostFact→TopoNode→HostFact 全链路保留 |
 | 3.3 上报截断静默 | ✅ 已完成 | `NodeReport` 增加 `Truncated/DroppedHosts/DroppedPolicies`；`collectFacts` 返回丢弃计数；测试：`TestCollectFactsTruncationVisible` |
