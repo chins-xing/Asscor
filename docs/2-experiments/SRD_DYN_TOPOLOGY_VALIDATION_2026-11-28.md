@@ -250,5 +250,18 @@ ok github.com/chins-xing/asscor/internal/srddyn
 ```
 
 - `Alpha` 精确；`Lambda` 偏差约 14%；
-- `Delta=0.05` 在 s-only 下弱可辨识，测试中**不拟合**它（避免把不可辨识参数伪装成已回收）。
+- 坐标下降对 `Delta=0.05` 落入局部极小（未回收）；后续剖面似然表明这是优化器问题，不是弱可辨识。
+
+
+## Stage 8：Delta 剖面似然
+
+- 新增 `ProfileLikelihoodSObserved`：固定 `Delta` 网格，重拟合 `Alpha/Lambda`；
+- dl360gen9：
+
+```text
+PASS TestProfileLikelihoodDeltaMinimum
+  Delta profile min SSE=0 at Delta=0.05 (truth=0.05)
+```
+
+结论：在“初值隐状态已知 + 激励充分”的合成场景下，`Delta` 在真值处有明确全局最小；此前坐标下降失败是局部极小，不应写成“弱可辨识”。初值隐状态未知时的一般部分观测可辨识性仍未证明。
 

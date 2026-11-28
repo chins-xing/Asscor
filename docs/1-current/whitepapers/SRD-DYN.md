@@ -397,10 +397,11 @@ P_k&=(I-K_kH_k)P_k^-
   - 数值：非负投影、`Δt` 收敛检查。
 - 已实现观测/EKF：`Filter`（数值 Jacobian + 协方差传播 + 标量 s 更新 + Confidence），测试 `filter_test.go`。
 - 已实现参数回收原型：`RecoverParams`（坐标下降，合成 **全状态** 观测），测试 `recover_test.go`；这证明 A8 的优化链路，但**不是**仅观测 s 的部分可辨识性证明。
-- 已实现 Fisher 信息原型：`FisherInformation`（s-only 观测、数值灵敏度），测试 `fisher_test.go`；尚未做剖面似然与 Sobol。
-- 已实现 s-only 参数回收：`RecoverParamsSObserved`（初值隐状态已知）；在激励充分时 `Alpha` 可精确回收、`Lambda` 偏差约 14%，`Delta` 弱可辨识，测试中明确不拟合它。
+- 已实现 Fisher 信息原型：`FisherInformation`（s-only 观测、数值灵敏度），测试 `fisher_test.go`。
+- 已实现剖面似然原型：`ProfileLikelihoodSObserved`（固定一个参数、重拟合其余参数），测试 `profile_test.go`；Sobol 尚未做。
+- 已实现 s-only 参数回收：`RecoverParamsSObserved`（初值隐状态已知）；在激励充分时 `Alpha` 可精确回收、`Lambda` 偏差约 14%。坐标下降对 `Delta` 落入局部极小；剖面似然在真值处取得全局最小，说明是优化器问题而非弱可辨识。
 - 尚未实现（因此 v0.0.1 仍不能宣称完整验收）：
-  - 剖面似然/Sobol（第 7 节）、`Delta` 等弱可辨识参数的正则/固定策略、时间外预测与 proper scoring（第 8 节）；
+  - Sobol（第 7 节）、初值隐状态未知时的部分观测可辨识性、时间外预测与 proper scoring（第 8 节）；
   - 事件跳变与真实数据校准。
-- 测试：`go test ./internal/srddyn`（核心 7 项 + EKF 2 项 + 参数回收 3 项 + Fisher 2 项）。
+- 测试：`go test ./internal/srddyn`（核心 7 项 + EKF 2 项 + 参数回收 3 项 + Fisher 2 项 + 剖面 1 项）。
 - 远端验证：dl360gen9 上同一测试通过（见 `docs/2-experiments/SRD_DYN_TOPOLOGY_VALIDATION_2026-11-28.md`）。
