@@ -25,6 +25,7 @@
 | 4.2 | 无单条事实置信度 | ✅ 成立 | 只有全局 `policyKnown`；无 per-fact confidence |
 | 4.3 | 拓扑→SRD 单向耦合 | ✅ 成立 | 拓扑供 SRD 传播；未发现 SRD 结果回写拓扑链路/策略 |
 | 5.1 | 只有小场景测试，无大规模压测 | ✅ 成立（抽查） | `layers_*_test.go` 均为手工小图；未见万级随机拓扑套件 |
+| 5.2 导出语义 | ✅ 已补齐 | `TopologyExport` 增加 `conflicts`、`policy_unknown_subnets`、`stats`、`generated_at`；策略保留 L4/元数据；内部调试字段仍是有损子集。测试：`TestMergedTopologyCarriesSemantics` |
 | 5.1 缺少大图压测 | ✅ 基准已加 | `layers_bench_test.go`：1024 节点构建、1024 链查询、256 密集查询；dl360（Xeon E5-2695 v4）约 5.9ms / 68µs / 396µs |
 | 5.2 | 导出 JSON 丢失内部语义 | ◐ **基本成立** | `exportFromFacts` 只导出 Host/Policy 子集，调试字段/来源/置信度不导出；需按“兼容 srd-roc 的刻意子集”表述 |
 | 5.3 | 文档高估真实网络仿真能力 | ✅ 成立 | 缺陷文档本身已列出边界；现行白皮书应显式声明 L4/NAT/LPM/置信度缺失 |

@@ -30,9 +30,13 @@ type ExportedHost struct {
 
 // TopologyExport 是主端合并图的"可评分"导出（v0.2）。
 type TopologyExport struct {
-	PolicyKnown bool           `json:"policy_known"`
-	Policies    []PolicyFact   `json:"policies"`
-	Hosts       []ExportedHost `json:"hosts"`
+	PolicyKnown          bool                      `json:"policy_known"`
+	Policies             []PolicyFact              `json:"policies"`
+	Hosts                []ExportedHost            `json:"hosts"`
+	Conflicts            []topology.PolicyConflict `json:"conflicts,omitempty"`
+	PolicyUnknownSubnets []string                  `json:"policy_unknown_subnets,omitempty"`
+	Stats                map[string]int            `json:"stats,omitempty"`
+	GeneratedAt          time.Time                 `json:"generated_at"`
 }
 
 // mergedFacts 把节点上报 + 主端本地拓扑合并成事实集合（供建图与导出共用）。
@@ -286,7 +290,13 @@ func sortedKeys(m map[string]bool) []string {
 
 func MergedTopology(reports []NodeReport) TopologyExport {
 	hosts, policies, known := mergedFacts(reports)
-	return exportFromFacts(hosts, policies, known)
+	exp := exportFromFacts(hosts, policies, known)
+	g := BuildMergedGraph(reports)
+	exp.Conflicts = g.PolicyConflicts()
+	exp.PolicyUnknownSubnets = g.PolicyUnknownSubnets()
+	exp.Stats = g.Stats()
+	exp.GeneratedAt = time.Now().UTC()
+	return exp
 }
 
 func exportFromFacts(hosts map[string]*HostFact, policies map[string]PolicyFact, known bool) TopologyExport {
