@@ -27,7 +27,7 @@ func BuildNodeReport(kc kernel.KernelContext, cfg Config) NodeReport {
 
 	nodes := topology.ListNodes()
 	report.Hosts = len(nodes)
-	report.HostFacts, report.PolicyFacts, report.PolicyKnown = collectFacts(nodes)
+	report.HostFacts, report.PolicyFacts, report.PolicyKnown, report.Truncated, report.DroppedHosts, report.DroppedPolicies = collectFacts(nodes)
 	if len(nodes) == 0 {
 		return report
 	}

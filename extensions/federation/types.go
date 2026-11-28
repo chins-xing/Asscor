@@ -39,7 +39,11 @@ type NodeReport struct {
 	HostFacts   []HostFact   `json:"host_facts,omitempty"`
 	PolicyFacts []PolicyFact `json:"policy_facts,omitempty"`
 	PolicyKnown bool         `json:"policy_known,omitempty"`
-	ReportedAt  time.Time    `json:"reported_at"`
+	// Truncated is set when the node report exceeded the per-node fact caps.
+	Truncated       bool      `json:"truncated,omitempty"`
+	DroppedHosts    int       `json:"dropped_hosts,omitempty"`
+	DroppedPolicies int       `json:"dropped_policies,omitempty"`
+	ReportedAt      time.Time `json:"reported_at"`
 	// ReceivedAt is stamped by the master collector; it is zero on the node
 	// side and after JSON round-trips through /federation/nodes it is the
 	// authoritative "last heard from" timestamp.

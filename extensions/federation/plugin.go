@@ -500,7 +500,7 @@ func errString(err error) string {
 
 // collectFacts 把拓扑注册表转成联邦上报事实（v0.2）。
 // 与 merge.go 的 hostFactFromTopo 配对：节点上报、主端合并。
-func collectFacts(nodes []*topology.TopoNode) ([]HostFact, []PolicyFact, bool) {
+func collectFacts(nodes []*topology.TopoNode) ([]HostFact, []PolicyFact, bool, bool, int, int) {
 	hosts := make([]HostFact, 0, len(nodes))
 	policies := make([]PolicyFact, 0)
 	seen := map[string]bool{}
@@ -520,16 +520,19 @@ func collectFacts(nodes []*topology.TopoNode) ([]HostFact, []PolicyFact, bool) {
 				continue
 			}
 			seen[key] = true
-			policies = append(policies, PolicyFact{From: p.From, To: p.To, Allow: p.Allow})
+			policies = append(policies, PolicyFact{From: p.From, To: p.To, Allow: p.Allow, Protocol: p.Protocol, SrcPort: p.SrcPort, DstPort: p.DstPort, ObservedAt: p.ObservedAt, ValidUntil: p.ValidUntil, Confidence: p.Confidence})
 		}
 	}
+	droppedHosts, droppedPolicies := 0, 0
 	if len(hosts) > MaxHostFacts {
+		droppedHosts = len(hosts) - MaxHostFacts
 		hosts = hosts[:MaxHostFacts]
 	}
 	if len(policies) > MaxPolicyFacts {
+		droppedPolicies = len(policies) - MaxPolicyFacts
 		policies = policies[:MaxPolicyFacts]
 	}
-	return hosts, policies, known
+	return hosts, policies, known, droppedHosts > 0 || droppedPolicies > 0, droppedHosts, droppedPolicies
 }
 
 func boolKey(b bool) string {
