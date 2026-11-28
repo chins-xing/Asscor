@@ -204,3 +204,34 @@ ok github.com/chins-xing/asscor/internal/srddyn
 
 限制：仅证明 Fisher 计算链路，尚未做剖面似然/Sobol/仅 s 参数回收。
 
+
+## Stage 6：长链深度耗尽（32 节点 + 12 节点实机）
+
+### 32 节点模型回归
+
+`internal/topology/layers_longchain_test.go`：
+
+```text
+PASS TestLongChainDepthExhaustion
+```
+
+- 32 节点链，`maxHops=5` → `probable` + `max_hops_exhausted`；
+- `maxHops=31` → `reachable`；
+- 已在 dl360gen9 源码级复跑通过。
+
+### 12 节点实机注入
+
+向 federation master 注入 `CH0…CH11` 链（每相邻主机共享一个独立 /24，中间节点 forward=true），查询：
+
+```text
+CH5  reachable   paths=1
+CH6  probable    unknowns=['max_hops_exhausted'] paths=1
+CH11 probable    unknowns=['max_hops_exhausted'] paths=1
+```
+
+与预期一致：5 跳可达；6/11 跳被深度截断，但返回 unknown 而不是误报 blocked。
+
+### 清理
+
+重启 kernel 清空注入报告，`/federation/nodes` 回到 `count=0`；T1 复查 `reachable (paths=2)`。
+
