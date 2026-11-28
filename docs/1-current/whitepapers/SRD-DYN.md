@@ -408,3 +408,28 @@ P_k&=(I-K_kH_k)P_k^-
   - 事件跳变与真实数据校准。
 - 测试：`go test ./internal/srddyn`（19 项：核心 7 + EKF 2 + 参数回收 3 + Fisher 2 + 剖面 1 + 事件/Sobol/评分/预测 4）。
 - 远端验证：dl360gen9 上同一测试通过（见 `docs/2-experiments/SRD_DYN_TOPOLOGY_VALIDATION_2026-11-28.md`）。
+
+
+## 14. v0.0.1 合成验收覆盖（2026-11-28）
+
+| 验收项 | 状态 | 证据 |
+|---|---|---|
+| A1 独立状态 | ✅ 合成 | `TestIndependentStateChangesTrajectory` |
+| A2 非平凡演化 | ✅ 合成 | `TestRK4FiniteAndBounded` + 轨迹测试 |
+| A3 记忆 | ✅ 合成 | `TestDebtHasMemoryAndDecays` |
+| A4 反馈 | ✅ 合成 | `TestCollapseFeedbackChangesPosture` |
+| A5 耦合 | ✅ 合成 | `TestNeighborCouplingChangesContagion` |
+| A6 滞回 | ✅ 合成 | `TestHysteresisStatePersistsAfterStress` |
+| A7 滤波置信 | ✅ 合成 | `TestFilterCovarianceShrinksAndTracksObservation` |
+| A8 参数回收 | ✅ 合成（全状态 + s-only 部分） | `TestRecoverParamsFromFullState`、`TestRecoverParamsSObserved`、`TestProfileLikelihoodDeltaMinimum` |
+| A9 预测技能 | ✅ 合成基线对比 | `TestForecastBeatsPersistence` |
+| A10 可复现 | ✅ | `TestRK4TimestepConvergence` + 固定种子 Sobol |
+| A11 文档一致 | ✅ | 本节与代码/测试同步 |
+
+**范围声明**：以上是“合成验收”，不是真实数据验收。未覆盖：
+
+- 真实事件序列的时间外校准；
+- 初值 `D/C/H` 未知时的部分观测可辨识性；
+- Sobol 置信区间。
+
+因此对外只能表述为“SRD-DYN v0.0.1 合成验收通过”，不能表述为“真实系统动力学已验证”。
