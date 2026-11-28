@@ -78,6 +78,8 @@ type PolicyRule struct {
 // PolicyConflict 表示同一 (from,to) 上同时存在 allow 与 deny 的来源冲突。
 // 审计 LayeredGraph P0：冲突不得被“先匹配到哪条算哪条”静默吞掉。
 type PolicyConflict struct {
+	Host         string   `json:"host,omitempty"`
+	Direction    string   `json:"direction,omitempty"`
 	From         string   `json:"from"`
 	To           string   `json:"to"`
 	AllowSources []string `json:"allow_sources,omitempty"`
@@ -292,6 +294,15 @@ func (g *LayeredGraph) hasUnvisitedNeighbor(cur string, visited map[string]bool)
 // finalizePath 逐跳检查跨子网策略，给出整条路径的最终判定。
 func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict {
 	pv := PathVerdict{Path: path, Steps: steps, Verdict: VerdictReachable}
+	// 审计 LayeredGraph P0：路径经过存在 host 级 allow/deny 冲突的主机时，
+	// 不得由“首条匹配”静默决定；标 probable 并暴露 conflict。
+	for _, h := range path {
+		if g.hasHostConflict(h, "inbound") || g.hasHostConflict(h, "outbound") {
+			pv.Verdict = VerdictProbable
+			pv.Unknowns = appendUnique(pv.Unknowns, "policy_conflict")
+			break
+		}
+	}
 	// steps[i].Subnet 是进入 steps[i].Host 时用的子网
 	for i := 0; i < len(steps)-1; i++ {
 		prevSub := steps[i].Subnet
@@ -716,7 +727,16 @@ func (g *LayeredGraph) PolicyConflicts() []PolicyConflict {
 
 func (g *LayeredGraph) hasPolicyConflict(from, to string) bool {
 	for _, c := range g.policyConflicts {
-		if c.From == from && c.To == to {
+		if c.Host == "" && c.From == from && c.To == to {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *LayeredGraph) hasHostConflict(host, direction string) bool {
+	for _, c := range g.policyConflicts {
+		if c.Host == host && c.Direction == direction {
 			return true
 		}
 	}

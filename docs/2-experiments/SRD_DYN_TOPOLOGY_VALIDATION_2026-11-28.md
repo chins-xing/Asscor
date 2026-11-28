@@ -147,6 +147,19 @@ srd check domA-web domB-web
 - 仅该节点的子网被标 unknown，其它已知子网仍保持 known；
 - 跨 unknown 子网判 `probable`，符合 1.4 目标。
 
+
+### 3.4 host 级 inbound/outbound 冲突
+
+在 dl360gen9 源码级验证 `TestHostLevelPolicyConflict`：
+
+```text
+PASS TestHostLevelPolicyConflict
+```
+
+- merge 按 `(host,direction,from,to)` 收集 allow/deny；
+- 冲突主机进入路径时判 `probable`，不再由首条匹配静默决定；
+- 本项尚未替换到实验环境中的 federation-mod（该二进制仍是 Stage 3.1 版本），属下一步部署项。
+
 ### 3.3 环境清理
 
 注入报告只存在 master 内存；验证后重启 `asscor-kernel` 清空测试节点，agent 自动重连，T1/T3 原有拓扑恢复。

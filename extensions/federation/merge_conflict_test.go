@@ -100,3 +100,35 @@ func TestMergePartialPolicyUnknown(t *testing.T) {
 		t.Fatalf("partial unknown verdict = %s, want probable", res.Verdict)
 	}
 }
+
+func TestHostLevelPolicyConflict(t *testing.T) {
+	reports := []NodeReport{
+		{NodeID: "hk1", PolicyKnown: true, HostFacts: []HostFact{
+			{ID: "HX", Subnets: []string{"10.9.9.0/24"}},
+			{ID: "HA", Subnets: []string{"10.9.9.0/24"}, Inbound: []PolicyFact{
+				{From: "10.9.9.0/24", To: "10.9.9.0/24", Allow: true},
+			}},
+		}},
+		{NodeID: "hk2", PolicyKnown: true, HostFacts: []HostFact{
+			{ID: "HX", Subnets: []string{"10.9.9.0/24"}},
+			{ID: "HA", Subnets: []string{"10.9.9.0/24"}, Inbound: []PolicyFact{
+				{From: "10.9.9.0/24", To: "10.9.9.0/24", Allow: false},
+			}},
+		}},
+	}
+	g := BuildMergedGraphWithLocal(reports, nil, nil, false)
+	found := false
+	for _, c := range g.PolicyConflicts() {
+		if c.Host == "HA" && c.Direction == "inbound" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("host conflict missing: %+v", g.PolicyConflicts())
+	}
+	// A path whose endpoint carries a host-level conflict must not be silently
+	// decided by first-match.
+	if res := CheckMerged(g, "HX", "HA", 3); res.Verdict != string(topology.VerdictProbable) {
+		t.Fatalf("host conflict path verdict = %s, want probable (best=%+v)", res.Verdict, res.Best)
+	}
+}

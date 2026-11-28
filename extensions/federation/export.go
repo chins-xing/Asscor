@@ -68,10 +68,27 @@ func mergedFactsWithConflicts(reports []NodeReport, localHosts []HostFact, local
 	hosts := map[string]*HostFact{}
 	policies := map[string]PolicyFact{}
 	votes := map[string]map[bool]map[string]bool{}
+	hostVotes := map[string]map[bool]map[string]bool{}
 	policyKnown := false
+
+	addHostRule := func(host, direction string, r PolicyFact, source string) {
+		from := normalizeFactSubnet(r.From)
+		to := normalizeFactSubnet(r.To)
+		key := host + "|" + direction + "|" + from + "|" + to
+		if hostVotes[key] == nil {
+			hostVotes[key] = map[bool]map[string]bool{true: {}, false: {}}
+		}
+		hostVotes[key][r.Allow][source] = true
+	}
 
 	mergeHost := func(h HostFact, source string) {
 		h.SourceNodes = unionStrings(h.SourceNodes, []string{source})
+		for _, r := range h.Inbound {
+			addHostRule(h.ID, "inbound", r, source)
+		}
+		for _, r := range h.Outbound {
+			addHostRule(h.ID, "outbound", r, source)
+		}
 		h.Subnets = normalizeFactSubnets(h.Subnets)
 		cur, ok := hosts[h.ID]
 		if !ok {
@@ -163,6 +180,30 @@ func mergedFactsWithConflicts(reports []NodeReport, localHosts []HostFact, local
 		conflicts = append(conflicts, topology.PolicyConflict{
 			From:         parts[0],
 			To:           parts[1],
+			AllowSources: sortedKeys(byAllow[true]),
+			DenySources:  sortedKeys(byAllow[false]),
+		})
+	}
+	// Host 级 inbound/outbound 冲突（审计 LayeredGraph P0 尾项）。
+	hostKeys := make([]string, 0, len(hostVotes))
+	for k := range hostVotes {
+		hostKeys = append(hostKeys, k)
+	}
+	sort.Strings(hostKeys)
+	for _, key := range hostKeys {
+		byAllow := hostVotes[key]
+		if len(byAllow[true]) == 0 || len(byAllow[false]) == 0 {
+			continue
+		}
+		parts := strings.SplitN(key, "|", 4)
+		if len(parts) != 4 {
+			continue
+		}
+		conflicts = append(conflicts, topology.PolicyConflict{
+			Host:         parts[0],
+			Direction:    parts[1],
+			From:         parts[2],
+			To:           parts[3],
 			AllowSources: sortedKeys(byAllow[true]),
 			DenySources:  sortedKeys(byAllow[false]),
 		})
