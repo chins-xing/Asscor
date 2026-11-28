@@ -328,7 +328,24 @@ PASS TestParseIptablesL4Ports
 PASS TestParseIptablesSkipsComplexModules
 ```
 
-- dl360gen9：topology/federation 远端通过；agent 包远端测试因缺 `x/sys/x/crypto` 模块且拉取超时未完成（已尝试上传本机模块缓存，SSH 通道随后失败）。本项以本地构建/测试为准，远端待网络恢复后补跑。
+- dl360gen9：补传 `x/crypto@v0.57.0`、`x/sys@v0.48.0` 模块缓存后，agent 解析测试远端通过：
+
+```text
+PASS TestParseNftL4Ports
+PASS TestParseIptablesL4Ports
+```
 
 
+## Stage 12：NodeReport 语义校验
+
+- 新增 `ValidateNodeReport`：node_id、host id、IP/CIDR、协议、端口、事实上限；
+- master `/federation/report` 在合并前校验，非法报告返回 400；
+- dl360gen9：
+
+```text
+PASS TestValidateNodeReportValid
+PASS TestValidateNodeReportRejectsMalformed
+```
+
+覆盖：空 node_id、坏 IP、坏 CIDR、端口越界、未知协议、空 host id、超限主机数。
 
