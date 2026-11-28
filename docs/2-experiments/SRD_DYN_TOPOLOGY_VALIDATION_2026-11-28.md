@@ -41,6 +41,8 @@ go test -v ./internal/srddyn
   PASS TestHysteresisStatePersistsAfterStress
   PASS TestRK4FiniteAndBounded
   PASS TestRK4TimestepConvergence
+  PASS TestFilterCovarianceShrinksAndTracksObservation
+  PASS TestFilterFiniteUnderNoise
 
 go test -tags federation,engine ./extensions/federation -run 'TestMerge|TestBuildMerged'
   ok
@@ -85,6 +87,19 @@ srd check domA-web domB-web
 - T1 域内可达性正常，且返回多路径计数（`paths=2`）；
 - 跨域 T3 被 router 的显式策略阻断，阻断点/原因可解释；这是当前拓扑策略的预期结果，不是代码回归；
 - 深度耗尽、部分 unknown、allow/deny 冲突三项在实验拓扑里没有自然实例，仍以 Stage 0/1 的定向用例为准。
+
+### T3 正向验证（临时 ACL）
+
+在 920 上临时插入 `eth0`↔`eth1` accept（备份原 nft 规则），重启 agent 后：
+
+```text
+srd check domA-web domB-web
+  verdict : reachable   (paths=1)
+  path    : domA-web -> domC-router -> domB-web
+  layers  : hosts=4 subnets=5 vlans=0 policies=7 forwarding=1
+```
+
+随后删除临时规则（handle 9/10）并重启 agent，恢复到原始 deny 策略，避免实验环境长期漂移。
 
 ### 待继续
 
