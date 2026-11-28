@@ -126,6 +126,9 @@ type LayeredGraph struct {
 	policyUnknown map[string]bool
 	// flow is the immutable query context used by HostReachableFlow.
 	flow Flow
+	// confidenceThreshold: facts with 0 < Confidence < threshold downgrade
+	// the verdict to probable.
+	confidenceThreshold float64
 }
 
 // BuildLayeredGraph 从观测事实构建分层图。
@@ -146,16 +149,17 @@ func BuildLayeredGraphAt(hosts []HostFacts, policies []PolicyRule, policyKnown, 
 
 func buildLayeredGraphAt(hosts []HostFacts, policies []PolicyRule, policyKnown, linkKnown bool, now time.Time) *LayeredGraph {
 	g := &LayeredGraph{
-		hosts:         map[string]*HostFacts{},
-		subnetTo:      map[string][]string{},
-		hostSubs:      map[string][]string{},
-		gateways:      map[string][]string{},
-		policies:      append([]PolicyRule(nil), policies...),
-		inbound:       map[string][]PolicyRule{},
-		outbound:      map[string][]PolicyRule{},
-		policyKnown:   policyKnown,
-		linkKnown:     linkKnown,
-		policyUnknown: map[string]bool{},
+		hosts:               map[string]*HostFacts{},
+		subnetTo:            map[string][]string{},
+		hostSubs:            map[string][]string{},
+		gateways:            map[string][]string{},
+		policies:            append([]PolicyRule(nil), policies...),
+		inbound:             map[string][]PolicyRule{},
+		outbound:            map[string][]PolicyRule{},
+		policyKnown:         policyKnown,
+		linkKnown:           linkKnown,
+		policyUnknown:       map[string]bool{},
+		confidenceThreshold: 0.5,
 	}
 	for i := range hosts {
 		h := hosts[i]
@@ -349,6 +353,16 @@ func (g *LayeredGraph) finalizePath(path []string, steps []PathStep) PathVerdict
 			pv.Unknowns = appendUnique(pv.Unknowns, "policy_conflict")
 			break
 		}
+		if hf := g.hosts[h]; hf != nil && hf.Confidence > 0 && g.confidenceThreshold > 0 && hf.Confidence < g.confidenceThreshold {
+			pv.Verdict = VerdictProbable
+			pv.Unknowns = appendUnique(pv.Unknowns, "low_confidence")
+			break
+		}
+		if g.hasLowConfidenceHostPolicy(h) {
+			pv.Verdict = VerdictProbable
+			pv.Unknowns = appendUnique(pv.Unknowns, "low_confidence_policy")
+			break
+		}
 	}
 	// steps[i].Subnet 是进入 steps[i].Host 时用的子网
 	for i := 0; i < len(steps)-1; i++ {
@@ -420,6 +434,9 @@ func (g *LayeredGraph) policyVerdict(from, to string) (Verdict, string) {
 	for _, r := range g.policies {
 		if !subnetMatch(r.From, from) || !subnetMatch(r.To, to) || !ruleMatchesFlow(r, g.flow) {
 			continue
+		}
+		if r.Confidence > 0 && g.confidenceThreshold > 0 && r.Confidence < g.confidenceThreshold {
+			return VerdictProbable, "low confidence policy"
 		}
 		if r.Allow {
 			return VerdictReachable, "policy allow " + r.From + "->" + r.To
@@ -768,6 +785,12 @@ func Summary(verdicts []PathVerdict) Verdict {
 	return VerdictBlocked
 }
 
+// SetConfidenceThreshold overrides the low-confidence cutoff (default 0.5).
+// A threshold <= 0 disables confidence-based downgrading.
+func (g *LayeredGraph) SetConfidenceThreshold(v float64) {
+	g.confidenceThreshold = v
+}
+
 // SetPolicyConflicts 注入合并阶段的策略冲突（federation merge 使用）。
 func (g *LayeredGraph) SetPolicyConflicts(conflicts []PolicyConflict) {
 	g.policyConflicts = append([]PolicyConflict(nil), conflicts...)
@@ -799,6 +822,23 @@ func (g *LayeredGraph) hasPolicyConflict(from, to string, f Flow) bool {
 			continue
 		}
 		return true
+	}
+	return false
+}
+
+func (g *LayeredGraph) hasLowConfidenceHostPolicy(host string) bool {
+	if g.confidenceThreshold <= 0 {
+		return false
+	}
+	for _, r := range g.inbound[host] {
+		if r.Confidence > 0 && r.Confidence < g.confidenceThreshold {
+			return true
+		}
+	}
+	for _, r := range g.outbound[host] {
+		if r.Confidence > 0 && r.Confidence < g.confidenceThreshold {
+			return true
+		}
 	}
 	return false
 }
