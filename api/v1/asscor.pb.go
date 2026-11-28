@@ -73,8 +73,9 @@ type NetworkInfo struct {
 	Forwards bool `json:"forwards,omitempty"`
 	// 状态化防火墙标记（v2.3 T2）：链内存在 ct state established,related accept。
 	// StatefulInput 影响"回程包是否被放行"，StatefulOutput 供诊断用。
-	StatefulInput  bool `json:"stateful_input,omitempty"`
-	StatefulOutput bool `json:"stateful_output,omitempty"`
+	StatefulInput       bool `json:"stateful_input,omitempty"`
+	StatefulOutput      bool `json:"stateful_output,omitempty"`
+	StatefulInvalidDrop bool `json:"stateful_invalid_drop,omitempty"`
 	// L1 事实（SRD 分层图的 link 层）：接口名、状态、所属子网与 VLAN。
 	// 让"链路 down"成为显式事实，而不是靠"不上报该子网"隐式表达。
 	Links []LinkInfo `json:"links,omitempty"`

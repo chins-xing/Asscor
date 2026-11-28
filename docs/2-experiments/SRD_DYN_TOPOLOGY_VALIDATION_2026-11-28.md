@@ -487,3 +487,20 @@ PASS TestMergedTopologyCarriesSemantics
 
 - 设计文档新增“模型边界”章节，明确支持的语义与不支持的完整 NAT/conntrack/LPM 集成。
 
+
+### 17.1 Agent invalid drop 上报
+
+- `NetworkInfo.StatefulInvalidDrop`；
+- agent nft 解析 `ct state invalid + drop`；
+- `RecordNetworkFacts` 写入 `TopoNode.StatefulInvalidDrop`；
+- `hostFactFromTopo` 带到 federation `HostFact`。
+- 本地/main：
+
+```text
+PASS TestParseNftStatefulDetectsInvalidDrop
+PASS TestRecordNetworkFactsInvalidDrop
+PASS TestHostFactFromTopoInvalidDrop
+```
+
+- dl360gen9 远端复跑因 SSH channel 失败未完成；待 SSH 恢复补跑。
+

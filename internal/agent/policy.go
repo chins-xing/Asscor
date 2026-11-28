@@ -22,23 +22,24 @@ import (
 
 // collectPolicyFacts 采集本机防火墙的显式 allow/deny 结论。
 // 返回 (rules, known)。known=false 表示"没采集到"，不是"没有策略"。
-func collectPolicyFacts() ([]apiv1.PolicyRule, bool, bool, bool) {
+func collectPolicyFacts() ([]apiv1.PolicyRule, bool, bool, bool, bool) {
 	ifaces := interfaceSubnets()
 	if out, ok := runQuiet("nft", "-j", "list", "ruleset"); ok {
 		rules, parsed := parseNftRuleset(out, ifaces)
 		if parsed {
-			si, so := parseNftStateful(out)
-			return rules, true, si, so
+			si, so, invalidDrop := parseNftStateful(out)
+			return rules, true, si, so, invalidDrop
 		}
 	}
 	if out, ok := runQuiet("iptables-save"); ok {
 		rules, parsed := parseIptablesSave(out, ifaces)
 		if parsed {
 			si := strings.Contains(out, "state RELATED,ESTABLISHED -j ACCEPT") || strings.Contains(out, "state ESTABLISHED,RELATED -j ACCEPT")
-			return rules, true, si, si
+			invalid := strings.Contains(out, "state INVALID -j DROP") || strings.Contains(out, "state INVALID -j REJECT")
+			return rules, true, si, si, invalid
 		}
 	}
-	return nil, false, false, false
+	return nil, false, false, false, false
 }
 
 // interfaceSubnets 采集"接口名 → 该接口上的子网"映射。
@@ -493,7 +494,7 @@ func runQuiet(name string, args ...string) (string, bool) {
 
 // parseNftStateful 检测 input/output 链里是否存在
 // `ct state established,related accept`（v2.3 T2）。
-func parseNftStateful(raw string) (input, output bool) {
+func parseNftStateful(raw string) (input, output, invalidDrop bool) {
 	var rs struct {
 		Nftables []struct {
 			Rule struct {
@@ -503,22 +504,36 @@ func parseNftStateful(raw string) (input, output bool) {
 		} `json:"nftables"`
 	}
 	if err := json.Unmarshal([]byte(raw), &rs); err != nil {
-		return false, false
+		return false, false, false
 	}
 	for _, r := range rs.Nftables {
 		chain := strings.ToLower(r.Rule.Chain)
 		if chain != "input" && chain != "output" {
 			continue
 		}
-		hasCT, hasAccept := false, false
+		hasCT, hasAccept, hasDrop, hasInvalid := false, false, false, false
 		for _, e := range r.Rule.Expr {
 			if _, ok := e["accept"]; ok {
 				hasAccept = true
 			}
-			if m, ok := e["match"]; ok && strings.Contains(string(m), "\"ct\"") &&
-				strings.Contains(strings.ToLower(string(m)), "established") {
-				hasCT = true
+			if _, ok := e["drop"]; ok {
+				hasDrop = true
 			}
+			if _, ok := e["reject"]; ok {
+				hasDrop = true
+			}
+			if m, ok := e["match"]; ok {
+				ms := strings.ToLower(string(m))
+				if strings.Contains(ms, "\"ct\"") && strings.Contains(ms, "established") {
+					hasCT = true
+				}
+				if strings.Contains(ms, "invalid") {
+					hasInvalid = true
+				}
+			}
+		}
+		if hasInvalid && hasDrop {
+			invalidDrop = true
 		}
 		if hasCT && hasAccept {
 			if chain == "input" {
@@ -528,5 +543,5 @@ func parseNftStateful(raw string) (input, output bool) {
 			}
 		}
 	}
-	return input, output
+	return input, output, invalidDrop
 }

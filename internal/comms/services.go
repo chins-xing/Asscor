@@ -414,7 +414,7 @@ func (s *KernelServiceImpl) Heartbeat(ctx context.Context, req *apiv1.HeartbeatR
 					req.NetworkInfo.VLANs, req.NetworkInfo.Forwards,
 					toTopoPolicies(req.NetworkInfo.Policies), req.NetworkInfo.PolicyKnown,
 					toTopoLinks(req.NetworkInfo.Links), req.NetworkInfo.LocalIPs,
-					req.NetworkInfo.StatefulInput, req.NetworkInfo.StatefulOutput)
+					req.NetworkInfo.StatefulInput, req.NetworkInfo.StatefulOutput, req.NetworkInfo.StatefulInvalidDrop)
 				// A-7b 诊断：记录落库的 zone 与规模，确认 agent 上报是否到达注册表。
 				logger.WithComponent("comms").Info("topology facts recorded",
 					"host_id", req.HostId,

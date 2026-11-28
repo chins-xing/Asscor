@@ -13,3 +13,12 @@ func TestRecordNetworkFactsMetadata(t *testing.T) {
 		t.Fatalf("metadata not set: %+v", n)
 	}
 }
+
+func TestRecordNetworkFactsInvalidDrop(t *testing.T) {
+	id := "invalid-drop-test"
+	RecordNetworkFacts(id, []string{"10.19.0.0/24"}, "internal", nil, false, nil, true, nil, []string{"10.19.0.1"}, true, false, true)
+	n := GetNode(id)
+	if n == nil || !n.StatefulInvalidDrop {
+		t.Fatalf("invalid drop not recorded: %+v", n)
+	}
+}

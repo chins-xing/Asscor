@@ -12,20 +12,21 @@ import (
 
 // ExportedHost 是导出为主端合并拓扑的主机条目（与 srdroc 的 topology JSON 兼容）。
 type ExportedHost struct {
-	ID            string             `json:"id"`
-	IPs           []string           `json:"ips,omitempty"`
-	Subnets       []string           `json:"subnets,omitempty"`
-	Zone          string             `json:"zone,omitempty"`
-	Forwards      bool               `json:"forwards,omitempty"`
-	StatefulInput bool               `json:"stateful_input,omitempty"`
-	Inbound       []PolicyFact       `json:"inbound,omitempty"`
-	Outbound      []PolicyFact       `json:"outbound,omitempty"`
-	Links         map[string]bool    `json:"links,omitempty"`
-	SourceNodes   []string           `json:"source_nodes,omitempty"`
-	ObservedAt    time.Time          `json:"observed_at,omitempty"`
-	ValidUntil    time.Time          `json:"valid_until,omitempty"`
-	Confidence    float64            `json:"confidence,omitempty"`
-	NAT           []topology.NATRule `json:"nat,omitempty"`
+	ID                  string             `json:"id"`
+	IPs                 []string           `json:"ips,omitempty"`
+	Subnets             []string           `json:"subnets,omitempty"`
+	Zone                string             `json:"zone,omitempty"`
+	Forwards            bool               `json:"forwards,omitempty"`
+	StatefulInput       bool               `json:"stateful_input,omitempty"`
+	StatefulInvalidDrop bool               `json:"stateful_invalid_drop,omitempty"`
+	Inbound             []PolicyFact       `json:"inbound,omitempty"`
+	Outbound            []PolicyFact       `json:"outbound,omitempty"`
+	Links               map[string]bool    `json:"links,omitempty"`
+	SourceNodes         []string           `json:"source_nodes,omitempty"`
+	ObservedAt          time.Time          `json:"observed_at,omitempty"`
+	ValidUntil          time.Time          `json:"valid_until,omitempty"`
+	Confidence          float64            `json:"confidence,omitempty"`
+	NAT                 []topology.NATRule `json:"nat,omitempty"`
 }
 
 // TopologyExport 是主端合并图的"可评分"导出（v0.2）。
@@ -310,7 +311,7 @@ func exportFromFacts(hosts map[string]*HostFact, policies map[string]PolicyFact,
 		h := hosts[id]
 		eh := ExportedHost{
 			ID: h.ID, IPs: h.IPs, Subnets: h.Subnets, Zone: h.Zone,
-			Forwards: h.Forwards, StatefulInput: h.StatefulInput,
+			Forwards: h.Forwards, StatefulInput: h.StatefulInput, StatefulInvalidDrop: h.StatefulInvalidDrop,
 			Inbound: h.Inbound, Outbound: h.Outbound, Links: h.Links,
 			SourceNodes: append([]string(nil), h.SourceNodes...),
 			ObservedAt:  h.ObservedAt, ValidUntil: h.ValidUntil, Confidence: h.Confidence,

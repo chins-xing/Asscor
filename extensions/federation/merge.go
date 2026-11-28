@@ -67,16 +67,17 @@ func BuildMergedGraphWithLocal(reports []NodeReport, localHosts []HostFact, loca
 	for _, id := range ids {
 		h := hosts[id]
 		facts = append(facts, topology.HostFacts{
-			HostID:        h.ID,
-			IPs:           h.IPs,
-			Subnets:       h.Subnets,
-			Zone:          h.Zone,
-			Forwards:      h.Forwards,
-			StatefulInput: h.StatefulInput,
-			Inbound:       toPolicyRules(h.Inbound),
-			Outbound:      toPolicyRules(h.Outbound),
-			Links:         h.Links,
-			NAT:           append([]topology.NATRule(nil), h.NAT...),
+			HostID:              h.ID,
+			IPs:                 h.IPs,
+			Subnets:             h.Subnets,
+			Zone:                h.Zone,
+			Forwards:            h.Forwards,
+			StatefulInput:       h.StatefulInput,
+			StatefulInvalidDrop: h.StatefulInvalidDrop,
+			Inbound:             toPolicyRules(h.Inbound),
+			Outbound:            toPolicyRules(h.Outbound),
+			Links:               h.Links,
+			NAT:                 append([]topology.NATRule(nil), h.NAT...),
 		})
 	}
 	keys := make([]string, 0, len(policies))
@@ -198,16 +199,17 @@ func unionStrings(a, b []string) []string {
 // hostFactFromTopo 把主 kernel 本地 TopoNode 转成上报事实（含入/出向拆分）。
 func hostFactFromTopo(n *topology.TopoNode) HostFact {
 	h := HostFact{
-		ID:            n.HostID,
-		IPs:           append([]string(nil), n.IPs...),
-		Subnets:       append([]string(nil), n.Subnets...),
-		Zone:          n.Zone,
-		Forwards:      n.Forwards,
-		StatefulInput: n.StatefulInput,
-		Links:         map[string]bool{},
-		ObservedAt:    n.ObservedAt,
-		ValidUntil:    n.ValidUntil,
-		Confidence:    n.Confidence,
+		ID:                  n.HostID,
+		IPs:                 append([]string(nil), n.IPs...),
+		Subnets:             append([]string(nil), n.Subnets...),
+		Zone:                n.Zone,
+		Forwards:            n.Forwards,
+		StatefulInput:       n.StatefulInput,
+		StatefulInvalidDrop: n.StatefulInvalidDrop,
+		Links:               map[string]bool{},
+		ObservedAt:          n.ObservedAt,
+		ValidUntil:          n.ValidUntil,
+		Confidence:          n.Confidence,
 	}
 	for _, l := range n.Links {
 		for _, s := range l.Subnets {
