@@ -447,3 +447,16 @@ PASS TestInvalidStateDropped
 
 范围：查询模型原型。agent 尚未采集 `ct state invalid drop`；会话超时与 related 生命周期仍未建模。
 
+
+## Stage 18：大图基准（5.1）
+
+`internal/topology/layers_bench_test.go`：
+
+```text
+BenchmarkBuildLayeredGraph1024    ~5.86 ms/op   (dl360, 1024 hosts)
+BenchmarkHostReachableChain1024   ~68 µs/op     (maxHops=5)
+BenchmarkHostReachableDense256    ~396 µs/op    (256 hosts 同广播域)
+```
+
+本地（i5-14600KF）：约 1.10ms / 39µs / 83µs。基准只覆盖构建与两类查询，不代表所有拓扑形状。
+
