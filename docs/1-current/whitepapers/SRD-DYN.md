@@ -396,8 +396,9 @@ P_k&=(I-K_kH_k)P_k^-
   - D5 部分：滞回变量 `h` 在压力撤除后仍保留；
   - 数值：非负投影、`Δt` 收敛检查。
 - 已实现观测/EKF：`Filter`（数值 Jacobian + 协方差传播 + 标量 s 更新 + Confidence），测试 `filter_test.go`。
+- 已实现参数回收原型：`RecoverParams`（坐标下降，合成 **全状态** 观测），测试 `recover_test.go`；这证明 A8 的优化链路，但**不是**仅观测 s 的部分可辨识性证明。
 - 尚未实现（因此 v0.0.1 仍不能宣称完整验收）：
-  - 参数辨识/Fisher/Sobol（第 7 节）、时间外预测与 proper scoring（第 8 节）；
+  - Fisher/剖面似然/Sobol（第 7 节）、仅 s 观测下的可辨识性、时间外预测与 proper scoring（第 8 节）；
   - 事件跳变与真实数据校准。
-- 测试：`go test ./internal/srddyn`（核心 7 项 + EKF 2 项）。
+- 测试：`go test ./internal/srddyn`（核心 7 项 + EKF 2 项 + 参数回收 2 项）。
 - 远端验证：dl360gen9 上同一测试通过（见 `docs/2-experiments/SRD_DYN_TOPOLOGY_VALIDATION_2026-11-28.md`）。

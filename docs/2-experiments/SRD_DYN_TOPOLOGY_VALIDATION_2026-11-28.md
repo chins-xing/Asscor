@@ -174,3 +174,18 @@ srd check domA-web domB-web
 
 注入报告只存在 master 内存；验证后重启 `asscor-kernel` 清空测试节点，agent 自动重连，T1/T3 原有拓扑恢复。
 
+
+## Stage 4：SRD-DYN 参数回收（dl360gen9）
+
+- 新增 `RecoverParams`：合成全状态观测 + 坐标下降；
+- 真值 `Alpha=0.20/Delta=0.05/Lambda=0.35`，初值扰动后回收，±20% 内通过；
+- dl360gen9 结果：
+
+```text
+PASS TestRecoverParamsFromFullState
+PASS TestRecoverParamsUnknownName
+ok github.com/chins-xing/asscor/internal/srddyn
+```
+
+限制：观测为**全状态 oracle**，只证明优化器与合成可辨识链路；仅观测 s 的部分可辨识性、Fisher/Sobol、时间外预测仍未做。
+
