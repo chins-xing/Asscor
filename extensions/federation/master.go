@@ -173,6 +173,10 @@ func (m *MasterServer) handleReport(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid report JSON: "+err.Error())
 		return
 	}
+	if err := ValidateNodeReport(report); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid report: "+err.Error())
+		return
+	}
 	if err := m.collector.Apply(report); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
